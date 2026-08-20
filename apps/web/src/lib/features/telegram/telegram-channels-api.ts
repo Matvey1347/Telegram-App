@@ -26,6 +26,7 @@ import type {
   PostGroup,
   TelegramAnalyticsSources,
   TelegramChannel,
+  TelegramChannelListResponse,
   TelegramChannelAdAnalysis,
   TelegramChannelAdAnalysisPayload,
   TelegramChannelAudience,
@@ -105,7 +106,17 @@ const telegramChannelsApi = {
     ).data,
   listPage: async (params?: PaginationParams) =>
     getPaginated<TelegramChannel>("/telegram-channels", params),
+  listWithCounts: async (archived = false, owned?: boolean) =>
+    (
+      await api.get<TelegramChannelListResponse>("/telegram-channels", {
+        params: { archived, owned, page: 1, pageSize: 100 },
+      })
+    ).data,
   list: async () => getAllPaginatedItems<TelegramChannel>("/telegram-channels"),
+  archive: async (id: string) =>
+    (await api.post<TelegramChannel>(`/telegram-channels/${id}/archive`)).data,
+  restore: async (id: string) =>
+    (await api.post<TelegramChannel>(`/telegram-channels/${id}/restore`)).data,
   customEmojiPacks: async (channelId: string) =>
     (
       await api.get<TelegramChannelCustomEmojiPacksResponse>(

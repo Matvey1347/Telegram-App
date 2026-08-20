@@ -1005,7 +1005,9 @@ export default function TelegramChannelAnalyticsPage() {
             : activeChannel?.title || "Channel Analytics"
         }
         subtitle={
-          isInitialPageLoading ? undefined : channelSubtitle(activeChannel)
+          isInitialPageLoading
+            ? undefined
+            : `${activeChannel?.archivedAt ? "Archived · " : ""}${channelSubtitle(activeChannel)}`
         }
         action={
           <div className="flex flex-wrap items-center justify-end gap-2">

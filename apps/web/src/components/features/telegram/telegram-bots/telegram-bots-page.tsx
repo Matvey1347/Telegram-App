@@ -325,8 +325,9 @@ function RuntimeTokenModal({
         }}
       >
         <p className="text-sm text-neutral-400">
-          The token is verified with Telegram before saving and is never shown
-          again.
+          {config?.environment === "PRODUCTION"
+            ? "The production token is verified and saved here. It becomes active only after the production API is deployed with a public webhook URL."
+            : "The local token is verified and saved here. It activates automatically when this API has a reachable local webhook URL."}
         </p>
         <FormField label="BotFather token" required>
           <Input

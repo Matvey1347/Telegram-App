@@ -7,10 +7,12 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpRight,
+  Archive,
   CircleHelp,
   Download,
   ImagePlus,
   RefreshCw,
+  RotateCcw,
   Send,
   X,
 } from "lucide-react";
@@ -76,15 +78,17 @@ import {
   isValidTimeInputValue,
 } from "@/components/ui/primitives";
 import { useAppToast } from "@/providers/toast-provider";
-import { telegramChannelKeys } from "@/lib/query-keys";
+import { dashboardKeys, telegramChannelKeys } from "@/lib/query-keys";
 import {
   prependTelegramChannelToCaches,
+  moveTelegramChannelBetweenLifecycleCaches,
   removeTelegramChannelFromCaches,
 } from "@/lib/features/telegram/telegram-channel-cache";
 import { invalidateTelegramChannelQueries } from "@/lib/features/telegram/telegram-query-invalidation";
 
 type TelegramTab = "channels" | "networks" | "accounts";
 type ChannelFilter = "own" | "external";
+type ChannelLifecycleTab = "active" | "archive";
 type AccountFilter = "mtproto" | "people";
 
 function normalizeUsername(value?: string | null) {
@@ -338,6 +342,10 @@ function parseTelegramTab(value: string | null): TelegramTab {
 
 function parseChannelFilter(value: string | null): ChannelFilter {
   return value === "external" ? "external" : "own";
+}
+
+function parseChannelLifecycleTab(value: string | null): ChannelLifecycleTab {
+  return value === "archive" ? "archive" : "active";
 }
 
 function parseAccountFilter(value: string | null): AccountFilter {
@@ -1689,6 +1697,7 @@ export default function TelegramChannelsPage() {
   const [mtprotoCreateOpen, setMtprotoCreateOpen] = useState(false);
   const tab = parseTelegramTab(searchParams.get("tab"));
   const channelFilter = parseChannelFilter(searchParams.get("channelTab"));
+  const lifecycleTab = parseChannelLifecycleTab(searchParams.get("lifecycle"));
   const accountFilter = parseAccountFilter(searchParams.get("accountTab"));
   const [deleting, setDeleting] = useState<TelegramChannel | null>(null);
   const [deletingPerson, setDeletingPerson] =
@@ -1713,23 +1722,33 @@ export default function TelegramChannelsPage() {
   const updateTabs = (next: {
     tab?: TelegramTab;
     channelFilter?: ChannelFilter;
+    lifecycle?: ChannelLifecycleTab;
     accountFilter?: AccountFilter;
   }) => {
     const params = new URLSearchParams(searchParams.toString());
     const nextTab = next.tab || tab;
     params.set("tab", nextTab);
     if (next.channelFilter) params.set("channelTab", next.channelFilter);
+    if (next.lifecycle) params.set("lifecycle", next.lifecycle);
     if (next.accountFilter) params.set("accountTab", next.accountFilter);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
   const {
-    data: channels,
+    data: channelsResponse,
     isLoading: channelsLoading,
     error: channelsError,
   } = useQuery({
-    queryKey: telegramChannelKeys.list(),
-    queryFn: telegramChannelsApi.list,
+    queryKey: telegramChannelKeys.list(
+      channelFilter === "own" && lifecycleTab === "archive",
+      channelFilter === "own",
+    ),
+    queryFn: () =>
+      telegramChannelsApi.listWithCounts(
+        channelFilter === "own" && lifecycleTab === "archive",
+        channelFilter === "own",
+      ),
   });
+  const channels = channelsResponse?.items;
   const {
     data: networks = [],
     isLoading: networksLoading,
@@ -1901,6 +1920,26 @@ export default function TelegramChannelsPage() {
         "error",
       ),
   });
+  const archiveMutation = useMutation({
+    mutationFn: (id: string) => telegramChannelsApi.archive(id),
+    onSuccess: (channel) => {
+      moveTelegramChannelBetweenLifecycleCaches(queryClient, channel);
+      queryClient.invalidateQueries({ queryKey: telegramChannelKeys.selects() });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.summary() });
+      pushToast("Channel archived.", "success");
+    },
+    onError: (error: unknown) => pushToast(requestErrorMessage(error, "Failed to archive channel."), "error"),
+  });
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) => telegramChannelsApi.restore(id),
+    onSuccess: (channel) => {
+      moveTelegramChannelBetweenLifecycleCaches(queryClient, channel);
+      queryClient.invalidateQueries({ queryKey: telegramChannelKeys.selects() });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.summary() });
+      pushToast("Channel restored.", "success");
+    },
+    onError: (error: unknown) => pushToast(requestErrorMessage(error, "Failed to restore channel."), "error"),
+  });
   const deletePersonMutation = useMutation({
     mutationFn: (id: string) => advertisingChannelsApi.remove(id),
     onSuccess: () => {
@@ -2042,14 +2081,9 @@ export default function TelegramChannelsPage() {
     onError: (requestError: unknown) =>
       pushToast(requestErrorMessage(requestError, "Sync failed."), "error"),
   });
-  const filteredChannels = useMemo(
-    () =>
-      (channels || []).filter((channel: TelegramChannel) => {
-        const hasAdminLink = isOwnChannel(channel);
-        return channelFilter === "own" ? hasAdminLink : !hasAdminLink;
-      }),
-    [channels, channelFilter],
-  );
+  // The server owns the selected own/external + lifecycle filters. Re-filtering
+  // on the client can disagree with its access read model and hide valid cards.
+  const filteredChannels = channels || [];
   const ownChannels = useMemo(
     () => (channels || []).filter(isOwnChannel),
     [channels],
@@ -2162,6 +2196,22 @@ export default function TelegramChannelsPage() {
               </button>
             ))}
           </div>
+          {channelFilter === "own" ? (
+            <div className="mb-3 flex gap-1 border-b border-neutral-800">
+              {(["active", "archive"] as ChannelLifecycleTab[]).map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  className={`border-b-2 px-3 py-2 text-sm ${lifecycleTab === item ? "border-blue-500 text-white" : "border-transparent text-neutral-400 hover:text-white"}`}
+                  onClick={() => updateTabs({ tab: "channels", lifecycle: item })}
+                >
+                  {item === "active"
+                    ? `Active (${channelsResponse?.counts.active ?? 0})`
+                    : `Archive (${channelsResponse?.counts.archived ?? 0})`}
+                </button>
+              ))}
+            </div>
+          ) : null}
           {channelsInitialLoading ? <LoadingState /> : null}
           {channelsInitialError ? (
             <div className="text-red-300">Failed to load channels</div>
@@ -2175,25 +2225,48 @@ export default function TelegramChannelsPage() {
                   <ChannelPreview
                     channel={channel}
                     badges={
-                      channel.acquisitionType === "PURCHASED" ? (
-                        <span className="inline-flex rounded border border-cyan-700/70 bg-cyan-950/25 px-2 py-0.5 text-xs text-cyan-200">
-                          Purchased
-                        </span>
-                      ) : null
+                      <div className="flex flex-wrap gap-1">
+                        {hasAdminLink && channel.archivedAt ? (
+                          <span className="inline-flex rounded border border-amber-700/70 bg-amber-950/25 px-2 py-0.5 text-xs text-amber-200">Archived</span>
+                        ) : null}
+                        {channel.acquisitionType === "PURCHASED" ? (
+                          <span className="inline-flex rounded border border-cyan-700/70 bg-cyan-950/25 px-2 py-0.5 text-xs text-cyan-200">Purchased</span>
+                        ) : null}
+                      </div>
                     }
                     rightAction={
-                      <IconButton
-                        kind="delete"
-                        onClick={() => setDeleting(channel)}
-                      />
+                      <div className="flex items-center gap-1">
+                        {channel.archivedAt ? (
+                          <button
+                            type="button"
+                            aria-label="Restore channel"
+                            title="Restore channel"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-700 text-neutral-200 transition hover:bg-neutral-800"
+                            onClick={() => restoreMutation.mutate(channel.id)}
+                          >
+                            <RotateCcw size={18} />
+                          </button>
+                        ) : hasAdminLink ? (
+                          <button
+                            type="button"
+                            aria-label="Archive channel"
+                            title="Archive channel"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-700 text-neutral-200 transition hover:bg-neutral-800"
+                            onClick={() => archiveMutation.mutate(channel.id)}
+                          >
+                            <Archive size={18} />
+                          </button>
+                        ) : null}
+                        <IconButton kind="delete" onClick={() => setDeleting(channel)} />
+                      </div>
                     }
                   />
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <ChannelAccessBadge accessMode={channel.accessMode} />
-                    <ChannelAutoSyncToggle
+                    {!channel.archivedAt ? <ChannelAutoSyncToggle
                       channelId={channel.id}
                       enabled={channel.autoSyncEnabled ?? true}
-                    />
+                    /> : null}
                   </div>
                   {username ? (
                     <div className="space-y-1">
@@ -2217,7 +2290,7 @@ export default function TelegramChannelsPage() {
                     rates={rates}
                     actions={
                       <>
-                        {hasAdminLink ? (
+                        {hasAdminLink && !channel.archivedAt ? (
                           <Button
                             className="inline-flex h-11 min-w-0 items-center justify-center gap-2 border border-blue-500/40 bg-blue-600/95 text-center text-white shadow-[0_10px_24px_rgba(37,99,235,0.18)] transition hover:border-blue-400 hover:bg-blue-500"
                             variant="primary"
@@ -2232,7 +2305,7 @@ export default function TelegramChannelsPage() {
                             Sync
                           </Button>
                         ) : null}
-                        {!hasAdminLink && username ? (
+                        {!hasAdminLink && username && !channel.archivedAt ? (
                           <Button
                             className="inline-flex h-11 min-w-56 items-center justify-center gap-2 border border-blue-500/40 bg-blue-600/95 text-center text-white shadow-[0_10px_24px_rgba(37,99,235,0.18)] transition hover:border-blue-400 hover:bg-blue-500"
                             variant="primary"
@@ -2247,7 +2320,7 @@ export default function TelegramChannelsPage() {
                             Refresh Public
                           </Button>
                         ) : null}
-                        {hasAdminLink ? (
+                        {hasAdminLink && !channel.archivedAt ? (
                           channel.preview?.canPostMessages ? (
                             <Link
                               href={buildTelegramPostsUrl({

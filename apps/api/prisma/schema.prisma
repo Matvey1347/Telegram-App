@@ -1132,6 +1132,8 @@ model TelegramChannel {
   inviteLinksSyncFrom       DateTime?
   purchaseTransactionId     String?                        @unique
   isActive                  Boolean                        @default(true)
+  /// Lifecycle state for channels retained for historical reporting.
+  archivedAt                DateTime?
   /// Controls automatic analytics/background synchronization only. Manual operations remain available.
   autoSyncEnabled           Boolean                        @default(true)
   assignedMemberId          String?
@@ -1203,6 +1205,7 @@ model TelegramChannel {
   @@index([workspaceId, telegramChatId])
   @@index([workspaceId, assignedMemberId])
   @@index([workspaceId, isActive, autoSyncEnabled])
+  @@index([workspaceId, archivedAt, createdAt, id])
 }
 
 model TelegramCustomEmojiPack {

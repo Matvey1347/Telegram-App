@@ -1,4 +1,3 @@
-import { ForbiddenException } from '@nestjs/common';
 import {
   TelegramBotApplicationType,
   TelegramBotRuntimeEnvironment,
@@ -66,6 +65,8 @@ function setup() {
     enableRuntime: jest.fn(),
     disableRuntime: jest.fn(),
     removeRuntime: jest.fn(),
+    forgetRuntime: jest.fn(),
+    canAutoEnable: jest.fn().mockReturnValue(true),
     reconcilePresentation: jest.fn(),
   };
   const applications = {
@@ -117,19 +118,36 @@ describe('TelegramBotsService runtime instances', () => {
     expect(prisma.telegramBotIntegration.create).not.toHaveBeenCalled();
   });
 
-  it('rejects mutations for an environment not owned by this process', async () => {
+  it('saves a production token locally without activating its runtime', async () => {
     const { service, runtime } = setup();
-    runtime.configureRuntime.mockRejectedValueOnce(new ForbiddenException());
 
-    await expect(
-      service.upsertRuntime('user-1', 'bot-1', 'PRODUCTION', {
-        botToken: '123:production-token',
-      }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    await service.upsertRuntime('user-1', 'bot-1', 'PRODUCTION', {
+      botToken: '123:production-token',
+    });
     expect(runtime.configureRuntime).toHaveBeenCalledWith(
       expect.objectContaining({
         environment: TelegramBotRuntimeEnvironment.PRODUCTION,
       }),
+    );
+    expect(runtime.enableRuntime).not.toHaveBeenCalled();
+  });
+
+  it('deletes a logical bot with both runtime records in one action', async () => {
+    const { service, runtime, prisma } = setup();
+    prisma.telegramBotIntegration.findFirst.mockResolvedValueOnce({
+      ...logicalBot,
+      runtimeInstances: [
+        ...logicalBot.runtimeInstances,
+        { id: 'runtime-local', runtimeStatus: TelegramBotRuntimeStatus.ACTIVE },
+      ],
+    });
+
+    await service.remove('user-1', 'bot-1');
+
+    expect(runtime.forgetRuntime).toHaveBeenCalledWith('runtime-prod');
+    expect(runtime.forgetRuntime).toHaveBeenCalledWith('runtime-local');
+    expect(prisma.telegramBotIntegration.deleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'bot-1', workspaceId: 'workspace-1' } }),
     );
   });
 

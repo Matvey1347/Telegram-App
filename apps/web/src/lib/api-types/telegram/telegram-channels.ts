@@ -120,6 +120,7 @@ export type TelegramChannel = EntityAssignment & {
   adminLinks?: TelegramChannelAdminLink[];
   timePosts?: TelegramChannelTimePost[];
   isActive: boolean;
+  archivedAt?: string | null;
   preview?: {
     audience: Pick<
       TelegramChannelAudience,
@@ -163,6 +164,19 @@ export type TelegramChannelSelectOption = {
   timePosts?: TelegramChannelTimePost[];
   canPostMessages: boolean;
   publishingCapabilities: TelegramPublishingCapabilities;
+};
+
+export type TelegramChannelListResponse = {
+  items: TelegramChannel[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+  counts: { active: number; archived: number };
 };
 
 export type TelegramSyncResult = SyncOperationResult & {

@@ -41,7 +41,8 @@ export const telegramChannelKeys = {
   root: ["telegram-channels"] as const,
   // Purpose-built read models deliberately have separate key families.
   lists: () => ["telegram-channels", "list"] as const,
-  list: () => ["telegram-channels", "list", "all"] as const,
+  list: (archived?: boolean, owned?: boolean) =>
+    ["telegram-channels", "list", archived ?? "all", owned ?? "all"] as const,
   details: () => ["telegram-channels", "detail"] as const,
   select: (params?: { canPostMessagesOnly?: boolean }) =>
     [

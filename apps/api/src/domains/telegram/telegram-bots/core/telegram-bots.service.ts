@@ -433,15 +433,11 @@ export class TelegramBotsService {
   async remove(userId: string, id: string) {
     await this.adminWorkspace(userId);
     const existing = await this.findOneRaw(userId, id);
-    if (
-      existing.runtimeInstances.some(
-        (runtime) => runtime.runtimeStatus !== TelegramBotRuntimeStatus.DISABLED,
-      )
-    ) {
-      throw new BadRequestException(
-        'Disable and remove each runtime before deleting the logical bot',
-      );
-    }
+    // Deleting the logical bot is intentionally a single destructive action.
+    // Runtime instances and their dependent records cascade from the integration.
+    existing.runtimeInstances.forEach((runtime) =>
+      this.runtime.forgetRuntime(runtime.id),
+    );
     await this.prisma.telegramChannelSourceAccess.deleteMany({
       where: {
         workspaceId: existing.workspaceId,
@@ -463,11 +459,21 @@ export class TelegramBotsService {
   ) {
     await this.adminWorkspace(userId);
     await this.findOneRaw(userId, id);
+    const selectedEnvironment = this.environment(environment);
     await this.runtime.configureRuntime({
       botIntegrationId: id,
-      environment: this.environment(environment),
+      environment: selectedEnvironment,
       token: dto.botToken,
     });
+    if (
+      selectedEnvironment === TelegramBotRuntimeEnvironment.LOCAL &&
+      this.runtime.canAutoEnable(selectedEnvironment)
+    ) {
+      await this.runtime.enableRuntime({
+        botIntegrationId: id,
+        environment: selectedEnvironment,
+      });
+    }
     return this.findOne(userId, id);
   }
 

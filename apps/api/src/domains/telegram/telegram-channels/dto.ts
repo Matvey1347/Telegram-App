@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { TelegramChannelAdAnalysisStatus } from '@prisma/client';
 import type {
   ScheduleManagedPostsBatchItem,
@@ -275,7 +275,28 @@ export class PostGroupsQueryDto extends PaginationQueryDto {
   @IsOptional() @IsString() search?: string;
 }
 
-export class TelegramChannelListQueryDto extends PaginationQueryDto {}
+export class TelegramChannelListQueryDto extends PaginationQueryDto {
+  @IsOptional()
+  @Transform(({ value }) =>
+    value === true || value === 'true'
+      ? true
+      : value === false || value === 'false'
+        ? false
+        : value,
+  )
+  @IsBoolean()
+  archived?: boolean;
+  @IsOptional()
+  @Transform(({ value }) =>
+    value === true || value === 'true'
+      ? true
+      : value === false || value === 'false'
+        ? false
+        : value,
+  )
+  @IsBoolean()
+  owned?: boolean;
+}
 
 export class TelegramChannelPostsQueryDto extends PaginationQueryDto {
   @IsOptional() @IsString() search?: string;

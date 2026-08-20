@@ -96,7 +96,6 @@ export class TelegramBotRuntimeService implements OnModuleInit {
     environment: TelegramBotRuntimeEnvironment;
     token: string;
   }) {
-    this.assertOwned(input.environment);
     const bot = await this.prisma.telegramBotIntegration.findUnique({
       where: { id: input.botIntegrationId },
       select: { id: true, workspaceId: true },
@@ -107,13 +106,12 @@ export class TelegramBotRuntimeService implements OnModuleInit {
       input.environment,
     );
     if (
-      existing &&
-      (existing.runtimeStatus === TelegramBotRuntimeStatus.ACTIVE ||
-        existing.runtimeStatus === TelegramBotRuntimeStatus.STARTING)
+      existing?.runtimeStatus === TelegramBotRuntimeStatus.ACTIVE &&
+      this.environment.owns(input.environment)
     ) {
-      throw new ConflictException(
-        'Disable the runtime before rotating its token',
-      );
+      // The owner can safely detach its old webhook before replacing the token.
+      // A non-owner only stores the replacement as disabled for its owner to activate.
+      await this.botApi.deleteWebhook(this.decryptToken(existing));
     }
     const identity = await this.botApi.getMe(input.token);
     if (!identity.id)
@@ -154,10 +152,43 @@ export class TelegramBotRuntimeService implements OnModuleInit {
         firstName: identity.first_name || null,
         lastCheckedAt: new Date(),
         lastErrorMessage: null,
+        runtimeStatus: TelegramBotRuntimeStatus.DISABLED,
+        webhookStatus: TelegramBotWebhookStatus.NOT_CONFIGURED,
+        webhookUrl: null,
+        webhookSecretEncrypted: null,
+        webhookSecretIv: null,
+        webhookSecretAuthTag: null,
+        webhookConfiguredAt: null,
+        pendingWebhookUrl: null,
+        pendingWebhookSecretEncrypted: null,
+        pendingWebhookSecretIv: null,
+        pendingWebhookSecretAuthTag: null,
+        runtimeTransitionStartedAt: null,
+        lastRuntimeError: null,
       },
     });
-    await this.registry.refresh(runtime.id, input.environment);
+    if (this.environment.owns(input.environment)) {
+      await this.registry.refresh(runtime.id, input.environment);
+    }
     return runtime;
+  }
+
+  ownsEnvironment(environment: TelegramBotRuntimeEnvironment) {
+    return this.environment.owns(environment);
+  }
+
+  canAutoEnable(environment: TelegramBotRuntimeEnvironment) {
+    if (!this.environment.owns(environment)) return false;
+    try {
+      this.webhookUrlFor('__runtime_probe__', environment);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  forgetRuntime(runtimeId: string) {
+    this.registry.invalidate(runtimeId);
   }
 
   async enableRuntime(input: {

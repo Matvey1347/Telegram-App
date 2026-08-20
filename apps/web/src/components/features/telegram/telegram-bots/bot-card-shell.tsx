@@ -222,6 +222,16 @@ function RuntimeDetails({
           value={miniAppLabel(runtime, appType)}
         />
       </dl>
+      {runtime.environment === "PRODUCTION" && runtime.runtimeStatus !== "ACTIVE" ? (
+        <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-100">
+          Production token is saved. Deploy the production API with its public webhook URL to activate this runtime.
+        </p>
+      ) : null}
+      {runtime.environment === "LOCAL" && runtime.runtimeStatus !== "ACTIVE" ? (
+        <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-100">
+          Local token is saved. Set a reachable local webhook URL to activate this runtime.
+        </p>
+      ) : null}
       {runtime.lastRuntimeError || runtime.lastErrorMessage ? (
         <div className="mt-3 flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-sm text-rose-100">
           <AlertTriangle className="mt-0.5 shrink-0" size={16} />

@@ -4486,10 +4486,30 @@ export class TelegramChannelsService {
   async findAll(userId: string, query: TelegramChannelListQueryDto = {}) {
     const workspaceId = await this.workspace(userId);
     const pagination = normalizePagination(query);
+    const archivedAt = query.archived ? { not: null } : null;
+    const ownership =
+      query.owned === true
+        ? { some: {} }
+        : query.owned === false
+          ? { none: {} }
+          : undefined;
+    const where = { workspaceId, isActive: true, archivedAt, adminLinks: ownership };
+    const activeWhere = {
+      workspaceId,
+      isActive: true,
+      archivedAt: null,
+      adminLinks: ownership,
+    };
+    const archivedWhere = {
+      workspaceId,
+      isActive: true,
+      archivedAt: { not: null },
+      adminLinks: ownership,
+    };
     const loadChannels = () =>
       Promise.all([
         this.prisma.telegramChannel.findMany({
-          where: { workspaceId, isActive: true },
+          where,
           include: {
             assignedMember: WorkspaceService.assignedMemberInclude,
             createdByUser: WorkspaceService.createdByUserInclude,
@@ -4523,22 +4543,33 @@ export class TelegramChannelsService {
           take: pagination.take,
         }),
         this.prisma.telegramChannel.count({
-          where: { workspaceId, isActive: true },
+          where,
+        }),
+        this.prisma.telegramChannel.count({
+          where: activeWhere,
+        }),
+        this.prisma.telegramChannel.count({
+          where: archivedWhere,
         }),
       ]);
     let channels;
     let totalItems;
+    let activeCount;
+    let archivedCount;
     try {
-      [channels, totalItems] = await loadChannels();
+      [channels, totalItems, activeCount, archivedCount] = await loadChannels();
     } catch (error) {
       if (!this.isMissingTelegramChannelSyncScopeColumn(error)) throw error;
       this.telegramChannelSyncScopeColumnsAvailable = false;
       await this.ensureTelegramChannelSyncScopeColumnsAvailable();
-      [channels, totalItems] = await loadChannels();
+      [channels, totalItems, activeCount, archivedCount] = await loadChannels();
     }
 
     if (!channels.length) {
-      return createPaginatedResponse([], totalItems, pagination);
+      return {
+        ...createPaginatedResponse([], totalItems, pagination),
+        counts: { active: activeCount, archived: archivedCount },
+      };
     }
 
     const channelIds = channels.map((channel) => channel.id);
@@ -4621,7 +4652,10 @@ export class TelegramChannelsService {
         },
       };
     });
-    return createPaginatedResponse(items, totalItems, pagination);
+    return {
+      ...createPaginatedResponse(items, totalItems, pagination),
+      counts: { active: activeCount, archived: archivedCount },
+    };
   }
 
   async selectOptions(
@@ -4630,7 +4664,7 @@ export class TelegramChannelsService {
   ) {
     const workspaceId = await this.workspace(userId);
     const channels = await this.prisma.telegramChannel.findMany({
-      where: { workspaceId, isActive: true },
+      where: { workspaceId, isActive: true, archivedAt: null },
       select: {
         id: true,
         title: true,
@@ -9922,6 +9956,31 @@ export class TelegramChannelsService {
     });
     notifyScheduledTaskDueWorkChanged(`workspace-auto-sync:${workspaceId}`);
     return result;
+  }
+
+  async archive(userId: string, id: string) {
+    const workspaceId = await this.workspace(userId);
+    await this.findOne(userId, id);
+    const result = await this.prisma.telegramChannel.updateMany({
+      where: { id, workspaceId, archivedAt: null },
+      data: { archivedAt: new Date() },
+    });
+    // A conditional update avoids an unchanged-state write if the request races
+    // with another archive operation or repeats after the channel is archived.
+    if (!result.count) return this.findOne(userId, id);
+    return this.findOne(userId, id);
+  }
+
+  async restore(userId: string, id: string) {
+    const workspaceId = await this.workspace(userId);
+    await this.findOne(userId, id);
+    const result = await this.prisma.telegramChannel.updateMany({
+      where: { id, workspaceId, archivedAt: { not: null } },
+      data: { archivedAt: null },
+    });
+    // Same conditional mutation makes restore idempotent without a no-op write.
+    if (!result.count) return this.findOne(userId, id);
+    return this.findOne(userId, id);
   }
 
   async syncNow(

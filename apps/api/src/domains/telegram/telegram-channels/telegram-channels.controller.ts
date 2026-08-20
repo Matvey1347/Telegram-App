@@ -604,6 +604,18 @@ export class TelegramChannelsController {
   ) {
     return this.service.update(user.sub, id, dto);
   }
+  @Post(':id/archive') archive(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+  ) {
+    return this.service.archive(user.sub, id);
+  }
+  @Post(':id/restore') restore(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+  ) {
+    return this.service.restore(user.sub, id);
+  }
   @Get(':id/audience') audience(
     @CurrentUser() user: JwtUser,
     @Param('id') id: string,

@@ -235,21 +235,50 @@ describe('TelegramBotRuntimeService environment isolation', () => {
     expect(dispatcher.dispatch).not.toHaveBeenCalled();
   });
 
-  it('does not inspect or configure a LOCAL token in a PRODUCTION process', async () => {
+  it('can save a LOCAL token in a PRODUCTION process without registering it there', async () => {
     environment.current.mockReturnValue(
       TelegramBotRuntimeEnvironment.PRODUCTION,
     );
 
-    await expect(
-      service.configureRuntime({
-        botIntegrationId: 'bot-1',
-        environment: TelegramBotRuntimeEnvironment.LOCAL,
-        token: 'local-token',
-      }),
-    ).rejects.toThrow('does not own the LOCAL');
+    prisma.telegramBotIntegration.findUnique.mockResolvedValue(bot);
+    prisma.telegramBotRuntimeInstance.upsert.mockResolvedValue(
+      runtime('local-1', TelegramBotRuntimeEnvironment.LOCAL),
+    );
+    api.getMe.mockResolvedValue({ id: '123', username: 'local_bot' });
 
-    expect(api.getMe).not.toHaveBeenCalled();
-    expect(prisma.telegramBotIntegration.findUnique).not.toHaveBeenCalled();
+    await service.configureRuntime({
+      botIntegrationId: 'bot-1',
+      environment: TelegramBotRuntimeEnvironment.LOCAL,
+      token: 'local-token',
+    });
+
+    expect(api.getMe).toHaveBeenCalledWith('local-token');
+    expect(registry.refresh).not.toHaveBeenCalled();
+  });
+
+  it('rotates an active non-owned runtime into a disabled state without changing its webhook', async () => {
+    environment.current.mockReturnValue(TelegramBotRuntimeEnvironment.LOCAL);
+    const production = runtime('production-1', TelegramBotRuntimeEnvironment.PRODUCTION);
+    prisma.telegramBotIntegration.findUnique.mockResolvedValue(bot);
+    prisma.telegramBotRuntimeInstance.findUnique.mockResolvedValue(production);
+    prisma.telegramBotRuntimeInstance.upsert.mockResolvedValue(production);
+    api.getMe.mockResolvedValue({ id: '456', username: 'replacement_bot' });
+
+    await service.configureRuntime({
+      botIntegrationId: 'bot-1',
+      environment: TelegramBotRuntimeEnvironment.PRODUCTION,
+      token: 'replacement-token',
+    });
+
+    expect(api.deleteWebhook).not.toHaveBeenCalled();
+    expect(prisma.telegramBotRuntimeInstance.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          runtimeStatus: TelegramBotRuntimeStatus.DISABLED,
+          webhookUrl: null,
+        }),
+      }),
+    );
   });
 
   it('dispatches with the cached runtime token and execution runtime id', async () => {

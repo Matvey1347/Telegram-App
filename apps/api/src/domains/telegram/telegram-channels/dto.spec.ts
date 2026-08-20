@@ -3,6 +3,7 @@ import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import {
   CreateTelegramManagedPostDto,
+  TelegramChannelListQueryDto,
   UpdateTelegramManagedPostDto,
 } from './dto';
 
@@ -22,4 +23,17 @@ describe('managed post button DTOs', () => {
         .toEqual([]);
     },
   );
+});
+
+describe('TelegramChannelListQueryDto', () => {
+  it('preserves false query flags instead of coercing their strings to true', () => {
+    const dto = plainToInstance(TelegramChannelListQueryDto, {
+      archived: 'false',
+      owned: 'true',
+    });
+
+    expect(dto.archived).toBe(false);
+    expect(dto.owned).toBe(true);
+    expect(validateSync(dto)).toEqual([]);
+  });
 });

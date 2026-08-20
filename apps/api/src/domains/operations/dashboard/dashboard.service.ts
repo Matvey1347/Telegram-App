@@ -153,7 +153,7 @@ export class DashboardService {
         },
       }),
       this.prisma.telegramChannel.findMany({
-        where: { workspaceId },
+        where: { workspaceId, archivedAt: null },
         select: {
           id: true,
           title: true,
