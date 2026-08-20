@@ -1,0 +1,629 @@
+import { Injectable } from '@nestjs/common';
+import {
+  inviteLinkJoinedSubscribers,
+  sumInviteLinkAttributedSubscribers,
+  sumInviteLinkJoinedSubscribers,
+} from '../../../common/analytics/invite-link-metrics';
+import { CurrencyConversionService } from '../../../common/currency-conversion.service';
+import { resolveChannelKpiStatus } from '../../../common/analytics/channel-financial-summary';
+import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { WorkspaceService } from '../../../common/workspace.service';
+
+const dec = (v: unknown) => Number(v ?? 0);
+const DAY = 24 * 60 * 60 * 1000;
+
+function startOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function endOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
+}
+
+function parseDate(value?: string) {
+  if (!value) return null;
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isoDay(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function dateRange(input?: { dateFrom?: string; dateTo?: string }) {
+  if (!input?.dateFrom && !input?.dateTo) {
+    return { from: startOfDay(new Date(2000, 0, 1)), to: endOfDay(new Date()) };
+  }
+  const fallbackTo = startOfDay(new Date());
+  const fallbackFrom = new Date(fallbackTo.getTime() - 29 * DAY);
+  const from = startOfDay(parseDate(input?.dateFrom) ?? fallbackFrom);
+  const to = endOfDay(parseDate(input?.dateTo) ?? fallbackTo);
+  return from <= to ? { from, to } : { from: startOfDay(to), to: endOfDay(from) };
+}
+
+function inRange(date: Date | null | undefined, from: Date, to: Date) {
+  if (!date) return false;
+  const time = date.getTime();
+  return time >= from.getTime() && time <= to.getTime();
+}
+
+function categoryKey(transaction: {
+  categoryRef?: { key?: string | null; name?: string | null } | null;
+  category?: string | null;
+}) {
+  return (
+    transaction.categoryRef?.key ??
+    String(transaction.categoryRef?.name ?? transaction.category ?? '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+  );
+}
+
+@Injectable()
+export class DashboardService {
+  constructor(
+    private prisma: PrismaService,
+    private workspaceService: WorkspaceService,
+    private conversionService: CurrencyConversionService,
+  ) {}
+
+  async summary(userId: string, input?: { dateFrom?: string; dateTo?: string }) {
+    const workspaceId = await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const { from, to } = dateRange(input);
+    return this.buildSummary(workspaceId, from, to);
+  }
+
+  async summaryForWorkspace(workspaceId: string) {
+    const { from, to } = dateRange();
+    return this.buildSummary(workspaceId, from, to);
+  }
+
+  private async buildSummary(workspaceId: string, from: Date, to: Date) {
+    const [workspace, accounts, tx, campaigns, channels, hypotheses, members, investments] =
+      await Promise.all([
+      this.prisma.workspace.findUniqueOrThrow({
+        where: { id: workspaceId },
+        select: { primaryCurrency: true, secondaryCurrency: true },
+      }),
+      this.prisma.account.findMany({
+        where: {
+          workspaceId,
+          isActive: true,
+          OR: [
+            { assignedMemberId: null },
+            { assignedMember: { isHidden: false } },
+          ],
+        },
+        include: {
+          assignedMember: WorkspaceService.assignedMemberInclude,
+          icon: {
+            select: {
+              id: true,
+              type: true,
+              name: true,
+              emoji: true,
+              imageUrl: true,
+            },
+          },
+        },
+      }),
+      this.prisma.transaction.findMany({
+        where: { workspaceId },
+        include: {
+          categoryRef: {
+            include: {
+              icon: {
+                select: {
+                  id: true,
+                  type: true,
+                  name: true,
+                  emoji: true,
+                  imageUrl: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.adCampaign.findMany({
+        where: { workspaceId },
+        include: {
+          inviteLinks: { select: { joinedCount: true, requestedCount: true } },
+          telegramChannel: {
+            select: {
+              id: true,
+              title: true,
+              username: true,
+              photoUrl: true,
+              targetCpaFrom: true,
+              targetCpa: true,
+              acceptableCpaFrom: true,
+              acceptableCpa: true,
+              stopCpaFrom: true,
+              stopCpa: true,
+            },
+          },
+          promo: { select: { title: true } },
+        },
+      }),
+      this.prisma.telegramChannel.findMany({
+        where: { workspaceId },
+        select: {
+          id: true,
+          title: true,
+          username: true,
+          photoUrl: true,
+          currentSubscribersCount: true,
+          isActive: true,
+          purchaseTransaction: {
+            select: {
+              id: true,
+              amountInPrimaryCurrency: true,
+              date: true,
+            },
+          },
+          adminLinks: { select: { id: true }, take: 1 },
+          audienceSnapshots: {
+            orderBy: { collectedAt: 'desc' },
+            take: 1,
+            select: {
+              subscribersCount: true,
+              activeSubscribersEstimate: true,
+              viewRate: true,
+              dataQuality: true,
+              hasExternalTrafficAnomaly: true,
+            },
+          },
+        },
+      }),
+      this.prisma.adHypothesis.findMany({ where: { workspaceId }, select: { id: true, status: true } }),
+      this.prisma.workspaceMember.count({ where: { workspaceId } }),
+      this.prisma.investment.findMany({
+        where: { workspaceId },
+        select: {
+          id: true,
+          amountInPrimaryCurrency: true,
+          date: true,
+        },
+      }),
+    ]);
+
+    const periodTx = tx.filter((t) => inRange(t.date, from, to));
+    const revenueTransactions = tx.filter(
+      (transaction) => categoryKey(transaction) === 'channel_advertising_revenue',
+    );
+    const periodRevenueTransactions = revenueTransactions.filter((transaction) =>
+      inRange(transaction.date, from, to),
+    );
+    const expenseTransactions = tx.filter((transaction) => transaction.type === 'expense');
+    const periodExpenseTransactions = expenseTransactions.filter((transaction) =>
+      inRange(transaction.date, from, to),
+    );
+    const periodInvestments = investments.filter((investment) =>
+      inRange(investment.date, from, to),
+    );
+    const campaignDate = (campaign: any) =>
+      campaign.placementDate ?? campaign.startedAt ?? campaign.createdAt;
+    const periodCampaignsRaw = campaigns.filter((campaign) =>
+      inRange(campaignDate(campaign), from, to),
+    );
+
+    const income = periodRevenueTransactions
+      .reduce((a, t) => a + dec(t.amountInPrimaryCurrency), 0);
+    const expenses = periodExpenseTransactions
+      .reduce((a, t) => a + dec(t.amountInPrimaryCurrency), 0);
+    const totalInvestedPrimary = investments.reduce(
+      (sum, investment) => sum + dec(investment.amountInPrimaryCurrency),
+      0,
+    );
+    const investedForPeriod = periodInvestments.reduce(
+      (sum, investment) => sum + dec(investment.amountInPrimaryCurrency),
+      0,
+    );
+    const operatingProfitAllTime =
+      revenueTransactions.reduce(
+        (sum, transaction) => sum + dec(transaction.amountInPrimaryCurrency),
+        0,
+      ) -
+      expenseTransactions.reduce(
+        (sum, transaction) => sum + dec(transaction.amountInPrimaryCurrency),
+        0,
+      );
+    const remainingToBreakEven = Math.max(
+      0,
+      totalInvestedPrimary - operatingProfitAllTime,
+    );
+    const periodDays = Math.max(
+      1,
+      Math.round((startOfDay(to).getTime() - startOfDay(from).getTime()) / DAY) + 1,
+    );
+    const projectedMonthlyProfit = ((income - expenses) / periodDays) * 30;
+    const projectedPaybackMonths =
+      projectedMonthlyProfit > 0
+        ? remainingToBreakEven / projectedMonthlyProfit
+        : null;
+    const adSpend = periodCampaignsRaw.reduce(
+      (a, c) => a + dec(c.priceInPrimaryCurrency),
+      0,
+    );
+    const selectedInviteLinkIds = campaigns
+      .map((campaign) => String(campaign.telegramInviteLinkId || '').trim())
+      .filter(Boolean);
+    const selectedInviteLinks = selectedInviteLinkIds.length
+      ? await this.prisma.telegramInviteLink.findMany({
+          where: { workspaceId, id: { in: selectedInviteLinkIds } },
+          select: { id: true, joinedCount: true, requestedCount: true },
+        })
+      : [];
+    const selectedInviteLinksById = new Map(
+      selectedInviteLinks.map((link) => [
+        link.id,
+        inviteLinkJoinedSubscribers(link),
+      ]),
+    );
+    const campaignJoinedCount = (campaign: any) => {
+      const selectedLinkId = String(campaign.telegramInviteLinkId || '').trim();
+      if (selectedLinkId && selectedInviteLinksById.has(selectedLinkId)) {
+        return Number(selectedInviteLinksById.get(selectedLinkId) || 0);
+      }
+
+      const linkedJoined = sumInviteLinkJoinedSubscribers(campaign.inviteLinks);
+      return Math.max(Number(campaign.joinedCount || 0), linkedJoined);
+    };
+    const campaignsWithMtprotoMetrics = campaigns.map((campaign) => {
+      const joinedCount = campaignJoinedCount(campaign);
+      const attributedCount = Math.max(
+        joinedCount,
+        sumInviteLinkAttributedSubscribers(campaign.inviteLinks),
+      );
+      const cpa =
+        attributedCount > 0
+          ? dec(campaign.priceInPrimaryCurrency) / attributedCount
+          : null;
+      return {
+        ...campaign,
+        joinedCount,
+        attributedCount,
+        leftCount: null,
+        netGrowthCount: null,
+        cpa,
+        overallStatus: resolveChannelKpiStatus({
+          avgCpa: cpa,
+          targetCpaFrom: campaign.telegramChannel?.targetCpaFrom,
+          targetCpa: campaign.telegramChannel?.targetCpa,
+          acceptableCpaFrom: campaign.telegramChannel?.acceptableCpaFrom,
+          acceptableCpa: campaign.telegramChannel?.acceptableCpa,
+          stopCpaFrom: campaign.telegramChannel?.stopCpaFrom,
+          stopCpa: campaign.telegramChannel?.stopCpa,
+        }),
+        attributionSource: 'mtproto_invite_link_usage',
+      };
+    });
+    const periodCampaigns = campaignsWithMtprotoMetrics.filter((campaign) =>
+      inRange(campaignDate(campaign), from, to),
+    );
+    const totalJoined = periodCampaigns.reduce(
+      (sum, campaign) => sum + campaign.joinedCount,
+      0,
+    );
+    const cpas = periodCampaigns
+      .map((c) => dec(c.cpa))
+      .filter((x) => x > 0);
+    const rankedCampaigns = periodCampaigns.filter(
+      (campaign) =>
+        campaign.joinedCount > 0 &&
+        dec(campaign.priceInPrimaryCurrency) > 0 &&
+        campaign.cpa !== null,
+    );
+
+    const accountRows = await Promise.all(
+      accounts.map(async (account) => {
+        const incomeSum = tx
+          .filter((t) => t.accountId === account.id && t.type === 'income')
+          .reduce((a, t) => a + dec(t.amount), 0);
+        const expenseSum = tx
+          .filter((t) => t.accountId === account.id && t.type === 'expense')
+          .reduce((a, t) => a + dec(t.amount), 0);
+        const outgoing = await this.prisma.transfer.aggregate({
+          where: { workspaceId, fromAccountId: account.id },
+          _sum: { fromAmount: true },
+        });
+        const incoming = await this.prisma.transfer.aggregate({
+          where: { workspaceId, toAccountId: account.id },
+          _sum: { toAmount: true },
+        });
+        const balance =
+          dec(account.initialBalance) +
+          incomeSum -
+          expenseSum -
+          dec(outgoing._sum.fromAmount) +
+          dec(incoming._sum.toAmount);
+        const primary = await this.conversionService.convertCurrency(
+          balance,
+          account.currency,
+          workspace.primaryCurrency,
+          workspaceId,
+        );
+        const secondary = await this.conversionService.convertCurrency(
+          balance,
+          account.currency,
+          workspace.secondaryCurrency,
+          workspaceId,
+        );
+        return { account, balance, primary, secondary };
+      }),
+    );
+
+    const totalBalancePrimary = accountRows.reduce(
+      (a, row) => a + dec(row.primary),
+      0,
+    );
+    const totalBalanceSecondary = accountRows.reduce(
+      (a, row) => a + dec(row.secondary),
+      0,
+    );
+
+    const cumulativeBeforePeriod =
+      revenueTransactions
+        .filter((transaction) => transaction.date < from)
+        .reduce((sum, transaction) => sum + dec(transaction.amountInPrimaryCurrency), 0) -
+      expenseTransactions
+        .filter((transaction) => transaction.date < from)
+        .reduce((sum, transaction) => sum + dec(transaction.amountInPrimaryCurrency), 0) -
+      investments
+        .filter((investment) => investment.date < from)
+        .reduce((sum, investment) => sum + dec(investment.amountInPrimaryCurrency), 0);
+
+    const dailyMap = new Map<string, {
+      date: string;
+      income: number;
+      expenses: number;
+      profit: number;
+      investments: number;
+      cumulativeProfitAfterInvestments: number;
+      adSpend: number;
+      joined: number;
+    }>();
+    for (let time = startOfDay(from).getTime(); time <= startOfDay(to).getTime(); time += DAY) {
+      const date = isoDay(new Date(time));
+      dailyMap.set(date, {
+        date,
+        income: 0,
+        expenses: 0,
+        profit: 0,
+        investments: 0,
+        cumulativeProfitAfterInvestments: 0,
+        adSpend: 0,
+        joined: 0,
+      });
+    }
+    for (const transaction of periodRevenueTransactions) {
+      const row = dailyMap.get(isoDay(transaction.date));
+      if (!row) continue;
+      row.income += dec(transaction.amountInPrimaryCurrency);
+    }
+    for (const transaction of periodExpenseTransactions) {
+      const row = dailyMap.get(isoDay(transaction.date));
+      if (!row) continue;
+      row.expenses += dec(transaction.amountInPrimaryCurrency);
+    }
+    for (const investment of periodInvestments) {
+      const row = dailyMap.get(isoDay(investment.date));
+      if (!row) continue;
+      row.investments += dec(investment.amountInPrimaryCurrency);
+    }
+    for (const campaign of periodCampaigns) {
+      const row = dailyMap.get(isoDay(campaignDate(campaign)));
+      if (!row) continue;
+      row.adSpend += dec(campaign.priceInPrimaryCurrency);
+      row.joined += campaign.joinedCount;
+    }
+    let cumulativeProfitAfterInvestments = cumulativeBeforePeriod;
+    for (const row of dailyMap.values()) {
+      row.profit = row.income - row.expenses;
+      cumulativeProfitAfterInvestments +=
+        row.income - row.expenses - row.investments;
+      row.cumulativeProfitAfterInvestments = cumulativeProfitAfterInvestments;
+    }
+
+    const categoryMap = new Map<string, { id?: string | null; name: string; type: string; amount: number; count: number; iconId?: string | null; icon?: Parameters<typeof iconToResolvedEmoji>[0] | null }>();
+    for (const transaction of [...periodRevenueTransactions, ...periodExpenseTransactions]) {
+      const category = transaction.categoryRef;
+      const key = `${transaction.type}:${transaction.categoryId ?? transaction.category}`;
+      const current = categoryMap.get(key) ?? {
+        id: transaction.categoryId,
+        name: category?.name ?? transaction.category,
+        type: transaction.type,
+        amount: 0,
+        count: 0,
+        iconId: category?.iconId ?? null,
+        icon: category?.icon ?? null,
+      };
+      current.amount += dec(transaction.amountInPrimaryCurrency);
+      current.count += 1;
+      categoryMap.set(key, current);
+    }
+
+    const channelAdMap = new Map<string, { id: string; title: string; username?: string | null; photoUrl?: string | null; spend: number; joined: number; campaigns: number }>();
+    for (const campaign of periodCampaigns) {
+      const channel = campaign.telegramChannel;
+      const current = channelAdMap.get(channel.id) ?? {
+        id: channel.id,
+        title: channel.title,
+        username: channel.username,
+        photoUrl: channel.photoUrl,
+        spend: 0,
+        joined: 0,
+        campaigns: 0,
+      };
+      current.spend += dec(campaign.priceInPrimaryCurrency);
+      current.joined += campaign.joinedCount;
+      current.campaigns += 1;
+      channelAdMap.set(channel.id, current);
+    }
+
+    const revenueByChannelId = new Map<
+      string,
+      { allTimeRevenue: number; periodRevenue: number }
+    >();
+    for (const transaction of revenueTransactions) {
+      const channelId = transaction.telegramChannelId;
+      if (!channelId) continue;
+      const current = revenueByChannelId.get(channelId) ?? {
+        allTimeRevenue: 0,
+        periodRevenue: 0,
+      };
+      const amount = dec(transaction.amountInPrimaryCurrency);
+      current.allTimeRevenue += amount;
+      if (inRange(transaction.date, from, to)) {
+        current.periodRevenue += amount;
+      }
+      revenueByChannelId.set(channelId, current);
+    }
+
+    const ownChannels = channels.filter((channel) => channel.adminLinks.length > 0);
+    const externalChannels = channels.filter((channel) => channel.adminLinks.length === 0);
+    const totalSubscribers = ownChannels.reduce((sum, channel) => {
+      const latest = channel.audienceSnapshots[0];
+      return sum + Number(latest?.subscribersCount ?? channel.currentSubscribersCount ?? 0);
+    }, 0);
+    const activeSubscribersEstimate = ownChannels.reduce((sum, channel) => {
+      const latest = channel.audienceSnapshots[0];
+      return sum + Number(latest?.activeSubscribersEstimate ?? 0);
+    }, 0);
+    const anomalousChannelsCount = ownChannels.filter((channel) => channel.audienceSnapshots[0]?.hasExternalTrafficAnomaly).length;
+    const campaignStatusCounts = campaigns.reduce<Record<string, number>>((acc, campaign) => {
+      acc[campaign.status] = (acc[campaign.status] ?? 0) + 1;
+      return acc;
+    }, {});
+    const adQualityCounts = periodCampaigns.reduce<Record<string, number>>((acc, campaign) => {
+      const key = campaign.overallStatus || 'unknown';
+      acc[key] = (acc[key] ?? 0) + 1;
+      return acc;
+    }, {});
+    const hypothesisStatusCounts = hypotheses.reduce<Record<string, number>>((acc, hypothesis) => {
+      acc[hypothesis.status] = (acc[hypothesis.status] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    return {
+      period: { dateFrom: isoDay(from), dateTo: isoDay(to) },
+      totalBalancePrimary,
+      totalBalanceSecondary,
+      primaryCurrency: workspace.primaryCurrency,
+      secondaryCurrency: workspace.secondaryCurrency,
+      incomeForPeriod: income,
+      expensesForPeriod: expenses,
+      profitForPeriod: income - expenses,
+      investedCapital: totalInvestedPrimary,
+      investedCapitalForPeriod: investedForPeriod,
+      operatingProfitAllTime,
+      remainingToBreakEven,
+      projectedMonthlyProfit,
+      projectedPaybackMonths,
+      revenueTransactionsCount: periodRevenueTransactions.length,
+      channelsWithRevenueCount: new Set(
+        periodRevenueTransactions
+          .map((transaction) => transaction.telegramChannelId)
+          .filter(Boolean),
+      ).size,
+      adSpendForPeriod: adSpend,
+      totalJoinedFromAds: totalJoined,
+      averageCPA: cpas.length
+        ? cpas.reduce((a, b) => a + b, 0) / cpas.length
+        : null,
+      campaignsCount: campaigns.length,
+      periodCampaignsCount: periodCampaigns.length,
+      telegramChannelsCount: channels.length,
+      ownChannelsCount: ownChannels.length,
+      externalChannelsCount: externalChannels.length,
+      workspaceMembersCount: members,
+      totalSubscribers,
+      activeSubscribersEstimate,
+      anomalousChannelsCount,
+      dailyTrend: [...dailyMap.values()],
+      categoryBreakdown: [...categoryMap.values()]
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 8)
+        .map((row) => ({
+          ...row,
+          iconPresentation: iconToResolvedEmoji(row.icon),
+        })),
+      accountBalances: accountRows
+        .map((row) => ({
+          id: row.account.id,
+          name: row.account.name,
+          currency: row.account.currency,
+          iconId: row.account.iconId,
+          icon: row.account.icon,
+          iconPresentation: iconToResolvedEmoji(row.account.icon),
+          balance: row.balance,
+          primary: row.primary,
+          secondary: row.secondary,
+        }))
+        .sort((a, b) => dec(b.primary) - dec(a.primary)),
+      channelPerformance: [...channelAdMap.values()]
+        .map((channel) => {
+          const revenue = revenueByChannelId.get(channel.id);
+          const acquisitionCost = ownChannels.find(
+            (ownChannel) => ownChannel.id === channel.id,
+          )?.purchaseTransaction
+            ? dec(
+                ownChannels.find((ownChannel) => ownChannel.id === channel.id)
+                  ?.purchaseTransaction?.amountInPrimaryCurrency,
+              )
+            : 0;
+          const remaining = Math.max(
+            0,
+            acquisitionCost - dec(revenue?.allTimeRevenue),
+          );
+          const periodNet = dec(revenue?.periodRevenue) - channel.spend;
+          const monthlyNet = (periodNet / periodDays) * 30;
+          return {
+            ...channel,
+            revenue: dec(revenue?.periodRevenue),
+            allTimeRevenue: dec(revenue?.allTimeRevenue),
+            acquisitionCost,
+            net: periodNet,
+            remainingToBreakEven: remaining,
+            projectedPaybackMonths:
+              monthlyNet > 0 ? remaining / monthlyNet : null,
+            cpa: channel.joined > 0 ? channel.spend / channel.joined : null,
+          };
+        })
+        .sort((a, b) => dec(b.net) - dec(a.net))
+        .slice(0, 6),
+      topOwnChannels: ownChannels
+        .map((channel) => {
+          const latest = channel.audienceSnapshots[0];
+          return {
+            id: channel.id,
+            title: channel.title,
+            username: channel.username,
+            photoUrl: channel.photoUrl,
+            subscribers: Number(latest?.subscribersCount ?? channel.currentSubscribersCount ?? 0),
+            activeSubscribers: Number(latest?.activeSubscribersEstimate ?? 0),
+            viewRate: latest?.viewRate ?? null,
+            dataQuality: latest?.dataQuality ?? 'unknown',
+          };
+        })
+        .sort((a, b) => b.subscribers - a.subscribers)
+        .slice(0, 6),
+      campaignStatusCounts,
+      adQualityCounts,
+      hypothesisStatusCounts,
+      bestCampaigns: [...rankedCampaigns]
+        .sort((a, b) => dec(a.cpa) - dec(b.cpa))
+        .slice(0, 5),
+      worstCampaigns: [...rankedCampaigns]
+        .sort((a, b) => dec(b.cpa) - dec(a.cpa))
+        .slice(0, 5),
+    };
+  }
+}

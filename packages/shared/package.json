@@ -1,0 +1,30 @@
+{
+  "name": "@telegram-system/shared",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    },
+    "./telegram-spoilers": {
+      "types": "./src/telegram-spoilers.ts",
+      "default": "./dist/telegram-spoilers.js"
+    },
+    "./telegram-table-markup": {
+      "types": "./src/telegram-table-markup.ts",
+      "default": "./dist/telegram-table-markup.js"
+    }
+  },
+  "scripts": {
+    "lint": "pnpm exec tsc --noEmit -p tsconfig.json",
+    "typecheck": "pnpm exec tsc --noEmit -p tsconfig.json",
+    "test": "echo \"No shared tests yet\"",
+    "build": "pnpm exec tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}

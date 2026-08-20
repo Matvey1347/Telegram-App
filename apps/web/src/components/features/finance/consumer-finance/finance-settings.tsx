@@ -1,0 +1,17 @@
+"use client";
+
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ConsumerFinanceProfile } from "@telegram-system/shared";
+import { Button, Card, FormField, Input, Select } from "@/components/ui/primitives";
+import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
+import { consumerFinanceKeys } from "@/lib/query-keys";
+import { financeCopy, supportedFinanceLocales, type FinanceLocale } from "./finance-i18n";
+
+export function FinanceSettings({ botId, profile, locale, onCategories }: { botId: string; profile: ConsumerFinanceProfile; locale: FinanceLocale; onCategories: () => void }) {
+  const t = financeCopy(locale); const client = useQueryClient(); const [currency, setCurrency] = useState(profile.defaultCurrency); const [timezone, setTimezone] = useState(profile.timezone); const [nextLocale, setNextLocale] = useState<FinanceLocale>(locale);
+  const billing = useQuery({ queryKey: consumerFinanceKeys.billing(botId), queryFn: () => consumerFinanceApi.billing(botId) });
+  const save = useMutation({ mutationFn: () => consumerFinanceApi.updateSettings(botId, { defaultCurrency: currency, timezone, locale: nextLocale }), onSuccess: (updated) => { client.setQueryData(consumerFinanceKeys.settings(botId), { profile: updated }); void Promise.all([client.invalidateQueries({ queryKey: consumerFinanceKeys.dashboard(botId) }), client.invalidateQueries({ queryKey: consumerFinanceKeys.accounts(botId) }), client.invalidateQueries({ queryKey: consumerFinanceKeys.transactionLists(botId) }), client.invalidateQueries({ queryKey: consumerFinanceKeys.analyticsRoot(botId) })]); } });
+  const active = billing.data?.subscriptions.some((item) => item.status === "ACTIVE");
+  return <div className="space-y-4"><Card><h2 className="font-medium">{t.general}</h2><div className="mt-3 space-y-3"><FormField label={t.language}><Select value={nextLocale} onChange={(event) => setNextLocale(event.target.value as FinanceLocale)}>{supportedFinanceLocales.map((item) => <option key={item} value={item}>{item.toUpperCase()}</option>)}</Select></FormField><div><FormField label={t.mainCurrency}><Select value={currency} onChange={(event) => setCurrency(event.target.value)}>{["UAH", "USD", "EUR", "PLN"].map((item) => <option key={item}>{item}</option>)}</Select></FormField><p className="mt-1 text-xs text-neutral-500">{t.currencyHelp}</p></div><FormField label={t.timezone}><Input value={timezone} onChange={(event) => setTimezone(event.target.value)} /></FormField><Button className="w-full" disabled={!currency || !timezone || save.isPending} onClick={() => save.mutate()}>{save.isPending ? t.saving : t.save}</Button></div></Card><Card><h2 className="font-medium">{t.categories}</h2><p className="mt-1 text-sm text-neutral-400">{t.categoriesHelp}</p><Button className="mt-3" variant="secondary" onClick={onCategories}>{t.manageCategories}</Button></Card><Card><h2 className="font-medium">{t.plan}</h2><p className="mt-1 text-sm text-neutral-400">{active ? t.proActive : t.proDescription}</p></Card><Card><h2 className="font-medium">{t.dataPrivacy}</h2><Button className="mt-3" variant="secondary" onClick={() => consumerFinanceApi.exportData(botId).then((data) => { const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })); link.download = "finance-export.json"; link.click(); URL.revokeObjectURL(link.href); })}>{t.exportData}</Button></Card></div>;
+}

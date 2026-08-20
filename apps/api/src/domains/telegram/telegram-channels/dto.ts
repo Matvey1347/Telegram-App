@@ -1,0 +1,460 @@
+import { Type } from 'class-transformer';
+import { TelegramChannelAdAnalysisStatus } from '@prisma/client';
+import type {
+  ScheduleManagedPostsBatchItem,
+  ScheduleManagedPostsBatchPayload,
+  TelegramPostPlannerPreviewPayload,
+} from '@telegram-system/shared';
+import {
+  Allow,
+  IsArray,
+  IsBoolean,
+  IsDateString,
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUrl,
+  Matches,
+  Max,
+  Min,
+  ValidateIf,
+  ValidateNested,
+} from 'class-validator';
+import { PaginationQueryDto } from '../../../common/pagination/pagination-query.dto';
+
+export class CreateTelegramChannelDto {
+  @IsOptional() @IsString() assignedMemberId?: string | null;
+  @IsString() title!: string;
+  @IsOptional() @IsString() username?: string;
+  @IsOptional() @IsString() telegramChatId?: string;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @Type(() => Number) @IsInt() currentSubscribersCount?: number;
+}
+
+export class TelegramChannelTimePostDto {
+  @IsOptional() @IsString() iconId?: string | null;
+  @IsOptional() @IsString() title?: string;
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/) time!: string;
+}
+
+export class UpdateTelegramChannelDto {
+  @IsOptional() @IsString() assignedMemberId?: string | null;
+  @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsString() username?: string;
+  @IsOptional() @IsString() telegramChatId?: string;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @Type(() => Number) @IsInt() currentSubscribersCount?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  seedSubscribersCount?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  activeSubscribersWindow?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) ownViewsPerPost?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  ownReactionsPerPost?: number;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) targetCpaFrom?: number;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) targetCpa?: number;
+  @IsOptional() @Matches(/^[A-Za-z]{3}$/) kpiCurrency?: string;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  acceptableCpaFrom?: number;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) acceptableCpa?: number;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) stopCpaFrom?: number;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) stopCpa?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  knownFakeSubscribersCount?: number;
+  @IsOptional()
+  @IsIn(['normal', 'suspicious', 'polluted', 'invalid'])
+  subscriberBaseQuality?: string;
+  @IsOptional() @IsString() dataQualityNotes?: string | null;
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TelegramChannelTimePostDto)
+  timePosts?: TelegramChannelTimePostDto[];
+  @IsOptional() @IsBoolean() syncIncludePublicInfo?: boolean;
+  @IsOptional() @IsBoolean() syncIncludeInviteLinks?: boolean;
+  @IsOptional() @IsBoolean() syncIncludeHistoricalPosts?: boolean;
+  @IsOptional() @IsBoolean() syncIncludePostMetrics?: boolean;
+  @IsOptional() @IsBoolean() syncIncludeOlderPosts?: boolean;
+  @IsOptional() @IsBoolean() syncIncludeChannelStats?: boolean;
+  @IsOptional() @IsBoolean() syncIncludeManagedPosts?: boolean;
+  @IsOptional() @IsBoolean() syncIncludeAudienceSnapshot?: boolean;
+  @IsOptional() @IsBoolean() autoSyncEnabled?: boolean;
+  @IsOptional() @IsIn(['CREATED', 'PURCHASED']) acquisitionType?:
+    | 'CREATED'
+    | 'PURCHASED';
+  @IsOptional()
+  @ValidateIf((_, value) => value !== undefined && value !== null)
+  @IsDateString()
+  postsSyncFrom?: string | null;
+  @IsOptional()
+  @ValidateIf((_, value) => value !== undefined && value !== null)
+  @IsDateString()
+  inviteLinksSyncFrom?: string | null;
+  @IsOptional() @IsString() purchaseTransactionId?: string | null;
+}
+
+export class ImportTelegramChannelDto {
+  @IsOptional() @IsString() input?: string;
+  @IsOptional() @IsString() username?: string;
+  @IsOptional() @IsString() telegramAccountId?: string;
+  @IsOptional() @IsIn(['CREATED', 'PURCHASED']) acquisitionType?:
+    | 'CREATED'
+    | 'PURCHASED';
+  @IsOptional()
+  @ValidateIf((_, value) => value !== undefined && value !== null)
+  @IsDateString()
+  postsSyncFrom?: string | null;
+  @IsOptional()
+  @ValidateIf((_, value) => value !== undefined && value !== null)
+  @IsDateString()
+  inviteLinksSyncFrom?: string | null;
+  @IsOptional() @IsString() purchaseTransactionId?: string | null;
+}
+
+export class HistoricalSyncDto {
+  @IsOptional() @IsString() telegramUserAccountId?: string;
+  @IsOptional() @IsBoolean() syncInviteLinks?: boolean;
+  @IsOptional() @IsBoolean() syncPosts?: boolean;
+  @IsOptional() @Type(() => Number) @IsInt() postLimit?: number;
+}
+
+export class SyncNowDto {
+  @IsOptional() @IsString() telegramUserAccountId?: string;
+  @IsOptional() @IsBoolean() saveSelection?: boolean;
+  @IsOptional() @IsBoolean() syncIncludePublicInfo?: boolean;
+  @IsOptional() @IsBoolean() syncIncludeInviteLinks?: boolean;
+  @IsOptional() @IsBoolean() syncIncludeHistoricalPosts?: boolean;
+  @IsOptional() @IsBoolean() syncIncludePostMetrics?: boolean;
+  @IsOptional() @IsBoolean() syncIncludeOlderPosts?: boolean;
+  @IsOptional() @IsBoolean() syncIncludeChannelStats?: boolean;
+  @IsOptional() @IsBoolean() syncIncludeManagedPosts?: boolean;
+  @IsOptional() @IsBoolean() syncIncludeAudienceSnapshot?: boolean;
+  @IsOptional() @Type(() => Number) @IsInt() postLimit?: number;
+}
+
+export class DeepSyncDto {
+  @IsOptional() @IsString() telegramUserAccountId?: string;
+  @IsOptional() @Type(() => Number) @IsInt() postLimit?: number;
+}
+
+export class SyncPostsMetricsDto {
+  @IsOptional() @IsString() telegramUserAccountId?: string;
+  @IsOptional() @Type(() => Number) @IsInt() postLimit?: number;
+}
+
+export class SyncChannelStatsDto {
+  @IsOptional() @IsString() telegramUserAccountId?: string;
+}
+
+export class AttachCampaignDto {
+  @IsString() adCampaignId!: string;
+}
+
+export class UpdateTelegramPostManualMetricsDto {
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) manualOwnViews?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  manualOwnReactions?: number;
+  @IsOptional() @IsBoolean() excludeFromAnalytics?: boolean;
+}
+
+export class CreateTelegramManagedPostDto {
+  @IsString() title!: string;
+  @IsOptional() @IsString() text?: string;
+  @IsOptional() @IsArray() @IsString({ each: true }) imageUrls?: string[];
+  @IsOptional() @IsString() assignedMemberId?: string;
+  @IsOptional() @IsString() icon?: string | null;
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TelegramManagedPostButtonDto)
+  buttonRows?: TelegramManagedPostButtonDto[][];
+}
+
+export class TelegramManagedPostButtonDto {
+  @IsString() text!: string;
+  @IsUrl({ protocols: ['http', 'https', 'tg'], require_protocol: true }) url!: string;
+  @IsIn(['default', 'primary', 'success', 'danger']) style!: 'default' | 'primary' | 'success' | 'danger';
+}
+
+export class ImportTelegramManagedPostRowDto {
+  @Allow() title?: unknown;
+  @Allow() text?: unknown;
+  @Allow() icon?: unknown;
+  @Allow() emoji?: unknown;
+  @Allow() iconText?: unknown;
+  @Allow() urls?: unknown;
+  @Allow() imageUrls?: unknown;
+  @Allow() images?: unknown;
+  @Allow() groupId?: unknown;
+  @Allow() groupPosition?: unknown;
+  @Allow() order?: unknown;
+  @Allow() scheduledAt?: unknown;
+  @Allow() imported?: unknown;
+  @Allow() approved?: unknown;
+  @Allow() imageSearch?: unknown;
+}
+
+export class ImportTelegramManagedPostsDto {
+  @IsOptional() @IsString() postGroupId?: string | null;
+  @IsOptional() @IsString() assignedMemberId?: string;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ImportTelegramManagedPostRowDto)
+  rows!: ImportTelegramManagedPostRowDto[];
+}
+
+export class TelegramChannelSelectQueryDto {
+  @IsOptional() @Type(() => Boolean) @IsBoolean() canPostMessagesOnly?: boolean;
+}
+
+export class UpdateTelegramManagedPostDto {
+  @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsString() text?: string | null;
+  @IsOptional() @IsArray() @IsString({ each: true }) imageUrls?: string[];
+  @IsOptional() @IsString() assignedMemberId?: string;
+  @IsOptional() @IsString() icon?: string | null;
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TelegramManagedPostButtonDto)
+  buttonRows?: TelegramManagedPostButtonDto[][];
+}
+
+export class ManagedPostLinkTargetsQueryDto {
+  @IsOptional() @IsString() search?: string;
+  @IsOptional() @IsString() groupId?: string;
+  @IsOptional() @IsString() excludePostId?: string;
+  @IsOptional() @IsIn(['edit', 'publishNow', 'schedule']) usage?: string;
+  @IsOptional() @IsDateString() scheduledAt?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50) limit?: number;
+}
+
+export class SetManagedPostTelegramUrlDto {
+  @IsString()
+  telegramUrl!: string;
+}
+
+export class CreatePostGroupDto {
+  @IsString() telegramChannelId!: string;
+  @IsString() title!: string;
+  @IsOptional() @IsString() description?: string | null;
+  @IsOptional() @IsString() icon?: string | null;
+  @IsOptional() @IsBoolean() statusNumberingEnabled?: boolean;
+  @IsOptional() @IsArray() @IsString({ each: true }) postIds?: string[];
+}
+
+export class UpdatePostGroupDto {
+  @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsString() description?: string | null;
+  @IsOptional() @IsString() icon?: string | null;
+  @IsOptional() @IsBoolean() statusNumberingEnabled?: boolean;
+}
+
+export class PostGroupsQueryDto extends PaginationQueryDto {
+  @IsOptional() @IsString() telegramChannelId?: string;
+  @IsOptional() @IsString() search?: string;
+}
+
+export class TelegramChannelListQueryDto extends PaginationQueryDto {}
+
+export class TelegramChannelPostsQueryDto extends PaginationQueryDto {
+  @IsOptional() @IsString() search?: string;
+  @IsOptional() @IsDateString() from?: string;
+  @IsOptional() @IsDateString() to?: string;
+}
+
+export class TelegramChannelInviteLinksQueryDto extends PaginationQueryDto {
+  @IsOptional() @IsString() search?: string;
+  @IsOptional() @IsString() availableForCampaignId?: string;
+}
+
+export class TelegramManagedPostsQueryDto extends PaginationQueryDto {}
+
+export class PostIdsDto {
+  @IsArray() @IsString({ each: true }) postIds!: string[];
+}
+
+export class ReorderPostGroupDto {
+  @IsArray() @IsString({ each: true }) orderedPostIds!: string[];
+}
+
+export class ReorderManagedPostSidebarDto {
+  @IsArray() @IsString({ each: true }) orderedItems!: string[];
+}
+
+export class MovePostChannelDto {
+  @IsString() targetTelegramChannelId!: string;
+}
+
+export class PublishPostGroupDto {
+  @IsOptional() @IsBoolean() includeScheduled?: boolean;
+  @IsOptional() @IsBoolean() includeFailed?: boolean;
+  @IsOptional() @IsBoolean() republishPublished?: boolean;
+}
+
+export class SchedulePostGroupSequenceDto {
+  @IsDateString() startDate!: string;
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/) time!: string;
+  @Type(() => Number) @IsInt() @Min(1) intervalDays!: number;
+  @IsOptional() @IsString() timezone?: string;
+  @IsOptional() @IsBoolean() includeDraftsOnly?: boolean;
+  @IsOptional() @IsBoolean() overwriteExistingScheduled?: boolean;
+  @IsOptional() @IsBoolean() includeFailed?: boolean;
+}
+
+export class ScheduleTelegramManagedPostDto {
+  @IsDateString() scheduledAt!: string;
+  @IsOptional()
+  @IsIn(['IMAGES_THEN_TEXT', 'CAPTION_THEN_TEXT'])
+  longTextMode?: string;
+}
+
+export class PublishTelegramManagedPostDto {
+  @IsOptional()
+  @IsIn(['IMAGES_THEN_TEXT', 'CAPTION_THEN_TEXT'])
+  longTextMode?: string;
+}
+
+export class ManagedPostsCalendarQueryDto {
+  @IsDateString()
+  from!: string;
+
+  @IsDateString()
+  to!: string;
+}
+
+export class CreatePostPlannerFormatDto {
+  @IsString() name!: string;
+  @IsOptional() @IsString() description?: string | null;
+  @IsOptional() @IsString() icon?: string | null;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) position?: number;
+  @IsOptional() @IsBoolean() isActive?: boolean;
+}
+
+export class UpdatePostPlannerFormatDto {
+  @IsOptional() @IsString() name?: string;
+  @IsOptional() @IsString() description?: string | null;
+  @IsOptional() @IsString() icon?: string | null;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) position?: number;
+  @IsOptional() @IsBoolean() isActive?: boolean;
+}
+
+export class CreatePostPlannerSlotDto {
+  @IsOptional() @IsString() formatId?: string | null;
+  @IsOptional() @IsArray() @IsString({ each: true }) postGroupIds?: string[];
+  @Type(() => Number) @IsInt() @Min(0) @Max(6) weekday!: number;
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/) time!: string;
+  @IsOptional() @IsString() timezone?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) position?: number;
+  @IsOptional() @IsBoolean() isActive?: boolean;
+}
+
+export class UpdatePostPlannerSlotDto {
+  @IsOptional() @IsString() formatId?: string | null;
+  @IsOptional() @IsArray() @IsString({ each: true }) postGroupIds?: string[];
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(6) weekday?: number;
+  @IsOptional() @Matches(/^([01]\d|2[0-3]):[0-5]\d$/) time?: string;
+  @IsOptional() @IsString() timezone?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) position?: number;
+  @IsOptional() @IsBoolean() isActive?: boolean;
+}
+
+export class PostPlannerPreviewDto implements TelegramPostPlannerPreviewPayload {
+  @IsDateString() from!: string;
+  @IsDateString() to!: string;
+  @IsOptional() @IsString() timezone?: string;
+  @IsOptional() @IsArray() @IsString({ each: true }) postGroupIds?: string[];
+  @IsOptional() @IsArray() @IsString({ each: true }) formatIds?: string[];
+  @IsOptional() @Allow() formatWeights?: Record<string, number>;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50) limit?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) rerollOffset?: number;
+  @IsOptional() @IsArray() @IsString({ each: true }) excludePostIds?: string[];
+}
+
+export class PostPlannerApplyDto extends PostPlannerPreviewDto {}
+
+export class PostPlannerRerollDayDto {
+  @IsDateString() date!: string;
+  @IsOptional() @IsString() timezone?: string;
+  @IsOptional() @IsArray() @IsString({ each: true }) postGroupIds?: string[];
+  @IsOptional() @IsArray() @IsString({ each: true }) formatIds?: string[];
+  @IsOptional() @Allow() formatWeights?: Record<string, number>;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50) limit?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) rerollOffset?: number;
+}
+
+export class ScheduleManagedPostsBatchItemDto implements ScheduleManagedPostsBatchItem {
+  @IsString()
+  postId!: string;
+
+  @IsDateString()
+  scheduledAt!: string;
+
+  @IsOptional()
+  @IsIn(['IMAGES_THEN_TEXT', 'CAPTION_THEN_TEXT'])
+  longTextMode?: 'IMAGES_THEN_TEXT' | 'CAPTION_THEN_TEXT';
+}
+
+export class ScheduleManagedPostsBatchDto implements ScheduleManagedPostsBatchPayload {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ScheduleManagedPostsBatchItemDto)
+  items!: ScheduleManagedPostsBatchItemDto[];
+}
+
+export class CreateTelegramChannelAdAnalysisDto {
+  @IsOptional() @IsString() assignedMemberId?: string | null;
+  @IsIn([
+    TelegramChannelAdAnalysisStatus.APPROVED,
+    TelegramChannelAdAnalysisStatus.REJECTED,
+  ])
+  status!: TelegramChannelAdAnalysisStatus;
+  @IsDateString() analyzedAt!: string;
+  @IsOptional() @IsString() verdict?: string;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) price?: number;
+  @IsOptional() @IsString() currency?: string;
+  @IsOptional() @IsArray() @IsString({ each: true }) reasonTags?: string[];
+  @IsOptional() @IsString() reasonSummary?: string;
+  @IsOptional() @IsString() notes?: string;
+  @IsOptional() @IsDateString() nextReviewAt?: string | Date;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) postLimit?: number;
+}
+
+export class UpdateTelegramChannelAdAnalysisDto {
+  @IsOptional() @IsString() assignedMemberId?: string | null;
+  @IsOptional()
+  @IsIn([
+    TelegramChannelAdAnalysisStatus.APPROVED,
+    TelegramChannelAdAnalysisStatus.REJECTED,
+  ])
+  status?: TelegramChannelAdAnalysisStatus;
+  @IsOptional() @IsDateString() analyzedAt?: string;
+  @IsOptional() @IsString() verdict?: string;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) price?: number;
+  @IsOptional() @IsString() currency?: string;
+  @IsOptional() @IsArray() @IsString({ each: true }) reasonTags?: string[];
+  @IsOptional() @IsString() reasonSummary?: string;
+  @IsOptional() @IsString() notes?: string;
+  @IsOptional() @IsDateString() nextReviewAt?: string | Date;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) postLimit?: number;
+}

@@ -1,0 +1,531 @@
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  buildDataQualityWarning,
+  calculateEffectiveSubscribers,
+  classifyViewRate,
+  maxDataQuality,
+  type DataQuality,
+} from '../../../common/analytics/data-quality';
+import {
+  effectiveCampaignActiveSubscribers,
+  effectiveCampaignAttributedSubscribers,
+  effectiveCampaignJoinedSubscribers,
+  effectiveCampaignPendingSubscribers,
+  resolveChannelKpiLabel,
+  resolveChannelKpiStatus,
+} from '../../../common/analytics/channel-financial-summary';
+
+@Injectable()
+export class TelegramChannelAnalyticsService {
+  private readonly logger = new Logger(TelegramChannelAnalyticsService.name);
+  private readonly rollingPostsWindow = 50;
+  private telegramChannelSyncScopeColumnsAvailable: boolean | null = null;
+  private telegramInviteLinkRequestedCountColumnAvailable: boolean | null =
+    null;
+  private ensureTelegramInviteLinkRequestedCountColumnPromise:
+    | Promise<boolean>
+    | null = null;
+  private ensureTelegramChannelSyncScopeColumnsPromise: Promise<void> | null =
+    null;
+
+  constructor(private prisma: PrismaService) {}
+
+  private average(values: number[]) {
+    return values.length
+      ? values.reduce((sum, value) => sum + value, 0) / values.length
+      : null;
+  }
+
+  private numberOrNull(value: unknown) {
+    if (value == null) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  private isMissingTelegramChannelSyncScopeColumn(error: unknown) {
+    const message =
+      error instanceof Error ? error.message : String(error || '');
+    return (
+      /column [`'"](?:TelegramChannel\.)?syncInclude[A-Za-z]+\b.*does not exist(?: in the current database)?/i.test(
+        message,
+      ) ||
+      /column [`'"]syncInclude[A-Za-z]+ of relation TelegramChannel[`'"] does not exist/i.test(
+        message,
+      )
+    );
+  }
+
+  private requestedCountCompatibilityReason(error: unknown) {
+    const message =
+      error instanceof Error ? error.message : String(error || '');
+    if (/Unknown arg(?:ument)? [`'"]requestedCount[`'"]/i.test(message)) {
+      return 'outdated_prisma_client';
+    }
+    if (
+      /column [`'"](?:TelegramInviteLink\.)?requestedCount\b.*does not exist(?: in the current database)?/i.test(
+        message,
+      ) ||
+      /column [`'"]requestedCount of relation TelegramInviteLink[`'"] does not exist/i.test(
+        message,
+      )
+    ) {
+      return 'database_column_missing';
+    }
+    return 'unknown';
+  }
+
+  private normalizeRequestedCount<T extends object>(
+    value: T,
+  ): T & { requestedCount: number } {
+    const entity = value as T & { requestedCount?: number | null };
+    return {
+      ...value,
+      requestedCount: Number(entity.requestedCount ?? 0),
+    };
+  }
+
+  private normalizeRequestedCounts<T extends object>(
+    values: T[],
+  ): Array<T & { requestedCount: number }> {
+    return values.map((value) => this.normalizeRequestedCount(value));
+  }
+
+  private async ensureTelegramInviteLinkRequestedCountColumnAvailable() {
+    if (this.telegramInviteLinkRequestedCountColumnAvailable === true) {
+      return true;
+    }
+    if (this.ensureTelegramInviteLinkRequestedCountColumnPromise) {
+      return this.ensureTelegramInviteLinkRequestedCountColumnPromise;
+    }
+    this.ensureTelegramInviteLinkRequestedCountColumnPromise = (async () => {
+      if (typeof this.prisma.$executeRawUnsafe !== 'function') {
+        return false;
+      }
+      await this.prisma.$executeRawUnsafe(`
+        ALTER TABLE "TelegramInviteLink"
+        ADD COLUMN IF NOT EXISTS "requestedCount" INTEGER NOT NULL DEFAULT 0
+      `);
+      this.telegramInviteLinkRequestedCountColumnAvailable = true;
+      this.logger.warn(
+        'TelegramInviteLink.requestedCount column was missing in analytics queries and was created automatically for compatibility.',
+      );
+      return true;
+    })();
+    try {
+      await this.ensureTelegramInviteLinkRequestedCountColumnPromise;
+    } finally {
+      this.ensureTelegramInviteLinkRequestedCountColumnPromise = null;
+    }
+    return Boolean(this.telegramInviteLinkRequestedCountColumnAvailable);
+  }
+
+  private async findInviteLinksForFinancialSummary(params: {
+    workspaceId: string;
+    telegramChannelId: string;
+  }) {
+    const run = async (includeRequestedCount: boolean) => {
+      const links = await this.prisma.telegramInviteLink.findMany({
+        where: {
+          workspaceId: params.workspaceId,
+          telegramChannelId: params.telegramChannelId,
+        },
+        select: includeRequestedCount
+          ? { id: true, joinedCount: true, requestedCount: true }
+          : { id: true, joinedCount: true },
+      });
+      return this.normalizeRequestedCounts(links);
+    };
+
+    if (this.telegramInviteLinkRequestedCountColumnAvailable === false) {
+      return run(false);
+    }
+
+    try {
+      return await run(true);
+    } catch (error) {
+      const reason = this.requestedCountCompatibilityReason(error);
+      if (reason !== 'database_column_missing') {
+        throw error;
+      }
+      this.telegramInviteLinkRequestedCountColumnAvailable = false;
+      const repaired =
+        await this.ensureTelegramInviteLinkRequestedCountColumnAvailable();
+      return repaired ? run(true) : run(false);
+    }
+  }
+
+  private async findCampaignsForFinancialSummary(params: {
+    workspaceId: string;
+    telegramChannelId: string;
+  }) {
+    const run = async (includeRequestedCount: boolean) => {
+      const campaigns = await (this.prisma.adCampaign as any).findMany({
+        where: {
+          workspaceId: params.workspaceId,
+          telegramChannelId: params.telegramChannelId,
+          excludeFromAnalytics: false,
+        },
+        include: {
+          inviteLinks: {
+            select: includeRequestedCount
+              ? { joinedCount: true, requestedCount: true }
+              : { joinedCount: true },
+          },
+        },
+      });
+
+      return campaigns.map((campaign: any) => ({
+        ...campaign,
+        inviteLinks: this.normalizeRequestedCounts(
+          Array.isArray(campaign.inviteLinks) ? campaign.inviteLinks : [],
+        ),
+      }));
+    };
+
+    if (this.telegramInviteLinkRequestedCountColumnAvailable === false) {
+      return run(false);
+    }
+
+    try {
+      return await run(true);
+    } catch (error) {
+      const reason = this.requestedCountCompatibilityReason(error);
+      if (reason !== 'database_column_missing') {
+        throw error;
+      }
+      this.telegramInviteLinkRequestedCountColumnAvailable = false;
+      const repaired =
+        await this.ensureTelegramInviteLinkRequestedCountColumnAvailable();
+      return repaired ? run(true) : run(false);
+    }
+  }
+
+  private async ensureTelegramChannelSyncScopeColumnsAvailable() {
+    if (this.telegramChannelSyncScopeColumnsAvailable === true) return;
+    if (this.ensureTelegramChannelSyncScopeColumnsPromise) {
+      return this.ensureTelegramChannelSyncScopeColumnsPromise;
+    }
+    this.ensureTelegramChannelSyncScopeColumnsPromise = (async () => {
+      await this.prisma.$executeRawUnsafe(`
+        ALTER TABLE "TelegramChannel"
+        ADD COLUMN IF NOT EXISTS "syncIncludePublicInfo" BOOLEAN NOT NULL DEFAULT true,
+        ADD COLUMN IF NOT EXISTS "syncIncludeInviteLinks" BOOLEAN NOT NULL DEFAULT true,
+        ADD COLUMN IF NOT EXISTS "syncIncludeHistoricalPosts" BOOLEAN NOT NULL DEFAULT true,
+        ADD COLUMN IF NOT EXISTS "syncIncludePostMetrics" BOOLEAN NOT NULL DEFAULT true,
+        ADD COLUMN IF NOT EXISTS "syncIncludeOlderPosts" BOOLEAN NOT NULL DEFAULT true,
+        ADD COLUMN IF NOT EXISTS "syncIncludeChannelStats" BOOLEAN NOT NULL DEFAULT true,
+        ADD COLUMN IF NOT EXISTS "syncIncludeManagedPosts" BOOLEAN NOT NULL DEFAULT true,
+        ADD COLUMN IF NOT EXISTS "syncIncludeAudienceSnapshot" BOOLEAN NOT NULL DEFAULT true,
+        ADD COLUMN IF NOT EXISTS "autoSyncEnabled" BOOLEAN NOT NULL DEFAULT true
+      `);
+      this.telegramChannelSyncScopeColumnsAvailable = true;
+      this.logger.warn(
+        'TelegramChannel sync-scope columns were missing in analytics queries and were created automatically for compatibility.',
+      );
+    })();
+    try {
+      await this.ensureTelegramChannelSyncScopeColumnsPromise;
+    } finally {
+      this.ensureTelegramChannelSyncScopeColumnsPromise = null;
+    }
+  }
+
+  private async findChannelById(channelId: string) {
+    const run = () =>
+      this.prisma.telegramChannel.findUnique({
+        where: { id: channelId },
+      });
+
+    try {
+      return await run();
+    } catch (error) {
+      if (!this.isMissingTelegramChannelSyncScopeColumn(error)) throw error;
+      this.telegramChannelSyncScopeColumnsAvailable = false;
+      await this.ensureTelegramChannelSyncScopeColumnsAvailable();
+      return run();
+    }
+  }
+
+  async getActiveAudienceEstimate(channelId: string) {
+    const channel = await this.findChannelById(channelId);
+    if (!channel) throw new NotFoundException('Telegram channel not found');
+
+    const postsWindow = this.rollingPostsWindow;
+    const posts = await this.prisma.telegramPost.findMany({
+      where: {
+        workspaceId: channel.workspaceId,
+        telegramChannelId: channel.id,
+        excludeFromAnalytics: false,
+      },
+      orderBy: { postDate: 'desc' },
+      take: postsWindow,
+    });
+
+    const rawViews = posts.map((post) => Number(post.viewsCount || 0));
+    const ownViewsPerPost = Math.max(0, Number(channel.ownViewsPerPost || 0));
+    const ownReactionsPerPost = Math.max(
+      0,
+      Number(channel.ownReactionsPerPost || 0),
+    );
+    const adjustedViews = posts.map((post) =>
+      Math.max(
+        0,
+        Number(post.viewsCount || 0) -
+          ownViewsPerPost -
+          Number(post.manualOwnViews || 0),
+      ),
+    );
+    const rawReactions = posts.map((post) =>
+      Number(post.reactionsCount || 0),
+    );
+    const adjustedReactions = posts.map((post) =>
+      Math.max(
+        0,
+        Number(post.reactionsCount || 0) -
+          ownReactionsPerPost -
+          Number(post.manualOwnReactions || 0),
+      ),
+    );
+    const avgViewsAdjusted = this.average(adjustedViews);
+    const subscribersCount = channel.currentSubscribersCount ?? null;
+    const knownFakeSubscribersCount = Math.max(
+      0,
+      Number(channel.knownFakeSubscribersCount || 0),
+    );
+    const seedSubscribersCount = Math.max(
+      0,
+      Number(channel.seedSubscribersCount || 0),
+    );
+    const {
+      effectiveSubscribers: effectiveSubscribersBeforeSeed,
+      subscriberBaseQuality,
+      hasSubscriberBasePollution,
+    } = calculateEffectiveSubscribers({
+      totalSubscribers: subscribersCount,
+      knownFakeSubscribersCount,
+      manualSubscriberBaseQuality: channel.subscriberBaseQuality,
+    });
+    const effectiveSubscribers =
+      effectiveSubscribersBeforeSeed == null
+        ? null
+        : Math.max(0, effectiveSubscribersBeforeSeed - seedSubscribersCount);
+    const rawActiveSubscribersEstimate =
+      avgViewsAdjusted == null ? null : Math.round(avgViewsAdjusted);
+    const rawViewRate =
+      effectiveSubscribers && rawActiveSubscribersEstimate != null
+        ? (rawActiveSubscribersEstimate / effectiveSubscribers) * 100
+        : null;
+    const cappedActiveSubscribersEstimate =
+      effectiveSubscribers == null || rawActiveSubscribersEstimate == null
+        ? null
+        : Math.min(rawActiveSubscribersEstimate, effectiveSubscribers);
+    const cappedViewRate =
+      rawViewRate == null ? null : Math.min(rawViewRate, 100);
+    const classified = classifyViewRate(rawViewRate);
+    let dataQuality: DataQuality = classified.dataQuality;
+    let dataQualityReason = classified.reason;
+    let hasExternalTrafficAnomaly = classified.hasExternalTrafficAnomaly;
+    if (subscriberBaseQuality === 'polluted' || subscriberBaseQuality === 'suspicious') {
+      dataQuality = maxDataQuality(dataQuality, 'suspicious');
+      dataQualityReason = 'subscriber_base_polluted';
+    }
+    if (subscriberBaseQuality === 'invalid') {
+      dataQuality = 'invalid';
+      dataQualityReason = 'missing_subscribers_or_views';
+      hasExternalTrafficAnomaly = false;
+    }
+    const dataQualityWarning = buildDataQualityWarning(
+      dataQuality,
+      dataQualityReason,
+    );
+    const activeSubscribersEstimate = cappedActiveSubscribersEstimate;
+    const viewRate = cappedViewRate;
+    const organicActiveSubscribersEstimate = 0;
+    const paidActiveSubscribersEstimate =
+      activeSubscribersEstimate == null
+        ? null
+        : activeSubscribersEstimate;
+
+    return {
+      subscribersCount,
+      knownFakeSubscribersCount,
+      effectiveSubscribersCount: effectiveSubscribers,
+      subscriberBaseQuality,
+      seedSubscribersCount,
+      ownViewsPerPost,
+      ownReactionsPerPost,
+      rawActiveSubscribersEstimate,
+      activeSubscribersEstimate,
+      cappedActiveSubscribersEstimate,
+      organicActiveSubscribersEstimate,
+      paidActiveSubscribersEstimate,
+      rawViewRate,
+      viewRate,
+      cappedViewRate,
+      avgViewsRaw: this.average(rawViews),
+      avgViewsAdjusted,
+      avgReactionsRaw: this.average(rawReactions),
+      avgReactionsAdjusted: this.average(adjustedReactions),
+      rawAvgViews: this.average(rawViews),
+      rawAvgReactions: this.average(rawReactions),
+      dataQuality,
+      dataQualityReason,
+      dataQualityWarning,
+      hasExternalTrafficAnomaly,
+      hasSubscriberBasePollution,
+      postsWindow,
+      postsUsed: posts.length,
+    };
+  }
+
+  async createAudienceSnapshot(channelId: string, source = 'sync') {
+    const channel = await this.findChannelById(channelId);
+    if (!channel) throw new NotFoundException('Telegram channel not found');
+    const analytics = await this.getActiveAudienceEstimate(channelId);
+    return this.prisma.telegramChannelAudienceSnapshot.create({
+      data: {
+        workspaceId: channel.workspaceId,
+        telegramChannelId: channel.id,
+        subscribersCount: analytics.subscribersCount,
+        activeSubscribersEstimate: analytics.activeSubscribersEstimate,
+        viewRate: analytics.viewRate,
+        avgViewsRaw: analytics.avgViewsRaw,
+        avgViewsAdjusted: analytics.avgViewsAdjusted,
+        avgReactionsRaw: analytics.avgReactionsRaw,
+        avgReactionsAdjusted: analytics.avgReactionsAdjusted,
+        rawAvgViews: analytics.rawAvgViews,
+        rawAvgReactions: analytics.rawAvgReactions,
+        rawViewRate: analytics.rawViewRate,
+        effectiveSubscribersCount: analytics.effectiveSubscribersCount,
+        cappedActiveSubscribersEstimate:
+          analytics.cappedActiveSubscribersEstimate,
+        cappedViewRate: analytics.cappedViewRate,
+        dataQuality: analytics.dataQuality,
+        dataQualityReason: analytics.dataQualityReason,
+        hasExternalTrafficAnomaly: analytics.hasExternalTrafficAnomaly,
+        hasSubscriberBasePollution: analytics.hasSubscriberBasePollution,
+        postsWindow: analytics.postsWindow,
+        source,
+      },
+    });
+  }
+
+  async audienceSnapshots(channelId: string, limit = 50) {
+    const safeLimit = Math.max(1, Math.min(200, limit));
+    return this.prisma.telegramChannelAudienceSnapshot.findMany({
+      where: { telegramChannelId: channelId },
+      orderBy: { collectedAt: 'asc' },
+      take: safeLimit,
+    });
+  }
+
+  async getChannelFinancialSummary(channelId: string) {
+    const channel = await this.findChannelById(channelId);
+    if (!channel) throw new NotFoundException('Telegram channel not found');
+    const purchaseTransactionId = (
+      channel as { purchaseTransactionId?: string | null }
+    ).purchaseTransactionId;
+    const [campaignRows, audience, channelInviteLinks, purchaseTransaction] =
+      await Promise.all([
+      this.findCampaignsForFinancialSummary({
+        workspaceId: channel.workspaceId,
+        telegramChannelId: channel.id,
+      }),
+      this.getActiveAudienceEstimate(channelId),
+      this.findInviteLinksForFinancialSummary({
+        workspaceId: channel.workspaceId,
+        telegramChannelId: channel.id,
+      }),
+      purchaseTransactionId
+        ? this.prisma.transaction.findFirst({
+            where: {
+              id: purchaseTransactionId,
+              workspaceId: channel.workspaceId,
+            },
+            select: { amountInPrimaryCurrency: true },
+          })
+        : Promise.resolve(null),
+    ]);
+    const campaigns = campaignRows as any[];
+    const acquisitionCost = Number(
+      purchaseTransaction?.amountInPrimaryCurrency || 0,
+    );
+    const totalAdSpend = campaigns.reduce(
+      (sum, campaign) => sum + Number(campaign.priceInPrimaryCurrency || 0),
+      0,
+    );
+    const totalSpend = totalAdSpend + acquisitionCost;
+    const totalJoinedSubscribers = campaigns.reduce(
+      (sum, campaign) => sum + effectiveCampaignJoinedSubscribers(campaign),
+      0,
+    );
+    const totalPendingSubscribers = campaigns.reduce(
+      (sum, campaign) => sum + effectiveCampaignPendingSubscribers(campaign),
+      0,
+    );
+    const totalAttributedSubscribers = campaigns.reduce(
+      (sum, campaign) => sum + effectiveCampaignAttributedSubscribers(campaign),
+      0,
+    );
+    const avgCpa =
+      totalAttributedSubscribers > 0
+        ? totalAdSpend / totalAttributedSubscribers
+        : null;
+    const campaignActiveSubscribersEstimate = campaigns.reduce(
+      (sum, campaign) => sum + effectiveCampaignActiveSubscribers(campaign),
+      0,
+    );
+    const paidActiveSubscribersEstimate =
+      campaignActiveSubscribersEstimate > 0
+        ? campaignActiveSubscribersEstimate
+        : (audience.paidActiveSubscribersEstimate ?? 0);
+    const activeCpa =
+      paidActiveSubscribersEstimate > 0
+        ? totalAdSpend / paidActiveSubscribersEstimate
+        : null;
+    const avgActiveRate = this.average(
+      campaigns
+        .map((campaign) => this.numberOrNull(campaign.activeRate))
+        .filter((value): value is number => value != null),
+    );
+    const avgRetention7d = this.average(
+      campaigns
+        .map((campaign) => this.numberOrNull(campaign.retention7d))
+        .filter((value): value is number => value != null),
+    );
+    const kpiStatus = resolveChannelKpiStatus({
+      avgCpa,
+      targetCpaFrom: channel.targetCpaFrom,
+      targetCpa: channel.targetCpa,
+      acceptableCpaFrom: channel.acceptableCpaFrom,
+      acceptableCpa: channel.acceptableCpa,
+      stopCpaFrom: channel.stopCpaFrom,
+      stopCpa: channel.stopCpa,
+    });
+    const kpiLabel = resolveChannelKpiLabel(kpiStatus);
+
+    return {
+      acquisitionCost,
+      totalSpend,
+      totalAdSpend,
+      campaignsCount: campaigns.length,
+      totalJoinedSubscribers,
+      totalPendingSubscribers,
+      totalAttributedSubscribers,
+      avgCpa,
+      activeSubscribersEstimate: audience.activeSubscribersEstimate,
+      paidActiveSubscribersEstimate,
+      activeCpa,
+      avgActiveRate,
+      avgRetention7d,
+      dataQuality: audience.dataQuality,
+      dataQualityReason: audience.dataQualityReason,
+      dataQualityWarning: audience.dataQualityWarning,
+      hasExternalTrafficAnomaly: audience.hasExternalTrafficAnomaly,
+      hasSubscriberBasePollution: audience.hasSubscriberBasePollution,
+      kpiStatus,
+      kpiLabel,
+    };
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "name": "telegram_system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Internal system for Telegram channel finance, ads, campaigns and analytics.",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "postinstall": "pnpm --filter @telegram-system/shared build",
+    "dev": "NEXT_PUBLIC_API_URL=http://localhost:4000/api FRONTEND_URL=http://localhost:3000 TELEGRAM_SYSTEM_BOT_ENVIRONMENT= TELEGRAM_BOT_RUNTIME_ENVIRONMENT= pnpm --parallel --filter api --filter web dev",
+    "dev:ngrok": "node scripts/dev-ngrok.mjs --ngrok",
+    "dev:webhook": "NGROK_TARGET_PORT=4000 node scripts/dev-ngrok.mjs --ngrok --bots",
+    "dev:bots": "NGROK_TARGET_PORT=4000 node scripts/dev-ngrok.mjs --ngrok --bots",
+    "dev:plain": "pnpm dev",
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "pnpm --filter api start:dev",
+    "build": "pnpm --recursive build",
+    "lint": "pnpm --recursive lint",
+    "typecheck": "pnpm --filter @telegram-system/shared typecheck && pnpm --filter api typecheck && pnpm --filter web typecheck",
+    "test": "pnpm test:api && pnpm test:web",
+    "test:deployment": "node scripts/check-railway-build.mjs",
+    "architecture:check": "node scripts/check-architecture.mjs",
+    "test:api": "pnpm --filter api test -- --runInBand",
+    "test:web": "pnpm --filter web test -- --run",
+    "check": "pnpm db:generate && pnpm architecture:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "check:changed": "node scripts/check-changed.mjs",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f postgres",
+    "db:migrate": "pnpm --filter api exec prisma migrate dev",
+    "db:deploy:safe": "pnpm --filter api run db:deploy:safe",
+    "db:generate": "pnpm --filter api exec prisma generate",
+    "db:studio": "pnpm --filter api exec prisma studio",
+    "db:seed": "pnpm --filter api exec prisma db seed",
+    "archive": "zip -r telegram-system.zip . -x 'telegram-system.zip' 'node_modules/*' '*/node_modules/*' '.next/*' '*/.next/*' 'dist/*' '*/dist/*' '.env' '*/.env' '.git/*'"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "devDependencies": {
+    "next": "16.2.6",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  }
+}

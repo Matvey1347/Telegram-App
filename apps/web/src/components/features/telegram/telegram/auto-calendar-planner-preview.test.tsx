@@ -1,0 +1,63 @@
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { AutoCalendarPlannerPreview } from "./auto-calendar-planner-preview";
+
+const preview = {
+  from: "2099-08-10",
+  to: "2099-08-11",
+  timezone: "Europe/Warsaw",
+  assignments: [
+    {
+      postId: "post-1",
+      title: "First post",
+      scheduledAt: "2099-08-10T07:30:00.000Z",
+      date: "2099-08-10",
+      slotId: "slot-1",
+      formatId: "format-1",
+      groupId: "group-1",
+      provenance: {
+        planner: "telegram_posts_auto_calendar" as const,
+        reason: "matched_active_slot",
+        slotId: "slot-1",
+        formatId: "format-1",
+        groupId: "group-1",
+        generatedAt: "2099-08-01T00:00:00.000Z",
+      },
+    },
+  ],
+  summary: {
+    eligiblePosts: 3,
+    availableSlots: 2,
+    plannedPosts: 1,
+    unfilledSlots: 1,
+  },
+};
+
+describe("AutoCalendarPlannerPreview", () => {
+  it("makes preview-only behavior and explicit scheduling clear", () => {
+    const onRerollDay = vi.fn();
+    const onScheduleAll = vi.fn();
+    render(
+      <AutoCalendarPlannerPreview
+        preview={preview}
+        busy={false}
+        rerollingDate={null}
+        onRerollDay={onRerollDay}
+        onScheduleAll={onScheduleAll}
+      />,
+    );
+
+    expect(
+      screen.getByText(/Nothing is scheduled until you confirm/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText("First post")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Reroll day/i }));
+    expect(onRerollDay).toHaveBeenCalledWith("2099-08-10");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Schedule all 1 posts/i }),
+    );
+    expect(onScheduleAll).toHaveBeenCalledOnce();
+  });
+});

@@ -1,0 +1,1645 @@
+[
+  {
+    "path": "apps/api/src/domains/telegram/telegram-channels/telegram-channels.service.ts",
+    "lines": 11019,
+    "category": "backend",
+    "responsibilities": [
+      "NestJS application/domain service orchestration",
+      "Prisma persistence orchestration",
+      "Telegram API/MTProto integration"
+    ],
+    "imports": [
+      "../ad-campaigns/ad-campaign-admission-analytics.service",
+      "../ad-campaigns/ad-campaign-admission-backfill.service",
+      "../application-logs/application-logger.service",
+      "../common/analytics/channel-financial-summary",
+      "../common/analytics/invite-link-metrics",
+      "../common/pagination/pagination.utils",
+      "../common/response-cache.service",
+      "../common/security/token-encryption.service",
+      "../common/workspace.service",
+      "../prisma/prisma.service",
+      "../telegram/shared/internal-post-links",
+      "../telegram/shared/telegram-import.helpers",
+      "../telegram/shared/telegram-invite-link-attribution",
+      "../telegram/shared/telegram-markup",
+      "../telegram/shared/telegram-mtproto.client",
+      "../telegram/shared/telegram-post-url",
+      "../telegram/shared/telegram-source-access.service",
+      "./dto",
+      "./post-groups.helpers",
+      "./telegram-channel-analytics.service",
+      "@nestjs/common",
+      "@prisma/client",
+      "@telegram-system/shared",
+      "crypto",
+      "exceljs",
+      "telegram/extensions/html"
+    ],
+    "publicExports": [
+      "TelegramChannelsService"
+    ],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities",
+      "separate persistence orchestration from Telegram adapter/use case logic",
+      "extract use-case services with explicit transaction boundaries"
+    ],
+    "testFiles": [
+      "apps/api/src/domains/telegram/telegram-channels/import-channel.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/internal-post-links-resolver.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/invite-links-select.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/invite-links-sync.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/managed-post-history.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/post-groups.helpers.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/return-managed-post-to-draft.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/sync-managed-posts.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/sync-post-metrics.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/update-managed-post.spec.ts"
+    ],
+    "risk": "high"
+  },
+  {
+    "path": "apps/web/src/app/(telegram)/telegram-posts/page.tsx",
+    "lines": 6775,
+    "category": "frontend",
+    "responsibilities": [
+      "Next.js route/page composition",
+      "React Query data fetching/mutation",
+      "API client usage",
+      "interactive UI controls"
+    ],
+    "imports": [
+      "@/components/icons/icon-avatar",
+      "@/components/icons/icon-picker",
+      "@/components/layout/app-shell",
+      "@/components/layout/page-tab-head",
+      "@/components/features/telegram/telegram/telegram-image-upload",
+      "@/components/features/telegram/telegram/telegram-post-preview",
+      "@/components/features/telegram/telegram/telegram-text-editor",
+      "@/components/ui/primitives",
+      "@/components/features/workspace/member-badge",
+      "@/components/features/workspace/member-select",
+      "@/lib/api",
+      "@/lib/features/telegram/telegram-calendar-scheduler",
+      "@/lib/features/telegram/telegram-post-title",
+      "@/lib/features/telegram/telegram-posts-url",
+      "@/providers/toast-provider",
+      "@tanstack/react-query",
+      "@telegram-system/shared",
+      "lucide-react",
+      "next/navigation",
+      "react",
+      "react-dom"
+    ],
+    "publicExports": [],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities",
+      "extract React Query hooks from UI composition",
+      "compare with reusable UI primitives before local controls"
+    ],
+    "testFiles": [],
+    "risk": "high"
+  },
+  {
+    "path": "apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.service.ts",
+    "lines": 5746,
+    "category": "backend",
+    "responsibilities": [
+      "NestJS application/domain service orchestration",
+      "Prisma persistence orchestration",
+      "Telegram API/MTProto integration"
+    ],
+    "imports": [
+      "../application-logs/application-logger.service",
+      "../common/currency-conversion.service",
+      "../common/pagination/pagination.utils",
+      "../common/response-cache.service",
+      "../common/security/token-encryption.service",
+      "../common/workspace.service",
+      "../finance-categories/finance-categories.service",
+      "../prisma/prisma.service",
+      "../telegram-channels/telegram-channels.service",
+      "../telegram/shared/telegram-mtproto.client",
+      "../telegram/shared/telegram-source-access.service",
+      "./domain/decimal",
+      "./domain/expected-views",
+      "./domain/policy-recommendation",
+      "./domain/pricing",
+      "./domain/slot-engine",
+      "./domain/timezone",
+      "./dto",
+      "@nestjs/common",
+      "@prisma/client"
+    ],
+    "publicExports": [
+      "TelegramAdSalesService"
+    ],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities",
+      "separate persistence orchestration from Telegram adapter/use case logic",
+      "extract use-case services with explicit transaction boundaries"
+    ],
+    "testFiles": [
+      "apps/api/src/domains/telegram/telegram-ad-sales/expected-views.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/policy-recommendation.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/pricing.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/slot-engine.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.service.spec.ts"
+    ],
+    "risk": "high"
+  },
+  {
+    "path": "apps/web/src/app/(telegram)/telegram/channels/[id]/page.tsx",
+    "lines": 4000,
+    "category": "frontend",
+    "responsibilities": [
+      "Next.js route/page composition",
+      "React Query data fetching/mutation",
+      "interactive UI controls"
+    ],
+    "imports": [
+      "@/components/features/growth/ad-campaigns/campaigns-table",
+      "@/components/features/growth/ad-sales/telegram-channel-ad-sales-section",
+      "@/components/icons/icon-picker",
+      "@/components/layout/app-shell",
+      "@/components/layout/page-tab-head",
+      "@/components/features/telegram/telegram/channel-access-badge",
+      "@/components/features/telegram/telegram/channel-preview",
+      "@/components/features/telegram/telegram/invite-links-table",
+      "@/components/features/telegram/telegram/post-preview-modal",
+      "@/components/features/telegram/telegram/telegram-source-avatar",
+      "@/components/ui/money-stack",
+      "@/components/ui/pagination",
+      "@/components/ui/primitives",
+      "@/hooks/use-pagination",
+      "@/lib/api",
+      "@/lib/metric-preview-icons",
+      "@/lib/progress",
+      "@/lib/query-keys",
+      "@/lib/features/telegram/telegram-query-invalidation",
+      "@/providers/toast-provider",
+      "@tanstack/react-query",
+      "lucide-react",
+      "next/navigation",
+      "react",
+      "react-dom",
+      "recharts"
+    ],
+    "publicExports": [],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities",
+      "extract React Query hooks from UI composition",
+      "compare with reusable UI primitives before local controls"
+    ],
+    "testFiles": [],
+    "risk": "high"
+  },
+  {
+    "path": "apps/web/src/app/(telegram)/telegram-channels/page.tsx",
+    "lines": 3502,
+    "category": "frontend",
+    "responsibilities": [
+      "Next.js route/page composition",
+      "React Query data fetching/mutation",
+      "API client usage",
+      "form state and validation",
+      "interactive UI controls"
+    ],
+    "imports": [
+      "@/components/layout/app-shell",
+      "@/components/features/telegram/telegram/channel-access-badge",
+      "@/components/features/telegram/telegram/channel-preview",
+      "@/components/features/telegram/telegram/telegram-account-panels",
+      "@/components/features/telegram/telegram/telegram-entity-avatar",
+      "@/components/features/telegram/telegram/telegram-source-avatar",
+      "@/components/features/telegram/telegram/telegram-text-editor",
+      "@/components/ui/money-stack",
+      "@/components/ui/primitives",
+      "@/components/features/workspace/member-badge",
+      "@/components/features/workspace/member-select",
+      "@/lib/api",
+      "@/lib/progress",
+      "@/providers/toast-provider",
+      "@tanstack/react-query",
+      "lucide-react",
+      "next/image",
+      "next/link",
+      "next/navigation",
+      "react",
+      "react-hook-form"
+    ],
+    "publicExports": [],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities",
+      "extract React Query hooks from UI composition",
+      "compare with reusable UI primitives before local controls"
+    ],
+    "testFiles": [],
+    "risk": "high"
+  },
+  {
+    "path": "apps/api/src/telegram/shared/telegram-mtproto.client.ts",
+    "lines": 3360,
+    "category": "backend",
+    "responsibilities": [
+      "Telegram API/MTProto integration"
+    ],
+    "imports": [
+      "./telegram-import.helpers",
+      "./telegram-markup",
+      "./telegram-post-url",
+      "@nestjs/common",
+      "@telegram-system/shared",
+      "node:child_process",
+      "node:fs/promises",
+      "node:os",
+      "node:path",
+      "node:util",
+      "sharp",
+      "telegram",
+      "telegram/Helpers",
+      "telegram/client/uploads",
+      "telegram/extensions/Logger",
+      "telegram/extensions/html",
+      "telegram/sessions"
+    ],
+    "publicExports": [
+      "TelegramAccountProfile",
+      "TelegramInviteLinksResult",
+      "TelegramMtprotoClient",
+      "TelegramScheduledMessage"
+    ],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities",
+      "extract use-case services with explicit transaction boundaries"
+    ],
+    "testFiles": [
+      "apps/api/src/telegram/shared/internal-post-links.spec.ts",
+      "apps/api/src/telegram/shared/telegram-import.helpers.spec.ts",
+      "apps/api/src/telegram/shared/telegram-markup.spec.ts",
+      "apps/api/src/telegram/shared/telegram-mtproto-publish.spec.ts",
+      "apps/api/src/telegram/shared/telegram-mtproto.client.spec.ts",
+      "apps/api/src/telegram/shared/telegram-post-url.spec.ts"
+    ],
+    "risk": "high"
+  },
+  {
+    "path": "apps/web/src/components/features/growth/ad-sales/ad-sales-page.tsx",
+    "lines": 3102,
+    "category": "frontend",
+    "responsibilities": [
+      "Next.js route/page composition",
+      "React Query data fetching/mutation",
+      "interactive UI controls"
+    ],
+    "imports": [
+      "@/components/features/growth/ad-sales/ad-sale-modal",
+      "@/components/features/growth/ad-sales/ad-sales-analytics-panel",
+      "@/components/features/growth/ad-sales/calendar-slot-card",
+      "@/components/features/growth/ad-sales/register-payment-modal",
+      "@/components/features/growth/ad-sales/sale-status-actions",
+      "@/components/layout/app-shell",
+      "@/components/layout/page-tab-head",
+      "@/components/features/telegram/telegram/telegram-entity-avatar",
+      "@/components/ui/money-stack",
+      "@/components/ui/pagination",
+      "@/components/ui/primitives",
+      "@/components/features/workspace/member-badge",
+      "@/components/features/workspace/member-select",
+      "@/lib/api",
+      "@/lib/metric-preview-icons",
+      "@/lib/features/growth/telegram-ad-sales",
+      "@/lib/features/growth/telegram-ad-sales-query",
+      "@/providers/toast-provider",
+      "@tanstack/react-query",
+      "@telegram-system/shared",
+      "lucide-react",
+      "next/navigation",
+      "react"
+    ],
+    "publicExports": [
+      "AdSalesPage"
+    ],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities",
+      "extract React Query hooks from UI composition",
+      "compare with reusable UI primitives before local controls"
+    ],
+    "testFiles": [
+      "apps/web/src/components/features/growth/ad-sales/ad-sale-modal.test.tsx",
+      "apps/web/src/components/features/growth/ad-sales/calendar-slot-card.test.tsx",
+      "apps/web/src/components/features/growth/ad-sales/sale-status-actions.test.tsx"
+    ],
+    "risk": "high"
+  },
+  {
+    "path": "apps/web/src/app/(growth)/ad-campaigns/page.tsx",
+    "lines": 2503,
+    "category": "frontend",
+    "responsibilities": [
+      "Next.js route/page composition",
+      "React Query data fetching/mutation",
+      "form state and validation",
+      "interactive UI controls"
+    ],
+    "imports": [
+      "@/components/features/growth/ad-campaigns/campaigns-table",
+      "@/components/features/growth/ad-campaigns/promo-preview-modal",
+      "@/components/icons/icon-avatar",
+      "@/components/icons/icon-picker",
+      "@/components/layout/app-shell",
+      "@/components/features/telegram/telegram/invite-link-history-panel",
+      "@/components/features/telegram/telegram/invite-link-preview-modal",
+      "@/components/features/telegram/telegram/telegram-image-upload",
+      "@/components/features/telegram/telegram/telegram-post-preview",
+      "@/components/features/telegram/telegram/telegram-text-editor",
+      "@/components/ui/money-stack",
+      "@/components/ui/primitives",
+      "@/components/features/workspace/member-select",
+      "@/lib/features/finance/account-display",
+      "@/lib/api",
+      "@/providers/toast-provider",
+      "@tanstack/react-query",
+      "lucide-react",
+      "next/navigation",
+      "react",
+      "react-dom",
+      "react-hook-form"
+    ],
+    "publicExports": [],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities",
+      "extract React Query hooks from UI composition",
+      "compare with reusable UI primitives before local controls"
+    ],
+    "testFiles": [],
+    "risk": "high"
+  },
+  {
+    "path": "apps/web/src/lib/api.ts",
+    "lines": 2235,
+    "category": "frontend",
+    "responsibilities": [
+      "API client usage",
+      "interactive UI controls"
+    ],
+    "imports": [
+      "./api-types",
+      "./auth",
+      "@telegram-system/shared",
+      "axios"
+    ],
+    "publicExports": [
+      "API_MUTATION_EVENT",
+      "ApiFeedbackConfig",
+      "ApiFeedbackMode",
+      "ApiMutationEventDetail",
+      "BulkProgressHandler",
+      "CurrencySettings",
+      "ExchangeRate",
+      "StreamProgressHandler",
+      "StructuredApiErrorPayload",
+      "TransactionQuery",
+      "TransferQuery",
+      "accountApi",
+      "accountsApi",
+      "adCampaignsApi",
+      "adHypothesesApi",
+      "advertisingChannelsApi",
+      "api",
+      "applicationLogsApi",
+      "authApi",
+      "currenciesApi",
+      "exchangeRatesApi",
+      "getLastCorrelationId",
+      "globalSearchApi",
+      "iconsApi",
+      "isApiNetworkError",
+      "promosApi",
+      "promptNotesApi",
+      "telegramAdSalesApi",
+      "telegramBotsApi",
+      "telegramChannelNetworksApi",
+      "telegramChannelsApi",
+      "telegramSyncApi",
+      "telegramUserAccountsApi",
+      "transactionCategoriesApi",
+      "transactionsApi",
+      "transfersApi",
+      "workspaceMembersApi",
+      "workspacesApi"
+    ],
+    "candidatesForExtraction": [
+      "continue extracting domain endpoint clients behind the compatibility facade",
+      "move base axios/interceptors into a dedicated base client module",
+      "split remaining large endpoint facades by domain"
+    ],
+    "testFiles": [
+      "apps/api/src/domains/growth/ad-campaigns/ad-campaign-admission-analytics.service.spec.ts",
+      "apps/api/src/domains/growth/ad-hypotheses/ad-hypotheses.service.spec.ts",
+      "apps/api/src/domains/operations/application-logs/application-logs.service.spec.ts",
+      "apps/api/src/common/analytics/channel-financial-summary.spec.ts",
+      "apps/api/src/common/analytics/invite-link-metrics.spec.ts",
+      "apps/api/src/common/response-cache.interceptor.spec.ts",
+      "apps/api/src/domains/finance/finance-categories/finance-categories.service.spec.ts",
+      "apps/api/src/telegram/shared/internal-post-links.spec.ts",
+      "apps/api/src/telegram/shared/telegram-import.helpers.spec.ts",
+      "apps/api/src/telegram/shared/telegram-markup.spec.ts",
+      "apps/api/src/telegram/shared/telegram-mtproto-publish.spec.ts",
+      "apps/api/src/telegram/shared/telegram-mtproto.client.spec.ts",
+      "apps/api/src/telegram/shared/telegram-post-url.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/expected-views.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/policy-recommendation.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/pricing.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/slot-engine.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.service.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/import-channel.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/internal-post-links-resolver.spec.ts"
+    ],
+    "risk": "high"
+  },
+  {
+    "path": "apps/api/src/domains/growth/ad-campaigns/ad-campaigns.service.ts",
+    "lines": 1864,
+    "category": "backend",
+    "responsibilities": [
+      "NestJS application/domain service orchestration",
+      "Prisma persistence orchestration",
+      "Telegram API/MTProto integration"
+    ],
+    "imports": [
+      "../common/analytics/invite-link-metrics",
+      "../common/pagination/pagination.utils",
+      "../common/workspace.service",
+      "../finance-categories/finance-categories.service",
+      "../prisma/prisma.service",
+      "./ad-campaign-analytics.service",
+      "./dto",
+      "@nestjs/common",
+      "@prisma/client",
+      "./invite-link-history"
+    ],
+    "publicExports": [
+      "AdCampaignsService"
+    ],
+    "candidatesForExtraction": [
+      "extract campaign CRUD orchestration from analytics read models",
+      "extract performance/admission analytics coordination behind focused services",
+      "keep invite-link history payload logic in invite-link-history.ts"
+    ],
+    "testFiles": [
+      "apps/api/src/domains/growth/ad-campaigns/ad-campaign-admission-analytics.service.spec.ts"
+    ],
+    "risk": "high"
+  },
+  {
+    "path": "apps/web/src/components/ui/primitives.tsx",
+    "lines": 1854,
+    "category": "frontend",
+    "responsibilities": [
+      "interactive UI controls"
+    ],
+    "imports": [
+      "lucide-react",
+      "react",
+      "react-dom"
+    ],
+    "publicExports": [
+      "Button",
+      "Card",
+      "ConfirmDeleteModal",
+      "CurrencySelect",
+      "CustomSelect",
+      "DateInput",
+      "DateRangeInput",
+      "EmptyState",
+      "EntityCard",
+      "ErrorState",
+      "FormError",
+      "FormField",
+      "IconButton",
+      "Input",
+      "LoadingState",
+      "MasonryGrid",
+      "Modal",
+      "MultiSelect",
+      "PageHeader",
+      "Select",
+      "Skeleton",
+      "StatusPill",
+      "Table",
+      "TableLoadingState",
+      "Textarea",
+      "TimeInput",
+      "ToastItem",
+      "ToastStack",
+      "Tooltip",
+      "TooltipBubble",
+      "canonicalizeTimeInputValue",
+      "isValidTimeInputValue",
+      "normalizeTimeInputValue"
+    ],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities",
+      "compare with reusable UI primitives before local controls"
+    ],
+    "testFiles": [
+      "apps/web/src/components/ui/primitives.test.tsx"
+    ],
+    "risk": "high"
+  },
+  {
+    "path": "apps/web/src/lib/api-types.ts",
+    "lines": 11,
+    "category": "frontend",
+    "responsibilities": [
+      "compatibility barrel for frontend API contract types"
+    ],
+    "imports": [
+      "./api-types/ad-campaigns",
+      "./api-types/ad-hypotheses",
+      "./api-types/core",
+      "./api-types/dashboard",
+      "./api-types/finance",
+      "./api-types/telegram-channel-analytics",
+      "./api-types/telegram-channel-networks",
+      "./api-types/telegram-channels",
+      "./api-types/telegram-invite-links",
+      "./api-types/telegram-posts",
+      "./api-types/telegram-sources"
+    ],
+    "publicExports": [
+      "re-exported domain API contract types"
+    ],
+    "candidatesForExtraction": [],
+    "testFiles": [
+      "apps/web/src/lib/telegram-ad-sales-query.test.ts",
+      "apps/web/src/lib/telegram-post-title.test.ts"
+    ],
+    "risk": "low"
+  },
+  {
+    "path": "apps/web/src/lib/api-types/ad-campaigns.ts",
+    "lines": 249,
+    "category": "frontend",
+    "responsibilities": [
+      "domain frontend API contract types"
+    ],
+    "imports": [
+      "./core",
+      "./telegram-channels",
+      "./telegram-invite-links",
+      "./ad-hypotheses"
+    ],
+    "publicExports": [
+      "Promo",
+      "AdvertisingChannel",
+      "ImportedTelegramSource",
+      "AdCampaignHypothesisLink",
+      "AdCampaignKpiStatus",
+      "AdCampaignAnalyticsInput",
+      "AdCampaignAnalyticsFields",
+      "AdmissionAnalyticsDataQuality",
+      "AdmissionAnalyticsDetectionMode",
+      "AdmissionAnalyticsBaselineMethod",
+      "AdCampaignAdmissionViewPoint",
+      "AdCampaignAdmissionLatestBatch",
+      "AdCampaignAdmissionViewAnalytics",
+      "AdCampaignAdmissionAnalyticsHistory",
+      "AdCampaign",
+      "AdCampaignAnalyticsSummary",
+      "DailyAnalyticsSyncRun",
+      "AdCampaignPerformanceSummary"
+    ],
+    "candidatesForExtraction": [],
+    "testFiles": [],
+    "risk": "low"
+  },
+  {
+    "path": "apps/web/src/lib/api-types/ad-hypotheses.ts",
+    "lines": 140,
+    "category": "frontend",
+    "responsibilities": [
+      "domain frontend API contract types"
+    ],
+    "imports": [
+      "./core",
+      "./ad-campaigns",
+      "./telegram-channels",
+      "./telegram-invite-links"
+    ],
+    "publicExports": [
+      "AdHypothesisStatus",
+      "AdHypothesisKpiStatus",
+      "AdHypothesisCampaignSummary",
+      "AdHypothesisSummary",
+      "AdHypothesis",
+      "AdHypothesisCampaign",
+      "AdHypothesisDetail",
+      "AdHypothesisInviteLinkHistory",
+      "CreateAdHypothesisPayload",
+      "UpdateAdHypothesisPayload"
+    ],
+    "candidatesForExtraction": [],
+    "testFiles": [],
+    "risk": "low"
+  },
+  {
+    "path": "apps/web/src/lib/api-types/core.ts",
+    "lines": 140,
+    "category": "frontend",
+    "responsibilities": [
+      "domain frontend API contract types"
+    ],
+    "imports": [],
+    "publicExports": [
+      "BulkActionResult",
+      "BulkActionResultItem",
+      "PaginatedResponse",
+      "PaginationMeta",
+      "StructuredApiError",
+      "SyncOperationResult",
+      "TelegramChannelAccessMode",
+      "WorkspaceRole",
+      "PaginationParams",
+      "CurrencyDisplayMode",
+      "IconType",
+      "Icon",
+      "WorkspaceInfo",
+      "User",
+      "AuthResponse",
+      "MeResponse",
+      "AccountMe",
+      "WorkspaceMember",
+      "AssignedMember",
+      "EntityAssignment",
+      "GlobalSearchResult",
+      "Currency"
+    ],
+    "candidatesForExtraction": [],
+    "testFiles": [],
+    "risk": "low"
+  },
+  {
+    "path": "apps/web/src/lib/api-types/dashboard.ts",
+    "lines": 94,
+    "category": "frontend",
+    "responsibilities": [
+      "domain frontend API contract types"
+    ],
+    "imports": [
+      "./core",
+      "./finance",
+      "./ad-campaigns"
+    ],
+    "publicExports": [
+      "DashboardSummary"
+    ],
+    "candidatesForExtraction": [],
+    "testFiles": [],
+    "risk": "low"
+  },
+  {
+    "path": "apps/web/src/lib/api-types/finance.ts",
+    "lines": 84,
+    "category": "frontend",
+    "responsibilities": [
+      "domain frontend API contract types"
+    ],
+    "imports": [
+      "./core"
+    ],
+    "publicExports": [
+      "TransactionType",
+      "AccountTransactionStats",
+      "Account",
+      "TransactionCategory",
+      "Transaction",
+      "Transfer"
+    ],
+    "candidatesForExtraction": [],
+    "testFiles": [],
+    "risk": "low"
+  },
+  {
+    "path": "apps/web/src/lib/api-types/telegram-channel-analytics.ts",
+    "lines": 131,
+    "category": "frontend",
+    "responsibilities": [
+      "domain frontend API contract types"
+    ],
+    "imports": [
+      "./telegram-channels",
+      "./telegram-posts",
+      "./telegram-invite-links",
+      "./ad-campaigns"
+    ],
+    "publicExports": [
+      "TelegramChannelAudience",
+      "TelegramChannelAudienceSnapshot",
+      "TelegramChannelFinancialSummary",
+      "TelegramChannelAnalyticsSummary",
+      "TelegramChannelAnalyticsResponse"
+    ],
+    "candidatesForExtraction": [],
+    "testFiles": [],
+    "risk": "low"
+  },
+  {
+    "path": "apps/web/src/lib/api-types/telegram-channel-networks.ts",
+    "lines": 78,
+    "category": "frontend",
+    "responsibilities": [
+      "domain frontend API contract types"
+    ],
+    "imports": [
+      "./core"
+    ],
+    "publicExports": [
+      "TelegramChannelNetworkKpiStatus",
+      "TelegramChannelNetworkSummary",
+      "TelegramChannelNetworkMember",
+      "TelegramChannelNetworkChannelSummary",
+      "TelegramChannelNetwork",
+      "TelegramChannelNetworkDetail",
+      "CreateTelegramChannelNetworkPayload",
+      "UpdateTelegramChannelNetworkPayload"
+    ],
+    "candidatesForExtraction": [],
+    "testFiles": [],
+    "risk": "low"
+  },
+  {
+    "path": "apps/web/src/lib/api-types/telegram-channels.ts",
+    "lines": 199,
+    "category": "frontend",
+    "responsibilities": [
+      "domain frontend API contract types"
+    ],
+    "imports": [
+      "./core",
+      "./telegram-channel-analytics"
+    ],
+    "publicExports": [
+      "TelegramChannelAdAnalysisStatus",
+      "TelegramChannelAdAnalysis",
+      "TelegramChannelAdAnalysisPayload",
+      "TelegramChannelAdminLink",
+      "TelegramChannelTimePost",
+      "TelegramChannel",
+      "TelegramSyncResult",
+      "TelegramChannelSyncSelection",
+      "TelegramChannelSyncNowPayload",
+      "TelegramChannelImportPayload",
+      "TelegramAccountChannelImportItem",
+      "ApiErrorPayload"
+    ],
+    "candidatesForExtraction": [],
+    "testFiles": [],
+    "risk": "low"
+  },
+  {
+    "path": "apps/web/src/lib/api-types/telegram-invite-links.ts",
+    "lines": 79,
+    "category": "frontend",
+    "responsibilities": [
+      "domain frontend API contract types"
+    ],
+    "imports": [
+      "./core",
+      "./ad-campaigns"
+    ],
+    "publicExports": [
+      "TelegramInviteLink",
+      "InviteLinkHistoryPoint",
+      "InviteLinkHistorySummary",
+      "TelegramInviteLinkHistory",
+      "AdCampaignInviteLinkHistory"
+    ],
+    "candidatesForExtraction": [],
+    "testFiles": [],
+    "risk": "low"
+  },
+  {
+    "path": "apps/web/src/lib/api-types/telegram-posts.ts",
+    "lines": 184,
+    "category": "frontend",
+    "responsibilities": [
+      "domain frontend API contract types"
+    ],
+    "imports": [
+      "./core",
+      "./telegram-channels"
+    ],
+    "publicExports": [
+      "TelegramPost",
+      "TelegramManagedPostStatus",
+      "TelegramManagedPostRemoteStatus",
+      "TelegramManagedPost",
+      "TelegramManagedPostRevision",
+      "TelegramManagedPostLinkTarget",
+      "PromptNote",
+      "PostGroupStatusSummary",
+      "PostGroup",
+      "TelegramPostAnalyticsItem"
+    ],
+    "candidatesForExtraction": [],
+    "testFiles": [],
+    "risk": "low"
+  },
+  {
+    "path": "apps/web/src/lib/api-types/telegram-sources.ts",
+    "lines": 143,
+    "category": "frontend",
+    "responsibilities": [
+      "domain frontend API contract types"
+    ],
+    "imports": [
+      "./core"
+    ],
+    "publicExports": [
+      "TelegramUserAccount",
+      "TelegramBot",
+      "TelegramSourceType",
+      "TelegramChannelSourceRole",
+      "TelegramChannelDataType",
+      "TelegramSourcePermissions",
+      "TelegramSourceChannelAccess",
+      "TelegramSyncedDialogChannel",
+      "TelegramUserAccountSyncDialogsResponse",
+      "TelegramChannelSourceAccess",
+      "TelegramAnalyticsSources"
+    ],
+    "candidatesForExtraction": [],
+    "testFiles": [],
+    "risk": "low"
+  },
+  {
+    "path": "apps/web/src/components/features/growth/ad-campaigns/campaigns-table.tsx",
+    "lines": 1307,
+    "category": "frontend",
+    "responsibilities": [
+      "interactive UI controls"
+    ],
+    "imports": [
+      "@/components/features/growth/ad-campaigns/campaign-admission-view-analytics-modal",
+      "@/components/features/growth/ad-campaigns/campaign-invite-link-history-modal",
+      "@/components/features/growth/ad-campaigns/promo-preview-modal",
+      "@/components/icons/icon-avatar",
+      "@/components/features/telegram/telegram/invite-link-preview-modal",
+      "@/components/ui/primitives",
+      "@/lib/api",
+      "@/lib/metric-preview-icons",
+      "@/lib/features/finance/money",
+      "lucide-react",
+      "react",
+      "recharts"
+    ],
+    "publicExports": [
+      "AdCampaignsTable"
+    ],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities",
+      "compare with reusable UI primitives before local controls"
+    ],
+    "testFiles": [
+      "apps/web/src/components/features/growth/ad-campaigns/campaigns-table.test.tsx"
+    ],
+    "risk": "medium"
+  },
+  {
+    "path": "apps/api/src/domains/telegram/telegram-user-accounts/telegram-user-accounts.service.ts",
+    "lines": 1217,
+    "category": "backend",
+    "responsibilities": [
+      "NestJS application/domain service orchestration",
+      "Prisma persistence orchestration",
+      "Telegram API/MTProto integration"
+    ],
+    "imports": [
+      "../application-logs/application-logger.service",
+      "../common/security/token-encryption.service",
+      "../common/workspace.service",
+      "../prisma/prisma.service",
+      "../telegram-channels/telegram-channels.service",
+      "../telegram/shared/telegram-mtproto.client",
+      "../telegram/shared/telegram-post-url",
+      "../telegram/shared/telegram-source-access.service",
+      "./dto",
+      "@nestjs/common",
+      "@nestjs/config",
+      "@prisma/client",
+      "@telegram-system/shared"
+    ],
+    "publicExports": [
+      "TelegramUserAccountsService"
+    ],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities",
+      "separate persistence orchestration from Telegram adapter/use case logic",
+      "extract use-case services with explicit transaction boundaries"
+    ],
+    "testFiles": [],
+    "risk": "medium"
+  },
+  {
+    "path": "apps/web/src/components/features/telegram/telegram/telegram-account-panels.tsx",
+    "lines": 1178,
+    "category": "frontend",
+    "responsibilities": [
+      "React Query data fetching/mutation",
+      "form state and validation",
+      "interactive UI controls"
+    ],
+    "imports": [
+      "@/components/features/telegram/telegram/channel-preview",
+      "@/components/features/telegram/telegram/telegram-entity-avatar",
+      "@/components/ui/primitives",
+      "@/lib/api",
+      "@/lib/progress",
+      "@/lib/features/telegram/telegram-query-invalidation",
+      "@/providers/toast-provider",
+      "@tanstack/react-query",
+      "react",
+      "react-hook-form"
+    ],
+    "publicExports": [
+      "BotAccountsPanel",
+      "MtprotoAccountsPanel"
+    ],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities",
+      "extract React Query hooks from UI composition",
+      "compare with reusable UI primitives before local controls"
+    ],
+    "testFiles": [
+      "apps/web/src/components/features/telegram/telegram/channel-access-badge.test.tsx",
+      "apps/web/src/components/features/telegram/telegram/invite-links-table.test.tsx",
+      "apps/web/src/components/features/telegram/telegram/telegram-image-upload.test.tsx",
+      "apps/web/src/components/features/telegram/telegram/telegram-post-preview.test.tsx",
+      "apps/web/src/components/features/telegram/telegram/telegram-text-editor-format.test.ts"
+    ],
+    "risk": "medium"
+  },
+  {
+    "path": "apps/web/src/components/icons/icon-picker.tsx",
+    "lines": 1111,
+    "category": "frontend",
+    "responsibilities": [
+      "React Query data fetching/mutation",
+      "interactive UI controls"
+    ],
+    "imports": [
+      "./icon-avatar",
+      "@/components/ui/primitives",
+      "@/lib/api",
+      "@/lib/emoji-icons",
+      "@tanstack/react-query",
+      "lucide-react",
+      "react",
+      "react-dom"
+    ],
+    "publicExports": [
+      "IconPicker"
+    ],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities",
+      "extract React Query hooks from UI composition",
+      "compare with reusable UI primitives before local controls"
+    ],
+    "testFiles": [],
+    "risk": "medium"
+  },
+  {
+    "path": "apps/web/src/components/features/growth/ad-sales/ad-sale-modal.tsx",
+    "lines": 1048,
+    "category": "frontend",
+    "responsibilities": [
+      "interactive UI controls"
+    ],
+    "imports": [
+      "@/components/features/telegram/telegram/telegram-entity-avatar",
+      "@/components/ui/primitives",
+      "@/components/features/workspace/member-select",
+      "@/lib/features/finance/account-display",
+      "@/lib/api",
+      "@/lib/features/growth/telegram-ad-sales",
+      "@telegram-system/shared",
+      "react"
+    ],
+    "publicExports": [
+      "AdSaleModal",
+      "SalePlacementDraft"
+    ],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities",
+      "compare with reusable UI primitives before local controls"
+    ],
+    "testFiles": [
+      "apps/web/src/components/features/growth/ad-sales/ad-sale-modal.test.tsx",
+      "apps/web/src/components/features/growth/ad-sales/calendar-slot-card.test.tsx",
+      "apps/web/src/components/features/growth/ad-sales/sale-status-actions.test.tsx"
+    ],
+    "risk": "medium"
+  },
+  {
+    "path": "apps/api/src/domains/growth/ad-campaigns/ad-campaign-admission-analytics.service.ts",
+    "lines": 1010,
+    "category": "backend",
+    "responsibilities": [
+      "NestJS application/domain service orchestration",
+      "Prisma persistence orchestration",
+      "Telegram API/MTProto integration"
+    ],
+    "imports": [
+      "../prisma/prisma.service",
+      "@nestjs/common",
+      "@prisma/client",
+      "crypto"
+    ],
+    "publicExports": [
+      "AdCampaignAdmissionAnalyticsService",
+      "AdmissionAnalyticsStageResult"
+    ],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities",
+      "separate persistence orchestration from Telegram adapter/use case logic",
+      "extract use-case services with explicit transaction boundaries"
+    ],
+    "testFiles": [
+      "apps/api/src/domains/growth/ad-campaigns/ad-campaign-admission-analytics.service.spec.ts"
+    ],
+    "risk": "medium"
+  },
+  {
+    "path": "apps/api/src/domains/growth/ad-hypotheses/ad-hypotheses.service.ts",
+    "lines": 902,
+    "category": "backend",
+    "responsibilities": [
+      "NestJS application/domain service orchestration",
+      "Prisma persistence orchestration",
+      "Telegram API/MTProto integration"
+    ],
+    "imports": [
+      "../common/analytics/channel-financial-summary",
+      "../common/pagination/pagination.utils",
+      "../common/workspace.service",
+      "../prisma/prisma.service",
+      "./dto/create-ad-hypothesis.dto",
+      "./dto/update-ad-hypothesis.dto",
+      "@nestjs/common"
+    ],
+    "publicExports": [
+      "AdHypothesesService"
+    ],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities",
+      "separate persistence orchestration from Telegram adapter/use case logic",
+      "extract use-case services with explicit transaction boundaries"
+    ],
+    "testFiles": [
+      "apps/api/src/domains/growth/ad-hypotheses/ad-hypotheses.service.spec.ts"
+    ],
+    "risk": "medium"
+  },
+  {
+    "path": "apps/web/src/components/features/telegram/telegram/telegram-post-preview.tsx",
+    "lines": 897,
+    "category": "frontend",
+    "responsibilities": [
+      "interactive UI controls"
+    ],
+    "imports": [
+      "./telegram-text-editor-format",
+      "@/components/features/telegram/telegram/telegram-entity-avatar",
+      "lucide-react",
+      "react",
+      "react-dom"
+    ],
+    "publicExports": [
+      "TelegramPostPreview"
+    ],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities",
+      "compare with reusable UI primitives before local controls"
+    ],
+    "testFiles": [
+      "apps/web/src/components/features/telegram/telegram/channel-access-badge.test.tsx",
+      "apps/web/src/components/features/telegram/telegram/invite-links-table.test.tsx",
+      "apps/web/src/components/features/telegram/telegram/telegram-image-upload.test.tsx",
+      "apps/web/src/components/features/telegram/telegram/telegram-post-preview.test.tsx",
+      "apps/web/src/components/features/telegram/telegram/telegram-text-editor-format.test.ts"
+    ],
+    "risk": "medium"
+  },
+  {
+    "path": "packages/shared/src/types/telegram-ad-sales.ts",
+    "lines": 857,
+    "category": "shared",
+    "responsibilities": [
+      "shared serializable TypeScript contracts/utilities"
+    ],
+    "imports": [
+      "../pagination"
+    ],
+    "publicExports": [
+      "TelegramAdAnalyticsAlert",
+      "TelegramAdAnalyticsAlertsResponse",
+      "TelegramAdAnalyticsDateField",
+      "TelegramAdAnalyticsDateRule",
+      "TelegramAdAnalyticsSeriesPoint",
+      "TelegramAdAnalyticsSummaryResponse",
+      "TelegramAdAvailabilityDaySummary",
+      "TelegramAdAvailabilityResponse",
+      "TelegramAdAvailabilitySlot",
+      "TelegramAdAvailabilityState",
+      "TelegramAdChannelAnalyticsResponse",
+      "TelegramAdChannelBaseline",
+      "TelegramAdChannelPricingSettings",
+      "TelegramAdCrmDealStage",
+      "TelegramAdCrmMemberSettings",
+      "TelegramAdCrmOwnerMode",
+      "TelegramAdCrmWorkspaceSettings",
+      "TelegramAdInventoryAnalyticsResponse",
+      "TelegramAdInventorySeriesPoint",
+      "TelegramAdNetworkAnalyticsResponse",
+      "TelegramAdPlacementStatus",
+      "TelegramAdPriceQuote",
+      "TelegramAdPriceSnapshot",
+      "TelegramAdPricingMode",
+      "TelegramAdPricingSeriesPoint",
+      "TelegramAdPricingSeriesResponse",
+      "TelegramAdProduct",
+      "TelegramAdRevenueSeriesResponse",
+      "TelegramAdSale",
+      "TelegramAdSaleChannelBreakdown",
+      "TelegramAdSaleComputedPaymentStatus",
+      "TelegramAdSaleMetricsResponse",
+      "TelegramAdSalePayment",
+      "TelegramAdSalePaymentAllocation",
+      "TelegramAdSalePaymentStatus",
+      "TelegramAdSalePlacement",
+      "TelegramAdSaleStatus",
+      "TelegramAdSalesListResult",
+      "TelegramAdSalesMemberPreferences",
+      "TelegramAdSalesWorkspaceSettings",
+      "TelegramAdSchedulePolicy",
+      "TelegramAdSlotStrategy",
+      "TelegramAdStructuredError",
+      "TelegramAdStructuredErrorCode",
+      "TelegramAdStructuredWarning",
+      "TelegramAdWarningCode",
+      "TelegramAdvertiser",
+      "TelegramAdvertiserActivity",
+      "TelegramAdvertiserActivityType",
+      "TelegramAdvertiserContact",
+      "TelegramAdvertiserContactType",
+      "TelegramAdvertiserLifecycleStage",
+      "TelegramAdvertiserStatus",
+      "TelegramAdvertiserTask",
+      "TelegramAdvertiserTaskPriority",
+      "TelegramAdvertiserTaskStatus",
+      "TelegramAdvertiserTaskType",
+      "TelegramAdvertisersListResult"
+    ],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities"
+    ],
+    "testFiles": [
+      "apps/api/src/domains/telegram/telegram-ad-sales/expected-views.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/policy-recommendation.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/pricing.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/slot-engine.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.service.spec.ts",
+      "apps/web/src/lib/telegram-ad-sales-query.test.ts",
+      "apps/web/src/lib/telegram-ad-sales.test.ts"
+    ],
+    "risk": "medium"
+  },
+  {
+    "path": "apps/api/src/domains/finance/transactions/transactions.service.ts",
+    "lines": 818,
+    "category": "backend",
+    "responsibilities": [
+      "NestJS application/domain service orchestration",
+      "Prisma persistence orchestration",
+      "Telegram API/MTProto integration"
+    ],
+    "imports": [
+      "../common/currency-conversion.service",
+      "../common/pagination/pagination.utils",
+      "../common/workspace.service",
+      "../finance-categories/finance-categories.service",
+      "../prisma/prisma.service",
+      "./dto",
+      "@nestjs/common",
+      "@prisma/client"
+    ],
+    "publicExports": [
+      "TransactionsService"
+    ],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities",
+      "separate persistence orchestration from Telegram adapter/use case logic",
+      "extract use-case services with explicit transaction boundaries"
+    ],
+    "testFiles": [
+      "apps/api/src/domains/finance/transactions/transactions-buy-channels.spec.ts",
+      "apps/api/src/domains/finance/transactions/transactions-channel-ad-revenue.spec.ts"
+    ],
+    "risk": "medium"
+  },
+  {
+    "path": "apps/web/src/app/(operations)/system-logs/page.tsx",
+    "lines": 806,
+    "category": "frontend",
+    "responsibilities": [
+      "Next.js route/page composition",
+      "React Query data fetching/mutation",
+      "API client usage",
+      "interactive UI controls"
+    ],
+    "imports": [
+      "@/components/layout/app-shell",
+      "@/components/ui/pagination",
+      "@/components/ui/primitives",
+      "@/hooks/use-auth",
+      "@/lib/api",
+      "@/providers/toast-provider",
+      "@tanstack/react-query",
+      "@telegram-system/shared",
+      "lucide-react",
+      "next/navigation",
+      "react"
+    ],
+    "publicExports": [],
+    "candidatesForExtraction": [
+      "split high-line-count module by cohesive responsibilities",
+      "extract React Query hooks from UI composition",
+      "compare with reusable UI primitives before local controls"
+    ],
+    "testFiles": [],
+    "risk": "medium"
+  },
+  {
+    "path": "apps/web/src/components/features/telegram/telegram/telegram-text-editor.tsx",
+    "lines": 720,
+    "category": "frontend",
+    "responsibilities": [
+      "React Query data fetching/mutation",
+      "interactive UI controls"
+    ],
+    "imports": [
+      "@/components/icons/icon-avatar",
+      "@/lib/api",
+      "@tanstack/react-query",
+      "lucide-react",
+      "react"
+    ],
+    "publicExports": [
+      "TelegramTextEditor",
+      "TelegramTextEditorHandle"
+    ],
+    "candidatesForExtraction": [
+      "extract React Query hooks from UI composition",
+      "compare with reusable UI primitives before local controls"
+    ],
+    "testFiles": [
+      "apps/web/src/components/features/telegram/telegram/channel-access-badge.test.tsx",
+      "apps/web/src/components/features/telegram/telegram/invite-links-table.test.tsx",
+      "apps/web/src/components/features/telegram/telegram/telegram-image-upload.test.tsx",
+      "apps/web/src/components/features/telegram/telegram/telegram-post-preview.test.tsx",
+      "apps/web/src/components/features/telegram/telegram/telegram-text-editor-format.test.ts"
+    ],
+    "risk": "low"
+  },
+  {
+    "path": "apps/api/src/domains/telegram/telegram-channels/telegram-channels.controller.ts",
+    "lines": 648,
+    "category": "backend",
+    "responsibilities": [
+      "HTTP routing, auth/context mapping, DTO handling",
+      "Telegram API/MTProto integration"
+    ],
+    "imports": [
+      "../common/current-user.decorator",
+      "../common/jwt-auth.guard",
+      "../common/stream/stream-response.service",
+      "./dto",
+      "./telegram-channels.service",
+      "@nestjs/common",
+      "express"
+    ],
+    "publicExports": [
+      "TelegramChannelsController"
+    ],
+    "candidatesForExtraction": [],
+    "testFiles": [
+      "apps/api/src/domains/telegram/telegram-channels/import-channel.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/internal-post-links-resolver.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/invite-links-select.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/invite-links-sync.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/managed-post-history.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/post-groups.helpers.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/return-managed-post-to-draft.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/sync-managed-posts.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/sync-post-metrics.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/update-managed-post.spec.ts"
+    ],
+    "risk": "low"
+  },
+  {
+    "path": "apps/web/src/app/page.tsx",
+    "lines": 629,
+    "category": "frontend",
+    "responsibilities": [
+      "Next.js route/page composition",
+      "React Query data fetching/mutation",
+      "interactive UI controls"
+    ],
+    "imports": [
+      "@/components/features/growth/ad-sales/ad-sales-dashboard-card",
+      "@/components/icons/icon-picker",
+      "@/components/layout/app-shell",
+      "@/components/ui/primitives",
+      "@/lib/features/finance/account-display",
+      "@/lib/api",
+      "@/lib/features/finance/money",
+      "@tanstack/react-query",
+      "lucide-react",
+      "react",
+      "recharts"
+    ],
+    "publicExports": [],
+    "candidatesForExtraction": [
+      "extract React Query hooks from UI composition",
+      "compare with reusable UI primitives before local controls"
+    ],
+    "testFiles": [],
+    "risk": "low"
+  },
+  {
+    "path": "apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.controller.ts",
+    "lines": 628,
+    "category": "backend",
+    "responsibilities": [
+      "HTTP routing, auth/context mapping, DTO handling",
+      "Telegram API/MTProto integration"
+    ],
+    "imports": [
+      "../common/current-user.decorator",
+      "../common/jwt-auth.guard",
+      "./dto",
+      "./telegram-ad-sales.service",
+      "@nestjs/common"
+    ],
+    "publicExports": [
+      "TelegramAdSalesController"
+    ],
+    "candidatesForExtraction": [],
+    "testFiles": [
+      "apps/api/src/domains/telegram/telegram-ad-sales/expected-views.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/policy-recommendation.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/pricing.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/slot-engine.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.service.spec.ts"
+    ],
+    "risk": "low"
+  },
+  {
+    "path": "apps/api/src/domains/operations/dashboard/dashboard.service.ts",
+    "lines": 617,
+    "category": "backend",
+    "responsibilities": [
+      "NestJS application/domain service orchestration",
+      "Prisma persistence orchestration",
+      "Telegram API/MTProto integration"
+    ],
+    "imports": [
+      "../common/analytics/channel-financial-summary",
+      "../common/analytics/invite-link-metrics",
+      "../common/currency-conversion.service",
+      "../common/workspace.service",
+      "../prisma/prisma.service",
+      "@nestjs/common"
+    ],
+    "publicExports": [
+      "DashboardService"
+    ],
+    "candidatesForExtraction": [
+      "separate persistence orchestration from Telegram adapter/use case logic"
+    ],
+    "testFiles": [],
+    "risk": "low"
+  },
+  {
+    "path": "apps/web/src/components/layout/app-shell.tsx",
+    "lines": 601,
+    "category": "frontend",
+    "responsibilities": [
+      "React Query data fetching/mutation",
+      "form state and validation",
+      "interactive UI controls"
+    ],
+    "imports": [
+      "@/components/icons/icon-avatar",
+      "@/components/icons/icon-picker",
+      "@/components/ui/primitives",
+      "@/lib/api",
+      "@/lib/features/identity/auth",
+      "@/lib/progress",
+      "@/providers/query-provider",
+      "@/providers/toast-provider",
+      "@tanstack/react-query",
+      "lucide-react",
+      "next/link",
+      "next/navigation",
+      "react"
+    ],
+    "publicExports": [
+      "AppShell"
+    ],
+    "candidatesForExtraction": [
+      "extract React Query hooks from UI composition",
+      "compare with reusable UI primitives before local controls"
+    ],
+    "testFiles": [],
+    "risk": "low"
+  },
+  {
+    "path": "apps/api/src/telegram/shared/telegram-source-access.service.ts",
+    "lines": 571,
+    "category": "backend",
+    "responsibilities": [
+      "NestJS application/domain service orchestration",
+      "Prisma persistence orchestration",
+      "Telegram API/MTProto integration"
+    ],
+    "imports": [
+      "../../prisma/prisma.service",
+      "@nestjs/common",
+      "@prisma/client",
+      "@telegram-system/shared"
+    ],
+    "publicExports": [
+      "TelegramSourceAccessService",
+      "TelegramSourcePermissions"
+    ],
+    "candidatesForExtraction": [
+      "separate persistence orchestration from Telegram adapter/use case logic"
+    ],
+    "testFiles": [
+      "apps/api/src/telegram/shared/internal-post-links.spec.ts",
+      "apps/api/src/telegram/shared/telegram-import.helpers.spec.ts",
+      "apps/api/src/telegram/shared/telegram-markup.spec.ts",
+      "apps/api/src/telegram/shared/telegram-mtproto-publish.spec.ts",
+      "apps/api/src/telegram/shared/telegram-mtproto.client.spec.ts",
+      "apps/api/src/telegram/shared/telegram-post-url.spec.ts"
+    ],
+    "risk": "low"
+  },
+  {
+    "path": "apps/api/src/domains/telegram/telegram-ad-sales/dto.ts",
+    "lines": 547,
+    "category": "backend",
+    "responsibilities": [
+      "Telegram API/MTProto integration"
+    ],
+    "imports": [
+      "../common/pagination/pagination-query.dto",
+      "@prisma/client",
+      "class-transformer",
+      "class-validator"
+    ],
+    "publicExports": [
+      "AttachPlacementManagedPostDto",
+      "CancelPlacementDto",
+      "CompletePermanentPlacementDto",
+      "CompleteTelegramAdvertiserTaskDto",
+      "CreatePlacementManagedPostDto",
+      "CreateTelegramAdProductDto",
+      "CreateTelegramAdQuoteDto",
+      "CreateTelegramAdSaleDto",
+      "CreateTelegramAdSalePaymentAllocationDto",
+      "CreateTelegramAdSalePaymentDto",
+      "CreateTelegramAdSalePlacementDto",
+      "CreateTelegramAdvertiserActivityDto",
+      "CreateTelegramAdvertiserContactDto",
+      "CreateTelegramAdvertiserDto",
+      "CreateTelegramAdvertiserTaskDto",
+      "PublishPlacementDto",
+      "RecommendTelegramAdPolicyDto",
+      "ReschedulePlacementDto",
+      "ReserveTelegramAdSaleDto",
+      "ReserveTelegramAdSalePlacementDto",
+      "RetryPlacementDeletionDto",
+      "SchedulePlacementDto",
+      "ScheduleSaleDto",
+      "ScheduleSalePlacementItemDto",
+      "SkipTelegramAdvertiserTaskDto",
+      "TelegramAdAlertsQueryDto",
+      "TelegramAdAnalyticsQueryDto",
+      "TelegramAdAnalyticsSeriesQueryDto",
+      "TelegramAdAvailabilityQueryDto",
+      "TelegramAdCrmMemberSettingsDto",
+      "TelegramAdCrmWorkspaceSettingsDto",
+      "TelegramAdInventoryDetailsQueryDto",
+      "TelegramAdInventoryRebuildDto",
+      "TelegramAdNetworkAnalyticsQueryDto",
+      "TelegramAdPriceFillCorrelationQueryDto",
+      "TelegramAdPriceHistoryQueryDto",
+      "TelegramAdProductsQueryDto",
+      "TelegramAdRevenueScenarioDto",
+      "TelegramAdSalesQueryDto",
+      "TelegramAdvertiserActivitiesQueryDto",
+      "TelegramAdvertiserSearchDto",
+      "TelegramAdvertiserTasksQueryDto",
+      "TelegramAdvertisersQueryDto",
+      "UpdateTelegramAdChannelPricingDto",
+      "UpdateTelegramAdPolicyDto",
+      "UpdateTelegramAdProductDto",
+      "UpdateTelegramAdSaleDto",
+      "UpdateTelegramAdSalePaymentDto",
+      "UpdateTelegramAdSalePlacementDto",
+      "UpdateTelegramAdSalesMemberPreferencesDto",
+      "UpdateTelegramAdSalesWorkspaceSettingsDto",
+      "UpdateTelegramAdvertiserContactDto",
+      "UpdateTelegramAdvertiserDto",
+      "UpdateTelegramAdvertiserTaskDto",
+      "VoidTelegramAdSalePaymentDto"
+    ],
+    "candidatesForExtraction": [],
+    "testFiles": [
+      "apps/api/src/domains/telegram/telegram-ad-sales/expected-views.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/policy-recommendation.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/pricing.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/slot-engine.spec.ts",
+      "apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.service.spec.ts"
+    ],
+    "risk": "low"
+  },
+  {
+    "path": "apps/api/src/domains/telegram/telegram-channels/telegram-channel-analytics.service.ts",
+    "lines": 531,
+    "category": "backend",
+    "responsibilities": [
+      "NestJS application/domain service orchestration",
+      "Prisma persistence orchestration",
+      "Telegram API/MTProto integration"
+    ],
+    "imports": [
+      "../common/analytics/channel-financial-summary",
+      "../common/analytics/data-quality",
+      "../prisma/prisma.service",
+      "@nestjs/common"
+    ],
+    "publicExports": [
+      "TelegramChannelAnalyticsService"
+    ],
+    "candidatesForExtraction": [
+      "separate persistence orchestration from Telegram adapter/use case logic"
+    ],
+    "testFiles": [
+      "apps/api/src/domains/telegram/telegram-channels/import-channel.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/internal-post-links-resolver.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/invite-links-select.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/invite-links-sync.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/managed-post-history.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/post-groups.helpers.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/return-managed-post-to-draft.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/sync-managed-posts.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/sync-post-metrics.spec.ts",
+      "apps/api/src/domains/telegram/telegram-channels/update-managed-post.spec.ts"
+    ],
+    "risk": "low"
+  },
+  {
+    "path": "apps/api/src/domains/workspace/workspace-members/workspace-members.service.ts",
+    "lines": 521,
+    "category": "backend",
+    "responsibilities": [
+      "NestJS application/domain service orchestration",
+      "Prisma persistence orchestration",
+      "Telegram API/MTProto integration"
+    ],
+    "imports": [
+      "../common/workspace.service",
+      "../prisma/prisma.service",
+      "../telegram/shared/telegram-import.helpers",
+      "../telegram/shared/telegram-invite-link-attribution",
+      "./dto",
+      "@nestjs/common",
+      "@prisma/client",
+      "bcrypt",
+      "crypto"
+    ],
+    "publicExports": [
+      "WorkspaceMembersService"
+    ],
+    "candidatesForExtraction": [
+      "separate persistence orchestration from Telegram adapter/use case logic"
+    ],
+    "testFiles": [],
+    "risk": "low"
+  }
+]

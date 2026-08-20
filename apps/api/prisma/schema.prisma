@@ -1,0 +1,4063 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum WorkspaceRole {
+  owner
+  admin
+  MEDIA_BUYER
+  member
+}
+
+enum TransactionType {
+  income
+  expense
+}
+
+enum CurrencyDisplayMode {
+  code
+  symbol
+}
+
+enum CampaignStatus {
+  planned
+  active
+  finished
+  cancelled
+  archived
+}
+
+enum PromoStatus {
+  draft
+  active
+  archived
+}
+
+enum TelegramUserAccountStatus {
+  pending
+  needs_code
+  needs_password
+  connected
+  error
+  disabled
+}
+
+enum TelegramSourceType {
+  BOT
+  MTPROTO
+}
+
+enum TelegramChannelSourceRole {
+  OWNER
+  ADMIN
+  MEMBER
+  UNKNOWN
+}
+
+enum TelegramChannelDataType {
+  CHANNEL_INFO
+  POSTS
+  INVITE_LINKS
+  STATS
+  MEMBERS
+  REACTIONS
+  VIEWS
+  OTHER
+}
+
+enum TelegramChannelAccessMode {
+  PUBLIC
+  PRIVATE
+  PRIVATE_INVITE
+  PRIVATE_JOIN_REQUEST
+  UNKNOWN
+}
+
+enum TelegramChannelAcquisitionType {
+  CREATED
+  PURCHASED
+}
+
+enum TelegramDataSourceStatus {
+  SUCCESS
+  PARTIAL
+  FAILED
+  SKIPPED
+}
+
+enum TelegramInviteLinkCreatorMatchSource {
+  TELEGRAM_USER_ID
+  MTPROTO_USERNAME
+  MEMBER_USERNAME
+  UNRESOLVED
+}
+
+enum AdvertisingSourceType {
+  telegram_channel
+  instagram
+  facebook
+  website
+  direct
+  other
+}
+
+enum IconType {
+  emoji
+  image
+}
+
+enum TelegramChannelAdAnalysisStatus {
+  NEW
+  APPROVED
+  REJECTED
+  WATCH_LATER
+  BLACKLIST
+  TESTED
+}
+
+enum TelegramManagedPostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
+enum TelegramManagedPostRemoteStatus {
+  NONE
+  SCHEDULED
+  PUBLISHED
+  BROKEN
+  MISSING
+  UNKNOWN
+}
+
+enum TelegramManagedPostOrigin {
+  SYSTEM
+  TELEGRAM
+}
+
+enum TelegramManagedPostIdVerificationStatus {
+  UNVERIFIED
+  VERIFIED
+  MISMATCH
+  MISSING
+}
+
+enum TelegramManagedPostLinkSource {
+  AUTO
+  MANUAL
+}
+
+enum TelegramAdPricingMode {
+  CPM
+  FIXED
+  MANUAL
+}
+
+enum TelegramAdSlotStrategy {
+  BEFORE_ORGANIC_POST
+  FIXED_TIMES
+  MANUAL
+}
+
+enum TelegramAdSaleStatus {
+  DRAFT
+  RESERVED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TelegramAdPlacementStatus {
+  DRAFT
+  RESERVED
+  SCHEDULED
+  PUBLISHED
+  COMPLETED
+  CANCELLED
+  MISSED
+}
+
+enum TelegramAdSalePaymentStatus {
+  ACTIVE
+  VOIDED
+}
+
+enum TelegramAdvertiserStatus {
+  LEAD
+  ACTIVE
+  INACTIVE
+  LOST
+  BLOCKED
+  ARCHIVED
+}
+
+enum TelegramAdvertiserLifecycleStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CUSTOMER
+  REPEAT_CUSTOMER
+  REACTIVATION
+  CHURNED
+}
+
+enum TelegramAdvertiserContactType {
+  TELEGRAM_USERNAME
+  TELEGRAM_USER_ID
+  PHONE
+  EMAIL
+  WEBSITE
+  OTHER
+}
+
+enum TelegramAdCrmDealStage {
+  NEW_LEAD
+  CONTACTED
+  NEED_IDENTIFIED
+  OFFER_PREPARED
+  OFFER_SENT
+  NEGOTIATION
+  SLOT_RESERVED
+  WAITING_PAYMENT
+  PAID
+  SCHEDULED
+  PUBLISHED
+  COMPLETED
+  LOST
+}
+
+enum TelegramAdvertiserActivityType {
+  ADVERTISER_CREATED
+  CONTACT_ADDED
+  NOTE_ADDED
+  MANUAL_CONTACT
+  OUTREACH_PLANNED
+  OUTREACH_COMPLETED
+  CLIENT_REPLIED
+  OFFER_SENT
+  SALE_CREATED
+  SALE_STAGE_CHANGED
+  SLOT_RESERVED
+  PAYMENT_RECORDED
+  PLACEMENT_SCHEDULED
+  PLACEMENT_PUBLISHED
+  PLACEMENT_COMPLETED
+  FOLLOW_UP_CREATED
+  FOLLOW_UP_COMPLETED
+  FOLLOW_UP_SKIPPED
+  CLIENT_DECLINED
+  CLIENT_REQUESTED_LATER_CONTACT
+  CLIENT_REACTIVATED
+  ADVERTISER_MERGED
+  OWNER_CHANGED
+  STATUS_CHANGED
+}
+
+enum TelegramAdvertiserTaskType {
+  FOLLOW_UP
+  PAYMENT_FOLLOW_UP
+  REQUEST_FEEDBACK
+  OFFER_FREE_SLOT
+  REACTIVATION
+  PREPARE_OFFER
+  MANUAL
+}
+
+enum TelegramAdvertiserTaskStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+  CANCELLED
+}
+
+enum TelegramAdvertiserTaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TelegramAdCrmOwnerMode {
+  SALE_ASSIGNEE
+  ADVERTISER_OWNER
+  WORKSPACE_DEFAULT
+}
+
+enum TelegramAdvertiserAutomationEventType {
+  PLACEMENT_COMPLETED
+  PLACEMENT_PUBLISHED
+  SALE_COMPLETED
+  PAYMENT_OVERDUE
+  ADVERTISER_INACTIVE
+  FREE_SLOT_AVAILABLE
+  HIGH_PERFORMING_PLACEMENT
+  CLIENT_REQUESTED_LATER_CONTACT
+}
+
+enum TelegramAdvertiserAutomationActionType {
+  CREATE_FOLLOW_UP_TASK
+  CREATE_PAYMENT_TASK
+  CREATE_FEEDBACK_TASK
+  CREATE_REACTIVATION_TASK
+  CREATE_FREE_SLOT_SUGGESTION
+}
+
+enum TelegramAdvertiserAutomationExecutionStatus {
+  CREATED
+  SKIPPED
+  FAILED
+}
+
+enum AdCampaignAdmissionBatchStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum AdCampaignAdmissionDetectionMode {
+  EXACT_DELTA
+  BOOTSTRAPPED_CUMULATIVE
+}
+
+enum AdCampaignAdmissionTimeBoundarySource {
+  CAMPAIGN_ACTUAL_START
+  CAMPAIGN_START
+  INVITE_LINK_CREATED
+  AUDIENCE_SNAPSHOT
+  FIRST_INVITE_SNAPSHOT
+}
+
+enum AdCampaignAdmissionBaselineMethod {
+  PRE_ADMISSION
+  EARLIEST_OBSERVED
+  UNAVAILABLE
+}
+
+enum AdCampaignAdmissionDataQuality {
+  GOOD
+  PARTIAL
+  INSUFFICIENT
+  SUSPICIOUS
+}
+
+enum TelegramAdPlacementAdvertiserResultSource {
+  MANUAL
+  ADVERTISER_REPORTED
+  TRACKED
+}
+
+enum ApplicationLogLevel {
+  debug
+  info
+  warn
+  error
+}
+
+enum ApplicationLogKind {
+  http
+  application
+  integration
+  cron
+  client
+  audit
+}
+
+enum ScheduledTaskScope {
+  WORKSPACE_OPERATION
+  SYSTEM_MAINTENANCE
+}
+
+enum ScheduledTaskTrigger {
+  SCHEDULE
+  MANUAL
+}
+
+enum ScheduledTaskRunStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+enum ScheduledTaskNotificationChannel {
+  SYSTEM_TELEGRAM_BOT
+}
+
+enum TelegramBotApplicationType {
+  NONE
+  GREETER
+  FINANCE
+}
+
+enum TelegramBotRuntimeEnvironment {
+  LOCAL
+  PRODUCTION
+}
+
+enum TelegramBotRuntimeStatus {
+  DISABLED
+  STARTING
+  ACTIVE
+  ERROR
+}
+
+enum TelegramBotWebhookStatus {
+  NOT_CONFIGURED
+  CONFIGURED
+  ERROR
+}
+
+enum TelegramBotUpdateStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  DUPLICATE
+  FAILED
+  SKIPPED
+}
+
+enum TelegramBotDeliveryStatus {
+  PENDING
+  PROCESSING
+  SENT
+  RETRY
+  FAILED
+  CANCELLED
+}
+
+enum TelegramBotDeliveryType {
+  SEND_MESSAGE
+}
+
+enum GreeterCaptchaType {
+  BUTTON_CONFIRM
+  SIMPLE_CHOICE
+}
+
+enum GreeterFailureBehavior {
+  KEEP_PENDING
+  DECLINE
+}
+
+enum GreeterJoinRequestStatus {
+  PENDING_CAPTCHA
+  APPROVED
+  DECLINED
+  EXPIRED
+}
+
+enum GreeterUserState {
+  ALIVE
+  BLOCKED
+  DID_NOT_INTERACT
+}
+
+enum TelegramSystemBotFinanceDraftStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  EXPIRED
+  FAILED
+}
+
+enum TelegramSystemBotFinanceDraftKind {
+  TRANSACTION
+  TRANSFER
+}
+
+enum GreeterSequenceTrigger {
+  AFTER_START
+  AFTER_CAPTCHA_SUCCESS
+}
+
+enum GreeterSequenceVersionStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum GreeterAutomationEnvironment {
+  PRODUCTION
+  TEST
+}
+
+enum GreeterStepExecutionStatus {
+  PENDING
+  QUEUED
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum GreeterBroadcastStatus {
+  DRAFT
+  SCHEDULED
+  PROCESSING
+  COMPLETED
+  PARTIALLY_FAILED
+  FAILED
+  CANCELLED
+}
+
+enum GreeterBroadcastAudience {
+  ALL_ALIVE
+  CHANNEL
+  USER_STATE
+}
+
+enum GreeterBroadcastRecipientStatus {
+  PENDING
+  QUEUED
+  SENT
+  FAILED
+  BLOCKED
+  CANCELLED
+}
+
+enum FinanceAccountType {
+  CASH
+  CARD
+  SAVINGS
+  OTHER
+}
+
+enum FinanceTransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum FinanceTransactionSource {
+  CHAT
+  MINI_APP
+  AI
+  RECEIPT
+}
+
+enum FinanceProposalStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+}
+
+enum FinanceLimitPeriod {
+  MONTH
+}
+
+enum FinanceReminderRecurrence {
+  MONTHLY
+}
+
+enum FinanceAiProvider {
+  OPENAI
+}
+
+enum FinanceAiConnectionStatus {
+  NOT_CONFIGURED
+  CONNECTED
+  INVALID
+}
+
+enum BotBillingProvider {
+  STRIPE
+  TELEGRAM_STARS
+}
+
+enum BotBillingProviderMode {
+  TEST
+  LIVE
+}
+
+enum BotBillingConnectionStatus {
+  NOT_CONFIGURED
+  CONNECTED
+  INVALID
+}
+
+enum BotBillingInterval {
+  MONTH
+  YEAR
+}
+
+enum BotSubscriptionSource {
+  STRIPE
+  TELEGRAM_STARS
+  MANUAL
+  GIFT
+}
+
+enum BotSubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+  INCOMPLETE
+}
+
+enum BotSubscriptionGrantSource {
+  MANUAL
+  GIFT
+}
+
+enum BotBillingEventType {
+  CHECKOUT_COMPLETED
+  PAYMENT_SUCCEEDED
+  PAYMENT_FAILED
+  SUBSCRIPTION_UPDATED
+  SUBSCRIPTION_CANCELED
+  GRANT_CREATED
+  GRANT_REVOKED
+}
+
+model User {
+  id                                        String                                @id @default(cuid())
+  email                                     String                                @unique
+  seedKey                                   String?                               @unique
+  passwordHash                              String
+  name                                      String
+  editorShortcuts                           Json?
+  memberships                               WorkspaceMember[]
+  icons                                     Icon[]
+  createdAccounts                           Account[]                             @relation("AccountCreatedBy")
+  createdTransactions                       Transaction[]                         @relation("TransactionCreatedBy")
+  createdTransfers                          Transfer[]                            @relation("TransferCreatedBy")
+  createdInvestments                        Investment[]                          @relation("InvestmentCreatedBy")
+  createdTelegramChannels                   TelegramChannel[]                     @relation("TelegramChannelCreatedBy")
+  createdTelegramBots                       TelegramBotIntegration[]              @relation("TelegramBotCreatedBy")
+  createdTelegramUserAccounts               TelegramUserAccountIntegration[]      @relation("TelegramUserAccountCreatedBy")
+  createdPromos                             Promo[]                               @relation("PromoCreatedBy")
+  createdAdvertisingSources                 AdvertisingSource[]                   @relation("AdvertisingSourceCreatedBy")
+  createdAdCampaigns                        AdCampaign[]                          @relation("AdCampaignCreatedBy")
+  createdAdHypotheses                       AdHypothesis[]                        @relation("AdHypothesisCreatedBy")
+  createdTelegramChannelNetworks            TelegramChannelNetwork[]              @relation("TelegramChannelNetworkCreatedBy")
+  createdTelegramAdSales                    TelegramAdSale[]                      @relation("TelegramAdSaleCreatedBy")
+  createdTelegramAdSalePayments             TelegramAdSalePayment[]               @relation("TelegramAdSalePaymentCreatedBy")
+  createdTelegramAdvertisers                TelegramAdvertiser[]                  @relation("TelegramAdvertiserCreatedBy")
+  assignedTelegramAdvertiserTags            TelegramAdvertiserTagAssignment[]
+  telegramAdvertiserActivities              TelegramAdvertiserActivity[]          @relation("TelegramAdvertiserActivityActorUser")
+  createdTelegramAdvertiserTasks            TelegramAdvertiserTask[]              @relation("TelegramAdvertiserTaskCreatedBy")
+  createdTelegramPlacementAdvertiserResults TelegramAdPlacementAdvertiserResult[] @relation("TelegramAdPlacementAdvertiserResultCreatedBy")
+  applicationLogs                           ApplicationLog[]
+  telegramSystemBotConnection               TelegramSystemBotConnection?
+  createdAt                                 DateTime                              @default(now())
+  updatedAt                                 DateTime                              @updatedAt
+}
+
+model Workspace {
+  id                  String              @id @default(cuid())
+  name                String
+  timezone            String              @default("Europe/Warsaw")
+  primaryCurrency     String              @default("USD") @db.VarChar(3)
+  secondaryCurrency   String              @default("UAH") @db.VarChar(3)
+  tertiaryCurrency    String              @default("UAH") @db.VarChar(3)
+  currencyDisplayMode CurrencyDisplayMode @default(code)
+  avatarIconId        String?
+
+  members                                WorkspaceMember[]
+  accounts                               Account[]
+  transactions                           Transaction[]
+  transfers                              Transfer[]
+  telegramChannels                       TelegramChannel[]
+  telegramCustomEmojiPacks               TelegramCustomEmojiPack[]
+  telegramBotIntegrations                TelegramBotIntegration[]
+  telegramBotRuntimeInstances            TelegramBotRuntimeInstance[]
+  telegramBotApplicationAccesses         TelegramBotApplicationWorkspaceAccess[]
+  telegramBotUsers                       TelegramBotUser[]
+  telegramBotUpdateLogs                  TelegramBotUpdateLog[]
+  telegramBotDeliveries                  TelegramBotDelivery[]
+  financeAiProviderConfigs               FinanceAiProviderConfig[]
+  greeterConfigs                         GreeterConfig[]
+  greeterConfigVersions                  GreeterConfigVersion[]
+  greeterChannelConfigVersions           GreeterChannelConfigVersion[]
+  greeterChannels                        GreeterChannel[]
+  greeterJoinRequests                    GreeterJoinRequest[]
+  greeterSequences                       GreeterSequence[]
+  greeterEnrollments                     GreeterSequenceEnrollment[]
+  greeterBroadcasts                      GreeterBroadcast[]
+  greeterTestSessions                    GreeterTestSession[]
+  greeterUserEnvironmentStates           GreeterUserEnvironmentState[]
+  botBillingProviderConfigs              BotBillingProviderConfig[]
+  botBillingPlans                        BotSubscriptionPlan[]
+  botBillingSubscriptions                BotSubscription[]
+  botBillingCoupons                      BotCoupon[]
+  botBillingEvents                       BotBillingEvent[]
+  telegramSystemBotConnections           TelegramSystemBotConnection[]
+  telegramSystemBotTaskSubscriptions     TelegramSystemBotTaskSubscription[]
+  telegramSystemBotFinanceDrafts         TelegramSystemBotFinanceDraft[]
+  telegramUserAccountIntegrations        TelegramUserAccountIntegration[]
+  telegramChannelAdminLinks              TelegramChannelAdminLink[]
+  telegramChannelSourceAccesses          TelegramChannelSourceAccess[]
+  telegramChannelDataSources             TelegramChannelDataSource[]
+  telegramChannelStatsSnapshots          TelegramChannelStatsSnapshot[]
+  telegramChannelAudienceSnapshots       TelegramChannelAudienceSnapshot[]
+  adCampaignAdmissionBatches             AdCampaignAdmissionBatch[]
+  adCampaignAdmissionBackfillStates      AdCampaignAdmissionBackfillState[]
+  telegramChannelNetworks                TelegramChannelNetwork[]
+  telegramChannelNetworkMembers          TelegramChannelNetworkMember[]
+  telegramChannelStatsPoints             TelegramChannelStatsPoint[]
+  telegramChannelAdAnalyses              TelegramChannelAdAnalysis[]
+  telegramInviteLinkSnapshots            TelegramInviteLinkSnapshot[]
+  telegramPosts                          TelegramPost[]
+  telegramManagedPosts                   TelegramManagedPost[]
+  telegramManagedPostRevisions           TelegramManagedPostRevision[]
+  telegramPostPlannerFormats             TelegramPostPlannerFormat[]
+  telegramPostPlannerSlots               TelegramPostPlannerSlot[]
+  telegramAdProducts                     TelegramAdProduct[]
+  telegramAdSchedulePolicies             TelegramAdSchedulePolicy[]
+  telegramAdSalesWorkspaceSettings       TelegramAdSalesWorkspaceSettings?
+  telegramAdSalesMemberPreferences       TelegramAdSalesMemberPreferences[]
+  telegramAdPriceSnapshots               TelegramAdPriceSnapshot[]
+  telegramAdInventoryDailySnapshots      TelegramAdInventoryDailySnapshot[]
+  telegramAdSales                        TelegramAdSale[]
+  telegramAdSalePlacements               TelegramAdSalePlacement[]
+  telegramAdSalePayments                 TelegramAdSalePayment[]
+  telegramAdSalePaymentAllocations       TelegramAdSalePaymentAllocation[]
+  telegramAdvertisers                    TelegramAdvertiser[]
+  telegramAdvertiserContacts             TelegramAdvertiserContact[]
+  telegramAdvertiserTags                 TelegramAdvertiserTag[]
+  telegramAdvertiserTagAssignments       TelegramAdvertiserTagAssignment[]
+  telegramAdvertiserActivities           TelegramAdvertiserActivity[]
+  telegramAdvertiserTasks                TelegramAdvertiserTask[]
+  telegramAdCrmMemberSettings            TelegramAdCrmMemberSettings[]
+  telegramAdCrmWorkspaceSettings         TelegramAdCrmWorkspaceSettings?
+  telegramAdvertiserAutomationRules      TelegramAdvertiserAutomationRule[]
+  telegramAdvertiserAutomationExecutions TelegramAdvertiserAutomationExecution[]
+  telegramAdPlacementAdvertiserResults   TelegramAdPlacementAdvertiserResult[]
+  postGroups                             PostGroup[]
+  promos                                 Promo[]
+  advertisingSources                     AdvertisingSource[]
+  adCampaigns                            AdCampaign[]
+  adHypotheses                           AdHypothesis[]
+  adHypothesisCampaigns                  AdHypothesisCampaign[]
+  dailyAnalyticsSyncRuns                 DailyAnalyticsSyncRun[]
+  exchangeRates                          ExchangeRate[]
+  investments                            Investment[]
+  transactionCategories                  TransactionCategory[]
+  icons                                  Icon[]
+  promptNotes                            PromptNote[]
+  applicationLogs                        ApplicationLog[]
+  scheduledTaskConfigs                   ScheduledTaskConfig[]
+  scheduledTaskRuns                      ScheduledTaskRun[]
+  scheduledTaskLeases                    ScheduledTaskLease[]
+  avatarIcon                             Icon?                                   @relation("WorkspaceAvatarIcon", fields: [avatarIconId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PromptNote {
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  title              String
+  content            String
+  emoji              String?
+  iconId             String?
+  assignedMemberId   String?
+  telegramChannelId  String?
+  telegramChannelIds String[] @default([])
+  postGroupId        String?
+
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  icon            Icon?            @relation(fields: [iconId], references: [id], onDelete: SetNull)
+  assignedMember  WorkspaceMember? @relation("PromptNoteAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  telegramChannel TelegramChannel? @relation(fields: [telegramChannelId], references: [id], onDelete: SetNull)
+  postGroup       PostGroup?       @relation(fields: [postGroupId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, updatedAt])
+  @@index([workspaceId, telegramChannelId])
+  @@index([workspaceId, postGroupId])
+  @@index([workspaceId, assignedMemberId])
+  @@index([workspaceId, iconId])
+}
+
+model TelegramUserAccountIntegration {
+  id                        String                    @id @default(cuid())
+  workspaceId               String
+  assignedMemberId          String?
+  createdByUserId           String?
+  label                     String
+  apiId                     String
+  apiHashEncrypted          String
+  apiHashIv                 String
+  apiHashAuthTag            String
+  phoneMasked               String?
+  phoneEncrypted            String?
+  phoneIv                   String?
+  phoneAuthTag              String?
+  telegramUserId            String?
+  username                  String?
+  firstName                 String?
+  lastName                  String?
+  photoUrl                  String?
+  nameColor                 Int?
+  isPremium                 Boolean                   @default(false)
+  premiumCheckedAt          DateTime?
+  captionLengthMax          Int                       @default(1024)
+  messageLengthMax          Int                       @default(4096)
+  premiumCapabilities       Json?
+  status                    TelegramUserAccountStatus @default(pending)
+  lastErrorMessage          String?
+  lastCheckedAt             DateTime?
+  lastSyncedAt              DateTime?
+  isActive                  Boolean                   @default(true)
+  sessionEncrypted          String?
+  sessionIv                 String?
+  sessionAuthTag            String?
+  loginPhoneCodeHash        String?
+  loginTempSessionEncrypted String?
+  loginTempSessionIv        String?
+  loginTempSessionAuthTag   String?
+  loginStartedAt            DateTime?
+
+  workspace         Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignedMember    WorkspaceMember?           @relation("TelegramUserAccountAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdByUser     User?                      @relation("TelegramUserAccountCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  channelAdminLinks TelegramChannelAdminLink[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, assignedMemberId])
+}
+
+model TelegramChannelAdminLink {
+  id                               String @id @default(cuid())
+  workspaceId                      String
+  telegramChannelId                String
+  telegramUserAccountIntegrationId String
+  source                           String @default("mtproto")
+
+  workspace                      Workspace                      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel                TelegramChannel                @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  telegramUserAccountIntegration TelegramUserAccountIntegration @relation(fields: [telegramUserAccountIntegrationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, telegramChannelId, telegramUserAccountIntegrationId])
+  @@index([workspaceId, telegramChannelId])
+  @@index([workspaceId, telegramUserAccountIntegrationId])
+}
+
+model TelegramChannelSourceAccess {
+  id                   String                    @id @default(cuid())
+  workspaceId          String
+  channelId            String
+  sourceId             String
+  sourceType           TelegramSourceType
+  role                 TelegramChannelSourceRole @default(UNKNOWN)
+  canPostMessages      Boolean                   @default(false)
+  canEditMessages      Boolean                   @default(false)
+  canDeleteMessages    Boolean                   @default(false)
+  canInviteUsers       Boolean                   @default(false)
+  canManageInviteLinks Boolean                   @default(false)
+  canViewStats         Boolean                   @default(false)
+  rawPermissions       Json?
+  lastCheckedAt        DateTime?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  channel   TelegramChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, sourceId, sourceType])
+  @@index([workspaceId, channelId])
+  @@index([workspaceId, sourceId, sourceType])
+}
+
+model TelegramChannelDataSource {
+  id                String                   @id @default(cuid())
+  workspaceId       String
+  channelId         String
+  sourceId          String
+  sourceType        TelegramSourceType
+  dataType          TelegramChannelDataType
+  status            TelegramDataSourceStatus @default(SUCCESS)
+  sourceDisplayName String?
+  errorMessage      String?
+  metadata          Json?
+  syncedAt          DateTime                 @default(now())
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  channel   TelegramChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, channelId])
+  @@index([workspaceId, sourceId, sourceType])
+  @@index([workspaceId, channelId, dataType])
+}
+
+model WorkspaceMember {
+  id               String        @id @default(cuid())
+  workspaceId      String
+  userId           String
+  role             WorkspaceRole @default(admin)
+  isHidden         Boolean       @default(false)
+  avatarIconId     String?
+  telegramUsername String?
+
+  workspace                                 Workspace                          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user                                      User                               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  avatarIcon                                Icon?                              @relation(fields: [avatarIconId], references: [id], onDelete: SetNull)
+  investments                               Investment[]
+  investmentTransactions                    Transaction[]                      @relation("MemberInvestmentTransactions")
+  assignedAccounts                          Account[]                          @relation("AccountAssignedMember")
+  assignedTransactions                      Transaction[]                      @relation("TransactionAssignedMember")
+  assignedTransfers                         Transfer[]                         @relation("TransferAssignedMember")
+  assignedInvestments                       Investment[]                       @relation("InvestmentAssignedMember")
+  assignedTelegramChannels                  TelegramChannel[]                  @relation("TelegramChannelAssignedMember")
+  assignedTelegramBots                      TelegramBotIntegration[]           @relation("TelegramBotAssignedMember")
+  assignedTelegramUserAccounts              TelegramUserAccountIntegration[]   @relation("TelegramUserAccountAssignedMember")
+  assignedPromos                            Promo[]                            @relation("PromoAssignedMember")
+  assignedAdvertisingSources                AdvertisingSource[]                @relation("AdvertisingSourceAssignedMember")
+  assignedAdCampaigns                       AdCampaign[]                       @relation("AdCampaignAssignedMember")
+  assignedAdHypotheses                      AdHypothesis[]                     @relation("AdHypothesisAssignedMember")
+  assignedTelegramChannelNetworks           TelegramChannelNetwork[]           @relation("TelegramChannelNetworkAssignedMember")
+  assignedTelegramChannelAdAnalyses         TelegramChannelAdAnalysis[]        @relation("TelegramChannelAdAnalysisAssignedMember")
+  assignedTelegramManagedPosts              TelegramManagedPost[]              @relation("TelegramManagedPostAssignedMember")
+  assignedTelegramManagedPostRevisions      TelegramManagedPostRevision[]      @relation("TelegramManagedPostRevisionAssignedMember")
+  assignedTelegramAdSales                   TelegramAdSale[]                   @relation("TelegramAdSaleAssignedMember")
+  ownedTelegramAdvertisers                  TelegramAdvertiser[]               @relation("TelegramAdvertiserOwner")
+  telegramAdvertiserActivities              TelegramAdvertiserActivity[]       @relation("TelegramAdvertiserActivityActorMember")
+  assignedTelegramAdvertiserTasks           TelegramAdvertiserTask[]           @relation("TelegramAdvertiserTaskAssignedMember")
+  telegramAdCrmSettings                     TelegramAdCrmMemberSettings?
+  telegramAdSalesPreferences                TelegramAdSalesMemberPreferences?
+  specificTelegramAdvertiserAutomationRules TelegramAdvertiserAutomationRule[] @relation("TelegramAdvertiserAutomationSpecificMember")
+  createdPostGroups                         PostGroup[]                        @relation("PostGroupCreatedByMember")
+  createdTelegramInviteLinks                TelegramInviteLink[]               @relation("TelegramInviteLinkCreatorMember")
+  promptNotes                               PromptNote[]                       @relation("PromptNoteAssignedMember")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, userId])
+  @@unique([workspaceId, telegramUsername])
+  @@unique([id, workspaceId])
+}
+
+model Account {
+  id               String  @id @default(cuid())
+  workspaceId      String
+  name             String
+  currency         String  @db.VarChar(3)
+  initialBalance   Decimal @default(0)
+  isActive         Boolean @default(true)
+  iconId           String?
+  assignedMemberId String?
+  createdByUserId  String?
+
+  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  icon           Icon?            @relation(fields: [iconId], references: [id], onDelete: SetNull)
+  assignedMember WorkspaceMember? @relation("AccountAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdByUser  User?            @relation("AccountCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  transactions           Transaction[]
+  outgoingTransfers      Transfer[]              @relation("OutgoingTransfers")
+  incomingTransfers      Transfer[]              @relation("IncomingTransfers")
+  adCampaigns            AdCampaign[]
+  investments            Investment[]
+  telegramAdSalePayments TelegramAdSalePayment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, assignedMemberId])
+}
+
+model Transaction {
+  id                      String          @id @default(cuid())
+  workspaceId             String
+  accountId               String
+  telegramChannelId       String?
+  type                    TransactionType
+  amount                  Decimal
+  currency                String          @db.VarChar(3)
+  amountInPrimaryCurrency Decimal
+  exchangeRateToPrimary   Decimal
+  category                String
+  categoryId              String?
+  memberId                String?
+  description             String?
+  date                    DateTime
+  adCampaignId            String?         @unique
+  createdByUserId         String?
+  iconId                  String?
+  assignedMemberId        String?
+
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account         Account          @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  telegramChannel TelegramChannel? @relation("TelegramChannelRevenueTransactions", fields: [telegramChannelId], references: [id], onDelete: SetNull)
+
+  adCampaign                    AdCampaign?            @relation("CampaignExpenseTransaction", fields: [adCampaignId], references: [id])
+  investment                    Investment?
+  telegramAdSalePayment         TelegramAdSalePayment?
+  telegramAdSalePaymentReversal TelegramAdSalePayment? @relation("TelegramAdSalePaymentReversalTransaction")
+  purchasedTelegramChannel      TelegramChannel?       @relation("TelegramChannelPurchaseTransaction")
+  categoryRef                   TransactionCategory?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  member                        WorkspaceMember?       @relation("MemberInvestmentTransactions", fields: [memberId], references: [id], onDelete: SetNull)
+  icon                          Icon?                  @relation(fields: [iconId], references: [id], onDelete: SetNull)
+  assignedMember                WorkspaceMember?       @relation("TransactionAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdByUser                 User?                  @relation("TransactionCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, type, categoryId])
+  @@index([workspaceId, memberId])
+  @@index([workspaceId, assignedMemberId])
+  @@index([workspaceId, telegramChannelId])
+}
+
+model TransactionCategory {
+  id          String          @id @default(cuid())
+  workspaceId String
+  name        String
+  type        TransactionType
+  isSystem    Boolean         @default(false)
+  key         String?
+  iconId      String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  transactions Transaction[] @relation
+  icon         Icon?         @relation(fields: [iconId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, type, key])
+  @@index([workspaceId, type])
+}
+
+model Investment {
+  id                      String   @id @default(cuid())
+  workspaceId             String
+  workspaceMemberId       String
+  accountId               String
+  transactionId           String?  @unique
+  amount                  Decimal
+  currency                String   @db.VarChar(3)
+  amountInPrimaryCurrency Decimal
+  exchangeRateToPrimary   Decimal
+  date                    DateTime
+  notes                   String?
+  createdByUserId         String?
+  assignedMemberId        String?
+
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceMember WorkspaceMember  @relation(fields: [workspaceMemberId], references: [id], onDelete: Restrict)
+  account         Account          @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  transaction     Transaction?     @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  assignedMember  WorkspaceMember? @relation("InvestmentAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdByUser   User?            @relation("InvestmentCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, assignedMemberId])
+}
+
+model Transfer {
+  id                   String   @id @default(cuid())
+  workspaceId          String
+  fromAccountId        String
+  toAccountId          String
+  fromAmount           Decimal
+  fromCurrency         String   @db.VarChar(3)
+  toAmount             Decimal
+  toCurrency           String   @db.VarChar(3)
+  exchangeRate         Decimal?
+  expectedToAmount     Decimal?
+  transferLossAmount   Decimal?
+  transferLossCurrency String?  @db.VarChar(3)
+  date                 DateTime
+  description          String?
+  createdByUserId      String?
+  assignedMemberId     String?
+
+  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fromAccount    Account          @relation("OutgoingTransfers", fields: [fromAccountId], references: [id], onDelete: Restrict)
+  toAccount      Account          @relation("IncomingTransfers", fields: [toAccountId], references: [id], onDelete: Restrict)
+  assignedMember WorkspaceMember? @relation("TransferAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdByUser  User?            @relation("TransferCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, assignedMemberId])
+}
+
+model TelegramChannel {
+  id                        String                         @id @default(cuid())
+  workspaceId               String
+  title                     String
+  username                  String?
+  telegramChatId            String?
+  telegramAccessHash        String?
+  accessMode                TelegramChannelAccessMode      @default(UNKNOWN)
+  requiresJoinRequest       Boolean                        @default(false)
+  lastEntityResolvedAt      DateTime?
+  inviteLink                String?
+  description               String?
+  language                  String?
+  niche                     String?
+  currentSubscribersCount   Int?
+  seedSubscribersCount      Int                            @default(0)
+  activeSubscribersWindow   Int                            @default(5)
+  knownFakeSubscribersCount Int                            @default(0)
+  ownViewsPerPost           Int                            @default(0)
+  ownReactionsPerPost       Int                            @default(0)
+  /// Canonical currency for monetary channel KPI thresholds and CPA comparisons.
+  kpiCurrency               String                         @default("USD") @db.VarChar(3)
+  adBaseCpm                 Decimal?
+  adBaseCurrency            String                         @default("USD") @db.VarChar(3)
+  subscriberBaseQuality     String                         @default("normal")
+  dataQualityNotes          String?
+  targetCpaFrom             Decimal?
+  targetCpa                 Decimal?
+  acceptableCpaFrom         Decimal?
+  acceptableCpa             Decimal?
+  stopCpaFrom               Decimal?
+  stopCpa                   Decimal?
+  acquisitionType           TelegramChannelAcquisitionType @default(CREATED)
+  postsSyncFrom             DateTime?
+  inviteLinksSyncFrom       DateTime?
+  purchaseTransactionId     String?                        @unique
+  isActive                  Boolean                        @default(true)
+  /// Controls automatic analytics/background synchronization only. Manual operations remain available.
+  autoSyncEnabled           Boolean                        @default(true)
+  assignedMemberId          String?
+  createdByUserId           String?
+
+  photoSmallFileId            String?
+  photoBigFileId              String?
+  photoUrl                    String?
+  sourceType                  String?   @default("telegram")
+  lastPublicSyncedAt          DateTime?
+  syncIncludePublicInfo       Boolean   @default(true)
+  syncIncludeInviteLinks      Boolean   @default(true)
+  syncIncludeHistoricalPosts  Boolean   @default(true)
+  syncIncludePostMetrics      Boolean   @default(true)
+  syncIncludeOlderPosts       Boolean   @default(true)
+  syncIncludeChannelStats     Boolean   @default(true)
+  syncIncludeManagedPosts     Boolean   @default(true)
+  syncIncludeAudienceSnapshot Boolean   @default(true)
+
+  workspace           Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignedMember      WorkspaceMember? @relation("TelegramChannelAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdByUser       User?            @relation("TelegramChannelCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  purchaseTransaction Transaction?     @relation("TelegramChannelPurchaseTransaction", fields: [purchaseTransactionId], references: [id], onDelete: SetNull)
+  revenueTransactions Transaction[]    @relation("TelegramChannelRevenueTransactions")
+
+  promos                     Promo[]
+  adCampaigns                AdCampaign[]
+  adHypotheses               AdHypothesis[]                       @relation("AdHypothesisTelegramChannel")
+  adPlacements               AdCampaignTelegramChannelPlacement[]
+  inviteLinks                TelegramInviteLink[]
+  inviteLinkSnapshots        TelegramInviteLinkSnapshot[]
+  dailyStats                 TelegramChannelDailyStats[]
+  adminLinks                 TelegramChannelAdminLink[]
+  sourceAccesses             TelegramChannelSourceAccess[]
+  dataSources                TelegramChannelDataSource[]
+  posts                      TelegramPost[]
+  managedPosts               TelegramManagedPost[]
+  managedPostRevisions       TelegramManagedPostRevision[]
+  postPlannerFormats         TelegramPostPlannerFormat[]
+  postPlannerSlots           TelegramPostPlannerSlot[]
+  postGroups                 PostGroup[]
+  promptNotes                PromptNote[]
+  statsSnapshots             TelegramChannelStatsSnapshot[]
+  audienceSnapshots          TelegramChannelAudienceSnapshot[]
+  networkMembers             TelegramChannelNetworkMember[]
+  statsPoints                TelegramChannelStatsPoint[]
+  adAnalyses                 TelegramChannelAdAnalysis[]
+  timePosts                  TelegramChannelTimePost[]
+  adProducts                 TelegramAdProduct[]
+  admissionBatches           AdCampaignAdmissionBatch[]
+  admissionBackfillStates    AdCampaignAdmissionBackfillState[]
+  adSchedulePolicy           TelegramAdSchedulePolicy?
+  adPriceSnapshots           TelegramAdPriceSnapshot[]
+  adInventoryDailySnapshots  TelegramAdInventoryDailySnapshot[]
+  adSalePlacements           TelegramAdSalePlacement[]
+  greeterAcquiredEnrollments GreeterSequenceEnrollment[]          @relation("GreeterEnrollmentChannel")
+  greeterSequences           GreeterSequence[]                    @relation("GreeterSequenceChannel")
+  greeterChannels            GreeterChannel[]
+  greeterJoinRequests        GreeterJoinRequest[]
+  greeterBroadcasts          GreeterBroadcast[]
+  greeterBroadcastRecipients GreeterBroadcastRecipient[]
+  greeterTestSessions        GreeterTestSession[]
+  customEmojiPackLinks       TelegramChannelCustomEmojiPack[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, username])
+  @@index([workspaceId, telegramChatId])
+  @@index([workspaceId, assignedMemberId])
+  @@index([workspaceId, isActive, autoSyncEnabled])
+}
+
+model TelegramCustomEmojiPack {
+  id            String                           @id @default(cuid())
+  workspaceId   String
+  telegramSetId String?
+  shortName     String
+  title         String
+  telegramLink  String
+  metadata      Json?
+  workspace     Workspace                        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  emojis        TelegramCustomEmoji[]
+  channelLinks  TelegramChannelCustomEmojiPack[]
+  createdAt     DateTime                         @default(now())
+  updatedAt     DateTime                         @updatedAt
+
+  @@unique([workspaceId, shortName])
+  @@index([workspaceId, updatedAt])
+}
+
+model TelegramCustomEmoji {
+  id              String                  @id @default(cuid())
+  packId          String
+  documentId      String
+  alt             String
+  mimeType        String?
+  kind            String
+  isFree          Boolean                 @default(false)
+  needsRepainting Boolean                 @default(false)
+  position        Int
+  assetKey        String?
+  assetUrl        String?
+  assetBytes      Bytes?
+  renderAssetKey  String?
+  renderAssetUrl  String?
+  metadata        Json?
+  pack            TelegramCustomEmojiPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@unique([packId, documentId])
+  @@index([packId, position])
+  @@index([documentId])
+}
+
+model TelegramChannelCustomEmojiPack {
+  id        String                  @id @default(cuid())
+  channelId String
+  packId    String
+  channel   TelegramChannel         @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  pack      TelegramCustomEmojiPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+  createdAt DateTime                @default(now())
+
+  @@unique([channelId, packId])
+  @@index([packId])
+}
+
+model TelegramChannelTimePost {
+  id                String   @id @default(uuid())
+  telegramChannelId String
+  iconId            String?
+  title             String
+  time              String   @db.VarChar(5)
+  position          Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  telegramChannel TelegramChannel @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  icon            Icon?           @relation(fields: [iconId], references: [id], onDelete: SetNull)
+
+  @@index([telegramChannelId, position])
+  @@index([iconId])
+}
+
+model TelegramChannelAdAnalysis {
+  id                String                          @id @default(cuid())
+  workspaceId       String
+  telegramChannelId String
+  assignedMemberId  String?
+  analyzedAt        DateTime                        @default(now())
+  status            TelegramChannelAdAnalysisStatus @default(WATCH_LATER)
+  verdict           String?
+  price             Decimal?
+  currency          String                          @default("USD") @db.VarChar(3)
+  avgViews          Float?
+  avgReactions      Float?
+  avgForwards       Float?
+  postsCount        Int?
+  cpm               Decimal?
+  reasonTags        String[]                        @default([])
+  reasonSummary     String?
+  notes             String?
+  nextReviewAt      DateTime?
+
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel  @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  assignedMember  WorkspaceMember? @relation("TelegramChannelAdAnalysisAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, telegramChannelId])
+  @@index([workspaceId, analyzedAt])
+  @@index([workspaceId, status])
+  @@index([workspaceId, assignedMemberId])
+}
+
+model TelegramChannelDailyStats {
+  id                String   @id @default(cuid())
+  telegramChannelId String
+  date              DateTime
+  subscribersCount  Int?
+  joinedCount       Int?
+  leftCount         Int?
+  netGrowthCount    Int?
+  viewsCount        Int?
+  reactionsCount    Int?
+  forwardsCount     Int?
+
+  telegramChannel TelegramChannel @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([telegramChannelId, date])
+}
+
+model TelegramChannelStatsSnapshot {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  telegramChannelId String
+  syncedAt          DateTime @default(now())
+  snapshotDate      DateTime @db.Date
+  rawStats          Json
+  normalizedStats   Json
+  availableFields   String[] @default([])
+  warnings          String[] @default([])
+
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([telegramChannelId, snapshotDate])
+  @@index([workspaceId, telegramChannelId, syncedAt], map: "TelegramChannelStatsSnapshot_workspaceId_telegramChannelId_sync")
+}
+
+model TelegramChannelStatsPoint {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  telegramChannelId String
+  metric            String
+  series            String
+  seriesLabel       String
+  color             String?
+  graphType         String
+  date              DateTime @db.Date
+  value             Float
+  latestSyncedAt    DateTime @default(now())
+
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([telegramChannelId, metric, series, date], map: "TelegramChannelStatsPoint_telegramChannelId_metric_series_date_")
+  @@index([workspaceId, telegramChannelId, date], map: "TelegramChannelStatsPoint_workspaceId_telegramChannelId_date_id")
+}
+
+model TelegramChannelAudienceSnapshot {
+  id                              String   @id @default(cuid())
+  workspaceId                     String
+  telegramChannelId               String
+  collectedAt                     DateTime @default(now())
+  subscribersCount                Int?
+  activeSubscribersEstimate       Int?
+  viewRate                        Float?
+  avgViewsRaw                     Float?
+  avgViewsAdjusted                Float?
+  avgReactionsRaw                 Float?
+  avgReactionsAdjusted            Float?
+  rawAvgViews                     Float?
+  rawAvgReactions                 Float?
+  rawViewRate                     Float?
+  effectiveSubscribersCount       Int?
+  cappedActiveSubscribersEstimate Int?
+  cappedViewRate                  Float?
+  dataQuality                     String   @default("normal")
+  dataQualityReason               String?
+  hasExternalTrafficAnomaly       Boolean  @default(false)
+  hasSubscriberBasePollution      Boolean  @default(false)
+  postsWindow                     Int
+  source                          String   @default("sync")
+  createdAt                       DateTime @default(now())
+
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, telegramChannelId, collectedAt], map: "TelegramChannelAudienceSnapshot_workspaceId_telegramChannelId_c")
+  @@index([telegramChannelId, collectedAt], map: "TelegramChannelAudienceSnapshot_telegramChannelId_collectedAt_i")
+}
+
+model TelegramChannelNetwork {
+  id               String  @id @default(cuid())
+  workspaceId      String
+  name             String
+  description      String?
+  assignedMemberId String?
+  createdByUserId  String?
+
+  workspace        Workspace                      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  channels         TelegramChannelNetworkMember[]
+  assignedMember   WorkspaceMember?               @relation("TelegramChannelNetworkAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdByUser    User?                          @relation("TelegramChannelNetworkCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  adSalePlacements TelegramAdSalePlacement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@index([workspaceId, assignedMemberId])
+}
+
+model TelegramChannelNetworkMember {
+  id                String @id @default(cuid())
+  workspaceId       String
+  networkId         String
+  telegramChannelId String
+
+  workspace       Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  network         TelegramChannelNetwork @relation(fields: [networkId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel        @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([networkId, telegramChannelId])
+  @@index([workspaceId])
+  @@index([networkId])
+  @@index([telegramChannelId])
+}
+
+model TelegramAdProduct {
+  id                 String                @id @default(cuid())
+  workspaceId        String
+  telegramChannelId  String
+  name               String
+  description        String?
+  topDurationMinutes Int?
+  feedDurationHours  Int?
+  deleteAfterHours   Int?
+  isPermanent        Boolean               @default(false)
+  defaultPricingMode TelegramAdPricingMode
+  defaultCpm         Decimal?
+  defaultFixedPrice  Decimal?
+  minimumPrice       Decimal?
+  currency           String                @db.VarChar(3)
+  isActive           Boolean               @default(true)
+  position           Int                   @default(0)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  workspace       Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel           @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  priceSnapshots  TelegramAdPriceSnapshot[]
+  placements      TelegramAdSalePlacement[]
+
+  @@unique([workspaceId, telegramChannelId, name])
+  @@index([workspaceId])
+  @@index([telegramChannelId, isActive, position])
+  @@index([workspaceId, telegramChannelId])
+}
+
+model TelegramAdSchedulePolicy {
+  id                         String                 @id @default(cuid())
+  workspaceId                String
+  telegramChannelId          String                 @unique
+  timezone                   String
+  autoFrequencyEnabled       Boolean                @default(true)
+  expectedOrganicPostsPerDay Decimal?
+  useWorkspaceDefault        Boolean                @default(false)
+  organicPostsPerAdSlot      Int                    @default(3)
+  maxAdsPerDay               Int
+  minHoursBetweenAds         Int
+  minDaysBetweenAds          Int
+  slotStrategy               TelegramAdSlotStrategy
+  fallbackSlotTimes          String[]               @default([])
+  allowManualSlots           Boolean                @default(false)
+  createdAt                  DateTime               @default(now())
+  updatedAt                  DateTime               @updatedAt
+
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([workspaceId, telegramChannelId])
+}
+
+model TelegramAdSalesWorkspaceSettings {
+  workspaceId                  String   @id
+  defaultOrganicPostsPerAdSlot Int      @default(3)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model TelegramAdSalesMemberPreferences {
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  workspaceMemberId  String   @unique
+  selectedChannelIds String[] @default([])
+  selectedNetworkId  String?
+  calendarView       String   @default("week")
+  initialized        Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceMember WorkspaceMember @relation(fields: [workspaceMemberId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model TelegramAdPriceSnapshot {
+  id                   String   @id @default(cuid())
+  workspaceId          String
+  telegramChannelId    String
+  telegramAdProductId  String?
+  calculatedAt         DateTime @default(now())
+  source               String
+  methodVersion        String
+  statisticsWindowDays Int
+  postsSampleCount     Int
+  expectedViews        Int
+  averageViews         Decimal?
+  medianViews          Decimal?
+  adjustedViews        Decimal?
+  targetCpm            Decimal
+  minimumCpm           Decimal?
+  recommendedPrice     Decimal
+  minimumPrice         Decimal
+  currency             String   @db.VarChar(3)
+  metadata             Json?
+  createdAt            DateTime @default(now())
+
+  workspace       Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel           @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  product         TelegramAdProduct?        @relation(fields: [telegramAdProductId], references: [id], onDelete: SetNull)
+  placements      TelegramAdSalePlacement[] @relation("TelegramAdPlacementPricingSnapshot")
+
+  @@index([workspaceId])
+  @@index([telegramChannelId, calculatedAt])
+  @@index([telegramAdProductId, calculatedAt])
+}
+
+model TelegramAdInventoryDailySnapshot {
+  id                          String   @id @default(cuid())
+  workspaceId                 String
+  telegramChannelId           String
+  date                        DateTime
+  timezone                    String
+  eligibleSlots               Int
+  bookedSlots                 Int
+  publishedSlots              Int
+  cancelledSlots              Int
+  missedSlots                 Int
+  blockedSlots                Int
+  recommendedInventoryRevenue Decimal
+  minimumInventoryRevenue     Decimal
+  agreedRevenue               Decimal
+  paidRevenue                 Decimal
+  outstandingRevenue          Decimal
+  underpricingLoss            Decimal
+  unsoldInventoryOpportunity  Decimal
+  expectedViews               Int
+  actualViews                 Int
+  policySnapshot              Json?
+  productSnapshot             Json?
+  pricingSnapshot             Json?
+  calculationVersion          String
+  calculatedAt                DateTime
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, telegramChannelId, date], map: "tg_ad_inv_daily_ws_channel_date_key")
+  @@index([workspaceId, date], map: "tg_ad_inv_daily_ws_date_idx")
+  @@index([telegramChannelId, date], map: "tg_ad_inv_daily_channel_date_idx")
+  @@index([workspaceId, telegramChannelId, date], map: "tg_ad_inv_daily_ws_channel_date_idx")
+  @@index([date, eligibleSlots], map: "tg_ad_inv_daily_date_eligible_idx")
+  @@index([date, bookedSlots], map: "tg_ad_inv_daily_date_booked_idx")
+}
+
+model TelegramAdSale {
+  id                         String                 @id @default(cuid())
+  workspaceId                String
+  advertiserId               String?
+  advertiserName             String
+  advertiserTelegram         String?
+  advertiserContact          String?
+  advertiserNameSnapshot     String?
+  advertiserTelegramSnapshot String?
+  advertiserCompanySnapshot  String?
+  title                      String?
+  notes                      String?
+  status                     TelegramAdSaleStatus   @default(DRAFT)
+  crmDealStage               TelegramAdCrmDealStage @default(NEW_LEAD)
+  expectedCloseAt            DateTime?
+  lostReason                 String?
+  nextActionAt               DateTime?
+  settlementCurrency         String                 @db.VarChar(3)
+  reservedUntil              DateTime?
+  sourceTaskId               String?
+  sourceAdvertiserActivityId String?
+  createdByUserId            String?
+  assignedMemberId           String?
+  createdAt                  DateTime               @default(now())
+  updatedAt                  DateTime               @updatedAt
+
+  workspace                Workspace                               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  advertiser               TelegramAdvertiser?                     @relation(fields: [advertiserId], references: [id], onDelete: SetNull)
+  createdByUser            User?                                   @relation("TelegramAdSaleCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  assignedMember           WorkspaceMember?                        @relation("TelegramAdSaleAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  sourceTask               TelegramAdvertiserTask?                 @relation("TelegramAdSaleSourceTask", fields: [sourceTaskId], references: [id], onDelete: SetNull)
+  sourceAdvertiserActivity TelegramAdvertiserActivity?             @relation("TelegramAdSaleSourceActivity", fields: [sourceAdvertiserActivityId], references: [id], onDelete: SetNull)
+  placements               TelegramAdSalePlacement[]
+  payments                 TelegramAdSalePayment[]
+  activities               TelegramAdvertiserActivity[]
+  tasks                    TelegramAdvertiserTask[]
+  automationExecutions     TelegramAdvertiserAutomationExecution[]
+
+  @@index([workspaceId])
+  @@index([workspaceId, status, createdAt])
+  @@index([workspaceId, assignedMemberId])
+  @@index([workspaceId, advertiserId, createdAt])
+  @@index([workspaceId, crmDealStage, createdAt])
+  @@index([sourceTaskId])
+}
+
+model TelegramAdSalePlacement {
+  id                         String                    @id @default(cuid())
+  workspaceId                String
+  telegramAdSaleId           String
+  telegramChannelId          String
+  telegramChannelNetworkId   String?
+  telegramAdProductId        String?
+  inventoryOpportunityKey    String?
+  pricingSnapshotId          String?
+  status                     TelegramAdPlacementStatus @default(DRAFT)
+  scheduledAt                DateTime
+  timezone                   String
+  pricingMode                TelegramAdPricingMode
+  expectedViews              Int
+  quotedCpm                  Decimal?
+  recommendedPrice           Decimal
+  minimumPrice               Decimal
+  agreedPrice                Decimal
+  currency                   String                    @db.VarChar(3)
+  scheduledManagedAt         DateTime?
+  topDurationMinutesSnapshot Int?
+  feedDurationHoursSnapshot  Int?
+  deleteAfterHoursSnapshot   Int?
+  isPermanentSnapshot        Boolean                   @default(false)
+  manualPriceReason          String?
+  managedPostId              String?
+  telegramPostId             String?
+  publishedAt                DateTime?
+  plannedDeleteAt            DateTime?
+  deletedAt                  DateTime?
+  lastDeletionAttemptAt      DateTime?
+  lastDeletionError          String?
+  actualViews24h             Int?
+  actualViews48h             Int?
+  actualViewsFinal           Int?
+  actualReactionsFinal       Int?
+  actualCpm                  Decimal?
+  completedAt                DateTime?
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
+
+  workspace            Workspace                               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sale                 TelegramAdSale                          @relation(fields: [telegramAdSaleId], references: [id], onDelete: Cascade)
+  telegramChannel      TelegramChannel                         @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  network              TelegramChannelNetwork?                 @relation(fields: [telegramChannelNetworkId], references: [id], onDelete: SetNull)
+  product              TelegramAdProduct?                      @relation(fields: [telegramAdProductId], references: [id], onDelete: SetNull)
+  pricingSnapshot      TelegramAdPriceSnapshot?                @relation("TelegramAdPlacementPricingSnapshot", fields: [pricingSnapshotId], references: [id], onDelete: SetNull)
+  managedPost          TelegramManagedPost?                    @relation("TelegramAdPlacementManagedPost", fields: [managedPostId], references: [id], onDelete: SetNull)
+  telegramPost         TelegramPost?                           @relation("TelegramAdPlacementTelegramPost", fields: [telegramPostId], references: [id], onDelete: SetNull)
+  paymentAllocations   TelegramAdSalePaymentAllocation[]
+  advertiserActivities TelegramAdvertiserActivity[]
+  tasks                TelegramAdvertiserTask[]
+  advertiserResult     TelegramAdPlacementAdvertiserResult?
+  automationExecutions TelegramAdvertiserAutomationExecution[]
+
+  @@unique([workspaceId, telegramChannelId, inventoryOpportunityKey], map: "TelegramAdSalePlacement_workspaceId_telegramChannelId_inventory")
+  @@index([workspaceId])
+  @@index([telegramChannelId, scheduledAt])
+  @@index([telegramAdSaleId])
+  @@index([status, scheduledAt])
+  @@index([workspaceId, status, scheduledAt])
+  @@index([status, plannedDeleteAt, lastDeletionAttemptAt], map: "TelegramAdSalePlacement_due_deletion_idx")
+  @@index([telegramChannelNetworkId])
+  @@index([telegramAdProductId])
+  @@index([pricingSnapshotId])
+  @@index([workspaceId, publishedAt])
+  @@index([workspaceId, plannedDeleteAt, deletedAt], map: "TelegramAdSalePlacement_workspaceId_plannedDeleteAt_deletedAt_i")
+}
+
+model TelegramAdvertiser {
+  id                                 String                           @id @default(cuid())
+  workspaceId                        String
+  displayName                        String
+  companyName                        String?
+  telegramUsername                   String?
+  telegramUserId                     String?
+  phone                              String?
+  email                              String?
+  website                            String?
+  description                        String?
+  source                             String?
+  status                             TelegramAdvertiserStatus         @default(LEAD)
+  lifecycleStage                     TelegramAdvertiserLifecycleStage @default(NEW)
+  ownerMemberId                      String?
+  createdByUserId                    String?
+  lastContactAt                      DateTime?
+  lastPurchaseAt                     DateTime?
+  nextContactAt                      DateTime?
+  defaultFollowUpDays                Int?
+  preferredCurrency                  String?                          @db.VarChar(3)
+  preferredContactMethod             TelegramAdvertiserContactType?
+  totalSalesCount                    Int                              @default(0)
+  completedSalesCount                Int                              @default(0)
+  totalPlacementsCount               Int                              @default(0)
+  totalRevenueInPrimaryCurrency      Decimal                          @default(0)
+  averageOrderValueInPrimaryCurrency Decimal                          @default(0)
+  firstPurchaseAt                    DateTime?
+  repeatCustomerAt                   DateTime?
+  archivedAt                         DateTime?
+  createdAt                          DateTime                         @default(now())
+  updatedAt                          DateTime                         @updatedAt
+
+  workspace            Workspace                               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  ownerMember          WorkspaceMember?                        @relation("TelegramAdvertiserOwner", fields: [ownerMemberId], references: [id], onDelete: SetNull)
+  createdByUser        User?                                   @relation("TelegramAdvertiserCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  contacts             TelegramAdvertiserContact[]
+  sales                TelegramAdSale[]
+  tags                 TelegramAdvertiserTagAssignment[]
+  activities           TelegramAdvertiserActivity[]
+  tasks                TelegramAdvertiserTask[]
+  automationExecutions TelegramAdvertiserAutomationExecution[]
+
+  @@unique([workspaceId, displayName])
+  @@index([workspaceId, status, updatedAt])
+  @@index([workspaceId, lifecycleStage, updatedAt])
+  @@index([workspaceId, ownerMemberId])
+  @@index([workspaceId, lastPurchaseAt])
+  @@index([workspaceId, nextContactAt])
+}
+
+model TelegramAdvertiserContact {
+  id              String                        @id @default(cuid())
+  workspaceId     String
+  advertiserId    String
+  type            TelegramAdvertiserContactType
+  value           String
+  normalizedValue String
+  label           String?
+  isPrimary       Boolean                       @default(false)
+  isVerified      Boolean                       @default(false)
+  createdAt       DateTime                      @default(now())
+  updatedAt       DateTime                      @updatedAt
+
+  workspace  Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  advertiser TelegramAdvertiser @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, type, normalizedValue])
+  @@index([workspaceId, advertiserId, type])
+}
+
+model TelegramAdvertiserTag {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  color       String?
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace   Workspace                         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  advertisers TelegramAdvertiserTagAssignment[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, position])
+}
+
+model TelegramAdvertiserTagAssignment {
+  advertiserId     String
+  tagId            String
+  workspaceId      String
+  assignedByUserId String?
+  createdAt        DateTime @default(now())
+
+  advertiser     TelegramAdvertiser    @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
+  tag            TelegramAdvertiserTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  workspace      Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignedByUser User?                 @relation(fields: [assignedByUserId], references: [id], onDelete: SetNull)
+
+  @@id([advertiserId, tagId])
+  @@index([workspaceId, tagId])
+}
+
+model TelegramAdvertiserActivity {
+  id            String                         @id @default(cuid())
+  workspaceId   String
+  advertiserId  String
+  saleId        String?
+  placementId   String?
+  taskId        String?
+  actorUserId   String?
+  actorMemberId String?
+  type          TelegramAdvertiserActivityType
+  title         String
+  description   String?
+  metadata      Json?
+  occurredAt    DateTime
+  createdAt     DateTime                       @default(now())
+
+  workspace    Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  advertiser   TelegramAdvertiser       @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
+  sale         TelegramAdSale?          @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  placement    TelegramAdSalePlacement? @relation(fields: [placementId], references: [id], onDelete: SetNull)
+  task         TelegramAdvertiserTask?  @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  actorUser    User?                    @relation("TelegramAdvertiserActivityActorUser", fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorMember  WorkspaceMember?         @relation("TelegramAdvertiserActivityActorMember", fields: [actorMemberId], references: [id], onDelete: SetNull)
+  sourcedSales TelegramAdSale[]         @relation("TelegramAdSaleSourceActivity")
+
+  @@index([workspaceId, advertiserId, occurredAt], map: "TelegramAdvertiserActivity_workspaceId_advertiserId_occurredAt_")
+  @@index([workspaceId, type, occurredAt])
+}
+
+model TelegramAdvertiserTask {
+  id               String                         @id @default(cuid())
+  workspaceId      String
+  advertiserId     String
+  saleId           String?
+  placementId      String?
+  assignedMemberId String
+  createdByUserId  String?
+  type             TelegramAdvertiserTaskType
+  status           TelegramAdvertiserTaskStatus   @default(OPEN)
+  priority         TelegramAdvertiserTaskPriority @default(NORMAL)
+  title            String
+  description      String?
+  dueAt            DateTime
+  remindAt         DateTime?
+  completedAt      DateTime?
+  skippedAt        DateTime?
+  snoozedUntil     DateTime?
+  completionNote   String?
+  automationRuleId String?
+  metadata         Json?
+  createdAt        DateTime                       @default(now())
+  updatedAt        DateTime                       @updatedAt
+
+  workspace            Workspace                               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  advertiser           TelegramAdvertiser                      @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
+  sale                 TelegramAdSale?                         @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  placement            TelegramAdSalePlacement?                @relation(fields: [placementId], references: [id], onDelete: SetNull)
+  assignedMember       WorkspaceMember                         @relation("TelegramAdvertiserTaskAssignedMember", fields: [assignedMemberId], references: [id], onDelete: Restrict)
+  createdByUser        User?                                   @relation("TelegramAdvertiserTaskCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  automationRule       TelegramAdvertiserAutomationRule?       @relation(fields: [automationRuleId], references: [id], onDelete: SetNull)
+  activities           TelegramAdvertiserActivity[]
+  sourcedSales         TelegramAdSale[]                        @relation("TelegramAdSaleSourceTask")
+  automationExecutions TelegramAdvertiserAutomationExecution[]
+
+  @@index([workspaceId, assignedMemberId, status, dueAt], map: "TelegramAdvertiserTask_workspaceId_assignedMemberId_status_dueA")
+  @@index([workspaceId, advertiserId, dueAt])
+  @@index([workspaceId, status, dueAt])
+}
+
+model TelegramAdCrmMemberSettings {
+  id                               String                         @id @default(cuid())
+  workspaceId                      String
+  workspaceMemberId                String                         @unique
+  defaultFollowUpDays              Int                            @default(30)
+  defaultReactivationDays          Int                            @default(60)
+  autoCreateFollowUpAfterPlacement Boolean                        @default(true)
+  autoCreateFeedbackTask           Boolean                        @default(false)
+  autoCreatePaymentFollowUp        Boolean                        @default(true)
+  dailyDigestEnabled               Boolean                        @default(false)
+  overdueDigestEnabled             Boolean                        @default(true)
+  reminderNotificationsEnabled     Boolean                        @default(true)
+  preferredReminderTime            String?
+  timezone                         String                         @default("UTC")
+  defaultTaskPriority              TelegramAdvertiserTaskPriority @default(NORMAL)
+  defaultAdvertiserOwnerMode       TelegramAdCrmOwnerMode         @default(SALE_ASSIGNEE)
+  createdAt                        DateTime                       @default(now())
+  updatedAt                        DateTime                       @updatedAt
+
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceMember WorkspaceMember @relation(fields: [workspaceMemberId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model TelegramAdCrmWorkspaceSettings {
+  workspaceId                       String                 @id
+  defaultFollowUpDays               Int                    @default(30)
+  defaultReactivationDays           Int                    @default(60)
+  defaultSaleOwnerAssignment        TelegramAdCrmOwnerMode @default(SALE_ASSIGNEE)
+  autoCreateAdvertiserFromSale      Boolean                @default(true)
+  requireAdvertiserForConfirmedSale Boolean                @default(false)
+  duplicateDetectionEnabled         Boolean                @default(true)
+  inactivityThresholdDays           Int                    @default(60)
+  highValueCustomerThreshold        Decimal                @default(0)
+  createdAt                         DateTime               @default(now())
+  updatedAt                         DateTime               @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model TelegramAdvertiserAutomationRule {
+  id                 String                                 @id @default(cuid())
+  workspaceId        String
+  name               String
+  eventType          TelegramAdvertiserAutomationEventType
+  actionType         TelegramAdvertiserAutomationActionType
+  delayDays          Int                                    @default(0)
+  delayHours         Int                                    @default(0)
+  assignedMemberMode TelegramAdCrmOwnerMode                 @default(SALE_ASSIGNEE)
+  specificMemberId   String?
+  conditions         Json?
+  isActive           Boolean                                @default(true)
+  priority           TelegramAdvertiserTaskPriority         @default(NORMAL)
+  createdAt          DateTime                               @default(now())
+  updatedAt          DateTime                               @updatedAt
+
+  workspace      Workspace                               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  specificMember WorkspaceMember?                        @relation("TelegramAdvertiserAutomationSpecificMember", fields: [specificMemberId], references: [id], onDelete: SetNull)
+  tasks          TelegramAdvertiserTask[]
+  executions     TelegramAdvertiserAutomationExecution[]
+
+  @@index([workspaceId, eventType, isActive], map: "TelegramAdvertiserAutomationRule_workspaceId_eventType_isActive")
+}
+
+model TelegramAdvertiserAutomationExecution {
+  id               String                                      @id @default(cuid())
+  workspaceId      String
+  automationRuleId String
+  advertiserId     String
+  saleId           String?
+  placementId      String?
+  taskId           String?
+  eventKey         String
+  status           TelegramAdvertiserAutomationExecutionStatus
+  executedAt       DateTime
+  createdTaskId    String?
+  error            String?
+  createdAt        DateTime                                    @default(now())
+
+  workspace      Workspace                        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  automationRule TelegramAdvertiserAutomationRule @relation(fields: [automationRuleId], references: [id], onDelete: Cascade)
+  advertiser     TelegramAdvertiser               @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
+  sale           TelegramAdSale?                  @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  placement      TelegramAdSalePlacement?         @relation(fields: [placementId], references: [id], onDelete: SetNull)
+  task           TelegramAdvertiserTask?          @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@unique([automationRuleId, eventKey], map: "TelegramAdvertiserAutomationExecution_automationRuleId_eventKey")
+  @@index([workspaceId, executedAt], map: "TelegramAdvertiserAutomationExecution_workspaceId_executedAt_id")
+}
+
+model TelegramAdPlacementAdvertiserResult {
+  id              String                                    @id @default(cuid())
+  workspaceId     String
+  placementId     String                                    @unique
+  leadsCount      Int?
+  salesCount      Int?
+  revenue         Decimal?
+  currency        String?                                   @db.VarChar(3)
+  conversionRate  Decimal?
+  roi             Decimal?
+  source          TelegramAdPlacementAdvertiserResultSource
+  notes           String?
+  reportedAt      DateTime?
+  createdByUserId String?
+  createdAt       DateTime                                  @default(now())
+  updatedAt       DateTime                                  @updatedAt
+
+  workspace     Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  placement     TelegramAdSalePlacement @relation(fields: [placementId], references: [id], onDelete: Cascade)
+  createdByUser User?                   @relation("TelegramAdPlacementAdvertiserResultCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, reportedAt])
+}
+
+model TelegramAdSalePayment {
+  id                      String                      @id @default(cuid())
+  workspaceId             String
+  telegramAdSaleId        String
+  accountId               String
+  transactionId           String?                     @unique
+  amount                  Decimal
+  currency                String                      @db.VarChar(3)
+  amountInPrimaryCurrency Decimal
+  exchangeRateToPrimary   Decimal
+  paidAt                  DateTime
+  notes                   String?
+  status                  TelegramAdSalePaymentStatus @default(ACTIVE)
+  idempotencyKey          String?
+  reversalTransactionId   String?                     @unique
+  voidedAt                DateTime?
+  voidReason              String?
+  createdByUserId         String?
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @updatedAt
+
+  workspace           Workspace                         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sale                TelegramAdSale                    @relation(fields: [telegramAdSaleId], references: [id], onDelete: Cascade)
+  account             Account                           @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  transaction         Transaction?                      @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  reversalTransaction Transaction?                      @relation("TelegramAdSalePaymentReversalTransaction", fields: [reversalTransactionId], references: [id], onDelete: SetNull)
+  createdByUser       User?                             @relation("TelegramAdSalePaymentCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  allocations         TelegramAdSalePaymentAllocation[]
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId])
+  @@index([telegramAdSaleId, paidAt])
+  @@index([accountId, paidAt])
+  @@index([workspaceId, status, paidAt])
+}
+
+model TelegramAdSalePaymentAllocation {
+  id                        String   @id @default(cuid())
+  workspaceId               String
+  telegramAdSalePaymentId   String
+  telegramAdSalePlacementId String
+  amount                    Decimal
+  currency                  String   @db.VarChar(3)
+  amountInPrimaryCurrency   Decimal
+  createdAt                 DateTime @default(now())
+
+  workspace Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  payment   TelegramAdSalePayment   @relation(fields: [telegramAdSalePaymentId], references: [id], onDelete: Cascade)
+  placement TelegramAdSalePlacement @relation(fields: [telegramAdSalePlacementId], references: [id], onDelete: Cascade)
+
+  @@unique([telegramAdSalePaymentId, telegramAdSalePlacementId], map: "TelegramAdSalePaymentAllocation_telegramAdSalePaymentId_telegra")
+  @@index([workspaceId])
+  @@index([telegramAdSalePaymentId])
+  @@index([telegramAdSalePlacementId])
+}
+
+model Promo {
+  id                String      @id @default(cuid())
+  workspaceId       String
+  telegramChannelId String
+  iconId            String?
+  title             String
+  text              String
+  angle             String?
+  imageData         String?
+  status            PromoStatus @default(draft)
+  assignedMemberId  String?
+  createdByUserId   String?
+
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel  @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  icon            Icon?            @relation(fields: [iconId], references: [id], onDelete: SetNull)
+  assignedMember  WorkspaceMember? @relation("PromoAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdByUser   User?            @relation("PromoCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  primaryAdCampaigns AdCampaign[]      @relation("AdCampaignPrimaryPromo")
+  campaignLinks      AdCampaignPromo[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, assignedMemberId])
+  @@index([iconId])
+}
+
+model AdCampaignPromo {
+  id           String   @id @default(cuid())
+  adCampaignId String
+  promoId      String
+  createdAt    DateTime @default(now())
+
+  adCampaign AdCampaign @relation(fields: [adCampaignId], references: [id], onDelete: Cascade)
+  promo      Promo      @relation(fields: [promoId], references: [id], onDelete: Cascade)
+
+  @@unique([adCampaignId, promoId])
+  @@index([promoId])
+}
+
+model AdvertisingSource {
+  id               String                @id @default(cuid())
+  workspaceId      String
+  name             String
+  type             AdvertisingSourceType @default(telegram_channel)
+  url              String?
+  telegramUsername String?
+  description      String?
+  contactInfo      String?
+  notes            String?
+  imageUrl         String?
+  subscribersCount Int                   @default(0)
+  channelTags      String[]              @default([])
+  assignedMemberId String?
+  createdByUserId  String?
+
+  workspace         Workspace                      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  adCampaignsLegacy AdCampaign[]
+  adCampaigns       AdCampaignAdvertisingChannel[]
+  assignedMember    WorkspaceMember?               @relation("AdvertisingSourceAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdByUser     User?                          @relation("AdvertisingSourceCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, assignedMemberId])
+}
+
+model AdCampaign {
+  id                  String  @id @default(cuid())
+  workspaceId         String
+  telegramChannelId   String
+  advertisingSourceId String?
+  promoId             String?
+  accountId           String?
+
+  title                         String
+  status                        CampaignStatus @default(planned)
+  price                         Decimal
+  currency                      String         @db.VarChar(3)
+  priceInPrimaryCurrency        Decimal
+  exchangeRateToPrimary         Decimal
+  inviteLink                    String?
+  telegramInviteLinkId          String?
+  sourcePostUrl                 String?
+  sourcePostViews               Int?
+  startedAt                     DateTime?
+  endedAt                       DateTime?
+  placementDate                 DateTime?
+  joinedCount                   Int            @default(0)
+  leftCount                     Int?
+  netGrowthCount                Int?
+  cpa                           Decimal?
+  cpm                           Decimal?
+  subscribersBefore             Int?
+  avgViewsBefore                Float?
+  avgReactionsBefore            Float?
+  subscribersAfter24h           Int?
+  subscribersAfter48h           Int?
+  subscribersAfter72h           Int?
+  subscribersAfter7d            Int?
+  subscribersAfter30d           Int?
+  avgViewsAfter                 Float?
+  avgReactionsAfter             Float?
+  clicksAfter                   Int?
+  newSubscribers                Int?
+  activeSubscribersFromAd       Int?
+  activeCpa                     Decimal?
+  activeRate                    Float?
+  rawActiveSubscribersFromAd    Int?
+  rawViewRateAfter              Float?
+  cappedActiveSubscribersFromAd Int?
+  cappedActiveRate              Float?
+  cappedActiveCpa               Decimal?
+  cappedViewRateAfter           Float?
+  adDataQuality                 String         @default("normal")
+  adDataQualityReason           String?
+  hasViewAnomaly                Boolean        @default(false)
+  hasSubscriberBasePollution    Boolean        @default(false)
+  unsub24h                      Int?
+  unsub48h                      Int?
+  unsub72h                      Int?
+  unsub7d                       Int?
+  unsub30d                      Int?
+  retention24h                  Float?
+  retention48h                  Float?
+  retention72h                  Float?
+  retention7d                   Float?
+  retention30d                  Float?
+  cpaStatus                     String?
+  activeCpaStatus               String?
+  retentionStatus               String?
+  overallStatus                 String?
+  decisionText                  String?
+  excludeFromAnalytics          Boolean        @default(false)
+  analyticsNotes                String?
+  analyticsLastCalculatedAt     DateTime?
+  analyticsLastAutoSyncedAt     DateTime?
+  analyticsLastManualSyncedAt   DateTime?
+  customTitleTemplate           String?
+  notes                         String?
+  createdByUserId               String?
+  assignedMemberId              String?
+
+  workspace         Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel   TelegramChannel    @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  advertisingSource AdvertisingSource? @relation(fields: [advertisingSourceId], references: [id], onDelete: SetNull)
+  promo             Promo?             @relation("AdCampaignPrimaryPromo", fields: [promoId], references: [id], onDelete: SetNull)
+  account           Account?           @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  assignedMember    WorkspaceMember?   @relation("AdCampaignAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdByUser     User?              @relation("AdCampaignCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  expenseTransaction          Transaction?                         @relation("CampaignExpenseTransaction")
+  advertisingChannels         AdCampaignAdvertisingChannel[]
+  advertisingTelegramChannels AdCampaignTelegramChannelPlacement[]
+  hypothesisLinks             AdHypothesisCampaign[]
+  promos                      AdCampaignPromo[]
+
+  inviteLinks         TelegramInviteLink[]
+  inviteLinkSnapshots TelegramInviteLinkSnapshot[]
+  admissionBatches    AdCampaignAdmissionBatch[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, assignedMemberId])
+}
+
+model AdCampaignAdmissionBatch {
+  id                       String                                @id @default(cuid())
+  workspaceId              String
+  adCampaignId             String
+  telegramChannelId        String
+  status                   AdCampaignAdmissionBatchStatus        @default(ACTIVE)
+  detectionMode            AdCampaignAdmissionDetectionMode
+  analysisStartedAt        DateTime
+  firstObservedAt          DateTime
+  startedAt                DateTime
+  endedAt                  DateTime?
+  timeBoundarySource       AdCampaignAdmissionTimeBoundarySource
+  releasedSubscribersCount Int
+  joinedBefore             Int                                   @default(0)
+  joinedAfter              Int                                   @default(0)
+  requestedBefore          Int                                   @default(0)
+  requestedAfter           Int                                   @default(0)
+  sourceLinks              Json
+  baselineSnapshotAt       DateTime?
+  baselineMethod           AdCampaignAdmissionBaselineMethod     @default(UNAVAILABLE)
+  trackedPosts             Json
+  trackedPostsCount        Int                                   @default(0)
+  baselineAvgViews         Float?
+  baselineAvgReactions     Float?
+  dataQuality              AdCampaignAdmissionDataQuality        @default(GOOD)
+  dataQualityReason        String?
+  batchFingerprint         String                                @unique
+  createdAt                DateTime                              @default(now())
+  updatedAt                DateTime                              @updatedAt
+
+  workspace       Workspace                         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  adCampaign      AdCampaign                        @relation(fields: [adCampaignId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel                   @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  viewSnapshots   AdCampaignAdmissionViewSnapshot[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, adCampaignId, status])
+  @@index([workspaceId, telegramChannelId, startedAt], map: "AdmissionBatch_workspace_channel_started_idx")
+  @@index([adCampaignId, status])
+  @@index([telegramChannelId, startedAt])
+  @@index([startedAt])
+}
+
+model AdCampaignAdmissionViewSnapshot {
+  id                         String                         @id @default(cuid())
+  batchId                    String
+  collectedAt                DateTime
+  sourceMetricCollectedAt    DateTime
+  avgViews                   Float?
+  avgReactions               Float?
+  cumulativeAvgViewsUplift   Float?
+  incrementalAvgViewsUplift  Float?
+  estimatedActiveSubscribers Int?
+  activationRate             Float?
+  trackedPostsCount          Int                            @default(0)
+  channelSubscribersCount    Int?
+  joinedCount                Int?
+  requestedCount             Int?
+  dataQuality                AdCampaignAdmissionDataQuality @default(GOOD)
+  dataQualityReason          String?
+  createdAt                  DateTime                       @default(now())
+
+  batch AdCampaignAdmissionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, sourceMetricCollectedAt], map: "AdmissionViewSnapshot_batch_metric_key")
+  @@index([batchId, collectedAt])
+}
+
+model AdCampaignAdmissionBackfillState {
+  id                            String    @id @default(cuid())
+  workspaceId                   String
+  telegramChannelId             String
+  completedAt                   DateTime
+  lastProcessedInviteSnapshotAt DateTime?
+  version                       Int       @default(1)
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
+
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, telegramChannelId, version], map: "AdmissionBackfillState_workspace_channel_version_key")
+  @@index([workspaceId, telegramChannelId], map: "AdmissionBackfillState_workspace_channel_idx")
+}
+
+model AdHypothesis {
+  id                String  @id @default(cuid())
+  workspaceId       String
+  name              String
+  description       String?
+  status            String  @default("testing")
+  conclusion        String?
+  iconId            String?
+  telegramChannelId String?
+  assignedMemberId  String?
+  createdByUserId   String?
+
+  workspace       Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaigns       AdHypothesisCampaign[]
+  icon            Icon?                  @relation(fields: [iconId], references: [id], onDelete: SetNull)
+  telegramChannel TelegramChannel?       @relation("AdHypothesisTelegramChannel", fields: [telegramChannelId], references: [id], onDelete: SetNull)
+  assignedMember  WorkspaceMember?       @relation("AdHypothesisAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdByUser   User?                  @relation("AdHypothesisCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@index([workspaceId, status])
+  @@index([iconId])
+  @@index([telegramChannelId])
+  @@index([workspaceId, assignedMemberId])
+}
+
+model AdHypothesisCampaign {
+  id           String @id @default(cuid())
+  workspaceId  String
+  hypothesisId String
+  adCampaignId String
+
+  workspace  Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  hypothesis AdHypothesis @relation(fields: [hypothesisId], references: [id], onDelete: Cascade)
+  adCampaign AdCampaign   @relation(fields: [adCampaignId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([hypothesisId, adCampaignId])
+  @@index([workspaceId])
+  @@index([hypothesisId])
+  @@index([adCampaignId])
+}
+
+model DailyAnalyticsSyncRun {
+  id                 String    @id @default(cuid())
+  workspaceId        String?
+  startedAt          DateTime  @default(now())
+  finishedAt         DateTime?
+  status             String    @default("running")
+  source             String    @default("cron")
+  channelsProcessed  Int       @default(0)
+  campaignsProcessed Int       @default(0)
+  snapshotsCreated   Int       @default(0)
+  errorsCount        Int       @default(0)
+  errorMessage       String?
+  createdAt          DateTime  @default(now())
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, startedAt])
+  @@index([status])
+  @@index([source])
+}
+
+model ScheduledTaskConfig {
+  id                      String                           @id @default(cuid())
+  workspaceId             String?
+  taskKey                 String
+  scope                   ScheduledTaskScope
+  lockKey                 String                           @unique
+  enabled                 Boolean                          @default(true)
+  /// Set only when an automatic channel-sync task has no eligible channels.
+  autoDisarmed            Boolean                          @default(false)
+  schedule                Json
+  notificationChannel     ScheduledTaskNotificationChannel @default(SYSTEM_TELEGRAM_BOT)
+  notifyOnSuccess         Boolean                          @default(false)
+  notifyOnFailure         Boolean                          @default(false)
+  nextScheduledRunAt      DateTime?
+  scheduledClaimOwner     String?
+  scheduledClaimExpiresAt DateTime?
+  createdAt               DateTime                         @default(now())
+  updatedAt               DateTime                         @updatedAt
+
+  workspace Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  runs      ScheduledTaskRun[]
+
+  @@index([workspaceId, taskKey])
+  @@index([taskKey])
+  @@index([scope])
+  @@index([enabled])
+  @@index([enabled, nextScheduledRunAt])
+  @@index([scheduledClaimExpiresAt])
+}
+
+model ScheduledTaskRun {
+  id                    String                 @id @default(cuid())
+  taskKey               String
+  workspaceId           String?
+  scheduledTaskConfigId String?
+  scheduledFor          DateTime?
+  trigger               ScheduledTaskTrigger
+  status                ScheduledTaskRunStatus @default(RUNNING)
+  startedAt             DateTime               @default(now())
+  finishedAt            DateTime?
+  durationMs            Int?
+  resultSummary         String?
+  error                 String?
+  createdAt             DateTime               @default(now())
+
+  workspace           Workspace?           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  scheduledTaskConfig ScheduledTaskConfig? @relation(fields: [scheduledTaskConfigId], references: [id], onDelete: SetNull)
+
+  @@unique([scheduledTaskConfigId, scheduledFor])
+  @@index([workspaceId, taskKey, startedAt])
+  @@index([taskKey, startedAt])
+  @@index([status])
+  @@index([trigger])
+  @@index([status, finishedAt])
+}
+
+model ScheduledTaskLease {
+  id          String   @id @default(cuid())
+  lockKey     String   @unique
+  taskKey     String
+  workspaceId String?
+  ownerId     String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, taskKey])
+  @@index([expiresAt])
+}
+
+model ApplicationLog {
+  id            String              @id @default(cuid())
+  workspaceId   String?
+  userId        String?
+  level         ApplicationLogLevel
+  kind          ApplicationLogKind
+  environment   String
+  service       String
+  source        String?
+  event         String
+  message       String
+  correlationId String?
+  requestId     String?
+  method        String?
+  endpoint      String?
+  path          String?
+  statusCode    Int?
+  durationMs    Int?
+  errorName     String?
+  errorCode     String?
+  stack         String?
+  metadata      Json?
+  createdAt     DateTime            @default(now())
+  expiresAt     DateTime?
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([level, createdAt])
+  @@index([kind, createdAt])
+  @@index([source, createdAt])
+  @@index([event, createdAt])
+  @@index([correlationId])
+  @@index([statusCode, createdAt])
+  @@index([expiresAt])
+}
+
+model AdCampaignAdvertisingChannel {
+  id                  String   @id @default(cuid())
+  adCampaignId        String
+  advertisingSourceId String
+  createdAt           DateTime @default(now())
+
+  adCampaign        AdCampaign        @relation(fields: [adCampaignId], references: [id], onDelete: Cascade)
+  advertisingSource AdvertisingSource @relation(fields: [advertisingSourceId], references: [id], onDelete: Cascade)
+
+  @@unique([adCampaignId, advertisingSourceId], map: "AdCampaignAdvertisingChannel_adCampaignId_advertisingSourceId_k")
+  @@index([advertisingSourceId])
+}
+
+model AdCampaignTelegramChannelPlacement {
+  id                String   @id @default(cuid())
+  adCampaignId      String
+  telegramChannelId String
+  createdAt         DateTime @default(now())
+
+  adCampaign      AdCampaign      @relation(fields: [adCampaignId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+
+  @@unique([adCampaignId, telegramChannelId], map: "AdCampaignTelegramChannelPlacement_adCampaignId_telegramChannel")
+  @@index([telegramChannelId])
+}
+
+model TelegramInviteLink {
+  id                    String                                @id @default(cuid())
+  workspaceId           String
+  telegramChannelId     String
+  adCampaignId          String?
+  name                  String
+  url                   String
+  telegramInviteLinkId  String?
+  createdBy             String?
+  createsJoinRequest    Boolean?
+  expireDate            DateTime?
+  memberLimit           Int?
+  joinedCount           Int                                   @default(0)
+  requestedCount        Int                                   @default(0)
+  isRevoked             Boolean                               @default(false)
+  lastSyncedAt          DateTime?
+  creatorTelegramUserId String?
+  creatorUsername       String?
+  creatorFirstName      String?
+  creatorLastName       String?
+  creatorPhotoUrl       String?
+  creatorMemberId       String?
+  creatorMatchSource    TelegramInviteLinkCreatorMatchSource?
+  telegramCreatedAt     DateTime?
+
+  telegramChannel TelegramChannel              @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  adCampaign      AdCampaign?                  @relation(fields: [adCampaignId], references: [id], onDelete: SetNull)
+  creatorMember   WorkspaceMember?             @relation("TelegramInviteLinkCreatorMember", fields: [creatorMemberId, workspaceId], references: [id, workspaceId], onDelete: SetNull)
+  snapshots       TelegramInviteLinkSnapshot[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, telegramChannelId, url])
+  @@index([workspaceId, creatorTelegramUserId])
+  @@index([workspaceId, creatorMemberId])
+  @@index([telegramChannelId, isRevoked])
+}
+
+model TelegramInviteLinkSnapshot {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  telegramChannelId String
+  inviteLinkId      String
+  adCampaignId      String?
+  syncedAt          DateTime
+  joinedCount       Int      @default(0)
+  requestedCount    Int      @default(0)
+  isRevoked         Boolean  @default(false)
+
+  workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel    @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  inviteLink      TelegramInviteLink @relation(fields: [inviteLinkId], references: [id], onDelete: Cascade)
+  adCampaign      AdCampaign?        @relation(fields: [adCampaignId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@unique([inviteLinkId, syncedAt])
+  @@index([workspaceId, telegramChannelId, syncedAt], map: "TelegramInviteLinkSnapshot_workspaceId_telegramChannelId_synced")
+  @@index([workspaceId, adCampaignId, syncedAt], map: "TelegramInviteLinkSnapshot_workspaceId_adCampaignId_syncedAt_id")
+  @@index([workspaceId, inviteLinkId, syncedAt], map: "TelegramInviteLinkSnapshot_workspaceId_inviteLinkId_syncedAt_id")
+}
+
+model TelegramBotIntegration {
+  id               String                     @id @default(cuid())
+  workspaceId      String
+  label            String
+  isActive         Boolean                    @default(true)
+  applicationType  TelegramBotApplicationType @default(NONE)
+  assignedMemberId String?
+  createdByUserId  String?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  workspace                    Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignedMember               WorkspaceMember?              @relation("TelegramBotAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdByUser                User?                         @relation("TelegramBotCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  runtimeInstances             TelegramBotRuntimeInstance[]
+  botUsers                     TelegramBotUser[]
+  updateLogs                   TelegramBotUpdateLog[]
+  deliveries                   TelegramBotDelivery[]
+  greeterConfig                GreeterConfig?
+  greeterConfigVersions        GreeterConfigVersion[]
+  greeterChannelConfigVersions GreeterChannelConfigVersion[]
+  greeterChannels              GreeterChannel[]
+  greeterJoinRequests          GreeterJoinRequest[]
+  greeterSequences             GreeterSequence[]
+  greeterEnrollments           GreeterSequenceEnrollment[]
+  greeterBroadcasts            GreeterBroadcast[]
+  greeterTestSessions          GreeterTestSession[]
+  greeterUserEnvironmentStates GreeterUserEnvironmentState[]
+  financeProfiles              FinanceProfile[]
+  financeAiProviderConfigs     FinanceAiProviderConfig[]
+  billingProviderConfigs       BotBillingProviderConfig[]
+  billingPlans                 BotSubscriptionPlan[]
+  billingSubscriptions         BotSubscription[]
+  billingCoupons               BotCoupon[]
+  billingEvents                BotBillingEvent[]
+
+  @@unique([id, workspaceId])
+  @@index([workspaceId, assignedMemberId])
+  @@index([workspaceId, applicationType])
+}
+
+model TelegramBotRuntimeInstance {
+  id                            String                        @id @default(cuid())
+  workspaceId                   String
+  botIntegrationId              String
+  environment                   TelegramBotRuntimeEnvironment
+  botTokenEncrypted             String
+  botTokenIv                    String
+  botTokenAuthTag               String
+  botTokenMasked                String
+  botId                         String?
+  username                      String?
+  firstName                     String?
+  lastErrorMessage              String?
+  lastCheckedAt                 DateTime?
+  runtimeStatus                 TelegramBotRuntimeStatus      @default(DISABLED)
+  webhookStatus                 TelegramBotWebhookStatus      @default(NOT_CONFIGURED)
+  webhookUrl                    String?
+  webhookSecretEncrypted        String?
+  webhookSecretIv               String?
+  webhookSecretAuthTag          String?
+  webhookConfiguredAt           DateTime?
+  pendingWebhookUrl             String?
+  pendingWebhookSecretEncrypted String?
+  pendingWebhookSecretIv        String?
+  pendingWebhookSecretAuthTag   String?
+  runtimeTransitionStartedAt    DateTime?
+  lastUpdateProcessedAt         DateTime?
+  lastRuntimeError              String?
+  webAppStatus                  String?
+  webAppUrl                     String?
+  webAppError                   String?
+  miniAppStatus                 String?
+  miniAppExpectedUrl            String?
+  miniAppActualUrl              String?
+  miniAppError                  String?
+  createdAt                     DateTime                      @default(now())
+  updatedAt                     DateTime                      @updatedAt
+
+  workspace      Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration TelegramBotIntegration @relation(fields: [botIntegrationId, workspaceId], references: [id, workspaceId], onDelete: Cascade, map: "TelegramBotRuntimeInstance_bot_workspace_fkey")
+  updateLogs     TelegramBotUpdateLog[]
+  deliveries     TelegramBotDelivery[]
+
+  @@unique([botIntegrationId, environment])
+  @@unique([id, workspaceId, botIntegrationId])
+  @@index([workspaceId, botIntegrationId])
+  @@index([environment, runtimeStatus])
+}
+
+model TelegramBotApplicationWorkspaceAccess {
+  id              String                     @id @default(cuid())
+  workspaceId     String
+  applicationType TelegramBotApplicationType
+  enabled         Boolean                    @default(true)
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, applicationType], map: "TelegramBotApplicationWorkspaceAccess_workspaceId_applicationTy")
+  @@index([applicationType, enabled], map: "TelegramBotApplicationWorkspaceAccess_applicationType_enabled_i")
+}
+
+model TelegramBotUser {
+  id                String    @id @default(cuid())
+  workspaceId       String
+  botIntegrationId  String
+  telegramUserId    String
+  telegramChatId    String?
+  username          String?
+  firstName         String?
+  lastName          String?
+  languageCode      String?
+  startedAt         DateTime?
+  firstSeenAt       DateTime  @default(now())
+  lastInteractionAt DateTime  @default(now())
+  blockedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  workspace                    Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration               TelegramBotIntegration        @relation(fields: [botIntegrationId, workspaceId], references: [id, workspaceId], onDelete: Cascade, map: "TelegramBotUser_botIntegrationId_fkey")
+  deliveries                   TelegramBotDelivery[]
+  greeterJoinRequests          GreeterJoinRequest[]
+  greeterEnrollments           GreeterSequenceEnrollment[]
+  greeterBroadcastRecipients   GreeterBroadcastRecipient[]
+  greeterTestSessions          GreeterTestSession[]
+  greeterUserEnvironmentStates GreeterUserEnvironmentState[]
+  financeProfiles              FinanceProfile[]
+  billingSubscriptions         BotSubscription[]
+  billingCouponRedemptions     BotCouponRedemption[]
+  providerCustomers            BotProviderCustomer[]
+  financeProposals             FinancePendingProposal[]
+
+  @@unique([botIntegrationId, telegramUserId])
+  @@index([workspaceId, botIntegrationId])
+  @@index([telegramChatId])
+  @@index([blockedAt])
+}
+
+model TelegramBotUpdateLog {
+  id                String                  @id @default(cuid())
+  workspaceId       String
+  botIntegrationId  String
+  runtimeInstanceId String
+  updateId          String
+  updateType        String
+  receivedAt        DateTime                @default(now())
+  processedAt       DateTime?
+  status            TelegramBotUpdateStatus @default(RECEIVED)
+  error             String?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  workspace       Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration  TelegramBotIntegration     @relation(fields: [botIntegrationId, workspaceId], references: [id, workspaceId], onDelete: Cascade, map: "TelegramBotUpdateLog_botIntegrationId_fkey")
+  runtimeInstance TelegramBotRuntimeInstance @relation(fields: [runtimeInstanceId, workspaceId, botIntegrationId], references: [id, workspaceId, botIntegrationId], onDelete: Cascade, map: "TelegramBotUpdateLog_runtime_workspace_bot_fkey")
+
+  @@unique([runtimeInstanceId, updateId])
+  @@index([workspaceId, runtimeInstanceId, receivedAt], map: "TelegramBotUpdateLog_workspace_runtime_received_idx")
+  @@index([status, receivedAt])
+}
+
+model TelegramBotDelivery {
+  id                String                    @id @default(cuid())
+  workspaceId       String
+  botIntegrationId  String
+  runtimeInstanceId String?
+  telegramBotUserId String?
+  financeReminderId String?
+  chatId            String
+  type              TelegramBotDeliveryType
+  payload           Json
+  scheduledAt       DateTime
+  status            TelegramBotDeliveryStatus @default(PENDING)
+  attempts          Int                       @default(0)
+  maxAttempts       Int                       @default(3)
+  lockedAt          DateTime?
+  lockedUntil       DateTime?
+  lastError         String?
+  sentAt            DateTime?
+  idempotencyKey    String
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  workspace                 Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration            TelegramBotIntegration        @relation(fields: [botIntegrationId, workspaceId], references: [id, workspaceId], onDelete: Cascade, map: "TelegramBotDelivery_botIntegrationId_fkey")
+  runtimeInstance           TelegramBotRuntimeInstance?   @relation(fields: [runtimeInstanceId], references: [id], onDelete: SetNull)
+  telegramUser              TelegramBotUser?              @relation(fields: [telegramBotUserId], references: [id], onDelete: SetNull)
+  financeReminder           FinanceReminder?              @relation(fields: [financeReminderId], references: [id], onDelete: SetNull)
+  greeterStepExecution      GreeterSequenceStepExecution?
+  greeterBroadcastRecipient GreeterBroadcastRecipient?
+  greeterCaptchaJoinRequest GreeterJoinRequest?           @relation("GreeterCaptchaDelivery")
+  greeterOutcomeJoinRequest GreeterJoinRequest?           @relation("GreeterOutcomeDelivery")
+
+  @@unique([botIntegrationId, idempotencyKey])
+  @@index([status, scheduledAt])
+  @@index([lockedUntil])
+  @@index([workspaceId, botIntegrationId])
+  @@index([runtimeInstanceId])
+  @@index([financeReminderId])
+}
+
+model GreeterConfig {
+  id                        String                 @id @default(cuid())
+  workspaceId               String
+  botIntegrationId          String                 @unique
+  captchaEnabled            Boolean                @default(true)
+  captchaType               GreeterCaptchaType     @default(BUTTON_CONFIRM)
+  captchaMessage            String                 @default("To confirm you are human, tap the button below.")
+  confirmButtonText         String                 @default("I am human")
+  choicePrompt              String                 @default("Choose the number {{captcha.answer}}")
+  timeoutMinutes            Int                    @default(30)
+  successMessage            String?                @default("Approved for {{channel.title}}.")
+  failureMessage            String?
+  failureBehavior           GreeterFailureBehavior @default(KEEP_PENDING)
+  draftRevision             Int                    @default(1)
+  publishedRevision         Int?
+  currentPublishedVersionId String?                @unique
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime               @updatedAt
+  workspace                 Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration            TelegramBotIntegration @relation(fields: [botIntegrationId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  channels                  GreeterChannel[]
+  versions                  GreeterConfigVersion[] @relation("GreeterConfigVersions")
+  currentPublishedVersion   GreeterConfigVersion?  @relation("GreeterCurrentPublishedConfig", fields: [currentPublishedVersionId], references: [id], onDelete: SetNull)
+
+  @@unique([botIntegrationId, workspaceId])
+  @@index([workspaceId])
+}
+
+model GreeterConfigVersion {
+  id                String                        @id @default(cuid())
+  workspaceId       String
+  botIntegrationId  String
+  configId          String
+  revision          Int
+  captchaEnabled    Boolean
+  captchaType       GreeterCaptchaType
+  captchaMessage    String
+  confirmButtonText String
+  choicePrompt      String
+  timeoutMinutes    Int
+  successMessage    String?
+  failureMessage    String?
+  failureBehavior   GreeterFailureBehavior
+  publishedAt       DateTime                      @default(now())
+  workspace         Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration    TelegramBotIntegration        @relation(fields: [botIntegrationId, workspaceId], references: [id, workspaceId], onDelete: Cascade, map: "GreeterConfigVersion_bot_workspace_fkey")
+  config            GreeterConfig                 @relation("GreeterConfigVersions", fields: [configId], references: [id], onDelete: Cascade)
+  publishedFor      GreeterConfig?                @relation("GreeterCurrentPublishedConfig")
+  channelVersions   GreeterChannelConfigVersion[]
+
+  @@unique([configId, revision])
+  @@index([workspaceId, botIntegrationId, revision])
+}
+
+model GreeterChannel {
+  id                String                        @id @default(cuid())
+  workspaceId       String
+  botIntegrationId  String
+  channelId         String
+  enabled           Boolean                       @default(true)
+  useGlobalConfig   Boolean                       @default(true)
+  captchaEnabled    Boolean?
+  captchaType       GreeterCaptchaType?
+  captchaMessage    String?
+  confirmButtonText String?
+  choicePrompt      String?
+  timeoutMinutes    Int?
+  successMessage    String?
+  failureMessage    String?
+  failureBehavior   GreeterFailureBehavior?
+  permissionError   String?
+  createdAt         DateTime                      @default(now())
+  updatedAt         DateTime                      @updatedAt
+  workspace         Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration    TelegramBotIntegration        @relation(fields: [botIntegrationId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  channel           TelegramChannel               @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  config            GreeterConfig?                @relation(fields: [botIntegrationId], references: [botIntegrationId], onDelete: Cascade)
+  joinRequests      GreeterJoinRequest[]
+  configVersions    GreeterChannelConfigVersion[]
+
+  @@unique([botIntegrationId, channelId])
+  @@index([workspaceId, channelId])
+}
+
+model GreeterChannelConfigVersion {
+  id                String                  @id @default(cuid())
+  workspaceId       String
+  botIntegrationId  String
+  configVersionId   String
+  greeterChannelId  String
+  enabled           Boolean
+  useGlobalConfig   Boolean
+  captchaEnabled    Boolean?
+  captchaType       GreeterCaptchaType?
+  captchaMessage    String?
+  confirmButtonText String?
+  choicePrompt      String?
+  timeoutMinutes    Int?
+  successMessage    String?
+  failureMessage    String?
+  failureBehavior   GreeterFailureBehavior?
+  workspace         Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration    TelegramBotIntegration  @relation(fields: [botIntegrationId, workspaceId], references: [id, workspaceId], onDelete: Cascade, map: "GreeterChannelConfigVersion_bot_workspace_fkey")
+  configVersion     GreeterConfigVersion    @relation(fields: [configVersionId], references: [id], onDelete: Cascade)
+  greeterChannel    GreeterChannel          @relation(fields: [greeterChannelId], references: [id], onDelete: Cascade)
+
+  @@unique([configVersionId, greeterChannelId], map: "GreeterChannelConfigVersion_configVersionId_channel_key")
+  @@index([workspaceId, botIntegrationId, greeterChannelId], map: "GreeterChannelConfigVersion_workspace_bot_channel_idx")
+}
+
+model GreeterJoinRequest {
+  id                   String                       @id @default(cuid())
+  workspaceId          String
+  botIntegrationId     String
+  greeterChannelId     String
+  channelId            String
+  telegramBotUserId    String
+  telegramUserId       String
+  requestedAt          DateTime
+  status               GreeterJoinRequestStatus     @default(PENDING_CAPTCHA)
+  captchaStartedAt     DateTime?
+  captchaPassedAt      DateTime?
+  captchaFailedAt      DateTime?
+  captchaWrongAttempts Int                          @default(0)
+  captchaChatId        String?
+  captchaDeliveryId    String?                      @unique
+  outcomeDeliveryId    String?                      @unique
+  approvedAt           DateTime?
+  declinedAt           DateTime?
+  expiredAt            DateTime?
+  captchaAnswer        String?
+  callbackToken        String                       @unique
+  sourceInviteLink     String?
+  lastDecisionError    String?
+  decisionAppliedAt    DateTime?
+  expiryClaimOwner     String?
+  expiryClaimUntil     DateTime?
+  environment          GreeterAutomationEnvironment @default(PRODUCTION)
+  testSessionId        String?
+  testGeneration       Int?
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+  workspace            Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration       TelegramBotIntegration       @relation(fields: [botIntegrationId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  greeterChannel       GreeterChannel               @relation(fields: [greeterChannelId], references: [id], onDelete: Cascade)
+  channel              TelegramChannel              @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  telegramUser         TelegramBotUser              @relation(fields: [telegramBotUserId], references: [id], onDelete: Cascade)
+  captchaDelivery      TelegramBotDelivery?         @relation("GreeterCaptchaDelivery", fields: [captchaDeliveryId], references: [id], onDelete: SetNull)
+  outcomeDelivery      TelegramBotDelivery?         @relation("GreeterOutcomeDelivery", fields: [outcomeDeliveryId], references: [id], onDelete: SetNull)
+  sequenceEnrollments  GreeterSequenceEnrollment[]
+  testSession          GreeterTestSession?          @relation(fields: [testSessionId], references: [id], onDelete: SetNull)
+
+  @@unique([botIntegrationId, channelId, telegramUserId, requestedAt], map: "GreeterJoinRequest_botIntegrationId_channelId_telegramUserId_re")
+  @@index([workspaceId, botIntegrationId, status])
+  @@index([workspaceId, botIntegrationId, environment, status], map: "GreeterJoinRequest_workspace_bot_environment_status_idx")
+  @@index([testSessionId, testGeneration])
+  @@index([workspaceId, botIntegrationId, requestedAt])
+  @@index([botIntegrationId, channelId, requestedAt])
+  @@index([telegramBotUserId, requestedAt])
+  @@index([expiredAt])
+  @@index([status, expiredAt, expiryClaimUntil])
+}
+
+model GreeterSequence {
+  id                        String                      @id @default(cuid())
+  workspaceId               String
+  botIntegrationId          String
+  channelId                 String?
+  name                      String
+  trigger                   GreeterSequenceTrigger      @default(AFTER_START)
+  draftRevision             Int                         @default(1)
+  currentPublishedVersionId String?
+  enabled                   Boolean                     @default(true)
+  createdAt                 DateTime                    @default(now())
+  updatedAt                 DateTime                    @updatedAt
+  workspace                 Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration            TelegramBotIntegration      @relation(fields: [botIntegrationId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  channel                   TelegramChannel?            @relation("GreeterSequenceChannel", fields: [channelId], references: [id], onDelete: SetNull)
+  versions                  GreeterSequenceVersion[]
+  draftSteps                GreeterSequenceStep[]       @relation("GreeterDraftSteps")
+  enrollments               GreeterSequenceEnrollment[]
+
+  @@index([workspaceId, botIntegrationId])
+  @@index([workspaceId, botIntegrationId, trigger, channelId], map: "GreeterSequence_workspace_bot_trigger_channel_idx")
+}
+
+model GreeterSequenceVersion {
+  id                  String                       @id @default(cuid())
+  sequenceId          String
+  version             Int
+  status              GreeterSequenceVersionStatus @default(PUBLISHED)
+  sourceDraftRevision Int?
+  createdAt           DateTime                     @default(now())
+  sequence            GreeterSequence              @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  steps               GreeterSequenceStep[]        @relation("GreeterVersionSteps")
+  enrollments         GreeterSequenceEnrollment[]
+
+  @@unique([sequenceId, version])
+  @@unique([sequenceId, status, sourceDraftRevision], map: "GreeterSequenceVersion_sequence_status_source_revision_key")
+}
+
+model GreeterSequenceStep {
+  id            String                         @id @default(cuid())
+  sequenceId    String?
+  versionId     String?
+  position      Int
+  delaySeconds  Int                            @default(0)
+  messageText   String
+  buttons       Json?
+  enabled       Boolean                        @default(true)
+  createdAt     DateTime                       @default(now())
+  updatedAt     DateTime                       @updatedAt
+  draftSequence GreeterSequence?               @relation("GreeterDraftSteps", fields: [sequenceId], references: [id], onDelete: Cascade)
+  version       GreeterSequenceVersion?        @relation("GreeterVersionSteps", fields: [versionId], references: [id], onDelete: Cascade)
+  executions    GreeterSequenceStepExecution[]
+
+  @@unique([sequenceId, position])
+  @@unique([versionId, position])
+}
+
+model GreeterSequenceEnrollment {
+  id                       String                         @id @default(cuid())
+  workspaceId              String
+  botIntegrationId         String
+  sequenceVersionId        String?
+  sequenceId               String
+  telegramBotUserId        String
+  acquiredChannelId        String?
+  acquisitionJoinRequestId String?
+  logicalScopeKey          String
+  runKey                   String
+  environment              GreeterAutomationEnvironment   @default(PRODUCTION)
+  enrolledAt               DateTime                       @default(now())
+  cancelledAt              DateTime?
+  workspace                Workspace                      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration           TelegramBotIntegration         @relation(fields: [botIntegrationId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  sequenceVersion          GreeterSequenceVersion?        @relation(fields: [sequenceVersionId], references: [id], onDelete: Cascade)
+  sequence                 GreeterSequence                @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  telegramUser             TelegramBotUser                @relation(fields: [telegramBotUserId], references: [id], onDelete: Cascade)
+  acquiredChannel          TelegramChannel?               @relation("GreeterEnrollmentChannel", fields: [acquiredChannelId], references: [id], onDelete: SetNull)
+  acquisitionJoinRequest   GreeterJoinRequest?            @relation(fields: [acquisitionJoinRequestId], references: [id], onDelete: SetNull)
+  executions               GreeterSequenceStepExecution[]
+
+  @@unique([sequenceId, telegramBotUserId, environment, logicalScopeKey, runKey], map: "GreeterSequenceEnrollment_logical_run_key")
+  @@index([workspaceId, botIntegrationId, environment])
+}
+
+model GreeterSequenceStepExecution {
+  id           String                     @id @default(cuid())
+  enrollmentId String
+  stepId       String
+  status       GreeterStepExecutionStatus @default(PENDING)
+  dueAt        DateTime
+  deliveryId   String?                    @unique
+  sentAt       DateTime?
+  completedAt  DateTime?
+  lastError    String?
+  createdAt    DateTime                   @default(now())
+  updatedAt    DateTime                   @updatedAt
+  enrollment   GreeterSequenceEnrollment  @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  step         GreeterSequenceStep        @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  delivery     TelegramBotDelivery?       @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+
+  @@unique([enrollmentId, stepId])
+  @@index([status, dueAt])
+}
+
+model GreeterBroadcast {
+  id                  String                      @id @default(cuid())
+  workspaceId         String
+  botIntegrationId    String
+  name                String
+  messageText         String
+  buttons             Json?
+  audience            GreeterBroadcastAudience    @default(ALL_ALIVE)
+  audienceUserState   GreeterUserState?
+  channelId           String?
+  status              GreeterBroadcastStatus      @default(DRAFT)
+  scheduledAt         DateTime?
+  confirmedAt         DateTime?
+  cancelledAt         DateTime?
+  processingStartedAt DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  workspace           Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration      TelegramBotIntegration      @relation(fields: [botIntegrationId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  channel             TelegramChannel?            @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  recipients          GreeterBroadcastRecipient[]
+
+  @@index([workspaceId, botIntegrationId, status])
+  @@index([status, scheduledAt], map: "GreeterBroadcast_status_scheduledAt_idx")
+}
+
+model GreeterBroadcastRecipient {
+  id                String                          @id @default(cuid())
+  broadcastId       String
+  telegramBotUserId String
+  acquiredChannelId String?
+  deliveryId        String?                         @unique
+  status            GreeterBroadcastRecipientStatus @default(PENDING)
+  sentAt            DateTime?
+  completedAt       DateTime?
+  lastError         String?
+  nextQueueAttemptAt DateTime?
+  createdAt         DateTime                        @default(now())
+  broadcast         GreeterBroadcast                @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  telegramUser      TelegramBotUser                 @relation(fields: [telegramBotUserId], references: [id], onDelete: Cascade)
+  acquiredChannel   TelegramChannel?                @relation(fields: [acquiredChannelId], references: [id], onDelete: SetNull)
+  delivery          TelegramBotDelivery?            @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+
+  @@unique([broadcastId, telegramBotUserId])
+  @@index([broadcastId, status])
+  @@index([status, nextQueueAttemptAt])
+}
+
+model GreeterTestSession {
+  id                String                 @id @default(cuid())
+  workspaceId       String
+  botIntegrationId  String                 @unique
+  telegramBotUserId String?
+  channelId         String?
+  enabled           Boolean                @default(false)
+  generation        Int                    @default(1)
+  startedAt         DateTime?
+  lastInteractionAt DateTime?
+  enabledAt         DateTime?
+  disabledAt        DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  workspace         Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration    TelegramBotIntegration @relation(fields: [botIntegrationId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  telegramUser      TelegramBotUser?       @relation(fields: [telegramBotUserId], references: [id], onDelete: SetNull)
+  channel           TelegramChannel?       @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  joinRequests      GreeterJoinRequest[]
+
+  @@index([workspaceId, botIntegrationId])
+}
+
+model GreeterUserEnvironmentState {
+  id                String                       @id @default(cuid())
+  workspaceId       String
+  botIntegrationId  String
+  telegramBotUserId String
+  environment       GreeterAutomationEnvironment
+  generation        Int                          @default(0)
+  startedAt         DateTime?
+  lastInteractionAt DateTime?
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  workspace         Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration    TelegramBotIntegration       @relation(fields: [botIntegrationId, workspaceId], references: [id, workspaceId], onDelete: Cascade, map: "GreeterUserEnvironmentState_bot_workspace_fkey")
+  telegramUser      TelegramBotUser              @relation(fields: [telegramBotUserId], references: [id], onDelete: Cascade, map: "GreeterUserEnvironmentState_userId_fkey")
+
+  @@unique([botIntegrationId, telegramBotUserId, environment, generation], map: "GreeterUserEnvironmentState_bot_user_env_generation_key")
+  @@index([workspaceId, botIntegrationId, environment], map: "GreeterUserEnvironmentState_workspace_bot_environment_idx")
+}
+
+model FinanceProfile {
+  id                    String                   @id @default(cuid())
+  botIntegrationId      String
+  telegramBotUserId     String
+  defaultCurrency       String                   @default("UAH") @db.VarChar(3)
+  timezone              String                   @default("Europe/Warsaw")
+  locale                String?
+  onboardingCompletedAt DateTime?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  botIntegration        TelegramBotIntegration   @relation(fields: [botIntegrationId], references: [id], onDelete: Cascade)
+  telegramUser          TelegramBotUser          @relation(fields: [telegramBotUserId], references: [id], onDelete: Cascade)
+  accounts              FinanceAccount[]
+  categories            FinanceCategory[]
+  transactions          FinanceTransaction[]
+  transfers             FinanceTransfer[]
+  merchantMappings      FinanceMerchantMapping[]
+  limits                FinanceSpendingLimit[]
+  reminders             FinanceReminder[]
+  goals                 FinanceGoal[]
+  proposals             FinancePendingProposal[]
+  assistantProfile      FinanceAssistantProfile?
+  aiUsage               FinanceAiUsage[]
+  chatFlows             FinanceChatFlow[]
+  consumerTransfers     FinanceConsumerTransfer[]
+
+  @@unique([botIntegrationId, telegramBotUserId])
+}
+
+// Explicit Mini App -> browser handoff only. Raw bearer values are never persisted.
+// Expiry is enforced on consume; no background cleanup is required for correctness.
+model FinanceConsumerTransfer {
+  id              String   @id @default(cuid())
+  profileId       String
+  tokenHash       String   @unique
+  expiresAt       DateTime
+  consumedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  profile FinanceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+// A nullable bot means a workspace default. A bot-specific row overrides it.
+// Secrets use the same AES-GCM envelope as Bot API and billing credentials.
+model FinanceAiProviderConfig {
+  id                  String                    @id @default(cuid())
+  workspaceId         String
+  botIntegrationId    String?
+  provider            FinanceAiProvider         @default(OPENAI)
+  apiKeyEncrypted     String?
+  apiKeyIv            String?
+  apiKeyAuthTag       String?
+  model               String                    @default("gpt-5.6-luna")
+  connectionStatus    FinanceAiConnectionStatus @default(NOT_CONFIGURED)
+  lastCheckedAt       DateTime?
+  lastValidationError String?
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  workspace           Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration      TelegramBotIntegration?   @relation(fields: [botIntegrationId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, botIntegrationId, provider], map: "FinanceAiProviderConfig_workspaceId_botIntegrationId_provider_k")
+  @@index([workspaceId, provider])
+}
+
+model FinanceAccount {
+  id                String               @id @default(cuid())
+  profileId         String
+  name              String
+  type              FinanceAccountType   @default(OTHER)
+  currency          String               @db.VarChar(3)
+  openingBalance    Decimal              @default(0)
+  archivedAt        DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  profile           FinanceProfile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  transactions      FinanceTransaction[]
+  outgoingTransfers FinanceTransfer[]    @relation("FinanceOutgoingTransfers")
+  incomingTransfers FinanceTransfer[]    @relation("FinanceIncomingTransfers")
+
+  @@index([profileId, archivedAt])
+}
+
+model FinanceCategory {
+  id           String                 @id @default(cuid())
+  profileId    String
+  parentId     String?
+  name         String
+  type         FinanceTransactionType
+  key          String?
+  archivedAt   DateTime?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  profile      FinanceProfile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  parent       FinanceCategory?       @relation("FinanceCategoryChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children     FinanceCategory[]      @relation("FinanceCategoryChildren")
+  transactions FinanceTransaction[]
+  limits       FinanceSpendingLimit[]
+
+  @@unique([profileId, type, key])
+  @@index([profileId, parentId])
+}
+
+model FinanceTransaction {
+  id                      String                   @id @default(cuid())
+  profileId               String
+  accountId               String
+  categoryId              String?
+  type                    FinanceTransactionType
+  amount                  Decimal
+  currency                String                   @db.VarChar(3)
+  amountInDefaultCurrency Decimal
+  exchangeRateToDefault   Decimal
+  // Immutable USD valuation. Legacy rows may be null until they are edited;
+  // do not reinterpret amountInDefaultCurrency after a default-currency change.
+  valuationCurrency       String?                  @db.VarChar(3)
+  amountInValuationCurrency Decimal?
+  exchangeRateToValuation Decimal?
+  valuationRateAt         DateTime?
+  occurredAt              DateTime
+  description             String?
+  merchantNormalized      String?
+  source                  FinanceTransactionSource @default(CHAT)
+  deletedAt               DateTime?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  profile                 FinanceProfile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  account                 FinanceAccount           @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  category                FinanceCategory?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([profileId, occurredAt])
+  @@index([profileId, accountId, occurredAt])
+  @@index([profileId, categoryId, occurredAt])
+}
+
+model FinanceChatFlow {
+  id                String         @id @default(cuid())
+  profileId         String
+  botIntegrationId  String
+  telegramBotUserId String
+  step              String         @db.VarChar(80)
+  status            String         @default("ACTIVE") @db.VarChar(24)
+  payload           Json           @default("{}")
+  expiresAt         DateTime
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  profile           FinanceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([botIntegrationId, telegramBotUserId])
+  @@index([profileId, expiresAt])
+  @@index([expiresAt])
+}
+
+model FinanceTransfer {
+  id            String         @id @default(cuid())
+  profileId     String
+  fromAccountId String
+  toAccountId   String
+  fromAmount    Decimal
+  fromCurrency  String         @db.VarChar(3)
+  toAmount      Decimal
+  toCurrency    String         @db.VarChar(3)
+  exchangeRate  Decimal?
+  occurredAt    DateTime
+  description   String?
+  deletedAt     DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  profile       FinanceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  fromAccount   FinanceAccount @relation("FinanceOutgoingTransfers", fields: [fromAccountId], references: [id], onDelete: Restrict)
+  toAccount     FinanceAccount @relation("FinanceIncomingTransfers", fields: [toAccountId], references: [id], onDelete: Restrict)
+
+  @@index([profileId, occurredAt])
+}
+
+model FinanceMerchantMapping {
+  id                 String         @id @default(cuid())
+  profileId          String
+  merchantNormalized String
+  categoryId         String
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  profile            FinanceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, merchantNormalized])
+}
+
+model FinanceSpendingLimit {
+  id         String             @id @default(cuid())
+  profileId  String
+  categoryId String
+  amount     Decimal
+  currency   String             @db.VarChar(3)
+  period     FinanceLimitPeriod @default(MONTH)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  profile    FinanceProfile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  category   FinanceCategory    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, categoryId, period])
+}
+
+model FinanceReminder {
+  id                    String                    @id @default(cuid())
+  profileId             String
+  name                  String
+  amount                Decimal
+  currency              String                    @db.VarChar(3)
+  recurrence            FinanceReminderRecurrence @default(MONTHLY)
+  dayOfMonth            Int
+  reminderOffsetMinutes Int                       @default(0)
+  nextOccurrenceAt      DateTime
+  enabled               Boolean                   @default(true)
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  profile               FinanceProfile            @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  deliveries            TelegramBotDelivery[]
+
+  @@index([enabled, nextOccurrenceAt])
+}
+
+model FinanceGoal {
+  id            String         @id @default(cuid())
+  profileId     String
+  name          String
+  targetAmount  Decimal
+  currentAmount Decimal        @default(0)
+  currency      String         @db.VarChar(3)
+  targetDate    DateTime?
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  profile       FinanceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, active])
+}
+
+model FinancePendingProposal {
+  id                String                @id @default(cuid())
+  profileId         String
+  telegramBotUserId String
+  botIntegrationId  String
+  tokenHash         String                @unique
+  payload           Json
+  status            FinanceProposalStatus @default(PENDING)
+  expiresAt         DateTime
+  transactionId     String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  profile           FinanceProfile        @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  telegramUser      TelegramBotUser       @relation(fields: [telegramBotUserId], references: [id], onDelete: Cascade)
+
+  @@index([botIntegrationId, telegramBotUserId, status, expiresAt], map: "FinancePendingProposal_botIntegrationId_telegramBotUserId_statu")
+}
+
+model FinanceAssistantProfile {
+  id                String         @id @default(cuid())
+  profileId         String         @unique
+  incomeContext     String?
+  familyContext     String?
+  goals             String?
+  priorities        String?
+  fixedExpenses     String?
+  protectedExpenses String?
+  constraints       String?
+  notes             String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  profile           FinanceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+model FinanceAiUsage {
+  id                  String            @id @default(cuid())
+  profileId           String
+  feature             String
+  provider            FinanceAiProvider
+  model               String
+  inputTokens         Int?
+  outputTokens        Int?
+  estimatedCostMicros Int?
+  latencyMs           Int
+  status              String
+  createdAt           DateTime          @default(now())
+  profile             FinanceProfile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, createdAt, feature])
+}
+
+model BotBillingProviderConfig {
+  id                     String                     @id @default(cuid())
+  workspaceId            String
+  botIntegrationId       String?
+  provider               BotBillingProvider
+  mode                   BotBillingProviderMode
+  secretKeyEncrypted     String?
+  secretKeyIv            String?
+  secretKeyAuthTag       String?
+  webhookSecretEncrypted String?
+  webhookSecretIv        String?
+  webhookSecretAuthTag   String?
+  publicKey              String?
+  publicKeyMasked        String?
+  connectionStatus       BotBillingConnectionStatus @default(NOT_CONFIGURED)
+  lastCheckedAt          DateTime?
+  lastValidationError    String?
+  createdAt              DateTime                   @default(now())
+  updatedAt              DateTime                   @updatedAt
+
+  workspace      Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration TelegramBotIntegration? @relation(fields: [botIntegrationId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, botIntegrationId, provider, mode], map: "BotBillingProviderConfig_workspaceId_botIntegrationId_provider_")
+  @@index([workspaceId, provider, mode])
+}
+
+model BotSubscriptionPlan {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  botIntegrationId String
+  code             String
+  name             String
+  description      String?
+  freeCapabilities String[] @default([])
+  paidCapabilities String[] @default([])
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  workspace      Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration TelegramBotIntegration @relation(fields: [botIntegrationId], references: [id], onDelete: Cascade)
+  prices         BotPlanPrice[]
+  subscriptions  BotSubscription[]
+  coupons        BotCoupon[]
+
+  @@unique([botIntegrationId, code])
+  @@index([workspaceId, botIntegrationId, isActive])
+}
+
+model BotPlanPrice {
+  id                    String             @id @default(cuid())
+  planId                String
+  version               Int
+  currency              String             @db.VarChar(3)
+  interval              BotBillingInterval
+  amountMinor           Int
+  isPublic              Boolean            @default(true)
+  isActive              Boolean            @default(true)
+  providerPriceIdentity Json?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  plan              BotSubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+  subscriptions     BotSubscription[]
+  couponRedemptions BotCouponRedemption[]
+
+  @@unique([planId, currency, interval, version])
+  @@index([planId, currency, interval, isPublic, isActive])
+}
+
+model BotSubscription {
+  id                     String                @id @default(cuid())
+  workspaceId            String
+  botIntegrationId       String
+  telegramBotUserId      String
+  planId                 String?
+  planPriceId            String?
+  source                 BotSubscriptionSource
+  status                 BotSubscriptionStatus @default(INCOMPLETE)
+  currency               String?               @db.VarChar(3)
+  interval               BotBillingInterval?
+  amountMinor            Int?
+  priceVersion           Int?
+  providerCustomerId     String?
+  providerSubscriptionId String?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean               @default(false)
+  canceledAt             DateTime?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  workspace            Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration       TelegramBotIntegration   @relation(fields: [botIntegrationId], references: [id], onDelete: Cascade)
+  telegramBotUser      TelegramBotUser          @relation(fields: [telegramBotUserId], references: [id], onDelete: Cascade)
+  plan                 BotSubscriptionPlan?     @relation(fields: [planId], references: [id], onDelete: SetNull)
+  planPrice            BotPlanPrice?            @relation(fields: [planPriceId], references: [id], onDelete: SetNull)
+  grants               BotSubscriptionGrant[]
+  events               BotBillingEvent[]
+  providerSubscription BotProviderSubscription?
+
+  @@index([workspaceId, botIntegrationId, status])
+  @@index([workspaceId, botIntegrationId, createdAt])
+  @@index([telegramBotUserId, status, currentPeriodEnd])
+  @@index([providerSubscriptionId])
+}
+
+model BotSubscriptionGrant {
+  id              String                     @id @default(cuid())
+  subscriptionId  String
+  source          BotSubscriptionGrantSource
+  reason          String
+  idempotencyKey  String                     @unique
+  startsAt        DateTime                   @default(now())
+  expiresAt       DateTime?
+  revokedAt       DateTime?
+  createdByUserId String?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  subscription BotSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, expiresAt, revokedAt])
+}
+
+model BotCoupon {
+  id               String    @id @default(cuid())
+  workspaceId      String
+  botIntegrationId String
+  planId           String?
+  code             String
+  percentOff       Int?
+  amountOffMinor   Int?
+  currency         String?   @db.VarChar(3)
+  startsAt         DateTime?
+  expiresAt        DateTime?
+  maxRedemptions   Int?
+  newUsersOnly     Boolean   @default(false)
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  workspace      Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration TelegramBotIntegration @relation(fields: [botIntegrationId], references: [id], onDelete: Cascade)
+  plan           BotSubscriptionPlan?   @relation(fields: [planId], references: [id], onDelete: SetNull)
+  redemptions    BotCouponRedemption[]
+
+  @@unique([botIntegrationId, code])
+  @@index([workspaceId, botIntegrationId, isActive])
+}
+
+model BotCouponRedemption {
+  id                String   @id @default(cuid())
+  couponId          String
+  telegramBotUserId String
+  planPriceId       String
+  subscriptionId    String?
+  idempotencyKey    String   @unique
+  createdAt         DateTime @default(now())
+
+  coupon          BotCoupon       @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  telegramBotUser TelegramBotUser @relation(fields: [telegramBotUserId], references: [id], onDelete: Cascade)
+  planPrice       BotPlanPrice    @relation(fields: [planPriceId], references: [id], onDelete: Restrict)
+
+  @@unique([couponId, telegramBotUserId, planPriceId])
+  @@index([couponId, createdAt])
+}
+
+model BotProviderCustomer {
+  id                 String                 @id @default(cuid())
+  workspaceId        String
+  botIntegrationId   String
+  telegramBotUserId  String
+  provider           BotBillingProvider
+  mode               BotBillingProviderMode
+  providerCustomerId String
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  telegramBotUser TelegramBotUser @relation(fields: [telegramBotUserId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, mode, providerCustomerId])
+  @@unique([botIntegrationId, telegramBotUserId, provider, mode], map: "BotProviderCustomer_botIntegrationId_telegramBotUserId_provider")
+}
+
+model BotProviderSubscription {
+  id                     String                 @id @default(cuid())
+  subscriptionId         String                 @unique
+  provider               BotBillingProvider
+  mode                   BotBillingProviderMode
+  providerSubscriptionId String
+  providerStatus         String
+  rawSnapshot            Json?
+  lastSyncedAt           DateTime               @default(now())
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  subscription BotSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, mode, providerSubscriptionId], map: "BotProviderSubscription_provider_mode_providerSubscriptionId_ke")
+}
+
+model BotBillingEvent {
+  id               String                  @id @default(cuid())
+  workspaceId      String
+  botIntegrationId String
+  subscriptionId   String?
+  provider         BotBillingProvider?
+  mode             BotBillingProviderMode?
+  providerEventId  String?
+  type             BotBillingEventType
+  amountMinor      Int?
+  currency         String?                 @db.VarChar(3)
+  occurredAt       DateTime                @default(now())
+  payload          Json?
+  createdAt        DateTime                @default(now())
+
+  workspace      Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  botIntegration TelegramBotIntegration @relation(fields: [botIntegrationId], references: [id], onDelete: Cascade)
+  subscription   BotSubscription?       @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, mode, providerEventId])
+  @@index([workspaceId, botIntegrationId, occurredAt])
+  @@index([subscriptionId, occurredAt])
+}
+
+model SystemBotLinkToken {
+  id                String    @id @default(cuid())
+  tokenHash         String    @unique
+  telegramUserId    String
+  telegramChatId    String
+  username          String?
+  firstName         String?
+  telegramMessageId Int?
+  expiresAt         DateTime
+  usedAt            DateTime?
+  revokedAt         DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@index([telegramUserId, expiresAt])
+  @@index([expiresAt])
+}
+
+model TelegramSystemBotConnection {
+  id                 String    @id @default(cuid())
+  userId             String    @unique
+  telegramUserId     String    @unique
+  telegramChatId     String
+  username           String?
+  firstName          String?
+  lastName           String?
+  currentWorkspaceId String?
+  enabled            Boolean   @default(true)
+  lastInteractionAt  DateTime  @default(now())
+  disconnectedAt     DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user              User                                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentWorkspace  Workspace?                          @relation(fields: [currentWorkspaceId], references: [id], onDelete: SetNull)
+  taskSubscriptions TelegramSystemBotTaskSubscription[]
+  financeDrafts     TelegramSystemBotFinanceDraft[]
+
+  @@index([currentWorkspaceId])
+  @@index([enabled])
+}
+
+model TelegramSystemBotTaskSubscription {
+  id              String   @id @default(cuid())
+  connectionId    String
+  workspaceId     String
+  taskKey         String
+  enabled         Boolean  @default(true)
+  notifyOnSuccess Boolean  @default(false)
+  notifyOnFailure Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  connection TelegramSystemBotConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  workspace  Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, workspaceId, taskKey], map: "TelegramSystemBotTaskSubscription_connectionId_workspaceId_task")
+  @@index([workspaceId, taskKey])
+}
+
+model TelegramSystemBotFinanceDraft {
+  id            String                              @id @default(cuid())
+  connectionId  String
+  workspaceId   String
+  kind          TelegramSystemBotFinanceDraftKind   @default(TRANSACTION)
+  type          TransactionType?
+  amount        Decimal?
+  description   String?
+  accountId     String?
+  categoryId    String?
+  fromAccountId String?
+  toAccountId   String?
+  fromAmount    Decimal?
+  toAmount      Decimal?
+  status        TelegramSystemBotFinanceDraftStatus @default(PENDING)
+  transactionId String?
+  transferId    String?
+  expiresAt     DateTime
+  completedAt   DateTime?
+  lastError     String?
+  createdAt     DateTime                            @default(now())
+  updatedAt     DateTime                            @updatedAt
+
+  connection TelegramSystemBotConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  workspace  Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId, status, expiresAt])
+  @@index([workspaceId, status])
+  @@index([status, expiresAt])
+}
+
+model TelegramSystemBotUpdateLog {
+  id          String    @id @default(cuid())
+  environment TelegramBotRuntimeEnvironment
+  updateId    String
+  updateType  String
+  status      String    @default("PROCESSING")
+  error       String?
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([environment, updateId])
+  @@index([status, createdAt])
+}
+
+model TelegramPost {
+  id                   String   @id @default(cuid())
+  workspaceId          String
+  telegramChannelId    String
+  telegramMessageId    String
+  text                 String?
+  formattedText        String?
+  hasMedia             Boolean  @default(false)
+  mediaKind            String?
+  postDate             DateTime
+  viewsCount           Int?
+  forwardsCount        Int?
+  reactionsCount       Int?
+  commentsCount        Int?
+  manualOwnViews       Int      @default(0)
+  manualOwnReactions   Int      @default(0)
+  excludeFromAnalytics Boolean  @default(false)
+  reactions            Json?
+  rawMessage           Json?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  workspace        Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel  TelegramChannel              @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  metricSnapshots  TelegramPostMetricSnapshot[]
+  adSalePlacements TelegramAdSalePlacement[]    @relation("TelegramAdPlacementTelegramPost")
+
+  @@unique([telegramChannelId, telegramMessageId])
+  @@index([telegramChannelId, postDate])
+  @@index([workspaceId, telegramChannelId, postDate])
+}
+
+model TelegramManagedPost {
+  id                           String                                  @id @default(cuid())
+  workspaceId                  String
+  telegramChannelId            String
+  title                        String
+  text                         String?
+  imageUrls                    String[]                                @default([])
+  buttonRows                   Json?
+  origin                       TelegramManagedPostOrigin               @default(SYSTEM)
+  remoteImportKey              String?
+  jsonImportKey                String?
+  status                       TelegramManagedPostStatus               @default(DRAFT)
+  scheduledAt                  DateTime?
+  scheduleMode                 String?
+  publishedAt                  DateTime?
+  telegramScheduledMessageIds  String[]                                @default([])
+  telegramMessageIds           String[]                                @default([])
+  telegramMessageUrls          String[]                                @default([])
+  telegramIdVerificationStatus TelegramManagedPostIdVerificationStatus @default(UNVERIFIED)
+  telegramLinkSource           TelegramManagedPostLinkSource           @default(AUTO)
+  telegramIdVerifiedAt         DateTime?
+  telegramIdLastCheckedAt      DateTime?
+  telegramRemoteStatus         TelegramManagedPostRemoteStatus         @default(NONE)
+  lastTelegramSyncedAt         DateTime?
+  lastTelegramSyncNote         String?
+  sourceType                   TelegramSourceType?
+  sourceId                     String?
+  sourceWasPremium             Boolean?
+  captionLengthMaxUsed         Int?
+  messageLengthMaxUsed         Int?
+  publishMode                  String?
+  lastError                    String?
+  plannerFormatId              String?
+  plannerSlotId                String?
+  plannerRunId                 String?
+  plannerPlannedAt             DateTime?
+  plannerProvenance            Json?
+  assignedMemberId             String
+  icon                         String?
+  groupId                      String?
+  groupPosition                Int?
+  statusPosition               Int?
+  sidebarPosition              Int?
+
+  workspace        Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel  TelegramChannel               @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  assignedMember   WorkspaceMember               @relation("TelegramManagedPostAssignedMember", fields: [assignedMemberId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "TelegramManagedPost_assignedMemberId_fkey")
+  group            PostGroup?                    @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  plannerFormat    TelegramPostPlannerFormat?    @relation(fields: [plannerFormatId], references: [id], onDelete: SetNull)
+  plannerSlot      TelegramPostPlannerSlot?      @relation(fields: [plannerSlotId], references: [id], onDelete: SetNull)
+  revisions        TelegramManagedPostRevision[]
+  adSalePlacements TelegramAdSalePlacement[]     @relation("TelegramAdPlacementManagedPost")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Enforced by a partial unique index in the baseline migration. Prisma's
+  // schema language cannot represent `WHERE remoteImportKey IS NOT NULL`.
+  @@index([workspaceId, telegramChannelId, createdAt])
+  @@unique([workspaceId, telegramChannelId, jsonImportKey])
+  @@index([workspaceId, assignedMemberId])
+  @@index([groupId])
+  @@index([groupId, groupPosition])
+  @@index([groupId, status, statusPosition])
+  @@index([telegramChannelId, sidebarPosition])
+  @@index([workspaceId, telegramChannelId, plannerRunId], map: "TelegramManagedPost_workspaceId_telegramChannelId_plannerRunId_")
+  @@index([workspaceId, telegramChannelId, plannerSlotId], map: "TelegramManagedPost_workspaceId_telegramChannelId_plannerSlotId")
+  @@index([status, scheduledAt])
+  @@index([telegramIdVerificationStatus, status, telegramIdLastCheckedAt], map: "TelegramManagedPost_due_identity_idx")
+  @@index([workspaceId, telegramChannelId, origin, status, scheduledAt], map: "TelegramManagedPost_workspaceId_telegramChannelId_origin_status")
+}
+
+model TelegramPostPlannerFormat {
+  id                String  @id @default(cuid())
+  workspaceId       String
+  telegramChannelId String
+  name              String
+  description       String?
+  icon              String?
+  position          Int     @default(0)
+  isActive          Boolean @default(true)
+
+  workspace       Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel           @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  slots           TelegramPostPlannerSlot[]
+  plannedPosts    TelegramManagedPost[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, telegramChannelId, name], map: "TelegramPostPlannerFormat_workspaceId_telegramChannelId_name_ke")
+  @@index([workspaceId, telegramChannelId, position], map: "TelegramPostPlannerFormat_workspaceId_telegramChannelId_positio")
+  @@index([workspaceId, telegramChannelId, isActive], map: "TelegramPostPlannerFormat_workspaceId_telegramChannelId_isActiv")
+}
+
+model TelegramPostPlannerSlot {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  telegramChannelId String
+  formatId          String?
+  postGroupIds      String[] @default([])
+  weekday           Int
+  time              String   @db.VarChar(5)
+  timezone          String
+  position          Int      @default(0)
+  isActive          Boolean  @default(true)
+
+  workspace       Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel            @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  format          TelegramPostPlannerFormat? @relation(fields: [formatId], references: [id], onDelete: SetNull)
+  plannedPosts    TelegramManagedPost[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, telegramChannelId, weekday, position], map: "TelegramPostPlannerSlot_workspaceId_telegramChannelId_weekday_p")
+  @@index([workspaceId, telegramChannelId, isActive], map: "TelegramPostPlannerSlot_workspaceId_telegramChannelId_isActive_")
+  @@index([workspaceId, telegramChannelId, formatId], map: "TelegramPostPlannerSlot_workspaceId_telegramChannelId_formatId_")
+}
+
+model TelegramManagedPostRevision {
+  id                           String                                  @id @default(cuid())
+  telegramManagedPostId        String
+  workspaceId                  String
+  telegramChannelId            String
+  title                        String
+  text                         String?
+  imageUrls                    String[]                                @default([])
+  buttonRows                   Json?
+  origin                       TelegramManagedPostOrigin               @default(SYSTEM)
+  remoteImportKey              String?
+  status                       TelegramManagedPostStatus
+  scheduledAt                  DateTime?
+  scheduleMode                 String?
+  publishedAt                  DateTime?
+  telegramScheduledMessageIds  String[]                                @default([])
+  telegramMessageIds           String[]                                @default([])
+  telegramMessageUrls          String[]                                @default([])
+  telegramIdVerificationStatus TelegramManagedPostIdVerificationStatus @default(UNVERIFIED)
+  telegramLinkSource           TelegramManagedPostLinkSource           @default(AUTO)
+  telegramIdVerifiedAt         DateTime?
+  telegramIdLastCheckedAt      DateTime?
+  telegramRemoteStatus         TelegramManagedPostRemoteStatus         @default(NONE)
+  lastTelegramSyncedAt         DateTime?
+  lastTelegramSyncNote         String?
+  sourceType                   TelegramSourceType?
+  sourceId                     String?
+  sourceWasPremium             Boolean?
+  captionLengthMaxUsed         Int?
+  messageLengthMaxUsed         Int?
+  publishMode                  String?
+  lastError                    String?
+  assignedMemberId             String
+  icon                         String?
+  groupId                      String?
+  groupPosition                Int?
+  statusPosition               Int?
+  sidebarPosition              Int?
+  reason                       String
+
+  telegramManagedPost TelegramManagedPost @relation(fields: [telegramManagedPostId], references: [id], onDelete: Cascade)
+  workspace           Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel     TelegramChannel     @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  assignedMember      WorkspaceMember     @relation("TelegramManagedPostRevisionAssignedMember", fields: [assignedMemberId, workspaceId], references: [id, workspaceId], onDelete: Restrict)
+  group               PostGroup?          @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([telegramManagedPostId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@index([telegramChannelId, createdAt])
+  @@index([groupId, status, statusPosition])
+}
+
+model PostGroup {
+  id                     String  @id @default(cuid())
+  workspaceId            String
+  telegramChannelId      String
+  title                  String
+  description            String?
+  icon                   String?
+  isSystem               Boolean @default(false)
+  systemKey              String?
+  statusNumberingEnabled Boolean @default(false)
+  createdByMemberId      String
+  sidebarPosition        Int?
+
+  workspace            Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel      TelegramChannel               @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  createdByMember      WorkspaceMember               @relation("PostGroupCreatedByMember", fields: [createdByMemberId, workspaceId], references: [id, workspaceId], onDelete: Restrict)
+  posts                TelegramManagedPost[]
+  managedPostRevisions TelegramManagedPostRevision[]
+  promptNotes          PromptNote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([telegramChannelId, systemKey])
+  @@index([workspaceId])
+  @@index([telegramChannelId])
+  @@index([createdByMemberId])
+  @@index([telegramChannelId, sidebarPosition])
+}
+
+model TelegramPostMetricSnapshot {
+  id             String   @id @default(cuid())
+  telegramPostId String
+  viewsCount     Int?
+  forwardsCount  Int?
+  reactionsCount Int?
+  commentsCount  Int?
+  reactions      Json?
+  collectedAt    DateTime @default(now())
+
+  telegramPost TelegramPost @relation(fields: [telegramPostId], references: [id], onDelete: Cascade)
+
+  @@index([telegramPostId, collectedAt])
+}
+
+model ExchangeRate {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  baseCurrency   String   @db.VarChar(3)
+  targetCurrency String   @db.VarChar(3)
+  rate           Decimal
+  date           DateTime
+  source         String?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, baseCurrency, targetCurrency, date])
+}
+
+model Icon {
+  id              String   @id @default(cuid())
+  workspaceId     String?
+  type            IconType
+  name            String
+  emoji           String?
+  imageUrl        String?
+  createdByUserId String?
+
+  workspace                    Workspace?                    @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  createdByUser                User?                         @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  workspaceAvatars             Workspace[]                   @relation("WorkspaceAvatarIcon")
+  workspaceMembers             WorkspaceMember[]
+  accounts                     Account[]
+  transactions                 Transaction[]
+  transactionCategories        TransactionCategory[]
+  promptNotes                  PromptNote[]
+  promos                       Promo[]
+  adHypotheses                 AdHypothesis[]
+  telegramChannelTimePosts     TelegramChannelTimePost[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, type, name])
+  @@index([workspaceId, name, type])
+  @@index([workspaceId, type])
+  @@index([createdByUserId])
+}
