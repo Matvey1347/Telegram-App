@@ -29,6 +29,10 @@ import {
 import { useAppToast } from "@/providers/toast-provider";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
 import { consumerFinanceKeys } from "@/lib/query-keys";
+import {
+  prependConsumerTransactionToCaches,
+  removeConsumerTransactionFromCaches,
+} from "@/lib/features/finance/transaction-cache";
 import { TransactionRow } from "./finance-dashboard";
 
 export function FinanceTransactions({
@@ -76,8 +80,10 @@ export function FinanceTransactions({
     mutationFn: (id: string) =>
       consumerFinanceApi.deleteTransaction(botId, id),
     onSuccess: (_, id) => {
+      removeConsumerTransactionFromCaches(client, botId, id);
       void client.invalidateQueries({
         queryKey: consumerFinanceKeys.transactionLists(botId),
+        refetchType: "none",
       });
       setUndoable(id);
       invalidateDashboard();
@@ -89,11 +95,15 @@ export function FinanceTransactions({
   const undo = useMutation({
     mutationFn: (id: string) =>
       consumerFinanceApi.undoTransaction(botId, id),
-    onSuccess: () => {
+    onSuccess: (result) => {
       setUndoable(null);
-      void client.invalidateQueries({
-        queryKey: consumerFinanceKeys.transactionLists(botId),
-      });
+      if (result.transaction) {
+        prependConsumerTransactionToCaches(client, botId, result.transaction);
+      } else {
+        void client.invalidateQueries({
+          queryKey: consumerFinanceKeys.transactionLists(botId),
+        });
+      }
       invalidateDashboard();
       pushToast("Transaction restored.", "success");
     },

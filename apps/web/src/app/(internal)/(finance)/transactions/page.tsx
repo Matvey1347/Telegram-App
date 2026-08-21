@@ -12,6 +12,8 @@ import { Button, Card, ConfirmDeleteModal, DateInput, DateRangeInput, EmptyState
 import { IconPicker } from '@/components/icons/icon-picker';
 import { InlineIconPicker } from '@/components/icons/inline-icon-picker';
 import { useAppToast } from '@/providers/toast-provider';
+import { useDeleteTransactionMutation } from '@/lib/features/finance/use-delete-transaction-mutation';
+import { accountKeys } from '@/lib/query-keys';
 
 type Values = { accountId: string; type: 'income' | 'expense'; amount: number; categoryId: string; memberId?: string; telegramChannelId?: string; description?: string; date: string; iconId?: string | null };
 
@@ -78,11 +80,11 @@ export default function TransactionsPage() {
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [deleting, setDeleting] = useState<Transaction | null>(null);
   const [filters, setFilters] = useState({ type: 'all', sort: 'date_desc', dateFrom: '', dateTo: '', categoryId: '', accountId: '', search: '' });
-  const { data: accounts } = useQuery({ queryKey: ['accounts'], queryFn: accountsApi.list });
+  const { data: accounts } = useQuery({ queryKey: accountKeys.accounts(), queryFn: accountsApi.list });
   const { data: settings } = useQuery({ queryKey: ['currency-settings'], queryFn: currenciesApi.getSettings });
   const { data: rates } = useQuery({ queryKey: ['currency-rates'], queryFn: currenciesApi.listRates });
   const { data, isLoading, error } = useQuery({
-    queryKey: ['transactions', filters],
+    queryKey: [...accountKeys.transactions(), filters],
     queryFn: () => transactionsApi.list(Object.fromEntries(Object.entries(filters).filter(([, value]) => value)) as TransactionQuery),
   });
   const { data: members } = useQuery({ queryKey: ['workspace-members', 'select'], queryFn: () => workspaceMembersApi.select() });
@@ -90,21 +92,21 @@ export default function TransactionsPage() {
   const createMutation = useMutation({
     mutationFn: transactionsApi.create,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['transactions'] });
-      qc.invalidateQueries({ queryKey: ['accounts'] });
+      qc.invalidateQueries({ queryKey: accountKeys.transactions() });
+      qc.invalidateQueries({ queryKey: accountKeys.accounts() });
     },
   });
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => transactionsApi.update(id, payload),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['transactions'] });
-      qc.invalidateQueries({ queryKey: ['accounts'] });
+      qc.invalidateQueries({ queryKey: accountKeys.transactions() });
+      qc.invalidateQueries({ queryKey: accountKeys.accounts() });
     },
   });
   const updateTransactionIconMutation = useMutation({ mutationFn: ({ id, iconId }: { id: string; iconId: string | null }) => transactionsApi.update(id, { iconId }), onSuccess: () => qc.invalidateQueries({ queryKey: ['transactions'] }) });
   const updateAccountIconMutation = useMutation({ mutationFn: ({ id, iconId }: { id: string; iconId: string | null }) => accountsApi.update(id, { iconId }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['accounts'] }); qc.invalidateQueries({ queryKey: ['transactions'] }); } });
   const updateCategoryIconMutation = useMutation({ mutationFn: ({ id, iconId }: { id: string; iconId: string | null }) => transactionCategoriesApi.update(id, { iconId }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['transaction-categories'] }); qc.invalidateQueries({ queryKey: ['transaction-categories-admin'] }); qc.invalidateQueries({ queryKey: ['transactions'] }); } });
-  const deleteMutation = useMutation({ mutationFn: (id: string) => transactionsApi.remove(id), onSuccess: () => { qc.invalidateQueries({ queryKey: ['transactions'] }); qc.invalidateQueries({ queryKey: ['accounts'] }); } });
+  const deleteMutation = useDeleteTransactionMutation();
 
   useEffect(() => {
     const nextSearch = searchParams.get('search') || '';
