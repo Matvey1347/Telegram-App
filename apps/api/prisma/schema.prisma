@@ -3893,7 +3893,7 @@ model TelegramManagedPost {
   // Enforced by a partial unique index in the baseline migration. Prisma's
   // schema language cannot represent `WHERE remoteImportKey IS NOT NULL`.
   @@index([workspaceId, telegramChannelId, createdAt])
-  @@unique([workspaceId, telegramChannelId, jsonImportKey])
+  @@unique([workspaceId, telegramChannelId, jsonImportKey], map: "TelegramManagedPost_workspaceId_telegramChannelId_jsonImportKey")
   @@index([workspaceId, assignedMemberId])
   @@index([groupId])
   @@index([groupId, groupPosition])
