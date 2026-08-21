@@ -238,6 +238,9 @@ export function resolveRouteTabIdentity({
   if (pathname === "/telegram-user-accounts") {
     return { title: pageTitle("Accounts"), emoji: "📱", color: "#1d4ed8" };
   }
+  if (pathname === "/telegram-bots" || pathname.startsWith("/telegram-bots/")) {
+    return { title: pageTitle("Bots"), emoji: "🤖", color: "#2563eb" };
+  }
   if (pathname === "/telegram-channel-networks") {
     return { title: pageTitle("Networks"), emoji: "🕸️", color: "#4338ca" };
   }

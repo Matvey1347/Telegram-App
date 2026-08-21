@@ -5,10 +5,19 @@ import { useQuery } from "@tanstack/react-query";
 import { Button, ErrorState, LoadingState } from "@/components/ui/primitives";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
 import { consumerFinanceKeys } from "@/lib/query-keys";
+import { financeCopy, normalizeFinanceLocale } from "./finance-i18n";
 
 /** Browser authentication is delegated to the API so Telegram verifies identity server-side. */
 export function ConsumerFinanceLogin({ botId }: { botId: string }) {
-  const returnTo = typeof window === "undefined" ? `/finance/${botId}` : window.location.pathname;
+  const t = financeCopy(
+    normalizeFinanceLocale(
+      typeof navigator === "undefined" ? undefined : navigator.language,
+    ),
+  );
+  const returnTo =
+    typeof window === "undefined"
+      ? `/finance/${botId}`
+      : window.location.pathname;
   const config = useQuery({
     queryKey: consumerFinanceKeys.browserLoginConfig(botId),
     queryFn: () => consumerFinanceApi.browserLoginConfig(botId, returnTo),
@@ -16,16 +25,27 @@ export function ConsumerFinanceLogin({ botId }: { botId: string }) {
   });
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-lg items-center px-4 text-neutral-100">
-      <section className="w-full rounded-lg border border-neutral-800 bg-neutral-900 p-5">
-        <p className="text-xs uppercase tracking-[0.2em] text-sky-300">Personal Finance</p>
-        <h1 className="mt-2 text-2xl font-semibold">Sign in with Telegram</h1>
-        <p className="mt-2 text-sm text-neutral-400">
-          Use the Telegram account connected to your Finance bot. Your data stays the same in Telegram and the browser.
+    <div className="mx-auto grid min-h-dvh max-w-6xl items-center gap-10 px-4 py-10 text-neutral-100 md:grid-cols-[1.1fr_.9fr] md:px-8">
+      <div className="hidden md:block">
+        <p className="text-xs uppercase tracking-[0.22em] text-sky-300">
+          Finance
         </p>
-        {config.isLoading ? <LoadingState text="Loading Telegram sign in…" /> : null}
-        {config.isError ? <ErrorState text="Telegram sign in is unavailable. Please try again later." /> : null}
-        {config.data ? <TelegramLoginWidget {...config.data} /> : null}
+        <h2 className="mt-3 max-w-xl text-4xl font-semibold leading-tight">
+          {t.onboardingTitle}
+        </h2>
+        <p className="mt-4 max-w-lg text-neutral-400">{t.signInHelp}</p>
+      </div>
+      <section className="w-full rounded-lg border border-neutral-800 bg-neutral-900 p-6 md:p-8">
+        <p className="text-xs uppercase tracking-[0.2em] text-sky-300">
+          {t.personalFinance}
+        </p>
+        <h1 className="mt-2 text-2xl font-semibold">{t.signInTelegram}</h1>
+        <p className="mt-2 text-sm text-neutral-400">{t.signInHelp}</p>
+        {config.isLoading ? <LoadingState text={t.loadingSignIn} /> : null}
+        {config.isError ? <ErrorState text={t.signInUnavailable} /> : null}
+        {config.data ? (
+          <TelegramLoginWidget {...config.data} label={t.telegramSignIn} />
+        ) : null}
       </section>
     </div>
   );
@@ -34,9 +54,11 @@ export function ConsumerFinanceLogin({ botId }: { botId: string }) {
 function TelegramLoginWidget({
   botUsername,
   callbackUrl,
+  label,
 }: {
   botUsername: string;
   callbackUrl: string;
+  label: string;
 }) {
   const container = useRef<HTMLDivElement>(null);
 
@@ -56,14 +78,23 @@ function TelegramLoginWidget({
     return () => target.replaceChildren();
   }, [botUsername, callbackUrl]);
 
-  return <div className="mt-5 min-h-10" ref={container} aria-label="Telegram sign in" />;
+  return <div className="mt-5 min-h-10" ref={container} aria-label={label} />;
 }
 
-export function ConsumerFinanceBootstrapError({ onRetry }: { onRetry: () => void }) {
+export function ConsumerFinanceBootstrapError({
+  onRetry,
+}: {
+  onRetry: () => void;
+}) {
+  const t = financeCopy(
+    normalizeFinanceLocale(
+      typeof navigator === "undefined" ? undefined : navigator.language,
+    ),
+  );
   return (
     <div className="space-y-3">
-      <ErrorState text="Finance could not be opened. Please try again." />
-      <Button onClick={onRetry}>Retry</Button>
+      <ErrorState text={t.bootstrapError} />
+      <Button onClick={onRetry}>{t.retry}</Button>
     </div>
   );
 }

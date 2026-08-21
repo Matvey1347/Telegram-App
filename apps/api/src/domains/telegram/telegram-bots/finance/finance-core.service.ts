@@ -11,17 +11,24 @@ import type {
   CreateFinanceCategoryDto,
   CreateFinanceGoalDto,
   CreateFinanceReminderDto,
+  UpdateFinanceCategoryDto,
   UpdateFinanceAccountDto,
   UpdateFinanceSettingsDto,
   UpsertFinanceLimitDto,
 } from './finance.dto';
+import { financeChatLocale } from './i18n/finance-chat-i18n';
+import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
+import { FinanceLimitService } from './finance-limit.service';
 
 @Injectable()
 export class FinanceCoreService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly conversion?: CurrencyConversionService,
+  ) {}
 
-  profile(id: string) {
-    return this.prisma.financeProfile.findUnique({
+  async profile(id: string) {
+    const profile = await this.prisma.financeProfile.findUnique({
       where: { id },
       select: {
         id: true,
@@ -29,56 +36,47 @@ export class FinanceCoreService {
         timezone: true,
         locale: true,
         onboardingCompletedAt: true,
-        createdAt: true,
+        telegramUser: { select: { languageCode: true } },
       },
     });
+    if (!profile) return null;
+    const localeOverride =
+      profile.locale === 'uk' ||
+      profile.locale === 'ru' ||
+      profile.locale === 'en'
+        ? profile.locale
+        : null;
+    return {
+      id: profile.id,
+      defaultCurrency: profile.defaultCurrency,
+      timezone: profile.timezone,
+      locale: financeChatLocale(
+        localeOverride,
+        profile.telegramUser.languageCode,
+      ),
+      localeOverride,
+      onboardingCompletedAt: profile.onboardingCompletedAt,
+    };
   }
   categories(profileId: string) {
     return this.prisma.financeCategory.findMany({
       where: { profileId },
+      select: {
+        id: true,
+        parentId: true,
+        name: true,
+        key: true,
+        type: true,
+        archivedAt: true,
+      },
       orderBy: [{ archivedAt: 'asc' }, { type: 'asc' }, { name: 'asc' }],
     });
   }
-  async limits(profileId: string) {
-    const now = new Date();
-    const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const to = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1),
+  async limits(profileId: string, categoryId?: string) {
+    return new FinanceLimitService(this.prisma, this.conversion).list(
+      profileId,
+      categoryId,
     );
-    const [limits, spent] = await Promise.all([
-      this.prisma.financeSpendingLimit.findMany({
-        where: { profileId },
-        include: { category: { select: { id: true, name: true } } },
-      }),
-      this.prisma.financeTransaction.groupBy({
-        by: ['categoryId', 'currency'],
-        where: {
-          profileId,
-          type: 'EXPENSE',
-          deletedAt: null,
-          occurredAt: { gte: from, lt: to },
-        },
-        _sum: { amount: true },
-      }),
-    ]);
-    return limits.map((limit) => {
-      const value =
-        spent.find(
-          (row) =>
-            row.categoryId === limit.categoryId &&
-            row.currency === limit.currency,
-        )?._sum.amount || new Prisma.Decimal(0);
-      const remaining = Prisma.Decimal.max(0, limit.amount.minus(value));
-      return {
-        ...limit,
-        amount: limit.amount.toString(),
-        spent: value.toString(),
-        remaining: remaining.toString(),
-        percentage: limit.amount.isZero()
-          ? 0
-          : Number(value.div(limit.amount).mul(100).toDecimalPlaces(2)),
-      };
-    });
   }
   reminders(profileId: string) {
     return this.prisma.financeReminder.findMany({
@@ -98,18 +96,25 @@ export class FinanceCoreService {
     } catch {
       throw new BadRequestException('Unknown timezone');
     }
-    return this.prisma.financeProfile.update({
+    await this.prisma.financeProfile.update({
       where: { id: profileId },
       data: {
         defaultCurrency: dto.defaultCurrency.toUpperCase(),
         timezone: dto.timezone,
-        locale: dto.locale?.trim() || null,
+        ...(Object.prototype.hasOwnProperty.call(dto, 'locale')
+          ? { locale: dto.locale ?? null }
+          : {}),
         onboardingCompletedAt: new Date(),
       },
     });
+    return this.profile(profileId);
   }
 
-  async createAccount(profileId: string, dto: CreateFinanceAccountDto) {
+  async createAccount(
+    profileId: string,
+    dto: CreateFinanceAccountDto,
+    id?: string,
+  ) {
     const opening = new Prisma.Decimal(dto.openingBalance || 0);
     if (!opening.isFinite())
       throw new BadRequestException('Opening balance is invalid');
@@ -120,11 +125,20 @@ export class FinanceCoreService {
     if (!profile) throw new NotFoundException('Finance profile not found');
     return this.prisma.financeAccount.create({
       data: {
+        ...(id ? { id } : {}),
         profileId,
         name: dto.name.trim(),
         type: dto.type,
         currency: (dto.currency || profile.defaultCurrency).toUpperCase(),
         openingBalance: opening,
+      },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        currency: true,
+        openingBalance: true,
+        archivedAt: true,
       },
     });
   }
@@ -143,18 +157,27 @@ export class FinanceCoreService {
         ...(dto.name ? { name: dto.name.trim() } : {}),
         ...(dto.type ? { type: dto.type } : {}),
       },
+      select: { id: true },
     });
   }
   async archiveAccount(profileId: string, id: string) {
-    const result = await this.prisma.financeAccount.updateMany({
+    const account = await this.prisma.financeAccount.findFirst({
       where: { id, profileId, archivedAt: null },
-      data: { archivedAt: new Date() },
+      select: { id: true },
     });
-    if (!result.count) throw new NotFoundException('Finance account not found');
-    return { archived: true };
+    if (!account) throw new NotFoundException('Finance account not found');
+    return this.prisma.financeAccount.update({
+      where: { id: account.id },
+      data: { archivedAt: new Date() },
+      select: { id: true },
+    });
   }
 
-  async createCategory(profileId: string, dto: CreateFinanceCategoryDto) {
+  async createCategory(
+    profileId: string,
+    dto: CreateFinanceCategoryDto,
+    id?: string,
+  ) {
     if (dto.parentId) {
       const parent = await this.prisma.financeCategory.findFirst({
         where: {
@@ -168,22 +191,120 @@ export class FinanceCoreService {
     }
     return this.prisma.financeCategory.create({
       data: {
+        ...(id ? { id } : {}),
         profileId,
         name: dto.name.trim(),
         type: dto.type,
         parentId: dto.parentId || null,
         key: null,
       },
+      select: {
+        id: true,
+        parentId: true,
+        name: true,
+        key: true,
+        type: true,
+        archivedAt: true,
+      },
+    });
+  }
+  async updateCategory(
+    profileId: string,
+    id: string,
+    dto: UpdateFinanceCategoryDto,
+  ) {
+    const existing = await this.prisma.financeCategory.findFirst({
+      where: { id, profileId },
+      select: { id: true, parentId: true, name: true, key: true, type: true },
+    });
+    if (!existing) throw new NotFoundException('Finance category not found');
+    if (dto.parentId === id)
+      throw new BadRequestException('Category cannot be its own parent');
+    if (dto.type !== existing.type) {
+      const [transactions, limits, children, mappings] = await Promise.all([
+        this.prisma.financeTransaction.count({
+          where: { profileId, categoryId: id },
+        }),
+        this.prisma.financeSpendingLimit.count({
+          where: { profileId, categoryId: id },
+        }),
+        this.prisma.financeCategory.count({
+          where: { profileId, parentId: id },
+        }),
+        this.prisma.financeMerchantMapping.count({
+          where: { profileId, categoryId: id },
+        }),
+      ]);
+      if (transactions || limits || children || mappings)
+        throw new ConflictException(
+          'Category type cannot change while it is referenced',
+        );
+    }
+    const parentId = Object.prototype.hasOwnProperty.call(dto, 'parentId')
+      ? dto.parentId
+      : existing.parentId;
+    if (parentId) {
+      const categories = await this.prisma.financeCategory.findMany({
+        where: { profileId },
+        select: { id: true, parentId: true, type: true, archivedAt: true },
+      });
+      const byId = new Map(
+        categories.map((category) => [category.id, category]),
+      );
+      const parent = byId.get(parentId);
+      if (!parent || parent.archivedAt || parent.type !== dto.type)
+        throw new NotFoundException('Parent category not found');
+      let ancestorId = parent.parentId;
+      const visited = new Set<string>();
+      while (ancestorId) {
+        if (ancestorId === id || visited.has(ancestorId))
+          throw new BadRequestException(
+            'Category hierarchy cannot contain a cycle',
+          );
+        visited.add(ancestorId);
+        ancestorId = byId.get(ancestorId)?.parentId || null;
+      }
+    }
+    return this.prisma.financeCategory.update({
+      where: { id },
+      data: {
+        name: dto.name.trim(),
+        type: dto.type,
+        ...(existing.key && dto.name.trim() !== existing.name
+          ? { key: null }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(dto, 'parentId')
+          ? { parentId: dto.parentId ?? null }
+          : {}),
+      },
+      select: {
+        id: true,
+        parentId: true,
+        name: true,
+        key: true,
+        type: true,
+        archivedAt: true,
+      },
     });
   }
   async archiveCategory(profileId: string, id: string) {
-    const result = await this.prisma.financeCategory.updateMany({
+    const category = await this.prisma.financeCategory.findFirst({
       where: { id, profileId, archivedAt: null },
-      data: { archivedAt: new Date() },
+      select: { id: true },
     });
-    if (!result.count)
-      throw new NotFoundException('Finance category not found');
-    return { archived: true };
+    if (!category) throw new NotFoundException('Finance category not found');
+    return this.prisma.financeCategory.update({
+      where: { id: category.id },
+      data: { archivedAt: new Date() },
+      select: {
+        id: true,
+        parentId: true,
+        name: true,
+        key: true,
+        type: true,
+        archivedAt: true,
+      },
+    });
   }
 
   async upsertLimit(profileId: string, dto: UpsertFinanceLimitDto) {
@@ -194,12 +315,13 @@ export class FinanceCoreService {
         type: 'EXPENSE',
         archivedAt: null,
       },
+      select: { id: true },
     });
     if (!category) throw new NotFoundException('Expense category not found');
     const amount = new Prisma.Decimal(dto.amount);
     if (!amount.isFinite() || amount.lte(0))
       throw new BadRequestException('Limit amount must be positive');
-    return this.prisma.financeSpendingLimit.upsert({
+    await this.prisma.financeSpendingLimit.upsert({
       where: {
         profileId_categoryId_period: {
           profileId,
@@ -214,7 +336,11 @@ export class FinanceCoreService {
         amount,
         currency: dto.currency.toUpperCase(),
       },
+      select: { id: true },
     });
+    const [limit] = await this.limits(profileId, category.id);
+    if (!limit) throw new NotFoundException('Finance limit not found');
+    return limit;
   }
 
   async createGoal(profileId: string, dto: CreateFinanceGoalDto) {

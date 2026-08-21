@@ -1,6 +1,8 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
 import type { Request } from 'express';
+import { PrismaService } from '../../../../prisma/prisma.service';
 
 export type FinanceConsumerSession = {
   profileId: string;
@@ -17,24 +19,44 @@ type SignedSession = FinanceConsumerSession & {
 };
 
 const COOKIE_NAME = 'finance_consumer_session';
-const DEFAULT_TTL_SECONDS = 60 * 60 * 24 * 30;
+
+export type FinanceConsumerSessionInspection =
+  | { authenticated: true; session: FinanceConsumerSession }
+  | { authenticated: false; clearCookie: boolean };
 
 /** Stateless, consumer-only session. It deliberately shares neither secret nor claims with dashboard JWTs. */
 @Injectable()
 export class FinanceConsumerSessionService {
-  issue(context: FinanceConsumerSession, now = new Date()) {
-    const ttl = Number(
-      process.env.FINANCE_CONSUMER_SESSION_TTL_SECONDS || DEFAULT_TTL_SECONDS,
-    );
+  private readonly signingRootKey: Buffer;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    config: ConfigService,
+  ) {
+    const encodedKey = config.get<string>('BOT_TOKEN_ENCRYPTION_KEY');
+    const key = encodedKey
+      ? Buffer.from(encodedKey, 'base64')
+      : Buffer.alloc(0);
+    if (key.length !== 32) {
+      throw new Error(
+        'BOT_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key',
+      );
+    }
+    this.signingRootKey = key;
+  }
+
+  async issue(context: FinanceConsumerSession, now = new Date()) {
+    const ttlSeconds = await this.ttlSeconds(context.botIntegrationId);
     const payload: SignedSession = {
       ...context,
       scope: 'finance-consumer',
-      exp:
-        Math.floor(now.getTime() / 1000) +
-        (Number.isFinite(ttl) && ttl > 0 ? ttl : DEFAULT_TTL_SECONDS),
+      exp: Math.floor(now.getTime() / 1000) + ttlSeconds,
     };
     const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
-    return `${encoded}.${this.sign(encoded)}`;
+    return {
+      token: `${encoded}.${this.sign(encoded, context.botIntegrationId)}`,
+      ttlSeconds,
+    };
   }
 
   fromRequest(
@@ -44,7 +66,7 @@ export class FinanceConsumerSessionService {
     const value = this.cookie(request.headers.cookie, COOKIE_NAME);
     if (!value)
       throw new ForbiddenException('Finance consumer session is required');
-    const session = this.verify(value);
+    const session = this.verify(value, expectedBotIntegrationId);
     if (session.botIntegrationId !== expectedBotIntegrationId) {
       throw new ForbiddenException(
         'Finance consumer session belongs to another bot',
@@ -53,13 +75,37 @@ export class FinanceConsumerSessionService {
     return session;
   }
 
-  verify(value: string, now = new Date()): FinanceConsumerSession {
+  inspectRequest(
+    request: Request,
+    expectedBotIntegrationId: string,
+  ): FinanceConsumerSessionInspection {
+    const value = this.cookie(request.headers.cookie, COOKIE_NAME);
+    if (!value) return { authenticated: false, clearCookie: false };
+    try {
+      const session = this.verify(value, expectedBotIntegrationId);
+      if (session.botIntegrationId !== expectedBotIntegrationId) {
+        return { authenticated: false, clearCookie: true };
+      }
+      return { authenticated: true, session };
+    } catch (error) {
+      if (error instanceof ForbiddenException) {
+        return { authenticated: false, clearCookie: true };
+      }
+      throw error;
+    }
+  }
+
+  verify(
+    value: string,
+    expectedBotIntegrationId: string,
+    now = new Date(),
+  ): FinanceConsumerSession {
     const [encoded, signature, ...extra] = value.split('.');
     if (
       !encoded ||
       !signature ||
       extra.length ||
-      !this.safeEqual(signature, this.sign(encoded))
+      !this.safeEqual(signature, this.sign(encoded, expectedBotIntegrationId))
     ) {
       throw new ForbiddenException('Finance consumer session is invalid');
     }
@@ -84,21 +130,35 @@ export class FinanceConsumerSessionService {
       throw new ForbiddenException(
         'Finance consumer session is expired or invalid',
       );
-    const { exp: _exp, scope: _scope, ...session } = payload;
-    return session;
+    return {
+      profileId: payload.profileId,
+      botIntegrationId: payload.botIntegrationId,
+      telegramBotUserId: payload.telegramBotUserId,
+      ...(payload.telegramChatId === undefined
+        ? {}
+        : { telegramChatId: payload.telegramChatId }),
+      workspaceId: payload.workspaceId,
+      defaultCurrency: payload.defaultCurrency,
+    };
   }
 
   cookieName() {
     return COOKIE_NAME;
   }
 
-  private sign(value: string) {
-    const secret = process.env.FINANCE_CONSUMER_SESSION_SECRET;
-    if (!secret || secret.length < 32)
-      throw new Error(
-        'FINANCE_CONSUMER_SESSION_SECRET must be configured with at least 32 characters',
-      );
-    return createHmac('sha256', secret).update(value).digest('base64url');
+  private async ttlSeconds(botIntegrationId: string) {
+    const bot = await this.prisma.telegramBotIntegration.findUniqueOrThrow({
+      where: { id: botIntegrationId },
+      select: { financeConsumerSessionTtlSeconds: true },
+    });
+    return bot.financeConsumerSessionTtlSeconds;
+  }
+
+  private sign(value: string, botIntegrationId: string) {
+    const botKey = createHmac('sha256', this.signingRootKey)
+      .update(`finance-consumer-session:${botIntegrationId}`)
+      .digest();
+    return createHmac('sha256', botKey).update(value).digest('base64url');
   }
 
   private safeEqual(left: string, right: string) {

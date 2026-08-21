@@ -28,6 +28,7 @@ export class TelegramBotUsersService {
   async upsertFromUpdate(input: {
     workspaceId: string;
     botIntegrationId: string;
+    runtimeInstanceId: string;
     update: TelegramBotWebhookUpdate;
     trackProductionActivity?: boolean;
   }) {
@@ -36,6 +37,7 @@ export class TelegramBotUsersService {
     return this.upsertActor({
       workspaceId: input.workspaceId,
       botIntegrationId: input.botIntegrationId,
+      runtimeInstanceId: input.runtimeInstanceId,
       actor,
       telegramChatId: this.chatIdFromUpdate(input.update),
       startedAt:
@@ -51,6 +53,7 @@ export class TelegramBotUsersService {
   async upsertActor(input: {
     workspaceId: string;
     botIntegrationId: string;
+    runtimeInstanceId: string;
     actor: TelegramBotUpdateActor;
     telegramChatId?: string | null;
     startedAt?: Date;
@@ -60,14 +63,15 @@ export class TelegramBotUsersService {
     const now = new Date();
     const user = await this.prisma.telegramBotUser.upsert({
       where: {
-        botIntegrationId_telegramUserId: {
-          botIntegrationId: input.botIntegrationId,
+        runtimeInstanceId_telegramUserId: {
+          runtimeInstanceId: input.runtimeInstanceId,
           telegramUserId: String(input.actor.id),
         },
       },
       create: {
         workspaceId: input.workspaceId,
         botIntegrationId: input.botIntegrationId,
+        runtimeInstanceId: input.runtimeInstanceId,
         telegramUserId: String(input.actor.id),
         telegramChatId: input.telegramChatId || null,
         username: input.actor.username || null,

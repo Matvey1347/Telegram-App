@@ -162,12 +162,12 @@ export class TelegramBotsService {
       uniqueRows.map((row) => row.id),
     );
     const applications = await this.applicationRegistry.optionsForWorkspace(workspaceId);
-    const financeBotIds = uniqueRows
+    const financeRuntimeIds = uniqueRows
       .filter((row) => row.applicationType === TelegramBotApplicationType.FINANCE)
-      .map((row) => row.id);
-    const financeSummaries = await this.viewService.financeSummaryForBots(
+      .flatMap((row) => row.runtimeInstances.map((runtime) => runtime.id));
+    const financeSummaries = await this.viewService.financeSummaryForRuntimes(
       workspaceId,
-      financeBotIds,
+      financeRuntimeIds,
     );
     return Promise.all(
       uniqueRows.map((row) =>
@@ -176,7 +176,7 @@ export class TelegramBotsService {
           summaries.get(row.id),
           applications,
           row.applicationType === TelegramBotApplicationType.FINANCE
-            ? this.viewService.financeApplicationSummary(financeSummaries, row.id)
+            ? this.viewService.financeApplicationSummary(financeSummaries, row.runtimeInstances)
             : null,
         ),
       ),

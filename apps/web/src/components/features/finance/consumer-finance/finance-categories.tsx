@@ -2,16 +2,314 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ConsumerFinanceCategory } from "@telegram-system/shared";
-import { Button, Card, EmptyState, FormField, Input, Select } from "@/components/ui/primitives";
+import { Pencil, Trash2 } from "lucide-react";
+import type {
+  ConsumerFinanceCategory,
+  ConsumerFinanceTransactionType,
+} from "@telegram-system/shared";
+import {
+  Button,
+  Card,
+  EmptyState,
+  ErrorState,
+  FormField,
+  Input,
+  LoadingState,
+  Modal,
+  Select,
+} from "@/components/ui/primitives";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
 import { consumerFinanceKeys } from "@/lib/query-keys";
-import { financeCopy, type FinanceLocale } from "./finance-i18n";
+import {
+  financeCopy,
+  localizeFinanceCategory,
+  type FinanceLocale,
+} from "./finance-i18n";
+import { FinanceConfirmModal } from "./finance-confirm-modal";
 
-export function FinanceCategories({ botId, locale }: { botId: string; locale: FinanceLocale }) {
-  const t = financeCopy(locale); const client = useQueryClient(); const [name, setName] = useState(""); const [type, setType] = useState<ConsumerFinanceCategory["type"]>("EXPENSE");
-  const categories = useQuery({ queryKey: consumerFinanceKeys.categories(botId), queryFn: () => consumerFinanceApi.categories(botId) });
-  const create = useMutation({ mutationFn: () => consumerFinanceApi.createCategory(botId, { name, type }), onSuccess: (item) => { client.setQueryData(consumerFinanceKeys.categories(botId), (rows: ConsumerFinanceCategory[] | undefined) => [...(rows ?? []), item]); setName(""); } });
-  const archive = useMutation({ mutationFn: (id: string) => consumerFinanceApi.archiveCategory(botId, id), onSuccess: () => void client.invalidateQueries({ queryKey: consumerFinanceKeys.categories(botId) }) });
-  return <div className="space-y-4"><p className="text-sm text-neutral-400">{t.categoriesHelp}</p><Card><div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2"><FormField label={t.categoryName}><Input value={name} onChange={(event) => setName(event.target.value)} /></FormField><FormField label={t.categories}><Select value={type} onChange={(event) => setType(event.target.value as ConsumerFinanceCategory["type"])}><option value="EXPENSE">{t.expenseCategories}</option><option value="INCOME">{t.incomeCategories}</option></Select></FormField></div><Button className="mt-3 w-full" disabled={!name.trim() || create.isPending} onClick={() => create.mutate()}>{t.addCategory}</Button></Card>{(["EXPENSE", "INCOME"] as const).map((categoryType) => { const rows = categories.data?.filter((item) => item.type === categoryType && !item.archivedAt) ?? []; return <Card key={categoryType}><h2 className="font-medium">{categoryType === "EXPENSE" ? t.expenseCategories : t.incomeCategories}</h2>{rows.length ? <div className="mt-2 divide-y divide-neutral-800">{rows.map((item) => <div key={item.id} className="flex items-center justify-between py-2"><span>{item.name}</span><Button variant="secondary" disabled={archive.isPending} onClick={() => archive.mutate(item.id)}>{t.archive}</Button></div>)}</div> : <EmptyState text={t.noCategories} />}</Card>; })}</div>;
+export function FinanceCategories({
+  botId,
+  locale,
+}: {
+  botId: string;
+  locale: FinanceLocale;
+}) {
+  const t = financeCopy(locale);
+  const client = useQueryClient();
+  const [editing, setEditing] = useState<ConsumerFinanceCategory | null>(null);
+  const [archiving, setArchiving] = useState<ConsumerFinanceCategory | null>(
+    null,
+  );
+  const categories = useQuery({
+    queryKey: consumerFinanceKeys.categories(botId),
+    queryFn: () => consumerFinanceApi.categories(botId),
+  });
+  const reconcile = (item: ConsumerFinanceCategory) =>
+    client.setQueryData(
+      consumerFinanceKeys.categories(botId),
+      (rows: ConsumerFinanceCategory[] | undefined) => {
+        const current = rows ?? [];
+        return current.some((row) => row.id === item.id)
+          ? current.map((row) => (row.id === item.id ? item : row))
+          : [...current, item];
+      },
+    );
+  const archive = useMutation({
+    mutationFn: (id: string) => consumerFinanceApi.archiveCategory(botId, id),
+    onSuccess: (item) => {
+      reconcile(item);
+      setArchiving(null);
+      void client.invalidateQueries({
+        queryKey: consumerFinanceKeys.dashboard(botId),
+      });
+      void client.invalidateQueries({
+        queryKey: consumerFinanceKeys.analyticsRoot(botId),
+      });
+      void client.invalidateQueries({
+        queryKey: consumerFinanceKeys.ultimateRoot(botId),
+      });
+    },
+  });
+  if (categories.isLoading) return <LoadingState text={t.loading} />;
+  if (categories.isError)
+    return (
+      <div className="space-y-3">
+        <ErrorState text={t.categoryLoadError} />
+        <Button onClick={() => categories.refetch()}>{t.retry}</Button>
+      </div>
+    );
+  const rows = categories.data ?? [];
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-neutral-400">{t.categoriesHelp}</p>
+      <CategoryEditor
+        key={editing?.id ?? "create-category"}
+        botId={botId}
+        categories={rows}
+        editing={editing}
+        locale={locale}
+        onClose={() => setEditing(null)}
+        onSaved={(item) => {
+          reconcile(item);
+          setEditing(null);
+          // Transaction rows and search membership include the category name.
+          void client.invalidateQueries({
+            queryKey: consumerFinanceKeys.transactionLists(botId),
+          });
+          void client.invalidateQueries({
+            queryKey: consumerFinanceKeys.dashboard(botId),
+          });
+          void client.invalidateQueries({
+            queryKey: consumerFinanceKeys.analyticsRoot(botId),
+          });
+          void client.invalidateQueries({
+            queryKey: consumerFinanceKeys.ultimateRoot(botId),
+          });
+        }}
+      />
+      {(["EXPENSE", "INCOME"] as const).map((type) => {
+        const typed = rows.filter(
+          (item) => item.type === type && !item.archivedAt,
+        );
+        return (
+          <Card key={type}>
+            <h2 className="font-medium">
+              {type === "EXPENSE" ? t.expenseCategories : t.incomeCategories}
+            </h2>
+            {typed.length ? (
+              <div className="mt-2 divide-y divide-neutral-800">
+                {typed.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between gap-2 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate">
+                        {localizeFinanceCategory(item.name, item.key, locale)}
+                      </p>
+                      {item.parentId ? (
+                        <p className="truncate text-xs text-neutral-500">
+                          {t.parentCategory}:{" "}
+                          {localizeFinanceCategory(
+                            rows.find((row) => row.id === item.parentId)
+                              ?.name ?? "—",
+                            rows.find((row) => row.id === item.parentId)?.key,
+                            locale,
+                          )}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex shrink-0">
+                      <button
+                        aria-label={`${t.editCategory}: ${item.name}`}
+                        className="p-2 text-neutral-300"
+                        onClick={() => setEditing(item)}
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        aria-label={`${t.archiveCategory}: ${item.name}`}
+                        className="p-2 text-rose-300"
+                        onClick={() => setArchiving(item)}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState text={t.noCategories} />
+            )}
+          </Card>
+        );
+      })}
+      {rows.some((item) => item.archivedAt) ? (
+        <Card>
+          <h2 className="font-medium">{t.archivedCategories}</h2>
+          <p className="mt-1 text-xs text-neutral-500">
+            {t.archivedCategoriesHelp}
+          </p>
+          <div className="mt-3 divide-y divide-neutral-800">
+            {rows
+              .filter((item) => item.archivedAt)
+              .map((item) => (
+                <div
+                  className="flex justify-between gap-3 py-2 text-sm text-neutral-400"
+                  key={item.id}
+                >
+                  <span className="truncate">
+                    {localizeFinanceCategory(item.name, item.key, locale)}
+                  </span>
+                  <span>{item.type === "EXPENSE" ? t.expense : t.income}</span>
+                </div>
+              ))}
+          </div>
+        </Card>
+      ) : null}
+      <FinanceConfirmModal
+        open={!!archiving}
+        locale={locale}
+        onClose={() => setArchiving(null)}
+        onConfirm={() =>
+          archiving ? archive.mutateAsync(archiving.id) : Promise.resolve()
+        }
+        entityName={archiving?.name ?? ""}
+        actionLabel={t.archive}
+        description={t.archiveCategoryDescription}
+      />
+    </div>
+  );
+}
+
+function CategoryEditor({
+  botId,
+  categories,
+  editing,
+  locale,
+  onClose,
+  onSaved,
+}: {
+  botId: string;
+  categories: ConsumerFinanceCategory[];
+  editing: ConsumerFinanceCategory | null;
+  locale: FinanceLocale;
+  onClose: () => void;
+  onSaved: (item: ConsumerFinanceCategory) => void;
+}) {
+  const t = financeCopy(locale);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(editing?.name ?? "");
+  const [type, setType] = useState<ConsumerFinanceTransactionType>(
+    editing?.type ?? "EXPENSE",
+  );
+  const [parentId, setParentId] = useState(editing?.parentId ?? "");
+  const mutation = useMutation({
+    mutationFn: () =>
+      editing
+        ? consumerFinanceApi.updateCategory(botId, editing.id, {
+            name: name.trim(),
+            type,
+            parentId: parentId || null,
+          })
+        : consumerFinanceApi.createCategory(botId, {
+            name: name.trim(),
+            type,
+            parentId: parentId || undefined,
+          }),
+    onSuccess: (item) => {
+      onSaved(item);
+      setOpen(false);
+      setName("");
+      setParentId("");
+    },
+  });
+  return (
+    <>
+      <Button className="w-full" onClick={() => setOpen(true)}>
+        {t.addCategory}
+      </Button>
+      <Modal
+        open={open || !!editing}
+        closeLabel={t.close}
+        onClose={() => {
+          setOpen(false);
+          onClose();
+        }}
+        title={editing ? t.editCategory : t.addCategory}
+      >
+        <div className="space-y-3">
+          <FormField label={t.categoryName}>
+            <Input
+              autoFocus
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </FormField>
+          <FormField label={t.categoryType}>
+            <Select
+              value={type}
+              onChange={(event) => {
+                setType(event.target.value as ConsumerFinanceTransactionType);
+                setParentId("");
+              }}
+            >
+              <option value="EXPENSE">{t.expense}</option>
+              <option value="INCOME">{t.income}</option>
+            </Select>
+          </FormField>
+          <FormField label={t.parentCategory}>
+            <Select
+              value={parentId}
+              onChange={(event) => setParentId(event.target.value)}
+            >
+              <option value="">{t.noParent}</option>
+              {categories
+                .filter(
+                  (item) =>
+                    item.type === type &&
+                    item.id !== editing?.id &&
+                    (!item.archivedAt || item.id === editing?.parentId),
+                )
+                .map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {localizeFinanceCategory(item.name, item.key, locale)}
+                  </option>
+                ))}
+            </Select>
+          </FormField>
+          <Button
+            className="w-full"
+            disabled={!name.trim() || mutation.isPending}
+            onClick={() => mutation.mutate()}
+          >
+            {mutation.isPending ? t.saving : t.save}
+          </Button>
+          {mutation.isError ? (
+            <p className="text-sm text-rose-300">{t.categorySaveError}</p>
+          ) : null}
+        </div>
+      </Modal>
+    </>
+  );
 }

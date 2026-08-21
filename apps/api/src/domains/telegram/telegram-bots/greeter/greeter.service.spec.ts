@@ -13,10 +13,11 @@ describe('GreeterService callback fencing', () => {
     botTokenIv: 'iv',
     botTokenAuthTag: 'tag',
   } as any;
+  const runtime = { id: 'runtime' } as any;
   const callbackContext = (userId: number, data: string) =>
     ({
       bot,
-      runtime: {},
+      runtime,
       token: 'token',
       updateLogId: 'update',
       update: { callback_query: { id: 'query', data, from: { id: userId } } },
@@ -39,6 +40,7 @@ describe('GreeterService callback fencing', () => {
 
     await service.handle({
       bot,
+      runtime,
       updateLogId: 'one',
       update: {
         message: { chat: { id: 44 }, from: { id: 44 }, text: 'hello' },
@@ -46,6 +48,7 @@ describe('GreeterService callback fencing', () => {
     } as any);
     await service.handle({
       bot,
+      runtime,
       updateLogId: 'two',
       update: {
         message: { chat: { id: 44 }, from: { id: 44 }, text: '/start source' },
@@ -91,6 +94,7 @@ describe('GreeterService callback fencing', () => {
     );
     const context = {
       bot,
+      runtime,
       updateLogId: 'test-start',
       update: {
         message: { chat: { id: 44 }, from: { id: 44 }, text: '/start' },
@@ -347,6 +351,7 @@ describe('GreeterService callback fencing', () => {
     );
     const context = {
       bot: { id: 'bot', workspaceId: 'workspace' },
+      runtime,
       updateLogId: 'update',
       update: {
         chat_join_request: {

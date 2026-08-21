@@ -26,8 +26,14 @@ describe("AnalyticsPresentation", () => {
     expect(screen.getByRole("note")).toHaveTextContent(
       "not included in these totals",
     );
-    expect(screen.getByLabelText("Historical native currency amounts")).toHaveTextContent("₴");
-    expect(screen.getByLabelText("Historical native currency amounts")).toHaveTextContent("€");
-    expect(screen.getByText("Income").parentElement).toHaveTextContent("$ 100.00");
+    expect(
+      screen.getByLabelText("Historical native currency amounts"),
+    ).toHaveTextContent("₴");
+    expect(
+      screen.getByLabelText("Historical native currency amounts"),
+    ).toHaveTextContent("€");
+    expect(screen.getByText("Income").parentElement).toHaveTextContent(
+      "$ 100.00",
+    );
   });
 });

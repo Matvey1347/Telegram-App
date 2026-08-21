@@ -134,6 +134,10 @@ export const botBillingApi = {
     payload: CreateCouponPayload,
   ): Promise<BotBillingCouponView> =>
     (await api.post(`/telegram-bots/${botId}/billing/coupons`, payload)).data,
+  syncFinanceCatalog: async (botId: string) =>
+    (await api.post(`/telegram-bots/${botId}/finance-billing/sync`)).data,
+  syncFinanceCoupon: async (botId: string, couponId: string) =>
+    (await api.post(`/telegram-bots/${botId}/finance-billing/coupons/${couponId}/sync`)).data,
 };
 
 export const financeAiConfigApi = {

@@ -1,12 +1,25 @@
 import type { NextConfig } from "next";
 
-const publicApiOrigin = process.env.NEXT_PUBLIC_API_URL
-  ? new URL(process.env.NEXT_PUBLIC_API_URL).origin
-  : undefined;
+function configuredDevHostname(value: string | undefined) {
+  if (!value) return undefined;
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return undefined;
+  }
+}
+
+const gatewayHostname = configuredDevHostname(
+  process.env.NEXT_ALLOWED_DEV_ORIGIN,
+);
 
 const nextConfig: NextConfig = {
-  // Telegram Mini Apps load the dev site through the ngrok origin.
-  allowedDevOrigins: publicApiOrigin ? [publicApiOrigin] : [],
+  // Telegram Mini Apps load the dev site through the Cloudflare Tunnel origin.
+  allowedDevOrigins: [
+    "localhost",
+    "127.0.0.1",
+    ...(gatewayHostname ? [gatewayHostname] : []),
+  ],
   async rewrites() {
     if (process.env.LOCAL_API_PROXY !== "true") return [];
     return [

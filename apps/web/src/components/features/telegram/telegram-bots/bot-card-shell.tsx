@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type PropsWithChildren, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowLeftRight,
   Bot,
   CheckCircle2,
+  CircleX,
   Handshake,
   LoaderCircle,
   Pencil,
@@ -14,7 +15,6 @@ import {
   Settings,
   Trash2,
   Wallet,
-  Webhook,
 } from "lucide-react";
 import type {
   TelegramBotApplicationType,
@@ -29,22 +29,34 @@ export function BotCardShell({
   bot,
   checkingEnvironment,
   onCheck,
-  onDelete,
+  onRequestDelete,
   onSwitch,
   onConfigureRuntime,
-  onRemoveRuntime,
   children,
-}: PropsWithChildren<{
+}: {
   bot: TelegramBot;
   checkingEnvironment: TelegramBotRuntimeEnvironment | null;
   onCheck: (environment: TelegramBotRuntimeEnvironment) => void;
-  onDelete: () => void;
+  onRequestDelete: (environment: TelegramBotRuntimeEnvironment) => void;
   onSwitch: () => void;
   onConfigureRuntime: (environment: TelegramBotRuntimeEnvironment) => void;
-  onRemoveRuntime: (environment: TelegramBotRuntimeEnvironment) => void;
-}>) {
+  children:
+    | ReactNode
+    | ((environment: TelegramBotRuntimeEnvironment) => ReactNode);
+}) {
+  const storageKey = `telegram-bot-runtime-environment:${bot.id}`;
   const [environment, setEnvironment] =
     useState<TelegramBotRuntimeEnvironment>("PRODUCTION");
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(storageKey);
+    if (saved === "LOCAL" || saved === "PRODUCTION") setEnvironment(saved);
+  }, [storageKey]);
+
+  function selectEnvironment(next: TelegramBotRuntimeEnvironment) {
+    setEnvironment(next);
+    window.localStorage.setItem(storageKey, next);
+  }
   const runtime = bot.runtimes.find((item) => item.environment === environment);
   const appType = bot.applicationType;
   const currentApp = bot.applications.find((option) => option.type === appType);
@@ -106,7 +118,11 @@ export function BotCardShell({
               <Settings data-testid="configure-bot-app-icon" size={16} />
             </Link>
           ) : null}
-          <CardAction label="Delete bot" tone="danger" onClick={onDelete}>
+          <CardAction
+            label="Delete runtime or bot"
+            tone="danger"
+            onClick={() => onRequestDelete(environment)}
+          >
             <Trash2 size={16} />
           </CardAction>
         </div>
@@ -122,7 +138,7 @@ export function BotCardShell({
             type="button"
             role="tab"
             aria-selected={environment === option}
-            onClick={() => setEnvironment(option)}
+            onClick={() => selectEnvironment(option)}
             className={`rounded-md px-2.5 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${environment === option ? "bg-neutral-700 text-white" : "text-neutral-400 hover:text-neutral-200"}`}
           >
             {option === "PRODUCTION" ? "Production" : "Local"}
@@ -130,7 +146,7 @@ export function BotCardShell({
         ))}
       </div>
       {runtime ? (
-        <RuntimeDetails runtime={runtime} appType={appType} />
+        <RuntimeDetails runtime={runtime} appType={appType} botId={bot.id} />
       ) : (
         <RuntimeSetupState
           environment={environment}
@@ -139,14 +155,7 @@ export function BotCardShell({
       )}
       {runtime ? (
         <div className="mt-3 border-t border-neutral-800 pt-3">
-          {children}
-        </div>
-      ) : null}
-      {runtime?.environment === "LOCAL" ? (
-        <div className="mt-3 flex justify-end border-t border-neutral-800 pt-3">
-          <Button variant="danger" onClick={() => onRemoveRuntime("LOCAL")}>
-            Remove local runtime
-          </Button>
+          {typeof children === "function" ? children(environment) : children}
         </div>
       ) : null}
     </article>
@@ -182,21 +191,26 @@ function RuntimeSetupState({
 function RuntimeDetails({
   runtime,
   appType,
+  botId,
 }: {
   runtime: TelegramBotRuntimeSummary;
   appType: TelegramBotApplicationType;
+  botId: string;
 }) {
+  const statusLabel = runtimeStatusLabel(runtime);
   return (
     <>
       <div className="mt-3 flex flex-wrap gap-1.5">
-        <StatusBadge tone={runtimeTone(runtime.runtimeStatus)}>
-          <CheckCircle2 size={13} />
-          {runtime.runtimeStatus}
-        </StatusBadge>
-        <Tooltip content={webhookTooltip(runtime)}>
-          <StatusBadge tone={webhookTone(runtime.webhookConnectionStatus)}>
-            <Webhook size={13} />
-            {webhookLabel(runtime)}
+        <Tooltip content={runtimeStatusTooltip(runtime)}>
+          <StatusBadge tone={runtimeStatusTone(runtime)}>
+            {statusLabel === "RUNNING" ? (
+              <CheckCircle2 size={13} />
+            ) : statusLabel === "STARTING" ? (
+              <LoaderCircle className="animate-spin" size={13} />
+            ) : (
+              <CircleX size={13} />
+            )}
+            {statusLabel}
           </StatusBadge>
         </Tooltip>
         <StatusBadge tone={appType === "NONE" ? "muted" : "info"}>
@@ -205,31 +219,38 @@ function RuntimeDetails({
       </div>
       <dl className="mt-3 grid gap-x-4 gap-y-2 text-xs sm:grid-cols-2">
         <RuntimeField
-          label="Webhook endpoint"
-          value={runtime.webhookUrl || "Not configured"}
-        />
-        <RuntimeField
-          label="Last checked"
-          value={formatDate(runtime.lastCheckedAt)}
-        />
-        <RuntimeField
-          label="Last real update"
-          value={formatDate(runtime.lastUpdateProcessedAt)}
-        />
-        <RuntimeField label="Web App" value={webAppLabel(runtime, appType)} />
-        <RuntimeField
-          label="Telegram Mini App"
-          value={miniAppLabel(runtime, appType)}
+          label="Finance App"
+          value={
+            <RuntimeAppLink
+              runtime={runtime}
+              url={financeAppUrl(runtime, appType, botId)}
+            />
+          }
         />
       </dl>
-      {runtime.environment === "PRODUCTION" && runtime.runtimeStatus !== "ACTIVE" ? (
-        <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-100">
-          Production token is saved. Deploy the production API with its public webhook URL to activate this runtime.
+      {!runtime.isProcessOwner ? (
+        <p className="mt-3 rounded-lg border border-neutral-700 bg-neutral-900/60 p-2.5 text-sm text-neutral-300">
+          {runtime.environment === "LOCAL" ? "Local" : "Production"} runtime is
+          not running in this API process. Its saved webhook is not treated as
+          live.
         </p>
       ) : null}
-      {runtime.environment === "LOCAL" && runtime.runtimeStatus !== "ACTIVE" ? (
+      {runtime.isProcessOwner &&
+      runtime.environment === "PRODUCTION" &&
+      runtime.runtimeStatus !== "ACTIVE" ? (
         <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-100">
-          Local token is saved. Set a reachable local webhook URL to activate this runtime.
+          Production token is saved. Deploy the production API with its public
+          webhook URL to activate this runtime.
+        </p>
+      ) : null}
+      {runtime.isProcessOwner &&
+      runtime.environment === "LOCAL" &&
+      runtime.runtimeStatus !== "ACTIVE" ? (
+        <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-100">
+          Local token is saved. Run{" "}
+          <code className="rounded bg-amber-950/40 px-1">pnpm dev:bots</code> on
+          this computer to start the local API, web app and ngrok; the reachable
+          webhook is then registered automatically.
         </p>
       ) : null}
       {runtime.lastRuntimeError || runtime.lastErrorMessage ? (
@@ -243,7 +264,7 @@ function RuntimeDetails({
     </>
   );
 }
-function RuntimeField({ label, value }: { label: string; value: string }) {
+function RuntimeField({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-0">
       <dt className="text-neutral-500">{label}</dt>
@@ -251,30 +272,45 @@ function RuntimeField({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-function webAppLabel(
+function RuntimeAppLink({
+  runtime,
+  url,
+}: {
+  runtime: TelegramBotRuntimeSummary;
+  url: string | null;
+}) {
+  const running = runtime.isProcessOwner && runtime.runtimeStatus === "ACTIVE";
+  if (!running || !url) return <>NOT RUNNING</>;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className="break-all text-sky-300 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+    >
+      RUNNING
+    </a>
+  );
+}
+function financeAppUrl(
   runtime: TelegramBotRuntimeSummary,
   appType: TelegramBotApplicationType,
+  botId: string,
 ) {
-  if (appType !== "FINANCE") return "Not applicable";
-  if (!runtime.webApp || runtime.webApp.status === "UNKNOWN")
-    return "Not checked yet";
-  return runtime.webApp.status === "ERROR"
-    ? `Error${runtime.webApp.error ? ` · ${runtime.webApp.error}` : ""}`
-    : `${runtime.webApp.status === "AVAILABLE" ? "Available" : "Not configured"}${runtime.webApp.url ? ` · ${runtime.webApp.url}` : ""}`;
-}
-function miniAppLabel(
-  runtime: TelegramBotRuntimeSummary,
-  appType: TelegramBotApplicationType,
-) {
-  if (appType !== "FINANCE") return "Not applicable";
-  if (!runtime.miniApp || runtime.miniApp.status === "UNKNOWN")
-    return "Not checked yet";
-  return runtime.miniApp.status === "ERROR"
-    ? `Error${runtime.miniApp.error ? ` · ${runtime.miniApp.error}` : ""}`
-    : `${runtime.miniApp.status === "CONFIGURED" ? "Configured" : "Not configured"}${runtime.miniApp.actualUrl ? ` · ${runtime.miniApp.actualUrl}` : ""}`;
-}
-function formatDate(value?: string | null) {
-  return value ? new Date(value).toLocaleString() : "Never";
+  if (appType !== "FINANCE") return null;
+  const knownUrl =
+    runtime.miniApp.actualUrl ||
+    runtime.miniApp.expectedUrl ||
+    runtime.webApp.url;
+  if (knownUrl) return knownUrl;
+  // `dev:bots` has one public gateway: its webhook base and Mini App base are
+  // deliberately the same. This exposes a usable local link before a manual
+  // runtime check has persisted BotFather/menu-button state.
+  if (runtime.environment !== "LOCAL" || !runtime.webhookUrl) return null;
+  const marker = "/api/telegram/bots/runtime/";
+  const index = runtime.webhookUrl.indexOf(marker);
+  if (index < 0) return null;
+  return `${runtime.webhookUrl.slice(0, index)}/finance/${encodeURIComponent(botId)}`;
 }
 function AppIcon({ type }: { type: TelegramBotApplicationType }) {
   const Icon =
@@ -340,44 +376,38 @@ function StatusBadge({
     </span>
   );
 }
-function runtimeTone(status: string) {
-  return status === "ACTIVE"
+function runtimeStatusLabel(runtime: TelegramBotRuntimeSummary) {
+  if (runtime.isProcessOwner && runtime.runtimeStatus === "STARTING") {
+    return "STARTING";
+  }
+  if (runtime.isProcessOwner && runtime.runtimeStatus === "ERROR") {
+    return "ERROR";
+  }
+  return webhookIsRunning(runtime) ? "RUNNING" : "STOPPED";
+}
+function runtimeStatusTone(runtime: TelegramBotRuntimeSummary) {
+  const label = runtimeStatusLabel(runtime);
+  return label === "RUNNING"
     ? "success"
-    : status === "ERROR"
-      ? "danger"
-      : status === "STARTING"
-        ? "warning"
-        : "muted";
+    : label === "STARTING"
+      ? "warning"
+      : "danger";
 }
-function webhookTone(status: string) {
-  return status === "CONNECTED"
-    ? "success"
-    : status === "NOT_CONNECTED"
-      ? "danger"
-      : "muted";
-}
-function webhookLabel(runtime: TelegramBotRuntimeSummary) {
-  const target = runtime.environment === "LOCAL" ? "LOCAL" : "PROD";
-  const connection =
+function webhookIsRunning(runtime: TelegramBotRuntimeSummary) {
+  return (
+    runtime.isProcessOwner &&
+    runtime.runtimeStatus === "ACTIVE" &&
     runtime.webhookConnectionStatus === "CONNECTED"
-      ? "CONNECTED"
-      : runtime.webhookConnectionStatus === "NOT_CONNECTED"
-        ? "NOT CONNECTED"
-        : "NOT CONFIGURED";
-  return `${target} · ${connection}`;
+  );
 }
-function webhookTooltip(runtime: TelegramBotRuntimeSummary) {
-  const target =
-    runtime.environment === "LOCAL"
-      ? "Local runtime webhook"
-      : "Production webhook";
-  const connection =
-    runtime.webhookConnectionStatus === "CONNECTED"
-      ? "is configured for this runtime."
-      : runtime.webhookConnectionStatus === "NOT_CONNECTED"
-        ? "is not connected in Telegram. Use Check bot after starting the intended runtime."
-        : "has not been configured yet.";
-  return `${target} ${connection}`;
+function runtimeStatusTooltip(runtime: TelegramBotRuntimeSummary) {
+  const label = runtimeStatusLabel(runtime);
+  if (label === "RUNNING") {
+    return "Runtime is active and its webhook is connected.";
+  }
+  if (label === "STARTING") return "Runtime is starting.";
+  if (label === "ERROR") return "Runtime stopped because of an error.";
+  return "Runtime or its webhook is stopped.";
 }
 function applicationLabel(type: TelegramBotApplicationType) {
   return type === "GREETER"

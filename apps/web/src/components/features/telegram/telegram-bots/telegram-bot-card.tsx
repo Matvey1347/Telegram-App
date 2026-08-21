@@ -9,18 +9,16 @@ export function TelegramBotCard({
   bot,
   checkingEnvironment,
   onCheck,
-  onDelete,
+  onRequestDelete,
   onSwitch,
   onConfigureRuntime,
-  onRemoveRuntime,
 }: {
   bot: TelegramBot;
   checkingEnvironment: TelegramBotRuntimeEnvironment | null;
   onCheck: (environment: TelegramBotRuntimeEnvironment) => void;
-  onDelete: () => void;
+  onRequestDelete: (environment: TelegramBotRuntimeEnvironment) => void;
   onSwitch: () => void;
   onConfigureRuntime: (environment: TelegramBotRuntimeEnvironment) => void;
-  onRemoveRuntime: (environment: TelegramBotRuntimeEnvironment) => void;
 }) {
   const appType = bot.applicationType;
   return (
@@ -28,13 +26,12 @@ export function TelegramBotCard({
       bot={bot}
       checkingEnvironment={checkingEnvironment}
       onCheck={onCheck}
-      onDelete={onDelete}
+      onRequestDelete={onRequestDelete}
       onSwitch={onSwitch}
       onConfigureRuntime={onConfigureRuntime}
-      onRemoveRuntime={onRemoveRuntime}
     >
-      {appType === "FINANCE" ? (
-        <FinanceBotSummary summary={bot.applicationSummary?.finance} />
+      {appType === "FINANCE" ? (environment: TelegramBotRuntimeEnvironment) => (
+        <FinanceBotSummary summary={bot.applicationSummary?.finance?.[environment]} />
       ) : appType === "GREETER" ? (
         <GreeterBotSummary />
       ) : (

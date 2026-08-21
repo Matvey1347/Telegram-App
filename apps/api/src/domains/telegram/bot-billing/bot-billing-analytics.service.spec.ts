@@ -8,10 +8,10 @@ describe('BotBillingAnalyticsService', () => {
     };
     const service = new BotBillingAnalyticsService(prisma as never);
 
-    await expect(service.summariesForBots('workspace-1', ['finance-1'])).resolves.toEqual(
+    await expect(service.summariesForRuntimes('workspace-1', ['runtime-1'])).resolves.toEqual(
       new Map([
         [
-          'finance-1',
+          'runtime-1',
           {
             registeredUsers: 0,
             paidUsers: 0,
@@ -27,12 +27,12 @@ describe('BotBillingAnalyticsService', () => {
     const prisma = {
       telegramBotUser: {
         groupBy: jest.fn().mockResolvedValue([
-          { botIntegrationId: 'finance-1', _count: { _all: 3 } },
+          { runtimeInstanceId: 'runtime-1', _count: { _all: 3 } },
         ]),
       },
       $queryRaw: jest.fn().mockResolvedValue([
           {
-            botIntegrationId: 'finance-1',
+            runtimeInstanceId: 'runtime-1',
             activeSubscriptions: 2,
             paidUsers: 2,
             failedPayments: 1,
@@ -41,9 +41,9 @@ describe('BotBillingAnalyticsService', () => {
     };
     const service = new BotBillingAnalyticsService(prisma as never);
 
-    const summaries = await service.summariesForBots('workspace-1', ['finance-1']);
+    const summaries = await service.summariesForRuntimes('workspace-1', ['runtime-1']);
 
-    expect(summaries.get('finance-1')).toEqual({
+    expect(summaries.get('runtime-1')).toEqual({
       registeredUsers: 3,
       paidUsers: 2,
       activeSubscriptions: 2,
@@ -51,7 +51,7 @@ describe('BotBillingAnalyticsService', () => {
     });
     expect(prisma.telegramBotUser.groupBy).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { workspaceId: 'workspace-1', botIntegrationId: { in: ['finance-1'] } },
+        where: { workspaceId: 'workspace-1', runtimeInstanceId: { in: ['runtime-1'] } },
       }),
     );
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
@@ -61,35 +61,35 @@ describe('BotBillingAnalyticsService', () => {
     const prisma = {
       telegramBotUser: {
         groupBy: jest.fn().mockResolvedValue([
-          { botIntegrationId: 'finance-1', _count: { _all: 1 } },
-          { botIntegrationId: 'finance-2', _count: { _all: 4 } },
+          { runtimeInstanceId: 'runtime-1', _count: { _all: 1 } },
+          { runtimeInstanceId: 'runtime-2', _count: { _all: 4 } },
         ]),
       },
       $queryRaw: jest.fn().mockResolvedValue([
-        { botIntegrationId: 'finance-1', activeSubscriptions: 1, paidUsers: 1, failedPayments: 0 },
-        { botIntegrationId: 'finance-2', activeSubscriptions: 2, paidUsers: 2, failedPayments: 1 },
-        { botIntegrationId: 'foreign-bot', activeSubscriptions: 99, paidUsers: 99, failedPayments: 99 },
+        { runtimeInstanceId: 'runtime-1', activeSubscriptions: 1, paidUsers: 1, failedPayments: 0 },
+        { runtimeInstanceId: 'runtime-2', activeSubscriptions: 2, paidUsers: 2, failedPayments: 1 },
+        { runtimeInstanceId: 'foreign-runtime', activeSubscriptions: 99, paidUsers: 99, failedPayments: 99 },
       ]),
     };
     const service = new BotBillingAnalyticsService(prisma as never);
 
-    const summaries = await service.summariesForBots('workspace-1', [
-      'finance-1',
-      'finance-2',
+    const summaries = await service.summariesForRuntimes('workspace-1', [
+      'runtime-1',
+      'runtime-2',
     ]);
 
     expect(summaries).toEqual(
       new Map([
-        ['finance-1', { registeredUsers: 1, activeSubscriptions: 1, paidUsers: 1, failedPayments: 0 }],
-        ['finance-2', { registeredUsers: 4, activeSubscriptions: 2, paidUsers: 2, failedPayments: 1 }],
+        ['runtime-1', { registeredUsers: 1, activeSubscriptions: 1, paidUsers: 1, failedPayments: 0 }],
+        ['runtime-2', { registeredUsers: 4, activeSubscriptions: 2, paidUsers: 2, failedPayments: 1 }],
       ]),
     );
-    expect(summaries.has('foreign-bot')).toBe(false);
+    expect(summaries.has('foreign-runtime')).toBe(false);
     expect(prisma.telegramBotUser.groupBy).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
           workspaceId: 'workspace-1',
-          botIntegrationId: { in: ['finance-1', 'finance-2'] },
+          runtimeInstanceId: { in: ['runtime-1', 'runtime-2'] },
         },
       }),
     );

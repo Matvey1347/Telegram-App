@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
-import { Plus } from "lucide-react";
+import { Plus, Server, Trash2 } from "lucide-react";
 import type {
   TelegramBotApplicationType,
   TelegramBotRuntimeEnvironment,
@@ -18,6 +18,7 @@ import {
   Input,
   Modal,
   PageHeader,
+  Tooltip,
 } from "@/components/ui/primitives";
 import { runtimeAppPresentation } from "./runtime-app-presentation";
 import { QueryContentState } from "@/components/ui/query-content-state";
@@ -40,7 +41,14 @@ export function TelegramBotsPage() {
   const qc = useQueryClient();
   const { pushToast } = useAppToast();
   const [createOpen, setCreateOpen] = useState(false);
-  const [deleting, setDeleting] = useState<TelegramBot | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    bot: TelegramBot;
+    environment?: TelegramBotRuntimeEnvironment;
+  } | null>(null);
+  const [deleteChoice, setDeleteChoice] = useState<{
+    bot: TelegramBot;
+    environment: TelegramBotRuntimeEnvironment;
+  } | null>(null);
   const [switching, setSwitching] = useState<TelegramBot | null>(null);
   const [runtimeConfig, setRuntimeConfig] = useState<{
     bot: TelegramBot;
@@ -110,11 +118,12 @@ export function TelegramBotsPage() {
     }) => telegramBotsApi.removeRuntime(botId, environment),
     onSuccess: (bot) => {
       reconcileTelegramBotCache(qc, bot);
-      pushToast("Local runtime removed.", "success");
+      setDeleteConfirmation(null);
+      pushToast("Runtime removed.", "success");
     },
     onError: (error: unknown) =>
       pushToast(
-        errorMessage(error, "Failed to remove local runtime."),
+        errorMessage(error, "Failed to remove runtime."),
         "error",
       ),
   });
@@ -123,7 +132,7 @@ export function TelegramBotsPage() {
     onSuccess: (_bot, botId) => {
       removeTelegramBotFromCache(qc, botId);
       void invalidateTelegramAccessQueries(qc, { includeBots: false });
-      setDeleting(null);
+      setDeleteConfirmation(null);
       pushToast("Bot deleted.", "success");
     },
     onError: (error: unknown) =>
@@ -191,13 +200,12 @@ export function TelegramBotsPage() {
               onCheck={(environment) =>
                 checkMutation.mutate({ id: bot.id, environment })
               }
-              onDelete={() => setDeleting(bot)}
+              onRequestDelete={(environment) =>
+                setDeleteChoice({ bot, environment })
+              }
               onSwitch={() => setSwitching(bot)}
               onConfigureRuntime={(environment) =>
                 setRuntimeConfig({ bot, environment })
-              }
-              onRemoveRuntime={(environment) =>
-                removeRuntimeMutation.mutate({ botId: bot.id, environment })
               }
             />
           ))}
@@ -238,16 +246,122 @@ export function TelegramBotsPage() {
         }}
       />
       <ConfirmDeleteModal
-        open={Boolean(deleting)}
-        entityName={deleting?.label || ""}
-        description="This removes the bot token and runtime state from this workspace."
-        onClose={() => setDeleting(null)}
-        onConfirm={() =>
-          deleting ? deleteMutation.mutateAsync(deleting.id) : undefined
+        open={Boolean(deleteConfirmation)}
+        entityName={
+          deleteConfirmation?.environment || deleteConfirmation?.bot.label || ""
         }
-        label="Delete"
+        description={
+          deleteConfirmation?.environment
+            ? `This permanently removes the ${deleteConfirmation.environment.toLowerCase()} token and webhook state.`
+            : "This permanently removes every runtime and the bot configuration from this workspace."
+        }
+        onClose={() => setDeleteConfirmation(null)}
+        onConfirm={() =>
+          !deleteConfirmation
+            ? undefined
+            : deleteConfirmation.environment
+              ? removeRuntimeMutation.mutateAsync({
+                  botId: deleteConfirmation.bot.id,
+                  environment: deleteConfirmation.environment,
+                })
+              : deleteMutation.mutateAsync(deleteConfirmation.bot.id)
+        }
+        label={deleteConfirmation?.environment ? "Delete runtime" : "Delete bot"}
+      />
+      <RuntimeDeletionModal
+        choice={deleteChoice}
+        onClose={() => setDeleteChoice(null)}
+        onDeleteRuntime={(environment) => {
+          if (!deleteChoice) return;
+          setDeleteConfirmation({ bot: deleteChoice.bot, environment });
+          setDeleteChoice(null);
+        }}
+        onDeleteBot={() => {
+          if (!deleteChoice) return;
+          setDeleteConfirmation({ bot: deleteChoice.bot });
+          setDeleteChoice(null);
+        }}
       />
     </AppShell>
+  );
+}
+
+function RuntimeDeletionModal({
+  choice,
+  onClose,
+  onDeleteRuntime,
+  onDeleteBot,
+}: {
+  choice: { bot: TelegramBot; environment: TelegramBotRuntimeEnvironment } | null;
+  onClose: () => void;
+  onDeleteRuntime: (environment: TelegramBotRuntimeEnvironment) => void;
+  onDeleteBot: () => void;
+}) {
+  if (!choice) return null;
+  const local = choice.bot.runtimes.some((item) => item.environment === "LOCAL");
+  const production = choice.bot.runtimes.some((item) => item.environment === "PRODUCTION");
+  const selected = choice.environment === "LOCAL" ? "Local" : "Production";
+  return (
+    <Modal open onClose={onClose} title="Delete bot data">
+      <p className="text-sm text-neutral-300">
+        You selected <span className="font-medium text-white">{selected}</span>. Runtime deletion removes its token and webhook state only.
+      </p>
+      <div className="mt-4 flex items-center gap-2">
+        <DeleteAction
+          label="Delete Local runtime"
+          disabled={!local}
+          onClick={() => onDeleteRuntime("LOCAL")}
+        >
+          <Server size={17} />
+        </DeleteAction>
+        <DeleteAction
+          label="Delete Production runtime"
+          disabled={!production}
+          onClick={() => onDeleteRuntime("PRODUCTION")}
+        >
+          <Server size={17} />
+        </DeleteAction>
+        <DeleteAction
+          label="Delete bot from system"
+          tone="danger"
+          disabled={false}
+          onClick={onDeleteBot}
+        >
+          <Trash2 size={17} />
+        </DeleteAction>
+      </div>
+      <div className="mt-4 flex justify-end">
+        <Button variant="secondary" onClick={onClose}>Cancel</Button>
+      </div>
+    </Modal>
+  );
+}
+
+function DeleteAction({
+  children,
+  label,
+  tone = "neutral",
+  disabled,
+  onClick,
+}: {
+  children: ReactNode;
+  label: string;
+  tone?: "neutral" | "danger";
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Tooltip content={label}>
+      <button
+        type="button"
+        aria-label={label}
+        disabled={disabled}
+        onClick={onClick}
+        className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 ${tone === "danger" ? "border-rose-800/80 bg-rose-950/30 text-rose-300 hover:bg-rose-950/60" : "border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800"}`}
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }
 

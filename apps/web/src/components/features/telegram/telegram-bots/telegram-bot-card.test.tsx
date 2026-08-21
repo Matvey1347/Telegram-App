@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TelegramBot } from "@/lib/api";
 import { TelegramBotCard } from "./telegram-bot-card";
 
@@ -22,10 +22,12 @@ function bot(applicationType: "GREETER" | "FINANCE" | "NONE"): TelegramBot {
         ? {
             applicationType: "FINANCE",
             finance: {
-              registeredUsers: 12,
-              paidUsers: 4,
-              activeSubscriptions: 3,
-              failedPayments: 2,
+              PRODUCTION: {
+                registeredUsers: 12,
+                paidUsers: 4,
+                activeSubscriptions: 3,
+                failedPayments: 2,
+              },
             },
           }
         : null,
@@ -33,6 +35,7 @@ function bot(applicationType: "GREETER" | "FINANCE" | "NONE"): TelegramBot {
       {
         id: "runtime-1",
         environment: "PRODUCTION",
+        isProcessOwner: true,
         firstName: "Admissions bot",
         username: "admissions_prod",
         botTokenMasked: "123…abc",
@@ -81,15 +84,16 @@ function renderCard(
       bot={bot(applicationType)}
       checkingEnvironment={checkingEnvironment}
       onCheck={vi.fn()}
-      onDelete={vi.fn()}
+      onRequestDelete={vi.fn()}
       onSwitch={vi.fn()}
       onConfigureRuntime={vi.fn()}
-      onRemoveRuntime={vi.fn()}
     />,
   );
 }
 
 describe("TelegramBotCard", () => {
+  beforeEach(() => window.localStorage.clear());
+
   it("renders the access bot capabilities inline without technical credentials", () => {
     renderCard("NONE");
     expect(screen.getByLabelText("Access bot")).toBeInTheDocument();
@@ -97,21 +101,55 @@ describe("TelegramBotCard", () => {
       screen.getByLabelText("Channel access capabilities"),
     ).toHaveTextContent("Channels 1");
     expect(screen.queryByText("123…abc")).toBeNull();
+    expect(screen.getByText("STOPPED")).toBeInTheDocument();
   });
 
-  it("renders compact Finance metrics and separate Web App and Mini App facts", () => {
+  it("shows a checked running status for a connected webhook", () => {
+    renderCard("GREETER");
+    expect(screen.getByText("RUNNING")).toBeInTheDocument();
+    expect(screen.queryByText("ACTIVE")).toBeNull();
+    expect(screen.queryByText(/api\/telegram\/bots\/runtime/)).toBeNull();
+    expect(screen.queryByText("Last checked")).toBeNull();
+    expect(screen.queryByText("Last real update")).toBeNull();
+  });
+
+  it("shows one stopped status when the runtime and webhook are stopped", () => {
+    const stoppedBot = bot("FINANCE");
+    stoppedBot.runtimes[0] = {
+      ...stoppedBot.runtimes[0],
+      isProcessOwner: false,
+      runtimeStatus: "DISABLED",
+      webhookConnectionStatus: "NOT_CONNECTED",
+    };
+
+    render(
+      <TelegramBotCard
+        bot={stoppedBot}
+        checkingEnvironment={null}
+        onCheck={vi.fn()}
+        onRequestDelete={vi.fn()}
+        onSwitch={vi.fn()}
+        onConfigureRuntime={vi.fn()}
+      />,
+    );
+
+    const stoppedStatus = screen.getByText("STOPPED");
+    expect(stoppedStatus).toHaveClass("text-rose-200");
+    expect(screen.queryByText("NOT RUNNING", { selector: "span" })).toBeNull();
+  });
+
+  it("renders compact Finance metrics and one Finance App link", () => {
     renderCard("FINANCE");
     expect(screen.getByLabelText("Finance business metrics")).toHaveTextContent(
       "Registered12",
     );
-    expect(
-      screen.getByText("Available · https://finance.example.com"),
-    ).toBeInTheDocument();
-    expect(screen.getAllByText("Not configured")).toHaveLength(2);
+    expect(screen.getAllByRole("link", { name: "RUNNING" })).toHaveLength(1);
     expect(
       screen.getByRole("link", { name: "Configure Finance" }),
     ).toHaveAttribute("href", "/telegram-bots/bot-1/finance");
-    expect(screen.getByRole("button", { name: "Change bot app" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Change bot app" }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("change-bot-app-icon")).toBeInTheDocument();
     expect(screen.getByTestId("configure-bot-app-icon")).toBeInTheDocument();
   });
@@ -125,20 +163,69 @@ describe("TelegramBotCard", () => {
       environment: "LOCAL",
       username: "admissions_local",
     });
+    financeBot.applicationSummary = {
+      applicationType: "FINANCE",
+      finance: {
+        PRODUCTION: {
+          registeredUsers: 12,
+          paidUsers: 4,
+          activeSubscriptions: 3,
+          failedPayments: 2,
+        },
+        LOCAL: {
+          registeredUsers: 2,
+          paidUsers: 1,
+          activeSubscriptions: 1,
+          failedPayments: 0,
+        },
+      },
+    };
     render(
       <TelegramBotCard
         bot={financeBot}
         checkingEnvironment={null}
         onCheck={vi.fn()}
-        onDelete={vi.fn()}
+        onRequestDelete={vi.fn()}
         onSwitch={vi.fn()}
         onConfigureRuntime={vi.fn()}
-        onRemoveRuntime={vi.fn()}
       />,
     );
     expect(screen.getAllByRole("article")).toHaveLength(1);
     expect(screen.getByText("@admissions_prod")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Local" }));
+    expect(screen.getByText("@admissions_local")).toBeInTheDocument();
+    expect(screen.getByLabelText("Finance business metrics")).toHaveTextContent(
+      "Registered2",
+    );
+    expect(
+      window.localStorage.getItem("telegram-bot-runtime-environment:bot-1"),
+    ).toBe("LOCAL");
+  });
+
+  it("restores the previously selected local runtime after a refresh", () => {
+    window.localStorage.setItem(
+      "telegram-bot-runtime-environment:bot-1",
+      "LOCAL",
+    );
+    const financeBot = bot("FINANCE");
+    financeBot.runtimes.push({
+      ...financeBot.runtimes[0],
+      id: "runtime-local",
+      environment: "LOCAL",
+      username: "admissions_local",
+    });
+
+    render(
+      <TelegramBotCard
+        bot={financeBot}
+        checkingEnvironment={null}
+        onCheck={vi.fn()}
+        onRequestDelete={vi.fn()}
+        onSwitch={vi.fn()}
+        onConfigureRuntime={vi.fn()}
+      />,
+    );
+
     expect(screen.getByText("@admissions_local")).toBeInTheDocument();
   });
 
@@ -151,10 +238,9 @@ describe("TelegramBotCard", () => {
         bot={bot("GREETER")}
         checkingEnvironment={null}
         onCheck={onCheck}
-        onDelete={vi.fn()}
+        onRequestDelete={vi.fn()}
         onSwitch={vi.fn()}
         onConfigureRuntime={onConfigureRuntime}
-        onRemoveRuntime={vi.fn()}
       />,
     );
     await user.click(screen.getByRole("tab", { name: "Local" }));
@@ -171,7 +257,9 @@ describe("TelegramBotCard", () => {
     const user = userEvent.setup();
     renderCard("FINANCE");
 
-    expect(screen.getByLabelText("Finance business metrics")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Finance business metrics"),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Local" }));
 
     expect(screen.getByText("Local bot is not configured")).toBeInTheDocument();
@@ -184,5 +272,36 @@ describe("TelegramBotCard", () => {
     expect(screen.getByRole("button", { name: "Checking bot" })).toBeDisabled();
     await user.click(screen.getByRole("tab", { name: "Local" }));
     expect(screen.getByRole("button", { name: "Check bot" })).toBeDisabled();
+  });
+
+  it("shows one direct local Finance App link before a manual check", async () => {
+    const user = userEvent.setup();
+    const financeBot = bot("FINANCE");
+    financeBot.runtimes.push({
+      ...financeBot.runtimes[0],
+      id: "runtime-local",
+      environment: "LOCAL",
+      webhookUrl:
+        "https://example.ngrok-free.app/api/telegram/bots/runtime/runtime-local/webhook",
+      webApp: { status: "UNKNOWN", url: null },
+      miniApp: { status: "UNKNOWN", actualUrl: null },
+    });
+    render(
+      <TelegramBotCard
+        bot={financeBot}
+        checkingEnvironment={null}
+        onCheck={vi.fn()}
+        onRequestDelete={vi.fn()}
+        onSwitch={vi.fn()}
+        onConfigureRuntime={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Local" }));
+    expect(screen.getAllByRole("link", { name: "RUNNING" })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "RUNNING" })).toHaveAttribute(
+      "href",
+      "https://example.ngrok-free.app/finance/bot-1",
+    );
   });
 });

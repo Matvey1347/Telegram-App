@@ -1,5 +1,15 @@
-import type { SyncOperationResult, StructuredApiError, TelegramChannelAccessMode, EntityAssignment, ResolvedEmoji, WorkspaceMember } from "../core";
-import type { TelegramChannelAudience, TelegramChannelFinancialSummary } from "./telegram-channel-analytics";
+import type {
+  SyncOperationResult,
+  StructuredApiError,
+  TelegramChannelAccessMode,
+  EntityAssignment,
+  ResolvedEmoji,
+  WorkspaceMember,
+} from "../core";
+import type {
+  TelegramChannelAudience,
+  TelegramChannelFinancialSummary,
+} from "./telegram-channel-analytics";
 import type { TelegramPublishingCapabilities } from "@telegram-system/shared";
 
 export type TelegramChannelAdAnalysisStatus =
@@ -81,6 +91,8 @@ export type TelegramChannel = EntityAssignment & {
   ownViewsPerPost?: number;
   ownReactionsPerPost?: number;
   kpiCurrency?: string;
+  adBaseCpm?: number | string | null;
+  adBaseCurrency?: string;
   subscriberBaseQuality?: string | null;
   dataQualityNotes?: string | null;
   targetCpaFrom?: number | string | null;
@@ -200,13 +212,12 @@ export type TelegramChannelSyncSelection = {
   syncIncludeAudienceSnapshot: boolean;
 };
 
-export type TelegramChannelSyncNowPayload = Partial<
-  TelegramChannelSyncSelection
-> & {
-  telegramUserAccountId?: string;
-  saveSelection?: boolean;
-  postLimit?: number;
-};
+export type TelegramChannelSyncNowPayload =
+  Partial<TelegramChannelSyncSelection> & {
+    telegramUserAccountId?: string;
+    saveSelection?: boolean;
+    postLimit?: number;
+  };
 
 export type TelegramChannelImportPayload = {
   input?: string;

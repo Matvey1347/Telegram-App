@@ -90,6 +90,20 @@ describe("TabIdentityProvider", () => {
     expectEmojiFavicon("🕸️");
   });
 
+  it.each(["/telegram-bots", "/telegram-bots/bot-1/finance"])(
+    "uses bot metadata for %s",
+    async (pathname) => {
+      currentPathname = pathname;
+
+      renderWithTabProvider();
+
+      await waitFor(() => {
+        expect(document.title).toBe("Bots · Telegram System");
+      });
+      expectEmojiFavicon("🤖");
+    },
+  );
+
   it("updates title and favicon after async channel override appears", async () => {
     currentPathname = "/telegram-posts";
     currentSearch = "channelId=channel-1";

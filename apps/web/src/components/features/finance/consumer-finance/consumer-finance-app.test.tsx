@@ -1,0 +1,232 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ConsumerFinanceProfile } from "@telegram-system/shared";
+import { ConsumerFinanceApp } from "./consumer-finance-app";
+
+const mocks = vi.hoisted(() => ({
+  bootstrap: { status: "browser" } as
+    | { status: "browser" | "loading" | "error" }
+    | { status: "ready"; initData: string },
+  auth: vi.fn(),
+  session: vi.fn(),
+  createBrowserTransfer: vi.fn(),
+  browserTransferUrl: vi.fn(),
+}));
+
+vi.mock("./use-telegram-mini-app-bootstrap", () => ({
+  useTelegramMiniAppBootstrap: () => mocks.bootstrap,
+}));
+vi.mock("@/lib/features/finance/consumer-finance-api", () => ({
+  consumerFinanceApi: {
+    auth: mocks.auth,
+    session: mocks.session,
+    createBrowserTransfer: mocks.createBrowserTransfer,
+    browserTransferUrl: mocks.browserTransferUrl,
+  },
+}));
+vi.mock("./consumer-finance-screens", () => ({
+  ConsumerFinanceScreens: ({
+    profile,
+    screen: activeScreen,
+    openTransfer,
+  }: {
+    profile: ConsumerFinanceProfile;
+    screen: string;
+    openTransfer: boolean;
+  }) => (
+    <div>
+      Finance profile {profile.id} · screen {activeScreen} · transfer{" "}
+      {String(openTransfer)}
+    </div>
+  ),
+}));
+vi.mock("./consumer-finance-login", () => ({
+  ConsumerFinanceLogin: () => <div>Browser login</div>,
+  ConsumerFinanceBootstrapError: ({ onRetry }: { onRetry: () => void }) => (
+    <button onClick={onRetry}>Bootstrap retry</button>
+  ),
+}));
+
+const profile: ConsumerFinanceProfile = {
+  id: "profile-1",
+  defaultCurrency: "USD",
+  timezone: "UTC",
+  locale: "en",
+  onboardingCompletedAt: "2026-08-21T00:00:00.000Z",
+};
+
+function renderApp() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+  });
+  return render(
+    <QueryClientProvider client={client}>
+      <ConsumerFinanceApp botId="bot-1" />
+    </QueryClientProvider>,
+  );
+}
+
+beforeEach(() => {
+  mocks.bootstrap = { status: "browser" };
+  mocks.auth.mockReset();
+  mocks.session.mockReset();
+  mocks.createBrowserTransfer.mockReset();
+  mocks.browserTransferUrl.mockReset();
+  window.history.replaceState({}, "", "/finance/bot-1");
+});
+
+describe("ConsumerFinanceApp bootstrap", () => {
+  it("performs one browser session read and renders login only for explicit unauthenticated state", async () => {
+    mocks.session.mockResolvedValue({ authenticated: false });
+
+    renderApp();
+
+    expect(await screen.findByText("Browser login")).toBeInTheDocument();
+    expect(mocks.session).toHaveBeenCalledOnce();
+    expect(mocks.auth).not.toHaveBeenCalled();
+  });
+
+  it("opens Finance from an existing browser session", async () => {
+    mocks.session.mockResolvedValue({ authenticated: true, profile });
+
+    renderApp();
+
+    expect(
+      await screen.findByText(/Finance profile profile-1/),
+    ).toBeInTheDocument();
+    expect(mocks.session).toHaveBeenCalledOnce();
+    expect(mocks.auth).not.toHaveBeenCalled();
+    expect(
+      document.querySelector("[data-finance-surface='browser']"),
+    ).toBeInTheDocument();
+  });
+
+  it("uses exactly one Telegram bootstrap POST and its returned profile", async () => {
+    mocks.bootstrap = { status: "ready", initData: "signed-init-data" };
+    mocks.auth.mockResolvedValue({ authenticated: true, profile });
+
+    renderApp();
+
+    expect(
+      await screen.findByText(/Finance profile profile-1/),
+    ).toBeInTheDocument();
+    expect(mocks.auth).toHaveBeenCalledOnce();
+    expect(mocks.auth).toHaveBeenCalledWith("bot-1", "signed-init-data");
+    expect(mocks.session).not.toHaveBeenCalled();
+  });
+
+  it("keeps a failed Telegram bootstrap stable and retries once per click", async () => {
+    mocks.bootstrap = { status: "ready", initData: "expired-init-data" };
+    mocks.auth.mockRejectedValue(new Error("expired"));
+
+    renderApp();
+
+    const retry = await screen.findByRole("button", {
+      name: "Bootstrap retry",
+    });
+    expect(mocks.auth).toHaveBeenCalledOnce();
+    await new Promise((resolve) => window.setTimeout(resolve, 20));
+    expect(mocks.auth).toHaveBeenCalledOnce();
+
+    fireEvent.click(retry);
+    await waitFor(() => expect(mocks.auth).toHaveBeenCalledTimes(2));
+    expect(mocks.session).not.toHaveBeenCalled();
+  });
+
+  it("renders a recoverable Telegram context error without browser login or requests", () => {
+    mocks.bootstrap = { status: "error" };
+
+    renderApp();
+
+    expect(
+      screen.getByRole("button", { name: "Bootstrap retry" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Browser login")).not.toBeInTheDocument();
+    expect(mocks.session).not.toHaveBeenCalled();
+    expect(mocks.auth).not.toHaveBeenCalled();
+  });
+
+  it("renders the Telegram shell with four primary mobile destinations", async () => {
+    mocks.bootstrap = { status: "ready", initData: "signed-init-data" };
+    mocks.auth.mockResolvedValue({ authenticated: true, profile });
+
+    renderApp();
+
+    await screen.findByText(/Finance profile profile-1/);
+    expect(
+      document.querySelector("[data-finance-surface='telegram']"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open in browser" }),
+    ).toBeInTheDocument();
+    const mobileNav = document.querySelector("nav.grid-cols-4");
+    expect(mobileNav).toBeInTheDocument();
+    expect(
+      within(mobileNav as HTMLElement).getAllByRole("button"),
+    ).toHaveLength(4);
+  });
+
+  it("keeps the standalone shell visible while browser session data loads", () => {
+    mocks.session.mockReturnValue(new Promise(() => undefined));
+
+    renderApp();
+
+    expect(
+      document.querySelector("[data-finance-surface='browser']"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Opening Finance…")).toBeInTheDocument();
+  });
+
+  it.each(["categories", "budget", "ultimate"] as const)(
+    "preserves the %s direct route",
+    async (route) => {
+      window.history.replaceState({}, "", `/finance/bot-1?screen=${route}`);
+      mocks.session.mockResolvedValue({ authenticated: true, profile });
+
+      renderApp();
+
+      expect(
+        await screen.findByText(new RegExp(`screen ${route}`)),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it("updates browser URLs on navigation and follows popstate history", async () => {
+    mocks.session.mockResolvedValue({ authenticated: true, profile });
+    renderApp();
+    await screen.findByText(/screen home/);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Transactions" })[0]);
+    expect(await screen.findByText(/screen transactions/)).toBeInTheDocument();
+    expect(window.location.search).toBe("?screen=transactions");
+
+    act(() => {
+      window.history.pushState({}, "", "/finance/bot-1?screen=budget");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(await screen.findByText(/screen budget/)).toBeInTheDocument();
+  });
+
+  it("keeps secondary routes reachable and launches transfers directly", async () => {
+    mocks.session.mockResolvedValue({ authenticated: true, profile });
+    renderApp();
+    await screen.findByText(/screen home/);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Expense" })[0]);
+    expect(await screen.findByText(/screen transactions/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Transfers" })[1]);
+    expect(
+      await screen.findByText(/screen transfers · transfer true/),
+    ).toBeInTheDocument();
+    expect(window.location.search).toContain("transfer=1");
+  });
+});

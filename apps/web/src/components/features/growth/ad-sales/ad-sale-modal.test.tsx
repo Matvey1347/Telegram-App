@@ -4,6 +4,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { AdSaleModal } from "./ad-sale-modal";
 
+vi.mock("@/providers/toast-provider", () => ({
+  useAppToast: () => ({ pushToast: vi.fn() }),
+}));
+
 function renderModal(overrides: Partial<ComponentProps<typeof AdSaleModal>> = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -164,7 +168,7 @@ describe("AdSaleModal", () => {
     expect(onLoadPublishedPosts).not.toHaveBeenCalled();
     expect(screen.getByDisplayValue("12:00")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Not linked to a published post" }));
+    fireEvent.click(screen.getByRole("button", { name: "Load published posts" }));
     expect(onLoadPublishedPosts).toHaveBeenCalledTimes(1);
 
     const postOption = await screen.findByRole("button", {
@@ -173,22 +177,18 @@ describe("AdSaleModal", () => {
     fireEvent.click(postOption);
 
     expect(screen.getByDisplayValue("17:00")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /17:00 · Published campaign post/ })).toBeTruthy();
   });
 
   it("keeps the post selector available and retries after a loading failure", async () => {
     const onLoadPublishedPosts = vi.fn().mockRejectedValue(new Error("Telegram unavailable"));
     renderModal({ onLoadPublishedPosts });
 
-    const selector = await screen.findByRole("button", {
-      name: "Not linked to a published post",
-    });
-    fireEvent.click(selector);
+    await screen.findByRole("button", { name: "Select a published post" });
+    fireEvent.click(screen.getByRole("button", { name: "Load published posts" }));
     await waitFor(() => expect(screen.queryByText("Loading posts...")).toBeNull());
 
-    fireEvent.click(selector);
     expect(onLoadPublishedPosts).toHaveBeenCalledTimes(1);
-    fireEvent.click(selector);
+    fireEvent.click(screen.getByRole("button", { name: "Load published posts" }));
     await waitFor(() => expect(onLoadPublishedPosts).toHaveBeenCalledTimes(2));
     expect(screen.getByText("Advertising post")).toBeTruthy();
   });

@@ -27,6 +27,9 @@ import {
   X,
 } from "lucide-react";
 import { createPortal } from "react-dom";
+import { Modal } from "./modal";
+
+export { Modal } from "./modal";
 
 export type ToastItem = {
   id: number | string;
@@ -1575,53 +1578,6 @@ export function Tooltip({
           )
         : null}
     </span>
-  );
-}
-
-export function Modal({
-  open,
-  onClose,
-  title,
-  children,
-  size = "md",
-  allowOverflow = false,
-  loading: _loading = false,
-}: PropsWithChildren<{
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  size?: "md" | "sm" | "xl";
-  allowOverflow?: boolean;
-  loading?: boolean;
-}>) {
-  if (!open) return null;
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div
-        data-app-modal="true"
-        className={`relative flex max-h-[calc(100dvh-1rem)] w-full flex-col rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl sm:max-h-[84vh] ${allowOverflow ? "overflow-visible" : "overflow-hidden"} ${size === "sm" ? "max-w-[560px]" : size === "xl" ? "max-w-[1280px]" : "max-w-[660px]"}`}
-      >
-        <div className="mb-1 flex items-center justify-between p-4 pb-3 sm:p-5 sm:pb-3">
-          <h3 className="text-lg font-semibold sm:text-xl">{title}</h3>
-          <button
-            onClick={onClose}
-            className="cursor-pointer rounded-lg border border-neutral-700 p-2 hover:bg-neutral-800"
-          >
-            <X size={16} />
-          </button>
-        </div>
-        <div
-          className={`min-h-0 px-4 pb-4 sm:px-5 sm:pb-5 ${allowOverflow ? "overflow-visible" : "overflow-y-auto"}`}
-        >
-          {children}
-        </div>
-      </div>
-    </div>
   );
 }
 

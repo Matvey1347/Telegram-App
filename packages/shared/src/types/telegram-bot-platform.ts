@@ -62,6 +62,8 @@ export type TelegramBotApplicationOption = {
 export type TelegramBotRuntimeSummary = {
   id: string;
   environment: TelegramBotRuntimeEnvironment;
+  /** Whether the API answering this request owns and can serve this runtime. */
+  isProcessOwner: boolean;
   botTokenMasked: string;
   tokenState: "SAVED";
   botId?: string | null;
@@ -105,12 +107,12 @@ export type TelegramBotChannelAccessSummary = {
 
 export type TelegramBotFinanceApplicationSummary = {
   applicationType: "FINANCE";
-  finance: {
+  finance: Partial<Record<TelegramBotRuntimeEnvironment, {
     registeredUsers: number;
     paidUsers: number;
     activeSubscriptions: number;
     failedPayments: number;
-  };
+  }>>;
 };
 
 export type TelegramBotIntegrationView = {

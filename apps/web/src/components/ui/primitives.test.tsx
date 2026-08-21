@@ -1,12 +1,37 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   canonicalizeTimeInputValue,
   CustomSelect,
   isValidTimeInputValue,
+  Modal,
   Tooltip,
 } from "@/components/ui/primitives";
+
+describe("Modal", () => {
+  it("exposes dialog semantics, closes on Escape, and restores focus", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const trigger = document.createElement("button");
+    document.body.appendChild(trigger);
+    trigger.focus();
+    const { unmount } = render(
+      <Modal open onClose={onClose} title="Edit account" closeLabel="Close dialog">
+        <button type="button">Save</button>
+      </Modal>,
+    );
+
+    expect(screen.getByRole("dialog", { name: "Edit account" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Close dialog" })).toBeTruthy();
+    await user.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledOnce();
+
+    unmount();
+    expect(document.activeElement).toBe(trigger);
+    trigger.remove();
+  });
+});
 
 describe("CustomSelect", () => {
   it("renders the dropdown in a fixed overlay layer above surrounding layout", async () => {

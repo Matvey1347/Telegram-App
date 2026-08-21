@@ -66,14 +66,16 @@ export class TelegramBotRuntimeService implements OnModuleInit {
       include: { botIntegration: true },
     });
     for (const runtime of transitions) await this.recoverTransition(runtime);
-    const runtimes = await this.registry.bootstrap(environment);
-    for (const entry of runtimes) await this.reconcileStartupRuntime(entry);
+    await this.reconcileRuntimeEnvironment(environment);
   }
 
-  webhookUrlFor(
-    runtimeId: string,
-    environment = this.requiredEnvironment(),
-  ) {
+  async reconcileLocalDevelopment() {
+    if (this.environment.current() !== TelegramBotRuntimeEnvironment.LOCAL)
+      return;
+    await this.reconcileRuntimeEnvironment(TelegramBotRuntimeEnvironment.LOCAL);
+  }
+
+  webhookUrlFor(runtimeId: string, environment = this.requiredEnvironment()) {
     const base = (
       process.env.TELEGRAM_BOT_WEBHOOK_BASE_URL ||
       process.env.API_PUBLIC_URL ||
@@ -368,7 +370,8 @@ export class TelegramBotRuntimeService implements OnModuleInit {
       this.checks.presentation(
         token,
         runtime.botIntegrationId,
-        runtime.botIntegration.applicationType === TelegramBotApplicationType.FINANCE,
+        runtime.botIntegration.applicationType ===
+          TelegramBotApplicationType.FINANCE,
       ),
     ]);
     const actualUrl = this.webhookUrl(webhookInfo);
@@ -522,6 +525,47 @@ export class TelegramBotRuntimeService implements OnModuleInit {
       }
     } catch (error) {
       await this.markError(runtime.id, runtime.environment, error);
+    }
+  }
+
+  private async reconcileRuntimeEnvironment(
+    environment: TelegramBotRuntimeEnvironment,
+  ) {
+    const runtimes = await this.registry.bootstrap(environment);
+    for (const entry of runtimes) await this.reconcileStartupRuntime(entry);
+    if (environment === TelegramBotRuntimeEnvironment.LOCAL) {
+      await this.activateSavedLocalRuntimes();
+    }
+  }
+
+  /**
+   * `pnpm dev:bots` deliberately owns LOCAL only. A saved local token must
+   * become live on that bounded process startup; otherwise it would remain
+   * DISABLED forever when it was saved before the dev process was started.
+   */
+  private async activateSavedLocalRuntimes() {
+    const runtimes = await this.prisma.telegramBotRuntimeInstance.findMany({
+      where: {
+        environment: TelegramBotRuntimeEnvironment.LOCAL,
+        runtimeStatus: TelegramBotRuntimeStatus.DISABLED,
+        botIntegration: {
+          isActive: true,
+          applicationType: { not: TelegramBotApplicationType.NONE },
+        },
+      },
+      select: { botIntegrationId: true },
+    });
+    for (const runtime of runtimes) {
+      try {
+        await this.enableRuntime({
+          botIntegrationId: runtime.botIntegrationId,
+          environment: TelegramBotRuntimeEnvironment.LOCAL,
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Unable to activate saved LOCAL runtime ${runtime.botIntegrationId}: ${sanitizeOperationalError(error)}`,
+        );
+      }
     }
   }
 
@@ -802,15 +846,19 @@ export class TelegramBotRuntimeService implements OnModuleInit {
     const host = url.hostname.toLowerCase();
     const localHost =
       host === 'localhost' || host === '::1' || host === '127.0.0.1';
-    const ngrokHost = host === 'ngrok.io' || host.endsWith('.ngrok.io') ||
-      host === 'ngrok-free.app' || host.endsWith('.ngrok-free.app');
-    if (localHost || ngrokHost) {
+    const developmentTunnelHost =
+      host === 'ngrok.io' ||
+      host.endsWith('.ngrok.io') ||
+      host === 'ngrok-free.app' ||
+      host.endsWith('.ngrok-free.app') ||
+      host === 'trycloudflare.com' ||
+      host.endsWith('.trycloudflare.com');
+    if (localHost || developmentTunnelHost) {
       throw new BadRequestException(
-        'Production Telegram webhooks cannot use localhost or ngrok URLs',
+        'Production Telegram webhooks cannot use localhost or development tunnel URLs',
       );
     }
   }
-
 
   private updateType(update: TelegramBotWebhookUpdate) {
     if (update.message) return 'message';

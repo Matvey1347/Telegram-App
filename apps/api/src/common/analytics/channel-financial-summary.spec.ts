@@ -69,11 +69,13 @@ describe('channel-financial-summary', () => {
       currency: 'UAH',
       invested: 7000,
       revenue: 0,
+      adSpend: 4500,
       adsSold: 0,
       expectedViews: 10_000,
       cpm: 50,
     });
     expect(economics.invested).toBe(7000);
+    expect(economics.adSpend).toBe(4500);
     expect(economics.remainingToBreakEven).toBe(7000);
     expect(economics.estimatedAdsRemaining).toBe(14);
   });

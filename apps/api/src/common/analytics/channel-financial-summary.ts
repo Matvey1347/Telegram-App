@@ -31,9 +31,9 @@ export function effectiveCampaignJoinedSubscribers(campaign: {
 }
 
 export function effectiveCampaignPendingSubscribers(campaign: {
-  inviteLinks?:
-    | Array<{ joinedCount?: unknown; requestedCount?: unknown } | null | undefined>
-    | null;
+  inviteLinks?: Array<
+    { joinedCount?: unknown; requestedCount?: unknown } | null | undefined
+  > | null;
   requestedCount?: unknown;
 }) {
   const linkedAttributed = sumInviteLinkAttributedSubscribers(
@@ -48,9 +48,9 @@ export function effectiveCampaignPendingSubscribers(campaign: {
 }
 
 export function effectiveCampaignAttributedSubscribers(campaign: {
-  inviteLinks?:
-    | Array<{ joinedCount?: unknown; requestedCount?: unknown } | null | undefined>
-    | null;
+  inviteLinks?: Array<
+    { joinedCount?: unknown; requestedCount?: unknown } | null | undefined
+  > | null;
   joinedCount?: unknown;
   requestedCount?: unknown;
   newSubscribers?: unknown;
@@ -85,7 +85,8 @@ export function resolveChannelKpiStatus(params: {
   const targetCpa = toNumberOrNull(params.targetCpa);
   const acceptableCpaFrom = toNumberOrNull(params.acceptableCpaFrom);
   const acceptableCpa = toNumberOrNull(params.acceptableCpa);
-  const stopCpaFrom = toNumberOrNull(params.stopCpaFrom) ?? toNumberOrNull(params.stopCpa);
+  const stopCpaFrom =
+    toNumberOrNull(params.stopCpaFrom) ?? toNumberOrNull(params.stopCpa);
 
   if (params.avgCpa == null) return 'unknown';
   // Current lower-is-better CPA semantics. `targetCpa` is "Good up to" and
@@ -107,7 +108,9 @@ export function resolveChannelKpiStatus(params: {
 export type ChannelAssetEconomics = {
   currency: string;
   invested: number | null;
+  purchasePrice: number | null;
   revenue: number | null;
+  adSpend: number | null;
   remainingToBreakEven: number | null;
   paybackPercent: number | null;
   adsSold: number;
@@ -119,7 +122,9 @@ export type ChannelAssetEconomics = {
 export function calculateChannelAssetEconomics(input: {
   currency: string;
   invested: number | null;
+  purchasePrice?: number | null;
   revenue: number | null;
+  adSpend?: number | null;
   adsSold: number;
   expectedViews: number | null;
   cpm: number | null;
@@ -128,17 +133,26 @@ export function calculateChannelAssetEconomics(input: {
   const conversionUnavailable = Boolean(input.conversionUnavailable);
   const invested = input.invested;
   const revenue = input.revenue;
-  const comparable = !conversionUnavailable && invested != null && revenue != null;
-  const remainingToBreakEven = comparable ? Math.max(invested - revenue, 0) : null;
-  const paybackPercent = comparable && invested > 0 ? (revenue / invested) * 100 : null;
+  const comparable =
+    !conversionUnavailable && invested != null && revenue != null;
+  const remainingToBreakEven = comparable
+    ? Math.max(invested - revenue, 0)
+    : null;
+  const paybackPercent =
+    comparable && invested > 0 ? (revenue / invested) * 100 : null;
   const estimatedAdPrice =
-    input.expectedViews != null && input.expectedViews > 0 && input.cpm != null && input.cpm > 0
+    input.expectedViews != null &&
+    input.expectedViews > 0 &&
+    input.cpm != null &&
+    input.cpm > 0
       ? (input.expectedViews / 1000) * input.cpm
       : null;
   return {
     currency: input.currency,
     invested,
+    purchasePrice: input.purchasePrice ?? null,
     revenue,
+    adSpend: input.adSpend ?? null,
     remainingToBreakEven,
     paybackPercent,
     adsSold: input.adsSold,

@@ -147,7 +147,9 @@ describe('TelegramBotRuntimeService environment isolation', () => {
         'production-1',
         TelegramBotRuntimeEnvironment.PRODUCTION,
       ),
-    ).toThrow('Production Telegram webhooks cannot use localhost or ngrok URLs');
+    ).toThrow(
+      'Production Telegram webhooks cannot use localhost or development tunnel URLs',
+    );
   });
 
   it('allows an ngrok webhook base for a LOCAL runtime', () => {
@@ -156,7 +158,26 @@ describe('TelegramBotRuntimeService environment isolation', () => {
 
     expect(
       service.webhookUrlFor('local-1', TelegramBotRuntimeEnvironment.LOCAL),
-    ).toBe('https://example.ngrok-free.app/api/telegram/bots/runtime/local-1/webhook');
+    ).toBe(
+      'https://example.ngrok-free.app/api/telegram/bots/runtime/local-1/webhook',
+    );
+  });
+
+  it('allows a Cloudflare Quick Tunnel only for a LOCAL runtime', () => {
+    process.env.TELEGRAM_BOT_WEBHOOK_BASE_URL =
+      'https://finance-dev.trycloudflare.com';
+
+    expect(
+      service.webhookUrlFor('local-1', TelegramBotRuntimeEnvironment.LOCAL),
+    ).toBe(
+      'https://finance-dev.trycloudflare.com/api/telegram/bots/runtime/local-1/webhook',
+    );
+    expect(() =>
+      service.webhookUrlFor(
+        'production-1',
+        TelegramBotRuntimeEnvironment.PRODUCTION,
+      ),
+    ).toThrow('development tunnel URLs');
   });
 
   it('loads and reconciles only the process-owned LOCAL environment', async () => {
@@ -258,7 +279,10 @@ describe('TelegramBotRuntimeService environment isolation', () => {
 
   it('rotates an active non-owned runtime into a disabled state without changing its webhook', async () => {
     environment.current.mockReturnValue(TelegramBotRuntimeEnvironment.LOCAL);
-    const production = runtime('production-1', TelegramBotRuntimeEnvironment.PRODUCTION);
+    const production = runtime(
+      'production-1',
+      TelegramBotRuntimeEnvironment.PRODUCTION,
+    );
     prisma.telegramBotIntegration.findUnique.mockResolvedValue(bot);
     prisma.telegramBotRuntimeInstance.findUnique.mockResolvedValue(production);
     prisma.telegramBotRuntimeInstance.upsert.mockResolvedValue(production);
@@ -384,7 +408,11 @@ describe('TelegramBotRuntimeService environment isolation', () => {
     api.getMe.mockResolvedValue({ id: 42, username: 'local_bot' });
     api.getWebhookInfo.mockResolvedValue({ url: local.webhookUrl });
     checks.presentation.mockResolvedValue({
-      webApp: { status: 'AVAILABLE', url: 'https://local.example/finance/bot-1', error: null },
+      webApp: {
+        status: 'AVAILABLE',
+        url: 'https://local.example/finance/bot-1',
+        error: null,
+      },
       miniApp: {
         status: 'ERROR',
         expectedUrl: 'https://local.example/finance/bot-1',
@@ -393,7 +421,10 @@ describe('TelegramBotRuntimeService environment isolation', () => {
       },
     });
     prisma.telegramBotRuntimeInstance.update.mockResolvedValue(local);
-    registry.refresh.mockResolvedValue({ runtime: local, token: 'local-token' });
+    registry.refresh.mockResolvedValue({
+      runtime: local,
+      token: 'local-token',
+    });
     const previousMiniAppUrl = process.env.FINANCE_MINI_APP_URL;
     process.env.FINANCE_MINI_APP_URL = 'https://local.example';
     await service.checkRuntime('bot-1', TelegramBotRuntimeEnvironment.LOCAL);
@@ -419,12 +450,9 @@ describe('TelegramBotRuntimeService environment isolation', () => {
         }),
       }),
     );
-    expect(checks.presentation).toHaveBeenCalledWith(
-      'token',
-      'bot-1',
-      true,
-    );
-    if (previousMiniAppUrl === undefined) delete process.env.FINANCE_MINI_APP_URL;
+    expect(checks.presentation).toHaveBeenCalledWith('token', 'bot-1', true);
+    if (previousMiniAppUrl === undefined)
+      delete process.env.FINANCE_MINI_APP_URL;
     else process.env.FINANCE_MINI_APP_URL = previousMiniAppUrl;
   });
 });

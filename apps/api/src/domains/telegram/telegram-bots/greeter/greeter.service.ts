@@ -64,6 +64,7 @@ export class GreeterService {
       const user = await this.users.upsertFromUpdate({
         workspaceId: context.bot.workspaceId,
         botIntegrationId: context.bot.id,
+        runtimeInstanceId: context.runtime.id,
         update: context.update,
         trackProductionActivity: !testSession,
       });
@@ -80,6 +81,7 @@ export class GreeterService {
     const user = await this.users.upsertFromUpdate({
       workspaceId: context.bot.workspaceId,
       botIntegrationId: context.bot.id,
+      runtimeInstanceId: context.runtime.id,
       update: context.update,
       trackProductionActivity: !testSession,
     });
@@ -175,6 +177,7 @@ export class GreeterService {
     const user = await this.users.upsertActor({
       workspaceId: context.bot.workspaceId,
       botIntegrationId: context.bot.id,
+      runtimeInstanceId: context.runtime.id,
       actor: request.from,
       telegramChatId: null,
       trackProductionActivity: !testSession,

@@ -20,6 +20,7 @@ import { Controller, useForm } from "react-hook-form";
 import { AppShell } from "@/components/layout/app-shell";
 import { ChannelPreview } from "@/components/features/telegram/telegram/channel-preview";
 import { ChannelAutoSyncToggle } from "@/components/features/telegram/telegram/channel-auto-sync-toggle";
+import { ChannelEconomicsSummary } from "@/components/features/telegram/telegram/channel-economics-summary";
 import {
   ChannelAccessBadge,
   telegramChannelAccessLabel,
@@ -150,20 +151,26 @@ function syncSelectionFromChannel(
 ): TelegramChannelSyncSelection {
   return {
     syncIncludePublicInfo:
-      channel?.syncIncludePublicInfo ?? DEFAULT_SYNC_SELECTION.syncIncludePublicInfo,
+      channel?.syncIncludePublicInfo ??
+      DEFAULT_SYNC_SELECTION.syncIncludePublicInfo,
     syncIncludeInviteLinks:
-      channel?.syncIncludeInviteLinks ?? DEFAULT_SYNC_SELECTION.syncIncludeInviteLinks,
+      channel?.syncIncludeInviteLinks ??
+      DEFAULT_SYNC_SELECTION.syncIncludeInviteLinks,
     syncIncludeHistoricalPosts:
       channel?.syncIncludeHistoricalPosts ??
       DEFAULT_SYNC_SELECTION.syncIncludeHistoricalPosts,
     syncIncludePostMetrics:
-      channel?.syncIncludePostMetrics ?? DEFAULT_SYNC_SELECTION.syncIncludePostMetrics,
+      channel?.syncIncludePostMetrics ??
+      DEFAULT_SYNC_SELECTION.syncIncludePostMetrics,
     syncIncludeOlderPosts:
-      channel?.syncIncludeOlderPosts ?? DEFAULT_SYNC_SELECTION.syncIncludeOlderPosts,
+      channel?.syncIncludeOlderPosts ??
+      DEFAULT_SYNC_SELECTION.syncIncludeOlderPosts,
     syncIncludeChannelStats:
-      channel?.syncIncludeChannelStats ?? DEFAULT_SYNC_SELECTION.syncIncludeChannelStats,
+      channel?.syncIncludeChannelStats ??
+      DEFAULT_SYNC_SELECTION.syncIncludeChannelStats,
     syncIncludeManagedPosts:
-      channel?.syncIncludeManagedPosts ?? DEFAULT_SYNC_SELECTION.syncIncludeManagedPosts,
+      channel?.syncIncludeManagedPosts ??
+      DEFAULT_SYNC_SELECTION.syncIncludeManagedPosts,
     syncIncludeAudienceSnapshot:
       channel?.syncIncludeAudienceSnapshot ??
       DEFAULT_SYNC_SELECTION.syncIncludeAudienceSnapshot,
@@ -335,9 +342,7 @@ function isPersonSource(
 }
 
 function parseTelegramTab(value: string | null): TelegramTab {
-  return value === "networks" || value === "accounts"
-    ? value
-    : "channels";
+  return value === "networks" || value === "accounts" ? value : "channels";
 }
 
 function parseChannelFilter(value: string | null): ChannelFilter {
@@ -400,9 +405,11 @@ function PersonPreview({
 function ChannelSourcesSummary({
   channelId,
   sourcesCount,
+  compact = false,
 }: {
   channelId: string;
   sourcesCount: number;
+  compact?: boolean;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedSource, setSelectedSource] =
@@ -417,18 +424,14 @@ function ChannelSourcesSummary({
     enabled: modalOpen,
   });
   return (
-    <div className="mt-3 border-t border-slate-800 pt-3">
+    <div className={compact ? "contents" : "mt-2 flex justify-end"}>
       <button
         type="button"
         onClick={() => setModalOpen(true)}
-        className="flex w-full items-center justify-between gap-2 rounded-md px-0 py-1 text-left transition hover:text-blue-300"
+        className={compact ? "group relative inline-flex h-9 items-center gap-1.5 rounded-md border border-neutral-700 px-2 text-xs text-neutral-300 hover:border-blue-500 hover:bg-blue-950/30 hover:text-white" : "inline-flex items-center gap-1.5 rounded-md border border-neutral-800 px-2 py-1 text-xs text-neutral-400 transition hover:border-neutral-600 hover:text-blue-300"}
       >
-        <span className="text-sm font-semibold text-slate-200">
-          Access sources
-        </span>
-        <span className="text-xs text-slate-400">
-          {`${sourcesCount} sources`}
-        </span>
+        Sources <span className="text-neutral-500">{sourcesCount}</span>
+        {compact ? <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-neutral-950 px-2 py-1 text-xs text-white shadow group-hover:block">Channel sources</span> : null}
       </button>
       <ChannelSourcesModal
         open={modalOpen}
@@ -1072,13 +1075,21 @@ function ChannelFinanceMiniSummary({
 
         {economics ? (
           <div className="rounded-md border border-slate-800 bg-slate-950/50 px-2.5 py-2 text-xs">
-            <p className="font-medium text-slate-300">Finance · {economics.currency}</p>
+            <p className="font-medium text-slate-300">
+              Finance · {economics.currency}
+            </p>
             {economics.conversionUnavailable ? (
-              <p className="mt-1 text-slate-500">Some amounts are unavailable because an exchange rate is missing.</p>
+              <p className="mt-1 text-slate-500">
+                Some amounts are unavailable because an exchange rate is
+                missing.
+              </p>
             ) : (
               <p className="mt-1 text-slate-400">
-                {formatNumber(economics.invested, 2)} invested · {formatNumber(economics.revenue, 2)} revenue
-                {economics.paybackPercent == null ? "" : ` · ${formatPercent(economics.paybackPercent)} paid back`}
+                {formatNumber(economics.invested, 2)} invested ·{" "}
+                {formatNumber(economics.revenue, 2)} revenue
+                {economics.paybackPercent == null
+                  ? ""
+                  : ` · ${formatPercent(economics.paybackPercent)} paid back`}
                 {economics.remainingToBreakEven === 0
                   ? " · Paid back"
                   : economics.estimatedAdsRemaining == null
@@ -1867,7 +1878,10 @@ export default function TelegramChannelsPage() {
         : telegramChannelsApi.createAdAnalysis(channelId, payload),
     onSuccess: (analysis) => {
       // The list preview contains server-derived analysis summaries.
-      queryClient.invalidateQueries({ queryKey: telegramChannelKeys.list(), exact: true });
+      queryClient.invalidateQueries({
+        queryKey: telegramChannelKeys.list(),
+        exact: true,
+      });
       queryClient.invalidateQueries({
         queryKey: ["telegram-channel-ad-analyses", analysis.telegramChannelId],
       });
@@ -1894,7 +1908,10 @@ export default function TelegramChannelsPage() {
       analysisId: string;
     }) => telegramChannelsApi.deleteAdAnalysis(channelId, analysisId),
     onSuccess: (analysis) => {
-      queryClient.invalidateQueries({ queryKey: telegramChannelKeys.list(), exact: true });
+      queryClient.invalidateQueries({
+        queryKey: telegramChannelKeys.list(),
+        exact: true,
+      });
       queryClient.invalidateQueries({
         queryKey: ["telegram-channel-ad-analyses", analysis.telegramChannelId],
       });
@@ -1924,21 +1941,33 @@ export default function TelegramChannelsPage() {
     mutationFn: (id: string) => telegramChannelsApi.archive(id),
     onSuccess: (channel) => {
       moveTelegramChannelBetweenLifecycleCaches(queryClient, channel);
-      queryClient.invalidateQueries({ queryKey: telegramChannelKeys.selects() });
+      queryClient.invalidateQueries({
+        queryKey: telegramChannelKeys.selects(),
+      });
       queryClient.invalidateQueries({ queryKey: dashboardKeys.summary() });
       pushToast("Channel archived.", "success");
     },
-    onError: (error: unknown) => pushToast(requestErrorMessage(error, "Failed to archive channel."), "error"),
+    onError: (error: unknown) =>
+      pushToast(
+        requestErrorMessage(error, "Failed to archive channel."),
+        "error",
+      ),
   });
   const restoreMutation = useMutation({
     mutationFn: (id: string) => telegramChannelsApi.restore(id),
     onSuccess: (channel) => {
       moveTelegramChannelBetweenLifecycleCaches(queryClient, channel);
-      queryClient.invalidateQueries({ queryKey: telegramChannelKeys.selects() });
+      queryClient.invalidateQueries({
+        queryKey: telegramChannelKeys.selects(),
+      });
       queryClient.invalidateQueries({ queryKey: dashboardKeys.summary() });
       pushToast("Channel restored.", "success");
     },
-    onError: (error: unknown) => pushToast(requestErrorMessage(error, "Failed to restore channel."), "error"),
+    onError: (error: unknown) =>
+      pushToast(
+        requestErrorMessage(error, "Failed to restore channel."),
+        "error",
+      ),
   });
   const deletePersonMutation = useMutation({
     mutationFn: (id: string) => advertisingChannelsApi.remove(id),
@@ -2167,18 +2196,20 @@ export default function TelegramChannelsPage() {
         action={headerAction}
       />
       <div className="mb-5 inline-flex rounded-lg border border-neutral-700 bg-neutral-900 p-1">
-        {(["channels", "networks", "accounts"] as TelegramTab[]).map(
-          (item) => (
-            <button
-              key={item}
-              type="button"
-              className={`rounded-md px-4 py-2 text-sm ${tab === item ? "bg-blue-600 text-white" : "text-neutral-300 hover:bg-neutral-800"}`}
-              onClick={() => updateTabs({ tab: item })}
-            >
-              {item === "channels" ? "Channels" : item === "networks" ? "Networks" : "Accounts"}
-            </button>
-          ),
-        )}
+        {(["channels", "networks", "accounts"] as TelegramTab[]).map((item) => (
+          <button
+            key={item}
+            type="button"
+            className={`rounded-md px-4 py-2 text-sm ${tab === item ? "bg-blue-600 text-white" : "text-neutral-300 hover:bg-neutral-800"}`}
+            onClick={() => updateTabs({ tab: item })}
+          >
+            {item === "channels"
+              ? "Channels"
+              : item === "networks"
+                ? "Networks"
+                : "Accounts"}
+          </button>
+        ))}
       </div>
       {tab === "channels" ? (
         <>
@@ -2203,7 +2234,9 @@ export default function TelegramChannelsPage() {
                   key={item}
                   type="button"
                   className={`border-b-2 px-3 py-2 text-sm ${lifecycleTab === item ? "border-blue-500 text-white" : "border-transparent text-neutral-400 hover:text-white"}`}
-                  onClick={() => updateTabs({ tab: "channels", lifecycle: item })}
+                  onClick={() =>
+                    updateTabs({ tab: "channels", lifecycle: item })
+                  }
                 >
                   {item === "active"
                     ? `Active (${channelsResponse?.counts.active ?? 0})`
@@ -2227,10 +2260,14 @@ export default function TelegramChannelsPage() {
                     badges={
                       <div className="flex flex-wrap gap-1">
                         {hasAdminLink && channel.archivedAt ? (
-                          <span className="inline-flex rounded border border-amber-700/70 bg-amber-950/25 px-2 py-0.5 text-xs text-amber-200">Archived</span>
+                          <span className="inline-flex rounded border border-amber-700/70 bg-amber-950/25 px-2 py-0.5 text-xs text-amber-200">
+                            Archived
+                          </span>
                         ) : null}
                         {channel.acquisitionType === "PURCHASED" ? (
-                          <span className="inline-flex rounded border border-cyan-700/70 bg-cyan-950/25 px-2 py-0.5 text-xs text-cyan-200">Purchased</span>
+                          <span className="inline-flex rounded border border-cyan-700/70 bg-cyan-950/25 px-2 py-0.5 text-xs text-cyan-200">
+                            Purchased
+                          </span>
                         ) : null}
                       </div>
                     }
@@ -2257,16 +2294,21 @@ export default function TelegramChannelsPage() {
                             <Archive size={18} />
                           </button>
                         ) : null}
-                        <IconButton kind="delete" onClick={() => setDeleting(channel)} />
+                        <IconButton
+                          kind="delete"
+                          onClick={() => setDeleting(channel)}
+                        />
                       </div>
                     }
                   />
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <ChannelAccessBadge accessMode={channel.accessMode} />
-                    {!channel.archivedAt ? <ChannelAutoSyncToggle
-                      channelId={channel.id}
-                      enabled={channel.autoSyncEnabled ?? true}
-                    /> : null}
+                    {!channel.archivedAt ? (
+                      <ChannelAutoSyncToggle
+                        channelId={channel.id}
+                        enabled={channel.autoSyncEnabled ?? true}
+                      />
+                    ) : null}
                   </div>
                   {username ? (
                     <div className="space-y-1">
@@ -2283,69 +2325,68 @@ export default function TelegramChannelsPage() {
                       </p>
                     </div>
                   ) : null}
-                  <ChannelFinanceMiniSummary
+                  <ChannelEconomicsSummary
                     channel={channel}
-                    isOwnChannel={hasAdminLink}
-                    moneySettings={currencySettings}
-                    rates={rates}
-                    actions={
-                      <>
-                        {hasAdminLink && !channel.archivedAt ? (
-                          <Button
-                            className="inline-flex h-11 min-w-0 items-center justify-center gap-2 border border-blue-500/40 bg-blue-600/95 text-center text-white shadow-[0_10px_24px_rgba(37,99,235,0.18)] transition hover:border-blue-400 hover:bg-blue-500"
-                            variant="primary"
-                            onClick={() => {
-                              setSyncTargetChannel(channel);
-                              setSyncSelection(
-                                syncSelectionFromChannel(channel),
-                              );
-                            }}
-                          >
-                            <RefreshCw size={16} />
-                            Sync
-                          </Button>
-                        ) : null}
-                        {!hasAdminLink && username && !channel.archivedAt ? (
-                          <Button
-                            className="inline-flex h-11 min-w-56 items-center justify-center gap-2 border border-blue-500/40 bg-blue-600/95 text-center text-white shadow-[0_10px_24px_rgba(37,99,235,0.18)] transition hover:border-blue-400 hover:bg-blue-500"
-                            variant="primary"
-                            onClick={() =>
-                              importMutation.mutate({
-                                input: `@${username}`,
-                                mode: "refresh",
-                              })
-                            }
-                          >
-                            <RefreshCw size={16} />
-                            Refresh Public
-                          </Button>
-                        ) : null}
-                        {hasAdminLink && !channel.archivedAt ? (
-                          channel.preview?.canPostMessages ? (
-                            <Link
-                              href={buildTelegramPostsUrl({
-                                channelId: channel.id,
-                                postView: "editor",
-                              })}
-                              className="inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-md border border-blue-500/40 bg-blue-600/95 text-center text-sm font-medium text-white shadow-[0_10px_24px_rgba(37,99,235,0.18)] transition hover:border-blue-400 hover:bg-blue-500"
-                            >
-                              <Send size={16} />
-                              Posts
-                            </Link>
-                          ) : null
-                        ) : null}
-                        {hasAdminLink ? (
-                          <Link
-                            href={`/telegram/channels/${channel.id}`}
-                            className="col-span-full flex h-11 w-full items-center justify-center gap-2 rounded-md border border-slate-600/80 px-3 py-2 text-center text-sm font-semibold text-slate-200 transition hover:border-blue-400/70 hover:bg-slate-900 hover:text-white"
-                          >
-                            Open
-                            <ArrowUpRight size={16} />
-                          </Link>
-                        ) : null}
-                      </>
-                    }
+                    currencySettings={currencySettings}
                   />
+                  <div className="mt-3 flex items-center justify-end gap-2 border-t border-neutral-800 pt-3">
+                    {hasAdminLink && !channel.archivedAt ? (
+                      <span className="group relative inline-flex"><button
+                        type="button"
+                        title="Sync channel"
+                        aria-label={`Sync ${channel.title}`}
+                        onClick={() => {
+                          setSyncTargetChannel(channel);
+                          setSyncSelection(syncSelectionFromChannel(channel));
+                        }}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-neutral-700 text-neutral-300 hover:border-blue-500 hover:bg-blue-950/30 hover:text-white"
+                      >
+                        <RefreshCw size={17} />
+                      </button><span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-neutral-950 px-2 py-1 text-xs text-white shadow group-hover:block">Sync channel</span></span>
+                    ) : null}
+                    {!hasAdminLink && username && !channel.archivedAt ? (
+                      <span className="group relative inline-flex"><button
+                        type="button"
+                        title="Refresh public data"
+                        aria-label={`Refresh ${channel.title}`}
+                        onClick={() =>
+                          importMutation.mutate({
+                            input: `@${username}`,
+                            mode: "refresh",
+                          })
+                        }
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-neutral-700 text-neutral-300 hover:border-blue-500 hover:bg-blue-950/30 hover:text-white"
+                      >
+                        <RefreshCw size={17} />
+                      </button><span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-neutral-950 px-2 py-1 text-xs text-white shadow group-hover:block">Refresh public data</span></span>
+                    ) : null}
+                    {hasAdminLink &&
+                    !channel.archivedAt &&
+                    channel.preview?.canPostMessages ? (
+                      <span className="group relative inline-flex"><Link
+                        href={buildTelegramPostsUrl({
+                          channelId: channel.id,
+                          postView: "editor",
+                        })}
+                        title="Posts"
+                        aria-label={`Posts for ${channel.title}`}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-neutral-700 text-neutral-300 hover:border-blue-500 hover:bg-blue-950/30 hover:text-white"
+                      >
+                        <Send size={17} />
+                      </Link><span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-neutral-950 px-2 py-1 text-xs text-white shadow group-hover:block">Posts</span></span>
+                    ) : null}
+                    {hasAdminLink ? (
+                      <span className="group relative inline-flex"><Link
+                        href={`/telegram/channels/${channel.id}`}
+                        title="Open channel"
+                        aria-label={`Open ${channel.title}`}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-neutral-700 text-neutral-300 hover:border-blue-500 hover:bg-blue-950/30 hover:text-white"
+                      >
+                        <ArrowUpRight size={17} />
+                      </Link><span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-neutral-950 px-2 py-1 text-xs text-white shadow group-hover:block">Open channel</span></span>
+                    ) : null}
+                    {hasAdminLink ? <ChannelSourcesSummary channelId={channel.id} sourcesCount={channel.preview?.sourcesCount ?? channel.adminLinks?.length ?? 0} compact /> : null}
+                  </div>
                   {!hasAdminLink ? (
                     <ExternalChannelAdAnalysis
                       channel={channel}
@@ -2354,16 +2395,6 @@ export default function TelegramChannelsPage() {
                       }
                       onDelete={(analysis) =>
                         setDeletingAnalysis({ channel, analysis })
-                      }
-                    />
-                  ) : null}
-                  {hasAdminLink ? (
-                    <ChannelSourcesSummary
-                      channelId={channel.id}
-                      sourcesCount={
-                        channel.preview?.sourcesCount ??
-                        channel.adminLinks?.length ??
-                        0
                       }
                     />
                   ) : null}

@@ -29,6 +29,12 @@ export type TelegramBotWebhookUpdate = {
       mime_type?: string;
       file_name?: string;
     };
+    voice?: {
+      file_id?: string;
+      file_size?: number;
+      mime_type?: string;
+      duration?: number;
+    };
     successful_payment?: {
       currency?: string;
       total_amount?: number;

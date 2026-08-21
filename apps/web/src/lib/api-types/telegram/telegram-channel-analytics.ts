@@ -84,7 +84,9 @@ export type TelegramChannelFinancialSummary = {
   assetEconomics?: {
     currency: string;
     invested: number | null;
+    purchasePrice: number | null;
     revenue: number | null;
+    adSpend: number | null;
     remainingToBreakEven: number | null;
     paybackPercent: number | null;
     adsSold: number;

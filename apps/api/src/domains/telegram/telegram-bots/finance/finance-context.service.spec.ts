@@ -35,7 +35,11 @@ function signedLogin(token: string) {
 }
 
 describe('FinanceContextService Telegram Mini App verification', () => {
-  const service = new FinanceContextService({} as never, {} as never);
+  const service = new FinanceContextService(
+    {} as never,
+    {} as never,
+    {} as never,
+  );
   it('accepts fresh initData signed by the exact bot token', () => {
     expect(
       service.verifyInitData(signed('123:token'), '123:token').user,
@@ -83,6 +87,8 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
     workspaceId: 'workspace-1',
     runtimeInstances: [
       {
+        id: 'runtime-1',
+        username: 'finance_bot',
         botTokenEncrypted: 'encrypted',
         botTokenIv: 'iv',
         botTokenAuthTag: 'tag',
@@ -121,6 +127,7 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
     const service = new FinanceContextService(
       prisma as never,
       encryption as never,
+      { current: () => 'PRODUCTION' } as never,
     );
     jest.spyOn(service, 'verifyInitData').mockReturnValue({
       user: { id: 12345, username: 'ada', first_name: 'Ada' },
@@ -145,6 +152,16 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
     expect(prisma.telegramBotUser.update).not.toHaveBeenCalled();
     expect(tx.financeCategory.createMany).not.toHaveBeenCalled();
     expect(tx.financeAccount.findFirst).not.toHaveBeenCalled();
+    expect(prisma.telegramBotIntegration.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          runtimeInstances: expect.objectContaining({
+            where: { environment: 'PRODUCTION', runtimeStatus: 'ACTIVE' },
+            take: 1,
+          }),
+        }),
+      }),
+    );
   });
 
   it('updates only changed Telegram identity fields without recording consumer API activity', async () => {
@@ -169,6 +186,25 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
     expect(
       prisma.telegramBotUser.update.mock.calls[0][0].data,
     ).not.toHaveProperty('lastInteractionAt');
+  });
+
+  it('does not erase a known Telegram language when browser login omits language_code', async () => {
+    const { service, prisma, tx } = setup();
+    prisma.telegramBotUser.findUnique.mockResolvedValue({
+      ...telegramUser,
+      languageCode: 'uk',
+    });
+    tx.financeProfile.findUnique.mockResolvedValue({ id: 'profile-1' });
+    jest.spyOn(service, 'verifyLoginData').mockReturnValue({
+      id: '12345',
+      username: 'ada',
+      first_name: 'Ada',
+      last_name: undefined,
+    });
+
+    await service.fromTelegramLogin('bot-1', {});
+
+    expect(prisma.telegramBotUser.update).not.toHaveBeenCalled();
   });
 
   it('initializes defaults exactly once for a first Finance profile', async () => {

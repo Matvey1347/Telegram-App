@@ -63,6 +63,10 @@ function Monetization({
   const [interval, setInterval] = useState<"MONTH" | "YEAR">("MONTH");
   const refreshPlans = () =>
     qc.invalidateQueries({ queryKey: botBillingKeys.plans(botId) });
+  const syncCatalog = useMutation({
+    mutationFn: () => botBillingApi.syncFinanceCatalog(botId),
+    onSuccess: refreshPlans,
+  });
   const createPlan = useMutation({
     mutationFn: () =>
       botBillingApi.createPlan(botId, {
@@ -88,75 +92,16 @@ function Monetization({
   return (
     <div className="space-y-4">
       <Card>
-        <h2 className="font-semibold">New plan</h2>
-        <div className="mt-3 grid gap-3 md:grid-cols-3">
-          <Input
-            aria-label="Plan name"
-            placeholder="Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <Input
-            aria-label="Plan code"
-            placeholder="Code"
-            value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
-          />
-          <Input
-            aria-label="Plan description"
-            placeholder="Description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </div>
+        <h2 className="font-semibold">Finance plans</h2>
+        <p className="mt-1 text-sm text-neutral-400">Canonical catalog: Pro — 149 UAH/month; Ultimate — 249 UAH/month.</p>
         <Button
           className="mt-3"
-          disabled={!name || !code || createPlan.isPending}
-          onClick={() => createPlan.mutate()}
+          disabled={syncCatalog.isPending}
+          onClick={() => syncCatalog.mutate()}
         >
-          Create plan
+          {syncCatalog.isPending ? "Syncing Stripe…" : "Sync plans with Stripe"}
         </Button>
-      </Card>
-      <Card>
-        <h2 className="font-semibold">New immutable price version</h2>
-        <p className="mt-1 text-xs text-neutral-500">
-          Changing a price creates a new version; active subscriptions keep
-          their existing price.
-        </p>
-        <div className="mt-3 grid gap-3 md:grid-cols-5">
-          <Select value={planId} onChange={(e) => setPlanId(e.target.value)}>
-            {plans.map((plan) => (
-              <option key={plan.id} value={plan.id}>
-                {plan.name}
-              </option>
-            ))}
-          </Select>
-          <Input
-            aria-label="Price amount"
-            inputMode="decimal"
-            placeholder="99.00"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-          <Input
-            aria-label="Currency"
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-          />
-          <Select
-            value={interval}
-            onChange={(e) => setInterval(e.target.value as "MONTH" | "YEAR")}
-          >
-            <option value="MONTH">Monthly</option>
-            <option value="YEAR">Yearly</option>
-          </Select>
-          <Button
-            disabled={!planId || !amount || createPrice.isPending}
-            onClick={() => createPrice.mutate()}
-          >
-            Add version
-          </Button>
-        </div>
+        {syncCatalog.isError ? <p className="mt-2 text-sm text-rose-300">Connect Stripe (secret key and webhook secret) before syncing plans.</p> : null}
       </Card>
       <div className="grid gap-4 xl:grid-cols-2">
         {plans.map((plan) => (

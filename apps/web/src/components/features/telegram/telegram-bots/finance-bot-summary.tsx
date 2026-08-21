@@ -1,9 +1,14 @@
-import type { TelegramBotFinanceApplicationSummary } from "@telegram-system/shared";
+import type {
+  TelegramBotFinanceApplicationSummary,
+  TelegramBotRuntimeEnvironment,
+} from "@telegram-system/shared";
 
 export function FinanceBotSummary({
   summary,
 }: {
-  summary: TelegramBotFinanceApplicationSummary["finance"] | undefined;
+  summary:
+    | TelegramBotFinanceApplicationSummary["finance"][TelegramBotRuntimeEnvironment]
+    | undefined;
 }) {
   const metrics = summary ?? {
     registeredUsers: 0,

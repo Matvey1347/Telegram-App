@@ -81,8 +81,10 @@ export class TelegramBotApiClient {
   async setChatMenuButton(
     token: string,
     menuButton: TelegramChatMenuButton = { type: 'commands' },
+    chatId?: string,
   ) {
     return this.call<boolean>(token, 'setChatMenuButton', {
+      ...(chatId ? { chat_id: chatId } : {}),
       menu_button:
         menuButton.type === 'web_app'
           ? {
@@ -103,11 +105,11 @@ export class TelegramBotApiClient {
     );
   }
 
-  async getChatMenuButton(token: string) {
+  async getChatMenuButton(token: string, chatId?: string) {
     const result = await this.call<Record<string, unknown>>(
       token,
       'getChatMenuButton',
-      {},
+      chatId ? { chat_id: chatId } : {},
       'GET',
     );
     const webApp = result.web_app;
@@ -115,7 +117,9 @@ export class TelegramBotApiClient {
       type: typeof result.type === 'string' ? result.type : 'commands',
       text: typeof result.text === 'string' ? result.text : undefined,
       webAppUrl:
-        webApp && typeof webApp === 'object' && typeof (webApp as { url?: unknown }).url === 'string'
+        webApp &&
+        typeof webApp === 'object' &&
+        typeof (webApp as { url?: unknown }).url === 'string'
           ? (webApp as { url: string }).url
           : undefined,
     } as TelegramChatMenuButtonInfo;
@@ -198,7 +202,12 @@ export class TelegramBotApiClient {
 
   async editRichMessage(
     token: string,
-    payload: { chat_id: string; message_id: number; rich_message: unknown; reply_markup?: unknown },
+    payload: {
+      chat_id: string;
+      message_id: number;
+      rich_message: unknown;
+      reply_markup?: unknown;
+    },
   ) {
     return this.call<unknown>(token, 'editMessageText', payload);
   }

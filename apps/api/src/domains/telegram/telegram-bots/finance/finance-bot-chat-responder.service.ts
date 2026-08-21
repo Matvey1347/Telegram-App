@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { TelegramBotDeliveryService } from '../core/telegram-bot-delivery.service';
+import { TelegramBotInteractiveReplyService } from '../../../../telegram/shared/telegram-bot-interactive-reply.service';
 import type { TelegramBotApplicationContext } from '../core/telegram-bot-update.types';
 import { FinanceHistoryQueryDto } from './finance.dto';
 import { FinanceLedgerService } from './finance-ledger.service';
@@ -38,7 +38,8 @@ export function financeMainMenu(botId: string, locale: FinanceChatLocale = 'en')
       { text: t(locale, 'menuRecent') },
     ],
     [{ text: t(locale, 'menuAccounts') }, { text: t(locale, 'menuCategories') }],
-    [{ text: t(locale, 'menuTransfer') }, { text: t(locale, 'menuHelp') }],
+    [{ text: t(locale, 'menuTransfer') }, { text: t(locale, 'menuSettings') }],
+    [{ text: t(locale, 'menuHelp') }],
   ];
 }
 
@@ -55,10 +56,16 @@ export function financeCategoryEmoji(name: string | null | undefined) {
   return '🏷️';
 }
 
+function rowsOfTwo<T>(items: T[]) {
+  const rows: T[][] = [];
+  for (let index = 0; index < items.length; index += 2) rows.push(items.slice(index, index + 2));
+  return rows;
+}
+
 @Injectable()
 export class FinanceBotChatResponderService {
   constructor(
-    private readonly delivery: TelegramBotDeliveryService,
+    private readonly interactive: TelegramBotInteractiveReplyService,
     private readonly ledger: FinanceLedgerService,
     private readonly core: FinanceCoreService,
   ) {}
@@ -107,14 +114,7 @@ export class FinanceBotChatResponderService {
     text: string,
     idempotencyKey: string,
   ) {
-    await this.delivery.enqueueSendMessage({
-      workspaceId: context.bot.workspaceId,
-      botIntegrationId: context.bot.id,
-      telegramBotUserId: userId,
-      chatId,
-      text,
-      idempotencyKey,
-    });
+    await this.interactive.send(context.token, chatId, { text });
   }
 
   async sendMainMenu(
@@ -123,15 +123,9 @@ export class FinanceBotChatResponderService {
     chatId: string,
     locale: FinanceChatLocale = 'en',
   ) {
-    await this.delivery.enqueueSendMessage({
-      workspaceId: context.bot.workspaceId,
-      botIntegrationId: context.bot.id,
-      telegramBotUserId: userId,
-      chatId,
+    await this.interactive.send(context.token, chatId, {
       text: t(locale, 'welcome'),
       replyKeyboard: financeMainMenu(context.bot.id, locale),
-      // Idempotent per incoming update, rather than permanently per user.
-      idempotencyKey: `finance-main-menu:${context.updateLogId}`,
     });
   }
 
@@ -142,15 +136,10 @@ export class FinanceBotChatResponderService {
     idempotencyKey: string,
     locale: FinanceChatLocale = 'en',
   ) {
-    await this.delivery.enqueueSendMessage({
-      workspaceId: context.bot.workspaceId,
-      botIntegrationId: context.bot.id,
-      telegramBotUserId: userId,
-      chatId,
+    await this.interactive.send(context.token, chatId, {
       text: financeMiniAppUrl(context.bot.id)
         ? t(locale, 'openFinance') : t(locale, 'noMiniApp'),
       replyKeyboard: financeMainMenu(context.bot.id, locale),
-      idempotencyKey,
     });
   }
 
@@ -198,16 +187,16 @@ export class FinanceBotChatResponderService {
       const accounts = await this.ledger.accounts(profileId);
       const active = accounts.filter((account) => !account.archivedAt);
       const text = active.length
-        ? `${t(locale, 'accountsTitle')}\n\n${active.map((account) => `${account.name}\n${account.balance} ${account.currency}`).join('\n\n')}`
+        ? `${t(locale, 'accountsTitle')}\n\n${active.slice(0, 8).map((account) => `${account.name}\n${account.balance} ${account.currency}`).join('\n\n')}`
         : t(locale, 'noAccounts');
-      await this.delivery.enqueueSendMessage({
-        workspaceId: context.bot.workspaceId,
-        botIntegrationId: context.bot.id,
-        telegramBotUserId: userId,
-        chatId,
+      await this.interactive.send(context.token, chatId, {
         text,
+        inlineButtons: [
+          [{ text: t(locale, 'addAccount'), callbackData: 'fin:flow:start-account' }],
+          ...rowsOfTwo(active.slice(0, 8).map((account) => ({ text: `✏️ ${account.name}`, callbackData: `fin:flow:edit-account:${account.id}` }))),
+          ...(financeMiniAppUrl(context.bot.id, undefined, 'accounts') ? [[{ text: t(locale, 'manageInFinance'), webAppUrl: financeMiniAppUrl(context.bot.id, undefined, 'accounts')! }]] : []),
+        ],
         replyKeyboard: financeMainMenu(context.bot.id, locale),
-        idempotencyKey: `finance-accounts:${context.updateLogId}`,
       });
     } catch {
       await this.sendSafe(
@@ -231,22 +220,29 @@ export class FinanceBotChatResponderService {
       const active = (await this.core.categories(profileId)).filter(
         (category) => !category.archivedAt,
       );
+      const visible = active.slice(0, 20);
       const list = (type: 'EXPENSE' | 'INCOME') =>
-        active
+        visible
           .filter((category) => category.type === type)
           .map((category) => `${financeCategoryEmoji(category.name)} ${financeCategoryLabel(locale, category.key, category.name)}`)
           .join(' · ');
       const text = active.length
         ? `${t(locale, 'categoriesTitle')}\n\n${t(locale, 'expenses')}\n${list('EXPENSE') || t(locale, 'none')}\n\n${t(locale, 'income')}\n${list('INCOME') || t(locale, 'none')}`
         : t(locale, 'noCategories');
-      await this.delivery.enqueueSendMessage({
-        workspaceId: context.bot.workspaceId,
-        botIntegrationId: context.bot.id,
-        telegramBotUserId: userId,
-        chatId,
+      await this.interactive.send(context.token, chatId, {
         text,
+        inlineButtons: [
+          [{ text: t(locale, 'addCategory'), callbackData: 'fin:flow:start-category' }],
+          ...active.slice(0, 8).map((category) => {
+            const label = financeCategoryLabel(locale, category.key, category.name);
+            return [
+              { text: `${category.type === 'EXPENSE' ? '💸' : '💰'} ${label}`, callbackData: `fin:flow:edit-category:${category.id}` },
+              { text: `🗄 ${t(locale, 'archive')}`, callbackData: `fin:flow:archive-category:${category.id}` },
+            ];
+          }),
+          ...(financeMiniAppUrl(context.bot.id, undefined, 'more') ? [[{ text: t(locale, 'manageInFinance'), webAppUrl: financeMiniAppUrl(context.bot.id, undefined, 'more')! }]] : []),
+        ],
         replyKeyboard: financeMainMenu(context.bot.id, locale),
-        idempotencyKey: `finance-categories:${context.updateLogId}`,
       });
     } catch {
       await this.sendSafe(
@@ -263,21 +259,34 @@ export class FinanceBotChatResponderService {
     profileId: string,
     chatId: string,
     locale: FinanceChatLocale = 'en',
+    accountCount = 0,
   ) {
-    const accounts = (await this.ledger.accounts(profileId)).filter(
-      (account) => !account.archivedAt,
-    );
-    const text = accounts.length < 2
-      ? `${t(locale, 'transfer')}\n\n${t(locale, 'transferNeedAccounts')}`
-      : `${t(locale, 'transfer')}\n\n${t(locale, 'transferReady', { count: accounts.length })}`;
-    await this.delivery.enqueueSendMessage({
-      workspaceId: context.bot.workspaceId,
-      botIntegrationId: context.bot.id,
-      telegramBotUserId: userId,
-      chatId,
+    const missing = Math.max(0, 2 - accountCount);
+    const text = `${t(locale, 'transfer')}\n\n${t(locale, 'transferMissingAccounts', { count: missing })}`;
+    const accountsUrl = financeMiniAppUrl(context.bot.id, undefined, 'accounts');
+    await this.interactive.send(context.token, chatId, {
       text,
+      inlineButtons: [
+        [{ text: t(locale, 'addAccount'), callbackData: 'fin:flow:start-account' }],
+        ...(accountsUrl ? [[{ text: t(locale, 'manageAccounts'), webAppUrl: accountsUrl }]] : []),
+      ],
       replyKeyboard: financeMainMenu(context.bot.id, locale),
-      idempotencyKey: `finance-transfer:${context.updateLogId}`,
+    });
+  }
+
+  async sendSettings(
+    context: TelegramBotApplicationContext,
+    chatId: string,
+    locale: FinanceChatLocale,
+    defaultCurrency: string,
+  ) {
+    const settingsUrl = financeMiniAppUrl(context.bot.id, undefined, 'more');
+    await this.interactive.send(context.token, chatId, {
+      text: t(locale, 'settingsSummary', { currency: defaultCurrency }),
+      inlineButtons: [
+        [{ text: t(locale, 'changeLanguage'), callbackData: 'fin:flow:start-language' }],
+        ...(settingsUrl ? [[{ text: t(locale, 'fullSettings'), webAppUrl: settingsUrl }, { text: t(locale, 'subscription'), webAppUrl: settingsUrl }]] : []),
+      ],
     });
   }
 

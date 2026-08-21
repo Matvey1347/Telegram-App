@@ -9,9 +9,7 @@
   "scripts": {
     "postinstall": "pnpm --filter @telegram-system/shared build",
     "dev": "NEXT_PUBLIC_API_URL=http://localhost:4000/api FRONTEND_URL=http://localhost:3000 TELEGRAM_SYSTEM_BOT_ENVIRONMENT= TELEGRAM_BOT_RUNTIME_ENVIRONMENT= pnpm --parallel --filter api --filter web dev",
-    "dev:ngrok": "node scripts/dev-ngrok.mjs --ngrok",
-    "dev:webhook": "NGROK_TARGET_PORT=4000 node scripts/dev-ngrok.mjs --ngrok --bots",
-    "dev:bots": "NGROK_TARGET_PORT=4000 node scripts/dev-ngrok.mjs --ngrok --bots",
+    "dev:bots": "TUNNEL_TARGET_PORT=4000 node scripts/dev-tunnel.mjs --cloudflare --bots",
     "dev:plain": "pnpm dev",
     "dev:web": "pnpm --filter web dev",
     "dev:api": "pnpm --filter api start:dev",
@@ -20,6 +18,7 @@
     "typecheck": "pnpm --filter @telegram-system/shared typecheck && pnpm --filter api typecheck && pnpm --filter web typecheck",
     "test": "pnpm test:api && pnpm test:web",
     "test:deployment": "node scripts/check-railway-build.mjs",
+    "env:check": "node scripts/check-env-profile.mjs",
     "architecture:check": "node scripts/check-architecture.mjs",
     "test:api": "pnpm --filter api test -- --runInBand",
     "test:web": "pnpm --filter web test -- --run",

@@ -17,25 +17,13 @@ import {
   TelegramBotApiClient,
   TelegramBotApiError,
 } from '../../../../telegram/shared/telegram-bot-api.client';
-import { createCollapsibleReplyKeyboard } from '../../../../telegram/shared/telegram-reply-keyboard';
+import { telegramBotMessagePayload, type TelegramBotMessage } from '../../../../telegram/shared/telegram-bot-message';
 import { sanitizeOperationalError } from '../../../../common/security/operational-error';
 import { TelegramBotDeliveryScheduler } from './telegram-bot-delivery-scheduler';
 import { TelegramBotRuntimeEnvironmentService } from './telegram-bot-runtime-environment.service';
 import { TelegramBotRuntimeExecutionContext } from './telegram-bot-runtime-execution-context';
 
-type SendMessagePayload = {
-  text: string;
-  parseMode?: string;
-  inlineButtons?: Array<
-    Array<{
-      text: string;
-      url?: string;
-      webAppUrl?: string;
-      callbackData?: string;
-    }>
-  >;
-  replyKeyboard?: Array<Array<{ text: string; webAppUrl?: string }>>;
-};
+type SendMessagePayload = TelegramBotMessage;
 
 type ClaimedDelivery = Prisma.TelegramBotDeliveryGetPayload<{
   include: {
@@ -285,29 +273,10 @@ export class TelegramBotDeliveryService
     try {
       if (delivery.type === TelegramBotDeliveryType.SEND_MESSAGE) {
         const payload = delivery.payload as SendMessagePayload;
-        await this.botApi.sendMessage(token, {
-          chat_id: delivery.chatId,
-          text: payload.text,
-          parse_mode: payload.parseMode,
-          reply_markup: payload.inlineButtons?.length
-            ? {
-                inline_keyboard: payload.inlineButtons.map((row) =>
-                  row.map((button) => ({
-                    text: button.text,
-                    ...(button.url ? { url: button.url } : {}),
-                    ...(button.webAppUrl
-                      ? { web_app: { url: button.webAppUrl } }
-                      : {}),
-                    ...(button.callbackData
-                      ? { callback_data: button.callbackData }
-                      : {}),
-                  })),
-                ),
-              }
-            : payload.replyKeyboard?.length
-              ? createCollapsibleReplyKeyboard(payload.replyKeyboard)
-              : undefined,
-        });
+        await this.botApi.sendMessage(
+          token,
+          telegramBotMessagePayload(delivery.chatId, payload),
+        );
       }
       const sentAt = new Date();
       const finalized = await this.prisma.$transaction(async (tx) => {

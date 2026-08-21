@@ -34,4 +34,13 @@ describe('Finance chat locale', () => {
     expect(financeChatTranslations.ru.welcome).toContain('Добро пожаловать');
     expect(financeChatTranslations.ru.receiptProposal).toBe('Предложение из чека');
   });
+
+  it.each(['en', 'uk', 'ru'] as const)('documents quick input, voice, receipts, history and settings in %s help', (locale) => {
+    const help = financeChatTranslations[locale].help;
+    expect(help).toEqual(expect.any(String));
+    expect((help as string).toLowerCase()).toMatch(/voice|голос/);
+    expect((help as string).toLowerCase()).toMatch(/receipt|чек/);
+    expect((help as string).toLowerCase()).toMatch(/histor|істор|истор/);
+    expect((help as string).toLowerCase()).toMatch(/setting|налашту|настрой/);
+  });
 });

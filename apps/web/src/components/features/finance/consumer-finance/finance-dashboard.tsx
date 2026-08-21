@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight } from "lucide-react";
 import type {
   ConsumerFinanceDashboard,
   ConsumerFinanceTransaction,
@@ -6,24 +6,54 @@ import type {
 import { Button, Card, EmptyState } from "@/components/ui/primitives";
 import { formatMoney } from "@/lib/features/finance/money";
 import type { ConsumerFinanceScreen } from "./consumer-finance-screens";
+import {
+  financeCopy,
+  financeIntlLocale,
+  localizeFinanceCategory,
+  type FinanceLocale,
+} from "./finance-i18n";
 
 export function FinanceDashboard({
   data,
   onNavigate,
+  locale,
+  timezone,
 }: {
   data: ConsumerFinanceDashboard;
   onNavigate: (screen: ConsumerFinanceScreen) => void;
+  locale: FinanceLocale;
+  timezone: string;
 }) {
+  const t = financeCopy(locale);
   const { stats } = data;
   const accounts = stats.accounts.filter((account) => !account.archivedAt);
   const categories = stats.categories.slice(0, 6);
   return (
     <div className="space-y-4">
+      <Card className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase text-neutral-500">{t.totalBalance}</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums">
+            {formatMoney(
+              stats.totalBalance.amount,
+              stats.totalBalance.currency,
+              "symbol",
+            )}
+          </p>
+        </div>
+        <p className="text-xs text-neutral-500">
+          {stats.totalBalance.includedAccountCount} / {accounts.length}{" "}
+          {t.accounts.toLocaleLowerCase()}
+        </p>
+        {stats.totalBalance.excludedAccounts.length ? (
+          <p className="w-full text-xs text-amber-300">{t.incompleteBalance}</p>
+        ) : null}
+      </Card>
       <div className="grid grid-cols-3 gap-2">
         {[
-          ["Income", stats.income, "text-emerald-300"],
-          ["Expenses", stats.expense, "text-rose-300"],
-          ["Net", stats.net, "text-sky-200"],
+          [t.income, stats.income, "text-emerald-300"],
+          [t.expense, stats.expense, "text-rose-300"],
+          [t.net, stats.net, "text-sky-200"],
         ].map(([label, value, tone]) => (
           <Card key={label} className="p-3">
             <p className="text-[10px] uppercase text-neutral-500">{label}</p>
@@ -34,7 +64,7 @@ export function FinanceDashboard({
         ))}
       </div>
       <Card>
-        <h2 className="mb-2 font-medium">Balances by account</h2>
+        <h2 className="mb-2 font-medium">{t.balancesByAccount}</h2>
         {accounts.length ? (
           accounts.map((account) => (
             <div
@@ -50,7 +80,8 @@ export function FinanceDashboard({
               {account.equivalentBalance &&
               account.equivalentBalance.currency !== account.currency ? (
                 <p className="mt-1 text-xs text-neutral-500">
-                  ≈ {formatMoney(
+                  ≈{" "}
+                  {formatMoney(
                     account.equivalentBalance.amount,
                     account.equivalentBalance.currency,
                     "symbol",
@@ -60,16 +91,20 @@ export function FinanceDashboard({
             </div>
           ))
         ) : (
-          <EmptyState text="Add an account to track balances." />
+          <EmptyState text={t.addAccountHint} />
         )}
       </Card>
       <Card>
-        <h2 className="mb-3 font-medium">Spending this month</h2>
+        <h2 className="mb-3 font-medium">{t.spendingMonth}</h2>
         {categories.length ? (
           categories.map((category) => (
             <CategoryProgress
               key={category.categoryId || category.name}
-              name={category.name}
+              name={localizeFinanceCategory(
+                category.name,
+                category.categoryKey,
+                locale,
+              )}
               amount={category.amount}
               currency={category.currency}
               maximum={Math.max(
@@ -79,28 +114,94 @@ export function FinanceDashboard({
             />
           ))
         ) : (
-          <EmptyState text="Expenses will appear here." />
+          <EmptyState text={t.expensesAppear} />
         )}
       </Card>
+      {data.limits.length ? (
+        <Card>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="font-medium">{t.budget}</h2>
+            <Button variant="secondary" onClick={() => onNavigate("budget")}>
+              {t.edit}
+            </Button>
+          </div>
+          {data.limits.slice(0, 4).map((limit) => (
+            <div className="mb-3 last:mb-0" key={limit.id}>
+              <div className="flex justify-between gap-3 text-xs">
+                <span>
+                  {localizeFinanceCategory(
+                    limit.category.name,
+                    limit.category.key,
+                    locale,
+                  )}
+                </span>
+                <span>
+                  {formatMoney(limit.spent, limit.currency, "symbol")} /{" "}
+                  {formatMoney(limit.amount, limit.currency, "symbol")}
+                </span>
+              </div>
+              <div className="mt-1 h-2 rounded bg-neutral-800">
+                <div
+                  className={`h-2 rounded ${limit.percentage > 100 ? "bg-rose-400" : "bg-sky-400"}`}
+                  style={{ width: `${Math.min(100, limit.percentage)}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </Card>
+      ) : null}
+      {data.goal ? (
+        <Card>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase text-neutral-500">
+                {t.financialGoal}
+              </p>
+              <h2 className="mt-1 font-medium">{data.goal.name}</h2>
+              <p className="text-sm text-neutral-400">
+                {formatMoney(
+                  data.goal.currentAmount,
+                  data.goal.currency,
+                  "symbol",
+                )}{" "}
+                /{" "}
+                {formatMoney(
+                  data.goal.targetAmount,
+                  data.goal.currency,
+                  "symbol",
+                )}
+              </p>
+            </div>
+            <Button variant="secondary" onClick={() => onNavigate("budget")}>
+              {t.edit}
+            </Button>
+          </div>
+        </Card>
+      ) : null}
       <Card>
-        <h2 className="mb-2 font-medium">Recent</h2>
+        <h2 className="mb-2 font-medium">{t.recent}</h2>
         {data.recent.length ? (
           data.recent.map((item) => (
-            <TransactionRow key={item.id} item={item} />
+            <TransactionRow
+              key={item.id}
+              item={item}
+              locale={locale}
+              timezone={timezone}
+            />
           ))
         ) : (
-          <EmptyState text="No transactions yet." />
+          <EmptyState text={t.noTransactionsYet} />
         )}
       </Card>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid gap-2 sm:grid-cols-3">
         <Button onClick={() => onNavigate("transactions")}>
-          <Plus size={16} /> Expense
+          <ArrowUpRight size={16} /> {t.addExpense}
         </Button>
         <Button variant="secondary" onClick={() => onNavigate("transactions")}>
-          Income
+          <ArrowDownLeft size={16} /> {t.addIncome}
         </Button>
-        <Button variant="secondary" onClick={() => onNavigate("transactions")}>
-          Transfer
+        <Button variant="secondary" onClick={() => onNavigate("transfers")}>
+          <ArrowLeftRight size={16} /> {t.transfers}
         </Button>
       </div>
     </div>
@@ -122,18 +223,9 @@ function CategoryProgress({
     <div className="mb-3">
       <div className="flex justify-between text-xs">
         <span>{name}</span>
-        <span>
-          {formatMoney(amount, currency, "symbol")} · {percent}%
-        </span>
+        <span>{formatMoney(amount, currency, "symbol")}</span>
       </div>
-      <div
-        role="progressbar"
-        aria-label={`${name} spending`}
-        aria-valuenow={percent}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        className="mt-1 h-2 rounded bg-neutral-800"
-      >
+      <div className="mt-1 h-2 rounded bg-neutral-800" aria-hidden="true">
         <div
           className="h-2 rounded bg-rose-400"
           style={{ width: `${percent}%` }}
@@ -142,19 +234,47 @@ function CategoryProgress({
     </div>
   );
 }
-export function TransactionRow({ item }: { item: ConsumerFinanceTransaction }) {
+export function TransactionRow({
+  item,
+  locale,
+  timezone,
+}: {
+  item: ConsumerFinanceTransaction;
+  locale: FinanceLocale;
+  timezone: string;
+}) {
+  const t = financeCopy(locale);
   const income = item.type === "INCOME";
+  const sourceLabel =
+    item.source === "RECEIPT"
+      ? t.receipt
+      : item.source === "AI"
+        ? t.aiEntry
+        : t.manualEntry;
   return (
     <div className="flex items-center justify-between border-b border-neutral-800 py-3 last:border-0">
       <div className="min-w-0">
         <p className="truncate text-sm">
-          {item.description ||
-            item.category?.name ||
-            (income ? "Income" : "Expense")}
+          {item.merchantDisplay ||
+            item.description ||
+            (item.category
+              ? localizeFinanceCategory(
+                  item.category.name,
+                  item.category.key,
+                  locale,
+                )
+              : undefined) ||
+            (income ? t.income : t.expense)}
         </p>
         <p className="text-xs text-neutral-500">
-          {item.account?.name ?? "Account"} ·{" "}
-          {new Date(item.occurredAt).toLocaleDateString()}
+          {item.account?.name ?? t.accountFallback} ·{" "}
+          {new Intl.DateTimeFormat(financeIntlLocale(locale), {
+            timeZone: timezone,
+          }).format(new Date(item.occurredAt))}
+          {item.source ? ` · ${sourceLabel}` : ""}
+          {item.itemCount
+            ? ` · ${item.itemCount} ${item.itemCount === 1 ? t.item : t.items}`
+            : ""}
         </p>
       </div>
       <strong className={income ? "text-emerald-300" : "text-rose-300"}>

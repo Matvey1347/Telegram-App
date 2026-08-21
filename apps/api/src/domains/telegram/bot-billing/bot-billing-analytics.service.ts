@@ -73,7 +73,7 @@ export class BotBillingAnalyticsService {
     };
   }
 
-  async summariesForBots(workspaceId: string, botIds: string[]) {
+  async summariesForRuntimes(workspaceId: string, runtimeIds: string[]) {
     const summaries = new Map<
       string,
       Pick<
@@ -81,24 +81,24 @@ export class BotBillingAnalyticsService {
         'registeredUsers' | 'paidUsers' | 'activeSubscriptions' | 'failedPayments'
       >
     >();
-    if (!botIds.length) return summaries;
+    if (!runtimeIds.length) return summaries;
 
     const [users, subscriptionMetrics] = await Promise.all([
       this.prisma.telegramBotUser.groupBy({
-        by: ['botIntegrationId'],
-        where: { workspaceId, botIntegrationId: { in: botIds } },
+        by: ['runtimeInstanceId'],
+        where: { workspaceId, runtimeInstanceId: { in: runtimeIds } },
         _count: { _all: true },
       }),
       this.prisma.$queryRaw<
         Array<{
-          botIntegrationId: string;
+          runtimeInstanceId: string;
           activeSubscriptions: number;
           paidUsers: number;
           failedPayments: number;
         }>
       >(Prisma.sql`
         SELECT
-          subscription."botIntegrationId" AS "botIntegrationId",
+          bot_user."runtimeInstanceId" AS "runtimeInstanceId",
           COUNT(*) FILTER (WHERE
             provider_subscription."mode" IS DISTINCT FROM 'TEST'
             AND (
@@ -124,23 +124,25 @@ export class BotBillingAnalyticsService {
             AND subscription."status" = 'PAST_DUE'
           )::int AS "failedPayments"
         FROM "BotSubscription" AS subscription
+        INNER JOIN "TelegramBotUser" AS bot_user
+          ON bot_user."id" = subscription."telegramBotUserId"
         LEFT JOIN "BotProviderSubscription" AS provider_subscription
           ON provider_subscription."subscriptionId" = subscription."id"
         WHERE subscription."workspaceId" = ${workspaceId}
-          AND subscription."botIntegrationId" IN (${Prisma.join(botIds)})
-        GROUP BY subscription."botIntegrationId"
+          AND bot_user."runtimeInstanceId" IN (${Prisma.join(runtimeIds)})
+        GROUP BY bot_user."runtimeInstanceId"
       `),
     ]);
     const usersByBot = new Map(
-      users.map((row) => [row.botIntegrationId, row._count._all]),
+      users.map((row) => [row.runtimeInstanceId, row._count._all]),
     );
     const metricsByBot = new Map(
-      subscriptionMetrics.map((row) => [row.botIntegrationId, row]),
+      subscriptionMetrics.map((row) => [row.runtimeInstanceId, row]),
     );
-    for (const botId of botIds) {
-      const metrics = metricsByBot.get(botId);
-      summaries.set(botId, {
-        registeredUsers: usersByBot.get(botId) || 0,
+    for (const runtimeId of runtimeIds) {
+      const metrics = metricsByBot.get(runtimeId);
+      summaries.set(runtimeId, {
+        registeredUsers: usersByBot.get(runtimeId) || 0,
         paidUsers: metrics?.paidUsers || 0,
         activeSubscriptions: metrics?.activeSubscriptions || 0,
         failedPayments: metrics?.failedPayments || 0,

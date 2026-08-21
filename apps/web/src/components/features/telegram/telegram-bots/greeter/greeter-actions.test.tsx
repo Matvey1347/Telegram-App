@@ -18,7 +18,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: (options: { queryKey: readonly unknown[] }) =>
-    mocks.query(options.queryKey),
+    options.queryKey[0] === "auth"
+      ? queryState({ user: { editorShortcuts: null } })
+      : mocks.query(options.queryKey),
   useMutation: () => ({ mutate: mocks.mutate, isPending: false }),
   useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
 }));
@@ -29,6 +31,7 @@ vi.mock("@/providers/toast-provider", () => ({
 
 vi.mock("@/lib/api", () => ({
   greeterApi: {},
+  authApi: { getMe: vi.fn() },
 }));
 
 const queryState = (data: unknown) => ({

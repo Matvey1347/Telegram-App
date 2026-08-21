@@ -2584,15 +2584,16 @@ model TelegramInviteLinkSnapshot {
 }
 
 model TelegramBotIntegration {
-  id               String                     @id @default(cuid())
-  workspaceId      String
-  label            String
-  isActive         Boolean                    @default(true)
-  applicationType  TelegramBotApplicationType @default(NONE)
-  assignedMemberId String?
-  createdByUserId  String?
-  createdAt        DateTime                   @default(now())
-  updatedAt        DateTime                   @updatedAt
+  id                               String                     @id @default(cuid())
+  workspaceId                      String
+  label                            String
+  isActive                         Boolean                    @default(true)
+  applicationType                  TelegramBotApplicationType @default(NONE)
+  financeConsumerSessionTtlSeconds Int                        @default(2592000)
+  assignedMemberId                 String?
+  createdByUserId                  String?
+  createdAt                        DateTime                   @default(now())
+  updatedAt                        DateTime                   @updatedAt
 
   workspace                    Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   assignedMember               WorkspaceMember?              @relation("TelegramBotAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
@@ -2666,6 +2667,7 @@ model TelegramBotRuntimeInstance {
   botIntegration TelegramBotIntegration @relation(fields: [botIntegrationId, workspaceId], references: [id, workspaceId], onDelete: Cascade, map: "TelegramBotRuntimeInstance_bot_workspace_fkey")
   updateLogs     TelegramBotUpdateLog[]
   deliveries     TelegramBotDelivery[]
+  users          TelegramBotUser[]
 
   @@unique([botIntegrationId, environment])
   @@unique([id, workspaceId, botIntegrationId])
@@ -2691,6 +2693,7 @@ model TelegramBotUser {
   id                String    @id @default(cuid())
   workspaceId       String
   botIntegrationId  String
+  runtimeInstanceId String?
   telegramUserId    String
   telegramChatId    String?
   username          String?
@@ -2706,6 +2709,7 @@ model TelegramBotUser {
 
   workspace                    Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   botIntegration               TelegramBotIntegration        @relation(fields: [botIntegrationId, workspaceId], references: [id, workspaceId], onDelete: Cascade, map: "TelegramBotUser_botIntegrationId_fkey")
+  runtimeInstance               TelegramBotRuntimeInstance?  @relation(fields: [runtimeInstanceId], references: [id], onDelete: SetNull)
   deliveries                   TelegramBotDelivery[]
   greeterJoinRequests          GreeterJoinRequest[]
   greeterEnrollments           GreeterSequenceEnrollment[]
@@ -2718,8 +2722,9 @@ model TelegramBotUser {
   providerCustomers            BotProviderCustomer[]
   financeProposals             FinancePendingProposal[]
 
-  @@unique([botIntegrationId, telegramUserId])
+  @@unique([runtimeInstanceId, telegramUserId])
   @@index([workspaceId, botIntegrationId])
+  @@index([workspaceId, runtimeInstanceId])
   @@index([telegramChatId])
   @@index([blockedAt])
 }
@@ -3244,6 +3249,7 @@ model FinanceCategory {
   parent       FinanceCategory?       @relation("FinanceCategoryChildren", fields: [parentId], references: [id], onDelete: SetNull)
   children     FinanceCategory[]      @relation("FinanceCategoryChildren")
   transactions FinanceTransaction[]
+  transactionItems FinanceTransactionItem[]
   limits       FinanceSpendingLimit[]
 
   @@unique([profileId, type, key])
@@ -3268,6 +3274,7 @@ model FinanceTransaction {
   valuationRateAt         DateTime?
   occurredAt              DateTime
   description             String?
+  merchantDisplay         String?
   merchantNormalized      String?
   source                  FinanceTransactionSource @default(CHAT)
   deletedAt               DateTime?
@@ -3276,10 +3283,33 @@ model FinanceTransaction {
   profile                 FinanceProfile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
   account                 FinanceAccount           @relation(fields: [accountId], references: [id], onDelete: Restrict)
   category                FinanceCategory?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  items                   FinanceTransactionItem[]
 
   @@index([profileId, occurredAt])
   @@index([profileId, accountId, occurredAt])
   @@index([profileId, categoryId, occurredAt])
+  @@index([profileId, merchantNormalized, occurredAt])
+}
+
+// Receipt/products are detail of one ledger purchase, never separate ledger rows.
+model FinanceTransactionItem {
+  id            String             @id @default(cuid())
+  transactionId String
+  displayName   String
+  normalizedName String?
+  quantity      Decimal?
+  unitPrice     Decimal?
+  totalAmount   Decimal
+  currency      String             @db.VarChar(3)
+  categoryId    String?
+  metadata      Json?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  transaction   FinanceTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  category      FinanceCategory?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([transactionId])
+  @@index([categoryId])
 }
 
 model FinanceChatFlow {
@@ -3287,6 +3317,7 @@ model FinanceChatFlow {
   profileId         String
   botIntegrationId  String
   telegramBotUserId String
+  operationKind     String         @db.VarChar(40)
   step              String         @db.VarChar(80)
   status            String         @default("ACTIVE") @db.VarChar(24)
   payload           Json           @default("{}")
@@ -3433,6 +3464,7 @@ model FinanceAiUsage {
   profile             FinanceProfile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([profileId, createdAt, feature])
+  @@index([profileId, feature, status, createdAt])
 }
 
 model BotBillingProviderConfig {
@@ -3575,6 +3607,9 @@ model BotCoupon {
   maxRedemptions   Int?
   newUsersOnly     Boolean   @default(false)
   isActive         Boolean   @default(true)
+  /// Provider identities are mode-scoped (for example STRIPE.TEST/LIVE) and
+  /// must never be reused across Stripe accounts or modes.
+  providerCouponIdentity Json?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 

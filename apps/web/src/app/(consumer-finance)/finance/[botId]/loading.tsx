@@ -1,3 +1,9 @@
 export default function FinanceMiniAppLoading() {
-  return <main className="min-h-dvh bg-neutral-950 p-4 text-neutral-300">Opening Finance…</main>;
+  return (
+    <main className="flex min-h-dvh items-center justify-center bg-neutral-950 text-neutral-300">
+      <span className="animate-pulse text-sm uppercase tracking-[0.22em]">
+        Finance
+      </span>
+    </main>
+  );
 }

@@ -20,6 +20,7 @@ const bot: TelegramBot = {
     {
       id: "runtime-prod",
       environment: "PRODUCTION",
+      isProcessOwner: true,
       firstName: "Admissions bot",
       botTokenMasked: "123:***",
       tokenState: "SAVED",

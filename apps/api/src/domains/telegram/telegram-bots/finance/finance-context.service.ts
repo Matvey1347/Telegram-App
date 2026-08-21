@@ -4,11 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  Prisma,
-  TelegramBotApplicationType,
-  TelegramBotRuntimeEnvironment,
-} from '@prisma/client';
+import { Prisma, TelegramBotApplicationType } from '@prisma/client';
 import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import { TokenEncryptionService } from '../../../../common/security/token-encryption.service';
 import { PrismaService } from '../../../../prisma/prisma.service';
@@ -16,6 +12,7 @@ import {
   DEFAULT_FINANCE_CATEGORIES,
   FINANCE_INIT_DATA_MAX_AGE_SECONDS,
 } from './finance-defaults';
+import { FinanceConsumerRuntimeEnvironmentService } from './finance-consumer-runtime-environment.service';
 
 type TelegramWebAppUser = {
   id: number | string;
@@ -30,6 +27,7 @@ export class FinanceContextService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly encryption: TokenEncryptionService,
+    private readonly environments: FinanceConsumerRuntimeEnvironmentService,
   ) {}
 
   async fromInitData(botIntegrationId: string, initData: string | undefined) {
@@ -37,96 +35,50 @@ export class FinanceContextService {
       throw new ForbiddenException(
         'Telegram Mini App authentication is required',
       );
-    // A Mini App request reaches the process that owns one runtime. Never try
-    // another token: a LOCAL signature must not authenticate against PROD.
-    const configuredEnvironment =
-      process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT?.trim().toUpperCase();
-    const environment =
-      configuredEnvironment === TelegramBotRuntimeEnvironment.LOCAL
-        ? TelegramBotRuntimeEnvironment.LOCAL
-        : configuredEnvironment === TelegramBotRuntimeEnvironment.PRODUCTION
-          ? TelegramBotRuntimeEnvironment.PRODUCTION
-          : null;
-    if (!environment)
-      throw new NotFoundException(
-        'Finance bot runtime is not enabled in this process',
-      );
-    const bot = await this.prisma.telegramBotIntegration.findFirst({
-      where: {
-        id: botIntegrationId,
-        applicationType: TelegramBotApplicationType.FINANCE,
-        isActive: true,
-      },
-      include: {
-        runtimeInstances: {
-          where: { environment, runtimeStatus: 'ACTIVE' },
-          take: 1,
-        },
-      },
-    });
-    const runtime = bot?.runtimeInstances[0];
-    if (!bot || !runtime) throw new NotFoundException('Finance bot not found');
+    const { bot, runtime } = await this.selectedRuntime(botIntegrationId);
     const token = this.encryption.decrypt({
       encrypted: runtime.botTokenEncrypted,
       iv: runtime.botTokenIv,
       authTag: runtime.botTokenAuthTag,
     });
     const parsed = this.verifyInitData(initData, token);
-    return this.resolveIdentity(bot, parsed.user);
+    return this.resolveIdentity(bot, runtime.id, parsed.user);
   }
 
   async fromTelegramLogin(
     botIntegrationId: string,
     login: Record<string, string | undefined>,
   ) {
-    const configured =
-      process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT?.trim().toUpperCase();
-    const environment =
-      configured === 'LOCAL'
-        ? TelegramBotRuntimeEnvironment.LOCAL
-        : configured === 'PRODUCTION'
-          ? TelegramBotRuntimeEnvironment.PRODUCTION
-          : null;
-    if (!environment)
-      throw new NotFoundException(
-        'Finance bot runtime is not enabled in this process',
-      );
-    const bot = await this.prisma.telegramBotIntegration.findFirst({
-      where: {
-        id: botIntegrationId,
-        applicationType: TelegramBotApplicationType.FINANCE,
-        isActive: true,
-      },
-      include: {
-        runtimeInstances: {
-          where: { environment, runtimeStatus: 'ACTIVE' },
-          take: 1,
-        },
-      },
-    });
-    const runtime = bot?.runtimeInstances[0];
-    if (!bot || !runtime) throw new NotFoundException('Finance bot not found');
+    const { bot, runtime } = await this.selectedRuntime(botIntegrationId);
     const token = this.encryption.decrypt({
       encrypted: runtime.botTokenEncrypted,
       iv: runtime.botTokenIv,
       authTag: runtime.botTokenAuthTag,
     });
-    return this.resolveIdentity(bot, this.verifyLoginData(login, token));
+    return this.resolveIdentity(
+      bot,
+      runtime.id,
+      this.verifyLoginData(login, token),
+    );
   }
 
   async browserLoginConfig(botIntegrationId: string) {
-    const configured =
-      process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT?.trim().toUpperCase();
-    const environment =
-      configured === 'LOCAL'
-        ? TelegramBotRuntimeEnvironment.LOCAL
-        : configured === 'PRODUCTION'
-          ? TelegramBotRuntimeEnvironment.PRODUCTION
-          : null;
-    if (!environment)
+    const { runtime } = await this.selectedRuntime(botIntegrationId);
+    const username = runtime.username;
+    if (!username)
+      throw new NotFoundException('Finance bot browser login is unavailable');
+    return { username };
+  }
+
+  private async selectedRuntime(botIntegrationId: string) {
+    // Consumer auth validates against one configured runtime only. It never
+    // probes another token after a signature failure.
+    const environment = this.environments.current();
+    if (!environment) {
       throw new NotFoundException(
         'Finance bot runtime is not enabled in this process',
       );
+    }
     const bot = await this.prisma.telegramBotIntegration.findFirst({
       where: {
         id: botIntegrationId,
@@ -134,43 +86,55 @@ export class FinanceContextService {
         isActive: true,
       },
       select: {
+        id: true,
+        workspaceId: true,
         runtimeInstances: {
           where: { environment, runtimeStatus: 'ACTIVE' },
-          select: { username: true },
+          select: {
+            id: true,
+            username: true,
+            botTokenEncrypted: true,
+            botTokenIv: true,
+            botTokenAuthTag: true,
+          },
           take: 1,
         },
       },
     });
-    const username = bot?.runtimeInstances[0]?.username;
-    if (!username)
-      throw new NotFoundException('Finance bot browser login is unavailable');
-    return { username };
+    const runtime = bot?.runtimeInstances[0];
+    if (!bot || !runtime) throw new NotFoundException('Finance bot not found');
+    return { bot, runtime };
   }
 
   private async resolveIdentity(
     bot: { id: string; workspaceId: string },
+    runtimeInstanceId: string,
     user: TelegramWebAppUser,
   ) {
     const telegramUserId = String(user.id);
-    const identity = {
-      username: user.username || null,
-      firstName: user.first_name || null,
-      lastName: user.last_name || null,
-      languageCode: user.language_code || null,
-    };
     const existingUser = await this.prisma.telegramBotUser.findUnique({
       where: {
-        botIntegrationId_telegramUserId: {
-          botIntegrationId: bot.id,
+        runtimeInstanceId_telegramUserId: {
+          runtimeInstanceId,
           telegramUserId,
         },
       },
     });
+    const identity = {
+      username: user.username || null,
+      firstName: user.first_name || null,
+      lastName: user.last_name || null,
+      languageCode:
+        user.language_code === undefined
+          ? existingUser?.languageCode || null
+          : user.language_code || null,
+    };
     const telegramUser = !existingUser
       ? await this.prisma.telegramBotUser.create({
           data: {
             workspaceId: bot.workspaceId,
             botIntegrationId: bot.id,
+            runtimeInstanceId,
             telegramUserId,
             telegramChatId: telegramUserId,
             ...identity,

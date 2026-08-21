@@ -295,7 +295,12 @@ type ManagedPostImportResultRow =
       post: unknown;
     }
   | { index: number; status: 'alreadyExists'; post: unknown }
-  | { index: number; status: 'scheduled' | 'scheduleFailed'; post: unknown; error?: string };
+  | {
+      index: number;
+      status: 'scheduled' | 'scheduleFailed';
+      post: unknown;
+      error?: string;
+    };
 
 type ManagedPostImportProgressHandler = (
   item: TelegramManagedPostsImportProgressItem,
@@ -449,6 +454,7 @@ export class TelegramChannelsService {
     workspaceId: string,
     channel: {
       id: string;
+      purchaseTransactionId?: string | null;
       username: string | null;
       telegramChatId: string | null;
     },
@@ -498,12 +504,13 @@ export class TelegramChannelsService {
       if (!token) throw new BadRequestException('System bot is not configured');
       return token;
     }
-    const environment = process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT === 'LOCAL'
-      ? 'LOCAL'
-      : process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT === 'PRODUCTION' ||
-          process.env.NODE_ENV === 'production'
-        ? 'PRODUCTION'
-        : null;
+    const environment =
+      process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT === 'LOCAL'
+        ? 'LOCAL'
+        : process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT === 'PRODUCTION' ||
+            process.env.NODE_ENV === 'production'
+          ? 'PRODUCTION'
+          : null;
     const bot = environment
       ? await this.prisma.telegramBotRuntimeInstance.findFirst({
           where: {
@@ -3742,10 +3749,9 @@ export class TelegramChannelsService {
           sourceId: botSource.sourceId,
           sourceType: botSource.sourceType,
           telegramMessageIds: [replacementMessageId],
-          telegramMessageUrls: this.telegramMessageUrlsForPost(
-            channel,
-            [replacementMessageId],
-          ),
+          telegramMessageUrls: this.telegramMessageUrlsForPost(channel, [
+            replacementMessageId,
+          ]),
           publishMode: rendered.publishMode,
           lastTelegramSyncedAt: new Date(),
           lastTelegramSyncNote:
@@ -4192,6 +4198,7 @@ export class TelegramChannelsService {
     workspaceId: string,
     channels: Array<{
       id: string;
+      purchaseTransactionId?: string | null;
       currentSubscribersCount?: number | null;
       activeSubscribersWindow?: number | null;
       targetCpaFrom?: Prisma.Decimal | number | null;
@@ -4217,57 +4224,60 @@ export class TelegramChannelsService {
       return new Map<string, Record<string, unknown>>();
     }
     const channelIds = channels.map((channel) => channel.id);
-    const [campaigns, inviteLinks, transactions, workspace] = await Promise.all([
-      this.prisma.adCampaign.findMany({
-        where: {
-          workspaceId,
-          telegramChannelId: { in: channelIds },
-          excludeFromAnalytics: false,
-        },
-        select: {
-          id: true,
-          telegramChannelId: true,
-          priceInPrimaryCurrency: true,
-          currency: true,
-          price: true,
-          status: true,
-          joinedCount: true,
-          newSubscribers: true,
-          cappedActiveSubscribersFromAd: true,
-          activeSubscribersFromAd: true,
-          activeRate: true,
-          retention7d: true,
-        },
-      }),
-      this.prisma.telegramInviteLink.findMany({
-        where: {
-          workspaceId,
-          telegramChannelId: { in: channelIds },
-          adCampaignId: { not: null },
-        },
-        select: {
-          telegramChannelId: true,
-          adCampaignId: true,
-          joinedCount: true,
-          requestedCount: true,
-        },
-      }),
-      this.prisma.transaction.findMany({
-        where: { workspaceId, telegramChannelId: { in: channelIds } },
-        select: {
-          telegramChannelId: true,
-          type: true,
-          amount: true,
-          currency: true,
-          amountInPrimaryCurrency: true,
-          categoryRef: { select: { key: true, name: true } },
-        },
-      }),
-      this.prisma.workspace.findUnique({
-        where: { id: workspaceId },
-        select: { primaryCurrency: true },
-      }),
-    ]);
+    const [campaigns, inviteLinks, transactions, workspace] = await Promise.all(
+      [
+        this.prisma.adCampaign.findMany({
+          where: {
+            workspaceId,
+            telegramChannelId: { in: channelIds },
+            excludeFromAnalytics: false,
+          },
+          select: {
+            id: true,
+            telegramChannelId: true,
+            priceInPrimaryCurrency: true,
+            currency: true,
+            price: true,
+            status: true,
+            joinedCount: true,
+            newSubscribers: true,
+            cappedActiveSubscribersFromAd: true,
+            activeSubscribersFromAd: true,
+            activeRate: true,
+            retention7d: true,
+          },
+        }),
+        this.prisma.telegramInviteLink.findMany({
+          where: {
+            workspaceId,
+            telegramChannelId: { in: channelIds },
+            adCampaignId: { not: null },
+          },
+          select: {
+            telegramChannelId: true,
+            adCampaignId: true,
+            joinedCount: true,
+            requestedCount: true,
+          },
+        }),
+        this.prisma.transaction.findMany({
+          where: { workspaceId, telegramChannelId: { in: channelIds } },
+          select: {
+            id: true,
+            telegramChannelId: true,
+            type: true,
+            amount: true,
+            currency: true,
+            amountInPrimaryCurrency: true,
+            categoryRef: { select: { key: true, name: true } },
+          },
+        }),
+        this.prisma.workspace.findUnique({
+          where: { id: workspaceId },
+          select: { primaryCurrency: true },
+        }),
+      ],
+    );
 
     const inviteLinksByCampaignId = new Map<
       string,
@@ -4293,7 +4303,8 @@ export class TelegramChannelsService {
     const transactionsByChannelId = new Map<string, typeof transactions>();
     for (const transaction of transactions) {
       if (!transaction.telegramChannelId) continue;
-      const list = transactionsByChannelId.get(transaction.telegramChannelId) ?? [];
+      const list =
+        transactionsByChannelId.get(transaction.telegramChannelId) ?? [];
       list.push(transaction);
       transactionsByChannelId.set(transaction.telegramChannelId, list);
     }
@@ -4307,7 +4318,11 @@ export class TelegramChannelsService {
       if (!conversionCache.has(target)) {
         conversionCache.set(
           target,
-          await this.currencyConversionService.getRate(primaryCurrency, target, workspaceId),
+          await this.currencyConversionService.getRate(
+            primaryCurrency,
+            target,
+            workspaceId,
+          ),
         );
       }
       const rate = conversionCache.get(target);
@@ -4323,18 +4338,23 @@ export class TelegramChannelsService {
       const purchaseTransactions = channelTransactions.filter(
         (transaction) =>
           transaction.type === 'expense' &&
-          (transaction.categoryRef?.key === 'buy_channels' ||
-            transaction.categoryRef?.name?.trim().toLowerCase() === 'buy channels' ||
-            transaction.categoryRef?.name?.trim().toLowerCase() === 'buy channels (legacy)'),
+          (transaction.id === channel.purchaseTransactionId ||
+            transaction.categoryRef?.key === 'buy_channels' ||
+            transaction.categoryRef?.name?.trim().toLowerCase() ===
+              'buy channels' ||
+            transaction.categoryRef?.name?.trim().toLowerCase() ===
+              'buy channels (legacy)'),
       );
       const revenueTransactions = channelTransactions.filter(
         (transaction) =>
           transaction.type === 'income' &&
           (transaction.categoryRef?.key === 'channel_advertising_revenue' ||
-            transaction.categoryRef?.name?.trim().toLowerCase() === 'channel advertising revenue'),
+            transaction.categoryRef?.name?.trim().toLowerCase() ===
+              'channel advertising revenue'),
       );
       const acquisitionCost = purchaseTransactions.reduce(
-        (sum, transaction) => sum + Number(transaction.amountInPrimaryCurrency || 0),
+        (sum, transaction) =>
+          sum + Number(transaction.amountInPrimaryCurrency || 0),
         0,
       );
       const totalAdSpend = channelCampaigns.reduce(
@@ -4387,7 +4407,9 @@ export class TelegramChannelsService {
       const retentionRates = channelCampaigns
         .map((campaign) => Number(campaign.retention7d))
         .filter((value) => Number.isFinite(value));
-      const kpiCurrency = String(channel.kpiCurrency || primaryCurrency).toUpperCase();
+      const kpiCurrency = String(
+        channel.kpiCurrency || primaryCurrency,
+      ).toUpperCase();
       const avgCpaInKpiCurrency =
         avgCpa == null ? null : await convertPrimary(avgCpa, kpiCurrency);
       const kpiStatus = resolveChannelKpiStatus({
@@ -4399,14 +4421,22 @@ export class TelegramChannelsService {
         stopCpaFrom: channel.stopCpaFrom,
         stopCpa: channel.stopCpa,
       });
+      // Use the currency of costs, not revenue, for a channel's payback card.
+      // A UAH acquisition/ad spend must not turn into a mixed-currency view
+      // just because an ad sale was recorded in another currency.
       const economicsTransactions = [
-        ...purchaseTransactions.map((transaction) => ({ currency: transaction.currency })),
-        ...revenueTransactions.map((transaction) => ({ currency: transaction.currency })),
-        ...channelCampaigns.map((campaign) => ({ currency: campaign.currency })),
+        ...channelCampaigns.map((campaign) => ({
+          currency: campaign.currency,
+        })),
+        ...purchaseTransactions.map((transaction) => ({
+          currency: transaction.currency,
+        })),
       ];
       const currencyCounts = new Map<string, number>();
       for (const transaction of economicsTransactions) {
-        const currency = String(transaction.currency || primaryCurrency).toUpperCase();
+        const currency = String(
+          transaction.currency || primaryCurrency,
+        ).toUpperCase();
         currencyCounts.set(currency, (currencyCounts.get(currency) ?? 0) + 1);
       }
       const maxCount = Math.max(0, ...currencyCounts.values());
@@ -4416,36 +4446,50 @@ export class TelegramChannelsService {
         .sort();
       const dominantCurrency =
         tiedCurrencies.find((currency) => currency === kpiCurrency) ??
-        tiedCurrencies.find((currency) => currency === primaryCurrency.toUpperCase()) ??
+        tiedCurrencies.find(
+          (currency) => currency === primaryCurrency.toUpperCase(),
+        ) ??
         tiedCurrencies[0] ??
         kpiCurrency;
       const investedPrimary = totalSpend;
       const revenuePrimary = revenueTransactions.reduce(
-        (sum, transaction) => sum + Number(transaction.amountInPrimaryCurrency || 0),
+        (sum, transaction) =>
+          sum + Number(transaction.amountInPrimaryCurrency || 0),
         0,
       );
-      const [invested, revenue, cpm] = await Promise.all([
-        convertPrimary(investedPrimary, dominantCurrency),
-        convertPrimary(revenuePrimary, dominantCurrency),
-        channel.adBaseCpm == null
-          ? Promise.resolve(null)
-          : this.currencyConversionService
-            ? this.currencyConversionService.convertCurrency(
-                Number(channel.adBaseCpm),
-                String(channel.adBaseCurrency || primaryCurrency),
-                dominantCurrency,
-                workspaceId,
-              )
-            : Promise.resolve(null),
-      ]);
+      const [invested, purchasePrice, revenue, adSpend, cpm] =
+        await Promise.all([
+          convertPrimary(investedPrimary, dominantCurrency),
+          convertPrimary(acquisitionCost, dominantCurrency),
+          convertPrimary(revenuePrimary, dominantCurrency),
+          convertPrimary(totalAdSpend, dominantCurrency),
+          channel.adBaseCpm == null
+            ? Promise.resolve(null)
+            : this.currencyConversionService
+              ? this.currencyConversionService.convertCurrency(
+                  Number(channel.adBaseCpm),
+                  String(channel.adBaseCurrency || primaryCurrency),
+                  dominantCurrency,
+                  workspaceId,
+                )
+              : Promise.resolve(null),
+        ]);
       const economics = calculateChannelAssetEconomics({
         currency: dominantCurrency,
         invested,
+        purchasePrice,
         revenue,
-        adsSold: channelCampaigns.filter((campaign) => campaign.status === 'finished').length,
+        adSpend,
+        adsSold: channelCampaigns.filter(
+          (campaign) => campaign.status === 'finished',
+        ).length,
         expectedViews: channel.ownViewsPerPost ?? null,
         cpm,
-        conversionUnavailable: invested == null || revenue == null || (channel.adBaseCpm != null && cpm == null),
+        conversionUnavailable:
+          invested == null ||
+          revenue == null ||
+          adSpend == null ||
+          (channel.adBaseCpm != null && cpm == null),
       });
       summaries.set(channel.id, {
         acquisitionCost,
@@ -4493,7 +4537,12 @@ export class TelegramChannelsService {
         : query.owned === false
           ? { none: {} }
           : undefined;
-    const where = { workspaceId, isActive: true, archivedAt, adminLinks: ownership };
+    const where = {
+      workspaceId,
+      isActive: true,
+      archivedAt,
+      adminLinks: ownership,
+    };
     const activeWhere = {
       workspaceId,
       isActive: true,
@@ -4839,14 +4888,23 @@ export class TelegramChannelsService {
 
   async update(userId: string, id: string, dto: UpdateTelegramChannelDto) {
     const workspaceId = await this.workspace(userId);
-    if (dto.kpiCurrency !== undefined) dto.kpiCurrency = dto.kpiCurrency.toUpperCase();
+    if (dto.kpiCurrency !== undefined)
+      dto.kpiCurrency = dto.kpiCurrency.toUpperCase();
+    if (dto.adBaseCurrency !== undefined)
+      dto.adBaseCurrency = dto.adBaseCurrency.toUpperCase();
     const existing = await this.findOne(userId, id);
-    const goodUntil = dto.targetCpa === undefined
-      ? existing.targetCpa == null ? null : Number(existing.targetCpa)
-      : dto.targetCpa;
-    const stopFrom = dto.stopCpaFrom === undefined
-      ? existing.stopCpaFrom == null ? null : Number(existing.stopCpaFrom)
-      : dto.stopCpaFrom;
+    const goodUntil =
+      dto.targetCpa === undefined
+        ? existing.targetCpa == null
+          ? null
+          : Number(existing.targetCpa)
+        : dto.targetCpa;
+    const stopFrom =
+      dto.stopCpaFrom === undefined
+        ? existing.stopCpaFrom == null
+          ? null
+          : Number(existing.stopCpaFrom)
+        : dto.stopCpaFrom;
     if (goodUntil != null && stopFrom != null && goodUntil >= stopFrom) {
       throw new BadRequestException('Good up to must be lower than Stop from');
     }
@@ -7503,14 +7561,25 @@ export class TelegramChannelsService {
       null;
     const rawScheduledAt = row.scheduledAt;
     let scheduledAt: Date | null = null;
-    if (rawScheduledAt !== undefined && rawScheduledAt !== null && rawScheduledAt !== '') {
-      if (typeof rawScheduledAt !== 'string') return { error: 'scheduledAt must be an ISO timestamp or null' };
+    if (
+      rawScheduledAt !== undefined &&
+      rawScheduledAt !== null &&
+      rawScheduledAt !== ''
+    ) {
+      if (typeof rawScheduledAt !== 'string')
+        return { error: 'scheduledAt must be an ISO timestamp or null' };
       scheduledAt = new Date(rawScheduledAt);
-      if (Number.isNaN(scheduledAt.getTime())) return { error: 'scheduledAt must be a valid ISO timestamp' };
-      if (scheduledAt.getTime() <= Date.now()) return { error: 'scheduledAt must be in the future' };
+      if (Number.isNaN(scheduledAt.getTime()))
+        return { error: 'scheduledAt must be a valid ISO timestamp' };
+      if (scheduledAt.getTime() <= Date.now())
+        return { error: 'scheduledAt must be in the future' };
     }
     const rawGroupId = row.groupId;
-    if (rawGroupId !== undefined && rawGroupId !== null && typeof rawGroupId !== 'string') {
+    if (
+      rawGroupId !== undefined &&
+      rawGroupId !== null &&
+      typeof rawGroupId !== 'string'
+    ) {
       return { error: 'groupId must be a string or null' };
     }
     return {
@@ -7520,7 +7589,8 @@ export class TelegramChannelsService {
         imageUrls: images.imageUrls ?? [],
         icon,
         groupPosition: position.groupPosition ?? null,
-        groupId: rawGroupId === undefined ? undefined : rawGroupId?.trim() || null,
+        groupId:
+          rawGroupId === undefined ? undefined : rawGroupId?.trim() || null,
         scheduledAt,
       },
     };
@@ -7699,10 +7769,20 @@ export class TelegramChannelsService {
       (row): row is { index: number; value: NormalizedManagedPostImportRow } =>
         Boolean(row.value),
     );
-    const explicitGroupIds = [...new Set(validRows.map((row) => row.value.groupId).filter((id): id is string => Boolean(id)))];
+    const explicitGroupIds = [
+      ...new Set(
+        validRows
+          .map((row) => row.value.groupId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
     const explicitGroups = explicitGroupIds.length
       ? await this.prisma.postGroup.findMany({
-          where: { id: { in: explicitGroupIds }, workspaceId, telegramChannelId: channelId },
+          where: {
+            id: { in: explicitGroupIds },
+            workspaceId,
+            telegramChannelId: channelId,
+          },
           select: { id: true },
         })
       : [];
@@ -7725,21 +7805,50 @@ export class TelegramChannelsService {
     );
 
     const identityFor = (value: NormalizedManagedPostImportRow) =>
-      createHash('sha256').update(JSON.stringify({ title: value.title, text: value.text, imageUrls: value.imageUrls, icon: value.icon })).digest('hex');
+      createHash('sha256')
+        .update(
+          JSON.stringify({
+            title: value.title,
+            text: value.text,
+            imageUrls: value.imageUrls,
+            icon: value.icon,
+          }),
+        )
+        .digest('hex');
     const identities = validRowsWithIcons.map((row) => identityFor(row.value));
     const existing = identities.length
-      ? await this.prisma.telegramManagedPost.findMany({ where: { workspaceId, telegramChannelId: channelId, jsonImportKey: { in: identities } }, include: this.managedPostInclude })
+      ? await this.prisma.telegramManagedPost.findMany({
+          where: {
+            workspaceId,
+            telegramChannelId: channelId,
+            jsonImportKey: { in: identities },
+          },
+          include: this.managedPostInclude,
+        })
       : [];
-    const existingByIdentity = new Map(existing.map((post) => [post.jsonImportKey, post]));
+    const existingByIdentity = new Map(
+      existing.map((post) => [post.jsonImportKey, post]),
+    );
     const touchedGroupIds = new Set<string>();
     const defaultGroupPositionStart = defaultGroup
-      ? await this.prisma.telegramManagedPost.count({ where: { groupId: defaultGroup.id } })
+      ? await this.prisma.telegramManagedPost.count({
+          where: { groupId: defaultGroup.id },
+        })
       : 0;
     let defaultGroupPositionOffset = 0;
     let processedRows = 0;
     for (const invalid of rows.filter((row) => row.status === 'skipped')) {
       processedRows += 1;
-      onProgress?.({ index: invalid.index, status: 'skipped', error: invalid.error, message: `Row ${invalid.index + 1} skipped: ${invalid.error}` }, processedRows, normalized.length);
+      onProgress?.(
+        {
+          index: invalid.index,
+          status: 'skipped',
+          error: invalid.error,
+          message: `Row ${invalid.index + 1} skipped: ${invalid.error}`,
+        },
+        processedRows,
+        normalized.length,
+      );
     }
     for (const row of validRowsWithIcons) {
       const identity = identityFor(row.value);
@@ -7747,40 +7856,129 @@ export class TelegramChannelsService {
       if (post) {
         rows.push({ index: row.index, status: 'alreadyExists', post });
         processedRows += 1;
-        onProgress?.({ index: row.index, status: 'alreadyExists', title: row.value.title, postId: post.id, message: `Post already exists: ${row.value.title}` }, processedRows, normalized.length);
+        onProgress?.(
+          {
+            index: row.index,
+            status: 'alreadyExists',
+            title: row.value.title,
+            postId: post.id,
+            message: `Post already exists: ${row.value.title}`,
+          },
+          processedRows,
+          normalized.length,
+        );
         continue;
       }
-      const effectiveGroupId = row.value.groupId === undefined ? (defaultGroup?.id ?? null) : row.value.groupId;
+      const effectiveGroupId =
+        row.value.groupId === undefined
+          ? (defaultGroup?.id ?? null)
+          : row.value.groupId;
       try {
         post = await this.createManagedPostRecord(this.prisma, {
-          workspaceId, channelId, assignedMemberId, title: row.value.title, text: row.value.text,
-          imageUrls: row.value.imageUrls, icon: row.value.icon, groupId: effectiveGroupId,
+          workspaceId,
+          channelId,
+          assignedMemberId,
+          title: row.value.title,
+          text: row.value.text,
+          imageUrls: row.value.imageUrls,
+          icon: row.value.icon,
+          groupId: effectiveGroupId,
           groupPosition: effectiveGroupId
-            ? (row.value.groupPosition ?? (effectiveGroupId === defaultGroup?.id ? defaultGroupPositionStart + defaultGroupPositionOffset++ : null))
-            : null, jsonImportKey: identity,
+            ? (row.value.groupPosition ??
+              (effectiveGroupId === defaultGroup?.id
+                ? defaultGroupPositionStart + defaultGroupPositionOffset++
+                : null))
+            : null,
+          jsonImportKey: identity,
         });
         if (effectiveGroupId) touchedGroupIds.add(effectiveGroupId);
         rows.push({ index: row.index, status: 'created', post });
         if (row.value.scheduledAt) {
           try {
-            post = await this.publishManagedPost(workspaceId, channelId, post.id, row.value.scheduledAt);
-            rows[rows.length - 1] = { index: row.index, status: 'scheduled', post };
+            post = await this.publishManagedPost(
+              workspaceId,
+              channelId,
+              post.id,
+              row.value.scheduledAt,
+            );
+            rows[rows.length - 1] = {
+              index: row.index,
+              status: 'scheduled',
+              post,
+            };
           } catch (error) {
-            rows[rows.length - 1] = { index: row.index, status: 'scheduleFailed', post, error: error instanceof Error ? error.message : 'Could not schedule post' };
+            rows[rows.length - 1] = {
+              index: row.index,
+              status: 'scheduleFailed',
+              post,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : 'Could not schedule post',
+            };
           }
         }
       } catch (error) {
         if ((error as { code?: string }).code === 'P2002') {
-          const duplicate = await this.prisma.telegramManagedPost.findFirst({ where: { workspaceId, telegramChannelId: channelId, jsonImportKey: identity }, include: this.managedPostInclude });
-          if (duplicate) rows.push({ index: row.index, status: 'alreadyExists', post: duplicate });
-          else rows.push({ index: row.index, status: 'skipped', error: 'Could not create post' });
-        } else rows.push({ index: row.index, status: 'skipped', error: error instanceof Error ? error.message : 'Could not create post' });
+          const duplicate = await this.prisma.telegramManagedPost.findFirst({
+            where: {
+              workspaceId,
+              telegramChannelId: channelId,
+              jsonImportKey: identity,
+            },
+            include: this.managedPostInclude,
+          });
+          if (duplicate)
+            rows.push({
+              index: row.index,
+              status: 'alreadyExists',
+              post: duplicate,
+            });
+          else
+            rows.push({
+              index: row.index,
+              status: 'skipped',
+              error: 'Could not create post',
+            });
+        } else
+          rows.push({
+            index: row.index,
+            status: 'skipped',
+            error:
+              error instanceof Error ? error.message : 'Could not create post',
+          });
       }
       processedRows += 1;
-      onProgress?.({ index: row.index, status: rows.at(-1)?.status === 'scheduleFailed' ? 'scheduleFailed' : 'created', title: row.value.title, postId: post?.id, message: `Post processed: ${row.value.title}` }, processedRows, normalized.length);
+      onProgress?.(
+        {
+          index: row.index,
+          status:
+            rows.at(-1)?.status === 'scheduleFailed'
+              ? 'scheduleFailed'
+              : 'created',
+          title: row.value.title,
+          postId: post?.id,
+          message: `Post processed: ${row.value.title}`,
+        },
+        processedRows,
+        normalized.length,
+      );
     }
-    for (const groupId of touchedGroupIds) await this.prisma.$transaction((tx) => this.normalizePostGroupNumbering(tx, groupId));
-    const createdRows = rows.filter((row): row is Extract<ManagedPostImportResultRow, { status: 'created' | 'scheduled' | 'scheduleFailed' }> => row.status === 'created' || row.status === 'scheduled' || row.status === 'scheduleFailed');
+    for (const groupId of touchedGroupIds)
+      await this.prisma.$transaction((tx) =>
+        this.normalizePostGroupNumbering(tx, groupId),
+      );
+    const createdRows = rows.filter(
+      (
+        row,
+      ): row is Extract<
+        ManagedPostImportResultRow,
+        { status: 'created' | 'scheduled' | 'scheduleFailed' }
+      > =>
+        row.status === 'created' ||
+        row.status === 'scheduled' ||
+        row.status === 'scheduleFailed',
+    );
 
     rows.sort((left, right) => left.index - right.index);
     return {
@@ -7945,13 +8143,14 @@ export class TelegramChannelsService {
       nextButtonRows.length > 0 &&
       post.scheduleMode !== 'LOCAL';
     let localBotSource:
-      | Awaited<ReturnType<TelegramSourceAccessService['sourcesForChannel']>>[number]
+      | Awaited<
+          ReturnType<TelegramSourceAccessService['sourcesForChannel']>
+        >[number]
       | undefined;
     if (convertsNativeScheduleToLocal) {
-      localBotSource = (await this.sourceAccessService.sourcesForChannel(
-        workspaceId,
-        channelId,
-      )).find(
+      localBotSource = (
+        await this.sourceAccessService.sourcesForChannel(workspaceId, channelId)
+      ).find(
         (source) =>
           source.sourceType === TelegramSourceType.BOT &&
           source.permissions.canPostMessages,
@@ -7976,7 +8175,8 @@ export class TelegramChannelsService {
       post.status === TelegramManagedPostStatus.PUBLISHED &&
       post.telegramRemoteStatus === TelegramManagedPostRemoteStatus.PUBLISHED;
     const channel =
-      (dto.text !== undefined || dto.buttonRows !== undefined) && canEditPublishedTelegramText
+      (dto.text !== undefined || dto.buttonRows !== undefined) &&
+      canEditPublishedTelegramText
         ? await this.prisma.telegramChannel.findFirst({
             where: { id: channelId, workspaceId },
             select: {
@@ -7989,14 +8189,17 @@ export class TelegramChannelsService {
           })
         : null;
     const telegramEdit =
-      (dto.text !== undefined || dto.buttonRows !== undefined) && canEditPublishedTelegramText && channel
+      (dto.text !== undefined || dto.buttonRows !== undefined) &&
+      canEditPublishedTelegramText &&
+      channel
         ? await this.editManagedPostTextInTelegram({
             workspaceId,
             channelId,
             post,
             channel,
             nextText,
-            buttonRows: dto.buttonRows === undefined ? post.buttonRows : dto.buttonRows,
+            buttonRows:
+              dto.buttonRows === undefined ? post.buttonRows : dto.buttonRows,
           })
         : null;
     const updatedPost = await this.prisma.$transaction(async (tx) => {
@@ -8007,10 +8210,7 @@ export class TelegramChannelsService {
           title: dto.title?.trim(),
           text: dto.text,
           imageUrls: dto.imageUrls,
-          buttonRows:
-            dto.buttonRows === undefined
-              ? undefined
-              : nextButtonRows,
+          buttonRows: dto.buttonRows === undefined ? undefined : nextButtonRows,
           scheduleMode: convertsNativeScheduleToLocal ? 'LOCAL' : undefined,
           telegramRemoteStatus: convertsNativeScheduleToLocal
             ? TelegramManagedPostRemoteStatus.NONE
@@ -8413,7 +8613,10 @@ export class TelegramChannelsService {
     }
   }
 
-  private notifyManagedPostSchedulePersisted<T>(persisted: T, scheduleAt?: Date) {
+  private notifyManagedPostSchedulePersisted<T>(
+    persisted: T,
+    scheduleAt?: Date,
+  ) {
     if (scheduleAt) {
       notifyScheduledTaskDueWorkChanged('telegram.managed_posts.reconcile_due');
     }
@@ -9761,7 +9964,10 @@ export class TelegramChannelsService {
       },
     });
     if (!channel) throw new NotFoundException('Telegram channel not found');
-    const summaries = await this.buildChannelFinancialSummaryPreview(workspaceId, [channel]);
+    const summaries = await this.buildChannelFinancialSummaryPreview(
+      workspaceId,
+      [channel],
+    );
     return summaries.get(channelId);
   }
 
@@ -10958,7 +11164,8 @@ export class TelegramChannelsService {
         onProgress,
         progressStep,
       );
-      const changed = persistence.changedPosts > 0 || persistence.snapshotsCreated > 0;
+      const changed =
+        persistence.changedPosts > 0 || persistence.snapshotsCreated > 0;
       if (changed) {
         for (const dataType of [
           TelegramChannelDataType.POSTS,
@@ -11021,7 +11228,9 @@ export class TelegramChannelsService {
     progressStep = { current: 3, total: 8 },
   ) {
     const affectedDays = new Set<string>();
-    const incomingMessageIds = metrics.map((post) => String(post.telegramMessageId));
+    const incomingMessageIds = metrics.map((post) =>
+      String(post.telegramMessageId),
+    );
     // Fetch only the window returned by Telegram. A missing item from this
     // window is not a deleted historical post, so it must not cause every old
     // day in a channel to be recalculated on each sync.
@@ -11080,7 +11289,10 @@ export class TelegramChannelsService {
         rawMessage: post.rawMessage,
       };
       const upserted = existing
-        ? await this.prisma.telegramPost.update({ where: { id: existing.id }, data })
+        ? await this.prisma.telegramPost.update({
+            where: { id: existing.id },
+            data,
+          })
         : await this.prisma.telegramPost.create({
             data: {
               workspaceId,
@@ -11101,7 +11313,8 @@ export class TelegramChannelsService {
       });
       changedPosts += 1;
       snapshotsCreated += 1;
-      if (existing) affectedDays.add(existing.postDate.toISOString().slice(0, 10));
+      if (existing)
+        affectedDays.add(existing.postDate.toISOString().slice(0, 10));
       affectedDays.add(post.postDate.toISOString().slice(0, 10));
     }
     await this.notifyDetailedTaskProgress(
@@ -11116,13 +11329,27 @@ export class TelegramChannelsService {
     return { affectedDays: affectedDays.size, changedPosts, snapshotsCreated };
   }
 
-  private postMetricsChanged(existing: Record<string, any>, incoming: Record<string, any>) {
+  private postMetricsChanged(
+    existing: Record<string, any>,
+    incoming: Record<string, any>,
+  ) {
     const fields = [
-      'postDate', 'text', 'formattedText', 'hasMedia', 'mediaKind',
-      'viewsCount', 'forwardsCount', 'reactionsCount', 'commentsCount',
-      'reactions', 'rawMessage',
+      'postDate',
+      'text',
+      'formattedText',
+      'hasMedia',
+      'mediaKind',
+      'viewsCount',
+      'forwardsCount',
+      'reactionsCount',
+      'commentsCount',
+      'reactions',
+      'rawMessage',
     ];
-    return fields.some((field) => this.metricValue(existing[field]) !== this.metricValue(incoming[field]));
+    return fields.some(
+      (field) =>
+        this.metricValue(existing[field]) !== this.metricValue(incoming[field]),
+    );
   }
 
   private metricValue(value: unknown) {

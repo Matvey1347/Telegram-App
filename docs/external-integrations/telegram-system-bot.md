@@ -44,9 +44,7 @@ laptop is currently online.
 
 `pnpm dev` starts the API and web app with HMR and explicitly disables the System Bot runtime. It never deletes or changes either System Bot webhook.
 
-`pnpm dev:bots` (alias: `pnpm dev:webhook`) starts the API, web app, one ngrok gateway, and selects `LOCAL`. The gateway routes `/api` to Nest and all other paths to Next. The API registers only `TELEGRAM_SYSTEM_BOT_LOCAL_TOKEN` at the ngrok webhook URL and configures commands for that local bot. Production credentials are not read.
-
-`pnpm dev:ngrok` exposes the local app without enabling bot runtime side effects.
+`pnpm dev:bots` starts the API, web app, one free Cloudflare Quick Tunnel gateway, and selects `LOCAL`. The gateway routes `/api` to Nest and all other paths to Next. The API registers only `TELEGRAM_SYSTEM_BOT_LOCAL_TOKEN` at the generated `trycloudflare.com` webhook URL and configures commands for that local bot. Production credentials are not read.
 
 ## Production flow
 

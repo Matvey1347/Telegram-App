@@ -64,6 +64,9 @@ states independently for the selected `LOCAL` or `PRODUCTION` runtime.
   against the exact runtime token, then issue the scoped Finance consumer session.
 - Subsequent consumer requests authenticate with the secure, HttpOnly Finance consumer
   session cookie. This session is separate from internal dashboard JWT authentication.
+- Consumer sessions are bot-scoped: the signing key is derived from the encrypted-token
+  master key and the exact `botIntegrationId`, while the TTL is stored on that
+  `TelegramBotIntegration`. Do not add one environment secret or TTL variable per bot.
 - Browser authentication must use a server-validated Telegram identity flow and resolve
   the same logical `FinanceProfile` as the Mini App; never trust a browser user id/query
   parameter directly.

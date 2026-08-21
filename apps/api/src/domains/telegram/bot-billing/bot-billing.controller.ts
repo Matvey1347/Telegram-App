@@ -24,5 +24,7 @@ export class BotBillingController {
   @Get('telegram-bots/:botId/billing/coupons') coupons(@CurrentUser() user: JwtUser, @Param('botId') botId: string) { return this.billing.coupons(user.sub, botId); }
   @Get('telegram-bots/:botId/billing/subscribers') subscribers(@CurrentUser() user: JwtUser, @Param('botId') botId: string, @Query() query: BillingSubscribersQueryDto) { return this.billing.subscribers(user.sub, botId, query); }
   @Post('telegram-bots/:botId/billing/coupons') coupon(@CurrentUser() user: JwtUser, @Param('botId') botId: string, @Body() dto: CreateBillingCouponDto) { return this.billing.createCoupon(user.sub, botId, dto); }
+  @Post('telegram-bots/:botId/finance-billing/sync') syncFinance(@CurrentUser() user: JwtUser, @Param('botId') botId: string) { return this.billing.syncFinanceCatalog(user.sub, botId); }
+  @Post('telegram-bots/:botId/finance-billing/coupons/:couponId/sync') syncFinanceCoupon(@CurrentUser() user: JwtUser, @Param('botId') botId: string, @Param('couponId') couponId: string) { return this.billing.syncCouponToStripe(user.sub, botId, couponId); }
   @Get('billing/providers') workspaceProviders(@CurrentUser() user: JwtUser) { return this.billing.workspaceProviderResolution(user.sub); }
 }

@@ -588,7 +588,10 @@ export function ManagedPostsImportModal({
   const canImport = Boolean(channelId) && newRowIndices.length > 0;
   const resultSummary = summarizeResult(result);
   const skippedRows =
-    result?.rows.filter((row) => row.status === "skipped") ?? [];
+    result?.rows.filter(
+      (row): row is typeof row & { status: "skipped"; error: string } =>
+        row.status === "skipped",
+    ) ?? [];
 
   const updateEditableRow = (
     index: number,

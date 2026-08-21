@@ -33,6 +33,7 @@ async function bootstrap() {
       'Authorization',
       'X-Workspace-Id',
       'X-Telegram-Init-Data',
+      'X-Finance-Consumer-Request',
       'X-Correlation-Id',
       'X-Bypass-Response-Cache',
       'Cache-Control',

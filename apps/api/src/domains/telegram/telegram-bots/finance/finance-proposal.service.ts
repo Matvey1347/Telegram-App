@@ -17,6 +17,9 @@ type ProposalPayload = {
   amount: string;
   currency: string;
   description: string | null;
+  accountHint?: string;
+  merchantDisplay?: string;
+  items?: Array<{ displayName: string; quantity?: string; unitPrice?: string; totalAmount: string; currency: string }>;
   accountId: string;
   categoryId: string | null;
   occurredAt: string;
@@ -180,6 +183,9 @@ export class FinanceProposalService {
       currency: string;
       description: string;
       occurredAt: string;
+      accountHint?: string;
+      merchantDisplay?: string;
+      items?: Array<{ displayName: string; quantity?: string; unitPrice?: string; totalAmount: string; currency: string }>;
     }>;
   }) {
     if (!input.operations.length || input.operations.length > 10)
@@ -197,9 +203,7 @@ export class FinanceProposalService {
       categoryName: string | null;
     }> = [];
     for (const item of input.operations) {
-      const account =
-        accounts.find((candidate) => candidate.currency === item.currency) ||
-        accounts[0];
+      const account = this.resolveAccount(accounts, item.accountHint, item.currency);
       if (!account)
         throw new BadRequestException(
           'Create an account before adding transactions',
@@ -211,7 +215,7 @@ export class FinanceProposalService {
       const category = await this.resolveCategory(
         input.profile.id,
         item.type,
-        item.description,
+        item.merchantDisplay || item.description,
       );
       const payload = {
         ...item,
@@ -308,6 +312,25 @@ export class FinanceProposalService {
       ) ||
       null
     );
+  }
+
+  private resolveAccount(
+    accounts: Array<{ id: string; name: string; currency: string }>,
+    hint: string | undefined,
+    currency: string,
+  ) {
+    const normalizedHint = hint ? this.ledger.normalizeMerchant(hint) : '';
+    const hinted = normalizedHint
+      ? accounts.filter((account) => this.ledger.normalizeMerchant(account.name).includes(normalizedHint) || normalizedHint.includes(this.ledger.normalizeMerchant(account.name)))
+      : [];
+    if (hinted.length === 1) return hinted[0];
+    if (hinted.length > 1)
+      throw new BadRequestException('More than one account matches this AI proposal');
+    const currencyMatches = accounts.filter((account) => account.currency === currency);
+    if (currencyMatches.length === 1) return currencyMatches[0];
+    if (currencyMatches.length > 1)
+      throw new BadRequestException(`More than one ${currency} account is available for this AI proposal`);
+    return accounts[0];
   }
   private hash(token: string) {
     return createHash('sha256').update(token).digest('hex');

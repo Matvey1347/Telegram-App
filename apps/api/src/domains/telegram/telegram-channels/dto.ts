@@ -65,6 +65,10 @@ export class UpdateTelegramChannelDto {
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) targetCpaFrom?: number;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) targetCpa?: number;
   @IsOptional() @Matches(/^[A-Za-z]{3}$/) kpiCurrency?: string;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) adBaseCpm?:
+    | number
+    | null;
+  @IsOptional() @Matches(/^[A-Za-z]{3}$/) adBaseCurrency?: string;
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
@@ -192,8 +196,13 @@ export class CreateTelegramManagedPostDto {
 
 export class TelegramManagedPostButtonDto {
   @IsString() text!: string;
-  @IsUrl({ protocols: ['http', 'https', 'tg'], require_protocol: true }) url!: string;
-  @IsIn(['default', 'primary', 'success', 'danger']) style!: 'default' | 'primary' | 'success' | 'danger';
+  @IsUrl({ protocols: ['http', 'https', 'tg'], require_protocol: true })
+  url!: string;
+  @IsIn(['default', 'primary', 'success', 'danger']) style!:
+    | 'default'
+    | 'primary'
+    | 'success'
+    | 'danger';
 }
 
 export class ImportTelegramManagedPostRowDto {

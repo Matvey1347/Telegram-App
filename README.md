@@ -9,23 +9,30 @@ Internal system for managing Telegram channels, ad campaigns, finance, currencie
 3. `pnpm db:migrate`
 4. `pnpm dev` (starts the API and frontend locally, with HMR)
 
-`pnpm dev` starts API and frontend directly, without `scripts/dev-ngrok.mjs` or ngrok; browser requests use `http://localhost:4000/api`. It explicitly disables workspace-bot and System Bot runtime startup side effects.
+`pnpm dev` starts API and frontend directly, without `scripts/dev-tunnel.mjs` or a public tunnel; browser requests use `http://localhost:4000/api`. It explicitly disables workspace-bot and System Bot runtime startup side effects; Telegram-backed Finance consumer authentication is available through `pnpm dev:bots`.
 
 ### Local Telegram development
 
-Use `pnpm dev:bots` (alias: `pnpm dev:webhook`) only when developing Telegram behavior. It starts the API, web app and one ngrok gateway, selects the `LOCAL` runtime for workspace bots and the System Bot, and configures only those LOCAL BotFather bots. The public gateway sends `/api` to Nest and every other path to Next, allowing the local Finance Mini App to open on a phone. It never reads, changes, or rebinds a PRODUCTION token or webhook. Do not run it alongside `pnpm dev`: it owns ports 4000, 3000 and 4100.
-
-`pnpm dev:ngrok` exposes the local application without starting any bot runtime.
+Use `pnpm dev:bots` only when developing Telegram behavior. It starts the API, web app and a free Cloudflare Quick Tunnel, selects the `LOCAL` runtime for workspace bots and the System Bot, and configures only those LOCAL BotFather bots. Install its one local dependency with `brew install cloudflared`; no Cloudflare account or domain is required. The public gateway sends `/api` to Nest and every other path to Next, allowing the local Finance Mini App to open on a phone. When Cloudflare assigns a new `trycloudflare.com` URL, the LOCAL Finance menu button and saved users' reply keyboards are refreshed automatically. On Ctrl+C, the command removes the LOCAL webhook and menu link, removes the reply keyboard, and tells saved LOCAL users that Finance is not running before it stops the processes. It never reads, changes, or rebinds a PRODUCTION token or webhook. Do not run it alongside `pnpm dev`: it owns ports 4000, 3000 and 4100.
 
 ### Production
 
-Deploy with `TELEGRAM_BOT_RUNTIME_ENVIRONMENT=PRODUCTION` and `TELEGRAM_SYSTEM_BOT_ENVIRONMENT=PRODUCTION`. Each deployment performs a bounded startup reconciliation of the selected runtime's webhook and presentation configuration. It does not poll Telegram or create recurring status reads/writes merely to keep a status indicator green.
+Deploy with `TELEGRAM_BOT_RUNTIME_ENVIRONMENT=PRODUCTION` and `TELEGRAM_SYSTEM_BOT_ENVIRONMENT=PRODUCTION`. Finance consumer authentication uses that same workspace-bot runtime selection. Each deployment performs a bounded startup reconciliation of the selected bot runtime's webhook and presentation configuration. It does not poll Telegram or create recurring status reads/writes merely to keep a status indicator green.
 
 ### Finance entry points
 
 Finance has one logical profile and data model across its entry points. Telegram Mini App users bootstrap a scoped consumer browser session with Telegram `initData`; the browser Web App uses a server-validated identity flow and resolves that same profile. **Open in browser** is a browser entry point, not a separate Finance account.
 
 ## Required env variables
+
+The project has one environment profile:
+
+- `.env` contains the real runtime/deployment values and is git-ignored.
+- `.env.example` contains the same keys and section order with safe example values.
+- `.env.prod` is not supported. Do not recreate it.
+- Add, rename, move, or remove an environment key in `.env` and `.env.example`
+  together, then run `pnpm env:check`. The check compares key names only and
+  never prints secret values.
 
 - `DATABASE_URL`
 - `API_PORT`
@@ -61,6 +68,7 @@ Key generation:
 - `API_PUBLIC_URL` should point to your public API base URL for browser callback flows. `PUBLIC_API_URL` remains accepted only where an existing deployment already uses it.
 - `TELEGRAM_BOT_WEBHOOK_BASE_URL` can explicitly set the Bot API webhook base, e.g. `https://api.example.com`.
 - Workspace bot runtime selection uses `TELEGRAM_BOT_RUNTIME_ENVIRONMENT=LOCAL|PRODUCTION`. Both environments use separate BotFather bots and webhooks while sharing one logical bot's business data.
+- Finance consumer authentication uses the same `TELEGRAM_BOT_RUNTIME_ENVIRONMENT` selection as the workspace bot runtime.
 - System Bot runtime selection uses `TELEGRAM_SYSTEM_BOT_ENVIRONMENT=LOCAL|PRODUCTION` with distinct `TELEGRAM_SYSTEM_BOT_LOCAL_{TOKEN,USERNAME,WEBHOOK_SECRET}` and `TELEGRAM_SYSTEM_BOT_PRODUCTION_{TOKEN,USERNAME,WEBHOOK_SECRET}` credentials. There is no legacy unsuffixed-token fallback and no polling mode.
 - `TELEGRAM_UPDATES_MODE` supports `webhook`, `polling`, or `off`.
 - `TELEGRAM_SYNC_ENABLED=true` enables snapshot/daily sync jobs.

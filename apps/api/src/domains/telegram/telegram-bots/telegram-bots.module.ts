@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
 import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
+import { TelegramBotInteractiveReplyService } from '../../../telegram/shared/telegram-bot-interactive-reply.service';
 import {
   TelegramBotApplicationDispatcherService,
   TelegramBotFinanceHandler,
@@ -15,6 +16,7 @@ import { TelegramBotRuntimeExecutionContext } from './core/telegram-bot-runtime-
 import { TelegramBotRuntimePresentationService } from './core/telegram-bot-runtime-presentation.service';
 import { TelegramBotRuntimeRegistryService } from './core/telegram-bot-runtime-registry.service';
 import { TelegramBotRuntimeCheckService } from './core/telegram-bot-runtime-check.service';
+import { TelegramBotLocalDevelopmentService } from './core/telegram-bot-local-development.service';
 import { TelegramBotUsersService } from './core/telegram-bot-users.service';
 import { TelegramBotsController } from './core/telegram-bots.controller';
 import { TelegramBotsService } from './core/telegram-bots.service';
@@ -27,16 +29,21 @@ import { GreeterAutomationService } from './greeter/greeter-automation.service';
 import { FinanceBotService } from './finance/finance-bot.service';
 import { FinanceBotChatResponderService } from './finance/finance-bot-chat-responder.service';
 import { FinanceChatFlowService } from './finance/finance-chat-flow.service';
+import { FinanceChatFlowPresenterService } from './finance/finance-chat-flow-presenter.service';
 import { FinanceEntitlementService } from './finance/finance-entitlement.service';
 import { BotBillingModule } from '../bot-billing/bot-billing.module';
 import { FinanceAiConfigService } from './finance/finance-ai-config.service';
 import { FinanceAiConfigController } from './finance/finance-ai-config.controller';
 import { FinanceController } from './finance/finance.controller';
+import { FinanceUltimateController } from './finance/finance-ultimate.controller';
+import { FinanceUltimateService } from './finance/finance-ultimate.service';
 import { FinanceContextService } from './finance/finance-context.service';
 import { FinanceConsumerSessionService } from './finance/finance-consumer-session.service';
+import { FinanceConsumerRuntimeEnvironmentService } from './finance/finance-consumer-runtime-environment.service';
 import { FinanceConsumerTransferService } from './finance/finance-consumer-transfer.service';
 import { FinanceCoreService } from './finance/finance-core.service';
 import { FinanceLedgerService } from './finance/finance-ledger.service';
+import { FinanceTransferService } from './finance/finance-transfer.service';
 import { FinanceProposalService } from './finance/finance-proposal.service';
 import { FinanceAiProviderService } from './finance/finance-ai.provider';
 import { GreeterExpiryService } from './greeter/greeter-expiry.service';
@@ -56,6 +63,7 @@ import { GreeterTestModeService } from './greeter/greeter-test-mode.service';
     GreeterController,
     FinanceAiConfigController,
     FinanceController,
+    FinanceUltimateController,
   ],
   providers: [
     TelegramBotsService,
@@ -64,6 +72,7 @@ import { GreeterTestModeService } from './greeter/greeter-test-mode.service';
     TelegramBotLoadingFeedbackService,
     TelegramSourceAccessService,
     TelegramBotApiClient,
+    TelegramBotInteractiveReplyService,
     TelegramBotApplicationRegistryService,
     TelegramBotRuntimeService,
     TelegramBotRuntimeEnvironmentService,
@@ -71,6 +80,7 @@ import { GreeterTestModeService } from './greeter/greeter-test-mode.service';
     TelegramBotRuntimePresentationService,
     TelegramBotRuntimeRegistryService,
     TelegramBotRuntimeCheckService,
+    TelegramBotLocalDevelopmentService,
     TelegramBotUsersService,
     GreeterService,
     GreeterAdminService,
@@ -83,13 +93,17 @@ import { GreeterTestModeService } from './greeter/greeter-test-mode.service';
     FinanceBotService,
     FinanceBotChatResponderService,
     FinanceChatFlowService,
+    FinanceChatFlowPresenterService,
     FinanceEntitlementService,
     FinanceAiConfigService,
     FinanceContextService,
     FinanceConsumerSessionService,
+    FinanceConsumerRuntimeEnvironmentService,
     FinanceConsumerTransferService,
     FinanceCoreService,
     FinanceLedgerService,
+    FinanceTransferService,
+    FinanceUltimateService,
     FinanceProposalService,
     FinanceAiProviderService,
     TelegramBotGreeterHandler,

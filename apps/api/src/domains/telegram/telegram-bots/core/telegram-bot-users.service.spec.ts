@@ -26,6 +26,7 @@ describe('TelegramBotUsersService', () => {
     await service.upsertFromUpdate({
       workspaceId: 'w',
       botIntegrationId: 'b',
+      runtimeInstanceId: 'runtime-1',
       update: {
         message: { text: '/start campaign', chat: { id: 7 }, from: { id: 7 } },
       },

@@ -45,7 +45,11 @@ export class TelegramBotApplicationDispatcherService {
       });
       return { handled: false };
     }
-    const loading = await this.loadingFeedback.show(context);
+    // Finance owns immediate, step-specific feedback. Its live replies must not
+    // wait for a temporary message round trip. Greeter retains existing behavior.
+    const loading = context.bot.applicationType === TelegramBotApplicationType.GREETER
+      ? await this.loadingFeedback.show(context)
+      : null;
     try {
       switch (context.bot.applicationType) {
         case TelegramBotApplicationType.GREETER:

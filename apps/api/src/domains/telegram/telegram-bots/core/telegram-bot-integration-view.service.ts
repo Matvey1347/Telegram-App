@@ -3,12 +3,14 @@ import { TelegramBotApplicationType } from '@prisma/client';
 import type { TelegramBotIntegrationView } from '@telegram-system/shared';
 import { BotBillingAnalyticsService } from '../../bot-billing/bot-billing-analytics.service';
 import { TelegramBotApplicationRegistryService } from './telegram-bot-application-registry.service';
+import { TelegramBotRuntimeEnvironmentService } from './telegram-bot-runtime-environment.service';
 
 @Injectable()
 export class TelegramBotIntegrationViewService {
   constructor(
     private readonly applicationRegistry: TelegramBotApplicationRegistryService,
     private readonly billingAnalytics: BotBillingAnalyticsService,
+    private readonly runtimeEnvironment: TelegramBotRuntimeEnvironmentService,
   ) {}
 
   async toView(
@@ -49,31 +51,36 @@ export class TelegramBotIntegrationViewService {
     };
   }
 
-  async financeSummaryForBots(workspaceId: string, botIds: string[]) {
-    return this.billingAnalytics.summariesForBots(workspaceId, botIds);
+  async financeSummaryForRuntimes(workspaceId: string, runtimeIds: string[]) {
+    return this.billingAnalytics.summariesForRuntimes(workspaceId, runtimeIds);
   }
 
   financeApplicationSummary(
-    summaries: Awaited<ReturnType<BotBillingAnalyticsService['summariesForBots']>>,
-    botId: string,
+    summaries: Awaited<ReturnType<BotBillingAnalyticsService['summariesForRuntimes']>>,
+    runtimes: Array<{ id: string; environment: 'LOCAL' | 'PRODUCTION' }>,
   ): TelegramBotIntegrationView['applicationSummary'] {
-    const summary = summaries.get(botId);
     return {
       applicationType: 'FINANCE',
-      finance: {
-        registeredUsers: summary?.registeredUsers || 0,
-        paidUsers: summary?.paidUsers || 0,
-        activeSubscriptions: summary?.activeSubscriptions || 0,
-        failedPayments: summary?.failedPayments || 0,
-      },
+      finance: Object.fromEntries(runtimes.map((runtime) => {
+        const summary = summaries.get(runtime.id);
+        return [runtime.environment, {
+          registeredUsers: summary?.registeredUsers || 0,
+          paidUsers: summary?.paidUsers || 0,
+          activeSubscriptions: summary?.activeSubscriptions || 0,
+          failedPayments: summary?.failedPayments || 0,
+        }];
+      })),
     };
   }
 
   private async applicationSummaryForRow(row: Record<string, unknown>) {
     if (row.applicationType !== TelegramBotApplicationType.FINANCE) return null;
+    const runtimes = Array.isArray(row.runtimeInstances)
+      ? row.runtimeInstances as Array<{ id: string; environment: 'LOCAL' | 'PRODUCTION' }>
+      : [];
     return this.financeApplicationSummary(
-      await this.financeSummaryForBots(String(row.workspaceId), [String(row.id)]),
-      String(row.id),
+      await this.financeSummaryForRuntimes(String(row.workspaceId), runtimes.map((runtime) => runtime.id)),
+      runtimes,
     );
   }
 
@@ -86,6 +93,7 @@ export class TelegramBotIntegrationViewService {
     return value.map((runtime: Record<string, unknown>) => ({
       id: String(runtime.id),
       environment: runtime.environment as 'LOCAL' | 'PRODUCTION',
+      isProcessOwner: this.runtimeEnvironment.owns(runtime.environment as never),
       botTokenMasked: String(runtime.botTokenMasked),
       tokenState: 'SAVED' as const,
       botId: (runtime.botId as string | null) || null,
