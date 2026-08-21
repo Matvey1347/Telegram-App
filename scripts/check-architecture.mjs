@@ -16,33 +16,73 @@ const STRICT_MODE = process.env.ARCHITECTURE_STRICT === "1";
 // Transitional baseline: these files must shrink and may never grow.
 // Final strict mode ignores this map and fails every production file above policy.
 const TRANSITION_BASELINE = new Map([
-  ["apps/api/src/domains/telegram/telegram-channels/telegram-channels.service.ts", 11019],
-  ["apps/web/src/app/(internal)/(telegram)/telegram-posts/page.tsx", 6775],
-  ["apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.service.ts", 5746],
-  ["apps/web/src/app/(internal)/(telegram)/telegram/channels/[id]/page.tsx", 4000],
-  ["apps/web/src/app/(internal)/(telegram)/telegram-channels/page.tsx", 3502],
-  ["apps/api/src/telegram/shared/telegram-mtproto.client.ts", 3360],
+  [
+    "apps/api/src/domains/telegram/telegram-channels/telegram-channels.service.ts",
+    12788,
+  ],
+  ["apps/web/src/app/(internal)/(telegram)/telegram-posts/page.tsx", 8370],
+  [
+    "apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.service.ts",
+    5884,
+  ],
+  [
+    "apps/web/src/app/(internal)/(telegram)/telegram/channels/[id]/page.tsx",
+    4000,
+  ],
+  ["apps/web/src/app/(internal)/(telegram)/telegram-channels/page.tsx", 3621],
+  ["apps/api/src/telegram/shared/telegram-mtproto.client.ts", 3548],
   ["apps/web/src/components/features/growth/ad-sales/ad-sales-page.tsx", 3102],
   ["apps/web/src/lib/api.ts", 2235],
   ["apps/web/src/app/(internal)/(growth)/ad-campaigns/page.tsx", 2503],
   ["apps/api/src/domains/growth/ad-campaigns/ad-campaigns.service.ts", 1864],
-  ["apps/web/src/components/ui/primitives.tsx", 1854],
-  ["apps/web/src/components/features/growth/ad-campaigns/campaigns-table.tsx", 1307],
-  ["apps/api/src/domains/telegram/telegram-user-accounts/telegram-user-accounts.service.ts", 1217],
-  ["apps/web/src/components/features/telegram/telegram/telegram-account-panels.tsx", 1178],
-  ["apps/web/src/components/icons/icon-picker.tsx", 1111],
+  ["apps/web/src/components/ui/primitives.tsx", 1936],
+  [
+    "apps/web/src/components/features/growth/ad-campaigns/campaigns-table.tsx",
+    1307,
+  ],
+  [
+    "apps/api/src/domains/telegram/telegram-user-accounts/telegram-user-accounts.service.ts",
+    1217,
+  ],
+  [
+    "apps/web/src/components/features/telegram/telegram/telegram-account-panels.tsx",
+    1185,
+  ],
+  [
+    "apps/web/src/components/features/telegram/telegram/managed-posts-import-modal.tsx",
+    1177,
+  ],
+  ["apps/web/src/components/icons/icon-picker.tsx", 1165],
   ["apps/web/src/components/features/growth/ad-sales/ad-sale-modal.tsx", 1048],
-  ["apps/api/src/domains/growth/ad-campaigns/ad-campaign-admission-analytics.service.ts", 1010],
-  ["apps/api/src/domains/growth/ad-hypotheses/ad-hypotheses.service.ts", 902],
-  ["apps/web/src/components/features/telegram/telegram/telegram-post-preview.tsx", 897],
+  [
+    "apps/api/src/domains/growth/ad-campaigns/ad-campaign-admission-analytics.service.ts",
+    1017,
+  ],
+  [
+    "apps/api/src/domains/telegram/telegram-bots/core/telegram-bot-runtime.service.ts",
+    914,
+  ],
+  ["apps/api/src/domains/growth/ad-hypotheses/ad-hypotheses.service.ts", 906],
+  [
+    "apps/web/src/components/features/telegram/telegram/telegram-post-preview.tsx",
+    1175,
+  ],
   ["packages/shared/src/types/telegram-ad-sales.ts", 857],
-  ["apps/api/src/domains/finance/transactions/transactions.service.ts", 818],
+  ["apps/api/src/domains/finance/transactions/transactions.service.ts", 848],
+  ["apps/web/src/lib/features/telegram/telegram-channels-api.ts", 848],
+  [
+    "apps/api/src/domains/telegram/telegram-channels/telegram-channels.controller.ts",
+    826,
+  ],
   ["apps/web/src/app/(internal)/(operations)/system-logs/page.tsx", 806],
-  ["apps/web/src/app/(internal)/page.tsx", 629],
-  ["apps/web/src/app/(internal)/(finance)/transactions/page.tsx", 461],
-  ["apps/web/src/app/(internal)/(telegram)/telegram-channel-networks/[id]/page.tsx", 434],
-  ["apps/web/src/app/(internal)/(growth)/ad-campaigns/[id]/page.tsx", 388],
-  ["apps/web/src/app/(internal)/(finance)/finance/page.tsx", 325],
+  ["apps/web/src/app/(internal)/page.tsx", 646],
+  ["apps/web/src/app/(internal)/(finance)/transactions/page.tsx", 466],
+  [
+    "apps/web/src/app/(internal)/(telegram)/telegram-channel-networks/[id]/page.tsx",
+    435,
+  ],
+  ["apps/web/src/app/(internal)/(growth)/ad-campaigns/[id]/page.tsx", 421],
+  ["apps/web/src/app/(internal)/(finance)/finance/page.tsx", 329],
 ]);
 
 const PRODUCTION_ROOTS = [

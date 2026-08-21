@@ -11,6 +11,11 @@ const baselineMigration = '000000000000_squashed_migrations';
 const reconciliationLockKey = 'telegram-system:prisma-baseline-reconciliation';
 const recoverableSquashedMigration =
   '20260813120000_managed_post_inline_buttons';
+// Historical tenant-specific data changes have no target on a fresh database.
+// Record them without execution after the structural baseline is installed.
+const freshDatabaseSkippedMigrations = [
+  '20260814000001_enable_finance_for_business_workspace',
+];
 const legacyMigrations = [
   '20260530223827_init',
   '20260530233013_add_investors',
@@ -278,6 +283,25 @@ async function verifyBaselineRecord(client) {
   }
 }
 
+async function bootstrapFreshDatabase(client) {
+  console.log('Applying the squashed schema baseline to the fresh database...');
+  runPrisma([
+    'db',
+    'execute',
+    '--file',
+    resolve(apiDir, 'prisma/migrations', baselineMigration, 'migration.sql'),
+  ]);
+  runPrisma(['migrate', 'resolve', '--applied', baselineMigration]);
+  for (const migration of freshDatabaseSkippedMigrations) {
+    console.log(
+      `Recording tenant-specific migration ${migration} as not applicable to the fresh database...`,
+    );
+    runPrisma(['migrate', 'resolve', '--applied', migration]);
+  }
+  await verifyBaselineRecord(client);
+  await verifyPartialRemoteImportIndex(client);
+}
+
 async function reconcileBaseline(options = {}) {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) throw new Error('DATABASE_URL is not set');
@@ -303,9 +327,7 @@ async function reconcileBaseline(options = {}) {
     }
     const rows = await readMigrationRows(client);
     if (rows === null) {
-      console.log(
-        'Fresh database detected; baseline will be applied by migrate deploy.',
-      );
+      await bootstrapFreshDatabase(client);
       return;
     }
 
