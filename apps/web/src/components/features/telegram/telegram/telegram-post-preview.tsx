@@ -2,8 +2,12 @@
 
 import {
   Bold,
+  ChevronRight,
   Code,
+  Eye,
+  ImageIcon,
   Italic,
+  MessageCircle,
   Quote,
   Strikethrough,
   Underline,
@@ -18,7 +22,6 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { ChevronRight, Eye, MessageCircle } from "lucide-react";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import { editorHtmlToTelegramMarkup } from "./telegram-text-editor-format";
 import { TelegramInlineKeyboardPreview } from "./telegram-inline-keyboard-preview";
@@ -26,6 +29,9 @@ import type { TelegramPostButtonRows } from "@telegram-system/shared";
 import type { TelegramCustomEmojiPackSummary } from "@telegram-system/shared";
 import { parseTelegramTableCellMarkup } from "@telegram-system/shared/telegram-table-markup";
 import { useTelegramTableCellEditor } from "./telegram-table-cell-editor";
+import { TelegramPostEngagement } from "./telegram-post-engagement";
+import type { TelegramPostEngagementMetrics } from "@telegram-system/shared";
+import { normalizeTelegramFormattedHtml } from "./telegram-formatted-html";
 
 type TelegramPostPreviewProps = {
   channelTitle: string;
@@ -33,6 +39,11 @@ type TelegramPostPreviewProps = {
   text: string;
   formattedHtml?: string | null;
   imageUrls: string[];
+  hasMedia?: boolean;
+  engagement?:
+    | TelegramPostEngagementMetrics
+    | TelegramPostEngagementMetrics[]
+    | null;
   onTextChange?: ((value: string) => void) | null;
   onUndo?: (() => void) | null;
   onRedo?: (() => void) | null;
@@ -394,49 +405,14 @@ function RenderedPreviewText({
   );
 }
 
-function normalizeTelegramFormattedHtml(html: string) {
-  return html
-    .replace(
-      /<blockquote\s+expandable(?:=(['"])?.*?\1)?\s*>/gi,
-      '<blockquote class="expandable">',
-    )
-    .replace(/<tg-spoiler>/gi, '<span class="tg-spoiler">')
-    .replace(/<\/tg-spoiler>/gi, "</span>")
-    .replace(/<span class="spoiler">/gi, '<span class="tg-spoiler">')
-    .replace(
-      /<pre([^>]*)>([\s\S]*?)<\/pre>/gi,
-      (_match, attributes: string, inner: string) => {
-        if (/data-copy-code/i.test(inner)) return _match;
-        const languageFromAttr =
-          attributes.match(/\slanguage=(['"])(.*?)\1/i)?.[2] ||
-          attributes.match(/\slang=(['"])(.*?)\1/i)?.[2] ||
-          "";
-        const codeClassMatch = inner.match(
-          /<code[^>]*class=(['"])(.*?)\1[^>]*>/i,
-        );
-        const languageFromCodeClass =
-          codeClassMatch?.[2]
-            ?.split(/\s+/)
-            .find((value) => value.startsWith("language-"))
-            ?.replace(/^language-/, "") || "";
-        const label = languageFromAttr || languageFromCodeClass;
-        const content = /<code[\s>]/i.test(inner)
-          ? inner
-          : `<code>${inner}</code>`;
-        const copyButton = `<button type="button" data-copy-code aria-label="Copy code"><svg class="tg-copy-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="6.5" y="2.5" width="10" height="12" rx="1.8"></rect><rect x="3.5" y="5.5" width="10" height="12" rx="1.8"></rect></svg></button>`;
-        return label
-          ? `<pre class="tg-native-pre"><span class="tg-native-pre-header"><span>${escapeHtml(label)}</span>${copyButton}</span>${content}</pre>`
-          : `<pre class="tg-native-pre tg-native-pre-plain">${copyButton}${content}</pre>`;
-      },
-    );
-}
-
 export function TelegramPostPreview({
   channelTitle,
   channelPhotoUrl,
   text,
   formattedHtml,
   imageUrls,
+  hasMedia = false,
+  engagement,
   onTextChange,
   onUndo,
   onRedo,
@@ -448,7 +424,7 @@ export function TelegramPostPreview({
 }: TelegramPostPreviewProps) {
   const resolvedCustomEmojiPacks =
     useRetainedCustomEmojiPacks(customEmojiPacks);
-  const hasContent = text.trim() || imageUrls.length;
+  const hasContent = text.trim() || imageUrls.length || hasMedia;
   const time = new Intl.DateTimeFormat("en", {
     hour: "2-digit",
     minute: "2-digit",
@@ -506,6 +482,11 @@ export function TelegramPostPreview({
         <div className="telegram-preview-wallpaper min-h-[460px] px-3 py-5">
           {hasContent ? (
             <div className="max-w-full space-y-2">
+              {hasMedia && !imageUrls.length ? (
+                <div className="flex min-h-28 items-center justify-center gap-2 rounded-[18px] rounded-bl-[5px] bg-[#182533] text-sm text-[#9fb2c3]">
+                  <ImageIcon size={18} /> Media attached in Telegram
+                </div>
+              ) : null}
               {messages.map((message, index) => (
                 <TelegramMessageBubble
                   key={index}
@@ -533,6 +514,10 @@ export function TelegramPostPreview({
                 />
               ))}
               <TelegramInlineKeyboardPreview buttonRows={buttonRows} />
+              {engagement &&
+              (Array.isArray(engagement) ? engagement.length : true) ? (
+                <TelegramPostEngagement engagement={engagement} />
+              ) : null}
             </div>
           ) : (
             <div className="flex min-h-[400px] items-center justify-center px-8 text-center text-sm text-[#708499]">

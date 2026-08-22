@@ -1018,6 +1018,9 @@ describe('TelegramChannelsService syncManagedPosts', () => {
           .mockResolvedValue([repairedPost]),
         update,
       },
+      telegramPost: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       telegramManagedPostRevision: {
         create: jest.fn().mockResolvedValue({}),
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),

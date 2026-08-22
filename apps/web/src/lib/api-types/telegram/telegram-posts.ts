@@ -2,6 +2,7 @@ import type { Icon, MemberSummary, ResolvedEmoji } from "../core";
 import type { TelegramChannel } from "./telegram-channels";
 import type {
   TelegramPostButtonRows,
+  TelegramPostEngagementMetrics,
   TelegramManagedPostIdVerificationStatus,
   TelegramManagedPostLinkSource,
 } from "@telegram-system/shared";
@@ -66,7 +67,10 @@ export type TelegramManagedPost = {
   sidebarPosition?: number | null;
   group?: TelegramManagedPostGroupSummary | null;
   title: string;
+  telegramPostId?: string | null;
   text?: string | null;
+  formattedText?: string | null;
+  hasMedia?: boolean;
   imageUrls: string[];
   buttonRows?: TelegramPostButtonRows;
   status: TelegramManagedPostStatus;
@@ -76,6 +80,9 @@ export type TelegramManagedPost = {
   telegramScheduledMessageIds: string[];
   telegramMessageIds: string[];
   telegramMessageUrls: string[];
+  primaryTelegramMessageUrl?: string | null;
+  readOnlyTelegramPost?: boolean;
+  engagementMetrics?: TelegramPostEngagementMetrics[];
   telegramIdVerificationStatus: TelegramManagedPostIdVerificationStatus;
   telegramLinkSource: TelegramManagedPostLinkSource;
   telegramIdVerifiedAt?: string | null;
@@ -123,7 +130,12 @@ export type TelegramManagedPostsImportResultRow =
       post: TelegramManagedPost;
     }
   | { index: number; status: "alreadyExists"; post: TelegramManagedPost }
-  | { index: number; status: "scheduled" | "scheduleFailed"; post: TelegramManagedPost; error?: string };
+  | {
+      index: number;
+      status: "scheduled" | "scheduleFailed";
+      post: TelegramManagedPost;
+      error?: string;
+    };
 export type TelegramManagedPostsImportResult = {
   createdCount: number;
   skippedCount: number;

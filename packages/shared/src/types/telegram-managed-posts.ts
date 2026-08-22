@@ -8,6 +8,41 @@ export type TelegramManagedPostIdVerificationStatus =
   | "MISSING";
 export type TelegramManagedPostLinkSource = "AUTO" | "MANUAL";
 
+export function buildTelegramGptContextFilename(
+  channelTitle: string,
+  downloadedAt = new Date(),
+) {
+  const words = channelTitle.match(/[\p{L}\p{N}]+/gu) ?? [];
+  const firstWord = Array.from(words[0] ?? "TG");
+  const secondWord = Array.from(words[1] ?? "");
+  const prefix =
+    secondWord.length > 0
+      ? `${firstWord[0] ?? "T"}${secondWord[0] ?? "G"}`
+      : firstWord.slice(0, 2).join("");
+  const time = [
+    String(downloadedAt.getHours()).padStart(2, "0"),
+    String(downloadedAt.getMinutes()).padStart(2, "0"),
+  ].join("-");
+  return `${prefix.toUpperCase()}_${time}.txt`;
+}
+
+export type TelegramPostEngagementMetrics = {
+  telegramPostId: string;
+  telegramMessageId: string;
+  viewsCount: number | null;
+  forwardsCount: number | null;
+  reactionsCount: number | null;
+  commentsCount: number | null;
+  adjustedViewsCount: number;
+  adjustedReactionsCount: number;
+  subscriberCount: number | null;
+  err: number | null;
+  reactionRate: number | null;
+  forwardRate: number | null;
+  commentRate: number | null;
+  reactions: Array<{ reaction: string; count: number }> | null;
+};
+
 export type TelegramManagedPostIdentityFields = {
   telegramScheduledMessageIds: string[];
   telegramMessageIds: string[];
@@ -172,7 +207,13 @@ export type TelegramPostPlannerApplyResult = {
 
 export type TelegramManagedPostsImportProgressItem = {
   index: number;
-  status: "created" | "skipped" | "alreadyExists" | "scheduled" | "scheduleFailed" | "failed";
+  status:
+    | "created"
+    | "skipped"
+    | "alreadyExists"
+    | "scheduled"
+    | "scheduleFailed"
+    | "failed";
   title?: string;
   postId?: string;
   error?: string;

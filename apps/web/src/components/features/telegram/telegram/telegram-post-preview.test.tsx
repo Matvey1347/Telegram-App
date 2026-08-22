@@ -5,6 +5,74 @@ import { describe, expect, it, vi } from "vitest";
 import { TelegramPostPreview } from "@/components/features/telegram/telegram/telegram-post-preview";
 
 describe("TelegramPostPreview", () => {
+  it("renders per-message engagement metrics and reaction breakdowns when provided", () => {
+    render(
+      <TelegramPostPreview
+        channelTitle="Channel"
+        text="Synced post"
+        imageUrls={[]}
+        engagement={[
+          {
+            telegramPostId: "post-1",
+            telegramMessageId: "101",
+            viewsCount: 1250,
+            forwardsCount: 14,
+            reactionsCount: 55,
+            commentsCount: 8,
+            adjustedViewsCount: 1240,
+            adjustedReactionsCount: 54,
+            subscriberCount: 2000,
+            err: 62,
+            reactionRate: 4.35,
+            forwardRate: 1.13,
+            commentRate: 0.65,
+            reactions: [{ reaction: "🔥", count: 25 }],
+          },
+          {
+            telegramPostId: "post-2",
+            telegramMessageId: "102",
+            viewsCount: 1100,
+            forwardsCount: 5,
+            reactionsCount: 20,
+            commentsCount: 2,
+            adjustedViewsCount: 1090,
+            adjustedReactionsCount: 19,
+            subscriberCount: 2000,
+            err: 54.5,
+            reactionRate: 1.74,
+            forwardRate: 0.45,
+            commentRate: 0.18,
+            reactions: null,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByLabelText("Telegram post engagement")).toBeVisible();
+    expect(screen.getAllByLabelText("Views")).toHaveLength(2);
+    expect(screen.getAllByLabelText("Reactions")).toHaveLength(2);
+    expect(screen.getAllByLabelText("Comments")).toHaveLength(2);
+    expect(screen.getAllByLabelText("Forwards")).toHaveLength(2);
+    expect(screen.getByText("Telegram message 1 · ID 101")).toBeVisible();
+    expect(screen.getByText("Telegram message 2 · ID 102")).toBeVisible();
+    expect(screen.getByText("1.3K")).toBeVisible();
+    expect(screen.getByText("🔥 25")).toBeVisible();
+    expect(screen.getByText("62.00%")).toBeVisible();
+  });
+
+  it("shows a Telegram media placeholder when synced media has no local URL", () => {
+    render(
+      <TelegramPostPreview
+        channelTitle="Channel"
+        text=""
+        imageUrls={[]}
+        hasMedia
+      />,
+    );
+
+    expect(screen.getByText("Media attached in Telegram")).toBeVisible();
+  });
+
   it("shows markers for numbered and bulleted lists despite the global CSS reset", () => {
     const { container } = render(
       <TelegramPostPreview

@@ -26,7 +26,6 @@ import {
   ChevronRight,
   Copy,
   Clock3,
-  Download,
   FileText,
   FolderPlus,
   GripVertical,
@@ -74,6 +73,9 @@ import { TelegramPostPreview } from "@/components/features/telegram/telegram/tel
 import { TelegramCustomEmojiPacksModal } from "@/components/features/telegram/telegram/telegram-custom-emoji-packs-modal";
 import { upsertManagedPostInCache } from "@/components/features/telegram/telegram/managed-post-cache";
 import { ManagedPostHistoryModal } from "@/components/features/telegram/telegram/managed-post-history-modal";
+import { ManagedPostExportButton } from "@/components/features/telegram/telegram/managed-post-export-button";
+import { ManagedPostReadOnlyPanel } from "@/components/features/telegram/telegram/managed-post-read-only-panel";
+import { useManagedPostTelegramMedia } from "@/components/features/telegram/telegram/use-managed-post-telegram-media";
 import { MemberBadge } from "@/components/features/workspace/member-badge";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 import {
@@ -114,18 +116,20 @@ import {
   normalizeManagedPostNumbering,
 } from "@/lib/features/telegram/telegram-post-numbering";
 import { extractAutoPrefilledPostTitle } from "@/lib/features/telegram/telegram-post-title";
+import { telegramSyncedPostGroup } from "@/components/features/telegram/telegram/telegram-synced-post-group";
 import {
   memberKeys,
   telegramChannelKeys,
   telegramPostKeys,
 } from "@/lib/query-keys";
-import type {
-  ScheduleManagedPostsBatchItem,
-  TelegramManagedPostCalendarResult,
-  TelegramPostPlannerPreviewResult,
-  TelegramPostPlannerFormat,
-  TelegramPostPlannerSlot,
-  TelegramPostButtonRows,
+import {
+  buildTelegramGptContextFilename,
+  type ScheduleManagedPostsBatchItem,
+  type TelegramManagedPostCalendarResult,
+  type TelegramPostPlannerPreviewResult,
+  type TelegramPostPlannerFormat,
+  type TelegramPostPlannerSlot,
+  type TelegramPostButtonRows,
 } from "@telegram-system/shared";
 import {
   Button,
@@ -671,8 +675,7 @@ export function TelegramPostsPageClient({
                     const blob = await telegramChannelsApi.gptContext(channel.id);
                     const url = URL.createObjectURL(blob);
                     const link = document.createElement("a");
-                    link.href = url;
-                    link.download = `telegram-gpt-context-${channel.id}.txt`;
+                    link.href = url; link.download = buildTelegramGptContextFilename(channel.title);
                     document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
                     pushToast("GPT context downloaded.", "success");
                   } catch (error) {
@@ -1069,7 +1072,6 @@ function TelegramPostWorkspace({
       window.localStorage.removeItem(postGroupPreferenceKey(channelId));
     }
   };
-
   const currentMemberId =
     members.data?.find((member) => member.isCurrentUser)?.id ?? null;
   const telegramImportedSystemGroup = useMemo(
@@ -1083,10 +1085,11 @@ function TelegramPostWorkspace({
     () => new Map((postGroups.data || []).map((group) => [group.id, group])),
     [postGroups.data],
   );
+  const syncedPostGroup = useMemo(() => telegramSyncedPostGroup(channelId), [channelId]);
   const effectivePostGroup = (post: TelegramManagedPost) =>
     (post.groupId ? (postGroupsById.get(post.groupId) ?? post.group) : null) ??
     (post.origin === "TELEGRAM" && !post.groupId
-      ? telegramImportedSystemGroup
+      ? telegramImportedSystemGroup ?? syncedPostGroup
       : null);
   const effectivePostGroupId = (post: TelegramManagedPost) =>
     effectivePostGroup(post)?.id ?? post.groupId ?? null;
@@ -1103,6 +1106,12 @@ function TelegramPostWorkspace({
       ? posts.data.find((post) => post.id === editing.id) || null
       : null;
   const editingMeta = liveEditingPost ?? editing;
+  const isReadOnlyTelegramPost = Boolean(editingMeta?.readOnlyTelegramPost);
+  const syncedTelegramMediaUrl = useManagedPostTelegramMedia({
+    channelId,
+    telegramPostId: editingMeta?.telegramPostId,
+    enabled: isReadOnlyTelegramPost && Boolean(editingMeta?.hasMedia),
+  });
   const isPublished = editingMeta?.status === "PUBLISHED";
   const hasLockedTelegramMedia =
     editingMeta?.status === "PUBLISHED" || editingMeta?.status === "SCHEDULED";
@@ -1207,6 +1216,8 @@ function TelegramPostWorkspace({
     imageUrls.length === 0 && text.length > effectiveMessageLengthMax;
   const publishDisabledReason = busy
     ? "Saving or publishing is already in progress."
+    : isReadOnlyTelegramPost
+      ? "Synced Telegram posts are read-only."
     : creatingPostId
       ? "This post is being saved."
       : iconPending
@@ -1724,9 +1735,8 @@ function TelegramPostWorkspace({
   const allChannelPostsSelected =
     channelPostIds.length > 0 &&
     channelPostIds.every((id) => selectedPostIds.includes(id));
-  const allGroupIds = (postGroups.data || []).map((group) => group.id);
+  const allGroupIds = [...new Set([...(postGroups.data || []).map((group) => group.id), ...groupedVisiblePosts.groups.map(({ group }) => group.id)])];
   const collapsedGroupIds = collapsedGroupIdsPreference ?? allGroupIds;
-
   const changeStatusTab = (next: PostStatusTab) => {
     setStatusTab(next);
     window.localStorage.setItem(`telegram-posts-status:${channelId}`, next);
@@ -2695,6 +2705,7 @@ function TelegramPostWorkspace({
   const restorePostRevision = useMutation({
     mutationFn: async (revision: TelegramManagedPostRevision) => {
       if (!editing) throw new Error("No post selected");
+      if (editing.readOnlyTelegramPost) throw new Error("Synced Telegram posts are read-only");
       return telegramChannelsApi.restoreManagedPostHistory(
         channelId,
         editing.id,
@@ -2741,6 +2752,7 @@ function TelegramPostWorkspace({
   const returnManagedPostToDraft = useMutation({
     mutationFn: async () => {
       if (!editing) throw new Error("No post selected");
+      if (editing.readOnlyTelegramPost) throw new Error("Synced Telegram posts are read-only");
       return telegramChannelsApi.returnManagedPostToDraft(
         channelId,
         editing.id,
@@ -2784,48 +2796,6 @@ function TelegramPostWorkspace({
       }
       return [...new Set([...current, ...channelPostIds])];
     });
-  };
-
-  const downloadSelectedPostsText = () => {
-    if (!selectedPosts.length) return;
-    const instructions = [
-      "ИНСТРУКЦИЯ ПО ВНУТРЕННИМ ССЫЛКАМ",
-      "",
-      "Каждый пост ниже начинается со стабильного идентификатора tg-post:<id>.",
-      "Этот идентификатор нужен, чтобы связать один managed post с другим.",
-      "",
-      "Формат ссылки внутри текста:",
-      "[видимый текст](tg-post:<id>)",
-      "",
-      "Пример:",
-      "[перейти к первому посту](tg-post:cmr6qalme00tol4rii5pj5v3e)",
-      "",
-      "Не заменяйте tg-post:<id> заголовком: заголовок может измениться, а id остаётся стабильным.",
-      "",
-      "============================================================",
-    ].join("\n");
-    const postsContent = selectedPosts
-      .map((post) =>
-        [
-          `tg-post:${post.id} — ${post.title}`,
-          "",
-          post.text || "[Пост без текста]",
-        ].join("\n"),
-      )
-      .join(
-        "\n\n------------------------------------------------------------\n\n",
-      );
-    const content = `${instructions}\n\n${postsContent}\n`;
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    const stamp = new Date().toISOString().slice(0, 10);
-    link.href = url;
-    link.download = `telegram-posts-${stamp}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
   };
 
   const togglePostSelected = (postId: string) => {
@@ -2899,6 +2869,10 @@ function TelegramPostWorkspace({
   };
 
   const deletePosts = async (targetPosts: TelegramManagedPost[]) => {
+    if (targetPosts.some((post) => post.readOnlyTelegramPost)) {
+      pushToast("Synced Telegram posts are read-only and cannot be deleted.", "info");
+      return;
+    }
     const progressId = `managed-post-delete:${channelId}`;
     try {
       setProgress({
@@ -2994,6 +2968,7 @@ function TelegramPostWorkspace({
   }, [initialPostId, posts.data]);
 
   const run = () => {
+    if (isReadOnlyTelegramPost) return;
     const editingPost = editing;
     const saveMode = effectivePublishingMode;
     const saveTitle = title.trim();
@@ -4801,18 +4776,21 @@ function TelegramPostWorkspace({
             channelTitle={channelTitle}
             channelPhotoUrl={channelPhotoUrl}
             text={text}
+            formattedHtml={isReadOnlyTelegramPost ? editingMeta?.formattedText : null}
             customEmojiPacks={customEmojiPacks.data?.packs}
-            imageUrls={imageUrls}
+            imageUrls={syncedTelegramMediaUrl ? [syncedTelegramMediaUrl] : imageUrls}
+            hasMedia={editingMeta?.hasMedia}
+            engagement={editingMeta?.engagementMetrics}
             buttonRows={buttonRows}
-            onTextChange={(nextValue) => {
+            onTextChange={isReadOnlyTelegramPost ? null : (nextValue) => {
               if (textEditorRef.current) {
                 textEditorRef.current.commitExternalChange(nextValue);
                 return;
               }
               setText(nextValue);
             }}
-            onUndo={() => textEditorRef.current?.undo()}
-            onRedo={() => textEditorRef.current?.redo()}
+            onUndo={isReadOnlyTelegramPost ? null : () => textEditorRef.current?.undo()}
+            onRedo={isReadOnlyTelegramPost ? null : () => textEditorRef.current?.redo()}
             longTextMode={longTextMode}
             captionLengthMax={effectiveCaptionLengthMax}
             messageLengthMax={effectiveMessageLengthMax}
@@ -4827,6 +4805,11 @@ function TelegramPostWorkspace({
                   />
                   Saving “{editing?.title || title}”…
                 </div>
+              </div>
+            ) : null}
+            {isReadOnlyTelegramPost && editingMeta ? (
+              <div className="absolute inset-0 z-50 rounded-lg bg-neutral-900 p-4">
+                <ManagedPostReadOnlyPanel title={editingMeta.title} telegramUrl={editingMeta.primaryTelegramMessageUrl} />
               </div>
             ) : null}
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -5265,6 +5248,7 @@ function TelegramPostWorkspace({
                     const statusNumberingEnabled = Boolean(
                       section.group?.statusNumberingEnabled,
                     );
+                    const sectionReadOnly = section.posts.some((post) => post.readOnlyTelegramPost);
                     const sectionPostIds = section.posts.map((post) => post.id);
                     const allSectionSelected = sectionPostIds.every((id) =>
                       selectedPostIds.includes(id),
@@ -5272,8 +5256,8 @@ function TelegramPostWorkspace({
                     return (
                       <div
                         key={section.key}
-                        draggable
-                        onDragStart={() => setDraggedSidebarKey(section.key)}
+                        draggable={!sectionReadOnly}
+                        onDragStart={() => { if (!sectionReadOnly) setDraggedSidebarKey(section.key); }}
                         onDragOver={(event) => {
                           event.preventDefault();
                           if (
@@ -5296,6 +5280,7 @@ function TelegramPostWorkspace({
                           });
                         }}
                         onDragEnd={() => {
+                          if (sectionReadOnly) return;
                           setDraggedSidebarKey(null);
                           scheduleSidebarOrderSave(
                             orderedSidebarSections.map((item) => item.key),
@@ -5313,10 +5298,7 @@ function TelegramPostWorkspace({
                       >
                         {section.group ? (
                           <div className="flex items-center gap-2 border-b border-neutral-800 px-2 py-2">
-                            <GripVertical
-                              size={15}
-                              className="shrink-0 cursor-grab text-neutral-500"
-                            />
+                            {!sectionReadOnly ? <GripVertical size={15} className="shrink-0 cursor-grab text-neutral-500" /> : null}
                             <button
                               type="button"
                               onClick={() =>
@@ -5428,10 +5410,7 @@ function TelegramPostWorkspace({
                                   }`}
                                 >
                                   {!section.group ? (
-                                    <GripVertical
-                                      size={15}
-                                      className="shrink-0 cursor-grab text-neutral-500"
-                                    />
+                                    post.readOnlyTelegramPost ? null : <GripVertical size={15} className="shrink-0 cursor-grab text-neutral-500" />
                                   ) : null}
                                   <div className="flex min-w-0 flex-1 items-center gap-2 text-left">
                                     {isSaving ? (
@@ -5472,6 +5451,7 @@ function TelegramPostWorkspace({
                                         <ManagedPostTelegramIdentityIndicator
                                           post={post}
                                         />
+                                        {post.readOnlyTelegramPost ? <span className="shrink-0 rounded border border-sky-800 bg-sky-950/40 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-sky-300">Synced</span> : null}
                                         {post.telegramIdVerificationStatus !==
                                           "MISSING" &&
                                         ["BROKEN", "MISSING"].includes(
@@ -5501,7 +5481,7 @@ function TelegramPostWorkspace({
                                       ) : null}
                                     </span>
                                   </div>
-                                  <button
+                                  {!post.readOnlyTelegramPost ? <button
                                     type="button"
                                     title="Move to another channel"
                                     aria-label={`Move ${post.title}`}
@@ -5513,8 +5493,8 @@ function TelegramPostWorkspace({
                                     className="cursor-pointer rounded-md border border-neutral-700 p-1.5 text-neutral-300 hover:bg-neutral-800"
                                   >
                                     <MoveRight size={14} />
-                                  </button>
-                                  <button
+                                  </button> : null}
+                                  {!post.readOnlyTelegramPost ? <button
                                     type="button"
                                     aria-label={`Delete ${post.title}`}
                                     onClick={(event) => {
@@ -5525,7 +5505,7 @@ function TelegramPostWorkspace({
                                     className="cursor-pointer rounded-md border border-red-800 p-1.5 text-red-300 hover:bg-red-950"
                                   >
                                     <Trash2 size={14} />
-                                  </button>
+                                  </button> : null}
                                 </div>
                               );
                             })}
@@ -5562,24 +5542,13 @@ function TelegramPostWorkspace({
                     </span>
                   </div>
                   <div className="flex items-center justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={!selectedPosts.length}
-                      onClick={downloadSelectedPostsText}
-                      title="Download selected as TXT"
-                      aria-label="Download selected posts as TXT"
-                      className="flex h-9 items-center gap-1.5 px-3"
-                    >
-                      <Download size={15} />
-                      TXT
-                    </Button>
+                    <ManagedPostExportButton posts={selectedPosts} />
                     <Button
                       type="button"
                       variant="danger"
-                      disabled={!selectedPosts.length || busy}
+                      disabled={!selectedPosts.length || busy || selectedPosts.some((post) => post.readOnlyTelegramPost)}
                       onClick={() => setBulkDeleteOpen(true)}
-                      title="Delete selected"
+                      title={selectedPosts.some((post) => post.readOnlyTelegramPost) ? "Synced Telegram posts cannot be deleted" : "Delete selected"}
                       aria-label="Delete selected posts"
                       className="flex h-9 min-w-12 items-center justify-center px-3"
                     >
