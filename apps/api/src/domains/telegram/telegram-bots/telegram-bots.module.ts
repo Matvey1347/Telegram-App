@@ -55,6 +55,11 @@ import { FinanceTransferService } from '../consumer-finance/transfers/finance-tr
 import { FinanceProposalService } from '../consumer-finance/chat-flows/finance-proposal.service';
 import { FinanceAiProviderService } from '../consumer-finance/ai/finance-ai.provider';
 import { FinanceReminderDeliveryService } from '../consumer-finance/planning/finance-reminder-delivery.service';
+import {
+  FinanceBotBrandingAdminController,
+  FinanceBotBrandingAssetController,
+} from '../consumer-finance/branding/finance-bot-branding.controller';
+import { FinanceBotBrandingService } from '../consumer-finance/branding/finance-bot-branding.service';
 import { GreeterExpiryService } from './greeter/greeter-expiry.service';
 import { OperationalHistoryRetentionService } from './core/operational-history-retention.service';
 import { GreeterAdminService } from './greeter/greeter-admin.service';
@@ -74,6 +79,8 @@ import { GreeterTestModeService } from './greeter/greeter-test-mode.service';
     FinanceAiConfigController,
     FinanceController,
     FinanceUltimateController,
+    FinanceBotBrandingAdminController,
+    FinanceBotBrandingAssetController,
   ],
   providers: [
     TelegramBotsService,
@@ -119,6 +126,7 @@ import { GreeterTestModeService } from './greeter/greeter-test-mode.service';
     FinanceProposalService,
     FinanceAiProviderService,
     FinanceReminderDeliveryService,
+    FinanceBotBrandingService,
     GreeterTelegramPresentationService,
     FinanceTelegramPresentationService,
     { provide: TELEGRAM_BOT_GREETER_HANDLER, useExisting: GreeterService },

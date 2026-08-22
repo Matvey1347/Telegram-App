@@ -35,6 +35,17 @@ test("preserves explicit canonical Railway topology values", () => {
   });
 });
 
+test("replaces stale development tunnels with Railway's production origin", () => {
+  const result = railwayPublicEnvironment("telegram-system.up.railway.app", {
+    API_PUBLIC_URL: "https://old-api.trycloudflare.com",
+    FRONTEND_URL: "https://old-web.ngrok-free.app/",
+  });
+  assert.deepEqual(result?.values, {
+    API_PUBLIC_URL: "https://telegram-system.up.railway.app",
+    FRONTEND_URL: "https://telegram-system.up.railway.app",
+  });
+});
+
 test("maps a dev tunnel to generic public origins for both bot runtimes", () => {
   assert.deepEqual(
     localBotPublicEnvironment("https://random-tunnel.example.com/path"),

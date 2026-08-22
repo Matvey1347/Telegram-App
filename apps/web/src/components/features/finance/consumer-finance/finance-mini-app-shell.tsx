@@ -39,6 +39,7 @@ const SECONDARY = [
 ] as const;
 
 export function FinanceMiniAppShell({
+  logoUrl,
   screen,
   copy,
   children,
@@ -48,6 +49,7 @@ export function FinanceMiniAppShell({
   openingBrowser = false,
   browserOpenError,
 }: {
+  logoUrl?: string;
   screen: ConsumerFinanceScreen;
   copy: FinanceCopy;
   children: React.ReactNode;
@@ -71,13 +73,23 @@ export function FinanceMiniAppShell({
       <div className="mx-auto flex min-h-dvh w-full max-w-2xl">
         <div className="min-w-0 flex-1">
           <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between border-b border-neutral-800 bg-neutral-950/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur">
-            <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-sky-300">
-                {copy.personalFinance}
-              </p>
-              <h1 className="text-lg font-semibold">
-                {financeScreenLabel(copy, screen)}
-              </h1>
+            <div className="flex items-center gap-3">
+              <img
+                src={logoUrl || "/brand/finance.png"}
+                alt=""
+                className="h-9 w-9 rounded-lg object-cover"
+                onError={(event) => {
+                  event.currentTarget.src = "/brand/finance.png";
+                }}
+              />
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-sky-300">
+                  {copy.personalFinance}
+                </p>
+                <h1 className="text-lg font-semibold">
+                  {financeScreenLabel(copy, screen)}
+                </h1>
+              </div>
             </div>
             {onOpenBrowser ? (
               <button

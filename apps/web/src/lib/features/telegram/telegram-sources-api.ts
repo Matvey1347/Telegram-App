@@ -205,6 +205,23 @@ export function createTelegramSourcesApi({
         )
       ).data;
     },
+    updateFinanceBranding: async (
+      id: string,
+      environment: TelegramBotRuntimeEnvironment,
+      payload: { name?: string; logo?: File; favicon?: File },
+    ) => {
+      const form = new FormData();
+      if (payload.name?.trim()) form.append("name", payload.name.trim());
+      if (payload.logo) form.append("logo", payload.logo);
+      if (payload.favicon) form.append("favicon", payload.favicon);
+      form.append("confirmTelegramUpdate", "true");
+      return (
+        await api.patch<TelegramBot>(
+          `/telegram-bots/${id}/finance-branding/${environment}`,
+          form,
+        )
+      ).data;
+    },
     enableRuntime: async (
       id: string,
       environment: TelegramBotRuntimeEnvironment,

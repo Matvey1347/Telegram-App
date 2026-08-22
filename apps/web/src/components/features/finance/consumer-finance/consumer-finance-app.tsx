@@ -27,10 +27,12 @@ import {
   readConsumerFinanceScreen,
   type ConsumerFinanceAction,
 } from "./consumer-finance-navigation";
+import { useFinanceBotBranding } from "./use-finance-bot-branding";
 
 const subscribeToStaticBrowserState = () => () => undefined;
 
 export function ConsumerFinanceApp({ botId }: { botId: string }) {
+  const branding = useFinanceBotBranding(botId);
   const localeStorageKey = `consumer-finance-locale:${botId}`;
   const bootstrap = useTelegramMiniAppBootstrap();
   const session = useQuery({
@@ -133,6 +135,7 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
   const shell = (children: React.ReactNode) =>
     surface === "browser" ? (
       <FinanceWebAppShell
+        logoUrl={branding.logoUrl}
         screen={screen}
         copy={t}
         profile={profile}
@@ -143,6 +146,7 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
       </FinanceWebAppShell>
     ) : (
       <FinanceMiniAppShell
+        logoUrl={branding.logoUrl}
         screen={screen}
         copy={t}
         onNavigate={navigate}

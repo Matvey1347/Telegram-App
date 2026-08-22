@@ -35,6 +35,7 @@ const NAVIGATION = [
 ] as const;
 
 export function FinanceWebAppShell({
+  logoUrl,
   screen,
   copy,
   profile,
@@ -42,6 +43,7 @@ export function FinanceWebAppShell({
   onNavigate,
   onAction,
 }: {
+  logoUrl?: string;
   screen: ConsumerFinanceScreen;
   copy: FinanceCopy;
   profile?: ConsumerFinanceProfile;
@@ -58,11 +60,21 @@ export function FinanceWebAppShell({
     >
       <div className="mx-auto flex min-h-dvh w-full max-w-[1800px]">
         <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-neutral-800 bg-neutral-950 px-4 py-5 md:flex">
-          <div className="mb-5 px-3">
-            <p className="text-xs uppercase tracking-[0.2em] text-sky-300">
-              {copy.personalFinance}
-            </p>
-            <p className="mt-1 text-xl font-semibold">Finance</p>
+          <div className="mb-5 flex items-center gap-3 px-3">
+            <img
+              src={logoUrl || "/brand/finance.png"}
+              alt=""
+              className="h-10 w-10 rounded-xl object-cover"
+              onError={(event) => {
+                event.currentTarget.src = "/brand/finance.png";
+              }}
+            />
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-sky-300">
+                {copy.personalFinance}
+              </p>
+              <p className="mt-1 text-xl font-semibold">Finance</p>
+            </div>
           </div>
           <nav aria-label={copy.financeNavigation} className="space-y-0.5">
             {NAVIGATION.map(({ id, key, Icon }) => (

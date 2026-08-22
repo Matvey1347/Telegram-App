@@ -92,7 +92,10 @@ import {
   UpdateTelegramAdSalePlacementDto,
   VoidTelegramAdSalePaymentDto,
 } from './dto';
-import { calculateExpectedViews } from './domain/expected-views';
+import {
+  calculateExpectedViews,
+  selectExpectedViewsAtWindow,
+} from '../../../common/analytics/telegram-post-expected-views';
 import { recommendPolicyFromOrganicPosts } from './domain/policy-recommendation';
 import { calculatePricing } from './domain/pricing';
 import { buildAvailabilitySlots } from './domain/slot-engine';
@@ -687,42 +690,7 @@ export class TelegramAdSalesService {
     now: Date,
     options?: { historicalAsOf?: boolean },
   ) {
-    if (targetHours == null) {
-      const latestSnapshot =
-        [...post.metricSnapshots]
-          .filter(
-            (snapshot) =>
-              snapshot.viewsCount != null &&
-              snapshot.collectedAt.getTime() >= post.postDate.getTime() &&
-              snapshot.collectedAt.getTime() <= now.getTime(),
-          )
-          .sort((left, right) => right.collectedAt.getTime() - left.collectedAt.getTime())[0] ?? null;
-      return latestSnapshot?.viewsCount ?? (options?.historicalAsOf ? null : post.viewsCount);
-    }
-    const targetAt = new Date(post.postDate.getTime() + targetHours * 60 * 60 * 1000);
-    if (targetAt > now) {
-      return null;
-    }
-    const toleranceHours = targetHours <= 24 ? 8 : targetHours <= 48 ? 12 : 24;
-    const candidate =
-      [...post.metricSnapshots]
-        .filter(
-          (snapshot) =>
-            snapshot.viewsCount != null &&
-            snapshot.collectedAt.getTime() >= post.postDate.getTime() &&
-            snapshot.collectedAt.getTime() <= now.getTime(),
-        )
-        .map((snapshot) => ({
-          ...snapshot,
-          diff: Math.abs(snapshot.collectedAt.getTime() - targetAt.getTime()),
-        }))
-        .sort((left, right) => left.diff - right.diff)[0] ?? null;
-
-    if (!candidate || candidate.diff > toleranceHours * 60 * 60 * 1000) {
-      return null;
-    }
-
-    return candidate.viewsCount;
+    return selectExpectedViewsAtWindow(post, targetHours, now, options);
   }
 
   private async computeExpectedViewsForWindow(

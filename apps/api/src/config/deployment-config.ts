@@ -17,11 +17,31 @@ function normalizedOrigin(value: string | undefined) {
   }
 }
 
+function isDevelopmentTunnelOrigin(origin: string) {
+  const host = new URL(origin).hostname.toLowerCase();
+  return (
+    host === 'ngrok.io' ||
+    host.endsWith('.ngrok.io') ||
+    host === 'ngrok-free.app' ||
+    host.endsWith('.ngrok-free.app') ||
+    host === 'trycloudflare.com' ||
+    host.endsWith('.trycloudflare.com')
+  );
+}
+
 /** Canonical public origin for every web application hosted by this deployment. */
 export function publicWebOrigin(
   environment: DeploymentEnvironment = process.env,
 ) {
-  return normalizedOrigin(environment.FRONTEND_URL);
+  const origin = normalizedOrigin(environment.FRONTEND_URL);
+  if (
+    origin &&
+    isProductionEnvironment(environment) &&
+    isDevelopmentTunnelOrigin(origin)
+  ) {
+    return undefined;
+  }
+  return origin;
 }
 
 /** Public API callback origin when the API is exposed separately from the web app. */

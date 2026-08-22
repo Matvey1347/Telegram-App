@@ -93,7 +93,22 @@ export type TelegramChannelFinancialSummary = {
     estimatedAdPrice: number | null;
     estimatedAdsRemaining: number | null;
     conversionUnavailable: boolean;
+    formatPricing?: {
+      currency: string;
+      cpm: number | null;
+      h24: TelegramChannelAdFormatPricing;
+      h48: TelegramChannelAdFormatPricing;
+      h72: TelegramChannelAdFormatPricing;
+      permanent: TelegramChannelAdFormatPricing;
+    } | null;
   };
+};
+
+export type TelegramChannelAdFormatPricing = {
+  expectedViews: number | null;
+  estimatedPrice: number | null;
+  postsSampleCount: number;
+  dataQuality: "READY" | "NOT_ENOUGH_DATA";
 };
 
 export type TelegramChannelAnalyticsSummary = {

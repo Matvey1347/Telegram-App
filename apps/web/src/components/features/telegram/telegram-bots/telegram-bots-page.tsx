@@ -118,24 +118,35 @@ export function TelegramBotsPage() {
       botId,
       environment,
       name,
-      avatar,
+      logo,
+      favicon,
     }: {
       botId: string;
       environment: TelegramBotRuntimeEnvironment;
       name?: string;
-      avatar?: File;
+      logo?: File;
+      favicon?: File;
     }) =>
-      telegramBotsApi.updateRuntimeProfile(botId, environment, {
-        name,
-        avatar,
-      }),
+      profileConfig?.bot.applicationType === "FINANCE"
+        ? telegramBotsApi.updateFinanceBranding(botId, environment, {
+            name,
+            logo,
+            favicon,
+          })
+        : telegramBotsApi.updateRuntimeProfile(botId, environment, {
+            name,
+            avatar: logo,
+          }),
     onSuccess: (bot) => {
       reconcileTelegramBotCache(qc, bot);
       setProfileConfig(null);
-      pushToast("Telegram bot name and profile photo updated.", "success");
+      pushToast("Bot logo, favicon, and Telegram profile updated.", "success");
     },
     onError: (error: unknown) =>
-      pushToast(errorMessage(error, "Failed to update Telegram profile."), "error"),
+      pushToast(
+        errorMessage(error, "Failed to update Telegram profile."),
+        "error",
+      ),
   });
   const removeRuntimeMutation = useMutation({
     mutationFn: ({
@@ -151,10 +162,7 @@ export function TelegramBotsPage() {
       pushToast("Runtime removed.", "success");
     },
     onError: (error: unknown) =>
-      pushToast(
-        errorMessage(error, "Failed to remove runtime."),
-        "error",
-      ),
+      pushToast(errorMessage(error, "Failed to remove runtime."), "error"),
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => telegramBotsApi.remove(id),
@@ -282,13 +290,14 @@ export function TelegramBotsPage() {
         config={profileConfig}
         saving={profileMutation.isPending}
         onClose={() => setProfileConfig(null)}
-        onSubmit={({ name, avatar }) => {
+        onSubmit={({ name, logo, favicon }) => {
           if (!profileConfig) return;
           profileMutation.mutate({
             botId: profileConfig.bot.id,
             environment: profileConfig.environment,
             name,
-            avatar,
+            logo,
+            favicon,
           });
         }}
       />
@@ -313,7 +322,9 @@ export function TelegramBotsPage() {
                 })
               : deleteMutation.mutateAsync(deleteConfirmation.bot.id)
         }
-        label={deleteConfirmation?.environment ? "Delete runtime" : "Delete bot"}
+        label={
+          deleteConfirmation?.environment ? "Delete runtime" : "Delete bot"
+        }
       />
       <RuntimeDeletionModal
         choice={deleteChoice}
@@ -339,19 +350,27 @@ function RuntimeDeletionModal({
   onDeleteRuntime,
   onDeleteBot,
 }: {
-  choice: { bot: TelegramBot; environment: TelegramBotRuntimeEnvironment } | null;
+  choice: {
+    bot: TelegramBot;
+    environment: TelegramBotRuntimeEnvironment;
+  } | null;
   onClose: () => void;
   onDeleteRuntime: (environment: TelegramBotRuntimeEnvironment) => void;
   onDeleteBot: () => void;
 }) {
   if (!choice) return null;
-  const local = choice.bot.runtimes.some((item) => item.environment === "LOCAL");
-  const production = choice.bot.runtimes.some((item) => item.environment === "PRODUCTION");
+  const local = choice.bot.runtimes.some(
+    (item) => item.environment === "LOCAL",
+  );
+  const production = choice.bot.runtimes.some(
+    (item) => item.environment === "PRODUCTION",
+  );
   const selected = choice.environment === "LOCAL" ? "Local" : "Production";
   return (
     <Modal open onClose={onClose} title="Delete bot data">
       <p className="text-sm text-neutral-300">
-        You selected <span className="font-medium text-white">{selected}</span>. Runtime deletion removes its token and webhook state only.
+        You selected <span className="font-medium text-white">{selected}</span>.
+        Runtime deletion removes its token and webhook state only.
       </p>
       <div className="mt-4 flex items-center gap-2">
         <DeleteAction
@@ -378,7 +397,9 @@ function RuntimeDeletionModal({
         </DeleteAction>
       </div>
       <div className="mt-4 flex justify-end">
-        <Button variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button variant="secondary" onClick={onClose}>
+          Cancel
+        </Button>
       </div>
     </Modal>
   );

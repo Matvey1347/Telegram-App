@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import {
   calculateChannelAssetEconomics,
   effectiveCampaignAttributedSubscribers,
@@ -10,46 +9,47 @@ import {
 } from '../../../common/analytics/channel-financial-summary';
 import { CurrencyConversionService } from '../../../common/currency-conversion.service';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  priceChannelAdFormatWindows,
+  resolveChannelCardExpectedViews,
+  TelegramChannelAdPricingReadService,
+} from './telegram-channel-ad-pricing-read.service';
+import type { TelegramChannelFinancialPreviewInput } from './telegram-channel-financial-read.types';
 
 @Injectable()
 export class TelegramChannelFinancialReadService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly currencyConversionService: CurrencyConversionService,
+    private readonly adPricingReadService: TelegramChannelAdPricingReadService,
   ) {}
 
   public async buildChannelFinancialSummaryPreview(
     workspaceId: string,
-    channels: Array<{
-      id: string;
-      purchaseTransactionId?: string | null;
-      currentSubscribersCount?: number | null;
-      activeSubscribersWindow?: number | null;
-      targetCpaFrom?: Prisma.Decimal | number | null;
-      targetCpa?: Prisma.Decimal | number | null;
-      acceptableCpaFrom?: Prisma.Decimal | number | null;
-      acceptableCpa?: Prisma.Decimal | number | null;
-      stopCpaFrom?: Prisma.Decimal | number | null;
-      stopCpa?: Prisma.Decimal | number | null;
-      kpiCurrency?: string | null;
-      ownViewsPerPost?: number | null;
-      adBaseCpm?: Prisma.Decimal | number | null;
-      adBaseCurrency?: string | null;
-      audienceSnapshots?: Array<{
-        activeSubscribersEstimate?: number | null;
-        dataQuality?: string | null;
-        dataQualityReason?: string | null;
-        hasExternalTrafficAnomaly?: boolean | null;
-        hasSubscriberBasePollution?: boolean | null;
-      }>;
-    }>,
+    channels: TelegramChannelFinancialPreviewInput[],
   ) {
     if (!channels.length) {
       return new Map<string, Record<string, unknown>>();
     }
     const channelIds = channels.map((channel) => channel.id);
-    const [campaigns, inviteLinks, transactions, workspace] = await Promise.all(
-      [
+    const purchaseTransactionIds = channels
+      .map((channel) => channel.purchaseTransactionId)
+      .filter((id): id is string => Boolean(id));
+    const purchaseChannelIdByTransactionId = new Map(
+      channels.flatMap((channel) =>
+        channel.purchaseTransactionId
+          ? [[channel.purchaseTransactionId, channel.id] as const]
+          : [],
+      ),
+    );
+    const [
+      campaigns,
+      inviteLinks,
+      transactions,
+      adSaleAllocations,
+      workspace,
+      pricingWindowsByChannel,
+    ] = await Promise.all([
         this.prisma.adCampaign.findMany({
           where: {
             workspaceId,
@@ -85,7 +85,19 @@ export class TelegramChannelFinancialReadService {
           },
         }),
         this.prisma.transaction.findMany({
-          where: { workspaceId, telegramChannelId: { in: channelIds } },
+          where: {
+            workspaceId,
+            OR: [
+              { telegramChannelId: { in: channelIds } },
+              { id: { in: purchaseTransactionIds } },
+              {
+                adCampaign: {
+                  telegramChannelId: { in: channelIds },
+                  excludeFromAnalytics: false,
+                },
+              },
+            ],
+          },
           select: {
             id: true,
             telegramChannelId: true,
@@ -94,14 +106,31 @@ export class TelegramChannelFinancialReadService {
             currency: true,
             amountInPrimaryCurrency: true,
             categoryRef: { select: { key: true, name: true } },
+            adCampaign: {
+              select: { telegramChannelId: true },
+            },
+            telegramAdSalePayment: { select: { id: true } },
+          },
+        }),
+        this.prisma.telegramAdSalePaymentAllocation.findMany({
+          where: {
+            workspaceId,
+            placement: { telegramChannelId: { in: channelIds } },
+            payment: { status: 'ACTIVE' },
+          },
+          select: {
+            amount: true,
+            currency: true,
+            amountInPrimaryCurrency: true,
+            placement: { select: { telegramChannelId: true } },
           },
         }),
         this.prisma.workspace.findUnique({
           where: { id: workspaceId },
           select: { primaryCurrency: true },
         }),
-      ],
-    );
+        this.adPricingReadService.windowsForChannels(workspaceId, channels),
+      ]);
 
     const inviteLinksByCampaignId = new Map<
       string,
@@ -126,11 +155,24 @@ export class TelegramChannelFinancialReadService {
 
     const transactionsByChannelId = new Map<string, typeof transactions>();
     for (const transaction of transactions) {
-      if (!transaction.telegramChannelId) continue;
-      const list =
-        transactionsByChannelId.get(transaction.telegramChannelId) ?? [];
+      const channelId =
+        transaction.telegramChannelId ??
+        transaction.adCampaign?.telegramChannelId ??
+        purchaseChannelIdByTransactionId.get(transaction.id);
+      if (!channelId) continue;
+      const list = transactionsByChannelId.get(channelId) ?? [];
       list.push(transaction);
-      transactionsByChannelId.set(transaction.telegramChannelId, list);
+      transactionsByChannelId.set(channelId, list);
+    }
+    const adSaleAllocationsByChannelId = new Map<
+      string,
+      typeof adSaleAllocations
+    >();
+    for (const allocation of adSaleAllocations) {
+      const channelId = allocation.placement.telegramChannelId;
+      const list = adSaleAllocationsByChannelId.get(channelId) ?? [];
+      list.push(allocation);
+      adSaleAllocationsByChannelId.set(channelId, list);
     }
     const primaryCurrency = workspace?.primaryCurrency ?? 'USD';
     const conversionCache = new Map<string, number | null>();
@@ -159,6 +201,8 @@ export class TelegramChannelFinancialReadService {
       const audience = channel.audienceSnapshots?.[0];
       const channelCampaigns = campaignsByChannelId.get(channel.id) ?? [];
       const channelTransactions = transactionsByChannelId.get(channel.id) ?? [];
+      const channelAdSaleAllocations =
+        adSaleAllocationsByChannelId.get(channel.id) ?? [];
       const purchaseTransactions = channelTransactions.filter(
         (transaction) =>
           transaction.type === 'expense' &&
@@ -172,17 +216,26 @@ export class TelegramChannelFinancialReadService {
       const revenueTransactions = channelTransactions.filter(
         (transaction) =>
           transaction.type === 'income' &&
+          !transaction.telegramAdSalePayment &&
           (transaction.categoryRef?.key === 'channel_advertising_revenue' ||
             transaction.categoryRef?.name?.trim().toLowerCase() ===
               'channel advertising revenue'),
+      );
+      const advertisingExpenseTransactions = channelTransactions.filter(
+        (transaction) =>
+          transaction.type === 'expense' &&
+          (transaction.categoryRef?.key === 'advertising' ||
+            transaction.categoryRef?.name?.trim().toLowerCase() ===
+              'advertising'),
       );
       const acquisitionCost = purchaseTransactions.reduce(
         (sum, transaction) =>
           sum + Number(transaction.amountInPrimaryCurrency || 0),
         0,
       );
-      const totalAdSpend = channelCampaigns.reduce(
-        (sum, campaign) => sum + Number(campaign.priceInPrimaryCurrency || 0),
+      const totalAdSpend = advertisingExpenseTransactions.reduce(
+        (sum, transaction) =>
+          sum + Number(transaction.amountInPrimaryCurrency || 0),
         0,
       );
       const totalSpend = totalAdSpend + acquisitionCost;
@@ -249,8 +302,8 @@ export class TelegramChannelFinancialReadService {
       // A UAH acquisition/ad spend must not turn into a mixed-currency view
       // just because an ad sale was recorded in another currency.
       const economicsTransactions = [
-        ...channelCampaigns.map((campaign) => ({
-          currency: campaign.currency,
+        ...advertisingExpenseTransactions.map((transaction) => ({
+          currency: transaction.currency,
         })),
         ...purchaseTransactions.map((transaction) => ({
           currency: transaction.currency,
@@ -275,20 +328,47 @@ export class TelegramChannelFinancialReadService {
         ) ??
         tiedCurrencies[0] ??
         kpiCurrency;
-      const investedPrimary = totalSpend;
-      const revenuePrimary = revenueTransactions.reduce(
-        (sum, transaction) =>
-          sum + Number(transaction.amountInPrimaryCurrency || 0),
-        0,
-      );
-      const [invested, purchasePrice, revenue, adSpend, cpm] =
-        await Promise.all([
-          convertPrimary(investedPrimary, dominantCurrency),
-          convertPrimary(acquisitionCost, dominantCurrency),
-          convertPrimary(revenuePrimary, dominantCurrency),
-          convertPrimary(totalAdSpend, dominantCurrency),
-          channel.adBaseCpm == null
-            ? Promise.resolve(null)
+      const sumInCurrency = async (
+        rows: Array<{ amount: unknown; currency: string }>,
+        targetCurrency: string,
+      ) => {
+        const converted = await Promise.all(
+          rows.map((transaction) => {
+            const sourceCurrency = String(transaction.currency).toUpperCase();
+            if (sourceCurrency === targetCurrency) {
+              return Promise.resolve(Number(transaction.amount));
+            }
+            return this.currencyConversionService
+              ? this.currencyConversionService.convertCurrency(
+                  Number(transaction.amount),
+                  sourceCurrency,
+                  targetCurrency,
+                  workspaceId,
+                )
+              : Promise.resolve(null);
+          }),
+        );
+        return converted.some((value) => value == null)
+          ? null
+          : converted.reduce<number>(
+              (sum, value) => sum + Number(value ?? 0),
+              0,
+            );
+      };
+      const [purchasePrice, revenue, adSpend, cpm] = await Promise.all([
+        purchaseTransactions.length
+          ? sumInCurrency(purchaseTransactions, dominantCurrency)
+          : Promise.resolve(null),
+        sumInCurrency(
+          [...revenueTransactions, ...channelAdSaleAllocations],
+          dominantCurrency,
+        ),
+        sumInCurrency(advertisingExpenseTransactions, dominantCurrency),
+        channel.adBaseCpm == null
+          ? Promise.resolve(null)
+          : String(channel.adBaseCurrency || primaryCurrency).toUpperCase() ===
+              dominantCurrency
+            ? Promise.resolve(Number(channel.adBaseCpm))
             : this.currencyConversionService
               ? this.currencyConversionService.convertCurrency(
                   Number(channel.adBaseCpm),
@@ -297,7 +377,24 @@ export class TelegramChannelFinancialReadService {
                   workspaceId,
                 )
               : Promise.resolve(null),
-        ]);
+      ]);
+      const invested =
+        purchasePrice == null && purchaseTransactions.length
+          ? null
+          : adSpend == null
+            ? null
+            : (purchasePrice ?? 0) + adSpend;
+      const pricingWindows = pricingWindowsByChannel.get(channel.id);
+      const expectedViews = resolveChannelCardExpectedViews(
+        pricingWindows,
+        channel,
+        audience,
+      );
+      const formatPricing = priceChannelAdFormatWindows(
+        pricingWindows,
+        cpm,
+        dominantCurrency,
+      );
       const economics = calculateChannelAssetEconomics({
         currency: dominantCurrency,
         invested,
@@ -307,7 +404,7 @@ export class TelegramChannelFinancialReadService {
         adsSold: channelCampaigns.filter(
           (campaign) => campaign.status === 'finished',
         ).length,
-        expectedViews: channel.ownViewsPerPost ?? null,
+        expectedViews,
         cpm,
         conversionUnavailable:
           invested == null ||
@@ -344,7 +441,7 @@ export class TelegramChannelFinancialReadService {
         kpiStatus,
         kpiLabel: resolveChannelKpiLabel(kpiStatus),
         currency: kpiCurrency,
-        assetEconomics: economics,
+        assetEconomics: { ...economics, formatPricing },
       });
     }
 

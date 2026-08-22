@@ -15,6 +15,7 @@ import { TelegramChannelAdmissionSyncService } from './telegram-channel-admissio
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
 import { TelegramChannelCatalogService } from './telegram-channel-catalog.service';
 import { TelegramChannelFinancialReadService } from './telegram-channel-financial-read.service';
+import { TelegramChannelAdPricingReadService } from './telegram-channel-ad-pricing-read.service';
 import { TelegramChannelHistoricalSyncService } from './telegram-channel-historical-sync.service';
 import { TelegramChannelImportPolicyService } from './telegram-channel-import-policy.service';
 import { TelegramChannelImportService } from './telegram-channel-import.service';
@@ -91,6 +92,7 @@ import { TelegramRemoteScheduledPostImportService } from './telegram-remote-sche
     TelegramManagedPostRevisionStore,
     TelegramManagedPostEditTransportService,
     TelegramChannelFinancialReadService,
+    TelegramChannelAdPricingReadService,
     TelegramChannelCatalogService,
     TelegramChannelLifecycleService,
     TelegramManagedPostGroupPresentationService,

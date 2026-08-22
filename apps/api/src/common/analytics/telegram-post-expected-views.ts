@@ -44,6 +44,50 @@ export type ExpectedViewsResult = {
   sample: ExpectedViewsSampleItem[];
 };
 
+export type ExpectedViewsWindowPost = {
+  postDate: Date;
+  viewsCount: number | null;
+  metricSnapshots: Array<{ viewsCount: number | null; collectedAt: Date }>;
+};
+
+export function selectExpectedViewsAtWindow(
+  post: ExpectedViewsWindowPost,
+  targetHours: number | null,
+  now: Date,
+  options?: { historicalAsOf?: boolean },
+) {
+  const snapshots = post.metricSnapshots
+    .filter(
+      (snapshot) =>
+        snapshot.viewsCount != null &&
+        snapshot.collectedAt.getTime() >= post.postDate.getTime() &&
+        snapshot.collectedAt.getTime() <= now.getTime(),
+    )
+    .sort(
+      (left, right) => left.collectedAt.getTime() - right.collectedAt.getTime(),
+    );
+  if (targetHours == null) {
+    return (
+      snapshots.at(-1)?.viewsCount ??
+      (options?.historicalAsOf ? null : post.viewsCount)
+    );
+  }
+  const targetAt = new Date(
+    post.postDate.getTime() + targetHours * 60 * 60 * 1000,
+  );
+  if (targetAt > now) return null;
+  const toleranceHours = targetHours <= 24 ? 8 : targetHours <= 48 ? 12 : 24;
+  const candidate = snapshots
+    .map((snapshot) => ({
+      ...snapshot,
+      diff: Math.abs(snapshot.collectedAt.getTime() - targetAt.getTime()),
+    }))
+    .sort((left, right) => left.diff - right.diff)[0];
+  return !candidate || candidate.diff > toleranceHours * 60 * 60 * 1000
+    ? null
+    : candidate.viewsCount;
+}
+
 function median(values: number[]) {
   if (!values.length) return null;
   const sorted = [...values].sort((a, b) => a - b);
@@ -58,21 +102,27 @@ function average(values: number[]) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-export function calculateExpectedViews(input: ExpectedViewsInput): ExpectedViewsResult {
+export function calculateExpectedViews(
+  input: ExpectedViewsInput,
+): ExpectedViewsResult {
   const now = input.now ?? new Date();
   const statisticsWindowDays = input.statisticsWindowDays ?? 50;
   const minPostsForPrimary = input.minPostsForPrimary ?? 3;
   const maxPostsForPrimary = input.maxPostsForPrimary ?? 3;
-  const cutoff = new Date(now.getTime() - statisticsWindowDays * 24 * 60 * 60 * 1000);
+  const cutoff = new Date(
+    now.getTime() - statisticsWindowDays * 24 * 60 * 60 * 1000,
+  );
 
   const baseSample = input.posts.map((post) => {
-    const rawViews = post.viewsCount == null ? null : Math.max(0, Number(post.viewsCount));
+    const rawViews =
+      post.viewsCount == null ? null : Math.max(0, Number(post.viewsCount));
     let reason: string | null = null;
     if (post.excludeFromAnalytics) reason = 'excluded_from_analytics';
     else if (post.adPlacementLinked) reason = 'ad_placement';
     else if (post.postDate < cutoff) reason = 'outside_window';
     else if (post.postDate > now) reason = 'future_post';
-    else if (rawViews == null || !Number.isFinite(rawViews) || rawViews <= 0) reason = 'missing_raw_views';
+    else if (rawViews == null || !Number.isFinite(rawViews) || rawViews <= 0)
+      reason = 'missing_raw_views';
     return {
       postId: post.id ?? null,
       date: post.postDate,
@@ -101,7 +151,10 @@ export function calculateExpectedViews(input: ExpectedViewsInput): ExpectedViews
   const includedViews = sample
     .filter((item) => item.included)
     .map((item) => item.rawViews)
-    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+    .filter(
+      (value): value is number =>
+        typeof value === 'number' && Number.isFinite(value),
+    );
   const avg = average(includedViews);
   const med = median(includedViews);
 

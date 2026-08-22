@@ -44,7 +44,7 @@ describe("TabIdentityProvider", () => {
     `;
   });
 
-  it("sets Finance title and branded favicon", async () => {
+  it("keeps internal Finance on the system route identity", async () => {
     currentPathname = "/finance";
 
     renderWithTabProvider();
@@ -52,9 +52,7 @@ describe("TabIdentityProvider", () => {
     await waitFor(() => {
       expect(document.title).toBe("Finance · Telegram System");
     });
-    await waitFor(() =>
-      expect(iconHref("icon")).toBe("/brand/favicon-finance.png"),
-    );
+    await waitFor(() => expectEmojiFavicon("💰"));
   });
 
   it("sets Dashboard metadata for root route", async () => {
@@ -145,7 +143,10 @@ describe("TabIdentityProvider", () => {
       "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23f97316'/%3E%3C/svg%3E";
 
     const view = renderWithTabProvider(
-      <PageTabHead title="Posts · First Channel · Telegram System" iconUrl={firstIcon} />,
+      <PageTabHead
+        title="Posts · First Channel · Telegram System"
+        iconUrl={firstIcon}
+      />,
     );
 
     await waitFor(() => {
@@ -155,7 +156,10 @@ describe("TabIdentityProvider", () => {
 
     view.rerender(
       <TabIdentityProvider>
-        <PageTabHead title="Posts · Second Channel · Telegram System" iconUrl={secondIcon} />
+        <PageTabHead
+          title="Posts · Second Channel · Telegram System"
+          iconUrl={secondIcon}
+        />
       </TabIdentityProvider>,
     );
 
@@ -170,7 +174,10 @@ describe("TabIdentityProvider", () => {
     const channelIcon =
       "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23059669'/%3E%3C/svg%3E";
     const view = renderWithTabProvider(
-      <PageTabHead title="Posts · Temp Channel · Telegram System" iconUrl={channelIcon} />,
+      <PageTabHead
+        title="Posts · Temp Channel · Telegram System"
+        iconUrl={channelIcon}
+      />,
     );
 
     await waitFor(() => {
@@ -182,9 +189,7 @@ describe("TabIdentityProvider", () => {
     await waitFor(() => {
       expect(document.title).toBe("Finance · Telegram System");
     });
-    await waitFor(() =>
-      expect(iconHref("icon")).toBe("/brand/favicon-finance.png"),
-    );
+    await waitFor(() => expectEmojiFavicon("💰"));
   });
 
   it("does not create duplicate favicon links across rerenders", async () => {
@@ -199,17 +204,24 @@ describe("TabIdentityProvider", () => {
     view.rerender(<TabIdentityProvider>{null}</TabIdentityProvider>);
 
     expect(document.querySelectorAll('link[rel="icon"]')).toHaveLength(1);
-    expect(document.querySelectorAll('link[rel="shortcut icon"]')).toHaveLength(1);
-    expect(document.querySelectorAll('link[rel="apple-touch-icon"]')).toHaveLength(1);
+    expect(document.querySelectorAll('link[rel="shortcut icon"]')).toHaveLength(
+      1,
+    );
+    expect(
+      document.querySelectorAll('link[rel="apple-touch-icon"]'),
+    ).toHaveLength(1);
   });
 
-  it("replaces channel avatar favicon with Finance branding when leaving channel page", async () => {
+  it("replaces channel avatar favicon with internal Finance identity", async () => {
     currentPathname = "/telegram-posts";
     currentSearch = "channelId=channel-1";
     const channelIcon =
       "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23eab308'/%3E%3C/svg%3E";
     const view = renderWithTabProvider(
-      <PageTabHead title="Posts · Test Channel · Telegram System" iconUrl={channelIcon} />,
+      <PageTabHead
+        title="Posts · Test Channel · Telegram System"
+        iconUrl={channelIcon}
+      />,
     );
 
     await waitFor(() => {
@@ -224,9 +236,7 @@ describe("TabIdentityProvider", () => {
     await waitFor(() => {
       expect(document.title).toBe("Finance · Telegram System");
     });
-    await waitFor(() =>
-      expect(iconHref("icon")).toBe("/brand/favicon-finance.png"),
-    );
+    await waitFor(() => expectEmojiFavicon("💰"));
   });
 
   it("applies correct title and favicon after hard reload style async data hydration", async () => {
@@ -253,7 +263,9 @@ describe("TabIdentityProvider", () => {
     );
 
     await waitFor(() => {
-      expect(document.title).toBe("Calendar · Reloaded Channel · Telegram System");
+      expect(document.title).toBe(
+        "Calendar · Reloaded Channel · Telegram System",
+      );
     });
     expect(iconHref("icon")).toBe(channelIcon);
   });
@@ -293,7 +305,9 @@ describe("TabIdentityProvider", () => {
     renderWithTabProvider();
 
     await waitFor(() => {
-      expect(document.title).toBe("Posts · Cached Canonical Channel · Telegram System");
+      expect(document.title).toBe(
+        "Posts · Cached Canonical Channel · Telegram System",
+      );
     });
     expect(iconHref("icon")).toBe(channelIcon);
   });
@@ -321,7 +335,9 @@ describe("TabIdentityProvider", () => {
     renderWithTabProvider();
 
     await waitFor(() => {
-      expect(document.title).toBe("Calendar · Cached Channel · Telegram System");
+      expect(document.title).toBe(
+        "Calendar · Cached Channel · Telegram System",
+      );
     });
     expect(iconHref("icon")).toBe(channelIcon);
   });
@@ -348,7 +364,9 @@ describe("TabIdentityProvider", () => {
 
     document.title = "Telegram System";
     for (const rel of ["icon", "shortcut icon", "apple-touch-icon"] as const) {
-      const link = document.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`);
+      const link = document.querySelector<HTMLLinkElement>(
+        `link[rel="${rel}"]`,
+      );
       if (link) {
         link.setAttribute("href", "/favicon.ico");
         link.setAttribute("type", "image/x-icon");
@@ -377,8 +395,6 @@ describe("TabIdentityProvider", () => {
     for (const rel of ["icon", "shortcut icon", "apple-touch-icon"] as const) {
       expect(iconHref(rel)).toBeTruthy();
     }
-    await waitFor(() =>
-      expect(iconHref("icon")).toBe("/brand/favicon-finance.png"),
-    );
+    await waitFor(() => expectEmojiFavicon("💰"));
   });
 });

@@ -7,10 +7,10 @@ import type { CurrencySettings, TelegramChannel } from "@/lib/api";
 import { telegramChannelsApi } from "@/lib/api";
 import {
   Button,
+  CustomSelect,
   FormField,
   Input,
   Modal,
-  Select,
 } from "@/components/ui/primitives";
 import { telegramChannelKeys } from "@/lib/query-keys";
 import { useAppToast } from "@/providers/toast-provider";
@@ -27,6 +27,13 @@ function number(value: unknown, digits = 0) {
 
 function money(value: unknown, currency: string, digits = 0) {
   return `${number(value, digits)} ${currency}`;
+}
+
+function moneyOrDash(value: unknown, currency: string, digits = 0) {
+  const parsed = Number(value);
+  return value == null || !Number.isFinite(parsed) || parsed === 0
+    ? "—"
+    : money(parsed, currency, digits);
 }
 
 function percent(value: unknown) {
@@ -103,18 +110,16 @@ function EconomicsEditor({
               placeholder="Not set"
             />
           </FormField>
-          <FormField label="Currency for all economics">
-            <Select
+          <FormField label="Currency">
+            <CustomSelect
               value={currency}
-              onChange={(event) => setCurrency(event.target.value)}
-              className="min-w-[150px]"
-            >
-              {currencies.map((currency) => (
-                <option key={currency} value={currency}>
-                  {currency}
-                </option>
-              ))}
-            </Select>
+              onChange={setCurrency}
+              options={currencies.map((currency) => ({
+                value: currency,
+                label: currency,
+              }))}
+              searchable={false}
+            />
           </FormField>
         </div>
         <div className="rounded-md border border-neutral-800 bg-neutral-950/50 p-3">
@@ -193,25 +198,24 @@ export function ChannelEconomicsSummary({
     channel.adBaseCurrency ||
     currencySettings?.primaryCurrency ||
     "USD";
-  const estimatedPrice = economics?.estimatedAdPrice;
+  const formatPricing = economics?.formatPricing;
 
   return (
     <>
-      <section className="mt-3 border-t border-neutral-800 pt-3">
+      <section className="mt-2">
         <div className="flex items-center justify-between gap-2">
-          <div>
+          <div className="flex items-center gap-2">
             <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
               Channel economics
             </p>
-            <p className="mt-0.5 text-sm text-neutral-400">
-              All figures in {currency}
-            </p>
+            <span className="text-neutral-700">·</span>
+            <p className="text-xs text-neutral-500">{currency}</p>
           </div>
           <span className="group relative inline-flex">
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-neutral-700 px-2 text-xs font-medium text-neutral-300 hover:border-neutral-500 hover:text-white"
+              className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs text-neutral-500 hover:bg-neutral-800 hover:text-white"
               aria-label={`Edit economics for ${channel.title}`}
             >
               <Settings2 size={15} /> Edit
@@ -228,66 +232,80 @@ export function ChannelEconomicsSummary({
           </p>
         ) : (
           <>
-            <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="mt-2 grid grid-cols-3 gap-x-3 gap-y-2">
               <Metric
                 label="Bought for"
                 value={
                   economics?.purchasePrice == null
                     ? "Not recorded"
-                    : money(economics.purchasePrice, currency)
+                    : moneyOrDash(economics.purchasePrice, currency)
                 }
                 tone="text-rose-300"
               />
               <Metric
                 label="Ad spend"
-                value={
-                  economics?.adSpend == null
-                    ? "—"
-                    : money(economics.adSpend, currency)
-                }
+                value={moneyOrDash(economics?.adSpend, currency)}
                 tone="text-rose-300"
               />
               <Metric
                 label="Earned"
-                value={
-                  economics?.revenue == null
-                    ? "—"
-                    : money(economics.revenue, currency)
-                }
+                value={moneyOrDash(economics?.revenue, currency)}
                 tone="text-emerald-300"
               />
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-2 rounded-md bg-neutral-950/70 p-2.5">
-              <div>
-                <p className="text-xs text-neutral-500">Payback</p>
-                <p className="mt-1 text-sm font-semibold text-white">
-                  {economics?.paybackPercent == null
-                    ? "—"
-                    : percent(economics.paybackPercent)}
-                </p>
-                <p className="text-xs text-neutral-400">
-                  {economics?.remainingToBreakEven == null
-                    ? "Set costs and revenue"
-                    : economics.remainingToBreakEven === 0
-                      ? "Investment recovered"
-                      : `${money(economics.remainingToBreakEven, currency)} remaining`}
-                </p>
-              </div>
-              <div className="border-l border-neutral-800 pl-2.5">
-                <p className="text-xs text-neutral-500">CPM / ad price</p>
-                <p className="mt-1 text-sm font-semibold text-white">
-                  {channel.adBaseCpm == null
-                    ? "CPM not set"
-                    : `CPM ${money(channel.adBaseCpm, channel.adBaseCurrency || currency, 2)}`}
-                </p>
-                <p className="text-xs text-neutral-400">
-                  {estimatedPrice == null
-                    ? "Set average views for ad-price forecast"
-                    : `${money(estimatedPrice, currency)} · ${economics?.estimatedAdsRemaining ?? "—"} ads to break even`}
-                </p>
-              </div>
+            <div className="mt-3 grid grid-cols-2 gap-1.5">
+              <FormatPrice
+                label="1/24"
+                pricing={formatPricing?.h24}
+                currency={formatPricing?.currency || currency}
+              />
+              <FormatPrice
+                label="2/48"
+                pricing={formatPricing?.h48}
+                currency={formatPricing?.currency || currency}
+              />
+              <FormatPrice
+                label="3/72"
+                pricing={formatPricing?.h72}
+                currency={formatPricing?.currency || currency}
+              />
+              <FormatPrice
+                label="No delete"
+                pricing={formatPricing?.permanent}
+                currency={formatPricing?.currency || currency}
+              />
             </div>
-            <div className="mt-3 flex items-center justify-between gap-3 text-xs">
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+              <span className="text-neutral-500">Payback</span>
+              <span className="font-semibold text-white">
+                {economics?.paybackPercent == null
+                  ? "—"
+                  : percent(economics.paybackPercent)}
+              </span>
+              <span className="text-neutral-400">
+                {economics?.remainingToBreakEven == null
+                  ? "Costs or revenue missing"
+                  : economics.remainingToBreakEven === 0
+                    ? "Investment recovered"
+                    : `${money(economics.remainingToBreakEven, currency)} remaining`}
+              </span>
+              {channel.adBaseCpm != null ? (
+                <span className="ml-auto text-neutral-500">
+                  CPM{" "}
+                  {money(
+                    channel.adBaseCpm,
+                    channel.adBaseCurrency || currency,
+                    2,
+                  )}
+                </span>
+              ) : null}
+              {economics?.estimatedAdsRemaining != null ? (
+                <span className="text-neutral-400">
+                  · {economics.estimatedAdsRemaining} ads to break even
+                </span>
+              ) : null}
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-3 border-t border-neutral-800/70 pt-2 text-xs">
               <span className="text-neutral-500">Audience</span>
               <span className="font-medium text-neutral-200">
                 {number(
@@ -310,6 +328,35 @@ export function ChannelEconomicsSummary({
   );
 }
 
+function FormatPrice({
+  label,
+  pricing,
+  currency,
+}: {
+  label: string;
+  pricing?: {
+    expectedViews: number | null;
+    estimatedPrice: number | null;
+  };
+  currency: string;
+}) {
+  return (
+    <div className="rounded-md border border-neutral-800/80 bg-neutral-950/55 px-2.5 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-neutral-300">{label}</span>
+        <span className="text-xs font-semibold text-sky-200">
+          {moneyOrDash(pricing?.estimatedPrice, currency, 1)}
+        </span>
+      </div>
+      <p className="mt-0.5 text-xs text-neutral-500">
+        {pricing?.expectedViews != null
+          ? `${number(pricing.expectedViews)} views`
+          : "Not enough data"}
+      </p>
+    </div>
+  );
+}
+
 function Metric({
   label,
   value,
@@ -322,7 +369,7 @@ function Metric({
   return (
     <div className="min-w-0">
       <p className="text-xs text-neutral-500">{label}</p>
-      <p className={`mt-1 truncate text-sm font-semibold ${tone}`}>{value}</p>
+      <p className={`mt-0.5 truncate text-sm font-semibold ${tone}`}>{value}</p>
     </div>
   );
 }

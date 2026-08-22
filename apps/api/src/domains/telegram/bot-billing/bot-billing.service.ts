@@ -273,12 +273,32 @@ export class BotBillingService {
     return true;
   }
 
-  async syncFinanceCatalog(userId: string, botIntegrationId: string, mode: Mode = 'LIVE') {
+  async syncFinanceCatalog(userId: string, botIntegrationId: string) {
     const bot = await this.bot(userId, botIntegrationId);
-    const finance = await this.prisma.telegramBotIntegration.findFirst({ where: { id: bot.id, applicationType: 'FINANCE' } });
+    const [finance, providerConfigs] = await Promise.all([
+      this.prisma.telegramBotIntegration.findFirst({
+        where: { id: bot.id, applicationType: 'FINANCE' },
+        select: { id: true },
+      }),
+      this.prisma.botBillingProviderConfig.findMany({
+        where: {
+          workspaceId: bot.workspaceId,
+          provider: BotBillingProvider.STRIPE,
+          connectionStatus: BotBillingConnectionStatus.CONNECTED,
+          OR: [{ botIntegrationId }, { botIntegrationId: null }],
+        },
+        select: { botIntegrationId: true, mode: true },
+      }),
+    ]);
     if (!finance) throw new BadRequestException('This operation is available only for Finance bots');
+    const modes = (['TEST', 'LIVE'] as const).filter((mode) => {
+      const matching = providerConfigs.filter((config) => config.mode === mode);
+      return matching.some((config) => config.botIntegrationId === botIntegrationId)
+        || matching.some((config) => config.botIntegrationId === null);
+    });
+    if (!modes.length) throw new BadRequestException('Stripe TEST or LIVE is not connected');
     const definitions = [{ code: 'PRO', name: 'Pro', amountMinor: 14900 }, { code: 'ULTIMATE', name: 'Ultimate', amountMinor: 24900 }];
-    const result: Array<{ code: string; planId: string; priceId: string; providerPriceId: string }> = [];
+    const result: Array<{ code: string; planId: string; priceId: string; mode: Mode; providerPriceId: string }> = [];
     for (const definition of definitions) {
       const plan = await this.prisma.botSubscriptionPlan.upsert({ where: { botIntegrationId_code: { botIntegrationId, code: definition.code } }, update: { name: definition.name, isActive: true }, create: { workspaceId: bot.workspaceId, botIntegrationId, code: definition.code, name: definition.name, isActive: true } });
       let price = await this.prisma.botPlanPrice.findFirst({ where: { planId: plan.id, currency: 'UAH', interval: 'MONTH', amountMinor: definition.amountMinor, isActive: true }, orderBy: { version: 'desc' } });
@@ -287,8 +307,10 @@ export class BotBillingService {
         await this.prisma.botPlanPrice.updateMany({ where: { planId: plan.id, currency: 'UAH', interval: 'MONTH', isPublic: true }, data: { isPublic: false } });
         price = await this.prisma.botPlanPrice.create({ data: { planId: plan.id, currency: 'UAH', interval: 'MONTH', amountMinor: definition.amountMinor, version: (previous._max.version || 0) + 1, isPublic: true } });
       }
-      const providerPriceId = await this.stripe.ensurePrice({ botIntegrationId, mode: mode as BotBillingProviderMode, plan, price });
-      result.push({ code: definition.code, planId: plan.id, priceId: price.id, providerPriceId });
+      for (const mode of modes) {
+        const providerPriceId = await this.stripe.ensurePrice({ botIntegrationId, mode, plan, price });
+        result.push({ code: definition.code, planId: plan.id, priceId: price.id, mode, providerPriceId });
+      }
     }
     return result;
   }

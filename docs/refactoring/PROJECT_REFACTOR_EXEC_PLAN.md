@@ -477,6 +477,17 @@ Domain-layout validation on 2026-08-09:
 | shared package typecheck/build          | pass                                                                                                                                     |
 | `pnpm architecture:check`               | path migration is recognized; still fails on pre-existing shrinking-baseline growth and the existing oversized managed-post import modal |
 
+## 2026-08-22 Channel card pricing slice
+
+- Moved the pure Telegram-post expected-views calculation into
+  `common/analytics` after the ad-sales setup and channel catalog became two
+  real consumers with identical 24h/48h/72h/7d semantics.
+- Shrunk `telegram-ad-sales.service.ts` while keeping its public pricing
+  contract unchanged. Channel collection pricing uses one bounded, workspace-
+  scoped batch instead of per-card API or database reads.
+- Lowered the shrinking-only architecture ceilings for the affected ad-sales
+  service and Telegram channels page.
+
 ## Integration Review
 
 - `integration-reviewer` checked the dirty refactor diff after the frontend/backend/design-system slices.

@@ -2590,6 +2590,11 @@ model TelegramBotIntegration {
   isActive                         Boolean                    @default(true)
   applicationType                  TelegramBotApplicationType @default(NONE)
   financeConsumerSessionTtlSeconds Int                        @default(2592000)
+  financeLogoImage                  Bytes?
+  financeLogoMimeType               String?
+  financeFaviconImage               Bytes?
+  financeFaviconMimeType            String?
+  financeBrandingUpdatedAt          DateTime?
   assignedMemberId                 String?
   createdByUserId                  String?
   createdAt                        DateTime                   @default(now())

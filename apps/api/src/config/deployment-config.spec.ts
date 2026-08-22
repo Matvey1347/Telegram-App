@@ -21,6 +21,21 @@ describe('deployment config', () => {
     expect(publicWebOrigin({ FRONTEND_URL: 'not-a-url' })).toBe(undefined);
   });
 
+  it('never exposes a development tunnel as the production web origin', () => {
+    expect(
+      publicWebOrigin({
+        NODE_ENV: 'production',
+        FRONTEND_URL: 'https://stale.ngrok-free.app/finance/old',
+      }),
+    ).toBe(undefined);
+    expect(
+      publicWebOrigin({
+        NODE_ENV: 'development',
+        FRONTEND_URL: 'https://active.trycloudflare.com',
+      }),
+    ).toBe('https://active.trycloudflare.com');
+  });
+
   it('uses canonical API_PUBLIC_URL for public API callbacks', () => {
     expect(publicApiOrigin({ API_PUBLIC_URL: 'https://api.example/' })).toBe(
       'https://api.example',

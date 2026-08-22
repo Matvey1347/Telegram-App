@@ -121,9 +121,16 @@ export function resolveRouteTabIdentity({
   if (pathname === "/") {
     return { title: pageTitle("Dashboard"), emoji: "📊", color: "#0f766e" };
   }
-  if (pathname === "/finance" || pathname.startsWith("/finance/")) {
+  if (pathname === "/finance") {
     return {
       title: pageTitle("Finance"),
+      emoji: "💰",
+      color: "#166534",
+    };
+  }
+  if (pathname.startsWith("/finance/")) {
+    return {
+      title: "Finance",
       emoji: "💰",
       color: "#166534",
       iconUrl: SYSTEM_BRAND.financeFavicon,

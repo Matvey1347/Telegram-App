@@ -1,4 +1,4 @@
-import { calculateExpectedViews } from './domain/expected-views';
+import { calculateExpectedViews } from './telegram-post-expected-views';
 
 describe('calculateExpectedViews', () => {
   const now = new Date('2026-08-02T12:00:00.000Z');
@@ -43,10 +43,31 @@ describe('calculateExpectedViews', () => {
       now,
       minPostsForPrimary: 2,
       posts: [
-        { id: 'organic-1', postDate: new Date('2026-08-01T00:00:00.000Z'), viewsCount: 100, excludeFromAnalytics: false },
-        { id: 'ad', postDate: new Date('2026-07-31T00:00:00.000Z'), viewsCount: 10000, excludeFromAnalytics: false, adPlacementLinked: true },
-        { id: 'excluded', postDate: new Date('2026-07-30T00:00:00.000Z'), viewsCount: 9000, excludeFromAnalytics: true },
-        { id: 'organic-2', postDate: new Date('2026-07-29T00:00:00.000Z'), viewsCount: 200, excludeFromAnalytics: false },
+        {
+          id: 'organic-1',
+          postDate: new Date('2026-08-01T00:00:00.000Z'),
+          viewsCount: 100,
+          excludeFromAnalytics: false,
+        },
+        {
+          id: 'ad',
+          postDate: new Date('2026-07-31T00:00:00.000Z'),
+          viewsCount: 10000,
+          excludeFromAnalytics: false,
+          adPlacementLinked: true,
+        },
+        {
+          id: 'excluded',
+          postDate: new Date('2026-07-30T00:00:00.000Z'),
+          viewsCount: 9000,
+          excludeFromAnalytics: true,
+        },
+        {
+          id: 'organic-2',
+          postDate: new Date('2026-07-29T00:00:00.000Z'),
+          viewsCount: 200,
+          excludeFromAnalytics: false,
+        },
       ],
     });
 
@@ -59,10 +80,30 @@ describe('calculateExpectedViews', () => {
     const result = calculateExpectedViews({
       now,
       posts: [
-        { id: 'post-1', postDate: new Date('2026-08-01T00:00:00.000Z'), viewsCount: 100, excludeFromAnalytics: false },
-        { id: 'post-2', postDate: new Date('2026-07-31T00:00:00.000Z'), viewsCount: 200, excludeFromAnalytics: false },
-        { id: 'post-3', postDate: new Date('2026-07-30T00:00:00.000Z'), viewsCount: 300, excludeFromAnalytics: false },
-        { id: 'post-4', postDate: new Date('2026-07-29T00:00:00.000Z'), viewsCount: 900, excludeFromAnalytics: false },
+        {
+          id: 'post-1',
+          postDate: new Date('2026-08-01T00:00:00.000Z'),
+          viewsCount: 100,
+          excludeFromAnalytics: false,
+        },
+        {
+          id: 'post-2',
+          postDate: new Date('2026-07-31T00:00:00.000Z'),
+          viewsCount: 200,
+          excludeFromAnalytics: false,
+        },
+        {
+          id: 'post-3',
+          postDate: new Date('2026-07-30T00:00:00.000Z'),
+          viewsCount: 300,
+          excludeFromAnalytics: false,
+        },
+        {
+          id: 'post-4',
+          postDate: new Date('2026-07-29T00:00:00.000Z'),
+          viewsCount: 900,
+          excludeFromAnalytics: false,
+        },
       ],
     });
 
