@@ -671,7 +671,7 @@ model Workspace {
   telegramBotUsers                       TelegramBotUser[]
   telegramBotUpdateLogs                  TelegramBotUpdateLog[]
   telegramBotDeliveries                  TelegramBotDelivery[]
-  financeAiProviderConfigs               FinanceAiProviderConfig[]
+  financeAiProviderConfigs               AiProviderConfig[]
   greeterConfigs                         GreeterConfig[]
   greeterConfigVersions                  GreeterConfigVersion[]
   greeterChannelConfigVersions           GreeterChannelConfigVersion[]
@@ -2614,7 +2614,7 @@ model TelegramBotIntegration {
   greeterUserEnvironmentStates GreeterUserEnvironmentState[]
   financeProfiles              FinanceProfile[]
   financeBrowserLoginChallenges FinanceBrowserLoginChallenge[]
-  financeAiProviderConfigs     FinanceAiProviderConfig[]
+  financeAiProviderConfigs     AiProviderConfig[]
   billingProviderConfigs       BotBillingProviderConfig[]
   billingPlans                 BotSubscriptionPlan[]
   billingSubscriptions         BotSubscription[]
@@ -2705,6 +2705,7 @@ model TelegramBotUser {
   firstSeenAt       DateTime  @default(now())
   lastInteractionAt DateTime  @default(now())
   blockedAt         DateTime?
+  localLifecycleMessageId Int?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -3173,7 +3174,7 @@ model FinanceProfile {
   goals                 FinanceGoal[]
   proposals             FinancePendingProposal[]
   assistantProfile      FinanceAssistantProfile?
-  aiUsage               FinanceAiUsage[]
+  aiUsage               AiUsageEvent[]
   chatFlows             FinanceChatFlow[]
   consumerTransfers     FinanceConsumerTransfer[]
   browserLoginChallenges FinanceBrowserLoginChallenge[]
@@ -3218,7 +3219,7 @@ model FinanceBrowserLoginChallenge {
 
 // A nullable bot means a workspace default. A bot-specific row overrides it.
 // Secrets use the same AES-GCM envelope as Bot API and billing credentials.
-model FinanceAiProviderConfig {
+model AiProviderConfig {
   id                  String                    @id @default(cuid())
   workspaceId         String
   botIntegrationId    String?
@@ -3226,7 +3227,6 @@ model FinanceAiProviderConfig {
   apiKeyEncrypted     String?
   apiKeyIv            String?
   apiKeyAuthTag       String?
-  model               String                    @default("gpt-5.6-luna")
   connectionStatus    FinanceAiConnectionStatus @default(NOT_CONFIGURED)
   lastCheckedAt       DateTime?
   lastValidationError String?
@@ -3237,6 +3237,7 @@ model FinanceAiProviderConfig {
 
   @@unique([workspaceId, botIntegrationId, provider], map: "FinanceAiProviderConfig_workspaceId_botIntegrationId_provider_k")
   @@index([workspaceId, provider])
+  @@map("FinanceAiProviderConfig")
 }
 
 model FinanceAccount {
@@ -3473,22 +3474,36 @@ model FinanceAssistantProfile {
   profile           FinanceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 }
 
-model FinanceAiUsage {
+model AiUsageEvent {
   id                  String            @id @default(cuid())
-  profileId           String
+  workspaceId         String?
+  botIntegrationId    String?
+  runtimeInstanceId   String?
+  telegramBotUserId   String?
+  profileId           String?
   feature             String
   provider            FinanceAiProvider
   model               String
   inputTokens         Int?
+  cachedInputTokens   Int?
   outputTokens        Int?
+  inputAudioTokens    Int?
+  outputAudioTokens   Int?
+  inputPriceMicrosPerMillion Int?
+  cachedInputPriceMicrosPerMillion Int?
+  outputPriceMicrosPerMillion Int?
+  pricingVersion      String?
   estimatedCostMicros Int?
   latencyMs           Int
   status              String
   createdAt           DateTime          @default(now())
-  profile             FinanceProfile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile             FinanceProfile?   @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([profileId, createdAt, feature])
   @@index([profileId, feature, status, createdAt])
+  @@index([workspaceId, botIntegrationId, runtimeInstanceId, createdAt], map: "FinanceAiUsage_workspace_bot_runtime_created_idx")
+  @@index([telegramBotUserId, createdAt], map: "FinanceAiUsage_user_created_idx")
+  @@map("FinanceAiUsage")
 }
 
 model BotBillingProviderConfig {

@@ -5,6 +5,7 @@ import {
   BadgeDollarSign,
   CircleDollarSign,
   CreditCard,
+  Cpu,
   Gift,
   ReceiptText,
   TrendingUp,
@@ -125,6 +126,7 @@ function Overview({ data }: { data: BotBillingOverviewView }) {
           rows={analytics.collectedRevenue}
         />
       </div>
+      <AiUsagePanel data={data.aiUsage} />
       {data.recentActivity.length ? (
         <Card>
           <h2 className="font-semibold text-white">Recent activity</h2>
@@ -151,6 +153,18 @@ function Overview({ data }: { data: BotBillingOverviewView }) {
       ) : null}
     </div>
   );
+}
+
+function formatAiCost(micros: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: micros < 10_000 ? 4 : 2, maximumFractionDigits: 6 }).format(micros / 1_000_000);
+}
+
+function AiUsagePanel({ data }: { data: BotBillingOverviewView["aiUsage"] }) {
+  return <Card><div className="flex flex-wrap items-start justify-between gap-3"><div className="flex items-center gap-3"><div className="rounded-lg border border-neutral-700 bg-neutral-950 p-2 text-sky-300"><Cpu size={20} /></div><div><h2 className="font-semibold text-white">AI usage · current month</h2><p className="text-xs text-neutral-500">Actual provider usage for this bot and selected runtime</p></div></div><p className="text-xl font-semibold tabular-nums text-white">{formatAiCost(data.estimatedCostMicros)}</p></div><div className="mt-4 grid gap-2 sm:grid-cols-4">{[["Requests", data.requests.toLocaleString()], ["Input tokens", data.inputTokens.toLocaleString()], ["Cached input", data.cachedInputTokens.toLocaleString()], ["Output tokens", data.outputTokens.toLocaleString()]].map(([label, value]) => <div key={label} className="rounded-lg border border-neutral-800 bg-neutral-950/40 p-3"><p className="text-xs text-neutral-500">{label}</p><p className="mt-1 font-medium tabular-nums text-white">{value}</p></div>)}</div>{data.unpricedRequests ? <p className="mt-3 text-xs text-amber-300">{data.unpricedRequests} request(s) use a model without a pricing snapshot and are excluded from cost.</p> : null}<div className="mt-4 grid gap-4 xl:grid-cols-2"><UsageTable title="By model" rows={data.byModel.map((row) => ({ key: row.model, label: row.model, detail: `${row.requests} requests · ${(row.inputTokens + row.outputTokens).toLocaleString()} tokens`, cost: row.estimatedCostMicros }))} /><UsageTable title="By user" rows={data.byUser.map((row) => ({ key: row.telegramBotUserId, label: row.username ? `@${row.username}` : row.firstName || row.telegramUserId, detail: `${row.requests} requests · Telegram ${row.telegramUserId}`, cost: row.estimatedCostMicros }))} /></div></Card>;
+}
+
+function UsageTable({ title, rows }: { title: string; rows: Array<{ key: string; label: string; detail: string; cost: number }> }) {
+  return <div><h3 className="text-sm font-medium text-neutral-300">{title}</h3>{rows.length ? <div className="mt-2 divide-y divide-neutral-800 rounded-lg border border-neutral-800">{rows.map((row) => <div key={row.key} className="flex items-center justify-between gap-3 p-3 text-sm"><div className="min-w-0"><p className="truncate text-white">{row.label}</p><p className="truncate text-xs text-neutral-500">{row.detail}</p></div><span className="shrink-0 tabular-nums text-neutral-200">{formatAiCost(row.cost)}</span></div>)}</div> : <p className="mt-2 text-sm text-neutral-500">No AI requests yet.</p>}</div>;
 }
 function Metric({
   label,

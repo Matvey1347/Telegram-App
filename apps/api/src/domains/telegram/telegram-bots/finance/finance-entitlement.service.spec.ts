@@ -5,7 +5,7 @@ describe('FinanceEntitlementService', () => {
     const prisma = {
       botSubscription: { findMany: jest.fn().mockResolvedValue([{ plan: { code: 'pro' }, currentPeriodEnd: new Date('2030-01-01'), cancelAtPeriodEnd: false, grants: [] }]) },
       financeProfile: { findUnique: jest.fn().mockResolvedValue({ id: 'profile-1' }) },
-      financeAiUsage: { count: jest.fn().mockResolvedValue(0) },
+      aiUsageEvent: { count: jest.fn().mockResolvedValue(0) },
     } as never;
     const service = new FinanceEntitlementService(prisma);
 
@@ -19,7 +19,7 @@ describe('FinanceEntitlementService', () => {
     const prisma = {
       botSubscription: { findMany: jest.fn().mockResolvedValue([]) },
       financeProfile: { findUnique: jest.fn().mockResolvedValue({ id: 'profile-1' }) },
-      financeAiUsage: { count: jest.fn().mockResolvedValueOnce(10).mockResolvedValueOnce(2) },
+      aiUsageEvent: { count: jest.fn().mockResolvedValueOnce(10).mockResolvedValueOnce(2) },
     } as never;
     const resolved = await new FinanceEntitlementService(prisma).resolve({ botIntegrationId: 'finance-bot', telegramBotUserId: 'user' });
     expect(resolved).toMatchObject({ tier: 'FREE', usage: [{ feature: 'AI_INPUT', used: 10, limit: 10, remaining: 0, resetAt: null }, { feature: 'RECEIPT_SCAN', used: 2, limit: 3, remaining: 1, resetAt: null }] });

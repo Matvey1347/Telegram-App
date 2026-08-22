@@ -170,6 +170,7 @@ describe('FinanceLedgerService tenant and money rules', () => {
           categoryName: null,
           currency: 'EUR',
           day: '2026-08-01',
+          nativeAmount: new Prisma.Decimal(50),
           valuedAmount: new Prisma.Decimal(10),
           legacyNativeAmount: new Prisma.Decimal(50),
           legacyTransactionCount: BigInt(1),
@@ -180,6 +181,7 @@ describe('FinanceLedgerService tenant and money rules', () => {
           categoryName: null,
           currency: 'PLN',
           day: '2026-08-01',
+          nativeAmount: new Prisma.Decimal(20),
           valuedAmount: new Prisma.Decimal(0),
           legacyNativeAmount: new Prisma.Decimal(20),
           legacyTransactionCount: BigInt(1),
@@ -224,6 +226,21 @@ describe('FinanceLedgerService tenant and money rules', () => {
       currency: 'UAH',
       summary: { income: '0', expenses: '0', netCashflow: '0' },
     });
+    expect(conversion.getRateMetadata).not.toHaveBeenCalled();
+  });
+
+  it('keeps native profile-currency totals exact instead of converting them through USD', async () => {
+    const prisma: any = { $queryRaw: jest.fn().mockResolvedValue([
+      { type: 'INCOME', categoryId: null, categoryName: null, categoryKey: null, currency: 'UAH', day: '2026-08-21', nativeAmount: new Prisma.Decimal(150), valuedAmount: new Prisma.Decimal('3.61'), legacyNativeAmount: new Prisma.Decimal(0), legacyTransactionCount: BigInt(0) },
+      { type: 'EXPENSE', categoryId: 'category-1', categoryName: 'Entertainment', categoryKey: 'entertainment', currency: 'UAH', day: '2026-08-21', nativeAmount: new Prisma.Decimal(100), valuedAmount: new Prisma.Decimal('2.41'), legacyNativeAmount: new Prisma.Decimal(0), legacyTransactionCount: BigInt(0) },
+    ]) };
+    const conversion = { getRateMetadata: jest.fn().mockResolvedValue({ available: true, rate: '36.34' }) };
+    const result = await new FinanceLedgerService(prisma, conversion as never).analytics(
+      { id: 'profile-a', defaultCurrency: 'UAH', timezone: 'Europe/Warsaw', workspaceId: 'workspace-a' },
+      { period: 'CUSTOM', from: '2026-08-21T00:00:00.000Z', to: '2026-08-22T00:00:00.000Z' },
+    );
+    expect(result.summary).toEqual({ income: '150', expenses: '100', netCashflow: '50' });
+    expect(result.expensesByCategory[0].amount).toBe('100');
     expect(conversion.getRateMetadata).not.toHaveBeenCalled();
   });
 

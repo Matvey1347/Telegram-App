@@ -7,6 +7,7 @@ export type FinanceAnalyticsAggregateRow = {
   categoryKey: string | null;
   currency: string;
   day: string;
+  nativeAmount: Prisma.Decimal;
   valuedAmount: Prisma.Decimal | null;
   legacyNativeAmount: Prisma.Decimal | null;
   legacyTransactionCount: bigint;
@@ -47,7 +48,9 @@ export function financeAnalyticsView(input: {
         ),
       );
     }
-    const amount = convert(new Prisma.Decimal(row.valuedAmount || 0));
+    const amount = row.currency === input.currency
+      ? new Prisma.Decimal(row.nativeAmount || 0)
+      : convert(new Prisma.Decimal(row.valuedAmount || 0));
     if (row.type === 'INCOME') income = income.plus(amount);
     else expenses = expenses.plus(amount);
     if (row.type === 'EXPENSE') {

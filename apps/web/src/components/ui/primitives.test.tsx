@@ -5,6 +5,7 @@ import {
   canonicalizeTimeInputValue,
   CustomSelect,
   isValidTimeInputValue,
+  Input,
   Modal,
   Tooltip,
 } from "@/components/ui/primitives";
@@ -74,6 +75,22 @@ describe("Tooltip", () => {
 
     await user.keyboard("{Escape}");
     expect(screen.queryByText("Helpful tab description")).toBeNull();
+  });
+});
+
+describe("Input", () => {
+  it("lets users reveal and hide every password field", async () => {
+    const user = userEvent.setup();
+    render(<Input type="password" defaultValue="secret-value" />);
+
+    const input = screen.getByDisplayValue("secret-value");
+    expect(input).toHaveAttribute("type", "password");
+
+    await user.click(screen.getByRole("button", { name: "Show password" }));
+    expect(input).toHaveAttribute("type", "text");
+
+    await user.click(screen.getByRole("button", { name: "Hide password" }));
+    expect(input).toHaveAttribute("type", "password");
   });
 });
 

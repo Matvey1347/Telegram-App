@@ -41,7 +41,6 @@ export type BotBillingProviderConfigView = {
 
 export type FinanceAiConfigView = {
   provider: "OPENAI";
-  model: string;
   source: "WORKSPACE_DEFAULT" | "BOT_OVERRIDE" | "NONE";
   status: "NOT_CONFIGURED" | "CONNECTED" | "INVALID";
   apiKeyConfigured: boolean;
@@ -51,6 +50,17 @@ export type FinanceAiConfigView = {
 
 export type BotBillingOverviewView = {
   analytics: BotBillingAnalyticsView & { conversionRate: number };
+  aiUsage: {
+    periodStart: string;
+    requests: number;
+    inputTokens: number;
+    cachedInputTokens: number;
+    outputTokens: number;
+    estimatedCostMicros: number;
+    unpricedRequests: number;
+    byModel: Array<{ model: string; requests: number; inputTokens: number; outputTokens: number; estimatedCostMicros: number }>;
+    byUser: Array<{ telegramBotUserId: string; telegramUserId: string; username: string | null; firstName: string | null; requests: number; estimatedCostMicros: number }>;
+  };
   recentActivity: Array<{
     id: string;
     type: "SUBSCRIPTION" | "PAYMENT_SUCCEEDED" | "PAYMENT_FAILED";

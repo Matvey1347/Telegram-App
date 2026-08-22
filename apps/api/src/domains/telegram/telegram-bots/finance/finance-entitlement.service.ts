@@ -94,7 +94,7 @@ export class FinanceEntitlementService {
     const pendingAfter = new Date(now.getTime() - 5 * 60_000);
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`${input.profileId}:${feature}`}))`);
-      const reserved = await tx.financeAiUsage.count({
+      const reserved = await tx.aiUsageEvent.count({
         where: {
           profileId: input.profileId,
           feature,
@@ -105,7 +105,7 @@ export class FinanceEntitlementService {
         },
       });
       if (reserved >= limit) throw new HttpException('Finance usage limit reached', HttpStatus.TOO_MANY_REQUESTS);
-      return tx.financeAiUsage.create({ data: { profileId: input.profileId, feature, provider: FinanceAiProvider.OPENAI, model, latencyMs: 0, status: 'PENDING' }, select: { id: true } });
+      return tx.aiUsageEvent.create({ data: { profileId: input.profileId, botIntegrationId: input.botIntegrationId, telegramBotUserId: input.telegramBotUserId, feature, provider: FinanceAiProvider.OPENAI, model, latencyMs: 0, status: 'PENDING' }, select: { id: true } });
     });
   }
 
@@ -114,7 +114,7 @@ export class FinanceEntitlementService {
     const monthly = limit !== null && tier !== 'FREE';
     const now = new Date();
     const start = monthly ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)) : undefined;
-    const used = await this.prisma.financeAiUsage.count({ where: { profileId, feature, status: 'SUCCEEDED', ...(start ? { createdAt: { gte: start } } : {}) } });
+    const used = await this.prisma.aiUsageEvent.count({ where: { profileId, feature, status: 'SUCCEEDED', ...(start ? { createdAt: { gte: start } } : {}) } });
     return { feature, used, limit, remaining: limit === null ? null : Math.max(0, limit - used), resetAt: monthly ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString() : null };
   }
 

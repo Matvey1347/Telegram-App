@@ -21,13 +21,14 @@ describe('TelegramBotLocalDevelopmentService', () => {
     botIntegration: {
       applicationType: TelegramBotApplicationType.FINANCE,
     },
-    users: [{ telegramChatId: '42', languageCode: 'ru' }],
+    users: [{ id: 'user-1', telegramChatId: '42', languageCode: 'ru', localLifecycleMessageId: 77 }],
   };
   const prisma = {
     telegramBotRuntimeInstance: {
       findMany: jest.fn(),
       update: jest.fn().mockResolvedValue({}),
     },
+    telegramBotUser: { update: jest.fn().mockResolvedValue({}) },
   } as any;
   const encryption = {
     decrypt: jest.fn().mockReturnValue('local-token'),
@@ -36,6 +37,7 @@ describe('TelegramBotLocalDevelopmentService', () => {
     sendMessage: jest.fn().mockResolvedValue({ message_id: 1 }),
     setChatMenuButton: jest.fn().mockResolvedValue(true),
     deleteWebhook: jest.fn().mockResolvedValue(true),
+    deleteMessage: jest.fn().mockResolvedValue(true),
   } as any;
   const environment = { current: jest.fn() } as any;
   const presentation = {
@@ -100,6 +102,9 @@ describe('TelegramBotLocalDevelopmentService', () => {
         }),
       }),
     );
+    expect(api.deleteMessage).toHaveBeenCalledWith('local-token', { chat_id: '42', message_id: 77 });
+    expect(prisma.telegramBotUser.update).toHaveBeenCalledWith({ where: { id: 'user-1' }, data: { localLifecycleMessageId: 1 } });
+    expect(api.sendMessage.mock.calls[0][1].text).toContain('✅');
     expect(prisma.telegramBotRuntimeInstance.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'local-1' },

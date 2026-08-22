@@ -5,6 +5,7 @@ import { TokenEncryptionService } from '../../../../common/security/token-encryp
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
 import { FinanceEntitlementService } from './finance-entitlement.service';
+import { AI_MODEL_POLICY, priceAiUsage } from '../core/ai-usage-cost';
 
 export type AiFinanceOperation = { type: 'INCOME' | 'EXPENSE'; amount: string; currency: string; description: string; occurredAt: string; accountHint?: string; merchantDisplay?: string; items?: Array<{ displayName: string; quantity?: string; unitPrice?: string; totalAmount: string; currency: string }> };
 
@@ -74,6 +75,8 @@ export class FinanceAiProviderService {
       bytes: downloaded.bytes,
       mime,
       config,
+      profileId: input.profileId,
+      botIntegrationId: input.botIntegrationId,
     });
   }
 
@@ -91,26 +94,33 @@ export class FinanceAiProviderService {
     if (!this.isSupportedVoiceMime(mime))
       throw new BadRequestException('Voice message format is not supported');
     const config = await this.providerConfig(input.profileId, input.botIntegrationId);
-    return this.transcribeVoiceBytes({ bytes: input.bytes, mime, config });
+    return this.transcribeVoiceBytes({ bytes: input.bytes, mime, config, profileId: input.profileId, botIntegrationId: input.botIntegrationId });
   }
 
   private async transcribeVoiceBytes(input: {
     bytes: Buffer;
     mime: string;
     config: { apiKeyEncrypted: string | null; apiKeyIv: string | null; apiKeyAuthTag: string | null };
+    profileId: string;
+    botIntegrationId: string;
   }) {
+    const startedAt = Date.now();
+    const model = AI_MODEL_POLICY.VOICE_TRANSCRIPTION;
     const key = this.encryption.decrypt({
       encrypted: input.config.apiKeyEncrypted!,
       iv: input.config.apiKeyIv!,
       authTag: input.config.apiKeyAuthTag!,
     });
     const form = new FormData();
-    form.set('model', 'gpt-4o-mini-transcribe');
+    form.set('model', model);
+    form.set('response_format', 'verbose_json');
     const audio = input.bytes.buffer.slice(
       input.bytes.byteOffset,
       input.bytes.byteOffset + input.bytes.byteLength,
     ) as ArrayBuffer;
     form.set('file', new Blob([audio], { type: input.mime }), this.voiceFileName(input.mime));
+    let status = 'FAILED';
+    let usage: { input_tokens?: number; output_tokens?: number } | undefined;
     try {
       const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
@@ -118,7 +128,8 @@ export class FinanceAiProviderService {
         body: form,
         signal: AbortSignal.timeout(20_000),
       });
-      const body = await response.json() as { text?: unknown };
+      const body = await response.json() as { text?: unknown; usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number } };
+      usage = body.usage;
       if (!response.ok) {
         throw new BadGatewayException(
           response.status === 401
@@ -128,24 +139,28 @@ export class FinanceAiProviderService {
       }
       if (typeof body.text !== 'string' || !body.text.trim() || body.text.length > 2_000)
         throw new BadGatewayException('Finance AI returned an invalid transcription');
+      status = 'SUCCEEDED';
       return body.text.trim();
     } catch (error) {
       if (error instanceof BadGatewayException) throw error;
       throw new BadGatewayException('Finance AI transcription timed out or returned invalid output');
+    } finally {
+      await this.recordUsage({ profileId: input.profileId, botIntegrationId: input.botIntegrationId, feature: 'VOICE_TRANSCRIPTION', model, status, latencyMs: Date.now() - startedAt, usage: { inputTokens: usage?.input_tokens, outputTokens: usage?.output_tokens, inputAudioTokens: usage?.input_tokens, outputAudioTokens: usage?.output_tokens } });
     }
   }
 
   private async extract(input: { profileId: string; botIntegrationId: string; feature: 'AI_INPUT' | 'RECEIPT_SCAN'; content: Array<Record<string, unknown>> }) {
     const start = Date.now();
-    const profileIdentity = await this.prisma.financeProfile.findUnique({ where: { id: input.profileId }, select: { telegramBotUserId: true } });
+    const profileIdentity = await this.prisma.financeProfile.findUnique({ where: { id: input.profileId }, select: { telegramBotUserId: true, botIntegration: { select: { workspaceId: true } }, telegramUser: { select: { runtimeInstanceId: true } } } });
     if (!profileIdentity) throw new BadRequestException('Finance profile not found');
     const config = await this.providerConfig(input.profileId, input.botIntegrationId);
-    const reservation = await this.entitlements.reserve({ botIntegrationId: input.botIntegrationId, telegramBotUserId: profileIdentity.telegramBotUserId, profileId: input.profileId }, input.feature, config.model);
+    const model = AI_MODEL_POLICY.FINANCE_EXTRACTION;
+    const reservation = await this.entitlements.reserve({ botIntegrationId: input.botIntegrationId, telegramBotUserId: profileIdentity.telegramBotUserId, profileId: input.profileId }, input.feature, model);
     const key = this.encryption.decrypt({ encrypted: config.apiKeyEncrypted!, iv: config.apiKeyIv!, authTag: config.apiKeyAuthTag! });
-    let status = 'FAILED'; let usage: { input_tokens?: number; output_tokens?: number } | undefined;
+    let status = 'FAILED'; let usage: { input_tokens?: number; input_tokens_details?: { cached_tokens?: number }; output_tokens?: number } | undefined;
     try {
-      const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: config.model, store: false, max_output_tokens: 1200, safety_identifier: createHash('sha256').update(input.profileId).digest('hex').slice(0, 32), input: [{ role: 'user', content: input.content }], text: { format: { type: 'json_schema', name: 'finance_operations', strict: true, schema: operationSchema } } }), signal: AbortSignal.timeout(20_000) });
-      const body = await response.json() as { output_text?: string; output?: Array<{ content?: Array<{ type?: string; text?: string }> }>; usage?: { input_tokens?: number; output_tokens?: number }; error?: { message?: string } };
+      const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model, store: false, max_output_tokens: 1200, safety_identifier: createHash('sha256').update(input.profileId).digest('hex').slice(0, 32), input: [{ role: 'user', content: input.content }], text: { format: { type: 'json_schema', name: 'finance_operations', strict: true, schema: operationSchema } } }), signal: AbortSignal.timeout(20_000) });
+      const body = await response.json() as { output_text?: string; output?: Array<{ content?: Array<{ type?: string; text?: string }> }>; usage?: { input_tokens?: number; input_tokens_details?: { cached_tokens?: number }; output_tokens?: number }; error?: { message?: string } };
       if (!response.ok) throw new BadGatewayException(response.status === 401 ? 'Finance AI credential is invalid' : 'Finance AI provider request failed');
       usage = body.usage;
       const text = body.output_text || body.output?.flatMap((item) => item.content || []).find((item) => item.type === 'output_text')?.text;
@@ -158,9 +173,9 @@ export class FinanceAiProviderService {
       throw new BadGatewayException('Finance AI provider timed out or returned invalid output');
     } finally {
       if (reservation)
-        await this.prisma.financeAiUsage.update({ where: { id: reservation.id }, data: { inputTokens: usage?.input_tokens, outputTokens: usage?.output_tokens, latencyMs: Date.now() - start, status } });
+        await this.prisma.aiUsageEvent.update({ where: { id: reservation.id }, data: { workspaceId: profileIdentity.botIntegration.workspaceId, botIntegrationId: input.botIntegrationId, runtimeInstanceId: profileIdentity.telegramUser.runtimeInstanceId, telegramBotUserId: profileIdentity.telegramBotUserId, ...priceAiUsage(model, { inputTokens: usage?.input_tokens, cachedInputTokens: usage?.input_tokens_details?.cached_tokens, outputTokens: usage?.output_tokens }), latencyMs: Date.now() - start, status } });
       else
-        await this.prisma.financeAiUsage.create({ data: { profileId: input.profileId, feature: input.feature, provider: FinanceAiProvider.OPENAI, model: config.model, inputTokens: usage?.input_tokens, outputTokens: usage?.output_tokens, latencyMs: Date.now() - start, status } });
+        await this.recordUsage({ profileId: input.profileId, botIntegrationId: input.botIntegrationId, feature: input.feature, model, status, latencyMs: Date.now() - start, usage: { inputTokens: usage?.input_tokens, cachedInputTokens: usage?.input_tokens_details?.cached_tokens, outputTokens: usage?.output_tokens } });
     }
   }
 
@@ -175,7 +190,7 @@ export class FinanceAiProviderService {
       select: { botIntegration: { select: { workspaceId: true } } },
     });
     const rows = profile
-      ? await this.prisma.financeAiProviderConfig.findMany({
+      ? await this.prisma.aiProviderConfig.findMany({
           where: {
             workspaceId: profile.botIntegration.workspaceId,
             provider: FinanceAiProvider.OPENAI,
@@ -189,6 +204,11 @@ export class FinanceAiProviderService {
     if (!config?.apiKeyEncrypted || !config.apiKeyIv || !config.apiKeyAuthTag)
       throw new BadGatewayException('Finance AI provider is not connected');
     return config;
+  }
+
+  private async recordUsage(input: { profileId: string; botIntegrationId: string; feature: string; model: string; status: string; latencyMs: number; usage: Parameters<typeof priceAiUsage>[1] }) {
+    const profile = await this.prisma.financeProfile.findUnique({ where: { id: input.profileId }, select: { telegramBotUserId: true, botIntegration: { select: { workspaceId: true } }, telegramUser: { select: { runtimeInstanceId: true } } } });
+    await this.prisma.aiUsageEvent.create({ data: { workspaceId: profile?.botIntegration.workspaceId, botIntegrationId: input.botIntegrationId, runtimeInstanceId: profile?.telegramUser.runtimeInstanceId, telegramBotUserId: profile?.telegramBotUserId, profileId: input.profileId, feature: input.feature, provider: FinanceAiProvider.OPENAI, model: input.model, ...priceAiUsage(input.model, input.usage), latencyMs: input.latencyMs, status: input.status } });
   }
 
   private isSupportedVoiceMime(mime: string) {

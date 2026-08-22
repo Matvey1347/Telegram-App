@@ -24,7 +24,12 @@ const nextConfig: NextConfig = {
     ...(gatewayHostname ? [gatewayHostname] : []),
   ],
   async rewrites() {
-    if (process.env.LOCAL_API_PROXY !== "true") return [];
+    if (
+      process.env.LOCAL_API_PROXY !== "true" &&
+      process.env.RAILWAY_API_PROXY !== "true"
+    ) {
+      return [];
+    }
     return [
       {
         source: "/api/:path*",

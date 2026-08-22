@@ -75,6 +75,7 @@ export type CreateCouponPayload = {
 export const botBillingApi = {
   workspaceProviders: async (): Promise<BotBillingProviderConfigView[]> => (await api.get("/billing/providers")).data,
   saveWorkspaceProvider: async (provider: BotBillingProvider, mode: BotBillingProviderMode, payload: SaveProviderPayload): Promise<BotBillingProviderConfigView> => (await api.patch(`/billing/providers/${provider}/${mode}`, payload)).data,
+  removeWorkspaceProvider: async (provider: BotBillingProvider, mode: BotBillingProviderMode): Promise<BotBillingProviderConfigView> => (await api.delete(`/billing/providers/${provider}/${mode}`)).data,
   overview: async (botId: string, environment: "LOCAL" | "PRODUCTION" = "PRODUCTION"): Promise<BotBillingOverviewView> =>
     (await api.get(`/telegram-bots/${botId}/billing/overview`, { params: { environment } })).data,
   analytics: async (botId: string): Promise<BotBillingAnalyticsView> =>
@@ -151,12 +152,13 @@ export const botBillingApi = {
 
 export const financeAiConfigApi = {
   workspace: async (): Promise<FinanceAiConfigView> => (await api.get("/telegram-bots/finance/ai-config")).data,
-  saveWorkspace: async (payload: { apiKey?: string; model?: string }): Promise<FinanceAiConfigView> => (await api.patch("/telegram-bots/finance/ai-config", payload)).data,
+  saveWorkspace: async (payload: { apiKey?: string }): Promise<FinanceAiConfigView> => (await api.patch("/telegram-bots/finance/ai-config", payload)).data,
+  validateWorkspace: async (): Promise<FinanceAiConfigView> => (await api.post("/telegram-bots/finance/ai-config/validate")).data,
   get: async (botId: string): Promise<FinanceAiConfigView> =>
     (await api.get(`/telegram-bots/${botId}/finance/ai-config`)).data,
   save: async (
     botId: string,
-    payload: { apiKey?: string; model?: string },
+    payload: { apiKey?: string },
   ): Promise<FinanceAiConfigView> =>
     (await api.patch(`/telegram-bots/${botId}/finance/ai-config`, payload))
       .data,

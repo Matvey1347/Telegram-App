@@ -91,6 +91,13 @@ export class BotBillingService {
     );
   }
 
+  async removeWorkspaceProviderDefault(userId: string, provider: Provider, mode: Mode) {
+    const membership = await this.admin(userId);
+    await this.prisma.botBillingProviderConfig.deleteMany({ where: { workspaceId: membership.workspaceId, botIntegrationId: null, provider, mode } });
+    this.audit(membership.workspaceId, userId, 'billing.workspace_provider_disabled', { provider, mode });
+    return this.toProviderView(null, provider, mode, 'NONE');
+  }
+
   async saveProviderConfig(userId: string, input: { botIntegrationId?: string; provider: Provider; mode: Mode; dto: UpsertBillingProviderConfigDto }) {
     const membership = await this.admin(userId);
     if (input.botIntegrationId) await this.bot(userId, input.botIntegrationId);
@@ -397,12 +404,13 @@ export class BotBillingService {
   async overview(userId: string, botIntegrationId: string, environment: 'LOCAL' | 'PRODUCTION' = 'PRODUCTION') {
     const bot = await this.bot(userId, botIntegrationId);
     const runtime = { runtimeInstance: { is: { environment: environment as TelegramBotRuntimeEnvironment } } };
-    const [subscriptionMetrics, registeredUsers, revenue, recentEvents, recentSubscriptions] = await Promise.all([
+    const [subscriptionMetrics, registeredUsers, revenue, recentEvents, recentSubscriptions, aiUsage] = await Promise.all([
       this.prisma.botSubscription.findMany({ where: { botIntegrationId, workspaceId: bot.workspaceId, telegramBotUser: runtime }, select: { telegramBotUserId: true, status: true, currency: true, interval: true, amountMinor: true, currentPeriodEnd: true, providerSubscription: { select: { mode: true } } } }),
       this.prisma.telegramBotUser.count({ where: { botIntegrationId, workspaceId: bot.workspaceId, ...runtime } }),
       this.prisma.botBillingEvent.groupBy({ by: ['currency'], where: { botIntegrationId, workspaceId: bot.workspaceId, type: 'PAYMENT_SUCCEEDED', mode: BotBillingProviderMode.LIVE, subscription: { telegramBotUser: runtime } }, _sum: { amountMinor: true } }),
       this.prisma.botBillingEvent.findMany({ where: { botIntegrationId, workspaceId: bot.workspaceId, type: { in: ['PAYMENT_SUCCEEDED', 'PAYMENT_FAILED'] }, subscription: { telegramBotUser: runtime } }, orderBy: { occurredAt: 'desc' }, take: 12, select: { id: true, type: true, occurredAt: true, subscriptionId: true, amountMinor: true, currency: true, subscription: { select: { telegramBotUser: { select: { id: true, telegramUserId: true, username: true, firstName: true } }, plan: { select: { id: true, name: true } } } } } }),
       this.prisma.botSubscription.findMany({ where: { botIntegrationId, workspaceId: bot.workspaceId, telegramBotUser: runtime }, orderBy: { createdAt: 'desc' }, take: 8, select: { id: true, createdAt: true, amountMinor: true, currency: true, telegramBotUser: { select: { id: true, telegramUserId: true, username: true, firstName: true } }, plan: { select: { id: true, name: true } } } }),
+      this.analytics.aiUsage(bot.workspaceId, botIntegrationId, environment),
     ]);
     const analytics = this.analytics.calculate(registeredUsers, subscriptionMetrics);
     analytics.collectedRevenue = revenue.map((row) => ({ currency: row.currency, amountMinor: row._sum.amountMinor || 0 }));
@@ -410,7 +418,7 @@ export class BotBillingService {
       ...recentEvents.map((event) => ({ id: event.id, type: event.type === 'PAYMENT_SUCCEEDED' ? 'PAYMENT_SUCCEEDED' as const : 'PAYMENT_FAILED' as const, occurredAt: event.occurredAt, subscriptionId: event.subscriptionId, amountMinor: event.amountMinor, currency: event.currency, subscriber: event.subscription?.telegramBotUser || null, plan: event.subscription?.plan || null })),
       ...recentSubscriptions.map((subscription) => ({ id: `subscription:${subscription.id}`, type: 'SUBSCRIPTION' as const, occurredAt: subscription.createdAt, subscriptionId: subscription.id, amountMinor: subscription.amountMinor, currency: subscription.currency, subscriber: subscription.telegramBotUser, plan: subscription.plan })),
     ].sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime()).slice(0, 16);
-    return { analytics: { ...analytics, conversionRate: registeredUsers ? analytics.paidUsers / registeredUsers : 0 }, recentActivity: recentActivity.map((item) => ({ ...item, occurredAt: item.occurredAt.toISOString() })) } satisfies BotBillingOverviewView;
+    return { analytics: { ...analytics, conversionRate: registeredUsers ? analytics.paidUsers / registeredUsers : 0 }, aiUsage, recentActivity: recentActivity.map((item) => ({ ...item, occurredAt: item.occurredAt.toISOString() })) } satisfies BotBillingOverviewView;
   }
 
   async plans(userId: string, botIntegrationId: string) {

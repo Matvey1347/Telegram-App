@@ -11,6 +11,7 @@ function setup() {
         workspaceId: 'workspace-1',
       }),
     },
+    telegramBotRuntimeInstance: { findFirst: jest.fn().mockResolvedValue(null) },
     botSubscriptionPlan: { findMany: jest.fn().mockResolvedValue([]) },
     botCoupon: { findMany: jest.fn().mockResolvedValue([]) },
     botSubscription: { findMany: jest.fn() },
@@ -236,5 +237,12 @@ describe('BotBillingService provider credentials', () => {
     expect(write).not.toHaveProperty('secretKeyEncrypted');
     expect(write).not.toHaveProperty('webhookSecretEncrypted');
     expect(encryption.encrypt).not.toHaveBeenCalled();
+  });
+
+  it('disables a workspace provider without touching bot overrides', async () => {
+    const { prisma, service } = providerSetup();
+    const result = await service.removeWorkspaceProviderDefault('owner-1', 'TELEGRAM_STARS', 'LIVE');
+    expect(prisma.botBillingProviderConfig.deleteMany).toHaveBeenCalledWith({ where: { workspaceId: 'workspace-1', botIntegrationId: null, provider: 'TELEGRAM_STARS', mode: 'LIVE' } });
+    expect(result).toMatchObject({ provider: 'TELEGRAM_STARS', mode: 'LIVE', status: 'NOT_CONFIGURED', source: 'NONE' });
   });
 });

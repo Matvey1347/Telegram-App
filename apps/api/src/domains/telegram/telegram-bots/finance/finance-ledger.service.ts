@@ -611,6 +611,7 @@ export class FinanceLedgerService {
           THEN t."amountInValuationCurrency"
           ELSE 0
         END) AS "valuedAmount",
+        SUM(t."amount") AS "nativeAmount",
         SUM(CASE
           WHEN t."valuationCurrency" IS DISTINCT FROM 'USD'
             OR t."amountInValuationCurrency" IS NULL
@@ -630,7 +631,9 @@ export class FinanceLedgerService {
       GROUP BY t."type", t."categoryId", c."name", c."key", t."currency", 6
     `;
     const hasValuedAmount = rows.some(
-      (row) => !new Prisma.Decimal(row.valuedAmount || 0).isZero(),
+      (row) =>
+        row.currency !== profile.defaultCurrency &&
+        !new Prisma.Decimal(row.valuedAmount || 0).isZero(),
     );
     const rate = hasValuedAmount
       ? await this.currentPresentationRate(profile)

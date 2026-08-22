@@ -21,6 +21,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Info,
+  Eye,
+  EyeOff,
   LoaderCircle,
   Pencil,
   Trash2,
@@ -114,14 +116,38 @@ export function ToggleRow({
   );
 }
 
-export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
+export const Input = forwardRef<
+  HTMLInputElement,
+  React.InputHTMLAttributes<HTMLInputElement>
+>(function Input({ className, type, ...props }, ref) {
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const isPassword = type === "password";
+  const input = (
     <input
       {...props}
-      className={`w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white outline-none ring-blue-500 focus:ring ${props.className ?? ""}`}
+      ref={ref}
+      type={isPassword && passwordVisible ? "text" : type}
+      className={`w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white outline-none ring-blue-500 focus:ring ${isPassword ? "pr-11" : ""} ${className ?? ""}`}
     />
   );
-}
+
+  if (!isPassword) return input;
+  return (
+    <span className="relative block">
+      {input}
+      <button
+        type="button"
+        disabled={props.disabled}
+        onClick={() => setPasswordVisible((visible) => !visible)}
+        className="absolute right-1 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-neutral-400 transition hover:bg-neutral-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:pointer-events-none disabled:opacity-50"
+        aria-label={passwordVisible ? "Hide password" : "Show password"}
+        aria-pressed={passwordVisible}
+      >
+        {passwordVisible ? <EyeOff size={17} /> : <Eye size={17} />}
+      </button>
+    </span>
+  );
+});
 
 export function normalizeTimeInputValue(value: string) {
   const sanitized = value.replace(/[^\d:.\s]/g, "").replace(/\s+/g, "");
@@ -1680,7 +1706,7 @@ export function FormField({
   required,
   error,
   children,
-}: PropsWithChildren<{ label: string; required?: boolean; error?: string }>) {
+}: PropsWithChildren<{ label: React.ReactNode; required?: boolean; error?: string }>) {
   return (
     <div className="block text-sm">
       <span className="mb-1 block text-neutral-300">

@@ -12,10 +12,13 @@ describe('FinanceAiProviderService voice transcription', () => {
     const prisma = {
       financeProfile: {
         findUnique: jest.fn().mockResolvedValue({
+          telegramBotUserId: 'user-1',
           botIntegration: { workspaceId: 'workspace-1' },
+          telegramUser: { runtimeInstanceId: 'runtime-1' },
         }),
       },
-      financeAiProviderConfig: {
+      aiUsageEvent: { create: jest.fn().mockResolvedValue({}) },
+      aiProviderConfig: {
         findMany: jest.fn().mockResolvedValue([
           {
             botIntegrationId: 'bot-1',
@@ -51,7 +54,7 @@ describe('FinanceAiProviderService voice transcription', () => {
     const { service, botApi, encryption } = createService();
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: jest.fn().mockResolvedValue({ text: '  250 грн Bolt с mono  ' }),
+      json: jest.fn().mockResolvedValue({ text: '  250 грн Bolt с mono  ', usage: { input_tokens: 100, output_tokens: 5 } }),
     }) as never;
 
     await expect(

@@ -9,6 +9,7 @@ import {
   financeAiConfigApi,
 } from "@/lib/features/finance/bot-billing-api";
 import { botBillingKeys } from "@/lib/query-keys";
+import { StripeWebhookSigningSecretLabel } from "./stripe-webhook-events-tooltip";
 export function FinanceIntegrationsSection({ botId }: { botId: string }) {
   const providers = useQuery({
     queryKey: botBillingKeys.providers(botId),
@@ -151,7 +152,11 @@ function StripeMode({
           />
         </FormField>
         <FormField
-          label={`Webhook signing secret${row?.webhookSecretConfigured ? " (configured)" : ""}`}
+          label={
+            <StripeWebhookSigningSecretLabel
+              configured={row?.webhookSecretConfigured}
+            />
+          }
         >
           <Input
             type="password"
@@ -213,87 +218,25 @@ function StarsIntegration({
   );
 }
 function FinanceAiIntegration({ botId }: { botId: string }) {
-  const qc = useQueryClient();
   const ai = useQuery({
     queryKey: botBillingKeys.financeAi(botId),
     queryFn: () => financeAiConfigApi.get(botId),
   });
-  const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState("");
-  const invalidate = () =>
-    qc.invalidateQueries({ queryKey: botBillingKeys.financeAi(botId) });
-  const save = useMutation({
-    mutationFn: () =>
-      financeAiConfigApi.save(botId, {
-        ...(apiKey ? { apiKey } : {}),
-        ...(model ? { model } : {}),
-      }),
-    onSuccess: () => {
-      setApiKey("");
-      return invalidate();
-    },
-  });
-  const validate = useMutation({
-    mutationFn: () => financeAiConfigApi.validate(botId),
-    onSuccess: invalidate,
-  });
-  const useGlobal = useMutation({
-    mutationFn: () => financeAiConfigApi.useGlobal(botId),
-    onSuccess: invalidate,
-  });
   const config = ai.data;
   return (
     <Card>
-      <h2 className="font-semibold">OpenAI / Finance AI</h2>
+      <h2 className="font-semibold">AI provider</h2>
       <p className="mt-1 text-sm text-neutral-400">
         {config
-          ? `${config.status} · ${config.source === "BOT_OVERRIDE" ? "Bot override" : config.source === "WORKSPACE_DEFAULT" ? "Using global configuration" : "Not configured"}`
+          ? `${config.status === "CONNECTED" ? "Connected" : "Not configured"} · ${config.source === "WORKSPACE_DEFAULT" ? "Using the global OpenAI connection" : "Configure OpenAI in Global bot configuration"}`
           : "Loading"}
       </p>
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <FormField
-          label={`API key${config?.apiKeyConfigured ? " (configured)" : ""}`}
-        >
-          <Input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="Leave blank to keep existing"
-          />
-        </FormField>
-        <FormField label="Model">
-          <Input
-            value={model || config?.model || ""}
-            onChange={(e) => setModel(e.target.value)}
-          />
-        </FormField>
-      </div>
       {config?.lastValidationError ? (
         <p className="mt-2 text-xs text-rose-300">
           {config.lastValidationError}
         </p>
       ) : null}
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button disabled={save.isPending} onClick={() => save.mutate()}>
-          Save
-        </Button>
-        <Button
-          variant="secondary"
-          disabled={validate.isPending}
-          onClick={() => validate.mutate()}
-        >
-          Validate
-        </Button>
-        {config?.source === "BOT_OVERRIDE" ? (
-          <Button
-            variant="secondary"
-            disabled={useGlobal.isPending}
-            onClick={() => useGlobal.mutate()}
-          >
-            Use global default
-          </Button>
-        ) : null}
-      </div>
+      <p className="mt-3 text-xs text-neutral-500">Models are selected automatically per feature. Usage and cost appear in this bot&apos;s Overview for the selected Local or Production runtime.</p>
     </Card>
   );
 }
