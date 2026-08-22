@@ -36,7 +36,8 @@ export function publicWebOrigin(
   const origin = normalizedOrigin(environment.FRONTEND_URL);
   if (
     origin &&
-    isProductionEnvironment(environment) &&
+    (isProductionEnvironment(environment) ||
+      telegramBotRuntimeEnvironmentName(environment) === 'PRODUCTION') &&
     isDevelopmentTunnelOrigin(origin)
   ) {
     return undefined;
@@ -103,9 +104,7 @@ export function positiveDeploymentNumber(
   environment: DeploymentEnvironment = process.env,
 ) {
   const configured = Number(deploymentValue(key, environment));
-  return Number.isFinite(configured) && configured > 0
-    ? configured
-    : fallback;
+  return Number.isFinite(configured) && configured > 0 ? configured : fallback;
 }
 
 export function apiPort(environment: DeploymentEnvironment = process.env) {

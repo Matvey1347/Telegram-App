@@ -89,7 +89,9 @@ export function BotCardShell({
         <div className="flex shrink-0 items-center gap-1">
           <CardAction
             label={
-              checkingEnvironment === environment ? "Checking bot" : "Check bot"
+              checkingEnvironment === environment
+                ? "Refreshing bot"
+                : "Refresh bot"
             }
             disabled={!runtime || checkingEnvironment === environment}
             onClick={() => onCheck(environment)}

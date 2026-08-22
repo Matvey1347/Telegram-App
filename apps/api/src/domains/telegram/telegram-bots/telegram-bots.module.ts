@@ -19,6 +19,8 @@ import { TelegramBotRuntimeExecutionContext } from './core/telegram-bot-runtime-
 import { TelegramBotRuntimePresentationService } from './core/telegram-bot-runtime-presentation.service';
 import { TelegramBotRuntimeRegistryService } from './core/telegram-bot-runtime-registry.service';
 import { TelegramBotRuntimeCheckService } from './core/telegram-bot-runtime-check.service';
+import { TelegramBotRuntimeUserPresentationService } from './core/telegram-bot-runtime-user-presentation.service';
+import { TelegramBotRuntimeRefreshService } from './core/telegram-bot-runtime-refresh.service';
 import { TelegramBotLocalDevelopmentService } from './core/telegram-bot-local-development.service';
 import { TelegramBotUsersService } from './core/telegram-bot-users.service';
 import { TelegramBotsController } from './core/telegram-bots.controller';
@@ -98,6 +100,8 @@ import { GreeterTestModeService } from './greeter/greeter-test-mode.service';
     TelegramBotRuntimePresentationService,
     TelegramBotRuntimeRegistryService,
     TelegramBotRuntimeCheckService,
+    TelegramBotRuntimeUserPresentationService,
+    TelegramBotRuntimeRefreshService,
     TelegramBotLocalDevelopmentService,
     TelegramBotUsersService,
     GreeterService,

@@ -43,7 +43,7 @@ import { accountKeys, adCampaignKeys, dashboardKeys } from '@/lib/query-keys';
 import { MoneyStack } from '@/components/ui/money-stack';
 import { Button, Card, ConfirmDeleteModal, CustomSelect, DateInput, DateRangeInput, EmptyState, FormField, IconButton, Input, LoadingState, Modal, PageHeader, Select, Textarea, TooltipBubble } from '@/components/ui/primitives';
 import { useAppToast } from '@/providers/toast-provider';
-import { CircleHelp, TrendingUp } from 'lucide-react';
+import { CircleHelp, CircleMinus, TrendingUp } from 'lucide-react';
 import { accountDisplayName } from '@/lib/features/finance/account-display';
 
 type CampaignValues = {
@@ -999,7 +999,7 @@ function PerformanceCell({
       </div>
       <div className="grid grid-cols-[minmax(90px,1fr)_minmax(70px,0.7fr)_minmax(80px,0.8fr)] gap-3">
         <div>
-          <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">Spend</p>
+          <p className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-wide text-slate-500"><CircleMinus size={12} className="text-rose-400" aria-hidden="true" />Spend</p>
           <MoneyStack amount={cost} currency={currency} settings={moneySettings} rates={rates} amountInPrimary={primaryCost} mainClassName="font-semibold leading-snug text-white" subClassName="text-xs leading-snug text-slate-500" />
         </div>
         <div>
@@ -1502,7 +1502,7 @@ function HypothesesSection({
                       </div>
                       <div className="grid grid-cols-[minmax(90px,1fr)_minmax(80px,0.75fr)_minmax(80px,0.85fr)] gap-3">
                         <div>
-                          <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">Spend</p>
+                          <p className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-wide text-slate-500"><CircleMinus size={12} className="text-rose-400" aria-hidden="true" />Spend</p>
                           <MoneyStack
                             amount={hypothesis.summary?.totalSpendDisplay ?? hypothesis.summary?.totalSpend}
                             currency={hypothesis.summary?.displayCurrency ?? moneySettings.primaryCurrency}

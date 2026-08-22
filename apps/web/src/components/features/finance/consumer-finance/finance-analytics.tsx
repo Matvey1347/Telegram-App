@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { CircleMinus } from "lucide-react";
 import type {
   ConsumerFinanceAnalyticsPeriod,
   ConsumerFinanceAnalyticsQuery,
@@ -124,6 +125,7 @@ export function AnalyticsPresentation({
           value={data.summary.expenses}
           currency={data.currency}
           tone="text-rose-300"
+          expense
         />
         <Metric
           label={t.net}
@@ -233,15 +235,22 @@ function Metric({
   value,
   currency,
   tone,
+  expense = false,
 }: {
   label: string;
   value: string;
   currency: string;
   tone: string;
+  expense?: boolean;
 }) {
   return (
     <div>
-      <p className="text-neutral-500">{label}</p>
+      <p className="flex items-center gap-1 text-neutral-500">
+        {expense ? (
+          <CircleMinus size={13} className="text-rose-400" aria-hidden="true" />
+        ) : null}
+        {label}
+      </p>
       <p className={`truncate font-medium ${tone}`}>
         {formatMoney(value, currency, "symbol")}
       </p>

@@ -99,8 +99,9 @@ describe('TelegramBotRuntimeService environment isolation', () => {
     invalidate: jest.fn(),
   } as any;
   const presentation = { reconcile: jest.fn() } as any;
-  const checks = { presentation: jest.fn() } as any;
   const identity = { ensureAvailable: jest.fn() } as any;
+  const userPresentation = { reconcile: jest.fn() } as any;
+  const refresh = { refresh: jest.fn() } as any;
   const executionContext = new TelegramBotRuntimeExecutionContext();
   let service: TelegramBotRuntimeService;
   const originalBase = process.env.API_PUBLIC_URL;
@@ -120,13 +121,13 @@ describe('TelegramBotRuntimeService environment isolation', () => {
       executionContext,
       presentation,
       identity,
-      checks,
+      userPresentation,
+      refresh,
     );
   });
 
   afterAll(() => {
-    if (originalBase === undefined)
-      delete process.env.API_PUBLIC_URL;
+    if (originalBase === undefined) delete process.env.API_PUBLIC_URL;
     else process.env.API_PUBLIC_URL = originalBase;
   });
 
@@ -141,8 +142,7 @@ describe('TelegramBotRuntimeService environment isolation', () => {
   });
 
   it('rejects an ngrok webhook base for a PRODUCTION runtime', () => {
-    process.env.API_PUBLIC_URL =
-      'https://example.ngrok-free.app';
+    process.env.API_PUBLIC_URL = 'https://example.ngrok-free.app';
 
     expect(() =>
       service.webhookUrlFor(
@@ -155,8 +155,7 @@ describe('TelegramBotRuntimeService environment isolation', () => {
   });
 
   it('allows an ngrok webhook base for a LOCAL runtime', () => {
-    process.env.API_PUBLIC_URL =
-      'https://example.ngrok-free.app';
+    process.env.API_PUBLIC_URL = 'https://example.ngrok-free.app';
 
     expect(
       service.webhookUrlFor('local-1', TelegramBotRuntimeEnvironment.LOCAL),
@@ -166,8 +165,7 @@ describe('TelegramBotRuntimeService environment isolation', () => {
   });
 
   it('allows a Cloudflare Quick Tunnel only for a LOCAL runtime', () => {
-    process.env.API_PUBLIC_URL =
-      'https://finance-dev.trycloudflare.com';
+    process.env.API_PUBLIC_URL = 'https://finance-dev.trycloudflare.com';
 
     expect(
       service.webhookUrlFor('local-1', TelegramBotRuntimeEnvironment.LOCAL),
@@ -258,7 +256,9 @@ describe('TelegramBotRuntimeService environment isolation', () => {
     presentation.reconcile.mockResolvedValue({
       miniAppUrl: 'https://www.nexeloq.com/finance/bot-1',
     });
-    prisma.telegramBotRuntimeInstance.updateMany.mockResolvedValue({ count: 1 });
+    prisma.telegramBotRuntimeInstance.updateMany.mockResolvedValue({
+      count: 1,
+    });
     registry.refresh.mockResolvedValue({
       runtime: production,
       token: 'production-token',
@@ -280,6 +280,12 @@ describe('TelegramBotRuntimeService environment isolation', () => {
         }),
       }),
     );
+    expect(userPresentation.reconcile).toHaveBeenCalledWith({
+      runtimeId: 'production-1',
+      botIntegrationId: 'bot-1',
+      applicationType: TelegramBotApplicationType.FINANCE,
+      token: 'production-token',
+    });
   });
 
   it('rejects a LOCAL runtime id in a PRODUCTION process before dispatch', async () => {
@@ -370,18 +376,33 @@ describe('TelegramBotRuntimeService environment isolation', () => {
         updateId: '7',
       }),
     });
-    expect(prisma.telegramBotUpdateLog.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'log-1' } }));
+    expect(prisma.telegramBotUpdateLog.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'log-1' } }),
+    );
     expect(prisma.telegramBotRuntimeInstance.update).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('keeps runtime-scoped update idempotency without dispatching duplicates', async () => {
     environment.current.mockReturnValue(TelegramBotRuntimeEnvironment.LOCAL);
-    registry.resolve.mockResolvedValue({ runtime: runtime('local-1', TelegramBotRuntimeEnvironment.LOCAL), token: 'local-token' });
-    prisma.telegramBotUpdateLog.create.mockRejectedValue(new Prisma.PrismaClientKnownRequestError('duplicate', { code: 'P2002', clientVersion: 'test' }));
-    prisma.telegramBotUpdateLog.findUnique.mockResolvedValue({ id: 'existing-log', status: TelegramBotUpdateStatus.PROCESSED });
+    registry.resolve.mockResolvedValue({
+      runtime: runtime('local-1', TelegramBotRuntimeEnvironment.LOCAL),
+      token: 'local-token',
+    });
+    prisma.telegramBotUpdateLog.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('duplicate', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+    prisma.telegramBotUpdateLog.findUnique.mockResolvedValue({
+      id: 'existing-log',
+      status: TelegramBotUpdateStatus.PROCESSED,
+    });
 
-    await expect(service.handleWebhook('local-1', 'webhook-secret', { update_id: 7 })).resolves.toEqual({ ok: true, duplicate: true });
+    await expect(
+      service.handleWebhook('local-1', 'webhook-secret', { update_id: 7 }),
+    ).resolves.toEqual({ ok: true, duplicate: true });
     expect(dispatcher.dispatch).not.toHaveBeenCalled();
     expect(prisma.telegramBotRuntimeInstance.update).not.toHaveBeenCalled();
   });
@@ -457,35 +478,13 @@ describe('TelegramBotRuntimeService environment isolation', () => {
     );
   });
 
-  it('checks only the selected runtime and records Web App and Mini App separately', async () => {
+  it('delegates refresh of only the selected runtime', async () => {
     environment.current.mockReturnValue(TelegramBotRuntimeEnvironment.LOCAL);
     const local = runtime('local-1', TelegramBotRuntimeEnvironment.LOCAL);
     prisma.telegramBotRuntimeInstance.findUnique.mockResolvedValue(local);
-    api.getMe.mockResolvedValue({ id: 42, username: 'local_bot' });
-    api.getWebhookInfo.mockResolvedValue({ url: local.webhookUrl });
-    checks.presentation.mockResolvedValue({
-      webApp: {
-        status: 'AVAILABLE',
-        url: 'https://local.example/finance/bot-1',
-        error: null,
-      },
-      miniApp: {
-        status: 'ERROR',
-        expectedUrl: 'https://local.example/finance/bot-1',
-        actualUrl: 'https://another.example/finance/bot-1',
-        error: 'Telegram menu button points to another URL.',
-      },
-    });
-    prisma.telegramBotRuntimeInstance.update.mockResolvedValue(local);
-    registry.refresh.mockResolvedValue({
-      runtime: local,
-      token: 'local-token',
-    });
-    const previousFrontendUrl = process.env.FRONTEND_URL;
-    process.env.FRONTEND_URL = 'https://local.example';
+    refresh.refresh.mockResolvedValue(local);
     await service.checkRuntime('bot-1', TelegramBotRuntimeEnvironment.LOCAL);
 
-    expect(api.getMe).toHaveBeenCalledWith('token');
     expect(prisma.telegramBotRuntimeInstance.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
@@ -496,18 +495,6 @@ describe('TelegramBotRuntimeService environment isolation', () => {
         },
       }),
     );
-    expect(prisma.telegramBotRuntimeInstance.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'local-1' },
-        data: expect.objectContaining({
-          webAppStatus: 'AVAILABLE',
-          miniAppStatus: 'ERROR',
-          miniAppActualUrl: 'https://another.example/finance/bot-1',
-        }),
-      }),
-    );
-    expect(checks.presentation).toHaveBeenCalledWith('token', 'bot-1', true);
-    if (previousFrontendUrl === undefined) delete process.env.FRONTEND_URL;
-    else process.env.FRONTEND_URL = previousFrontendUrl;
+    expect(refresh.refresh).toHaveBeenCalledWith(local, 'token');
   });
 });

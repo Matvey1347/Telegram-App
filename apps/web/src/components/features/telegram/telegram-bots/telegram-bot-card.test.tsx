@@ -128,7 +128,9 @@ describe("TelegramBotCard", () => {
       />,
     );
     expect(
-      document.querySelector('img[src="https://api.example/avatar/runtime-1?v=1"]'),
+      document.querySelector(
+        'img[src="https://api.example/avatar/runtime-1?v=1"]',
+      ),
     ).toBeInTheDocument();
   });
 
@@ -248,7 +250,7 @@ describe("TelegramBotCard", () => {
     expect(screen.getByText("@admissions_local")).toBeInTheDocument();
   });
 
-  it("shows the local setup state and uses local only for Check", async () => {
+  it("shows the local setup state and uses local only for refresh", async () => {
     const user = userEvent.setup();
     const onConfigureRuntime = vi.fn();
     const onCheck = vi.fn();
@@ -264,7 +266,7 @@ describe("TelegramBotCard", () => {
     );
     await user.click(screen.getByRole("tab", { name: "Local" }));
     expect(screen.getByText("Local bot is not configured")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Check bot" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Refresh bot" })).toBeDisabled();
     await user.click(
       screen.getByRole("button", { name: "Connect local test bot" }),
     );
@@ -285,12 +287,14 @@ describe("TelegramBotCard", () => {
     expect(screen.queryByLabelText("Finance business metrics")).toBeNull();
   });
 
-  it("shows a pending Check only for the selected runtime", async () => {
+  it("shows a pending refresh only for the selected runtime", async () => {
     const user = userEvent.setup();
     renderCard("GREETER", "PRODUCTION");
-    expect(screen.getByRole("button", { name: "Checking bot" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Refreshing bot" }),
+    ).toBeDisabled();
     await user.click(screen.getByRole("tab", { name: "Local" }));
-    expect(screen.getByRole("button", { name: "Check bot" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Refresh bot" })).toBeDisabled();
   });
 
   it("shows one direct local Finance App link before a manual check", async () => {

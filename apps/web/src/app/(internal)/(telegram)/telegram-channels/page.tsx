@@ -2294,13 +2294,20 @@ export default function TelegramChannelsPage() {
                     }
                     rightAction={
                       <ChannelActionsMenu
-                        channelTitle={channel.title}
+                        channel={channel} currencySettings={currencySettings}
                         archived={Boolean(channel.archivedAt)}
                         canArchive={hasAdminLink}
                         onRestore={() => restoreMutation.mutate(channel.id)}
                         onArchive={() => archiveMutation.mutate(channel.id)}
                         onDelete={() => setDeleting(channel)}
                       >
+                        {hasAdminLink ? (
+                          <ChannelMenuLink
+                            label="Open channel"
+                            href={`/telegram/channels/${channel.id}`}
+                            icon={<ArrowUpRight size={17} />}
+                          />
+                        ) : null}
                         {hasAdminLink && !channel.archivedAt ? (
                           <ChannelMenuAction
                             label="Sync channel"
@@ -2335,13 +2342,6 @@ export default function TelegramChannelsPage() {
                               postView: "editor",
                             })}
                             icon={<Send size={17} />}
-                          />
-                        ) : null}
-                        {hasAdminLink ? (
-                          <ChannelMenuLink
-                            label="Open channel"
-                            href={`/telegram/channels/${channel.id}`}
-                            icon={<ArrowUpRight size={17} />}
                           />
                         ) : null}
                         {hasAdminLink ? (

@@ -25,7 +25,8 @@ import { TelegramBotRuntimeEnvironmentService } from './telegram-bot-runtime-env
 import { TelegramBotRuntimeExecutionContext } from './telegram-bot-runtime-execution-context';
 import { TelegramBotIdentityService } from './telegram-bot-identity.service';
 import { TelegramBotRuntimePresentationService } from './telegram-bot-runtime-presentation.service';
-import { TelegramBotRuntimeCheckService } from './telegram-bot-runtime-check.service';
+import { TelegramBotRuntimeUserPresentationService } from './telegram-bot-runtime-user-presentation.service';
+import { TelegramBotRuntimeRefreshService } from './telegram-bot-runtime-refresh.service';
 import {
   type RegisteredTelegramBotRuntime,
   TelegramBotRuntimeRegistryService,
@@ -48,7 +49,8 @@ export class TelegramBotRuntimeService implements OnModuleInit {
     private readonly executionContext: TelegramBotRuntimeExecutionContext,
     private readonly presentation: TelegramBotRuntimePresentationService,
     private readonly identity: TelegramBotIdentityService,
-    private readonly checks: TelegramBotRuntimeCheckService,
+    private readonly userPresentation: TelegramBotRuntimeUserPresentationService,
+    private readonly refresh: TelegramBotRuntimeRefreshService,
   ) {}
 
   async onModuleInit() {
@@ -358,51 +360,7 @@ export class TelegramBotRuntimeService implements OnModuleInit {
     this.assertOwned(environment);
     const runtime = await this.runtimeWithBot(botIntegrationId, environment);
     const token = this.decryptToken(runtime);
-    const [identity, webhookInfo, presentation] = await Promise.all([
-      this.botApi.getMe(token),
-      runtime.runtimeStatus === TelegramBotRuntimeStatus.ACTIVE
-        ? this.botApi.getWebhookInfo(token)
-        : Promise.resolve(null),
-      this.checks.presentation(
-        token,
-        runtime.botIntegrationId,
-        runtime.botIntegration.applicationType ===
-          TelegramBotApplicationType.FINANCE,
-      ),
-    ]);
-    const actualUrl = this.webhookUrl(webhookInfo);
-    const webhookStatus =
-      runtime.runtimeStatus !== TelegramBotRuntimeStatus.ACTIVE
-        ? TelegramBotWebhookStatus.NOT_CONFIGURED
-        : actualUrl === runtime.webhookUrl
-          ? TelegramBotWebhookStatus.CONFIGURED
-          : actualUrl
-            ? TelegramBotWebhookStatus.ERROR
-            : TelegramBotWebhookStatus.NOT_CONFIGURED;
-    const checked = await this.prisma.telegramBotRuntimeInstance.update({
-      where: { id: runtime.id },
-      data: {
-        botId: String(identity.id),
-        username: identity.username || null,
-        firstName: identity.first_name || null,
-        lastCheckedAt: new Date(),
-        lastErrorMessage: null,
-        webhookStatus,
-        lastRuntimeError:
-          webhookStatus === TelegramBotWebhookStatus.ERROR
-            ? 'Telegram is delivering updates to a different webhook URL.'
-            : null,
-        webAppStatus: presentation.webApp.status,
-        webAppUrl: presentation.webApp.url,
-        webAppError: presentation.webApp.error,
-        miniAppStatus: presentation.miniApp.status,
-        miniAppExpectedUrl: presentation.miniApp.expectedUrl,
-        miniAppActualUrl: presentation.miniApp.actualUrl,
-        miniAppError: presentation.miniApp.error,
-      },
-    });
-    await this.registry.refresh(runtime.id, environment);
-    return checked;
+    return this.refresh.refresh(runtime, token);
   }
 
   async reconcilePresentation(runtimeId: string) {
@@ -467,7 +425,17 @@ export class TelegramBotRuntimeService implements OnModuleInit {
       });
       const totalMs = Date.now() - startedAt;
       if (totalMs >= 1_000)
-        this.logger.warn(JSON.stringify({ event: 'telegram_bot.slow_webhook', runtimeId, applicationType: entry.runtime.botIntegration.applicationType, claimMs: claimedAt - startedAt, dispatchMs: dispatchedAt - claimedAt, finalizeMs: Date.now() - dispatchedAt, totalMs }));
+        this.logger.warn(
+          JSON.stringify({
+            event: 'telegram_bot.slow_webhook',
+            runtimeId,
+            applicationType: entry.runtime.botIntegration.applicationType,
+            claimMs: claimedAt - startedAt,
+            dispatchMs: dispatchedAt - claimedAt,
+            finalizeMs: Date.now() - dispatchedAt,
+            totalMs,
+          }),
+        );
       return { ok: true, duplicate: false, status };
     } catch (error) {
       await this.prisma.telegramBotUpdateLog.update({
@@ -505,6 +473,7 @@ export class TelegramBotRuntimeService implements OnModuleInit {
         runtime.botIntegration.applicationType,
         runtime.botIntegrationId,
       );
+      await this.reconcileUserPresentation(runtime, entry.token);
       const miniAppUrl = presentation?.miniAppUrl ?? null;
       if (
         runtime.webhookStatus !== TelegramBotWebhookStatus.CONFIGURED ||
@@ -542,6 +511,18 @@ export class TelegramBotRuntimeService implements OnModuleInit {
     if (environment === TelegramBotRuntimeEnvironment.LOCAL) {
       await this.activateSavedLocalRuntimes();
     }
+  }
+
+  private reconcileUserPresentation(
+    runtime: RegisteredTelegramBotRuntime['runtime'],
+    token: string,
+  ) {
+    return this.userPresentation.reconcile({
+      runtimeId: runtime.id,
+      botIntegrationId: runtime.botIntegrationId,
+      applicationType: runtime.botIntegration.applicationType,
+      token,
+    });
   }
 
   /**
@@ -657,9 +638,13 @@ export class TelegramBotRuntimeService implements OnModuleInit {
     }
   }
 
-  private reconciledPresentationData(presentation: {
-    miniAppUrl: string | null;
-  } | undefined) {
+  private reconciledPresentationData(
+    presentation:
+      | {
+          miniAppUrl: string | null;
+        }
+      | undefined,
+  ) {
     return presentation?.miniAppUrl
       ? {
           miniAppStatus: 'CONFIGURED',

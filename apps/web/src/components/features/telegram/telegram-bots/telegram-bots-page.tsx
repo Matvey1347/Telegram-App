@@ -85,10 +85,10 @@ export function TelegramBotsPage() {
     }) => telegramBotsApi.checkRuntime(id, environment),
     onSuccess: (bot) => {
       reconcileTelegramBotCache(qc, bot);
-      pushToast("Selected runtime checked.", "success");
+      pushToast("Bot links and runtime status refreshed.", "success");
     },
     onError: (error: unknown) =>
-      pushToast(errorMessage(error, "Failed to check bot."), "error"),
+      pushToast(errorMessage(error, "Failed to refresh bot."), "error"),
   });
   const runtimeTokenMutation = useMutation({
     mutationFn: ({

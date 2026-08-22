@@ -1,14 +1,10 @@
-import {
-  apiPort,
-  publicApiOrigin,
-  publicWebOrigin,
-} from './deployment-config';
+import { apiPort, publicApiOrigin, publicWebOrigin } from './deployment-config';
 
 describe('deployment config', () => {
   it('uses FRONTEND_URL as the single public web origin', () => {
-    expect(
-      publicWebOrigin({ FRONTEND_URL: ' https://web.example/ ' }),
-    ).toBe('https://web.example');
+    expect(publicWebOrigin({ FRONTEND_URL: ' https://web.example/ ' })).toBe(
+      'https://web.example',
+    );
   });
 
   it('normalizes configured URLs to HTTP origins and rejects invalid protocols', () => {
@@ -34,6 +30,12 @@ describe('deployment config', () => {
         FRONTEND_URL: 'https://active.trycloudflare.com',
       }),
     ).toBe('https://active.trycloudflare.com');
+    expect(
+      publicWebOrigin({
+        TELEGRAM_BOT_RUNTIME_ENVIRONMENT: 'PRODUCTION',
+        FRONTEND_URL: 'https://stale.ngrok-free.app',
+      }),
+    ).toBe(undefined);
   });
 
   it('uses canonical API_PUBLIC_URL for public API callbacks', () => {

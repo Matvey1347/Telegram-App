@@ -1,4 +1,9 @@
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight } from "lucide-react";
+import {
+  ArrowDownLeft,
+  ArrowLeftRight,
+  ArrowUpRight,
+  CircleMinus,
+} from "lucide-react";
 import type {
   ConsumerFinanceDashboard,
   ConsumerFinanceTransaction,
@@ -67,7 +72,16 @@ export function FinanceDashboard({
           [t.net, stats.net, "text-sky-200"],
         ].map(([label, value, tone]) => (
           <Card key={label} className="p-3">
-            <p className="text-[10px] uppercase text-neutral-500">{label}</p>
+            <p className="flex items-center gap-1 text-[10px] uppercase text-neutral-500">
+              {label === t.expense ? (
+                <CircleMinus
+                  size={12}
+                  className="text-rose-400"
+                  aria-hidden="true"
+                />
+              ) : null}
+              {label}
+            </p>
             <p className={`mt-1 truncate text-base font-semibold ${tone}`}>
               {formatMoney(value, stats.currency, "symbol")}
             </p>

@@ -16,7 +16,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Activity, Banknote, Megaphone, RadioTower, Target, TrendingUp, Users } from 'lucide-react';
+import { Activity, Banknote, CircleMinus, Megaphone, RadioTower, Target, TrendingUp, Users } from 'lucide-react';
 import { AdSalesDashboardCard } from '@/components/features/growth/ad-sales/ad-sales-dashboard-card';
 import { IconPicker } from '@/components/icons/icon-picker';
 import { AppShell } from '@/components/layout/app-shell';
@@ -228,7 +228,7 @@ export default function DashboardPage() {
             <MetricCard icon={TrendingUp} label="Operating result" value={<MoneyStack amount={data.profitForPeriod} currency={moneySettings.primaryCurrency} settings={moneySettings} rates={currencyRates} mainClassName="text-2xl font-semibold text-white" subClassName="text-sm text-neutral-500" />} detail={`${money(data.incomeForPeriod)} revenue · ${money(data.expensesForPeriod)} expenses`} tone={data.profitForPeriod >= 0 ? 'green' : 'red'} />
             <MetricCard icon={Target} label="Invested capital" value={<MoneyStack amount={data.investedCapital} currency={moneySettings.primaryCurrency} settings={moneySettings} rates={currencyRates} mainClassName="text-2xl font-semibold text-white" subClassName="text-sm text-neutral-500" />} detail={`${money(data.remainingToBreakEven)} left to break even`} tone="violet" />
             <MetricCard icon={Target} label="Projected payback" value={data.projectedPaybackMonths == null ? '-' : `${n(data.projectedPaybackMonths, 1)} mo`} detail={`${money(data.projectedMonthlyProfit)} monthly pace`} tone={data.projectedPaybackMonths == null ? 'amber' : 'teal'} />
-            <MetricCard icon={Megaphone} label="Ad spend" value={<MoneyStack amount={data.adSpendForPeriod} currency={moneySettings.primaryCurrency} settings={moneySettings} rates={currencyRates} mainClassName="text-2xl font-semibold text-white" subClassName="text-sm text-neutral-500" />} detail={`${data.periodCampaignsCount} campaigns in period`} tone="amber" />
+            <MetricCard icon={CircleMinus} label="Ad spend" value={<MoneyStack amount={data.adSpendForPeriod} currency={moneySettings.primaryCurrency} settings={moneySettings} rates={currencyRates} mainClassName="text-2xl font-semibold text-white" subClassName="text-sm text-neutral-500" />} detail={`${data.periodCampaignsCount} campaigns in period`} tone="red" />
             <MetricCard icon={RadioTower} label="Own channels" value={n(data.ownChannelsCount)} detail={`${n(data.totalSubscribers)} subscribers total`} tone="teal" />
             <MetricCard icon={Activity} label="Active audience" value={activeRate == null ? '-' : `${n(activeRate, 1)}%`} detail={`${n(data.activeSubscribersEstimate)} estimated active`} tone="green" />
             <MetricCard icon={Users} label="Workspace members" value={n(data.workspaceMembersCount)} detail={`${n(data.telegramChannelsCount)} total channels`} tone="blue" />

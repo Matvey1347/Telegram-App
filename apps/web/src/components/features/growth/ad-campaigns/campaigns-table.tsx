@@ -567,9 +567,10 @@ function PerformanceCell({
       </div>
       <div className="grid grid-cols-[minmax(90px,1fr)_minmax(70px,0.7fr)_minmax(80px,0.8fr)] gap-3">
         <div>
-          <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">
-            Spend
-          </p>
+          <MetricPreviewLabel
+            label="Spend"
+            className="mb-1 text-[10px] uppercase tracking-wide text-slate-500"
+          />
           <div>
             <p className="font-semibold leading-snug text-white">
               {spendBreakdown[0]?.label ?? "-"}

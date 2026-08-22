@@ -1446,7 +1446,7 @@ export const TooltipBubble = forwardRef<
     <span
       ref={ref}
       style={style}
-      className={`pointer-events-none ${layerClass} z-50 w-max max-w-[calc(100vw-2rem)] rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs leading-relaxed text-neutral-100 shadow-xl ${positionClass} ${alignClass} ${className}`}
+      className={`pointer-events-none ${layerClass} z-[200] w-max max-w-[calc(100vw-2rem)] rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs leading-relaxed text-neutral-100 shadow-xl ${positionClass} ${alignClass} ${className}`}
     >
       {children}
       <span
