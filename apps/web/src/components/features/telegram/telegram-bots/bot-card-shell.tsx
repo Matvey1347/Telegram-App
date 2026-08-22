@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
@@ -21,6 +20,11 @@ import type {
 } from "@telegram-system/shared";
 import type { TelegramBot } from "@/lib/api";
 import { Button, Tooltip } from "@/components/ui/primitives";
+import {
+  TelegramCardActionsMenu,
+  TelegramCardMenuAction,
+  TelegramCardMenuLink,
+} from "../telegram/telegram-card-actions-menu";
 import { runtimeAppPresentation } from "./runtime-app-presentation";
 import { BotRuntimeAvatar } from "./bot-runtime-avatar";
 
@@ -51,7 +55,11 @@ export function BotCardShell({
 
   useEffect(() => {
     const saved = window.localStorage.getItem(storageKey);
-    if (saved === "LOCAL" || saved === "PRODUCTION") setEnvironment(saved);
+    if (saved === "LOCAL" || saved === "PRODUCTION") {
+      // The runtime preference exists only in the browser and is restored after hydration.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEnvironment(saved);
+    }
   }, [storageKey]);
 
   function selectEnvironment(next: TelegramBotRuntimeEnvironment) {
@@ -69,7 +77,7 @@ export function BotCardShell({
         : null;
 
   return (
-    <article className="rounded-lg border border-neutral-800 bg-neutral-950 p-4 shadow-sm">
+    <article className="rounded-lg border border-neutral-800 bg-neutral-950 p-3 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <BotRuntimeAvatar type={appType} avatarUrl={runtime?.avatarUrl} />
@@ -86,59 +94,61 @@ export function BotCardShell({
             </p>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <CardAction
+        <TelegramCardActionsMenu
+          label={`Actions for ${runtime?.firstName || bot.label}`}
+        >
+          <TelegramCardMenuAction
             label={
               checkingEnvironment === environment
-                ? "Refreshing bot"
-                : "Refresh bot"
+                ? "Refreshing"
+                : "Refresh"
+            }
+            icon={
+              checkingEnvironment === environment ? (
+                <LoaderCircle className="animate-spin" size={17} />
+              ) : (
+                <RefreshCw size={17} />
+              )
             }
             disabled={!runtime || checkingEnvironment === environment}
             onClick={() => onCheck(environment)}
-          >
-            {checkingEnvironment === environment ? (
-              <LoaderCircle className="animate-spin" size={16} />
-            ) : (
-              <RefreshCw size={16} />
-            )}
-          </CardAction>
-          <CardAction
-            label={runtime ? "Update runtime token" : "Configure runtime"}
+          />
+          <TelegramCardMenuAction
+            label={runtime ? "Edit token" : "Add token"}
+            icon={<Pencil size={17} />}
             onClick={() => onConfigureRuntime(environment)}
-          >
-            <Pencil size={16} />
-          </CardAction>
-          <CardAction
-            label="Edit Telegram name and profile photo"
+          />
+          <TelegramCardMenuAction
+            label="Edit bot"
+            icon={<UserRoundPen size={17} />}
             disabled={!runtime}
             onClick={() => onEditProfile?.(environment)}
-          >
-            <UserRoundPen size={16} />
-          </CardAction>
-          <CardAction label="Change bot app" onClick={onSwitch}>
-            <ArrowLeftRight data-testid="change-bot-app-icon" size={16} />
-          </CardAction>
+          />
+          <TelegramCardMenuAction
+            label="Change app"
+            icon={
+              <ArrowLeftRight data-testid="change-bot-app-icon" size={17} />
+            }
+            onClick={onSwitch}
+          />
           {configureHref ? (
-            <Link
+            <TelegramCardMenuLink
               href={configureHref}
-              aria-label={`Configure ${currentApp?.label || applicationLabel(appType)}`}
-              title={`Configure ${currentApp?.label || applicationLabel(appType)}`}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-700 text-neutral-200 transition hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            >
-              <Settings data-testid="configure-bot-app-icon" size={16} />
-            </Link>
+              label={`View ${currentApp?.label || applicationLabel(appType)}`}
+              icon={<Settings data-testid="configure-bot-app-icon" size={17} />}
+            />
           ) : null}
-          <CardAction
-            label="Delete runtime or bot"
-            tone="danger"
+          <div className="my-1 border-t border-neutral-800" />
+          <TelegramCardMenuAction
+            label="Delete bot"
+            icon={<Trash2 size={17} />}
+            danger
             onClick={() => onRequestDelete(environment)}
-          >
-            <Trash2 size={16} />
-          </CardAction>
-        </div>
+          />
+        </TelegramCardActionsMenu>
       </div>
       <div
-        className="mt-3 inline-flex rounded-lg border border-neutral-800 bg-neutral-900 p-0.5"
+        className="mt-2 inline-flex rounded-lg border border-neutral-800 bg-neutral-900 p-0.5"
         role="tablist"
         aria-label="Bot runtime environment"
       >
@@ -164,7 +174,7 @@ export function BotCardShell({
         />
       )}
       {runtime ? (
-        <div className="mt-3 border-t border-neutral-800 pt-3">
+        <div className="mt-2 border-t border-neutral-800 pt-2">
           {typeof children === "function" ? children(environment) : children}
         </div>
       ) : null}
@@ -181,7 +191,7 @@ function RuntimeSetupState({
 }) {
   const local = environment === "LOCAL";
   return (
-    <div className="mt-3 rounded-lg border border-dashed border-neutral-700 bg-neutral-900/60 p-3">
+    <div className="mt-2 rounded-lg border border-dashed border-neutral-700 bg-neutral-900/60 p-2.5">
       <p className="text-sm font-medium text-neutral-100">
         {local
           ? "Local bot is not configured"
@@ -192,7 +202,7 @@ function RuntimeSetupState({
           ? "Connect a separate BotFather test token for this machine. It is kept separate from production."
           : "Connect the production BotFather token to make this runtime available."}
       </p>
-      <Button className="mt-3" onClick={onConfigure}>
+      <Button className="mt-2" onClick={onConfigure}>
         {local ? "Connect local test bot" : "Connect production bot"}
       </Button>
     </div>
@@ -210,7 +220,7 @@ function RuntimeDetails({
   const statusLabel = runtimeStatusLabel(runtime);
   return (
     <>
-      <div className="mt-3 flex flex-wrap gap-1.5">
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <Tooltip content={runtimeStatusTooltip(runtime)}>
           <StatusBadge tone={runtimeStatusTone(runtime)}>
             {statusLabel === "RUNNING" ? (
@@ -226,20 +236,18 @@ function RuntimeDetails({
         <StatusBadge tone={appType === "NONE" ? "muted" : "info"}>
           {runtimeAppPresentation(appType).emoji} {applicationLabel(appType)}
         </StatusBadge>
-      </div>
-      <dl className="mt-3 grid gap-x-4 gap-y-2 text-xs sm:grid-cols-2">
-        <RuntimeField
-          label="Finance App"
-          value={
+        {appType === "FINANCE" ? (
+          <span className="ml-auto text-xs text-neutral-500">
+            Finance App:{" "}
             <RuntimeAppLink
               runtime={runtime}
               url={financeAppUrl(runtime, appType, botId)}
             />
-          }
-        />
-      </dl>
+          </span>
+        ) : null}
+      </div>
       {!runtime.isProcessOwner ? (
-        <p className="mt-3 rounded-lg border border-neutral-700 bg-neutral-900/60 p-2.5 text-sm text-neutral-300">
+        <p className="mt-2 rounded-lg border border-neutral-700 bg-neutral-900/60 p-2 text-xs text-neutral-300">
           {runtime.environment === "LOCAL" ? "Local" : "Production"} runtime is
           not running in this API process. Its saved webhook is not treated as
           live.
@@ -248,7 +256,7 @@ function RuntimeDetails({
       {runtime.isProcessOwner &&
       runtime.environment === "PRODUCTION" &&
       runtime.runtimeStatus !== "ACTIVE" ? (
-        <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-100">
+        <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-100">
           Production token is saved. Deploy the production API with its public
           webhook URL to activate this runtime.
         </p>
@@ -256,7 +264,7 @@ function RuntimeDetails({
       {runtime.isProcessOwner &&
       runtime.environment === "LOCAL" &&
       runtime.runtimeStatus !== "ACTIVE" ? (
-        <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-100">
+        <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-100">
           Local token is saved. Run{" "}
           <code className="rounded bg-amber-950/40 px-1">pnpm dev:bots</code> on
           this computer to start the local API, web app and ngrok; the reachable
@@ -264,7 +272,7 @@ function RuntimeDetails({
         </p>
       ) : null}
       {runtime.lastRuntimeError || runtime.lastErrorMessage ? (
-        <div className="mt-3 flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-sm text-rose-100">
+        <div className="mt-2 flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-2 text-xs text-rose-100">
           <AlertTriangle className="mt-0.5 shrink-0" size={16} />
           <span className="min-w-0 break-words">
             {runtime.lastRuntimeError || runtime.lastErrorMessage}
@@ -272,14 +280,6 @@ function RuntimeDetails({
         </div>
       ) : null}
     </>
-  );
-}
-function RuntimeField({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-neutral-500">{label}</dt>
-      <dd className="mt-0.5 break-words text-neutral-200">{value}</dd>
-    </div>
   );
 }
 function RuntimeAppLink({
@@ -321,27 +321,6 @@ function financeAppUrl(
   const index = runtime.webhookUrl.indexOf(marker);
   if (index < 0) return null;
   return `${runtime.webhookUrl.slice(0, index)}/finance/${encodeURIComponent(botId)}`;
-}
-function CardAction({
-  label,
-  tone = "neutral",
-  children,
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  label: string;
-  tone?: "neutral" | "danger";
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      {...props}
-      className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 ${tone === "danger" ? "border-rose-700/70 text-rose-300 hover:bg-rose-950/60" : "border-neutral-700 text-neutral-200 hover:bg-neutral-800"} ${props.className ?? ""}`}
-    >
-      {children}
-    </button>
-  );
 }
 function StatusBadge({
   tone,

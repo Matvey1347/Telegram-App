@@ -159,17 +159,22 @@ describe("TelegramBotCard", () => {
     expect(screen.queryByText("NOT RUNNING", { selector: "span" })).toBeNull();
   });
 
-  it("renders compact Finance metrics and one Finance App link", () => {
+  it("renders compact Finance metrics and keeps actions in one overflow menu", async () => {
+    const user = userEvent.setup();
     renderCard("FINANCE");
     expect(screen.getByLabelText("Finance business metrics")).toHaveTextContent(
       "Registered12",
     );
     expect(screen.getAllByRole("link", { name: "RUNNING" })).toHaveLength(1);
+    expect(screen.queryByRole("menuitem", { name: "Change app" })).toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: "Actions for Admissions bot" }),
+    );
     expect(
-      screen.getByRole("link", { name: "Configure Finance" }),
+      screen.getByRole("menuitem", { name: "View Finance" }),
     ).toHaveAttribute("href", "/telegram-bots/bot-1/finance");
     expect(
-      screen.getByRole("button", { name: "Change bot app" }),
+      screen.getByRole("menuitem", { name: "Change app" }),
     ).toBeInTheDocument();
     expect(screen.getByTestId("change-bot-app-icon")).toBeInTheDocument();
     expect(screen.getByTestId("configure-bot-app-icon")).toBeInTheDocument();
@@ -266,7 +271,10 @@ describe("TelegramBotCard", () => {
     );
     await user.click(screen.getByRole("tab", { name: "Local" }));
     expect(screen.getByText("Local bot is not configured")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Refresh bot" })).toBeDisabled();
+    await user.click(
+      screen.getByRole("button", { name: "Actions for Admissions bot" }),
+    );
+    expect(screen.getByRole("menuitem", { name: "Refresh" })).toBeDisabled();
     await user.click(
       screen.getByRole("button", { name: "Connect local test bot" }),
     );
@@ -290,11 +298,17 @@ describe("TelegramBotCard", () => {
   it("shows a pending refresh only for the selected runtime", async () => {
     const user = userEvent.setup();
     renderCard("GREETER", "PRODUCTION");
+    await user.click(
+      screen.getByRole("button", { name: "Actions for Admissions bot" }),
+    );
     expect(
-      screen.getByRole("button", { name: "Refreshing bot" }),
+      screen.getByRole("menuitem", { name: "Refreshing" }),
     ).toBeDisabled();
     await user.click(screen.getByRole("tab", { name: "Local" }));
-    expect(screen.getByRole("button", { name: "Refresh bot" })).toBeDisabled();
+    await user.click(
+      screen.getByRole("button", { name: "Actions for Admissions bot" }),
+    );
+    expect(screen.getByRole("menuitem", { name: "Refresh" })).toBeDisabled();
   });
 
   it("shows one direct local Finance App link before a manual check", async () => {

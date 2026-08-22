@@ -7,8 +7,10 @@ import {
   rowToEditable,
 } from "@/components/features/telegram/telegram/managed-posts-import-modal";
 import {
+  applyGroupToEditableImportRows,
   importRowTab,
   rowIndicesForTab,
+  selectionAfterEditableRowUpdate,
   summarizeImportProgress,
 } from "@/components/features/telegram/telegram/managed-posts-import-model";
 import {
@@ -35,7 +37,9 @@ describe("managed posts import parsing", () => {
     expect(editable.title).toBe("Не все важливе відчувається великим");
     expect(editable.text).toContain("Деякі зміни приходять тихо.");
     expect(editable.icon).toBe("🌱");
-    expect(editable.urlsText).toBe("https://images.example.test/post.jpg?fit=crop");
+    expect(editable.urlsText).toBe(
+      "https://images.example.test/post.jpg?fit=crop",
+    );
   });
 
   it("imports the edited preview rows instead of the original pasted text", () => {
@@ -128,7 +132,7 @@ describe("managed posts import parsing", () => {
     ]);
   });
 
-  it("places checked JSON rows into their status tabs immediately", () => {
+  it("keeps approved rows in New and uses a badge instead of a separate tab", () => {
     const rows = normalizeImportRows(
       JSON.stringify([
         { title: "New" },
@@ -138,9 +142,34 @@ describe("managed posts import parsing", () => {
       "posts.json",
     ).map(rowToEditable);
 
-    expect(rows.map(importRowTab)).toEqual(["new", "approved", "imported"]);
-    expect(rowIndicesForTab(rows, "approved")).toEqual([1]);
+    expect(rows.map(importRowTab)).toEqual(["new", "new", "imported"]);
+    expect(rowIndicesForTab(rows, "new")).toEqual([0, 1]);
     expect(rowIndicesForTab(rows, "imported")).toEqual([2]);
+  });
+
+  it("keeps the edited post selected and follows its Imported tab", () => {
+    const rows = [
+      rowToEditable({ title: "First" }),
+      rowToEditable({ title: "Second", imported: true }),
+    ];
+    const movedToImported = rows.map((row, index) =>
+      index === 0 ? { ...row, imported: true } : row,
+    );
+
+    expect(
+      selectionAfterEditableRowUpdate(movedToImported, "new", 0, {
+        imported: true,
+      }),
+    ).toEqual({ tab: "imported", selectedRowIndex: 0 });
+
+    const movedBackToNew = movedToImported.map((row, index) =>
+      index === 0 ? { ...row, imported: false } : row,
+    );
+    expect(
+      selectionAfterEditableRowUpdate(movedBackToNew, "imported", 0, {
+        imported: false,
+      }),
+    ).toEqual({ tab: "new", selectedRowIndex: 0 });
   });
 
   it("counts schedule failures as failed rather than imported", () => {
@@ -164,7 +193,28 @@ describe("managed posts import parsing", () => {
     const remainingRows = removeEditableImportRow(rows, 1);
 
     expect(remainingRows.map((row) => row.title)).toEqual(["First", "Third"]);
-    expect(JSON.parse(editableRowsToJsonContent(remainingRows))).toHaveLength(2);
+    expect(JSON.parse(editableRowsToJsonContent(remainingRows))).toHaveLength(
+      2,
+    );
+  });
+
+  it("applies a confirmed group to every row and serializes each groupId", () => {
+    const rows = [
+      rowToEditable({ title: "First", groupId: "old-group" }),
+      rowToEditable({ title: "Second" }),
+    ];
+
+    const groupedRows = applyGroupToEditableImportRows(rows, "group-2");
+    const json = JSON.parse(editableRowsToJsonContent(groupedRows));
+
+    expect(groupedRows.map((row) => row.groupId)).toEqual([
+      "group-2",
+      "group-2",
+    ]);
+    expect(json.map((row: { groupId: string }) => row.groupId)).toEqual([
+      "group-2",
+      "group-2",
+    ]);
   });
 
   it("detects blocking internal post links for import preview rows", () => {

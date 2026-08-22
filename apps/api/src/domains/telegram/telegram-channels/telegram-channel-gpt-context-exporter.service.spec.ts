@@ -76,7 +76,7 @@ describe('TelegramChannelGptContextExporter', () => {
     const text = result.buffer.toString('utf8');
 
     expect(result.filename).toMatch(/^CH_\d{2}-\d{2}\.txt$/);
-    expect(text).toContain('FORMAT VERSION: 3');
+    expect(text).toContain('FORMAT VERSION: 4');
     expect(text).toContain('id: telegram-post:telegram-post-1');
     expect(text).toContain('reference: telegram-source-post:telegram-post-1');
     expect(text).not.toContain(
@@ -89,6 +89,8 @@ describe('TelegramChannelGptContextExporter', () => {
     expect(text).toContain('reaction_rate: 10.00%');
     expect(text).toContain('reactions: [{"reaction":"👍","count":100}]');
     expect(text).toContain('text:\nPublished copy');
+    expect(text).toContain('group_id: null');
+    expect(text).toContain('group_title: Ungrouped');
     const telegramPostCalls = prisma.telegramPost.findMany.mock
       .calls as unknown as Array<
       [{ where: unknown; select: Record<string, boolean> }]
@@ -109,6 +111,7 @@ describe('TelegramChannelGptContextExporter', () => {
         id: 'managed-1',
         title: 'Managed title',
         status: 'PUBLISHED',
+        groupId: null,
         imageUrls: [],
         text: 'Managed copy',
         createdAt: new Date('2026-08-20T09:00:00.000Z'),
@@ -122,6 +125,66 @@ describe('TelegramChannelGptContextExporter', () => {
     expect(text).toContain('id: managed-1');
     expect(text).toContain('views: 1000');
     expect(text).not.toContain('id: telegram-post:telegram-post-1');
+  });
+
+  it('exports each managed post group and summarizes group statuses', async () => {
+    const { exporter, prisma } = setup();
+    prisma.postGroup.findMany.mockResolvedValueOnce([
+      { id: 'group-1', title: 'Evergreen' },
+      { id: 'group-2', title: 'News' },
+    ]);
+    prisma.telegramManagedPost.findMany.mockResolvedValueOnce([
+      {
+        id: 'managed-1',
+        title: 'Draft post',
+        status: 'DRAFT',
+        groupId: 'group-1',
+        imageUrls: [],
+        text: 'Draft copy',
+        createdAt: new Date('2026-08-20T09:00:00.000Z'),
+        telegramMessageIds: [],
+        telegramMessageUrls: [],
+      },
+      {
+        id: 'managed-2',
+        title: 'Published post',
+        status: 'PUBLISHED',
+        groupId: 'group-1',
+        imageUrls: [],
+        text: 'Published copy',
+        createdAt: new Date('2026-08-20T10:00:00.000Z'),
+        telegramMessageIds: [],
+        telegramMessageUrls: [],
+      },
+      {
+        id: 'managed-3',
+        title: 'Ungrouped post',
+        status: 'SCHEDULED',
+        groupId: null,
+        imageUrls: [],
+        text: 'Scheduled copy',
+        createdAt: new Date('2026-08-20T11:00:00.000Z'),
+        telegramMessageIds: [],
+        telegramMessageUrls: [],
+      },
+    ]);
+
+    const result = await exporter.export('user-1', 'channel-1');
+    const text = result.buffer.toString('utf8');
+
+    expect(text).toContain(
+      '- Evergreen — group-1 — posts: 2 — statuses: DRAFT=1, PUBLISHED=1',
+    );
+    expect(text).toContain('- News — group-2 — posts: 0 — statuses: none');
+    expect(text).toContain(
+      '- Ungrouped — null — posts: 1 — statuses: SCHEDULED=1',
+    );
+    expect(text).toContain(
+      'title: Draft post\nstatus: DRAFT\ngroup_id: group-1\ngroup_title: Evergreen',
+    );
+    expect(text).toContain(
+      'title: Ungrouped post\nstatus: SCHEDULED\ngroup_id: null\ngroup_title: Ungrouped',
+    );
   });
 
   it('rejects a channel outside the resolved workspace', async () => {

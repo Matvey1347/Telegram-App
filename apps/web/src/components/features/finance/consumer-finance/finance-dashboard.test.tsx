@@ -30,6 +30,21 @@ const dashboard: ConsumerFinanceDashboard = {
 };
 
 describe("FinanceDashboard actions", () => {
+  it("does not decorate the expense summary with a minus icon", () => {
+    const { container } = render(
+      <FinanceDashboard
+        data={dashboard}
+        locale="en"
+        timezone="UTC"
+        onNavigate={vi.fn()}
+        onAction={vi.fn()}
+        surface="telegram"
+      />,
+    );
+
+    expect(container.querySelector(".lucide-circle-minus")).toBeNull();
+  });
+
   it.each([
     ["Add expense", "expense"],
     ["Add income", "income"],

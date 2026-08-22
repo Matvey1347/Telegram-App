@@ -1,8 +1,12 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import type { TelegramChannel } from "@/lib/api";
 import { ChannelEconomicsEditor } from "./channel-economics-editor";
-import { ChannelEconomicsSummary } from "./channel-economics-summary";
+import {
+  ChannelEconomicsSummary,
+  sortChannelsByScale,
+} from "./channel-economics-summary";
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
@@ -16,6 +20,30 @@ vi.mock("@/providers/toast-provider", () => ({
 }));
 
 describe("ChannelEconomicsSummary", () => {
+  it("sorts channel cards by audience scale", () => {
+    const channels = [
+      { id: "test", title: "Test", currentSubscribersCount: 3 },
+      {
+        id: "largest",
+        title: "Largest",
+        currentSubscribersCount: 100,
+        preview: { audience: { subscribersCount: 11_695 } },
+      },
+      { id: "middle", title: "Middle", currentSubscribersCount: 7_719 },
+    ] as TelegramChannel[];
+
+    expect(sortChannelsByScale(channels).map((channel) => channel.id)).toEqual([
+      "largest",
+      "middle",
+      "test",
+    ]);
+    expect(channels.map((channel) => channel.id)).toEqual([
+      "test",
+      "largest",
+      "middle",
+    ]);
+  });
+
   it("shows combined spend with a detailed tooltip and format prices", async () => {
     render(
       <ChannelEconomicsSummary
@@ -156,8 +184,8 @@ describe("ChannelEconomicsSummary", () => {
     expect(screen.getByRole("button", { name: "UAH" })).toBeInTheDocument();
   });
 
-  it("renders missing or zero income and expenses as dashes", () => {
-    render(
+  it("omits the whole economics block when every value is zero or negligible", () => {
+    const { container } = render(
       <ChannelEconomicsSummary
         channel={
           {
@@ -168,7 +196,7 @@ describe("ChannelEconomicsSummary", () => {
                 assetEconomics: {
                   currency: "UAH",
                   purchasePrice: 0,
-                  adSpend: 0,
+                  adSpend: 0.001,
                   revenue: 0,
                   estimatedAdPrice: null,
                   conversionUnavailable: false,
@@ -180,17 +208,9 @@ describe("ChannelEconomicsSummary", () => {
       />,
     );
 
-    expect(screen.queryByText("0 UAH")).not.toBeInTheDocument();
-    expect(screen.queryByText("Not available")).not.toBeInTheDocument();
-    for (const label of ["Spend", "Earned"]) {
-      const labelElement = screen.getByText(label);
-      const labelRow =
-        label === "Spend" ? labelElement.parentElement : labelElement;
-      expect(labelRow?.nextElementSibling).toHaveTextContent("—");
-    }
-    expect(screen.queryByText("Bought for")).not.toBeInTheDocument();
-    expect(screen.queryByText("Ad spend")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Not enough data")).toHaveLength(3);
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByText("Spend")).not.toBeInTheDocument();
+    expect(screen.queryByText("Not enough data")).not.toBeInTheDocument();
   });
 
   it("omits zero-value lines from the spend breakdown", async () => {

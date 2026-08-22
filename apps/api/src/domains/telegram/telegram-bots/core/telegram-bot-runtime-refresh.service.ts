@@ -6,11 +6,14 @@ import {
   TelegramBotWebhookStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../../prisma/prisma.service';
+import { TokenEncryptionService } from '../../../../common/security/token-encryption.service';
+import { publicApiOrigin } from '../../../../config/deployment-config';
 import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
 import { TelegramBotRuntimeCheckService } from './telegram-bot-runtime-check.service';
 import { TelegramBotRuntimePresentationService } from './telegram-bot-runtime-presentation.service';
 import { TelegramBotRuntimeRegistryService } from './telegram-bot-runtime-registry.service';
 import { TelegramBotRuntimeUserPresentationService } from './telegram-bot-runtime-user-presentation.service';
+import { assertSafeTelegramWebhookBase } from './telegram-bot-webhook-url';
 
 type RuntimeWithBot = Prisma.TelegramBotRuntimeInstanceGetPayload<{
   include: { botIntegration: true };
@@ -25,9 +28,11 @@ export class TelegramBotRuntimeRefreshService {
     private readonly checks: TelegramBotRuntimeCheckService,
     private readonly registry: TelegramBotRuntimeRegistryService,
     private readonly userPresentation: TelegramBotRuntimeUserPresentationService,
+    private readonly encryption: TokenEncryptionService,
   ) {}
 
   async refresh(runtime: RuntimeWithBot, token: string) {
+    const expectedWebhook = this.expectedWebhook(runtime);
     if (runtime.runtimeStatus === TelegramBotRuntimeStatus.ACTIVE) {
       await this.presentation.reconcile(
         token,
@@ -53,11 +58,25 @@ export class TelegramBotRuntimeRefreshService {
           TelegramBotApplicationType.FINANCE,
       ),
     ]);
-    const actualUrl = this.webhookUrl(webhookInfo);
+    let actualUrl = this.webhookUrl(webhookInfo);
+    const webhookRepaired = Boolean(
+      expectedWebhook &&
+      runtime.runtimeStatus === TelegramBotRuntimeStatus.ACTIVE &&
+      actualUrl !== expectedWebhook.url,
+    );
+    if (webhookRepaired && expectedWebhook) {
+      await this.botApi.setWebhook(
+        token,
+        expectedWebhook.url,
+        expectedWebhook.secret,
+      );
+      actualUrl = expectedWebhook.url;
+    }
+    const configuredWebhookUrl = expectedWebhook?.url ?? runtime.webhookUrl;
     const webhookStatus =
       runtime.runtimeStatus !== TelegramBotRuntimeStatus.ACTIVE
         ? TelegramBotWebhookStatus.NOT_CONFIGURED
-        : actualUrl === runtime.webhookUrl
+        : actualUrl === configuredWebhookUrl
           ? TelegramBotWebhookStatus.CONFIGURED
           : actualUrl
             ? TelegramBotWebhookStatus.ERROR
@@ -71,6 +90,12 @@ export class TelegramBotRuntimeRefreshService {
         lastCheckedAt: new Date(),
         lastErrorMessage: null,
         webhookStatus,
+        ...(webhookRepaired && expectedWebhook
+          ? {
+              webhookUrl: expectedWebhook.url,
+              webhookConfiguredAt: new Date(),
+            }
+          : {}),
         lastRuntimeError:
           webhookStatus === TelegramBotWebhookStatus.ERROR
             ? 'Telegram is delivering updates to a different webhook URL.'
@@ -90,5 +115,29 @@ export class TelegramBotRuntimeRefreshService {
 
   private webhookUrl(info: Record<string, unknown> | null) {
     return typeof info?.url === 'string' && info.url ? info.url : null;
+  }
+
+  private expectedWebhook(runtime: RuntimeWithBot) {
+    if (runtime.runtimeStatus !== TelegramBotRuntimeStatus.ACTIVE)
+      return undefined;
+    const base = publicApiOrigin();
+    if (!base)
+      throw new Error('Telegram bot webhook base URL is not configured');
+    assertSafeTelegramWebhookBase(base, runtime.environment);
+    if (
+      !runtime.webhookSecretEncrypted ||
+      !runtime.webhookSecretIv ||
+      !runtime.webhookSecretAuthTag
+    ) {
+      throw new Error('Telegram bot webhook secret is not configured');
+    }
+    return {
+      url: `${base.endsWith('/api') ? base : `${base}/api`}/telegram/bots/runtime/${runtime.id}/webhook`,
+      secret: this.encryption.decrypt({
+        encrypted: runtime.webhookSecretEncrypted,
+        iv: runtime.webhookSecretIv,
+        authTag: runtime.webhookSecretAuthTag,
+      }),
+    };
   }
 }

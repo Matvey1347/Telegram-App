@@ -48,6 +48,10 @@ import { IconPicker } from "@/components/icons/icon-picker";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageTabHead } from "@/components/layout/page-tab-head";
 import { ManagedPostsImportModal } from "@/components/features/telegram/telegram/managed-posts-import-modal";
+import {
+  TelegramCardActionsMenu,
+  TelegramCardMenuAction,
+} from "@/components/features/telegram/telegram/telegram-card-actions-menu";
 import { CalendarPostGroupSection } from "@/components/features/telegram/telegram/calendar-post-group-section";
 import { AutoCalendarPlannerPreview } from "@/components/features/telegram/telegram/auto-calendar-planner-preview";
 import {
@@ -6413,14 +6417,12 @@ function PostGroupsWorkspace({
   const { pushToast, setProgress, clearProgress } = useAppToast();
   const openedFromSearchRef = useRef("");
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [groupForm, setGroupForm] = useState<PostGroup | "new" | null>(null);
   const [addPostsOpen, setAddPostsOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [movingListGroup, setMovingListGroup] = useState<PostGroup | null>(
     null,
   );
-  const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
   const [movingGroupPost, setMovingGroupPost] =
     useState<TelegramManagedPost | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
@@ -6471,21 +6473,6 @@ function PostGroupsWorkspace({
     setSelectedGroupId(initialGroupId);
     openedFromSearchRef.current = initialGroupId;
   }, [groupsList, initialGroupId]);
-  const allGroupIds = useMemo(
-    () => groupsList.map((group) => group.id),
-    [groupsList],
-  );
-  const visibleSelectedGroupIds = useMemo(
-    () => selectedGroupIds.filter((id) => allGroupIds.includes(id)),
-    [allGroupIds, selectedGroupIds],
-  );
-  const allGroupsSelected =
-    groupsList.length > 0 &&
-    visibleSelectedGroupIds.length === groupsList.length;
-  const selectedGroups = groupsList.filter((group) =>
-    visibleSelectedGroupIds.includes(group.id),
-  );
-
   const refresh = async (channelIds: string[] = [channelId]) => {
     const uniqueChannelIds = [...new Set(channelIds.filter(Boolean))];
     await Promise.all([
@@ -6534,17 +6521,6 @@ function PostGroupsWorkspace({
     ]);
   };
 
-  const toggleGroupSelected = (groupId: string) => {
-    setSelectedGroupIds((current) =>
-      current.includes(groupId)
-        ? current.filter((id) => id !== groupId)
-        : [...current, groupId],
-    );
-  };
-
-  const toggleAllGroupsSelected = () => {
-    setSelectedGroupIds(allGroupsSelected ? [] : allGroupIds);
-  };
   const scheduleProgressDismiss = (progressId: string, delayMs = 2800) => {
     window.setTimeout(() => clearProgress(progressId), delayMs);
   };
@@ -7114,118 +7090,83 @@ function PostGroupsWorkspace({
           </span>
         </Button>
       </div>
-      {groupsList.length ? (
-        <Card className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" onClick={toggleAllGroupsSelected}>
-              {allGroupsSelected ? "Clear all" : "Select all"}
-            </Button>
-            <span className="text-sm text-neutral-400">
-              {visibleSelectedGroupIds.length
-                ? `${visibleSelectedGroupIds.length} selected`
-                : "No groups selected"}
-            </span>
-          </div>
-          <Button
-            disabled={!visibleSelectedGroupIds.length}
-            onClick={() => setBulkMoveOpen(true)}
-          >
-            Move selected
-          </Button>
-        </Card>
-      ) : null}
       {groups.isLoading ? <LoadingState /> : null}
       {groupsList.length ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {groupsList.map((group) => {
-            const isSelected = visibleSelectedGroupIds.includes(group.id);
-            return (
-              <div
-                key={group.id}
-                className={`rounded-xl border bg-neutral-900 p-4 text-left transition hover:bg-neutral-900/80 ${
-                  isSelected
-                    ? "border-blue-600 shadow-[0_0_0_1px_rgba(37,99,235,0.45)]"
-                    : "border-neutral-800 hover:border-blue-700"
-                }`}
-              >
-                <div className="flex items-start gap-3">
+          {groupsList.map((group) => (
+            <div
+              key={group.id}
+              className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 text-left transition hover:border-blue-700 hover:bg-neutral-900/80"
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
                   <button
                     type="button"
-                    aria-label={
-                      isSelected
-                        ? "Deselect group"
-                        : "Select group for bulk move"
-                    }
-                    onClick={() => toggleGroupSelected(group.id)}
-                    className={`mt-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
-                      isSelected
-                        ? "border-blue-500 bg-blue-600 text-white"
-                        : "border-neutral-600 bg-neutral-950 text-transparent"
-                    }`}
+                    onClick={() => setSelectedGroupId(group.id)}
+                    className="flex min-w-0 flex-1 items-start gap-3 text-left"
                   >
-                    <Check size={12} />
-                  </button>
-                  <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedGroupId(group.id)}
-                      className="flex min-w-0 flex-1 items-start gap-3 text-left"
-                    >
-                      <PostIcon
-                        iconId={group.icon}
-                        icon={group.iconPresentation}
-                        label={group.title}
-                        size="sm"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <h3 className="truncate font-semibold text-white">
-                          {group.title}
-                        </h3>
-                        <div className="mt-1">
-                          {group.isSystem ? (
-                            <span className="inline-flex rounded-full border border-amber-600/40 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-200">
-                              System group
-                            </span>
-                          ) : (
-                            <MemberBadge member={group.createdByMember} />
-                          )}
-                        </div>
+                    <PostIcon
+                      iconId={group.icon}
+                      icon={group.iconPresentation}
+                      label={group.title}
+                      size="sm"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate font-semibold text-white">
+                        {group.title}
+                      </h3>
+                      <div className="mt-1">
+                        {group.isSystem ? (
+                          <span className="inline-flex rounded-full border border-amber-600/40 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-200">
+                            System group
+                          </span>
+                        ) : (
+                          <MemberBadge member={group.createdByMember} />
+                        )}
                       </div>
-                    </button>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setMovingListGroup(group)}
-                        className={groupIconActionButtonClass}
-                        title="Move group"
-                        aria-label={`Move ${group.title}`}
-                      >
-                        <MoveRight size={14} />
-                      </button>
-                      {!group.isSystem ? (
-                        <button
-                          type="button"
-                          onClick={() => setDeletingGroup(group)}
-                          className={groupDangerActionButtonClass}
-                          title="Delete group"
-                          aria-label={`Delete ${group.title}`}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      ) : null}
                     </div>
-                  </div>
+                  </button>
+                  <TelegramCardActionsMenu
+                    label={`Actions for ${group.title}`}
+                  >
+                    <TelegramCardMenuAction
+                      label="Open group"
+                      icon={<ChevronRight size={17} />}
+                      onClick={() => setSelectedGroupId(group.id)}
+                    />
+                    <TelegramCardMenuAction
+                      label="Move group"
+                      icon={<MoveRight size={17} />}
+                      onClick={() => setMovingListGroup(group)}
+                    />
+                    {!group.isSystem ? (
+                      <>
+                        <TelegramCardMenuAction
+                          label="Edit group"
+                          icon={<Pencil size={17} />}
+                          onClick={() => setGroupForm(group)}
+                        />
+                        <div className="my-1 border-t border-neutral-800" />
+                        <TelegramCardMenuAction
+                          label="Delete group"
+                          icon={<Trash2 size={17} />}
+                          onClick={() => setDeletingGroup(group)}
+                          danger
+                        />
+                      </>
+                    ) : null}
+                  </TelegramCardActionsMenu>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedGroupId(group.id)}
-                  className="mt-4 block w-full text-left"
-                >
-                  <GroupSummary summary={group.statusSummary} />
-                </button>
               </div>
-            );
-          })}
+              <button
+                type="button"
+                onClick={() => setSelectedGroupId(group.id)}
+                className="mt-4 block w-full text-left"
+              >
+                <GroupSummary summary={group.statusSummary} />
+              </button>
+            </div>
+          ))}
         </div>
       ) : !groups.isLoading ? (
         <EmptyState text="No groups yet. Create the first named post series." />
@@ -7241,77 +7182,6 @@ function PostGroupsWorkspace({
             setGroupForm(null);
             await groups.refetch();
             setSelectedGroupId(saved.id);
-          }}
-        />
-      ) : null}
-      {bulkMoveOpen ? (
-        <BulkMoveGroupsModal
-          groups={selectedGroups}
-          channels={channels}
-          sourceChannelId={channelId}
-          onClose={() => setBulkMoveOpen(false)}
-          onSubmit={async (targetId) => {
-            const groupsToMove = selectedGroups;
-            setBulkMoveOpen(false);
-            if (!groupsToMove.length) return;
-            const results = await Promise.all(
-              groupsToMove.map(async (group) => {
-                const progressMeta = progressMetaForGroup(group);
-                setProgress({
-                  ...progressMeta,
-                  current: 0,
-                  total: group.statusSummary.totalPosts || 0,
-                  message: "Loading…",
-                });
-                try {
-                  const response = await telegramChannelsApi.movePostGroup(
-                    group.id,
-                    targetId,
-                    true,
-                    (item, current, total) => {
-                      setProgress({
-                        ...progressMeta,
-                        current,
-                        total,
-                        message: item.message,
-                      });
-                    },
-                  );
-                  setProgress({
-                    ...progressMeta,
-                    current: response.total,
-                    total: response.total,
-                    message: response.results.at(-1)?.message || "Completed",
-                    completed: true,
-                    successCount: response.successCount,
-                    failedCount: response.failedCount,
-                    skippedCount: response.skippedCount,
-                  });
-                  scheduleProgressDismiss(progressMeta.id);
-                  return {
-                    ok: true as const,
-                    message: `${group.title}: moved`,
-                  };
-                } catch (error) {
-                  clearProgress(progressMeta.id);
-                  return {
-                    ok: false as const,
-                    message: `${group.title}: ${apiErrorMessage(error, "Move failed")}`,
-                  };
-                }
-              }),
-            );
-            const movedCount = results.filter((item) => item.ok).length;
-            const failedCount = results.length - movedCount;
-            const messages = results.map((item) => item.message);
-            setSelectedGroupIds([]);
-            await refresh([channelId, targetId]);
-            await forceReloadGroupData([channelId, targetId]);
-            pushToast(
-              messages.join("\n"),
-              failedCount ? "error" : "success",
-              7000,
-            );
           }}
         />
       ) : null}
@@ -7338,9 +7208,6 @@ function PostGroupsWorkspace({
                 initialMessage: "Loading…",
               },
             );
-            setSelectedGroupIds((current) =>
-              current.filter((id) => id !== group.id),
-            );
             await refresh([channelId, targetId]);
             await forceReloadGroupData([channelId, targetId]);
           }}
@@ -7355,9 +7222,6 @@ function PostGroupsWorkspace({
         onConfirm={async () => {
           if (!deletingGroup) return;
           await telegramChannelsApi.deletePostGroup(deletingGroup.id);
-          setSelectedGroupIds((current) =>
-            current.filter((id) => id !== deletingGroup.id),
-          );
           setDeletingGroup(null);
           await groups.refetch();
         }}
@@ -7812,62 +7676,6 @@ function MoveGroupModal({
           </Button>
           <Button disabled={!targetId} onClick={() => onSubmit(targetId)}>
             Move group
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function BulkMoveGroupsModal({
-  groups,
-  channels,
-  sourceChannelId,
-  onClose,
-  onSubmit,
-}: {
-  groups: PostGroup[];
-  channels: TelegramChannel[];
-  sourceChannelId: string;
-  onClose: () => void;
-  onSubmit: (targetId: string) => Promise<void>;
-}) {
-  const [targetId, setTargetId] = useState("");
-  return (
-    <Modal open onClose={onClose} title="Move selected groups" allowOverflow>
-      <div className="space-y-4">
-        <p className="text-sm text-amber-200">
-          Drafts remain drafts. Scheduled posts are recreated at the same time.
-          Published posts become drafts; old Telegram messages remain.
-        </p>
-        <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-3">
-          <p className="text-xs uppercase text-neutral-500">Selected groups</p>
-          <p className="mt-2 text-sm text-neutral-200">
-            {groups.map((group) => group.title).join(", ")}
-          </p>
-        </div>
-        <FormField label="Target channel" required>
-          <CustomSelect
-            value={targetId}
-            onChange={setTargetId}
-            options={channels
-              .filter((channel) => channel.id !== sourceChannelId)
-              .map((channel) => ({
-                value: channel.id,
-                label: channel.title,
-                iconUrl: channel.photoUrl || undefined,
-              }))}
-          />
-        </FormField>
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            disabled={!targetId || !groups.length}
-            onClick={() => onSubmit(targetId)}
-          >
-            Move {groups.length} group{groups.length === 1 ? "" : "s"}
           </Button>
         </div>
       </div>

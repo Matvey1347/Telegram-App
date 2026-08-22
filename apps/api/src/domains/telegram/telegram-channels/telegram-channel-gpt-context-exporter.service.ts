@@ -121,6 +121,7 @@ export class TelegramChannelGptContextExporter {
           id: true,
           title: true,
           status: true,
+          groupId: true,
           imageUrls: true,
           text: true,
           createdAt: true,
@@ -161,6 +162,46 @@ export class TelegramChannelGptContextExporter {
     if (!channel) throw new NotFoundException('Telegram channel not found.');
 
     const typedTelegramPosts = telegramPosts as TelegramPostEngagementRow[];
+    const groupTitleById = new Map(
+      groups.map((group) => [group.id, group.title] as const),
+    );
+    const groupStats = new Map<
+      string | null,
+      { total: number; statuses: Map<string, number> }
+    >();
+    for (const post of managedPosts) {
+      const stats = groupStats.get(post.groupId) ?? {
+        total: 0,
+        statuses: new Map<string, number>(),
+      };
+      stats.total += 1;
+      stats.statuses.set(
+        post.status,
+        (stats.statuses.get(post.status) ?? 0) + 1,
+      );
+      groupStats.set(post.groupId, stats);
+    }
+    const groupContext = (
+      id: string | null,
+      title: string,
+      stats = groupStats.get(id),
+    ) => {
+      const statuses = stats
+        ? [...stats.statuses.entries()]
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([status, count]) => `${status}=${count}`)
+            .join(', ')
+        : 'none';
+      return `- ${title} — ${id ?? 'null'} — posts: ${stats?.total ?? 0} — statuses: ${statuses}`;
+    };
+    const groupSummaryLines = [
+      ...groups.map((group) =>
+        groupContext(group.id, group.title, groupStats.get(group.id)),
+      ),
+      ...(groupStats.has(null)
+        ? [groupContext(null, 'Ungrouped', groupStats.get(null))]
+        : []),
+    ];
     const telegramPostByMessageId = new Map(
       typedTelegramPosts.map((post) => [post.telegramMessageId, post]),
     );
@@ -187,19 +228,19 @@ export class TelegramChannelGptContextExporter {
           ];
         },
       );
-      return `POST\nid: ${post.id}\nreference: tg-post:${post.id}\ntitle: ${post.title}\nstatus: ${post.status}\nimages:\n${post.imageUrls.length ? post.imageUrls.map((url) => `- ${url}`).join('\n') : '[]'}\nengagement:\n${metrics.length ? metrics.join('\n---\n') : 'unavailable'}\ntext:\n${post.text || ''}`;
+      return `POST\nid: ${post.id}\nreference: tg-post:${post.id}\ntitle: ${post.title}\nstatus: ${post.status}\ngroup_id: ${post.groupId ?? 'null'}\ngroup_title: ${post.groupId ? (groupTitleById.get(post.groupId) ?? 'unknown') : 'Ungrouped'}\nimages:\n${post.imageUrls.length ? post.imageUrls.map((url) => `- ${url}`).join('\n') : '[]'}\nengagement:\n${metrics.length ? metrics.join('\n---\n') : 'unavailable'}\ntext:\n${post.text || ''}`;
     });
     const importedPostBlocks = typedTelegramPosts
       .filter((post) => !matchedTelegramPostIds.has(post.id))
       .map((post) => {
         const url = telegramPostUrl(channel, post.telegramMessageId);
-        return `POST\nid: telegram-post:${post.id}\nreference: telegram-source-post:${post.id}\ntitle: ${telegramPostTitle(post)}\nstatus: PUBLISHED\nsource: synchronized_telegram\nimages:\n${post.hasMedia ? `media: ${post.mediaKind || 'present'}` : '[]'}\nengagement:\n${this.metricContext(engagementFor(post), url)}\ntext:\n${post.text || post.formattedText || ''}`;
+        return `POST\nid: telegram-post:${post.id}\nreference: telegram-source-post:${post.id}\ntitle: ${telegramPostTitle(post)}\nstatus: PUBLISHED\ngroup_id: null\ngroup_title: Ungrouped\nsource: synchronized_telegram\nimages:\n${post.hasMedia ? `media: ${post.mediaKind || 'present'}` : '[]'}\nengagement:\n${this.metricContext(engagementFor(post), url)}\ntext:\n${post.text || post.formattedText || ''}`;
       });
 
     const exportedAt = new Date();
     const content = [
       'TELEGRAM GPT CONTEXT',
-      'FORMAT VERSION: 3',
+      'FORMAT VERSION: 4',
       `CHANNEL: ${channel.title}`,
       `CHANNEL_ID: ${channel.id}`,
       `EXPORTED_AT: ${exportedAt.toISOString()}`,
@@ -220,9 +261,7 @@ export class TelegramChannelGptContextExporter {
       ]),
       '',
       'POST GROUPS',
-      ...(groups.length
-        ? groups.map((group) => `- ${group.title} — ${group.id}`)
-        : ['[]']),
+      ...(groupSummaryLines.length ? groupSummaryLines : ['[]']),
       '',
       'MANAGED POST IMPORT JSON',
       'Return a JSON array with title, text, icon, urls, groupId, scheduledAt, imported, approved, imageSearch. For new generated posts use imported: false and approved: false. Use an exact groupId from POST GROUPS; use groupId: null when no group is needed. Never invent an ID.',

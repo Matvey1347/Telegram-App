@@ -19,7 +19,7 @@ import { Controller, useForm } from "react-hook-form";
 import { AppShell } from "@/components/layout/app-shell";
 import { ChannelPreview } from "@/components/features/telegram/telegram/channel-preview";
 import { ChannelAutoSyncToggle } from "@/components/features/telegram/telegram/channel-auto-sync-toggle";
-import { ChannelEconomicsSummary } from "@/components/features/telegram/telegram/channel-economics-summary";
+import { ChannelEconomicsSummary, sortChannelsByScale } from "@/components/features/telegram/telegram/channel-economics-summary";
 import {
   ChannelActionsMenu,
   ChannelMenuAction,
@@ -2127,9 +2127,7 @@ export default function TelegramChannelsPage() {
     onError: (requestError: unknown) =>
       pushToast(requestErrorMessage(requestError, "Sync failed."), "error"),
   });
-  // The server owns the selected own/external + lifecycle filters. Re-filtering
-  // on the client can disagree with its access read model and hide valid cards.
-  const filteredChannels = channels || [];
+  const filteredChannels = useMemo(() => sortChannelsByScale(channels || []), [channels]);
   const ownChannels = useMemo(
     () => (channels || []).filter(isOwnChannel),
     [channels],
@@ -2365,7 +2363,7 @@ export default function TelegramChannelsPage() {
                         ) : null}
                       </ChannelActionsMenu>
                     }
-                    className="!mb-2 !border-0 !bg-transparent !p-0"
+                    className="!mb-0 !border-0 !bg-transparent !p-0"
                   />
                   <ChannelEconomicsSummary
                     channel={channel}

@@ -12,6 +12,7 @@ import sharp from 'sharp';
 import { WorkspaceService } from '../../../../common/workspace.service';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { TelegramBotProfileService } from '../../telegram-bots/core/telegram-bot-profile.service';
+import { FinanceConsumerRuntimeEnvironmentService } from '../identity/finance-consumer-runtime-environment.service';
 
 @Injectable()
 export class FinanceBotBrandingService {
@@ -19,6 +20,7 @@ export class FinanceBotBrandingService {
     private readonly prisma: PrismaService,
     private readonly workspace: WorkspaceService,
     private readonly profiles: TelegramBotProfileService,
+    private readonly environments: FinanceConsumerRuntimeEnvironmentService,
   ) {}
 
   async update(
@@ -104,29 +106,47 @@ export class FinanceBotBrandingService {
   }
 
   async asset(botIntegrationId: string, kind: 'logo' | 'favicon') {
+    const environment = this.environments.current();
+    if (kind === 'logo' && !environment) {
+      throw new NotFoundException('Finance bot runtime is not enabled');
+    }
     const bot = await this.prisma.telegramBotIntegration.findFirst({
       where: {
         id: botIntegrationId,
         applicationType: TelegramBotApplicationType.FINANCE,
       },
       select: {
-        financeLogoImage: true,
-        financeLogoMimeType: true,
         financeFaviconImage: true,
         financeFaviconMimeType: true,
         financeBrandingUpdatedAt: true,
+        runtimeInstances: {
+          where: {
+            environment: environment ?? undefined,
+            runtimeStatus: 'ACTIVE',
+          },
+          select: {
+            avatarImage: true,
+            avatarMimeType: true,
+            avatarUpdatedAt: true,
+          },
+          take: 1,
+        },
       },
     });
+    const runtime = bot?.runtimeInstances[0];
     const bytes =
-      kind === 'logo' ? bot?.financeLogoImage : bot?.financeFaviconImage;
+      kind === 'logo' ? runtime?.avatarImage : bot?.financeFaviconImage;
     if (!bytes) throw new NotFoundException('Finance branding asset not found');
     return {
       bytes: Buffer.from(bytes),
       contentType:
         (kind === 'logo'
-          ? bot?.financeLogoMimeType
+          ? runtime?.avatarMimeType
           : bot?.financeFaviconMimeType) || 'image/png',
-      updatedAt: bot?.financeBrandingUpdatedAt,
+      updatedAt:
+        kind === 'logo'
+          ? runtime?.avatarUpdatedAt
+          : bot?.financeBrandingUpdatedAt,
     };
   }
 }

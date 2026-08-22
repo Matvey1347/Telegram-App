@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unnecessary-type-assertion */
 import {
   TelegramBotApplicationType,
   TelegramBotRuntimeEnvironment,
@@ -17,10 +18,16 @@ describe('FinanceBotBrandingService', () => {
       .mockResolvedValue({ workspaceId: 'workspace-1' }),
   };
   const profiles = { update: jest.fn() };
+  const environments = {
+    current: jest
+      .fn()
+      .mockReturnValue(TelegramBotRuntimeEnvironment.PRODUCTION),
+  };
   const service = new FinanceBotBrandingService(
     prisma as never,
     workspace as never,
     profiles as never,
+    environments as never,
   );
 
   beforeEach(() => {
@@ -81,5 +88,36 @@ describe('FinanceBotBrandingService', () => {
       ),
     ).rejects.toThrow('Finance bot not found');
     expect(profiles.update).not.toHaveBeenCalled();
+  });
+
+  it('serves the logo from the active runtime in the process environment', async () => {
+    const updatedAt = new Date('2026-08-22T18:00:00Z');
+    prisma.telegramBotIntegration.findFirst.mockResolvedValue({
+      runtimeInstances: [
+        {
+          avatarImage: Uint8Array.from([9, 8, 7]),
+          avatarMimeType: 'image/jpeg',
+          avatarUpdatedAt: updatedAt,
+        },
+      ],
+    });
+
+    await expect(service.asset('bot-1', 'logo')).resolves.toEqual({
+      bytes: Buffer.from([9, 8, 7]),
+      contentType: 'image/jpeg',
+      updatedAt,
+    });
+    expect(prisma.telegramBotIntegration.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          runtimeInstances: expect.objectContaining({
+            where: {
+              environment: TelegramBotRuntimeEnvironment.PRODUCTION,
+              runtimeStatus: 'ACTIVE',
+            },
+          }),
+        }),
+      }),
+    );
   });
 });

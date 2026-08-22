@@ -40,6 +40,46 @@ function percent(value: unknown) {
   return Number.isFinite(parsed) ? `${number(parsed, 0)}%` : "—";
 }
 
+function channelScale(channel: TelegramChannel) {
+  const value = Number(
+    channel.preview?.audience?.subscribersCount ??
+      channel.currentSubscribersCount ??
+      0,
+  );
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+export function sortChannelsByScale(channels: TelegramChannel[]) {
+  return [...channels].sort(
+    (left, right) =>
+      channelScale(right) - channelScale(left) ||
+      left.title.localeCompare(right.title),
+  );
+}
+
+function isMeaningfulAmount(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && Math.abs(parsed) >= 0.01;
+}
+
+export function hasMeaningfulChannelEconomics(channel: TelegramChannel) {
+  const economics = channel.preview?.financialSummary.assetEconomics;
+  const prices = economics?.formatPricing;
+  return Boolean(
+    economics?.conversionUnavailable ||
+    isMeaningfulAmount(channel.adBaseCpm) ||
+    isMeaningfulAmount(economics?.invested) ||
+    isMeaningfulAmount(economics?.purchasePrice) ||
+    isMeaningfulAmount(economics?.adSpend) ||
+    isMeaningfulAmount(economics?.revenue) ||
+    isMeaningfulAmount(economics?.remainingToBreakEven) ||
+    isMeaningfulAmount(economics?.estimatedAdPrice) ||
+    isMeaningfulAmount(prices?.h24?.estimatedPrice) ||
+    isMeaningfulAmount(prices?.h48?.estimatedPrice) ||
+    isMeaningfulAmount(prices?.permanent?.estimatedPrice),
+  );
+}
+
 export function ChannelEconomicsSummary({
   channel,
   currencySettings,
@@ -48,6 +88,7 @@ export function ChannelEconomicsSummary({
   currencySettings?: CurrencySettings | null;
 }) {
   const economics = channel.preview?.financialSummary.assetEconomics;
+  if (!hasMeaningfulChannelEconomics(channel)) return null;
   const financialSummary = channel.preview?.financialSummary;
   const audience = channel.preview?.audience;
   const currency =

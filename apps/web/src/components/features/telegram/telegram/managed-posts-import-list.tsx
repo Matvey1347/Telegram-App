@@ -26,9 +26,9 @@ export function ManagedPostsImportList({
   onSelectTab: (tab: ImportRowTab) => void;
 }) {
   return (
-    <div className="min-w-0">
-      <div className="mb-2 grid grid-cols-3 gap-1 rounded-lg border border-neutral-800 bg-neutral-900/70 p-1 text-xs">
-        {(["new", "approved", "imported"] as const).map((tab) => (
+    <div className="min-w-0 xl:col-start-3">
+      <div className="mb-2 grid grid-cols-2 gap-1 rounded-lg border border-neutral-800 bg-neutral-900/70 p-1 text-xs">
+        {(["new", "imported"] as const).map((tab) => (
           <button
             key={tab}
             type="button"
@@ -65,8 +65,12 @@ export function ManagedPostsImportList({
               <span className="min-w-0 flex-1 truncate font-medium">
                 {row.title || "Untitled post"}
               </span>
-              {row.approved ? <StatusBadge tone="approved">✓ Approved</StatusBadge> : null}
-              {row.imported ? <StatusBadge tone="imported">✓ Imported</StatusBadge> : null}
+              {row.approved ? (
+                <StatusBadge tone="approved">✓ Approved</StatusBadge>
+              ) : null}
+              {row.imported ? (
+                <StatusBadge tone="imported">✓ Imported</StatusBadge>
+              ) : null}
               {urlsTextToArray(row.urlsText).length ? (
                 <StatusBadge tone="image">img</StatusBadge>
               ) : null}

@@ -5,7 +5,7 @@ import type {
   ResolvedEmoji,
 } from "@/lib/api";
 
-export type ImportRowTab = "new" | "approved" | "imported";
+export type ImportRowTab = "new" | "imported";
 
 export const gptImportPromptFormat = `Ask GPT to return only a JSON array. Each array item is one post:
 
@@ -181,7 +181,8 @@ function parseJsonRows(content: string): ParsedImportRow[] | null {
       );
     }
     if (parsed && typeof parsed === "object") {
-      if ("title" in parsed || "text" in parsed) return [parsed as ParsedImportRow];
+      if ("title" in parsed || "text" in parsed)
+        return [parsed as ParsedImportRow];
       const rows = (parsed as { posts?: unknown }).posts;
       if (Array.isArray(rows)) {
         return rows.filter(
@@ -199,7 +200,8 @@ function parseJsonRows(content: string): ParsedImportRow[] | null {
 function importValueToString(value: unknown) {
   if (value === null || value === undefined) return "";
   if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "number" || typeof value === "boolean")
+    return String(value);
   return "";
 }
 
@@ -226,7 +228,10 @@ function cleanImportImageUrl(value: string) {
 
 function importUrlsToArray(value: unknown): string[] {
   if (Array.isArray(value)) {
-    return value.flatMap(importUrlsToArray).map(cleanImportImageUrl).filter(Boolean);
+    return value
+      .flatMap(importUrlsToArray)
+      .map(cleanImportImageUrl)
+      .filter(Boolean);
   }
   if (typeof value !== "string") return [];
   return value
@@ -243,7 +248,10 @@ export function importImageSearchToArray(value: unknown): string[] {
       .filter(Boolean);
   }
   if (typeof value !== "string") return [];
-  return value.split(/[\n,]+/).map((item) => item.trim()).filter(Boolean);
+  return value
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 export function urlsTextToArray(value: string) {
@@ -255,11 +263,14 @@ export function normalizeImportRows(
   fileName?: string | null,
 ): TelegramManagedPostsImportRow[] {
   const jsonRows = parseJsonRows(content);
-  const rows: ParsedImportRow[] = jsonRows ?? (
-    detectDelimiter(content, fileName)
-      ? parseDelimitedRows(content, detectDelimiter(content, fileName) as string)
-      : parsePlainTextRows(content)
-  );
+  const rows: ParsedImportRow[] =
+    jsonRows ??
+    (detectDelimiter(content, fileName)
+      ? parseDelimitedRows(
+          content,
+          detectDelimiter(content, fileName) as string,
+        )
+      : parsePlainTextRows(content));
   return rows.map((row) => ({
     title: row.title,
     text: row.text,
@@ -275,7 +286,9 @@ export function normalizeImportRows(
   }));
 }
 
-export function rowToEditable(row: TelegramManagedPostsImportRow): EditableImportRow {
+export function rowToEditable(
+  row: TelegramManagedPostsImportRow,
+): EditableImportRow {
   const icon =
     importValueToString(row.icon) ||
     importValueToString(row.emoji) ||
@@ -284,7 +297,9 @@ export function rowToEditable(row: TelegramManagedPostsImportRow): EditableImpor
     title: cleanRepeatedMarkdownLinks(importValueToString(row.title)),
     text: cleanRepeatedMarkdownLinks(importValueToString(row.text)),
     icon,
-    urlsText: importUrlsToArray(row.urls ?? row.imageUrls ?? row.images).join("\n"),
+    urlsText: importUrlsToArray(row.urls ?? row.imageUrls ?? row.images).join(
+      "\n",
+    ),
     imageSearchText: importImageSearchToArray(row.imageSearch).join("\n"),
     groupId:
       row.groupId === undefined
@@ -334,42 +349,81 @@ export function editableRowsToJsonContent(rows: EditableImportRow[]) {
   );
 }
 
-export function removeEditableImportRow(rows: EditableImportRow[], index: number) {
+export function removeEditableImportRow(
+  rows: EditableImportRow[],
+  index: number,
+) {
   return rows.filter((_, rowIndex) => rowIndex !== index);
+}
+
+export function applyGroupToEditableImportRows(
+  rows: EditableImportRow[],
+  groupId: string | null,
+) {
+  return rows.map((row) => ({ ...row, groupId }));
 }
 
 export function importRowTab(row: EditableImportRow): ImportRowTab {
   if (row.imported) return "imported";
-  if (row.approved) return "approved";
   return "new";
 }
 
 export function rowIndicesForTab(rows: EditableImportRow[], tab: ImportRowTab) {
-  return rows.flatMap((row, index) => (importRowTab(row) === tab ? [index] : []));
+  return rows.flatMap((row, index) =>
+    importRowTab(row) === tab ? [index] : [],
+  );
+}
+
+export function selectionAfterEditableRowUpdate(
+  rows: EditableImportRow[],
+  activeTab: ImportRowTab,
+  updatedRowIndex: number,
+  patch: Partial<EditableImportRow>,
+) {
+  const nextTab: ImportRowTab =
+    typeof patch.imported === "boolean"
+      ? patch.imported
+        ? "imported"
+        : "new"
+      : activeTab;
+  const visibleRows = rowIndicesForTab(rows, nextTab);
+  return {
+    tab: nextTab,
+    selectedRowIndex: visibleRows.includes(updatedRowIndex)
+      ? updatedRowIndex
+      : (visibleRows[0] ?? 0),
+  };
 }
 
 export function isSuccessfulImportStatus(
   status: TelegramManagedPostsImportProgressItem["status"],
 ) {
-  return status === "created" || status === "scheduled" || status === "alreadyExists";
+  return (
+    status === "created" || status === "scheduled" || status === "alreadyExists"
+  );
 }
 
 export function isFailedImportStatus(
   status: TelegramManagedPostsImportProgressItem["status"],
 ) {
-  return status === "failed" || status === "skipped" || status === "scheduleFailed";
+  return (
+    status === "failed" || status === "skipped" || status === "scheduleFailed"
+  );
 }
 
 export function summarizeImportProgress(
   rows: Array<Pick<TelegramManagedPostsImportProgressItem, "status">>,
 ) {
   return {
-    successful: rows.filter((row) => isSuccessfulImportStatus(row.status)).length,
+    successful: rows.filter((row) => isSuccessfulImportStatus(row.status))
+      .length,
     failed: rows.filter((row) => isFailedImportStatus(row.status)).length,
   };
 }
 
-export function summarizeResult(result: TelegramManagedPostsImportResult | null) {
+export function summarizeResult(
+  result: TelegramManagedPostsImportResult | null,
+) {
   if (!result) return { created: 0, skipped: 0, errors: 0 };
   const progress = summarizeImportProgress(result.rows);
   return {

@@ -20,6 +20,12 @@ const analytics: ConsumerFinanceAnalytics = {
 };
 
 describe("AnalyticsPresentation", () => {
+  it("does not decorate the expense summary with a minus icon", () => {
+    const { container } = render(<AnalyticsPresentation data={analytics} />);
+
+    expect(container.querySelector(".lucide-circle-minus")).toBeNull();
+  });
+
   it("makes pre-valuation native amounts visible without presenting them as current totals", () => {
     render(<AnalyticsPresentation data={analytics} />);
 

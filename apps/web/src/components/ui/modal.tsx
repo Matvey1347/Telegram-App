@@ -1,12 +1,19 @@
 "use client";
 
 import { X } from "lucide-react";
-import { type PropsWithChildren, useEffect, useId, useRef } from "react";
+import {
+  type PropsWithChildren,
+  type ReactNode,
+  useEffect,
+  useId,
+  useRef,
+} from "react";
 
 export function Modal({
   open,
   onClose,
   title,
+  headerAction,
   children,
   size = "md",
   allowOverflow = false,
@@ -15,6 +22,7 @@ export function Modal({
   open: boolean;
   onClose: () => void;
   title: string;
+  headerAction?: ReactNode;
   size?: "md" | "sm" | "xl";
   allowOverflow?: boolean;
   loading?: boolean;
@@ -40,9 +48,11 @@ export function Modal({
       );
     const frame = window.requestAnimationFrame(() => {
       if (dialog?.contains(document.activeElement)) return;
-      (dialog?.querySelector<HTMLElement>("[autofocus]") ??
+      (
+        dialog?.querySelector<HTMLElement>("[autofocus]") ??
         focusable()[0] ??
-        dialog)?.focus();
+        dialog
+      )?.focus();
     });
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -92,10 +102,13 @@ export function Modal({
         tabIndex={-1}
         className={`relative flex max-h-[calc(100dvh-1rem)] w-full flex-col rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl sm:max-h-[84vh] ${allowOverflow ? "overflow-visible" : "overflow-hidden"} ${size === "sm" ? "max-w-[560px]" : size === "xl" ? "max-w-[1280px]" : "max-w-[660px]"}`}
       >
-        <div className="mb-1 flex items-center justify-between p-4 pb-3 sm:p-5 sm:pb-3">
-          <h3 id={titleId} className="text-lg font-semibold sm:text-xl">
-            {title}
-          </h3>
+        <div className="mb-1 flex items-center justify-between gap-3 p-4 pb-3 sm:p-5 sm:pb-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
+            <h3 id={titleId} className="text-lg font-semibold sm:text-xl">
+              {title}
+            </h3>
+            {headerAction}
+          </div>
           <button
             type="button"
             aria-label={closeLabel}

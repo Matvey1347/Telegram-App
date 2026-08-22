@@ -11,6 +11,26 @@ import {
 } from "@/components/ui/primitives";
 
 describe("Modal", () => {
+  it("renders an action beside the dialog title", () => {
+    render(
+      <Modal
+        open
+        onClose={vi.fn()}
+        title="Import managed posts"
+        headerAction={<button type="button">Copy GPT prompt</button>}
+      >
+        Import form
+      </Modal>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Copy GPT prompt" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Import managed posts" }),
+    ).toBeInTheDocument();
+  });
+
   it("exposes dialog semantics, closes on Escape, and restores focus", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
@@ -18,7 +38,12 @@ describe("Modal", () => {
     document.body.appendChild(trigger);
     trigger.focus();
     const { unmount } = render(
-      <Modal open onClose={onClose} title="Edit account" closeLabel="Close dialog">
+      <Modal
+        open
+        onClose={onClose}
+        title="Edit account"
+        closeLabel="Close dialog"
+      >
         <button type="button">Save</button>
       </Modal>,
     );
