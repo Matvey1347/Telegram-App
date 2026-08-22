@@ -213,6 +213,7 @@ type FeedbackAwareConfig = AxiosRequestConfig & {
 
 export type ConsumerApiRequestConfig = AxiosRequestConfig & {
   consumer: true;
+  feedback?: ApiFeedbackConfig;
 };
 
 function withFeedback(config: FeedbackAwareConfig): FeedbackAwareConfig {
@@ -235,10 +236,13 @@ export type StreamProgressHandler<TItem = BulkActionResultItem> = (
   total: number,
 ) => void;
 
+export type StreamRequestOptions = { signal?: AbortSignal };
+
 async function streamAction<TResult, TItem = BulkActionResultItem>(
   path: string,
   payload: unknown,
   onProgress: StreamProgressHandler<TItem>,
+  options?: StreamRequestOptions,
 ): Promise<TResult> {
   const correlationId = createCorrelationId();
   lastCorrelationId = correlationId;
@@ -258,6 +262,7 @@ async function streamAction<TResult, TItem = BulkActionResultItem>(
     headers,
     credentials: "include",
     body: JSON.stringify(payload ?? {}),
+    signal: options?.signal,
   });
   if (!response.ok || !response.body) {
     const body = await response.text();
@@ -326,8 +331,9 @@ export async function streamProgressAction<
   path: string,
   payload: unknown,
   onProgress: StreamProgressHandler<TItem>,
+  options?: StreamRequestOptions,
 ): Promise<TResult> {
-  return streamAction<TResult, TItem>(path, payload, onProgress);
+  return streamAction<TResult, TItem>(path, payload, onProgress, options);
 }
 
 export function isApiNetworkError(error: unknown) {

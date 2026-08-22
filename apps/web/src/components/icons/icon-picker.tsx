@@ -30,7 +30,7 @@ import {
 } from "@/lib/emoji-icons";
 import { Button, Input } from "@/components/ui/primitives";
 import { IconAvatar } from "./icon-avatar";
-
+import { emojiLocalizedSearchTerms, uiCopy, type UiLocale } from "@/lib/ui-i18n";
 type IconPickerProps = {
   iconId?: string | null;
   icon?: Icon | ResolvedEmoji | null;
@@ -45,6 +45,7 @@ type IconPickerProps = {
   disabled?: boolean;
   allowImages?: boolean;
   onPendingChange?: (pending: boolean) => void;
+  uiLocale?: UiLocale;
 };
 
 type UploadState = {
@@ -79,16 +80,11 @@ type Tab = (typeof tabOrder)[number];
 type IconSection = "recent" | EmojiCategory | "custom";
 
 const sectionTabs = [
-  { section: "recent", icon: Clock3, label: "Recent" },
-  { section: "people", icon: Smile, label: "People" },
-  { section: "nature", icon: Leaf, label: "Nature" },
-  { section: "food", icon: Utensils, label: "Food" },
-  { section: "activity", icon: Dumbbell, label: "Activity" },
-  { section: "travel", icon: Plane, label: "Travel" },
-  { section: "objects", icon: Package, label: "Objects" },
-  { section: "symbols", icon: Shapes, label: "Symbols" },
-  { section: "flags", icon: Flag, label: "Flags" },
-  { section: "custom", icon: Grid2x2, label: "Custom" },
+  { section: "recent", icon: Clock3 }, { section: "people", icon: Smile },
+  { section: "nature", icon: Leaf }, { section: "food", icon: Utensils },
+  { section: "activity", icon: Dumbbell }, { section: "travel", icon: Plane },
+  { section: "objects", icon: Package }, { section: "symbols", icon: Shapes },
+  { section: "flags", icon: Flag }, { section: "custom", icon: Grid2x2 },
 ] as const;
 
 function stripExtension(fileName: string) {
@@ -114,17 +110,17 @@ function isStandardRecent(icon: RecentIcon): icon is RecentStandardIcon {
   return icon.kind === "standard";
 }
 
-function matchesSearch(icon: EmojiIcon, search: string) {
+function matchesSearch(icon: EmojiIcon, search: string, locale?: UiLocale) {
   if (!search) return true;
   const haystack =
-    `${icon.emoji} ${icon.name} ${icon.keywords.join(" ")} ${emojiCategoryLabels[icon.category]}`.toLowerCase();
+    `${icon.emoji} ${icon.name} ${icon.keywords.join(" ")} ${emojiCategoryLabels[icon.category]} ${emojiLocalizedSearchTerms(icon.name, icon.category, locale)}`.toLowerCase();
   return haystack.includes(search);
 }
 
-function matchesRecentStandard(item: RecentStandardIcon, search: string) {
+function matchesRecentStandard(item: RecentStandardIcon, search: string, locale?: UiLocale) {
   if (!search) return true;
   const haystack =
-    `${item.emoji} ${item.name} ${item.keywords.join(" ")} ${emojiCategoryLabels[item.category]}`.toLowerCase();
+    `${item.emoji} ${item.name} ${item.keywords.join(" ")} ${emojiCategoryLabels[item.category]} ${emojiLocalizedSearchTerms(item.name, item.category, locale)}`.toLowerCase();
   return haystack.includes(search);
 }
 
@@ -138,7 +134,7 @@ export function IconPicker({
   icon,
   onChange,
   onEmojiChange,
-  buttonLabel = "Add icon",
+  buttonLabel,
   ariaLabel,
   className = "",
   iconClassName = "",
@@ -147,7 +143,10 @@ export function IconPicker({
   disabled = false,
   allowImages = true,
   onPendingChange,
+  uiLocale,
 }: IconPickerProps) {
+  const ui = uiCopy(uiLocale);
+  const resolvedButtonLabel = buttonLabel ?? ui.addIcon;
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("icons");
@@ -314,8 +313,8 @@ export function IconPicker({
 
   const filteredStandardIcons = useMemo(() => {
     const value = search.trim().toLowerCase();
-    return emojiIcons.filter((item) => matchesSearch(item, value));
-  }, [search]);
+    return emojiIcons.filter((item) => matchesSearch(item, value, uiLocale));
+  }, [search, uiLocale]);
 
   const normalizedSearch = search.trim().toLowerCase();
   const isSearching = normalizedSearch.length > 0;
@@ -333,11 +332,11 @@ export function IconPicker({
       flags: [],
     };
     for (const icon of emojiIcons) {
-      if (!matchesSearch(icon, value)) continue;
+      if (!matchesSearch(icon, value, uiLocale)) continue;
       grouped[icon.category].push(icon);
     }
     return grouped;
-  }, [search]);
+  }, [search, uiLocale]);
 
   const currentIcon =
     iconToResolvedEmoji(optimisticIcon) ??
@@ -451,8 +450,8 @@ export function IconPicker({
     () =>
       recentIcons
         .filter(isStandardRecent)
-        .filter((item) => matchesRecentStandard(item, normalizedSearch)),
-    [normalizedSearch, recentIcons],
+        .filter((item) => matchesRecentStandard(item, normalizedSearch, uiLocale)),
+    [normalizedSearch, recentIcons, uiLocale],
   );
   const savedRecent = useMemo(
     () =>
@@ -581,7 +580,7 @@ export function IconPicker({
         type="button"
         ref={triggerRef}
         disabled={disabled}
-        aria-label={ariaLabel ?? (currentIcon ? "Change icon" : buttonLabel)}
+        aria-label={ariaLabel ?? (currentIcon ? ui.changeIcon : resolvedButtonLabel)}
         onClick={() => {
           if (disabled) return;
           if (open) {
@@ -611,7 +610,7 @@ export function IconPicker({
           <Plus size={bare ? 14 : 16} />
         )}
         {!compact && !bare ? (
-          <span>{currentIcon ? "Change icon" : buttonLabel}</span>
+          <span>{currentIcon ? ui.changeIcon : resolvedButtonLabel}</span>
         ) : null}
       </button>
 
@@ -639,7 +638,7 @@ export function IconPicker({
                             }}
                             className={`rounded-md px-2.5 py-1 text-sm capitalize ${tab === item ? "bg-neutral-800 text-white" : "text-neutral-400 hover:text-white"}`}
                           >
-                            {item}
+                            {ui[item]}
                           </button>
                         ))}
                     </div>
@@ -656,7 +655,7 @@ export function IconPicker({
                       }}
                       className="mr-1 text-sm text-neutral-400 hover:text-white"
                     >
-                      Remove
+                      {ui.remove}
                     </button>
                   </div>
 
@@ -670,7 +669,7 @@ export function IconPicker({
                         <Input
                           value={search}
                           onChange={(e) => setSearch(e.target.value)}
-                          placeholder="Search icon by name"
+                          placeholder={ui.searchIcon}
                           className="pl-9 py-2"
                         />
                       </div>
@@ -702,7 +701,7 @@ export function IconPicker({
                             ) : (
                               <Upload size={14} />
                             )}
-                            Upload
+                            {ui.upload}
                           </span>
                         </Button>
                       </>
@@ -720,15 +719,15 @@ export function IconPicker({
                         <div>
                           <div className="mb-1.5 flex items-center justify-between">
                             <p className="text-sm font-medium text-neutral-300">
-                              Results
+                              {ui.results}
                             </p>
                             <p className="text-xs text-neutral-500">
-                              {totalSearchResults} items
+                              {totalSearchResults} {ui.items}
                             </p>
                           </div>
                           {iconsQuery.isLoading ? (
                             <p className="text-sm text-neutral-400">
-                              Loading icons...
+                              {ui.loadingIcons}
                             </p>
                           ) : null}
                           {totalSearchResults ? (
@@ -791,7 +790,7 @@ export function IconPicker({
                             </div>
                           ) : (
                             <p className="mt-3 text-sm text-neutral-400">
-                              No icons found.
+                              {ui.noIcons}
                             </p>
                           )}
                         </div>
@@ -806,11 +805,11 @@ export function IconPicker({
                             >
                               <div className="mb-1.5 flex items-center justify-between">
                                 <p className="text-sm font-medium text-neutral-300">
-                                  Recent
+                                  {ui.recent}
                                 </p>
                                 <p className="text-xs text-neutral-500">
                                   {standardRecent.length + savedRecent.length}{" "}
-                                  items
+                                  {ui.items}
                                 </p>
                               </div>
                               <div className="grid grid-cols-8 justify-items-center gap-1 sm:grid-cols-10">
@@ -849,19 +848,19 @@ export function IconPicker({
                           <div className={hasRecentItems ? "mt-3" : ""}>
                             <div className="mb-1.5 flex items-center justify-between">
                               <p className="text-sm font-medium text-neutral-300">
-                                Standard
+                                {ui.standard}
                               </p>
                               <p className="text-xs text-neutral-500">
-                                {filteredStandardIcons.length} results
+                                {filteredStandardIcons.length} {ui.results.toLowerCase()}
                               </p>
                             </div>
                             {!standardIconsReady ? (
                               <div className="rounded-lg border border-neutral-900 bg-neutral-900/50 px-3 py-4 text-sm text-neutral-500">
-                                Loading icons...
+                                {ui.loadingIcons}
                               </div>
                             ) : filteredStandardIcons.length ? (
                               Object.entries(emojiCategoryLabels).map(
-                                ([category, label]) => {
+                                ([category]) => {
                                   const items =
                                     emojiByCategory[category as EmojiCategory];
                                   if (!items.length) return null;
@@ -877,7 +876,7 @@ export function IconPicker({
                                     >
                                       <div className="mb-1 flex items-center justify-between">
                                         <p className="text-xs uppercase tracking-wide text-neutral-500">
-                                          {label}
+                                          {ui[category as EmojiCategory]}
                                         </p>
                                         <p className="text-xs text-neutral-500">
                                           {items.length}
@@ -904,7 +903,7 @@ export function IconPicker({
                               )
                             ) : (
                               <p className="mt-3 text-sm text-neutral-400">
-                                No standard icons found.
+                                {ui.noStandardIcons}
                               </p>
                             )}
                           </div>
@@ -918,7 +917,7 @@ export function IconPicker({
                             >
                               <div className="mb-1.5 flex items-center justify-between">
                                 <p className="text-sm font-medium text-neutral-300">
-                                  Custom
+                                  {ui.custom}
                                 </p>
                                 <p className="text-xs text-neutral-500">
                                   {customIcons.length} results
@@ -926,7 +925,7 @@ export function IconPicker({
                               </div>
                               {iconsQuery.isLoading ? (
                                 <p className="text-sm text-neutral-400">
-                                  Loading custom icons...
+                                  {ui.loadingCustomIcons}
                                 </p>
                               ) : null}
                               <div className="grid grid-cols-8 justify-items-center gap-1 sm:grid-cols-10">
@@ -977,7 +976,7 @@ export function IconPicker({
                               </div>
                               {!iconsQuery.isLoading && !customIcons.length ? (
                                 <p className="mt-3 text-sm text-neutral-400">
-                                  No custom icons yet.
+                                  {ui.noCustomIcons}
                                 </p>
                               ) : null}
                             </div>
@@ -994,7 +993,8 @@ export function IconPicker({
                               ({ section }) =>
                                 allowImages || section !== "custom",
                             )
-                            .map(({ section, icon: Icon, label }) => {
+                            .map(({ section, icon: Icon }) => {
+                              const label = ui[section];
                               const disabled =
                                 section === "recent"
                                   ? !hasRecentItems
@@ -1042,17 +1042,17 @@ export function IconPicker({
                           size={24}
                           className="animate-spin text-blue-400"
                         />
-                        <span>Uploading image...</span>
+                        <span>{ui.uploadingImage}</span>
                         <span className="text-xs text-neutral-500">
-                          Preparing preview
+                          {ui.preparingPreview}
                         </span>
                       </div>
                     ) : !upload ? (
                       <div className="flex w-full flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-8 text-neutral-300">
                         <ImagePlus size={20} />
-                        <span>Upload an image</span>
+                        <span>{ui.uploadImage}</span>
                         <span className="text-xs text-neutral-500">
-                          Paste or drag and drop works too
+                          {ui.dropImage}
                         </span>
                       </div>
                     ) : (
@@ -1061,7 +1061,7 @@ export function IconPicker({
                           <div className="space-y-4 pb-3">
                             <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
                               <p className="mb-3 text-sm text-neutral-400">
-                                Preview
+                                {ui.preview}
                               </p>
                               <div className="flex items-center gap-4">
                                 <img
@@ -1071,7 +1071,7 @@ export function IconPicker({
                                 />
                                 <div className="min-w-0 flex-1">
                                   <p className="text-sm text-neutral-300">
-                                    Ready to use once
+                                    {ui.readyOnce}
                                   </p>
                                   <p className="truncate text-xs text-neutral-500">
                                     {upload.fileName}
@@ -1082,14 +1082,14 @@ export function IconPicker({
                             {saveReusableOpen ? (
                               <div>
                                 <label className="mb-1 block text-sm text-neutral-300">
-                                  Icon name
+                                  {ui.iconName}
                                 </label>
                                 <Input
                                   value={uploadName}
                                   onChange={(e) =>
                                     setUploadName(e.target.value)
                                   }
-                                  placeholder="e.g. office logo"
+                                  placeholder={ui.iconNameExample}
                                 />
                               </div>
                             ) : null}
@@ -1118,7 +1118,7 @@ export function IconPicker({
                               });
                             }}
                           >
-                            {saveReusableOpen ? "Save" : "Use once"}
+                            {saveReusableOpen ? ui.save : ui.useOnce}
                           </Button>
                           {!saveReusableOpen ? (
                             <Button
@@ -1131,7 +1131,7 @@ export function IconPicker({
                                 setSaveReusableOpen(true);
                               }}
                             >
-                              Save custom icon
+                              {ui.saveCustomIcon}
                             </Button>
                           ) : null}
                           <Button
@@ -1147,7 +1147,7 @@ export function IconPicker({
                               }
                             }}
                           >
-                            Back
+                            {ui.back}
                           </Button>
                         </div>
                       </>

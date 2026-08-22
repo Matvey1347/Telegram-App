@@ -123,6 +123,7 @@ export function FinanceTransferEditor({
         <div className="space-y-3">
           <FormField label={t.fromAccount}>
             <Select
+              uiLocale={locale}
               value={fromAccountId || from?.id || ""}
               onChange={(event) => setFrom(event.target.value)}
             >
@@ -135,6 +136,7 @@ export function FinanceTransferEditor({
           </FormField>
           <FormField label={t.toAccount}>
             <Select
+              uiLocale={locale}
               value={toAccountId}
               onChange={(event) => setTo(event.target.value)}
             >

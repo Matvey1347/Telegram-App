@@ -28,6 +28,10 @@ import type {
   FinanceHistoryQueryDto,
   UpdateFinanceTransactionDto,
 } from './finance.dto';
+import {
+  financeAccountEmoji,
+  financeIconPresentation,
+} from './finance-entity-emoji';
 type ProfileContext = {
   id: string;
   defaultCurrency: string;
@@ -68,6 +72,7 @@ export class FinanceLedgerService {
       select: {
         id: true,
         name: true,
+        emoji: true,
         type: true,
         currency: true,
         openingBalance: true,
@@ -141,6 +146,10 @@ export class FinanceLedgerService {
       return {
         id: account.id,
         name: account.name,
+        iconPresentation: financeIconPresentation(
+          account.emoji,
+          financeAccountEmoji(account.type),
+        ),
         type: account.type,
         currency: account.currency,
         openingBalance: account.openingBalance.toString(),
@@ -618,7 +627,7 @@ export class FinanceLedgerService {
         AND t."deletedAt" IS NULL
         AND t."occurredAt" >= ${from}
         AND t."occurredAt" < ${to}
-      GROUP BY t."type", t."categoryId", c."name", c."key", t."currency", to_char(t."occurredAt" AT TIME ZONE ${profile.timezone || 'UTC'}, 'YYYY-MM-DD')
+      GROUP BY t."type", t."categoryId", c."name", c."key", t."currency", 6
     `;
     const hasValuedAmount = rows.some(
       (row) => !new Prisma.Decimal(row.valuedAmount || 0).isZero(),

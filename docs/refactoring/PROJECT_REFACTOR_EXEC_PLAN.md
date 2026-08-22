@@ -1,6 +1,6 @@
 # Project Refactor ExecPlan
 
-Updated: 2026-08-09
+Updated: 2026-08-21
 
 ## Current State
 
@@ -16,27 +16,27 @@ The main architectural issue is concentrated handwritten production files that c
 
 Measured before edits:
 
-| Metric | Count |
-|---|---:|
-| Handwritten production TS/TSX files | 275 |
-| Files > 500 lines | 32 |
-| Files > 1000 lines | 17 |
-| Files > 2000 lines | 10 |
-| Files > 3000 lines | 8 |
-| Largest backend file | `apps/api/src/domains/telegram/telegram-channels/telegram-channels.service.ts` - 11019 |
-| Largest frontend file | `apps/web/src/app/(telegram)/telegram-posts/page.tsx` - 6775 |
+| Metric                              |                                                                                  Count |
+| ----------------------------------- | -------------------------------------------------------------------------------------: |
+| Handwritten production TS/TSX files |                                                                                    275 |
+| Files > 500 lines                   |                                                                                     32 |
+| Files > 1000 lines                  |                                                                                     17 |
+| Files > 2000 lines                  |                                                                                     10 |
+| Files > 3000 lines                  |                                                                                      8 |
+| Largest backend file                | `apps/api/src/domains/telegram/telegram-channels/telegram-channels.service.ts` - 11019 |
+| Largest frontend file               |                           `apps/web/src/app/(telegram)/telegram-posts/page.tsx` - 6775 |
 
 ## Metrics After Current Milestone
 
-| Metric | Count |
-|---|---:|
-| Handwritten production TS/TSX files | 278 |
-| Files > 500 lines | 33 |
-| Files > 1000 lines | 18 |
-| Files > 2000 lines | 9 |
-| Files > 3000 lines | 7 |
-| Largest backend file | `apps/api/src/domains/telegram/telegram-channels/telegram-channels.service.ts` - 11019 |
-| Largest frontend file | `apps/web/src/app/(telegram)/telegram-posts/page.tsx` - 6775 |
+| Metric                              |                                                                                  Count |
+| ----------------------------------- | -------------------------------------------------------------------------------------: |
+| Handwritten production TS/TSX files |                                                                                    278 |
+| Files > 500 lines                   |                                                                                     33 |
+| Files > 1000 lines                  |                                                                                     18 |
+| Files > 2000 lines                  |                                                                                      9 |
+| Files > 3000 lines                  |                                                                                      7 |
+| Largest backend file                | `apps/api/src/domains/telegram/telegram-channels/telegram-channels.service.ts` - 11019 |
+| Largest frontend file               |                           `apps/web/src/app/(telegram)/telegram-posts/page.tsx` - 6775 |
 
 `apps/web/src/lib/api.ts` was reduced from 3575 lines to 757 lines by extracting type-only API contracts, moving `applicationLogsApi` to `apps/web/src/lib/features/operations/application-logs-api.ts`, moving endpoint facades into focused modules (`workspace-api`, `finance-api`, `prompt-notes-api`, `telegram-channels-api`, `telegram-channel-helpers-api`, `telegram-sources-api`, `marketing-api`, `telegram-ad-sales-api`), and removing now-unused managed-feedback helpers. The temporary 1486-line `apps/web/src/lib/api-types.ts` type warehouse was split into domain modules under `apps/web/src/lib/api-types/`, leaving `apps/web/src/lib/api-types.ts` as an 11-line compatibility barrel. `packages/shared/src/types/telegram-ad-sales.ts` was reduced below its legacy allowance by moving CRM contracts to `packages/shared/src/types/telegram-ad-sales-crm.ts`. `apps/api/src/domains/growth/ad-campaigns/ad-campaigns.service.ts` was reduced to 1864 lines by extracting invite-link history payload construction. Transitional architecture allowances remain shrinking-only; current project-wide `pnpm architecture:check` still fails on older oversized files that have grown outside this slice.
 
@@ -140,18 +140,18 @@ Frontend target:
 
 Pre-existing results before implementation:
 
-| Command | Result |
-|---|---|
-| `pnpm install --frozen-lockfile` | pass |
-| `pnpm db:generate` | pass |
-| `pnpm --filter api test -- --runInBand` | pass: 30 suites, 209 tests |
-| `pnpm --filter api lint` | fail: 5680 errors, 251 warnings, mostly pre-existing prettier/unsafe any |
-| `pnpm --filter api typecheck` | pass after correcting the `telegram-ad-sales.service.spec.ts` mocked `OVERDUE_PAYMENT.scheduledAt` to match the service contract |
-| `pnpm --filter api build` | pass |
-| `pnpm --filter web test -- --run` | pass: 18 files, 89 tests |
-| `pnpm --filter web lint` | fail: 190 errors, 101 warnings, mostly pre-existing explicit any/react compiler rules |
-| `pnpm --filter web typecheck` | pass |
-| `pnpm --filter web build` | pass |
+| Command                                 | Result                                                                                                                           |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install --frozen-lockfile`        | pass                                                                                                                             |
+| `pnpm db:generate`                      | pass                                                                                                                             |
+| `pnpm --filter api test -- --runInBand` | pass: 30 suites, 209 tests                                                                                                       |
+| `pnpm --filter api lint`                | fail: 5680 errors, 251 warnings, mostly pre-existing prettier/unsafe any                                                         |
+| `pnpm --filter api typecheck`           | pass after correcting the `telegram-ad-sales.service.spec.ts` mocked `OVERDUE_PAYMENT.scheduledAt` to match the service contract |
+| `pnpm --filter api build`               | pass                                                                                                                             |
+| `pnpm --filter web test -- --run`       | pass: 18 files, 89 tests                                                                                                         |
+| `pnpm --filter web lint`                | fail: 190 errors, 101 warnings, mostly pre-existing explicit any/react compiler rules                                            |
+| `pnpm --filter web typecheck`           | pass                                                                                                                             |
+| `pnpm --filter web build`               | pass                                                                                                                             |
 
 ## Progress By Milestone
 
@@ -210,6 +210,14 @@ Pre-existing results before implementation:
 - Completed the consumer Finance product pass: the Finance bot now provides a Web App entry point and concise chat actions, proposal confirmation is atomic, and the Mini App is decomposed into focused Home, Transactions, Budget, Accounts and More workflows backed by typed consumer contracts and narrow query keys.
 - New Finance production files remain below architecture thresholds. The existing project-wide architecture failures and five unrelated Telegram channel tests remain outside this slice.
 
+## Finance Consumer Surface Split
+
+- Split the shared consumer layout into explicit Telegram Mini App and browser Web App shells while retaining one auth/bootstrap container, API client, query-key family and mutation implementation.
+- Kept Telegram viewport, safe-area, FAB and bottom-navigation behavior inside the Mini App shell. The browser shell now owns its desktop sidebar, operational header, responsive browser navigation and profile context.
+- Added browser-only Reminders and Billing destinations that compose the existing settings/reminder/billing workflows with screen-oriented lazy queries rather than duplicating domain logic.
+- Added a bounded desktop transaction table over the existing cursor endpoint. Row details remain user-triggered, so collection rendering adds no per-row HTTP joins.
+- The browser Overview continues to use the existing bounded dashboard read model and arranges its account, category, budget, goal and recent summaries in a desktop grid without adding a giant endpoint or bootstrap fan-out.
+
 ## Domain Layout Consolidation
 
 - Consolidated backend business modules under `apps/api/src/domains/{identity,workspace,finance,growth,telegram,operations}`. Shared infrastructure remains at `common`, `prisma`, and `telegram/shared` so domain grouping does not blur adapter boundaries.
@@ -232,42 +240,42 @@ Pre-existing results before implementation:
 
 ## Latest Validation
 
-| Command | Result |
-|---|---|
-| `pnpm architecture:check` | fail: current refactored files are within transitional allowances, but unrelated legacy growth remains in Telegram channels, Telegram posts pages, transactions, UI primitives, icon picker and managed-post import modal |
-| `pnpm --filter @telegram-system/shared typecheck` | pass |
-| `pnpm --filter api typecheck` | pass |
-| `pnpm --filter api test -- telegram-ad-sales.service.spec.ts telegram-ad-sales-crm-advertisers.service.spec.ts --runInBand` | pass: 2 suites, 31 tests |
-| `pnpm --filter api test -- --runInBand` | pass: 30 suites, 209 tests |
-| `pnpm --filter api test -- telegram-ad-sales.service.spec.ts --runInBand` | pass: 19 tests |
-| `pnpm --filter api test -- invite-link-history.spec.ts --runInBand` | pass |
-| `pnpm --filter api test -- ad-campaigns invite-link-history ad-campaign-admission-analytics --runInBand` | pass |
-| `pnpm --filter api build` | pass |
-| `pnpm --filter web typecheck` | pass |
-| `pnpm --filter web test -- --run` | pass: 18 files, 89 tests; existing jsdom navigation/chart-size stderr remains non-fatal |
-| `pnpm --filter web test -- src/lib/telegram-ad-sales-query.test.ts --run` | pass: 1 test |
-| `pnpm --filter web build` | pass |
-| `pnpm db:generate` | pass |
-| `pnpm --filter @telegram-system/shared build` | pass |
-| `pnpm --filter web exec eslint src/lib/application-logs-api.ts src/lib/query-keys.ts` | pass; pnpm emitted local Node v18 engine warning |
-| `pnpm --filter api exec eslint src/domains/growth/ad-campaigns/invite-link-history.ts src/domains/growth/ad-campaigns/invite-link-history.spec.ts` | pass |
-| `pnpm --filter api lint` | fail: 5622 errors, 251 warnings; existing repo-wide lint baseline remains |
-| `pnpm --filter web lint` | fail: 190 errors, 101 warnings; existing repo-wide lint baseline remains |
-| `ARCHITECTURE_STRICT=1 pnpm architecture:check` | expected fail until all transitional oversized files are decomposed |
+| Command                                                                                                                                            | Result                                                                                                                                                                                                                    |
+| -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm architecture:check`                                                                                                                          | fail: current refactored files are within transitional allowances, but unrelated legacy growth remains in Telegram channels, Telegram posts pages, transactions, UI primitives, icon picker and managed-post import modal |
+| `pnpm --filter @telegram-system/shared typecheck`                                                                                                  | pass                                                                                                                                                                                                                      |
+| `pnpm --filter api typecheck`                                                                                                                      | pass                                                                                                                                                                                                                      |
+| `pnpm --filter api test -- telegram-ad-sales.service.spec.ts telegram-ad-sales-crm-advertisers.service.spec.ts --runInBand`                        | pass: 2 suites, 31 tests                                                                                                                                                                                                  |
+| `pnpm --filter api test -- --runInBand`                                                                                                            | pass: 30 suites, 209 tests                                                                                                                                                                                                |
+| `pnpm --filter api test -- telegram-ad-sales.service.spec.ts --runInBand`                                                                          | pass: 19 tests                                                                                                                                                                                                            |
+| `pnpm --filter api test -- invite-link-history.spec.ts --runInBand`                                                                                | pass                                                                                                                                                                                                                      |
+| `pnpm --filter api test -- ad-campaigns invite-link-history ad-campaign-admission-analytics --runInBand`                                           | pass                                                                                                                                                                                                                      |
+| `pnpm --filter api build`                                                                                                                          | pass                                                                                                                                                                                                                      |
+| `pnpm --filter web typecheck`                                                                                                                      | pass                                                                                                                                                                                                                      |
+| `pnpm --filter web test -- --run`                                                                                                                  | pass: 18 files, 89 tests; existing jsdom navigation/chart-size stderr remains non-fatal                                                                                                                                   |
+| `pnpm --filter web test -- src/lib/telegram-ad-sales-query.test.ts --run`                                                                          | pass: 1 test                                                                                                                                                                                                              |
+| `pnpm --filter web build`                                                                                                                          | pass                                                                                                                                                                                                                      |
+| `pnpm db:generate`                                                                                                                                 | pass                                                                                                                                                                                                                      |
+| `pnpm --filter @telegram-system/shared build`                                                                                                      | pass                                                                                                                                                                                                                      |
+| `pnpm --filter web exec eslint src/lib/application-logs-api.ts src/lib/query-keys.ts`                                                              | pass; pnpm emitted local Node v18 engine warning                                                                                                                                                                          |
+| `pnpm --filter api exec eslint src/domains/growth/ad-campaigns/invite-link-history.ts src/domains/growth/ad-campaigns/invite-link-history.spec.ts` | pass                                                                                                                                                                                                                      |
+| `pnpm --filter api lint`                                                                                                                           | fail: 5622 errors, 251 warnings; existing repo-wide lint baseline remains                                                                                                                                                 |
+| `pnpm --filter web lint`                                                                                                                           | fail: 190 errors, 101 warnings; existing repo-wide lint baseline remains                                                                                                                                                  |
+| `ARCHITECTURE_STRICT=1 pnpm architecture:check`                                                                                                    | expected fail until all transitional oversized files are decomposed                                                                                                                                                       |
 
 Domain-layout validation on 2026-08-09:
 
-| Command | Result |
-|---|---|
-| `pnpm --filter api typecheck` | pass |
-| `pnpm --filter api build` | pass |
-| focused bot/scheduler/system-bot tests | pass: 30 suites, 134 tests |
-| `pnpm --filter api test -- --runInBand` | 70 suites and 409 tests pass; the same five legacy Telegram managed-post mock failures remain |
-| `pnpm --filter web typecheck` | pass after regenerating Next route types |
-| `pnpm --filter web test -- --run` | pass: 31 files, 149 tests |
-| `pnpm --filter web build` | pass; 36 existing public routes retained |
-| shared package typecheck/build | pass |
-| `pnpm architecture:check` | path migration is recognized; still fails on pre-existing shrinking-baseline growth and the existing oversized managed-post import modal |
+| Command                                 | Result                                                                                                                                   |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm --filter api typecheck`           | pass                                                                                                                                     |
+| `pnpm --filter api build`               | pass                                                                                                                                     |
+| focused bot/scheduler/system-bot tests  | pass: 30 suites, 134 tests                                                                                                               |
+| `pnpm --filter api test -- --runInBand` | 70 suites and 409 tests pass; the same five legacy Telegram managed-post mock failures remain                                            |
+| `pnpm --filter web typecheck`           | pass after regenerating Next route types                                                                                                 |
+| `pnpm --filter web test -- --run`       | pass: 31 files, 149 tests                                                                                                                |
+| `pnpm --filter web build`               | pass; 36 existing public routes retained                                                                                                 |
+| shared package typecheck/build          | pass                                                                                                                                     |
+| `pnpm architecture:check`               | path migration is recognized; still fails on pre-existing shrinking-baseline growth and the existing oversized managed-post import modal |
 
 ## Integration Review
 

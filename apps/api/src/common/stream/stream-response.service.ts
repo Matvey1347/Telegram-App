@@ -16,6 +16,7 @@ export class StreamResponseService {
       eventPrefix: string;
       action: (
         onProgress: (item: TItem, current: number, total: number) => void,
+        signal: AbortSignal,
       ) => Promise<TResult>;
     },
   ) {
@@ -29,6 +30,9 @@ export class StreamResponseService {
       res.setHeader('X-Correlation-Id', context.correlationId);
     }
     res.flushHeaders();
+    const abortController = new AbortController();
+    const abortOnClose = () => abortController.abort();
+    res.once('close', abortOnClose);
 
     this.applicationLogger.writeStructured({
       level: 'info',
@@ -40,12 +44,15 @@ export class StreamResponseService {
 
     try {
       const result = await config.action((item, current, total) => {
+        if (res.destroyed || res.writableEnded) return;
         res.write(
           `${JSON.stringify({ type: 'progress', item, current, total })}\n`,
         );
         (res as Response & { flush?: () => void }).flush?.();
-      });
-      res.write(`${JSON.stringify({ type: 'complete', result })}\n`);
+      }, abortController.signal);
+      if (!res.destroyed && !res.writableEnded) {
+        res.write(`${JSON.stringify({ type: 'complete', result })}\n`);
+      }
       (res as Response & { flush?: () => void }).flush?.();
       this.applicationLogger.writeStructured({
         level: 'info',
@@ -58,13 +65,15 @@ export class StreamResponseService {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Stream action failed';
-      res.write(
-        `${JSON.stringify({
-          type: 'error',
-          message,
-          correlationId: context?.correlationId,
-        })}\n`,
-      );
+      if (!res.destroyed && !res.writableEnded) {
+        res.write(
+          `${JSON.stringify({
+            type: 'error',
+            message,
+            correlationId: context?.correlationId,
+          })}\n`,
+        );
+      }
       (res as Response & { flush?: () => void }).flush?.();
       this.applicationLogger.writeStructured({
         level: 'error',
@@ -77,7 +86,8 @@ export class StreamResponseService {
         stack: error instanceof Error ? error.stack || null : null,
       });
     } finally {
-      res.end();
+      res.off('close', abortOnClose);
+      if (!res.destroyed && !res.writableEnded) res.end();
     }
   }
 }

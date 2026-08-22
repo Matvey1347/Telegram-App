@@ -1,12 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { BotBillingConnectionStatus, BotBillingProvider, BotBillingProviderMode, BotSubscriptionSource, BotSubscriptionStatus, Prisma, TelegramBotRuntimeEnvironment, WorkspaceRole } from '@prisma/client';
-import type { BotBillingOverviewView, BotBillingProviderConfigView, BotBillingSubscriberPage } from '@telegram-system/shared';
+import type { BotBillingOverviewView, BotBillingProviderConfigView, BotBillingSubscriberPage, BotBillingUserPage } from '@telegram-system/shared';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
 import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { BILLING_PROVIDER_CAPABILITIES } from './bot-billing.providers';
-import { BillingSubscribersQueryDto, CreateBillingGrantDto, CreateBillingPlanDto, CreateBillingPlanPriceDto, SetBillingPriceVisibilityDto, UpsertBillingProviderConfigDto } from './dto';
+import { BillingSubscribersQueryDto, BillingUsersQueryDto, CreateBillingGrantDto, CreateBillingPlanDto, CreateBillingPlanPriceDto, SetBillingPriceVisibilityDto, UpdateFinanceSupportProfileDto, UpsertBillingProviderConfigDto } from './dto';
 import type { CreateBillingCouponDto } from './dto';
 import { StripeBillingProvider } from './stripe-billing.provider';
 import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
@@ -14,6 +14,11 @@ import { BotBillingAnalyticsService } from './bot-billing-analytics.service';
 
 type Provider = 'STRIPE' | 'TELEGRAM_STARS';
 type Mode = 'TEST' | 'LIVE';
+
+function supportLocale(profileLocale?: string | null, telegramLocale?: string | null): 'en' | 'uk' | 'ru' {
+  const locale = (profileLocale || telegramLocale || 'en').toLowerCase().split(/[-_]/u)[0];
+  return locale === 'uk' || locale === 'ru' ? locale : 'en';
+}
 
 @Injectable()
 export class BotBillingService {
@@ -389,14 +394,15 @@ export class BotBillingService {
     catch (error) { await this.prisma.botCoupon.delete({ where: { id: coupon.id } }); throw error; }
   }
 
-  async overview(userId: string, botIntegrationId: string) {
+  async overview(userId: string, botIntegrationId: string, environment: 'LOCAL' | 'PRODUCTION' = 'PRODUCTION') {
     const bot = await this.bot(userId, botIntegrationId);
+    const runtime = { runtimeInstance: { is: { environment: environment as TelegramBotRuntimeEnvironment } } };
     const [subscriptionMetrics, registeredUsers, revenue, recentEvents, recentSubscriptions] = await Promise.all([
-      this.prisma.botSubscription.findMany({ where: { botIntegrationId, workspaceId: bot.workspaceId }, select: { telegramBotUserId: true, status: true, currency: true, interval: true, amountMinor: true, currentPeriodEnd: true, providerSubscription: { select: { mode: true } } } }),
-      this.prisma.telegramBotUser.count({ where: { botIntegrationId, workspaceId: bot.workspaceId } }),
-      this.prisma.botBillingEvent.groupBy({ by: ['currency'], where: { botIntegrationId, workspaceId: bot.workspaceId, type: 'PAYMENT_SUCCEEDED', mode: BotBillingProviderMode.LIVE }, _sum: { amountMinor: true } }),
-      this.prisma.botBillingEvent.findMany({ where: { botIntegrationId, workspaceId: bot.workspaceId, type: { in: ['PAYMENT_SUCCEEDED', 'PAYMENT_FAILED'] } }, orderBy: { occurredAt: 'desc' }, take: 12, select: { id: true, type: true, occurredAt: true, subscriptionId: true, amountMinor: true, currency: true, subscription: { select: { telegramBotUser: { select: { id: true, telegramUserId: true, username: true, firstName: true } }, plan: { select: { id: true, name: true } } } } } }),
-      this.prisma.botSubscription.findMany({ where: { botIntegrationId, workspaceId: bot.workspaceId }, orderBy: { createdAt: 'desc' }, take: 8, select: { id: true, createdAt: true, amountMinor: true, currency: true, telegramBotUser: { select: { id: true, telegramUserId: true, username: true, firstName: true } }, plan: { select: { id: true, name: true } } } }),
+      this.prisma.botSubscription.findMany({ where: { botIntegrationId, workspaceId: bot.workspaceId, telegramBotUser: runtime }, select: { telegramBotUserId: true, status: true, currency: true, interval: true, amountMinor: true, currentPeriodEnd: true, providerSubscription: { select: { mode: true } } } }),
+      this.prisma.telegramBotUser.count({ where: { botIntegrationId, workspaceId: bot.workspaceId, ...runtime } }),
+      this.prisma.botBillingEvent.groupBy({ by: ['currency'], where: { botIntegrationId, workspaceId: bot.workspaceId, type: 'PAYMENT_SUCCEEDED', mode: BotBillingProviderMode.LIVE, subscription: { telegramBotUser: runtime } }, _sum: { amountMinor: true } }),
+      this.prisma.botBillingEvent.findMany({ where: { botIntegrationId, workspaceId: bot.workspaceId, type: { in: ['PAYMENT_SUCCEEDED', 'PAYMENT_FAILED'] }, subscription: { telegramBotUser: runtime } }, orderBy: { occurredAt: 'desc' }, take: 12, select: { id: true, type: true, occurredAt: true, subscriptionId: true, amountMinor: true, currency: true, subscription: { select: { telegramBotUser: { select: { id: true, telegramUserId: true, username: true, firstName: true } }, plan: { select: { id: true, name: true } } } } } }),
+      this.prisma.botSubscription.findMany({ where: { botIntegrationId, workspaceId: bot.workspaceId, telegramBotUser: runtime }, orderBy: { createdAt: 'desc' }, take: 8, select: { id: true, createdAt: true, amountMinor: true, currency: true, telegramBotUser: { select: { id: true, telegramUserId: true, username: true, firstName: true } }, plan: { select: { id: true, name: true } } } }),
     ]);
     const analytics = this.analytics.calculate(registeredUsers, subscriptionMetrics);
     analytics.collectedRevenue = revenue.map((row) => ({ currency: row.currency, amountMinor: row._sum.amountMinor || 0 }));
@@ -428,11 +434,58 @@ export class BotBillingService {
       ...(query.source ? { source: query.source as BotSubscriptionSource } : {}),
       ...(query.planId ? { planId: query.planId } : {}),
       ...(query.provider ? { providerSubscription: { is: { provider: query.provider as BotBillingProvider } } } : {}),
-      ...(query.search?.trim() ? { telegramBotUser: { is: { OR: [{ username: { contains: query.search.trim(), mode: 'insensitive' as const } }, { firstName: { contains: query.search.trim(), mode: 'insensitive' as const } }, { telegramUserId: { contains: query.search.trim() } }] } } } : {}),
+      ...((query.search?.trim() || query.environment) ? { telegramBotUser: { is: {
+        ...(query.search?.trim() ? { OR: [{ username: { contains: query.search.trim(), mode: 'insensitive' as const } }, { firstName: { contains: query.search.trim(), mode: 'insensitive' as const } }, { telegramUserId: { contains: query.search.trim() } }] } : {}),
+        ...(query.environment ? { runtimeInstance: { is: { environment: query.environment as TelegramBotRuntimeEnvironment } } } : {}),
+      } } } : {}),
     };
     const rows = await this.prisma.botSubscription.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit + 1, ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}), select: { id: true, source: true, status: true, amountMinor: true, currency: true, interval: true, currentPeriodStart: true, currentPeriodEnd: true, cancelAtPeriodEnd: true, createdAt: true, telegramBotUser: { select: { id: true, telegramUserId: true, username: true, firstName: true } }, plan: { select: { id: true, name: true } }, providerSubscription: { select: { provider: true } } } });
     const page = rows.slice(0, limit);
     return { items: page.map((row) => ({ id: row.id, user: row.telegramBotUser, plan: row.plan, amountMinor: row.amountMinor, currency: row.currency, interval: row.interval, source: row.source, provider: row.providerSubscription?.provider || null, status: row.status, currentPeriodStart: row.currentPeriodStart?.toISOString() || null, currentPeriodEnd: row.currentPeriodEnd?.toISOString() || null, cancelAtPeriodEnd: row.cancelAtPeriodEnd, createdAt: row.createdAt.toISOString() })), nextCursor: rows.length > limit ? page.at(-1)?.id || null : null };
+  }
+
+  async users(userId: string, botIntegrationId: string, query: BillingUsersQueryDto): Promise<BotBillingUserPage> {
+    const bot = await this.bot(userId, botIntegrationId);
+    const limit = Math.min(query.limit || 25, 100);
+    const rows = await this.prisma.telegramBotUser.findMany({
+      where: {
+        workspaceId: bot.workspaceId, botIntegrationId,
+        runtimeInstance: { is: { environment: (query.environment || 'PRODUCTION') as TelegramBotRuntimeEnvironment } },
+        ...(query.search?.trim() ? { OR: [{ username: { contains: query.search.trim(), mode: 'insensitive' } }, { firstName: { contains: query.search.trim(), mode: 'insensitive' } }, { lastName: { contains: query.search.trim(), mode: 'insensitive' } }, { telegramUserId: { contains: query.search.trim() } }] } : {}),
+      },
+      orderBy: [{ lastInteractionAt: 'desc' }, { id: 'desc' }], take: limit + 1,
+      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
+      select: {
+        id: true, telegramUserId: true, username: true, firstName: true, lastName: true,
+        languageCode: true, firstSeenAt: true, lastInteractionAt: true,
+        runtimeInstance: { select: { environment: true } },
+        financeProfiles: { where: { botIntegrationId }, take: 1, select: { id: true, locale: true, defaultCurrency: true, timezone: true, onboardingCompletedAt: true } },
+        billingSubscriptions: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, status: true, source: true, currentPeriodEnd: true, plan: { select: { id: true, name: true, code: true } } } },
+      },
+    });
+    const page = rows.slice(0, limit);
+    return {
+      items: page.map(({ financeProfiles, billingSubscriptions, runtimeInstance, ...row }) => ({
+        ...row, environment: runtimeInstance!.environment,
+        firstSeenAt: row.firstSeenAt.toISOString(), lastInteractionAt: row.lastInteractionAt.toISOString(),
+        profile: financeProfiles[0] ? { id: financeProfiles[0].id, locale: supportLocale(financeProfiles[0].locale, row.languageCode), defaultCurrency: financeProfiles[0].defaultCurrency, timezone: financeProfiles[0].timezone, onboardingCompleted: Boolean(financeProfiles[0].onboardingCompletedAt) } : null,
+        subscription: billingSubscriptions[0] ? { ...billingSubscriptions[0], currentPeriodEnd: billingSubscriptions[0].currentPeriodEnd?.toISOString() || null } : null,
+      })),
+      nextCursor: rows.length > limit ? page.at(-1)?.id || null : null,
+    };
+  }
+
+  async updateFinanceSupportProfile(userId: string, botIntegrationId: string, telegramBotUserId: string, dto: UpdateFinanceSupportProfileDto) {
+    const bot = await this.bot(userId, botIntegrationId);
+    if (dto.timezone) try { Intl.DateTimeFormat('en', { timeZone: dto.timezone }).format(); } catch { throw new BadRequestException('Unknown timezone'); }
+    const profile = await this.prisma.financeProfile.findFirst({ where: { botIntegrationId, telegramBotUserId, botIntegration: { workspaceId: bot.workspaceId } }, select: { id: true } });
+    if (!profile) throw new NotFoundException('Finance profile not found');
+    const updated = await this.prisma.financeProfile.update({ where: { id: profile.id }, data: {
+      ...(dto.locale ? { locale: dto.locale } : {}), ...(dto.currency ? { defaultCurrency: dto.currency.toUpperCase().slice(0, 3) } : {}),
+      ...(dto.timezone ? { timezone: dto.timezone } : {}), ...(dto.resetOnboarding ? { onboardingCompletedAt: null } : {}),
+    }, select: { id: true, locale: true, defaultCurrency: true, timezone: true, onboardingCompletedAt: true } });
+    this.audit(bot.workspaceId, userId, 'finance.support_profile_updated', { botIntegrationId, telegramBotUserId, fields: Object.keys(dto) });
+    return updated;
   }
 
   private audit(workspaceId: string, userId: string, event: string, metadata: Record<string, unknown>) {

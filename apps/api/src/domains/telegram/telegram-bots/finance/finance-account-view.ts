@@ -2,6 +2,10 @@ import { NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
 import { PrismaService } from '../../../../prisma/prisma.service';
+import {
+  financeAccountEmoji,
+  financeIconPresentation,
+} from './finance-entity-emoji';
 
 /** Builds one authoritative account response in constant query count. */
 export async function financeAccountView(
@@ -17,6 +21,7 @@ export async function financeAccountView(
         select: {
           id: true,
           name: true,
+          emoji: true,
           type: true,
           currency: true,
           openingBalance: true,
@@ -63,8 +68,13 @@ export async function financeAccountView(
           profile.botIntegration.workspaceId,
         )
       : null;
+  const { emoji, ...accountFields } = account;
   return {
-    ...account,
+    ...accountFields,
+    iconPresentation: financeIconPresentation(
+      emoji,
+      financeAccountEmoji(account.type),
+    ),
     openingBalance: account.openingBalance.toString(),
     balance: balance.toString(),
     defaultCurrency: profile.defaultCurrency,

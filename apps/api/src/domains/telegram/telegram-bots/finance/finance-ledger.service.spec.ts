@@ -227,6 +227,33 @@ describe('FinanceLedgerService tenant and money rules', () => {
     expect(conversion.getRateMetadata).not.toHaveBeenCalled();
   });
 
+  it('groups analytics by the selected day without creating a second timezone SQL parameter', async () => {
+    const queryRaw = jest.fn().mockResolvedValue([]);
+    await new FinanceLedgerService({ $queryRaw: queryRaw } as never).analytics(
+      {
+        id: 'profile-a',
+        defaultCurrency: 'USD',
+        timezone: 'Europe/Warsaw',
+      },
+      {
+        period: 'CUSTOM',
+        from: '2026-08-01T00:00:00.000Z',
+        to: '2026-08-02T00:00:00.000Z',
+      },
+    );
+
+    const [sql, ...parameters] = queryRaw.mock.calls[0] as [
+      TemplateStringsArray,
+      ...unknown[],
+    ];
+    expect(sql.join('?')).toContain(
+      'GROUP BY t."type", t."categoryId", c."name", c."key", t."currency", 6',
+    );
+    expect(
+      parameters.filter((value) => value === 'Europe/Warsaw'),
+    ).toHaveLength(1);
+  });
+
   it('returns only an explicit valuation snapshot for a non-USD-default transaction', async () => {
     const created = {
       id: 'transaction-a',

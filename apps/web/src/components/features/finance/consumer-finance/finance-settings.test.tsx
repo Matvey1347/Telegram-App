@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
@@ -24,7 +24,10 @@ const profile: ConsumerFinanceProfile = {
   timezone: "UTC",
   locale: "en",
 };
-const renderSettings = () =>
+const renderSettings = (
+  section: React.ComponentProps<typeof FinanceSettings>["section"] = "all",
+  locale: "en" | "uk" | "ru" = "en",
+) =>
   render(
     <QueryClientProvider
       client={
@@ -33,9 +36,10 @@ const renderSettings = () =>
     >
       <FinanceSettings
         botId="bot"
-        profile={profile}
-        locale="en"
+        profile={{ ...profile, locale }}
+        locale={locale}
         onCategories={vi.fn()}
+        section={section}
       />
     </QueryClientProvider>,
   );
@@ -59,6 +63,37 @@ beforeEach(() => {
 });
 
 describe("FinanceSettings billing state", () => {
+  it("uses a timezone selector instead of a free-form input", () => {
+    renderSettings("profile");
+
+    const timezone = screen.getByRole("button", { name: "UTC" });
+    fireEvent.click(timezone);
+    expect(screen.getByPlaceholderText("Search…")).toBeInTheDocument();
+  });
+
+  it("localizes the shared timezone search for Russian", () => {
+    renderSettings("profile", "ru");
+
+    fireEvent.click(screen.getByRole("button", { name: "UTC" }));
+    expect(screen.getByPlaceholderText("Поиск…")).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Search…")).not.toBeInTheDocument();
+  });
+
+  it("lazy-loads only the data owned by the selected browser section", async () => {
+    const view = renderSettings("profile");
+    expect(screen.getByText("General")).toBeInTheDocument();
+    expect(consumerFinanceApi.entitlements).not.toHaveBeenCalled();
+    expect(consumerFinanceApi.billing).not.toHaveBeenCalled();
+    expect(consumerFinanceApi.reminders).not.toHaveBeenCalled();
+
+    view.unmount();
+    renderSettings("reminders");
+    await screen.findByText("No reminders yet.");
+    expect(consumerFinanceApi.reminders).toHaveBeenCalledOnce();
+    expect(consumerFinanceApi.entitlements).not.toHaveBeenCalled();
+    expect(consumerFinanceApi.billing).not.toHaveBeenCalled();
+  });
+
   it("does not show a tier before entitlements are authoritative", () => {
     vi.mocked(consumerFinanceApi.entitlements).mockReturnValue(
       new Promise(() => undefined),

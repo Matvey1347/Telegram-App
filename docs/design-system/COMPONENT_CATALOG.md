@@ -18,6 +18,7 @@ Before adding a primitive or domain wrapper, search for an existing selector, da
 - Import: `@/components/ui/primitives`
 - Use for standard form controls.
 - Use domain wrappers for entity selection when data loading/search is involved.
+- Pass `uiLocale` to searchable shared controls so search, empty and helper copy follow the active product locale.
 
 ### `CustomSelect`, `MultiSelect`
 
@@ -30,6 +31,7 @@ Before adding a primitive or domain wrapper, search for an existing selector, da
 - Import: `@/components/ui/primitives`
 - Use for date and date-range fields.
 - Preserve existing timezone semantics when migrating page-local date logic.
+- Pass `uiLocale` when the host product is localized; do not recreate translated calendar controls per feature.
 
 ### `Modal`, `ConfirmDeleteModal`
 
@@ -76,6 +78,7 @@ Before adding a primitive or domain wrapper, search for an existing selector, da
 - Use for emoji/image icon assignment.
 - Do not create separate emoji pickers unless the workflow cannot use icon semantics.
 - Pass hydrated `iconPresentation` or `avatarPresentation` for display. Do not pass raw `Icon` records or add entity render paths that call `/icons/:id`.
+- `IconPicker` receives `uiLocale`; its chrome and RU/UK search aliases are owned by the shared `@/lib/ui-i18n` layer, not by Finance or another feature.
 
 ### `TelegramPostPreview`
 

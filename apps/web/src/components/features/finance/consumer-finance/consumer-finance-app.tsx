@@ -19,21 +19,27 @@ import type {
   ConsumerFinanceSessionState,
 } from "@telegram-system/shared";
 import { financeCopy, normalizeFinanceLocale } from "./finance-i18n";
-import { ConsumerFinanceShell } from "./consumer-finance-shell";
+import { FinanceMiniAppShell } from "./finance-mini-app-shell";
+import { FinanceWebAppShell } from "./finance-web-app-shell";
 import {
   consumerFinanceScreenUrl,
+  financeSurfaceForBootstrap,
   readConsumerFinanceScreen,
   type ConsumerFinanceAction,
 } from "./consumer-finance-navigation";
 
 export function ConsumerFinanceApp({ botId }: { botId: string }) {
+  const localeStorageKey = `consumer-finance-locale:${botId}`;
   const bootstrap = useTelegramMiniAppBootstrap();
   const session = useQuery({
     queryKey: consumerFinanceKeys.session(botId),
-    queryFn: (): Promise<ConsumerFinanceSessionState> =>
-      bootstrap.status === "ready"
-        ? consumerFinanceApi.auth(botId, bootstrap.initData)
-        : consumerFinanceApi.session(botId),
+    queryFn: async (): Promise<ConsumerFinanceSessionState> => {
+      const existing = await consumerFinanceApi.session(botId);
+      if (existing.authenticated || bootstrap.status !== "ready") {
+        return existing;
+      }
+      return consumerFinanceApi.auth(botId, bootstrap.initData);
+    },
     enabled: bootstrap.status === "browser" || bootstrap.status === "ready",
     retry: false,
     refetchOnReconnect: false,
@@ -64,8 +70,13 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
     ?.authenticated
     ? session.data.profile
     : undefined;
-  const t = financeCopy(normalizeFinanceLocale(profile?.locale));
-  const surface = bootstrap.status === "browser" ? "browser" : "telegram";
+  const rememberedLocale =
+    typeof window === "undefined"
+      ? undefined
+      : window.localStorage.getItem(localeStorageKey) || navigator.language;
+  const locale = normalizeFinanceLocale(profile?.locale ?? rememberedLocale);
+  const t = financeCopy(locale);
+  const surface = financeSurfaceForBootstrap(bootstrap.status);
   const navigate = useCallback(
     (next: ConsumerFinanceScreen) => {
       setOpenTransfer(false);
@@ -101,6 +112,10 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
   };
 
   useEffect(() => {
+    if (profile?.locale) window.localStorage.setItem(localeStorageKey, locale);
+  }, [locale, localeStorageKey, profile?.locale]);
+
+  useEffect(() => {
     if (surface !== "browser") return;
     const onPopState = () => {
       setOpenTransfer(
@@ -112,26 +127,46 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
     return () => window.removeEventListener("popstate", onPopState);
   }, [surface]);
 
-  const shell = (children: React.ReactNode) => (
-    <ConsumerFinanceShell
-      surface={surface}
-      screen={screen}
-      copy={t}
-      onNavigate={navigate}
-      onAction={launchAction}
-      openingBrowser={browserTransfer.isPending}
-      onOpenBrowser={
-        surface === "telegram" ? () => browserTransfer.mutate() : undefined
-      }
-    >
-      {children}
-    </ConsumerFinanceShell>
-  );
-  if (bootstrap.status === "loading" || session.isLoading)
-    return shell(<LoadingState text={t.opening} />);
+  const shell = (children: React.ReactNode) =>
+    surface === "browser" ? (
+      <FinanceWebAppShell
+        screen={screen}
+        copy={t}
+        profile={profile}
+        onNavigate={navigate}
+        onAction={launchAction}
+      >
+        {children}
+      </FinanceWebAppShell>
+    ) : (
+      <FinanceMiniAppShell
+        screen={screen}
+        copy={t}
+        onNavigate={navigate}
+        onAction={launchAction}
+        openingBrowser={browserTransfer.isPending}
+        browserOpenError={
+          browserTransfer.isError ? t.browserOpenError : undefined
+        }
+        onOpenBrowser={() => browserTransfer.mutate()}
+      >
+        {children}
+      </FinanceMiniAppShell>
+    );
+  if (bootstrap.status === "loading")
+    return (
+      <main
+        data-finance-shell="bootstrap"
+        className="flex min-h-dvh items-center justify-center bg-neutral-950 px-6 text-neutral-100"
+      >
+        <LoadingState text={t.opening} />
+      </main>
+    );
+  if (session.isLoading) return shell(<LoadingState text={t.opening} />);
   if (bootstrap.status === "error" || session.isError)
     return shell(
       <ConsumerFinanceBootstrapError
+        locale={locale}
         onRetry={() => {
           if (bootstrap.status === "ready") void session.refetch();
           else window.location.reload();
@@ -139,10 +174,15 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
       />,
     );
   if (bootstrap.status === "browser" && session.data?.authenticated === false)
-    return <ConsumerFinanceLogin botId={botId} />;
+    return (
+      <ConsumerFinanceLogin
+        botId={botId}
+        onAuthenticated={() => void session.refetch()}
+      />
+    );
   if (!profile)
     return shell(
-      <ConsumerFinanceBootstrapError onRetry={() => void session.refetch()} />,
+      <ConsumerFinanceBootstrapError locale={locale} onRetry={() => void session.refetch()} />,
     );
   return shell(
     <ConsumerFinanceScreens
@@ -150,6 +190,8 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
       profile={profile}
       screen={screen}
       onScreenChange={navigate}
+      onAction={launchAction}
+      surface={surface}
       openTransfer={openTransfer}
       openTransaction={openTransaction}
     />,

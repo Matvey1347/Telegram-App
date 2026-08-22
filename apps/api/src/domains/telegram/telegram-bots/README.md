@@ -9,7 +9,7 @@
 ## Delivery boundary
 
 - Replies produced while handling a live Finance update use `TelegramBotInteractiveReplyService` and call the Bot API immediately. They do not create delivery rows or scheduler work.
-- Messages whose loss after a committed mutation would be misleading—payment success and saved Finance mutation confirmations—use `TelegramBotDeliveryService` for persisted retry.
+- Payment success and genuinely asynchronous notifications use `TelegramBotDeliveryService` for persisted retry. Finance proposal/flow confirmations produced for the current live update reply immediately and rely on mutation idempotency rather than creating queue work.
 - Reminders, Greeter sequences, broadcasts, and other scheduled/retry-sensitive work always remain on durable delivery.
 - Both paths use `telegramBotMessagePayload`; do not add a second reply-markup formatter.
 
@@ -23,3 +23,16 @@
 - Explicit dev shutdown removes LOCAL reply keyboards, menu links, and
   webhooks, then marks only LOCAL runtime rows disabled. It never scans or
   mutates PRODUCTION runtimes.
+
+## Finance consumer authentication
+
+- Mini Apps read the bot-scoped cookie session before validating `initData`.
+  This prevents a hot reload or a long-lived Telegram WebView from rejecting an
+  already authenticated user because its original launch data aged out.
+- Standalone browser login uses a five-minute `t.me/<bot>?start=finlogin_*`
+  challenge approved by that same Finance bot. It does not use Telegram's
+  domain-bound Login Widget, so Cloudflare Quick Tunnel hostnames can rotate.
+- Browser approval polling starts only after the user opens Telegram, stops on
+  approval/expiry, and performs indexed reads without timers or polling in the
+  API process. Expired challenge rows are pruned by the next user-triggered
+  challenge creation.

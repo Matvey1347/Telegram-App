@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import {
-  ArrowLeftRight,
   BarChart3,
+  ArrowLeftRight,
   ExternalLink,
   Landmark,
   LayoutGrid,
@@ -19,8 +19,8 @@ import type { FinanceCopy } from "./finance-i18n";
 import type { ConsumerFinanceScreen } from "./consumer-finance-screens";
 import {
   isMoreScreen,
+  financeScreenLabel,
   type ConsumerFinanceAction,
-  type ConsumerFinanceSurface,
 } from "./consumer-finance-navigation";
 import { ConsumerFinanceActionLauncher } from "./consumer-finance-action-launcher";
 
@@ -37,10 +37,8 @@ const SECONDARY = [
   { id: "ultimate", key: "financeUltimate", Icon: Sparkles },
   { id: "settings", key: "settings", Icon: Settings },
 ] as const;
-const DESKTOP = [...PRIMARY, ...SECONDARY];
 
-export function ConsumerFinanceShell({
-  surface,
+export function FinanceMiniAppShell({
   screen,
   copy,
   children,
@@ -48,8 +46,8 @@ export function ConsumerFinanceShell({
   onAction,
   onOpenBrowser,
   openingBrowser = false,
+  browserOpenError,
 }: {
-  surface: ConsumerFinanceSurface;
   screen: ConsumerFinanceScreen;
   copy: FinanceCopy;
   children: React.ReactNode;
@@ -57,70 +55,31 @@ export function ConsumerFinanceShell({
   onAction: (action: ConsumerFinanceAction) => void;
   onOpenBrowser?: () => void;
   openingBrowser?: boolean;
+  browserOpenError?: string;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const navigate = (next: ConsumerFinanceScreen) => {
     setMoreOpen(false);
     onNavigate(next);
   };
-  const navigation = (mobile: boolean) => (
-    <nav
-      aria-label={copy.financeNavigation}
-      className={mobile ? "contents" : "space-y-1"}
-    >
-      {DESKTOP.map(({ id, key, Icon }) => (
-        <button
-          key={id}
-          type="button"
-          aria-current={screen === id ? "page" : undefined}
-          onClick={() => navigate(id)}
-          className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-sky-300 ${screen === id ? "bg-sky-500/15 text-sky-200" : "text-neutral-400 hover:bg-neutral-900 hover:text-neutral-100"}`}
-        >
-          <Icon size={18} aria-hidden="true" />
-          <span>{copy[key]}</span>
-        </button>
-      ))}
-    </nav>
-  );
-
   return (
     <main
-      data-finance-surface={surface}
-      className="min-h-dvh bg-neutral-950 text-neutral-100"
+      data-finance-surface="telegram"
+      data-finance-shell="mini-app"
+      className="min-h-dvh bg-neutral-950 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] text-neutral-100"
     >
-      <div
-        className={`mx-auto flex min-h-dvh w-full ${surface === "browser" ? "max-w-[1600px]" : "max-w-2xl"}`}
-      >
-        <aside
-          className={`sticky top-0 h-dvh w-64 shrink-0 border-r border-neutral-800 px-4 py-6 ${surface === "browser" ? "hidden md:flex md:flex-col" : "hidden"}`}
-        >
-          <div className="mb-7 px-3">
-            <p className="text-xs uppercase tracking-[0.2em] text-sky-300">
-              {copy.personalFinance}
-            </p>
-            <p className="mt-1 text-xl font-semibold">Finance</p>
-          </div>
-          {navigation(false)}
-          <div className="mt-auto pt-6">
-            <ConsumerFinanceActionLauncher copy={copy} onAction={onAction} />
-          </div>
-        </aside>
-
+      <div className="mx-auto flex min-h-dvh w-full max-w-2xl">
         <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between border-b border-neutral-800 bg-neutral-950/95 px-4 backdrop-blur md:px-8">
+          <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between border-b border-neutral-800 bg-neutral-950/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur">
             <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-sky-300 md:hidden">
+              <p className="text-xs uppercase tracking-[0.18em] text-sky-300">
                 {copy.personalFinance}
               </p>
-              <h1 className="text-lg font-semibold md:text-xl">
-                {screen === "home"
-                  ? copy.overview
-                  : screen === "ultimate"
-                    ? copy.financeUltimate
-                    : copy[screen]}
+              <h1 className="text-lg font-semibold">
+                {financeScreenLabel(copy, screen)}
               </h1>
             </div>
-            {surface === "telegram" && onOpenBrowser ? (
+            {onOpenBrowser ? (
               <button
                 type="button"
                 disabled={openingBrowser}
@@ -134,21 +93,24 @@ export function ConsumerFinanceShell({
               </button>
             ) : null}
           </header>
-          <div className="w-full px-4 pb-28 pt-5 md:px-8 md:pb-10 md:pt-7 xl:px-10">
-            {children}
-          </div>
+          {browserOpenError ? (
+            <p role="alert" className="px-4 pt-3 text-sm text-rose-300">
+              {browserOpenError}
+            </p>
+          ) : null}
+          <div className="w-full px-4 pb-28 pt-5">{children}</div>
         </div>
       </div>
 
       <ConsumerFinanceActionLauncher
         compact
-        showOnDesktop={surface === "telegram"}
+        showOnDesktop
         copy={copy}
         onAction={onAction}
       />
       <nav
         aria-label={copy.financeNavigation}
-        className={`fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-neutral-800 bg-neutral-950/95 px-1 pb-[max(.5rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur ${surface === "browser" ? "md:hidden" : "mx-auto max-w-2xl"}`}
+        className="fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-2xl grid-cols-4 border-t border-neutral-800 bg-neutral-950/95 pb-[max(.5rem,env(safe-area-inset-bottom))] pl-[max(.25rem,env(safe-area-inset-left))] pr-[max(.25rem,env(safe-area-inset-right))] pt-1 backdrop-blur"
       >
         {PRIMARY.map(({ id, key, Icon }) => (
           <MobileItem
@@ -168,9 +130,7 @@ export function ConsumerFinanceShell({
         />
       </nav>
       {moreOpen ? (
-        <div
-          className={`fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-30 rounded-xl border border-neutral-800 bg-neutral-900 p-2 shadow-2xl ${surface === "browser" ? "md:hidden" : "mx-auto max-w-xl"}`}
-        >
+        <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-[max(.75rem,env(safe-area-inset-left))] right-[max(.75rem,env(safe-area-inset-right))] z-30 mx-auto max-w-xl rounded-xl border border-neutral-800 bg-neutral-900 p-2 shadow-2xl">
           <div className="grid grid-cols-2 gap-1">
             {SECONDARY.map(({ id, key, Icon }) => (
               <button

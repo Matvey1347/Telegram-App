@@ -6,6 +6,7 @@ import type {
   BotBillingProviderConfigView,
   BotBillingProviderMode,
   BotBillingSubscriberPage,
+  BotBillingUserPage,
   FinanceAiConfigView,
 } from "@telegram-system/shared";
 
@@ -40,7 +41,9 @@ export type BotBillingSubscribersQuery = {
   status?: "ACTIVE" | "PAST_DUE" | "CANCELED" | "EXPIRED" | "INCOMPLETE";
   source?: "STRIPE" | "TELEGRAM_STARS" | "MANUAL" | "GIFT";
   planId?: string;
+  environment?: "LOCAL" | "PRODUCTION";
 };
+export type BotBillingUsersQuery = { cursor?: string; search?: string; environment: "LOCAL" | "PRODUCTION" };
 
 export type SaveProviderPayload = {
   publicKey?: string;
@@ -72,8 +75,8 @@ export type CreateCouponPayload = {
 export const botBillingApi = {
   workspaceProviders: async (): Promise<BotBillingProviderConfigView[]> => (await api.get("/billing/providers")).data,
   saveWorkspaceProvider: async (provider: BotBillingProvider, mode: BotBillingProviderMode, payload: SaveProviderPayload): Promise<BotBillingProviderConfigView> => (await api.patch(`/billing/providers/${provider}/${mode}`, payload)).data,
-  overview: async (botId: string): Promise<BotBillingOverviewView> =>
-    (await api.get(`/telegram-bots/${botId}/billing/overview`)).data,
+  overview: async (botId: string, environment: "LOCAL" | "PRODUCTION" = "PRODUCTION"): Promise<BotBillingOverviewView> =>
+    (await api.get(`/telegram-bots/${botId}/billing/overview`, { params: { environment } })).data,
   analytics: async (botId: string): Promise<BotBillingAnalyticsView> =>
     (await api.get(`/telegram-bots/${botId}/billing/overview`)).data.analytics,
   plans: async (botId: string): Promise<BotBillingPlanView[]> =>
@@ -89,6 +92,12 @@ export const botBillingApi = {
         params: query,
       })
     ).data,
+  users: async (botId: string, query: BotBillingUsersQuery): Promise<BotBillingUserPage> =>
+    (await api.get(`/telegram-bots/${botId}/billing/users`, { params: query })).data,
+  grant: async (botId: string, payload: { telegramBotUserId: string; planId: string; source: "GIFT" | "MANUAL"; reason: string; idempotencyKey: string; expiresAt?: string }) =>
+    (await api.post(`/telegram-bots/${botId}/billing/grants`, payload)).data,
+  updateUserProfile: async (botId: string, userId: string, payload: { locale?: "uk" | "ru" | "en"; currency?: string; timezone?: string; resetOnboarding?: boolean }) =>
+    (await api.patch(`/telegram-bots/${botId}/billing/users/${userId}/finance-profile`, payload)).data,
   providers: async (botId: string): Promise<BotBillingProviderConfigView[]> =>
     (await api.get(`/telegram-bots/${botId}/billing/providers`)).data,
   saveProvider: async (

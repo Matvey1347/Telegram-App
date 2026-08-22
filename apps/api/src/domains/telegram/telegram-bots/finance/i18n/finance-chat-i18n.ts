@@ -76,6 +76,10 @@ const en = {
   saving: 'Saving…',
   cancelling: 'Cancelling…',
   unavailable: 'This action is no longer available.',
+  browserLoginApproved:
+    '✅ Browser login approved. Return to the Finance page — it will open automatically.',
+  browserLoginExpired:
+    'This browser login request has expired. Return to the Finance page and create a new one.',
   receiptLarge:
     'This receipt is larger than 8 MB. Please send a smaller image or document.',
   receiptError:
@@ -145,20 +149,21 @@ const en = {
   card: 'Card',
   savings: 'Savings',
   flowTransactionDescription:
-    'Step 1 of 4 · Description\n\nWhat was this for? Send a short note, or skip.',
-  flowTransactionAccount: 'Step 2 of 4 · Account\n\nWhich account was used?',
-  flowTransactionAmount:
-    'Step 3 of 4 · Amount\n\nSend a positive amount, for example 125.50.',
-  flowTransactionCategory:
-    'Step 4 of 4 · Category\n\nChoose a category, or skip.',
-  flowAccountName: 'Step 1 of 4 · Account name\n\nSend a short name.',
-  flowAccountType: 'Step 2 of 4 · Account type',
-  flowAccountCurrency: 'Step 3 of 4 · Currency',
+    'Step 4 of 4 · Optional description\n\nSend a short note, or choose Skip.',
+  flowTransactionAccount: 'Step 1 of 4 · Account\n\nWhich account was used?',
+  flowTransactionAmount: ({ account, currency }) =>
+    `Step 3 of 4 · Amount\n\nAccount: ${account} · ${currency}\nSend a positive amount, for example 125.50.`,
+  flowTransactionCategory: 'Step 2 of 4 · Category\n\nChoose a category.',
+  flowAccountName: 'Step 1 of 5 · Account name\n\nSend a short name.',
+  flowAccountType: 'Step 2 of 5 · Account type',
+  flowAccountEmoji: 'Step 3 of 5 · Account emoji',
+  flowAccountCurrency: 'Step 4 of 5 · Currency',
   flowAccountBalance:
-    'Step 4 of 4 · Opening balance\n\nSend 0 if the account is empty.',
-  flowCategoryType: 'Step 1 of 3 · Category type',
-  flowCategoryName: 'Step 2 of 3 · Category name\n\nSend a short name.',
-  flowCategoryParent: 'Step 3 of 3 · Parent category\n\nChoose one, or skip.',
+    'Step 5 of 5 · Opening balance\n\nSend 0 if the account is empty.',
+  flowCategoryType: 'Step 1 of 4 · Category type',
+  flowCategoryName: 'Step 2 of 4 · Category name\n\nSend a short name.',
+  flowCategoryEmoji: 'Step 3 of 4 · Category emoji',
+  flowCategoryParent: 'Step 4 of 4 · Parent category\n\nChoose one, or skip.',
   flowTransferDescription:
     'Step 1 of 4 · Transfer note\n\nOptional: send a description, or skip.',
   flowTransferFrom: 'Step 2 of 4 · From account',
@@ -266,6 +271,10 @@ const uk = {
   saving: 'Збереження…',
   cancelling: 'Скасування…',
   unavailable: 'Ця дія більше недоступна.',
+  browserLoginApproved:
+    '✅ Вхід у браузері підтверджено. Поверніться на сторінку Finance — вона відкриється автоматично.',
+  browserLoginExpired:
+    'Цей запит на вхід уже недійсний. Поверніться на сторінку Finance і створіть новий.',
   receiptLarge:
     'Цей чек більший за 8 МБ. Надішліть менше зображення або документ.',
   receiptError:
@@ -333,21 +342,22 @@ const uk = {
   card: 'Картка',
   savings: 'Заощадження',
   flowTransactionDescription:
-    'Крок 1 із 4 · Опис\n\nНа що була операція? Надішліть короткий опис або пропустіть.',
-  flowTransactionAccount: 'Крок 2 із 4 · Рахунок\n\nЯкий рахунок використано?',
-  flowTransactionAmount:
-    'Крок 3 із 4 · Сума\n\nНадішліть додатну суму, наприклад 125.50.',
-  flowTransactionCategory:
-    'Крок 4 із 4 · Категорія\n\nОберіть категорію або пропустіть.',
-  flowAccountName: 'Крок 1 із 4 · Назва рахунку',
-  flowAccountType: 'Крок 2 із 4 · Тип рахунку',
-  flowAccountCurrency: 'Крок 3 із 4 · Валюта',
+    'Крок 4 із 4 · Необов’язковий опис\n\nНадішліть короткий опис або натисніть «Пропустити».',
+  flowTransactionAccount: 'Крок 1 із 4 · Рахунок\n\nЯкий рахунок використано?',
+  flowTransactionAmount: ({ account, currency }) =>
+    `Крок 3 із 4 · Сума\n\nРахунок: ${account} · ${currency}\nНадішліть додатну суму, наприклад 125.50.`,
+  flowTransactionCategory: 'Крок 2 із 4 · Категорія\n\nОберіть категорію.',
+  flowAccountName: 'Крок 1 із 5 · Назва рахунку',
+  flowAccountType: 'Крок 2 із 5 · Тип рахунку',
+  flowAccountEmoji: 'Крок 3 із 5 · Емодзі рахунку',
+  flowAccountCurrency: 'Крок 4 із 5 · Валюта',
   flowAccountBalance:
-    'Крок 4 із 4 · Початковий баланс\n\nНадішліть 0, якщо рахунок порожній.',
-  flowCategoryType: 'Крок 1 із 3 · Тип категорії',
-  flowCategoryName: 'Крок 2 із 3 · Назва категорії',
+    'Крок 5 із 5 · Початковий баланс\n\nНадішліть 0, якщо рахунок порожній.',
+  flowCategoryType: 'Крок 1 із 4 · Тип категорії',
+  flowCategoryName: 'Крок 2 із 4 · Назва категорії',
+  flowCategoryEmoji: 'Крок 3 із 4 · Емодзі категорії',
   flowCategoryParent:
-    'Крок 3 із 3 · Батьківська категорія\n\nОберіть або пропустіть.',
+    'Крок 4 із 4 · Батьківська категорія\n\nОберіть або пропустіть.',
   flowTransferDescription:
     'Крок 1 із 4 · Опис переказу\n\nНеобов’язково: надішліть опис або пропустіть.',
   flowTransferFrom: 'Крок 2 із 4 · З рахунку',
@@ -454,6 +464,10 @@ const ru = {
   saving: 'Сохранение…',
   cancelling: 'Отмена…',
   unavailable: 'Это действие больше недоступно.',
+  browserLoginApproved:
+    '✅ Вход в браузере подтверждён. Вернитесь на страницу Finance — она откроется автоматически.',
+  browserLoginExpired:
+    'Этот запрос на вход уже недействителен. Вернитесь на страницу Finance и создайте новый.',
   receiptLarge:
     'Этот чек больше 8 МБ. Отправьте изображение или документ меньшего размера.',
   receiptError:
@@ -522,21 +536,22 @@ const ru = {
   card: 'Карта',
   savings: 'Сбережения',
   flowTransactionDescription:
-    'Шаг 1 из 4 · Описание\n\nДля чего была операция? Отправьте короткое описание или пропустите.',
-  flowTransactionAccount: 'Шаг 2 из 4 · Счёт\n\nКакой счёт использован?',
-  flowTransactionAmount:
-    'Шаг 3 из 4 · Сумма\n\nОтправьте положительную сумму, например 125.50.',
-  flowTransactionCategory:
-    'Шаг 4 из 4 · Категория\n\nВыберите категорию или пропустите.',
-  flowAccountName: 'Шаг 1 из 4 · Название счёта',
-  flowAccountType: 'Шаг 2 из 4 · Тип счёта',
-  flowAccountCurrency: 'Шаг 3 из 4 · Валюта',
+    'Шаг 4 из 4 · Необязательное описание\n\nОтправьте короткое описание или нажмите «Пропустить».',
+  flowTransactionAccount: 'Шаг 1 из 4 · Счёт\n\nКакой счёт использован?',
+  flowTransactionAmount: ({ account, currency }) =>
+    `Шаг 3 из 4 · Сумма\n\nСчёт: ${account} · ${currency}\nОтправьте положительную сумму, например 125.50.`,
+  flowTransactionCategory: 'Шаг 2 из 4 · Категория\n\nВыберите категорию.',
+  flowAccountName: 'Шаг 1 из 5 · Название счёта',
+  flowAccountType: 'Шаг 2 из 5 · Тип счёта',
+  flowAccountEmoji: 'Шаг 3 из 5 · Эмодзи счёта',
+  flowAccountCurrency: 'Шаг 4 из 5 · Валюта',
   flowAccountBalance:
-    'Шаг 4 из 4 · Начальный баланс\n\nОтправьте 0, если счёт пуст.',
-  flowCategoryType: 'Шаг 1 из 3 · Тип категории',
-  flowCategoryName: 'Шаг 2 из 3 · Название категории',
+    'Шаг 5 из 5 · Начальный баланс\n\nОтправьте 0, если счёт пуст.',
+  flowCategoryType: 'Шаг 1 из 4 · Тип категории',
+  flowCategoryName: 'Шаг 2 из 4 · Название категории',
+  flowCategoryEmoji: 'Шаг 3 из 4 · Эмодзи категории',
   flowCategoryParent:
-    'Шаг 3 из 3 · Родительская категория\n\nВыберите или пропустите.',
+    'Шаг 4 из 4 · Родительская категория\n\nВыберите или пропустите.',
   flowTransferDescription:
     'Шаг 1 из 4 · Описание перевода\n\nНеобязательно: отправьте описание или пропустите.',
   flowTransferFrom: 'Шаг 2 из 4 · Со счёта',

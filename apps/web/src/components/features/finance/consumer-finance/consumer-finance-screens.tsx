@@ -20,6 +20,10 @@ import { FinanceSettings } from "./finance-settings";
 import { FinanceTransactions } from "./finance-transactions";
 import { FinanceTransfers } from "./finance-transfers";
 import { FinanceUltimate } from "./finance-ultimate";
+import type {
+  ConsumerFinanceAction,
+  ConsumerFinanceSurface,
+} from "./consumer-finance-navigation";
 
 export type ConsumerFinanceScreen =
   | "home"
@@ -30,6 +34,8 @@ export type ConsumerFinanceScreen =
   | "accounts"
   | "settings"
   | "categories"
+  | "reminders"
+  | "billing"
   /** Retained as a direct URL while budget remains a secondary workflow. */
   | "budget";
 export type ConsumerFinanceContext = {
@@ -43,6 +49,8 @@ export function ConsumerFinanceScreens({
   profile,
   screen,
   onScreenChange,
+  onAction,
+  surface,
   openTransfer = false,
   openTransaction = null,
 }: {
@@ -50,6 +58,8 @@ export function ConsumerFinanceScreens({
   profile: ConsumerFinanceProfile;
   screen: ConsumerFinanceScreen;
   onScreenChange: (screen: ConsumerFinanceScreen) => void;
+  onAction: (action: ConsumerFinanceAction) => void;
+  surface: ConsumerFinanceSurface;
   openTransfer?: boolean;
   openTransaction?: "EXPENSE" | "INCOME" | null;
 }) {
@@ -58,7 +68,9 @@ export function ConsumerFinanceScreens({
     queryKey: consumerFinanceKeys.dashboard(botId),
     queryFn: () => consumerFinanceApi.dashboard(botId),
     retry: false,
-    enabled: screen === "home" || screen === "budget",
+    enabled:
+      !!profile.onboardingCompletedAt &&
+      (screen === "home" || screen === "budget"),
   });
   const accounts = useQuery({
     queryKey: consumerFinanceKeys.accounts(botId),
@@ -66,8 +78,7 @@ export function ConsumerFinanceScreens({
     enabled:
       screen === "transactions" ||
       screen === "transfers" ||
-      screen === "accounts" ||
-      screen === "budget",
+      screen === "accounts",
   });
   const categories = useQuery({
     queryKey: consumerFinanceKeys.categories(botId),
@@ -80,6 +91,11 @@ export function ConsumerFinanceScreens({
   const financeProfile = profile;
   const locale = normalizeFinanceLocale(financeProfile.locale);
   const t = financeCopy(locale);
+  const needsAccounts =
+    screen === "transactions" ||
+    screen === "transfers" ||
+    screen === "accounts";
+  const needsCategories = screen === "transactions" || screen === "budget";
   if (!financeProfile.onboardingCompletedAt)
     return (
       <FinanceOnboarding
@@ -105,25 +121,21 @@ export function ConsumerFinanceScreens({
       </div>
     );
   if (
-    (screen === "transactions" ||
-      screen === "transfers" ||
-      screen === "budget") &&
-    (accounts.isLoading || (screen !== "transfers" && categories.isLoading))
+    (needsAccounts && accounts.isLoading) ||
+    (needsCategories && categories.isLoading)
   )
     return <LoadingState text={t.loadingReferences} />;
   if (
-    (screen === "transactions" ||
-      screen === "transfers" ||
-      screen === "budget") &&
-    (accounts.isError || (screen !== "transfers" && categories.isError))
+    (needsAccounts && accounts.isError) ||
+    (needsCategories && categories.isError)
   )
     return (
       <div className="space-y-3">
         <ErrorState text={t.referencesUnavailable} />
         <Button
           onClick={() => {
-            void accounts.refetch();
-            if (screen !== "transfers") void categories.refetch();
+            if (needsAccounts) void accounts.refetch();
+            if (needsCategories) void categories.refetch();
           }}
         >
           {t.retry}
@@ -145,6 +157,8 @@ export function ConsumerFinanceScreens({
               locale={locale}
               timezone={financeProfile.timezone}
               onNavigate={onScreenChange}
+              onAction={onAction}
+              surface={surface}
             />
           ) : null}
         </>
@@ -156,7 +170,9 @@ export function ConsumerFinanceScreens({
         <FinanceUltimate
           botId={botId}
           locale={locale}
-          onUpgrade={() => onScreenChange("settings")}
+          onUpgrade={() =>
+            onScreenChange(surface === "browser" ? "billing" : "settings")
+          }
         />
       )}
       {screen === "transactions" && (
@@ -166,6 +182,7 @@ export function ConsumerFinanceScreens({
           locale={locale}
           timezone={financeProfile.timezone}
           initiallyOpenType={openTransaction}
+          surface={surface}
         />
       )}
       {screen === "transfers" && (
@@ -187,10 +204,13 @@ export function ConsumerFinanceScreens({
       )}
       {screen === "budget" && (
         <FinanceBudget
-          {...context}
+          botId={botId}
+          categories={context.categories}
           dashboard={dashboard.data!}
           locale={locale}
-          onUpgrade={() => onScreenChange("settings")}
+          onUpgrade={() =>
+            onScreenChange(surface === "browser" ? "billing" : "settings")
+          }
         />
       )}
       {screen === "categories" && (
@@ -202,6 +222,25 @@ export function ConsumerFinanceScreens({
           profile={financeProfile}
           locale={locale}
           onCategories={() => onScreenChange("categories")}
+          section={surface === "browser" ? "profile" : "all"}
+        />
+      )}
+      {screen === "reminders" && (
+        <FinanceSettings
+          botId={botId}
+          profile={financeProfile}
+          locale={locale}
+          onCategories={() => onScreenChange("categories")}
+          section="reminders"
+        />
+      )}
+      {screen === "billing" && (
+        <FinanceSettings
+          botId={botId}
+          profile={financeProfile}
+          locale={locale}
+          onCategories={() => onScreenChange("categories")}
+          section="billing"
         />
       )}
     </>

@@ -1,7 +1,7 @@
 import type { AxiosAdapter, InternalAxiosRequestConfig } from "axios";
 import { AxiosError } from "axios";
 import { afterEach, describe, expect, it } from "vitest";
-import { api } from "@/lib/api";
+import { API_MUTATION_EVENT, api } from "@/lib/api";
 import { AUTH_TOKEN_KEY } from "@/lib/features/identity/auth";
 import {
   CONSUMER_FINANCE_REQUEST_TIMEOUT_MS,
@@ -38,37 +38,101 @@ describe("consumerFinanceApi", () => {
 
   it("uses the local Mini App gateway when opened through localhost:4100", () => {
     expect(
-      resolveConsumerFinanceApiBase({
-        origin: "http://localhost:4100",
-        hostname: "localhost",
-        port: "4100",
-      } as Location),
+      resolveConsumerFinanceApiBase(
+        {
+          origin: "http://localhost:4100",
+          hostname: "localhost",
+          port: "4100",
+          protocol: "http:",
+        } as Location,
+        {
+          apiUrl: "http://localhost:4000/api",
+          gatewayOrigins: "http://localhost:4100",
+        },
+      ),
     ).toBe("http://localhost:4100/api");
   });
 
   it("uses the configured local API when opened through localhost:3000", () => {
-    const previous = process.env.NEXT_PUBLIC_API_URL;
-    process.env.NEXT_PUBLIC_API_URL = "http://localhost:4000";
     expect(
-      resolveConsumerFinanceApiBase({
-        origin: "http://localhost:3000",
-        hostname: "localhost",
-        port: "3000",
-      } as Location),
+      resolveConsumerFinanceApiBase(
+        {
+          origin: "http://localhost:3000",
+          hostname: "localhost",
+          port: "3000",
+          protocol: "http:",
+        } as Location,
+        {
+          apiUrl: "http://localhost:4000",
+          gatewayOrigins: "http://localhost:4100",
+        },
+      ),
     ).toBe("http://localhost:4000/api");
-    if (previous === undefined) delete process.env.NEXT_PUBLIC_API_URL;
-    else process.env.NEXT_PUBLIC_API_URL = previous;
   });
 
-  it("uses the same-origin gateway when opened through ngrok", () => {
+  it("uses the explicitly configured Cloudflare gateway origin", () => {
     expect(
-      resolveConsumerFinanceApiBase({
-        origin: "https://finance-example.ngrok-free.app",
-        hostname: "finance-example.ngrok-free.app",
-        port: "",
-      } as Location),
-    ).toBe("https://finance-example.ngrok-free.app/api");
+      resolveConsumerFinanceApiBase(
+        {
+          origin: "https://finance-example.trycloudflare.com",
+          hostname: "finance-example.trycloudflare.com",
+          port: "",
+          protocol: "https:",
+        } as Location,
+        {
+          apiUrl: "http://localhost:4000/api",
+          gatewayOrigins:
+            "http://localhost:4100,https://finance-example.trycloudflare.com",
+        },
+      ),
+    ).toBe("https://finance-example.trycloudflare.com/api");
   });
+
+  it("uses the configured production API for a normal production frontend", () => {
+    expect(
+      resolveConsumerFinanceApiBase(
+        {
+          origin: "https://finance.example.com",
+          hostname: "finance.example.com",
+          port: "",
+          protocol: "https:",
+        } as Location,
+        {
+          apiUrl: "https://api.example.com/api",
+          gatewayOrigins: "",
+        },
+      ),
+    ).toBe("https://api.example.com/api");
+  });
+
+  it("falls back to same-origin when an HTTPS consumer page receives a loopback API", () => {
+    expect(
+      resolveConsumerFinanceApiBase(
+        {
+          origin: "https://temporary-gateway.example",
+          hostname: "temporary-gateway.example",
+          port: "",
+          protocol: "https:",
+        } as Location,
+        {
+          apiUrl: "http://localhost:4000/api",
+          gatewayOrigins: "malformed gateway config",
+        },
+      ),
+    ).toBe("https://temporary-gateway.example/api");
+  });
+
+  it.each([undefined, "not a URL", "file:///tmp/api", "/"])(
+    "uses a safe relative API for missing or malformed config: %s",
+    (apiUrl) => {
+      expect(
+        resolveConsumerFinanceApiBase(undefined, {
+          apiUrl,
+          gatewayOrigins: "",
+        }),
+      ).toBe("/api");
+    },
+  );
 
   it("keeps the internal token after a consumer 401", async () => {
     localStorage.setItem(AUTH_TOKEN_KEY, "internal-token");
@@ -163,17 +227,28 @@ describe("consumerFinanceApi", () => {
 
   it("sends Telegram initData only to the one-time authentication bootstrap", async () => {
     let request: InternalAxiosRequestConfig | undefined;
+    const mutationEvents: Event[] = [];
+    const onMutation = (event: Event) => mutationEvents.push(event);
     api.defaults.adapter = async (config) => {
       request = config;
       return { data: {}, status: 200, statusText: "OK", headers: {}, config };
     };
 
-    await consumerFinanceApi.auth("bot-id", "signed-init-data");
+    window.addEventListener(API_MUTATION_EVENT, onMutation);
+    try {
+      await consumerFinanceApi.auth("bot-id", "signed-init-data");
+    } finally {
+      window.removeEventListener(API_MUTATION_EVENT, onMutation);
+    }
 
     expect(request?.url).toBe("/finance-bots/bot-id/auth");
     expect(request?.headers.get("X-Telegram-Init-Data")).toBe(
       "signed-init-data",
     );
+    expect(
+      (request as unknown as { feedback?: { mode?: string } })?.feedback,
+    ).toEqual({ mode: "silent" });
+    expect(mutationEvents).toEqual([]);
     expect(request?.timeout).toBe(CONSUMER_FINANCE_REQUEST_TIMEOUT_MS);
   });
 
@@ -248,6 +323,43 @@ describe("consumerFinanceApi", () => {
 
     expect(request?.url).toBe("/finance-bots/bot-id/auth/browser-config");
     expect(request?.params).toEqual({ returnTo: "/finance/bot-id" });
+  });
+
+  it("creates and consumes a bot-approved browser login challenge", async () => {
+    const requests: InternalAxiosRequestConfig[] = [];
+    api.defaults.adapter = async (config) => {
+      requests.push(config);
+      return {
+        data: config.url?.endsWith("/consume")
+          ? { status: "pending" }
+          : {
+              token: "a".repeat(32),
+              loginUrl: "https://t.me/finance_bot?start=finlogin_token",
+              expiresAt: "2026-08-21T12:05:00.000Z",
+            },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await consumerFinanceApi.createBrowserLoginChallenge("bot-id");
+    await consumerFinanceApi.consumeBrowserLoginChallenge(
+      "bot-id",
+      "a".repeat(32),
+    );
+
+    expect(requests.map((request) => request.url)).toEqual([
+      "/finance-bots/bot-id/auth/browser-challenge",
+      "/finance-bots/bot-id/auth/browser-challenge/consume",
+    ]);
+    expect(requests[1]?.data).toBe(JSON.stringify({ token: "a".repeat(32) }));
+    expect(
+      requests.every(
+        (request) => request.headers.get("X-Finance-Consumer-Request") === "1",
+      ),
+    ).toBe(true);
   });
 
   it("lists and edits transfers without sending a manual rate or destination amount", async () => {

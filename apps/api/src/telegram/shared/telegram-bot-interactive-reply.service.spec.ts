@@ -63,4 +63,51 @@ describe('TelegramBotInteractiveReplyService', () => {
       }),
     );
   });
+
+  it('can remove stale inline actions from a finalized message', async () => {
+    const api = { editMessageText: jest.fn().mockResolvedValue(true) };
+    await new TelegramBotInteractiveReplyService(api as never).edit(
+      'token',
+      'chat',
+      42,
+      { text: 'Saved', removeInlineKeyboard: true },
+    );
+    expect(api.editMessageText).toHaveBeenCalledWith(
+      'token',
+      expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
+    );
+  });
+
+  it('replaces an existing interactive step with the next inline keyboard', async () => {
+    const api = { editMessageText: jest.fn().mockResolvedValue(true) };
+
+    await new TelegramBotInteractiveReplyService(api as never).edit(
+      'token',
+      'chat',
+      42,
+      {
+        text: 'Choose a category',
+        inlineButtons: [
+          [{ text: 'Salary', callbackData: 'fin:flow:category:salary' }],
+        ],
+      },
+    );
+
+    expect(api.editMessageText).toHaveBeenCalledWith('token', {
+      chat_id: 'chat',
+      message_id: 42,
+      text: 'Choose a category',
+      parse_mode: undefined,
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: 'Salary',
+              callback_data: 'fin:flow:category:salary',
+            },
+          ],
+        ],
+      },
+    });
+  });
 });

@@ -170,7 +170,6 @@ describe('TelegramChannelsService importManagedPosts', () => {
           text: 'First body',
           emoji: '🔥',
           urls: ['https://example.com/one.png'],
-          groupPosition: 1,
         },
         {
           title: 'Second',
@@ -269,7 +268,7 @@ describe('TelegramChannelsService importManagedPosts', () => {
         index: 2,
         status: 'created',
         title: 'Good',
-        message: 'Post processed: Good',
+        message: 'Post created: Good',
       }),
       3,
       3,
@@ -310,6 +309,31 @@ describe('TelegramChannelsService importManagedPosts', () => {
     );
   });
 
+  it('keeps commas inside a single image URL', async () => {
+    const { service, create } = setup();
+
+    await service.importManagedPosts('user', 'channel', {
+      rows: [
+        {
+          title: 'Comma URL',
+          urls: [
+            'https://loremflickr.com/1280/800/open,door,road?lock=22003',
+          ],
+        },
+      ],
+    });
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          imageUrls: [
+            'https://loremflickr.com/1280/800/open,door,road?lock=22003',
+          ],
+        }),
+      }),
+    );
+  });
+
   it('keeps each imported row outside a long import transaction', async () => {
     const { service, prisma } = setup();
 
@@ -324,13 +348,13 @@ describe('TelegramChannelsService importManagedPosts', () => {
     expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function));
   });
 
-  it('uses standard group positions when groupPosition is blank', async () => {
+  it('uses standard group positions without JSON position fields', async () => {
     const { service, create, posts } = setup();
 
     await service.importManagedPosts('user', 'channel', {
       postGroupId: 'group-1',
       rows: [
-        { title: 'First blank', text: 'Body', groupPosition: '' },
+        { title: 'First blank', text: 'Body' },
         { title: 'Second blank', text: 'Body' },
       ],
     });
@@ -354,6 +378,83 @@ describe('TelegramChannelsService importManagedPosts', () => {
       ['post-1', 1, 1],
       ['post-2', 2, 2],
     ]);
+  });
+
+  it('reports schedule errors and retries scheduling the existing draft', async () => {
+    const { service, create } = setup();
+    const onProgress = jest.fn();
+    const publish = jest
+      .spyOn(service as never, 'publishManagedPost' as never)
+      .mockRejectedValueOnce(new Error('Telegram rejected the image') as never)
+      .mockImplementationOnce(async (...args: unknown[]) => ({
+        id: args[2],
+        status: 'SCHEDULED',
+      }) as never);
+    const payload = {
+      rows: [
+        {
+          title: 'Retry me',
+          text: 'Body',
+          scheduledAt: '2099-08-22T09:55:00.000Z',
+        },
+      ],
+    };
+
+    const failed = await service.importManagedPosts(
+      'user',
+      'channel',
+      payload,
+      onProgress,
+    );
+    const retried = await service.importManagedPosts(
+      'user',
+      'channel',
+      payload,
+    );
+
+    expect(failed.createdCount).toBe(0);
+    expect(failed.skippedCount).toBe(1);
+    expect(failed.rows[0]).toEqual(
+      expect.objectContaining({
+        status: 'scheduleFailed',
+        error: 'Telegram rejected the image',
+      }),
+    );
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'scheduleFailed',
+        error: 'Telegram rejected the image',
+        message: expect.stringContaining('Telegram rejected the image'),
+      }),
+      1,
+      1,
+    );
+    expect(retried.createdCount).toBe(1);
+    expect(retried.skippedCount).toBe(0);
+    expect(retried.rows[0]).toEqual(
+      expect.objectContaining({ status: 'scheduled' }),
+    );
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(publish).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops before the next row when the import stream is aborted', async () => {
+    const { service, create } = setup();
+    const controller = new AbortController();
+
+    const result = await service.importManagedPosts(
+      'user',
+      'channel',
+      { rows: [{ title: 'First' }, { title: 'Second' }] },
+      () => controller.abort(),
+      controller.signal,
+    );
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toEqual(
+      expect.objectContaining({ status: 'created' }),
+    );
   });
 
   it('requires the selected group to belong to the current workspace and channel', async () => {

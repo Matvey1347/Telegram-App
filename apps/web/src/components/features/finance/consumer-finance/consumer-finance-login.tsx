@@ -1,28 +1,69 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Send } from "lucide-react";
 import { Button, ErrorState, LoadingState } from "@/components/ui/primitives";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
 import { consumerFinanceKeys } from "@/lib/query-keys";
 import { financeCopy, normalizeFinanceLocale } from "./finance-i18n";
 
 /** Browser authentication is delegated to the API so Telegram verifies identity server-side. */
-export function ConsumerFinanceLogin({ botId }: { botId: string }) {
+export function ConsumerFinanceLogin({
+  botId,
+  onAuthenticated,
+}: {
+  botId: string;
+  onAuthenticated: () => void;
+}) {
   const t = financeCopy(
     normalizeFinanceLocale(
       typeof navigator === "undefined" ? undefined : navigator.language,
     ),
   );
-  const returnTo =
-    typeof window === "undefined"
-      ? `/finance/${botId}`
-      : window.location.pathname;
-  const config = useQuery({
-    queryKey: consumerFinanceKeys.browserLoginConfig(botId),
-    queryFn: () => consumerFinanceApi.browserLoginConfig(botId, returnTo),
+  const [waiting, setWaiting] = useState(false);
+  const completedToken = useRef<string | null>(null);
+  const challenge = useQuery({
+    queryKey: consumerFinanceKeys.browserLoginChallenge(botId),
+    queryFn: () => consumerFinanceApi.createBrowserLoginChallenge(botId),
     retry: false,
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: 0,
   });
+  const approval = useQuery({
+    queryKey: consumerFinanceKeys.browserLoginApproval(
+      botId,
+      challenge.data?.token || "pending",
+    ),
+    queryFn: () =>
+      consumerFinanceApi.consumeBrowserLoginChallenge(
+        botId,
+        challenge.data!.token,
+      ),
+    enabled: waiting && Boolean(challenge.data?.token),
+    retry: false,
+    staleTime: 0,
+    refetchInterval: (query) =>
+      query.state.data?.status === "pending" ? 1_500 : false,
+  });
+
+  useEffect(() => {
+    if (
+      approval.data?.status !== "authenticated" ||
+      !challenge.data?.token ||
+      completedToken.current === challenge.data.token
+    ) {
+      return;
+    }
+    completedToken.current = challenge.data.token;
+    onAuthenticated();
+  }, [approval.data, challenge.data?.token, onAuthenticated]);
+
+  const retry = async () => {
+    setWaiting(false);
+    completedToken.current = null;
+    await challenge.refetch();
+  };
 
   return (
     <div className="mx-auto grid min-h-dvh max-w-6xl items-center gap-10 px-4 py-10 text-neutral-100 md:grid-cols-[1.1fr_.9fr] md:px-8">
@@ -41,54 +82,57 @@ export function ConsumerFinanceLogin({ botId }: { botId: string }) {
         </p>
         <h1 className="mt-2 text-2xl font-semibold">{t.signInTelegram}</h1>
         <p className="mt-2 text-sm text-neutral-400">{t.signInHelp}</p>
-        {config.isLoading ? <LoadingState text={t.loadingSignIn} /> : null}
-        {config.isError ? <ErrorState text={t.signInUnavailable} /> : null}
-        {config.data ? (
-          <TelegramLoginWidget {...config.data} label={t.telegramSignIn} />
+        {challenge.isLoading ? <LoadingState text={t.loadingSignIn} /> : null}
+        {challenge.isError || approval.isError ? (
+          <div className="mt-4 space-y-3">
+            <ErrorState text={t.signInUnavailable} />
+            <Button variant="secondary" onClick={() => void retry()}>
+              {t.retry}
+            </Button>
+          </div>
+        ) : null}
+        {challenge.data && approval.data?.status !== "expired" ? (
+          <div className="mt-5 space-y-3">
+            <a
+              href={challenge.data.loginUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => setWaiting(true)}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#229ED9] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1b8fc5] focus:outline-none focus:ring-2 focus:ring-sky-400"
+            >
+              <Send className="h-4 w-4" aria-hidden="true" />
+              {t.telegramSignIn}
+            </a>
+            {waiting ? (
+              <p className="text-sm text-neutral-400" role="status">
+                {t.telegramSignInWaiting}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        {approval.data?.status === "expired" ? (
+          <div className="mt-4 space-y-3">
+            <ErrorState text={t.telegramSignInExpired} />
+            <Button variant="secondary" onClick={() => void retry()}>
+              {t.retry}
+            </Button>
+          </div>
         ) : null}
       </section>
     </div>
   );
 }
 
-function TelegramLoginWidget({
-  botUsername,
-  callbackUrl,
-  label,
-}: {
-  botUsername: string;
-  callbackUrl: string;
-  label: string;
-}) {
-  const container = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const target = container.current;
-    if (!target) return;
-    target.replaceChildren();
-    const script = document.createElement("script");
-    script.async = true;
-    script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.setAttribute("data-telegram-login", botUsername.replace(/^@/, ""));
-    script.setAttribute("data-size", "large");
-    script.setAttribute("data-radius", "8");
-    script.setAttribute("data-auth-url", callbackUrl);
-    script.setAttribute("data-request-access", "write");
-    target.appendChild(script);
-    return () => target.replaceChildren();
-  }, [botUsername, callbackUrl]);
-
-  return <div className="mt-5 min-h-10" ref={container} aria-label={label} />;
-}
-
 export function ConsumerFinanceBootstrapError({
   onRetry,
+  locale,
 }: {
   onRetry: () => void;
+  locale?: string | null;
 }) {
   const t = financeCopy(
     normalizeFinanceLocale(
-      typeof navigator === "undefined" ? undefined : navigator.language,
+      locale ?? (typeof navigator === "undefined" ? undefined : navigator.language),
     ),
   );
   return (

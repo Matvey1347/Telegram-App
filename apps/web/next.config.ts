@@ -14,6 +14,9 @@ const gatewayHostname = configuredDevHostname(
 );
 
 const nextConfig: NextConfig = {
+  // The floating Next.js development badge overlaps Mini App navigation and
+  // is not part of the product UI.
+  devIndicators: false,
   // Telegram Mini Apps load the dev site through the Cloudflare Tunnel origin.
   allowedDevOrigins: [
     "localhost",

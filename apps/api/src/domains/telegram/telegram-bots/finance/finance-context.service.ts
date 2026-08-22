@@ -151,63 +151,48 @@ export class FinanceContextService {
   }
 
   async ensureProfile(botIntegrationId: string, telegramBotUserId: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const existingProfile = await tx.financeProfile.findUnique({
-        where: {
-          botIntegrationId_telegramBotUserId: {
-            botIntegrationId,
-            telegramBotUserId,
+    const where = {
+      botIntegrationId_telegramBotUserId: {
+        botIntegrationId,
+        telegramBotUserId,
+      },
+    };
+    const existingProfile = await this.prisma.financeProfile.findUnique({
+      where,
+    });
+    if (existingProfile) return existingProfile;
+    try {
+      // Nested defaults commit atomically with the new profile. Established
+      // profiles never enter a transaction or rerun initialization.
+      return await this.prisma.financeProfile.create({
+        data: {
+          botIntegrationId,
+          telegramBotUserId,
+          categories: {
+            create: DEFAULT_FINANCE_CATEGORIES.map((item) => ({
+              name: item.name,
+              type: item.type,
+              key: item.name.toLowerCase().replace(/\s+/g, '-'),
+            })),
+          },
+          accounts: {
+            create: { name: 'Cash', type: 'CASH', currency: 'UAH' },
           },
         },
       });
-      if (existingProfile) return existingProfile;
-      let profile;
-      try {
-        profile = await tx.financeProfile.create({
-          data: { botIntegrationId, telegramBotUserId },
-        });
-      } catch (error) {
-        if (
-          !(error instanceof Prisma.PrismaClientKnownRequestError) ||
-          error.code !== 'P2002'
-        ) {
-          throw error;
-        }
-        const concurrentlyCreated = await tx.financeProfile.findUnique({
-          where: {
-            botIntegrationId_telegramBotUserId: {
-              botIntegrationId,
-              telegramBotUserId,
-            },
-          },
-        });
-        if (!concurrentlyCreated) throw error;
-        return concurrentlyCreated;
+    } catch (error) {
+      if (
+        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+        error.code !== 'P2002'
+      ) {
+        throw error;
       }
-      await tx.financeCategory.createMany({
-        data: DEFAULT_FINANCE_CATEGORIES.map((item) => ({
-          profileId: profile.id,
-          name: item.name,
-          type: item.type,
-          key: item.name.toLowerCase().replace(/\s+/g, '-'),
-        })),
-        skipDuplicates: true,
+      const concurrentlyCreated = await this.prisma.financeProfile.findUnique({
+        where,
       });
-      const account = await tx.financeAccount.findFirst({
-        where: { profileId: profile.id },
-        select: { id: true },
-      });
-      if (!account)
-        await tx.financeAccount.create({
-          data: {
-            profileId: profile.id,
-            name: 'Cash',
-            type: 'CASH',
-            currency: profile.defaultCurrency,
-          },
-        });
-      return profile;
-    });
+      if (!concurrentlyCreated) throw error;
+      return concurrentlyCreated;
+    }
   }
 
   private identityChanged(

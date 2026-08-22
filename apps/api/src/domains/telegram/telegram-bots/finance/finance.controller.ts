@@ -15,7 +15,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { IsIn } from 'class-validator';
+import { IsIn, IsString, Matches } from 'class-validator';
 import { randomBytes, timingSafeEqual } from 'crypto';
 import type { CookieOptions, Request, Response } from 'express';
 import { BotBillingService } from '../../bot-billing/bot-billing.service';
@@ -49,10 +49,17 @@ import {
 import { FinanceEntitlementService } from './finance-entitlement.service';
 import { forecastMonthlyLimit } from './finance-smart-limits';
 import { financeAnalyticsDateRange } from './finance-history-date-range';
-import { t } from './i18n/finance-chat-i18n';
+import { financeChatLocale, t } from './i18n/finance-chat-i18n';
+import { financeMainMenu } from './finance-bot-chat-responder.service';
 
 class DeleteFinanceDataDto {
   @IsIn(['DELETE MY FINANCE DATA']) confirmation!: 'DELETE MY FINANCE DATA';
+}
+
+class FinanceBrowserLoginChallengeDto {
+  @IsString()
+  @Matches(/^[A-Za-z0-9_-]{32}$/u)
+  token!: string;
 }
 @Controller('finance-bots/:botId')
 export class FinanceController {
@@ -272,6 +279,30 @@ export class FinanceController {
       callbackUrl: `${apiOrigin}/api/finance-bots/${botId}/auth/browser?returnTo=${encodeURIComponent(target)}&state=${encodeURIComponent(state)}`,
     };
   }
+  @Post('auth/browser-challenge') async createBrowserLoginChallenge(
+    @Param('botId') botId: string,
+    @Req() request: Request,
+  ) {
+    this.assertConsumerMutation(request);
+    const config = await this.contexts.browserLoginConfig(botId);
+    return this.transfers.createBrowserLogin(botId, config.username);
+  }
+  @Post('auth/browser-challenge/consume') async consumeBrowserLoginChallenge(
+    @Param('botId') botId: string,
+    @Body() input: FinanceBrowserLoginChallengeDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    this.assertConsumerMutation(request);
+    const result = await this.transfers.consumeBrowserLogin(input.token, botId);
+    if (result.status !== 'approved') return result;
+    await this.setCookie(res, result.session, botId, request);
+    const profile = await this.core.profile(result.session.profileId);
+    if (!profile) {
+      throw new InternalServerErrorException('Finance profile was not created');
+    }
+    return { status: 'authenticated' as const, profile };
+  }
   /** Telegram Login Widget callback. Telegram sends signed query parameters; redirect never retains them. */
   @Get('auth/browser') async browserLogin(
     @Param('botId') b: string,
@@ -353,12 +384,31 @@ export class FinanceController {
       recent: recent.items,
     };
   }
-  @Patch('settings') settings(
+  @Patch('settings') async settings(
     @Param('botId') b: string,
     @Req() r: Request,
     @Body() d: UpdateFinanceSettingsDto,
   ) {
-    return this.core.updateSettings(this.auth(b, r).profileId, d);
+    const session = this.auth(b, r);
+    const before = await this.core.profile(session.profileId);
+    const updated = await this.core.updateSettings(session.profileId, d);
+    if (d.locale && before?.locale !== updated?.locale) {
+      const target = await this.core.notificationTarget(session.profileId);
+      if (target?.telegramUser.telegramChatId) {
+        const locale = financeChatLocale(updated?.locale, target.telegramUser.languageCode);
+        await this.delivery.enqueueSendMessage({
+          workspaceId: target.botIntegration.workspaceId,
+          botIntegrationId: target.botIntegrationId,
+          runtimeInstanceId: target.telegramUser.runtimeInstanceId,
+          telegramBotUserId: target.telegramUser.id,
+          chatId: target.telegramUser.telegramChatId,
+          text: t(locale, 'languageSaved'),
+          replyKeyboard: financeMainMenu(target.botIntegrationId, locale),
+          idempotencyKey: `finance-language:${session.profileId}:${locale}:${Date.now()}`,
+        });
+      }
+    }
+    return updated;
   }
   @Get('accounts') accounts(@Param('botId') b: string, @Req() r: Request) {
     const c = this.auth(b, r);

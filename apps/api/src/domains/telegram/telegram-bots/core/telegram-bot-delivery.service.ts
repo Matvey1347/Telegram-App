@@ -22,6 +22,7 @@ import { sanitizeOperationalError } from '../../../../common/security/operationa
 import { TelegramBotDeliveryScheduler } from './telegram-bot-delivery-scheduler';
 import { TelegramBotRuntimeEnvironmentService } from './telegram-bot-runtime-environment.service';
 import { TelegramBotRuntimeExecutionContext } from './telegram-bot-runtime-execution-context';
+import { financeChatLocale, t } from '../finance/i18n/finance-chat-i18n';
 
 type SendMessagePayload = TelegramBotMessage;
 
@@ -484,7 +485,9 @@ export class TelegramBotDeliveryService
       telegramBotUserId: reminder.profile.telegramBotUserId,
       financeReminderId: reminder.id,
       chatId: reminder.profile.telegramUser.telegramChatId,
-      text: `Reminder: ${reminder.name}\n${reminder.amount.toString()} ${reminder.currency}`,
+      text: t(financeChatLocale(reminder.profile.locale, reminder.profile.telegramUser.languageCode), 'reminderNotification', {
+        name: reminder.name, amount: reminder.amount.toString(), currency: reminder.currency,
+      }),
       scheduledAt: new Date(
         next.getTime() - reminder.reminderOffsetMinutes * 60000,
       ),

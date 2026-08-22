@@ -1,6 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { TelegramBotApiClient } from './telegram-bot-api.client';
-import { telegramBotMessagePayload, type TelegramBotMessage } from './telegram-bot-message';
+import {
+  telegramBotMessagePayload,
+  type TelegramBotMessage,
+} from './telegram-bot-message';
 
 /**
  * Immediate replies to a live update. This deliberately has no persistence,
@@ -8,9 +11,50 @@ import { telegramBotMessagePayload, type TelegramBotMessage } from './telegram-b
  */
 @Injectable()
 export class TelegramBotInteractiveReplyService {
+  private readonly logger = new Logger(TelegramBotInteractiveReplyService.name);
+
   constructor(private readonly botApi: TelegramBotApiClient) {}
 
-  send(token: string, chatId: string, message: TelegramBotMessage) {
-    return this.botApi.sendMessage(token, telegramBotMessagePayload(chatId, message));
+  async send(token: string, chatId: string, message: TelegramBotMessage) {
+    const startedAt = Date.now();
+    try {
+      return await this.botApi.sendMessage(
+        token,
+        telegramBotMessagePayload(chatId, message),
+      );
+    } finally {
+      const latencyMs = Date.now() - startedAt;
+      if (latencyMs >= 750)
+        this.logger.warn(
+          JSON.stringify({
+            event: 'telegram_bot.slow_interactive_send',
+            latencyMs,
+          }),
+        );
+    }
+  }
+
+  async edit(
+    token: string,
+    chatId: string,
+    messageId: number,
+    message: TelegramBotMessage,
+  ) {
+    const startedAt = Date.now();
+    try {
+      return await this.botApi.editMessageText(token, {
+        ...telegramBotMessagePayload(chatId, message),
+        message_id: messageId,
+      });
+    } finally {
+      const latencyMs = Date.now() - startedAt;
+      if (latencyMs >= 750)
+        this.logger.warn(
+          JSON.stringify({
+            event: 'telegram_bot.slow_interactive_edit',
+            latencyMs,
+          }),
+        );
+    }
   }
 }

@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, Max, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class UpsertBillingProviderConfigDto {
   @IsOptional() @IsString() secretKey?: string;
@@ -48,7 +48,7 @@ export class CreateBillingCouponDto {
   @IsOptional() @IsString() planId?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) percentOff?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) amountOffMinor?: number;
-  @IsOptional() @IsString() currency?: string;
+  @IsOptional() @IsString() @MinLength(3) @MaxLength(3) currency?: string;
   @IsOptional() @IsDateString() startsAt?: string;
   @IsOptional() @IsDateString() expiresAt?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) maxRedemptions?: number;
@@ -63,4 +63,19 @@ export class BillingSubscribersQueryDto {
   @IsOptional() @IsIn(['STRIPE', 'TELEGRAM_STARS', 'MANUAL', 'GIFT']) source?: 'STRIPE' | 'TELEGRAM_STARS' | 'MANUAL' | 'GIFT';
   @IsOptional() @IsIn(['STRIPE', 'TELEGRAM_STARS']) provider?: 'STRIPE' | 'TELEGRAM_STARS';
   @IsOptional() @IsString() planId?: string;
+  @IsOptional() @IsIn(['LOCAL', 'PRODUCTION']) environment?: 'LOCAL' | 'PRODUCTION';
+}
+
+export class BillingUsersQueryDto {
+  @IsOptional() @IsString() cursor?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit?: number;
+  @IsOptional() @IsString() search?: string;
+  @IsOptional() @IsIn(['LOCAL', 'PRODUCTION']) environment?: 'LOCAL' | 'PRODUCTION';
+}
+
+export class UpdateFinanceSupportProfileDto {
+  @IsOptional() @IsIn(['uk', 'ru', 'en']) locale?: 'uk' | 'ru' | 'en';
+  @IsOptional() @IsString() @Matches(/^[A-Za-z]{3}$/u) currency?: string;
+  @IsOptional() @IsString() timezone?: string;
+  @IsOptional() @IsBoolean() resetOnboarding?: boolean;
 }

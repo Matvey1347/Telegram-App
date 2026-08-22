@@ -1,4 +1,9 @@
 import { Prisma } from '@prisma/client';
+import {
+  financeAccountEmoji,
+  financeCategoryEmoji,
+  financeIconPresentation,
+} from './finance-entity-emoji';
 
 export const financeTransactionSelect = {
   id: true,
@@ -17,8 +22,12 @@ export const financeTransactionSelect = {
   merchantNormalized: true,
   source: true,
   deletedAt: true,
-  account: { select: { id: true, name: true, currency: true } },
-  category: { select: { id: true, name: true, key: true, type: true } },
+  account: {
+    select: { id: true, name: true, currency: true, type: true, emoji: true },
+  },
+  category: {
+    select: { id: true, name: true, key: true, type: true, emoji: true },
+  },
   _count: { select: { items: true } },
 } satisfies Prisma.FinanceTransactionSelect;
 
@@ -40,8 +49,29 @@ export function financeTransactionView(row: FinanceTransactionViewRow) {
     merchantNormalized: row.merchantNormalized,
     source: row.source,
     itemCount: row._count?.items ?? 0,
-    account: row.account,
-    category: row.category,
+    account: row.account
+      ? {
+          id: row.account.id,
+          name: row.account.name,
+          currency: row.account.currency,
+          iconPresentation: financeIconPresentation(
+            row.account.emoji,
+            financeAccountEmoji(row.account.type),
+          ),
+        }
+      : undefined,
+    category: row.category
+      ? {
+          id: row.category.id,
+          name: row.category.name,
+          key: row.category.key,
+          type: row.category.type,
+          iconPresentation: financeIconPresentation(
+            row.category.emoji,
+            financeCategoryEmoji(row.category.name, row.category.key),
+          ),
+        }
+      : null,
     valuationSnapshot:
       row.valuationCurrency &&
       row.amountInValuationCurrency &&

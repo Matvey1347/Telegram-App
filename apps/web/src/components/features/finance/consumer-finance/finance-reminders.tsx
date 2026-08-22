@@ -81,6 +81,7 @@ export function FinanceReminders({
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
           />
+          <p className="mt-1 text-xs text-neutral-500">{t.reminderAmountHelp}</p>
         </FormField>
         <FormField label={t.reminderDay}>
           <Input

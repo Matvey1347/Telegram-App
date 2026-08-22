@@ -39,6 +39,7 @@ export function FinanceTransactionEditor({
   onClose,
   onSaved,
   initiallyOpenType = null,
+  showCreateActions = true,
 }: {
   botId: string;
   accounts: ConsumerFinanceAccount[];
@@ -49,6 +50,7 @@ export function FinanceTransactionEditor({
   onClose: () => void;
   onSaved: (item: ConsumerFinanceTransaction) => void;
   initiallyOpenType?: ConsumerFinanceTransactionInput["type"] | null;
+  showCreateActions?: boolean;
 }) {
   const t = financeCopy(locale);
   const [open, setOpen] = useState(!!initiallyOpenType);
@@ -114,23 +116,25 @@ export function FinanceTransactionEditor({
   };
   return (
     <>
-      <div className="grid grid-cols-2 gap-2">
-        <Button
-          className="min-h-11 w-full"
-          disabled={!activeAccounts.length}
-          onClick={() => openCreate("EXPENSE")}
-        >
-          <ArrowUpRight size={16} /> {t.addExpense}
-        </Button>
-        <Button
-          variant="secondary"
-          className="min-h-11 w-full"
-          disabled={!activeAccounts.length}
-          onClick={() => openCreate("INCOME")}
-        >
-          <ArrowDownLeft size={16} /> {t.addIncome}
-        </Button>
-      </div>
+      {showCreateActions ? (
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            className="min-h-11 w-full"
+            disabled={!activeAccounts.length}
+            onClick={() => openCreate("EXPENSE")}
+          >
+            <ArrowUpRight size={16} /> {t.addExpense}
+          </Button>
+          <Button
+            variant="secondary"
+            className="min-h-11 w-full"
+            disabled={!activeAccounts.length}
+            onClick={() => openCreate("INCOME")}
+          >
+            <ArrowDownLeft size={16} /> {t.addIncome}
+          </Button>
+        </div>
+      ) : null}
       <Modal
         open={open || !!editing}
         closeLabel={t.close}
@@ -143,6 +147,7 @@ export function FinanceTransactionEditor({
         <div className="space-y-3">
           <FormField label={t.transactionType}>
             <Select
+              uiLocale={locale}
               value={type}
               onChange={(event) => {
                 setType(event.target.value as typeof type);
@@ -164,11 +169,15 @@ export function FinanceTransactionEditor({
           </FormField>
           <FormField label={t.account}>
             <Select
+              uiLocale={locale}
               value={accountId || account?.id || ""}
               onChange={(event) => setAccountId(event.target.value)}
             >
               {activeAccounts.map((item) => (
                 <option key={item.id} value={item.id}>
+                  {item.iconPresentation.type === "unicode"
+                    ? `${item.iconPresentation.value} `
+                    : ""}
                   {item.name} · {item.currency}
                 </option>
               ))}
@@ -176,12 +185,16 @@ export function FinanceTransactionEditor({
           </FormField>
           <FormField label={t.category}>
             <Select
+              uiLocale={locale}
               value={categoryId}
               onChange={(event) => setCategoryId(event.target.value)}
             >
               <option value="">{t.uncategorized}</option>
               {visibleCategories.map((item) => (
                 <option key={item.id} value={item.id}>
+                  {item.iconPresentation.type === "unicode"
+                    ? `${item.iconPresentation.value} `
+                    : ""}
                   {localizeFinanceCategory(item.name, item.key, locale)}
                 </option>
               ))}

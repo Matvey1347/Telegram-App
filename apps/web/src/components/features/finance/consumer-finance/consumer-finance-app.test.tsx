@@ -37,21 +37,32 @@ vi.mock("./consumer-finance-screens", () => ({
     profile,
     screen: activeScreen,
     openTransfer,
+    openTransaction,
+    surface,
   }: {
     profile: ConsumerFinanceProfile;
     screen: string;
     openTransfer: boolean;
+    openTransaction: "EXPENSE" | "INCOME" | null;
+    surface: "browser" | "telegram";
   }) => (
     <div>
       Finance profile {profile.id} · screen {activeScreen} · transfer{" "}
-      {String(openTransfer)}
+      {String(openTransfer)} · transaction {String(openTransaction)} · surface{" "}
+      {surface}
     </div>
   ),
 }));
 vi.mock("./consumer-finance-login", () => ({
   ConsumerFinanceLogin: () => <div>Browser login</div>,
-  ConsumerFinanceBootstrapError: ({ onRetry }: { onRetry: () => void }) => (
-    <button onClick={onRetry}>Bootstrap retry</button>
+  ConsumerFinanceBootstrapError: ({
+    onRetry,
+    locale,
+  }: {
+    onRetry: () => void;
+    locale?: string;
+  }) => (
+    <button onClick={onRetry}>Bootstrap retry {locale}</button>
   ),
 }));
 
@@ -78,12 +89,32 @@ beforeEach(() => {
   mocks.bootstrap = { status: "browser" };
   mocks.auth.mockReset();
   mocks.session.mockReset();
+  mocks.session.mockResolvedValue({ authenticated: false });
   mocks.createBrowserTransfer.mockReset();
   mocks.browserTransferUrl.mockReset();
+  window.localStorage.clear();
   window.history.replaceState({}, "", "/finance/bot-1");
 });
 
 describe("ConsumerFinanceApp bootstrap", () => {
+  it("keeps SSR bootstrap neutral until the runtime surface is known", () => {
+    mocks.bootstrap = { status: "loading" };
+
+    renderApp();
+
+    expect(
+      document.querySelector("[data-finance-shell='bootstrap']"),
+    ).toBeInTheDocument();
+    expect(
+      document.querySelector("[data-finance-shell='mini-app']"),
+    ).not.toBeInTheDocument();
+    expect(
+      document.querySelector("[data-finance-shell='web-app']"),
+    ).not.toBeInTheDocument();
+    expect(mocks.session).not.toHaveBeenCalled();
+    expect(mocks.auth).not.toHaveBeenCalled();
+  });
+
   it("performs one browser session read and renders login only for explicit unauthenticated state", async () => {
     mocks.session.mockResolvedValue({ authenticated: false });
 
@@ -107,9 +138,15 @@ describe("ConsumerFinanceApp bootstrap", () => {
     expect(
       document.querySelector("[data-finance-surface='browser']"),
     ).toBeInTheDocument();
+    expect(
+      document.querySelector("[data-finance-shell='web-app']"),
+    ).toBeInTheDocument();
+    expect(
+      document.querySelector("[data-finance-shell='mini-app']"),
+    ).not.toBeInTheDocument();
   });
 
-  it("uses exactly one Telegram bootstrap POST and its returned profile", async () => {
+  it("checks the scoped session before using Telegram initData once", async () => {
     mocks.bootstrap = { status: "ready", initData: "signed-init-data" };
     mocks.auth.mockResolvedValue({ authenticated: true, profile });
 
@@ -120,7 +157,20 @@ describe("ConsumerFinanceApp bootstrap", () => {
     ).toBeInTheDocument();
     expect(mocks.auth).toHaveBeenCalledOnce();
     expect(mocks.auth).toHaveBeenCalledWith("bot-1", "signed-init-data");
-    expect(mocks.session).not.toHaveBeenCalled();
+    expect(mocks.session).toHaveBeenCalledOnce();
+  });
+
+  it("keeps an existing Mini App session without replaying stale initData", async () => {
+    mocks.bootstrap = { status: "ready", initData: "expired-init-data" };
+    mocks.session.mockResolvedValue({ authenticated: true, profile });
+
+    renderApp();
+
+    expect(
+      await screen.findByText(/Finance profile profile-1/),
+    ).toBeInTheDocument();
+    expect(mocks.session).toHaveBeenCalledOnce();
+    expect(mocks.auth).not.toHaveBeenCalled();
   });
 
   it("keeps a failed Telegram bootstrap stable and retries once per click", async () => {
@@ -130,7 +180,7 @@ describe("ConsumerFinanceApp bootstrap", () => {
     renderApp();
 
     const retry = await screen.findByRole("button", {
-      name: "Bootstrap retry",
+      name: "Bootstrap retry en",
     });
     expect(mocks.auth).toHaveBeenCalledOnce();
     await new Promise((resolve) => window.setTimeout(resolve, 20));
@@ -138,7 +188,7 @@ describe("ConsumerFinanceApp bootstrap", () => {
 
     fireEvent.click(retry);
     await waitFor(() => expect(mocks.auth).toHaveBeenCalledTimes(2));
-    expect(mocks.session).not.toHaveBeenCalled();
+    expect(mocks.session).toHaveBeenCalledTimes(2);
   });
 
   it("renders a recoverable Telegram context error without browser login or requests", () => {
@@ -147,11 +197,22 @@ describe("ConsumerFinanceApp bootstrap", () => {
     renderApp();
 
     expect(
-      screen.getByRole("button", { name: "Bootstrap retry" }),
+      screen.getByRole("button", { name: "Bootstrap retry en" }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Browser login")).not.toBeInTheDocument();
     expect(mocks.session).not.toHaveBeenCalled();
     expect(mocks.auth).not.toHaveBeenCalled();
+  });
+
+  it("keeps the last profile locale for a localized bootstrap error", () => {
+    window.localStorage.setItem("consumer-finance-locale:bot-1", "ru");
+    mocks.bootstrap = { status: "error" };
+
+    renderApp();
+
+    expect(
+      screen.getByRole("button", { name: "Bootstrap retry ru" }),
+    ).toBeInTheDocument();
   });
 
   it("renders the Telegram shell with four primary mobile destinations", async () => {
@@ -165,6 +226,9 @@ describe("ConsumerFinanceApp bootstrap", () => {
       document.querySelector("[data-finance-surface='telegram']"),
     ).toBeInTheDocument();
     expect(
+      document.querySelector("[data-finance-shell='mini-app']"),
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole("button", { name: "Open in browser" }),
     ).toBeInTheDocument();
     const mobileNav = document.querySelector("nav.grid-cols-4");
@@ -172,6 +236,26 @@ describe("ConsumerFinanceApp bootstrap", () => {
     expect(
       within(mobileNav as HTMLElement).getAllByRole("button"),
     ).toHaveLength(4);
+  });
+
+  it("keeps browser-session transfer failure recoverable", async () => {
+    mocks.bootstrap = { status: "ready", initData: "signed-init-data" };
+    mocks.auth.mockResolvedValue({ authenticated: true, profile });
+    mocks.createBrowserTransfer.mockRejectedValue(new Error("offline"));
+
+    renderApp();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Open in browser" }),
+    );
+    expect(
+      await screen.findByText(
+        "Could not open the browser session. Please try again.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open in browser" }),
+    ).toBeEnabled();
   });
 
   it("keeps the standalone shell visible while browser session data loads", () => {
@@ -185,19 +269,22 @@ describe("ConsumerFinanceApp bootstrap", () => {
     expect(screen.getByText("Opening Finance…")).toBeInTheDocument();
   });
 
-  it.each(["categories", "budget", "ultimate"] as const)(
-    "preserves the %s direct route",
-    async (route) => {
-      window.history.replaceState({}, "", `/finance/bot-1?screen=${route}`);
-      mocks.session.mockResolvedValue({ authenticated: true, profile });
+  it.each([
+    "categories",
+    "budget",
+    "ultimate",
+    "reminders",
+    "billing",
+  ] as const)("preserves the %s direct route", async (route) => {
+    window.history.replaceState({}, "", `/finance/bot-1?screen=${route}`);
+    mocks.session.mockResolvedValue({ authenticated: true, profile });
 
-      renderApp();
+    renderApp();
 
-      expect(
-        await screen.findByText(new RegExp(`screen ${route}`)),
-      ).toBeInTheDocument();
-    },
-  );
+    expect(
+      await screen.findByText(new RegExp(`screen ${route}`)),
+    ).toBeInTheDocument();
+  });
 
   it("updates browser URLs on navigation and follows popstate history", async () => {
     mocks.session.mockResolvedValue({ authenticated: true, profile });
@@ -221,7 +308,11 @@ describe("ConsumerFinanceApp bootstrap", () => {
     await screen.findByText(/screen home/);
 
     fireEvent.click(screen.getAllByRole("button", { name: "Expense" })[0]);
-    expect(await screen.findByText(/screen transactions/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        /screen transactions · transfer false · transaction EXPENSE/,
+      ),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Transfers" })[1]);
     expect(

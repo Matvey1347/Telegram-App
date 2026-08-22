@@ -7,6 +7,11 @@ import {
   rowToEditable,
 } from "@/components/features/telegram/telegram/managed-posts-import-modal";
 import {
+  importRowTab,
+  rowIndicesForTab,
+  summarizeImportProgress,
+} from "@/components/features/telegram/telegram/managed-posts-import-model";
+import {
   buildManagedPostInternalLinks,
   hasBlockingManagedPostInternalLinks,
 } from "@/components/features/telegram/telegram/managed-post-internal-links-notice";
@@ -20,7 +25,6 @@ describe("managed posts import parsing", () => {
         text: "**🌱 Не все важливе відчувається великим**\n\nДеякі зміни приходять тихо.\n\nПомічай це.",
         icon: "🌱",
         imageUrls: ["https://images.example.test/post.jpg?fit=crop"],
-        groupPosition: null,
       }),
       "posts.json",
     );
@@ -40,7 +44,6 @@ describe("managed posts import parsing", () => {
       text: "Before",
       icon: "🔥",
       urls: ["[image](https://cdn.example.test/before.png)"],
-      groupPosition: null,
     });
 
     const row = editableRowToImportRow({
@@ -78,6 +81,20 @@ describe("managed posts import parsing", () => {
     expect(importRow).not.toHaveProperty("imageSearch");
   });
 
+  it("keeps commas inside one image URL", () => {
+    const [row] = normalizeImportRows(
+      JSON.stringify({
+        title: "Comma URL",
+        urls: ["https://loremflickr.com/1280/800/open,door,road?lock=22003"],
+      }),
+      "posts.json",
+    );
+
+    expect(editableRowToImportRow(rowToEditable(row)).urls).toEqual([
+      "https://loremflickr.com/1280/800/open,door,road?lock=22003",
+    ]);
+  });
+
   it("serializes edited preview rows back to GPT-friendly JSON", () => {
     const editable = rowToEditable({
       title: "Original",
@@ -85,7 +102,6 @@ describe("managed posts import parsing", () => {
       icon: "🌗",
       urls: ["https://cdn.example.test/before.png"],
       imageSearch: ["old search"],
-      groupPosition: null,
     });
 
     const json = editableRowsToJsonContent([
@@ -104,13 +120,38 @@ describe("managed posts import parsing", () => {
         text: "After",
         icon: "🌗",
         urls: ["https://pinterest.example.test/image.jpg"],
-        groupPosition: null,
         scheduledAt: null,
         imported: false,
         approved: false,
         imageSearch: ["new pinterest query", "quiet window"],
       },
     ]);
+  });
+
+  it("places checked JSON rows into their status tabs immediately", () => {
+    const rows = normalizeImportRows(
+      JSON.stringify([
+        { title: "New" },
+        { title: "Approved", approved: true },
+        { title: "Imported", approved: true, imported: true },
+      ]),
+      "posts.json",
+    ).map(rowToEditable);
+
+    expect(rows.map(importRowTab)).toEqual(["new", "approved", "imported"]);
+    expect(rowIndicesForTab(rows, "approved")).toEqual([1]);
+    expect(rowIndicesForTab(rows, "imported")).toEqual([2]);
+  });
+
+  it("counts schedule failures as failed rather than imported", () => {
+    expect(
+      summarizeImportProgress([
+        { status: "created" },
+        { status: "scheduled" },
+        { status: "scheduleFailed" },
+        { status: "skipped" },
+      ]),
+    ).toEqual({ successful: 2, failed: 2 });
   });
 
   it("removes a post from the editable import rows before serializing JSON", () => {

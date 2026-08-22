@@ -6307,13 +6307,22 @@ function PostIcon({
   bare?: boolean;
 }) {
   if (!iconId && !icon) return null;
+  const isTelegramSystemGroupIcon =
+    icon?.type === "image" &&
+    (icon?.name === "telegram-system-group-icon" ||
+      iconId === "telegram-system-group-icon" ||
+      label === "Created in Telegram");
   return (
     <IconAvatar
       icon={icon}
       label={label}
       size={size}
-      bordered={!bare}
-      className={bare ? "!border-0 !bg-transparent" : ""}
+      bordered={!bare && !isTelegramSystemGroupIcon}
+      className={
+        bare || isTelegramSystemGroupIcon
+          ? "!border-0 !bg-transparent"
+          : ""
+      }
     />
   );
 }

@@ -215,8 +215,6 @@ export class ImportTelegramManagedPostRowDto {
   @Allow() imageUrls?: unknown;
   @Allow() images?: unknown;
   @Allow() groupId?: unknown;
-  @Allow() groupPosition?: unknown;
-  @Allow() order?: unknown;
   @Allow() scheduledAt?: unknown;
   @Allow() imported?: unknown;
   @Allow() approved?: unknown;

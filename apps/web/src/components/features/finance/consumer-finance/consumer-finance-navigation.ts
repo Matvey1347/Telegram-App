@@ -1,7 +1,35 @@
 import type { ConsumerFinanceScreen } from "./consumer-finance-screens";
+import type { FinanceCopy } from "./finance-i18n";
 
 export type ConsumerFinanceSurface = "browser" | "telegram";
 export type ConsumerFinanceAction = "expense" | "income" | "transfer";
+
+const SCREEN_COPY_KEYS: Record<ConsumerFinanceScreen, keyof FinanceCopy> = {
+  home: "overview",
+  transactions: "transactions",
+  transfers: "transfers",
+  analytics: "analytics",
+  ultimate: "financeUltimate",
+  accounts: "accounts",
+  settings: "settings",
+  categories: "categories",
+  budget: "budget",
+  reminders: "reminders",
+  billing: "plan",
+};
+
+export function financeScreenLabel(
+  copy: FinanceCopy,
+  screen: ConsumerFinanceScreen,
+) {
+  return copy[SCREEN_COPY_KEYS[screen]];
+}
+
+export function financeSurfaceForBootstrap(
+  status: string,
+): ConsumerFinanceSurface {
+  return status === "browser" ? "browser" : "telegram";
+}
 
 const SCREEN_VALUES = new Set<ConsumerFinanceScreen>([
   "home",
@@ -13,6 +41,8 @@ const SCREEN_VALUES = new Set<ConsumerFinanceScreen>([
   "settings",
   "categories",
   "budget",
+  "reminders",
+  "billing",
 ]);
 
 export function readConsumerFinanceScreen(location: Location) {
@@ -40,6 +70,8 @@ export function isMoreScreen(screen: ConsumerFinanceScreen) {
     "budget",
     "categories",
     "ultimate",
+    "reminders",
+    "billing",
     "settings",
   ].includes(screen);
 }

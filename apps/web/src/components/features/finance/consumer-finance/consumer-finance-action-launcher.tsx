@@ -43,7 +43,7 @@ export function ConsumerFinanceActionLauncher({
 
   return (
     <div
-      className={`fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-40 ${showOnDesktop ? "" : "md:hidden"}`}
+      className={`fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-40 ${showOnDesktop ? "" : "md:hidden"}`}
     >
       {open ? (
         <div className="mb-3 grid min-w-48 gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-2 shadow-2xl">

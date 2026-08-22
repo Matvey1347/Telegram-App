@@ -6,6 +6,8 @@ import type {
 import { Button, Card, EmptyState } from "@/components/ui/primitives";
 import { formatMoney } from "@/lib/features/finance/money";
 import type { ConsumerFinanceScreen } from "./consumer-finance-screens";
+import type { ConsumerFinanceAction } from "./consumer-finance-navigation";
+import type { ConsumerFinanceSurface } from "./consumer-finance-navigation";
 import {
   financeCopy,
   financeIntlLocale,
@@ -16,21 +18,30 @@ import {
 export function FinanceDashboard({
   data,
   onNavigate,
+  onAction,
   locale,
   timezone,
+  surface,
 }: {
   data: ConsumerFinanceDashboard;
   onNavigate: (screen: ConsumerFinanceScreen) => void;
+  onAction: (action: ConsumerFinanceAction) => void;
   locale: FinanceLocale;
   timezone: string;
+  surface: ConsumerFinanceSurface;
 }) {
   const t = financeCopy(locale);
   const { stats } = data;
   const accounts = stats.accounts.filter((account) => !account.archivedAt);
   const categories = stats.categories.slice(0, 6);
   return (
-    <div className="space-y-4">
-      <Card className="flex flex-wrap items-end justify-between gap-3">
+    <div
+      data-finance-dashboard={surface}
+      className={
+        surface === "browser" ? "grid gap-4 xl:grid-cols-2" : "space-y-4"
+      }
+    >
+      <Card className="flex flex-wrap items-end justify-between gap-3 xl:col-span-2">
         <div>
           <p className="text-xs uppercase text-neutral-500">{t.totalBalance}</p>
           <p className="mt-1 text-2xl font-semibold tabular-nums">
@@ -41,7 +52,7 @@ export function FinanceDashboard({
             )}
           </p>
         </div>
-        <p className="text-xs text-neutral-500">
+        <p className="truncate text-xs text-neutral-500">
           {stats.totalBalance.includedAccountCount} / {accounts.length}{" "}
           {t.accounts.toLocaleLowerCase()}
         </p>
@@ -49,7 +60,7 @@ export function FinanceDashboard({
           <p className="w-full text-xs text-amber-300">{t.incompleteBalance}</p>
         ) : null}
       </Card>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-2 xl:col-span-2">
         {[
           [t.income, stats.income, "text-emerald-300"],
           [t.expense, stats.expense, "text-rose-300"],
@@ -178,7 +189,7 @@ export function FinanceDashboard({
           </div>
         </Card>
       ) : null}
-      <Card>
+      <Card className="xl:col-span-2">
         <h2 className="mb-2 font-medium">{t.recent}</h2>
         {data.recent.length ? (
           data.recent.map((item) => (
@@ -193,17 +204,19 @@ export function FinanceDashboard({
           <EmptyState text={t.noTransactionsYet} />
         )}
       </Card>
-      <div className="grid gap-2 sm:grid-cols-3">
-        <Button onClick={() => onNavigate("transactions")}>
-          <ArrowUpRight size={16} /> {t.addExpense}
-        </Button>
-        <Button variant="secondary" onClick={() => onNavigate("transactions")}>
-          <ArrowDownLeft size={16} /> {t.addIncome}
-        </Button>
-        <Button variant="secondary" onClick={() => onNavigate("transfers")}>
-          <ArrowLeftRight size={16} /> {t.transfers}
-        </Button>
-      </div>
+      {surface === "telegram" ? (
+        <div className="grid gap-2 sm:grid-cols-3">
+          <Button onClick={() => onAction("expense")}>
+            <ArrowUpRight size={16} /> {t.addExpense}
+          </Button>
+          <Button variant="secondary" onClick={() => onAction("income")}>
+            <ArrowDownLeft size={16} /> {t.addIncome}
+          </Button>
+          <Button variant="secondary" onClick={() => onAction("transfer")}>
+            <ArrowLeftRight size={16} /> {t.transfers}
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -277,7 +290,9 @@ export function TransactionRow({
             : ""}
         </p>
       </div>
-      <strong className={income ? "text-emerald-300" : "text-rose-300"}>
+      <strong
+        className={`ml-3 shrink-0 whitespace-nowrap text-sm tabular-nums ${income ? "text-emerald-300" : "text-rose-300"}`}
+      >
         {income ? "+" : "−"}
         {formatMoney(item.amount, item.currency, "symbol")}
       </strong>

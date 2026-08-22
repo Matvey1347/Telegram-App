@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import type {
   ConsumerFinanceAccount,
   ConsumerFinanceAccountType,
@@ -21,6 +21,8 @@ import { formatMoney } from "@/lib/features/finance/money";
 import { consumerFinanceKeys } from "@/lib/query-keys";
 import { financeCopy, type FinanceLocale } from "./finance-i18n";
 import { FinanceConfirmModal } from "./finance-confirm-modal";
+import { IconAvatar } from "@/components/icons/icon-avatar";
+import { IconPicker } from "@/components/icons/icon-picker";
 
 const TYPES: ConsumerFinanceAccountType[] = [
   "CASH",
@@ -100,62 +102,72 @@ export function FinanceAccounts({
         }}
       />
       {accounts.filter((account) => !account.archivedAt).length ? (
-        accounts
-          .filter((account) => !account.archivedAt)
-          .map((account) => (
-            <Card
-              key={account.id}
-              className="flex items-center justify-between gap-3"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-medium">{account.name}</p>
-                <p className="text-xs text-neutral-500">
-                  {
-                    t[
-                      account.type.toLowerCase() as
-                        | "cash"
-                        | "card"
-                        | "savings"
-                        | "other"
-                    ]
-                  }{" "}
-                  · {account.currency}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <div className="mr-1 text-right">
-                  <strong>
-                    {formatMoney(account.balance, account.currency, "symbol")}
-                  </strong>
-                  {account.equivalentBalance &&
-                  account.equivalentBalance.currency !== account.currency ? (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {accounts
+            .filter((account) => !account.archivedAt)
+            .map((account) => (
+              <Card
+                key={account.id}
+                className="flex items-center justify-between gap-3"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <IconAvatar
+                    icon={account.iconPresentation}
+                    label={account.name}
+                    size="sm"
+                    bordered={false}
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{account.name}</p>
                     <p className="text-xs text-neutral-500">
-                      ≈{" "}
-                      {formatMoney(
-                        account.equivalentBalance.amount,
-                        account.equivalentBalance.currency,
-                        "symbol",
-                      )}
+                      {
+                        t[
+                          account.type.toLowerCase() as
+                            | "cash"
+                            | "card"
+                            | "savings"
+                            | "other"
+                        ]
+                      }{" "}
+                      · {account.currency}
                     </p>
-                  ) : null}
+                  </div>
                 </div>
-                <button
-                  aria-label={`${t.editAccount}: ${account.name}`}
-                  className="rounded p-2 text-neutral-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
-                  onClick={() => setEditing(account)}
-                >
-                  <Pencil size={16} />
-                </button>
-                <button
-                  aria-label={`${t.archiveAccount}: ${account.name}`}
-                  className="rounded p-2 text-rose-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
-                  onClick={() => setArchiving(account)}
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </Card>
-          ))
+                <div className="flex shrink-0 items-center gap-1">
+                  <div className="mr-1 text-right">
+                    <strong>
+                      {formatMoney(account.balance, account.currency, "symbol")}
+                    </strong>
+                    {account.equivalentBalance &&
+                    account.equivalentBalance.currency !== account.currency ? (
+                      <p className="text-xs text-neutral-500">
+                        ≈{" "}
+                        {formatMoney(
+                          account.equivalentBalance.amount,
+                          account.equivalentBalance.currency,
+                          "symbol",
+                        )}
+                      </p>
+                    ) : null}
+                  </div>
+                  <button
+                    aria-label={`${t.editAccount}: ${account.name}`}
+                    className="flex min-h-11 min-w-11 items-center justify-center rounded text-neutral-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
+                    onClick={() => setEditing(account)}
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    aria-label={`${t.archiveAccount}: ${account.name}`}
+                    className="flex min-h-11 min-w-11 items-center justify-center rounded text-rose-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
+                    onClick={() => setArchiving(account)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </Card>
+            ))}
+        </div>
       ) : (
         <EmptyState text={t.noAccounts} />
       )}
@@ -229,15 +241,22 @@ function AccountEditor({
   const [type, setType] = useState<ConsumerFinanceAccountType>(
     editing?.type ?? "CARD",
   );
+  const [emoji, setEmoji] = useState(
+    editing?.iconPresentation.type === "unicode"
+      ? editing.iconPresentation.value
+      : "💳",
+  );
   const mutation = useMutation({
     mutationFn: () =>
       editing
         ? consumerFinanceApi.updateAccount(botId, editing.id, {
             name: name.trim(),
             type,
+            emoji,
           })
         : consumerFinanceApi.createAccount(botId, {
             name: name.trim(),
+            emoji,
             type,
             currency,
             openingBalance,
@@ -254,15 +273,17 @@ function AccountEditor({
   return (
     <>
       <Button
-        className="w-full"
+        className="min-h-10 self-start px-3"
         onClick={() => {
           setName("");
           setType("CARD");
+          setEmoji("💳");
           setCurrency(defaultCurrency);
           setOpeningBalance("0");
           setOpen(true);
         }}
       >
+        <Plus size={16} aria-hidden="true" />
         {t.addAccount}
       </Button>
       <Modal
@@ -275,6 +296,15 @@ function AccountEditor({
         title={editing ? t.editAccount : t.addAccount}
       >
         <div className="space-y-3">
+          <IconPicker
+            uiLocale={locale}
+            icon={{ type: "unicode", value: emoji }}
+            iconId={null}
+            onChange={() => undefined}
+            onEmojiChange={(value) => value && setEmoji(value)}
+            allowImages={false}
+            buttonLabel={t.accountName}
+          />
           <FormField label={t.accountName}>
             <Input
               autoFocus
@@ -284,6 +314,7 @@ function AccountEditor({
           </FormField>
           <FormField label={t.accountType}>
             <Select
+              uiLocale={locale}
               value={type}
               onChange={(event) =>
                 setType(event.target.value as ConsumerFinanceAccountType)

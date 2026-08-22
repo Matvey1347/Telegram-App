@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { Modal } from "./modal";
-
+import { uiCopy, type UiLocale } from "@/lib/ui-i18n";
 export { Modal } from "./modal";
 
 export type ToastItem = {
@@ -39,6 +39,8 @@ export type ToastItem = {
   iconEmoji?: string;
   iconUrl?: string;
   progress?: { current: number; total: number };
+  progressSummary?: { successful: number; failed: number };
+  cancelable?: boolean;
   details?: string;
 };
 
@@ -204,7 +206,8 @@ function OptionIcon({
   );
 }
 
-export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement> & { uiLocale?: UiLocale }) {
+  const ui = uiCopy(props.uiLocale);
   const financeTypeClass = (value: string) => {
     if (value === "income") return "text-emerald-300";
     if (value === "expense" || value === "expenses" || value === "expences")
@@ -322,7 +325,7 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
           <span
             className={`truncate ${selected ? selected.className || "text-white" : "text-neutral-400"}`}
           >
-            {selected?.label || "Select"}
+            {selected?.label || ui.select}
           </span>
         </span>
         <ChevronDown size={16} className="text-neutral-400" />
@@ -346,7 +349,7 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
                     pickFirstFilteredOption();
                   }
                 }}
-                placeholder="Search..."
+                placeholder={ui.search}
                 className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-2 text-sm text-white outline-none placeholder:text-neutral-500 focus:border-blue-600"
               />
             </div>
@@ -382,7 +385,7 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
             ))}
             {!filteredMenuOptions.length ? (
               <p className="px-3 py-3 text-center text-sm text-neutral-500">
-                No options found
+                {ui.noOptions}
               </p>
             ) : null}
           </div>
@@ -812,19 +815,17 @@ type DateRangeInputProps = {
   disabled?: boolean;
   className?: string;
   placeholder?: string;
+  uiLocale?: UiLocale;
 };
-
 function formatLocalDateValue(date: Date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
-
 function formatDisplayDate(value?: string) {
   return value ? value.split("-").reverse().join(".") : "";
 }
-
 function monthCells(cursor: Date) {
   const monthStartDay = new Date(
     cursor.getFullYear(),
@@ -858,7 +859,6 @@ function monthCells(cursor: Date) {
     const d = new Date(cursor.getFullYear(), cursor.getMonth() + 1, day);
     cells.push({ iso: formatLocalDateValue(d), day, muted: true });
   }
-
   return cells;
 }
 
@@ -868,8 +868,10 @@ export function DateRangeInput({
   onChange,
   disabled,
   className = "",
-  placeholder = "Select period",
+  placeholder,
+  uiLocale,
 }: DateRangeInputProps) {
+  const ui = uiCopy(uiLocale);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const [openUp, setOpenUp] = useState(false);
@@ -916,7 +918,7 @@ export function DateRangeInput({
       ? start && end && start === end
         ? formatDisplayDate(start)
         : `${formatDisplayDate(start)}${end ? ` - ${formatDisplayDate(end)}` : ""}`
-      : placeholder;
+      : placeholder ?? ui.selectPeriod;
   const cells = monthCells(cursor);
 
   const pick = (iso: string) => {
@@ -946,7 +948,7 @@ export function DateRangeInput({
       </button>
       {open ? (
         <div
-          className={`absolute z-50 w-[min(320px,calc(100vw-2rem))] rounded-lg border border-neutral-700 bg-neutral-900 p-3 shadow-xl ${openUp ? "bottom-full mb-1" : "mt-1"}`}
+          className={`absolute right-0 z-50 w-[min(320px,calc(100vw-2rem))] rounded-lg border border-neutral-700 bg-neutral-900 p-3 shadow-xl ${openUp ? "bottom-full mb-1" : "mt-1"}`}
         >
           <div className="mb-2 flex items-center justify-between">
             <button
@@ -961,7 +963,7 @@ export function DateRangeInput({
               <ChevronLeft size={16} />
             </button>
             <p className="text-sm font-medium">
-              {cursor.toLocaleString(undefined, {
+              {cursor.toLocaleString(uiLocale === "uk" ? "uk-UA" : uiLocale === "ru" ? "ru-RU" : "en-US", {
                 month: "long",
                 year: "numeric",
               })}
@@ -978,11 +980,9 @@ export function DateRangeInput({
               <ChevronRight size={16} />
             </button>
           </div>
-          <div className="mb-2 text-xs text-neutral-400">
-            {selectingEnd ? "Select end date" : "Select start date"}
-          </div>
+          <div className="mb-2 text-xs text-neutral-400">{selectingEnd ? ui.selectEndDate : ui.selectStartDate}</div>
           <div className="mb-1 grid grid-cols-7 gap-1 text-center text-xs text-neutral-400">
-            {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => (
+            {ui.weekdays.map((d) => (
               <span key={d}>{d}</span>
             ))}
           </div>
@@ -1013,7 +1013,7 @@ export function DateRangeInput({
                 setSelectingEnd(false);
               }}
             >
-              Clear
+              {ui.clear}
             </button>
             <button
               type="button"
@@ -1025,7 +1025,7 @@ export function DateRangeInput({
                 setOpen(false);
               }}
             >
-              Today
+              {ui.today}
             </button>
           </div>
         </div>
@@ -1072,6 +1072,7 @@ export function CustomSelect({
   dropdownDirection = "down",
   searchable = true,
   dropdownClassName = "",
+  uiLocale,
 }: {
   value?: string;
   onChange: (value: string) => void;
@@ -1081,7 +1082,9 @@ export function CustomSelect({
   dropdownDirection?: "up" | "down";
   searchable?: boolean;
   dropdownClassName?: string;
+  uiLocale?: UiLocale;
 }) {
+  const ui = uiCopy(uiLocale);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -1234,7 +1237,7 @@ export function CustomSelect({
                         pickFirstFilteredOption();
                       }
                     }}
-                    placeholder="Search..."
+                    placeholder={ui.search}
                     className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-2 text-sm text-white outline-none placeholder:text-neutral-500 focus:border-blue-600"
                   />
                 </div>
@@ -1854,12 +1857,9 @@ export function ToastStack({
             ? CircleCheck
             : tone === "error"
               ? CircleX
-              : tone === "loading"
-                ? LoaderCircle
-                : Info;
+              : tone === "loading" ? LoaderCircle : Info;
         const percentage = item.progress?.total
-          ? Math.min(100, (item.progress.current / item.progress.total) * 100)
-          : 0;
+          ? Math.min(100, (item.progress.current / item.progress.total) * 100) : 0;
         return (
           <div
             key={item.id}
@@ -1881,17 +1881,12 @@ export function ToastStack({
                 <span
                   className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${styles.icon}`}
                 >
-                  <StatusIcon
-                    size={19}
-                    className={tone === "loading" ? "animate-spin" : ""}
-                  />
+                  <StatusIcon size={19} className={tone === "loading" ? "animate-spin" : ""} />
                 </span>
               )}
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-3">
-                  <p className="text-sm font-semibold text-white">
-                    {item.title || styles.title}
-                  </p>
+                  <p className="text-sm font-semibold text-white">{item.title || styles.title}</p>
                   {item.progress ? (
                     <span className="shrink-0 text-xs tabular-nums text-neutral-400">
                       {item.progress.current}/{item.progress.total}
@@ -1909,16 +1904,21 @@ export function ToastStack({
                     />
                   </div>
                 ) : null}
+                {item.progressSummary ? <div className="mt-2 flex gap-3 text-xs font-medium tabular-nums">
+                  <span className="text-emerald-300">{item.progressSummary.successful} successful</span>
+                  <span className="text-rose-300">{item.progressSummary.failed} failed</span>
+                </div> : null}
                 {item.details ? (
                   <p className="mt-2 text-xs text-neutral-400">
                     {item.details}
                   </p>
                 ) : null}
               </div>
-              {tone !== "loading" ? (
+              {tone !== "loading" || item.cancelable ? (
                 <button
                   type="button"
-                  aria-label="Close notification"
+                  aria-label={item.cancelable ? "Stop operation" : "Close notification"}
+                  title={item.cancelable ? "Stop operation" : undefined}
                   className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-neutral-400 hover:bg-white/10 hover:text-white"
                   onClick={() => onClose(item.id)}
                 >

@@ -30,6 +30,8 @@ type OperationEntry = {
   iconEmoji?: string;
   iconUrl?: string;
   progress?: { current: number; total: number };
+  progressSummary?: { successful: number; failed: number };
+  cancelable?: boolean;
   details?: string;
   createdAt: number;
 };
@@ -41,6 +43,7 @@ type OperationStartInput = {
   icon?: ToastIcon;
   current?: number;
   total?: number;
+  onCancel?: () => void;
 };
 
 type OperationUpdateInput = {
@@ -50,6 +53,8 @@ type OperationUpdateInput = {
   current?: number;
   total?: number;
   details?: string;
+  progressSummary?: { successful: number; failed: number };
+  cancelable?: boolean;
 };
 
 type OperationResultInput = {
@@ -151,6 +156,7 @@ export function ToastProvider({ children }: PropsWithChildren) {
   const dismissTimersRef = useRef<Map<string, number>>(new Map());
   const recentToastRef = useRef<Map<string, number>>(new Map());
   const sequenceRef = useRef(0);
+  const cancelHandlersRef = useRef<Map<string, () => void>>(new Map());
 
   const clearDismissTimer = useCallback((id: string) => {
     const timer = dismissTimersRef.current.get(id);
@@ -221,6 +227,8 @@ export function ToastProvider({ children }: PropsWithChildren) {
         iconEmoji: input.icon?.emoji ?? existing?.iconEmoji,
         iconUrl: input.icon?.imageUrl ?? existing?.iconUrl,
         progress: normalizeProgress(input.current, input.total) ?? existing?.progress,
+        progressSummary: input.progressSummary ?? existing?.progressSummary,
+        cancelable: input.cancelable ?? existing?.cancelable,
         details:
           buildDetails({
             details: input.details,
@@ -237,19 +245,30 @@ export function ToastProvider({ children }: PropsWithChildren) {
 
   const startOperation = useCallback(
     (input: OperationStartInput): OperationHandle => {
+      if (input.onCancel) cancelHandlersRef.current.set(input.id, input.onCancel);
       transitionOperation(input.id, "loading", {
         title: input.title,
         message: input.message,
         icon: input.icon,
         current: input.current,
         total: input.total,
+        cancelable: Boolean(input.onCancel),
       });
       return {
         id: input.id,
         update: (next) => transitionOperation(input.id, "loading", next),
-        succeed: (next) => transitionOperation(input.id, "success", next),
-        fail: (next) => transitionOperation(input.id, "error", next),
-        dismiss: () => dismissOperation(input.id),
+        succeed: (next) => {
+          cancelHandlersRef.current.delete(input.id);
+          transitionOperation(input.id, "success", { ...next, cancelable: false });
+        },
+        fail: (next) => {
+          cancelHandlersRef.current.delete(input.id);
+          transitionOperation(input.id, "error", { ...next, cancelable: false });
+        },
+        dismiss: () => {
+          cancelHandlersRef.current.delete(input.id);
+          dismissOperation(input.id);
+        },
       };
     },
     [dismissOperation, transitionOperation],
@@ -410,6 +429,7 @@ export function ToastProvider({ children }: PropsWithChildren) {
       dismissTimersRef.current.forEach((timer) => window.clearTimeout(timer));
       dismissTimersRef.current.clear();
       entriesRef.current.clear();
+      cancelHandlersRef.current.clear();
     };
   }, [startOperation]);
 
@@ -423,6 +443,8 @@ export function ToastProvider({ children }: PropsWithChildren) {
         iconEmoji: entry.iconEmoji,
         iconUrl: entry.iconUrl,
         progress: entry.progress,
+        progressSummary: entry.progressSummary,
+        cancelable: entry.cancelable,
         details: entry.details,
       })),
     [entries],
@@ -442,7 +464,16 @@ export function ToastProvider({ children }: PropsWithChildren) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <ToastStack items={items} onClose={(id) => dismissOperation(String(id))} />
+      <ToastStack
+        items={items}
+        onClose={(id) => {
+          const operationId = String(id);
+          const cancel = cancelHandlersRef.current.get(operationId);
+          cancelHandlersRef.current.delete(operationId);
+          cancel?.();
+          dismissOperation(operationId);
+        }}
+      />
     </ToastContext.Provider>
   );
 }

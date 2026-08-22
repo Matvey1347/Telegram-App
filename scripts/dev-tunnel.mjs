@@ -3,7 +3,7 @@ import {
   createServer as createHttpServer,
   request as httpRequest,
 } from "node:http";
-import { createServer } from "node:net";
+import { connect as connectToUpstream, createServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 import { randomBytes } from "node:crypto";
 
@@ -253,6 +253,41 @@ function startBotGateway() {
     });
     incoming.pipe(proxy);
   });
+  // Next's development client opens a WebSocket before it hydrates App Router
+  // client components. A plain HTTP-only proxy leaves the Finance page as
+  // inert server HTML forever: no effects, click handlers, or API requests.
+  gateway.on("upgrade", (incoming, socket, head) => {
+    const targetPort = incoming.url?.startsWith("/api") ? 4000 : 3000;
+    const upstream = connectToUpstream(targetPort, "127.0.0.1");
+    let connected = false;
+
+    const closeWithBadGateway = () => {
+      upstream.destroy();
+      if (!socket.destroyed) {
+        if (!connected) {
+          socket.write("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n");
+        }
+        socket.destroy();
+      }
+    };
+
+    upstream.once("connect", () => {
+      connected = true;
+      const rawHeaders = [];
+      for (let index = 0; index < incoming.rawHeaders.length; index += 2) {
+        rawHeaders.push(
+          `${incoming.rawHeaders[index]}: ${incoming.rawHeaders[index + 1]}`,
+        );
+      }
+      upstream.write(
+        `${incoming.method} ${incoming.url} HTTP/${incoming.httpVersion}\r\n${rawHeaders.join("\r\n")}\r\n\r\n`,
+      );
+      if (head.length) upstream.write(head);
+      socket.pipe(upstream).pipe(socket);
+    });
+    upstream.once("error", closeWithBadGateway);
+    socket.once("error", () => upstream.destroy());
+  });
   gateway.listen(botGatewayPort, "127.0.0.1");
   children.add({ kill: () => gateway.close() });
   status("Mini App gateway", `http://localhost:${botGatewayPort}`);
@@ -305,9 +340,14 @@ start("Backend", "pnpm", ["--filter", "api", "dev"], {
     : {}),
 });
 start("Frontend", "pnpm", ["--filter", "web", "dev"], {
-  // localhost:3000 always talks directly to the local API. Consumer pages
-  // opened through localhost:4100 or Cloudflare resolve their own same-origin /api.
+  // localhost:3000 talks directly to the configured local API. The explicit
+  // gateway list lets consumer pages use same-origin /api without inferring a
+  // tunnel vendor from the hostname.
   NEXT_PUBLIC_API_URL: "http://localhost:4000/api",
+  NEXT_PUBLIC_FINANCE_CONSUMER_GATEWAY_ORIGINS:
+    withBots && publicApiUrl
+      ? `http://localhost:${botGatewayPort},${publicApiUrl}`
+      : "",
   NEXT_ALLOWED_DEV_ORIGIN: publicApiUrl || "",
 });
 

@@ -91,7 +91,7 @@ export function createTelegramChannelsApi({
   getAllPaginatedItems: AllPaginatedGetter;
   hasExplicitPagination: (params?: Record<string, unknown>) => boolean;
   streamBulkAction: (path: string, payload: unknown, onProgress: BulkProgressHandler) => Promise<BulkActionResult>;
-  streamProgressAction: <TResult, TItem = BulkActionResultItem>(path: string, payload: unknown, onProgress: StreamProgressHandler<TItem>) => Promise<TResult>;
+  streamProgressAction: <TResult, TItem = BulkActionResultItem>(path: string, payload: unknown, onProgress: StreamProgressHandler<TItem>, options?: { signal?: AbortSignal }) => Promise<TResult>;
   silentFeedbackConfig: AxiosRequestConfig;
   quietMutationConfig: AxiosRequestConfig;
 }) {
@@ -497,7 +497,7 @@ const telegramChannelsApi = {
   importManagedPostsWithProgress: async (
     channelId: string,
     payload: TelegramManagedPostsImportPayload,
-    onProgress: StreamProgressHandler<TelegramManagedPostsImportProgressItem>,
+    onProgress: StreamProgressHandler<TelegramManagedPostsImportProgressItem>, options?: { signal?: AbortSignal },
   ) =>
     streamProgressAction<
       TelegramManagedPostsImportResult,
@@ -505,7 +505,7 @@ const telegramChannelsApi = {
     >(
       `/telegram-channels/${channelId}/managed-posts/import-stream`,
       payload,
-      onProgress,
+      onProgress, options,
     ),
   updateManagedPost: async (
     channelId: string,

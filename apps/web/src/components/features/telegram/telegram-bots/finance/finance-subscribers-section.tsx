@@ -1,33 +1,50 @@
 "use client";
+
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Button, Card, Input, Select, Table } from "@/components/ui/primitives";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type {
+  BotBillingUserPage,
+  TelegramBotRuntimeEnvironment,
+} from "@telegram-system/shared";
+import { Gift, Search, Settings2, UserRound } from "lucide-react";
+import {
+  Button,
+  Card,
+  FormField,
+  Input,
+  Modal,
+  Select,
+} from "@/components/ui/primitives";
 import { QueryContentState } from "@/components/ui/query-content-state";
 import {
   botBillingApi,
-  type BotBillingSubscribersQuery,
+  type BotBillingUsersQuery,
 } from "@/lib/features/finance/bot-billing-api";
 import { botBillingKeys } from "@/lib/query-keys";
-import {
-  formatBillingDate,
-  formatBillingMoney,
-} from "./finance-billing-format";
-export function FinanceSubscribersSection({ botId }: { botId: string }) {
-  const [query, setQuery] = useState<BotBillingSubscribersQuery>({});
+import { formatBillingDate } from "./finance-billing-format";
+import { financeTimezoneOptions } from "@/components/features/finance/consumer-finance/finance-timezones";
+
+type FinanceUser = BotBillingUserPage["items"][number];
+
+export function FinanceSubscribersSection({
+  botId,
+  environment,
+}: {
+  botId: string;
+  environment: TelegramBotRuntimeEnvironment;
+}) {
+  const [query, setQuery] = useState<BotBillingUsersQuery>({ environment });
   const [history, setHistory] = useState<string[]>([]);
-  const subscribers = useQuery({
-    queryKey: botBillingKeys.subscribers(botId, query),
-    queryFn: () => botBillingApi.subscribers(botId, query),
+  const [selected, setSelected] = useState<FinanceUser | null>(null);
+  const effectiveQuery = { ...query, environment };
+  const users = useQuery({
+    queryKey: botBillingKeys.users(botId, effectiveQuery),
+    queryFn: () => botBillingApi.users(botId, effectiveQuery),
   });
-  const setFilter = (changes: Partial<BotBillingSubscribersQuery>) => {
-    setHistory([]);
-    setQuery((value) => ({ ...value, ...changes, cursor: undefined }));
-  };
   const next = () => {
-    const nextCursor = subscribers.data?.nextCursor;
-    if (!nextCursor) return;
+    if (!users.data?.nextCursor) return;
     setHistory((value) => [...value, query.cursor ?? ""]);
-    setQuery((value) => ({ ...value, cursor: nextCursor }));
+    setQuery((value) => ({ ...value, cursor: users.data!.nextCursor! }));
   };
   const previous = () => {
     const cursor = history.at(-1);
@@ -36,126 +53,302 @@ export function FinanceSubscribersSection({ botId }: { botId: string }) {
   };
   return (
     <div className="space-y-4">
-      <Card>
-        <div className="grid gap-3 md:grid-cols-4">
+      <Card className="p-3">
+        <label className="relative block max-w-md">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500"
+            size={16}
+          />
           <Input
+            className="pl-9"
             value={query.search ?? ""}
-            onChange={(e) => setFilter({ search: e.target.value || undefined })}
-            placeholder="Search user"
+            onChange={(event) => {
+              setHistory([]);
+              setQuery({
+                environment,
+                search: event.target.value || undefined,
+              });
+            }}
+            placeholder="Search by name, username, or Telegram ID"
           />
-          <Select
-            value={query.status ?? ""}
-            onChange={(e) =>
-              setFilter({
-                status: (e.target.value ||
-                  undefined) as BotBillingSubscribersQuery["status"],
-              })
-            }
-          >
-            <option value="">All statuses</option>
-            {["ACTIVE", "PAST_DUE", "CANCELED", "EXPIRED", "INCOMPLETE"].map(
-              (status) => (
-                <option key={status}>{status}</option>
-              ),
-            )}
-          </Select>
-          <Select
-            value={query.source ?? ""}
-            onChange={(e) =>
-              setFilter({
-                source: (e.target.value ||
-                  undefined) as BotBillingSubscribersQuery["source"],
-              })
-            }
-          >
-            <option value="">All sources</option>
-            {["STRIPE", "TELEGRAM_STARS", "MANUAL", "GIFT"].map((source) => (
-              <option key={source}>{source}</option>
-            ))}
-          </Select>
-          <Input
-            value={query.planId ?? ""}
-            onChange={(e) => setFilter({ planId: e.target.value || undefined })}
-            placeholder="Plan ID"
-          />
-        </div>
+        </label>
       </Card>
       <QueryContentState
-        isLoading={subscribers.isLoading}
-        isError={subscribers.isError}
-        isEmpty={!subscribers.data?.items.length}
-        loadingText="Loading subscribers"
-        errorText="Could not load subscribers."
-        emptyText="No subscribers match these filters"
-        onRetry={() => void subscribers.refetch()}
+        isLoading={users.isLoading}
+        isError={users.isError}
+        isEmpty={!users.data?.items.length}
+        loadingText="Loading Finance users"
+        errorText="Could not load Finance users."
+        emptyText={`No users in the ${environment === "LOCAL" ? "local" : "production"} bot`}
+        onRetry={() => void users.refetch()}
       >
-        {subscribers.data ? (
-          <Card className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <thead>
-                  <tr>
-                    <th>User</th>
-                    <th>Plan</th>
-                    <th>Price</th>
-                    <th>Provider</th>
-                    <th>Status</th>
-                    <th>Current period</th>
-                    <th>Cancel at period end</th>
-                    <th>Started</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {subscribers.data.items.map((row) => (
-                    <tr
-                      key={row.id}
-                      className="border-t border-neutral-800 text-sm"
-                    >
-                      <td>
-                        {row.user.username
-                          ? `@${row.user.username}`
-                          : row.user.firstName || row.user.telegramUserId}
-                      </td>
-                      <td>{row.plan?.name ?? "—"}</td>
-                      <td>
-                        {row.amountMinor == null
-                          ? "—"
-                          : `${formatBillingMoney(row.amountMinor, row.currency)}${row.interval ? ` / ${row.interval.toLowerCase()}` : ""}`}
-                      </td>
-                      <td>{row.provider ?? row.source}</td>
-                      <td>{row.status}</td>
-                      <td>
-                        {formatBillingDate(row.currentPeriodStart)} –{" "}
-                        {formatBillingDate(row.currentPeriodEnd)}
-                      </td>
-                      <td>{row.cancelAtPeriodEnd ? "Yes" : "No"}</td>
-                      <td>{formatBillingDate(row.createdAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </div>
-          </Card>
-        ) : null}
+        <div className="grid gap-3 xl:grid-cols-2">
+          {users.data?.items.map((user) => (
+            <UserCard
+              key={user.id}
+              user={user}
+              onManage={() => setSelected(user)}
+            />
+          ))}
+        </div>
       </QueryContentState>
-      {subscribers.data ? (
+      {users.data ? (
         <div className="flex justify-end gap-2">
           <Button
             variant="secondary"
-            disabled={!history.length || subscribers.isFetching}
+            disabled={!history.length || users.isFetching}
             onClick={previous}
           >
             Previous
           </Button>
           <Button
             variant="secondary"
-            disabled={!subscribers.data.nextCursor || subscribers.isFetching}
+            disabled={!users.data.nextCursor || users.isFetching}
             onClick={next}
           >
             Next
           </Button>
         </div>
       ) : null}
+      <UserSupportModal
+        key={selected?.id ?? "closed"}
+        botId={botId}
+        user={selected}
+        onClose={() => setSelected(null)}
+      />
     </div>
+  );
+}
+
+function UserCard({
+  user,
+  onManage,
+}: {
+  user: FinanceUser;
+  onManage: () => void;
+}) {
+  const name = user.username
+    ? `@${user.username}`
+    : [user.firstName, user.lastName].filter(Boolean).join(" ") ||
+      user.telegramUserId;
+  return (
+    <Card className="flex items-center gap-3 p-3">
+      <span
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-950 text-xl"
+        aria-hidden
+      >
+        {user.subscription ? "💎" : "👤"}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium text-white">{name}</p>
+        <p className="truncate text-xs text-neutral-500">
+          ID {user.telegramUserId} ·{" "}
+          {user.profile?.locale.toUpperCase() ?? "NO PROFILE"} · seen{" "}
+          {formatBillingDate(user.lastInteractionAt)}
+        </p>
+        <p className="mt-1 text-xs text-neutral-400">
+          {user.subscription
+            ? `${user.subscription.plan?.name ?? "Subscription"} · ${user.subscription.status}`
+            : "Free user"}
+          {user.profile && !user.profile.onboardingCompleted
+            ? " · onboarding incomplete"
+            : ""}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onManage}
+        aria-label={`Manage ${name}`}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-neutral-700 text-neutral-300 hover:bg-neutral-800"
+      >
+        <Settings2 size={17} />
+      </button>
+    </Card>
+  );
+}
+
+function UserSupportModal({
+  botId,
+  user,
+  onClose,
+}: {
+  botId: string;
+  user: FinanceUser | null;
+  onClose: () => void;
+}) {
+  const client = useQueryClient();
+  const [planId, setPlanId] = useState("");
+  const [duration, setDuration] = useState("30");
+  const [locale, setLocale] = useState(user?.profile?.locale ?? "en");
+  const [currency, setCurrency] = useState(
+    user?.profile?.defaultCurrency ?? "UAH",
+  );
+  const [timezone, setTimezone] = useState(
+    user?.profile?.timezone ?? "Europe/Warsaw",
+  );
+  const timezoneOptions = financeTimezoneOptions(timezone);
+  const plans = useQuery({
+    queryKey: botBillingKeys.plans(botId),
+    queryFn: () => botBillingApi.plans(botId),
+    enabled: Boolean(user),
+  });
+  const refresh = () =>
+    client.invalidateQueries({ queryKey: botBillingKeys.root(botId) });
+  const grant = useMutation({
+    mutationFn: () => {
+      if (!user || !planId) throw new Error("Select a plan");
+      const expiresAt =
+        duration === "never"
+          ? undefined
+          : new Date(Date.now() + Number(duration) * 86_400_000).toISOString();
+      return botBillingApi.grant(botId, {
+        telegramBotUserId: user.id,
+        planId,
+        source: "GIFT",
+        reason: "Support gift from Finance admin",
+        idempotencyKey: crypto.randomUUID(),
+        expiresAt,
+      });
+    },
+    onSuccess: refresh,
+  });
+  const repair = useMutation({
+    mutationFn: ({ resetOnboarding }: { resetOnboarding: boolean }) => {
+      if (!user) throw new Error("User is required");
+      return botBillingApi.updateUserProfile(botId, user.id, {
+        locale: locale as "uk" | "ru" | "en",
+        currency,
+        timezone,
+        resetOnboarding,
+      });
+    },
+    onSuccess: refresh,
+  });
+  const displayName = user?.username
+    ? `@${user.username}`
+    : user?.firstName || "Finance user";
+  return (
+    <Modal
+      open={Boolean(user)}
+      onClose={onClose}
+      title={`Support · ${displayName}`}
+    >
+      <div className="space-y-5">
+        <section>
+          <div className="mb-2 flex items-center gap-2">
+            <Gift size={17} className="text-sky-300" />
+            <h3 className="font-medium">Gift subscription</h3>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <FormField label="Plan">
+              <Select
+                value={planId}
+                onChange={(event) => setPlanId(event.target.value)}
+              >
+                <option value="">Select plan</option>
+                {plans.data
+                  ?.filter((plan) => plan.isActive)
+                  .map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.name}
+                    </option>
+                  ))}
+              </Select>
+            </FormField>
+            <FormField label="Access duration">
+              <Select
+                value={duration}
+                onChange={(event) => setDuration(event.target.value)}
+              >
+                <option value="30">30 days</option>
+                <option value="90">90 days</option>
+                <option value="365">1 year</option>
+                <option value="never">No expiry</option>
+              </Select>
+            </FormField>
+          </div>
+          <Button
+            className="mt-2"
+            disabled={!planId || grant.isPending}
+            onClick={() => grant.mutate()}
+          >
+            {grant.isPending ? "Granting…" : "Gift access"}
+          </Button>
+          {grant.isError ? (
+            <p className="mt-2 text-sm text-rose-300">
+              Could not grant access.
+            </p>
+          ) : null}
+        </section>
+        <section className="border-t border-neutral-800 pt-4">
+          <div className="mb-2 flex items-center gap-2">
+            <UserRound size={17} className="text-sky-300" />
+            <h3 className="font-medium">Repair Finance profile</h3>
+          </div>
+          {user?.profile ? (
+            <>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <FormField label="Language">
+                  <Select
+                    value={locale}
+                    onChange={(event) => setLocale(event.target.value)}
+                  >
+                    <option value="en">English</option>
+                    <option value="ru">Русский</option>
+                    <option value="uk">Українська</option>
+                  </Select>
+                </FormField>
+                <FormField label="Currency">
+                  <Input
+                    maxLength={3}
+                    value={currency}
+                    onChange={(event) =>
+                      setCurrency(event.target.value.toUpperCase())
+                    }
+                  />
+                </FormField>
+                <FormField label="Timezone">
+                  <Select
+                    value={timezone}
+                    onChange={(event) => setTimezone(event.target.value)}
+                  >
+                    {timezoneOptions.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  disabled={repair.isPending}
+                  onClick={() => repair.mutate({ resetOnboarding: false })}
+                >
+                  Save profile
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={repair.isPending}
+                  onClick={() => repair.mutate({ resetOnboarding: true })}
+                >
+                  Reset onboarding
+                </Button>
+              </div>
+              {repair.isError ? (
+                <p className="mt-2 text-sm text-rose-300">
+                  Could not update the profile. Check currency and timezone.
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <p className="text-sm text-neutral-400">
+              The user has not opened Finance yet, so there is no profile to
+              repair.
+            </p>
+          )}
+        </section>
+      </div>
+    </Modal>
   );
 }

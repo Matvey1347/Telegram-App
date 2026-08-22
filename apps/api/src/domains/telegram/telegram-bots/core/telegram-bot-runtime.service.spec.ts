@@ -1,8 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/require-await */
 import {
+  Prisma,
   TelegramBotApplicationType,
   TelegramBotRuntimeEnvironment,
   TelegramBotRuntimeStatus,
+  TelegramBotUpdateStatus,
   TelegramBotWebhookStatus,
 } from '@prisma/client';
 import { TelegramBotRuntimeExecutionContext } from './telegram-bot-runtime-execution-context';
@@ -328,6 +330,20 @@ describe('TelegramBotRuntimeService environment isolation', () => {
         updateId: '7',
       }),
     });
+    expect(prisma.telegramBotUpdateLog.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'log-1' } }));
+    expect(prisma.telegramBotRuntimeInstance.update).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('keeps runtime-scoped update idempotency without dispatching duplicates', async () => {
+    environment.current.mockReturnValue(TelegramBotRuntimeEnvironment.LOCAL);
+    registry.resolve.mockResolvedValue({ runtime: runtime('local-1', TelegramBotRuntimeEnvironment.LOCAL), token: 'local-token' });
+    prisma.telegramBotUpdateLog.create.mockRejectedValue(new Prisma.PrismaClientKnownRequestError('duplicate', { code: 'P2002', clientVersion: 'test' }));
+    prisma.telegramBotUpdateLog.findUnique.mockResolvedValue({ id: 'existing-log', status: TelegramBotUpdateStatus.PROCESSED });
+
+    await expect(service.handleWebhook('local-1', 'webhook-secret', { update_id: 7 })).resolves.toEqual({ ok: true, duplicate: true });
+    expect(dispatcher.dispatch).not.toHaveBeenCalled();
+    expect(prisma.telegramBotRuntimeInstance.update).not.toHaveBeenCalled();
   });
 
   it('accepts the pending secret during a recoverable STARTING transition', async () => {

@@ -15,7 +15,7 @@ import {
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
 import { formatMoney } from "@/lib/features/finance/money";
 import { consumerFinanceKeys } from "@/lib/query-keys";
-import type { FinanceLocale } from "./finance-i18n";
+import { financeCopy, type FinanceLocale } from "./finance-i18n";
 
 const copy = {
   en: {
@@ -135,6 +135,7 @@ export function FinanceUltimate({
   onUpgrade: () => void;
 }) {
   const t = copy[locale];
+  const common = financeCopy(locale);
   const entitlements = useQuery({
     queryKey: consumerFinanceKeys.entitlements(botId),
     queryFn: () => consumerFinanceApi.entitlements(botId),
@@ -158,6 +159,15 @@ export function FinanceUltimate({
     mutationFn: () => consumerFinanceApi.askFinance(botId, { question }),
   });
   if (entitlements.isLoading) return <LoadingState text={t.loading} />;
+  if (entitlements.isError || !entitlements.data)
+    return (
+      <Card className="space-y-3">
+        <ErrorState text={t.error} />
+        <Button variant="secondary" onClick={() => entitlements.refetch()}>
+          {common.retry}
+        </Button>
+      </Card>
+    );
   if (!isUltimate)
     return (
       <Card className="space-y-3">
@@ -167,17 +177,29 @@ export function FinanceUltimate({
       </Card>
     );
   if (overview.isLoading) return <LoadingState text={t.loading} />;
-  if (overview.isError || !overview.data) return <ErrorState text={t.error} />;
+  if (overview.isError || !overview.data)
+    return (
+      <Card className="space-y-3">
+        <ErrorState text={t.error} />
+        <Button variant="secondary" onClick={() => overview.refetch()}>
+          {common.retry}
+        </Button>
+      </Card>
+    );
   const data = overview.data;
   return (
     <div className="space-y-4">
-      <section className="grid gap-3 sm:grid-cols-3">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Metric
           label={t.balance}
           value={formatMoney(
             data.balanceSummary.amount,
             data.balanceSummary.currency,
           )}
+        />
+        <Metric
+          label={t.income}
+          value={formatMoney(data.forecast.expectedIncome, data.currency)}
         />
         <Metric
           label={t.expenses}
@@ -249,6 +271,22 @@ export function FinanceUltimate({
                 {fact.label}: {formatMoney(fact.amount, fact.currency)}
               </p>
             ))}
+            {ask.data.suggestedQuestions.length ? (
+              <div className="flex flex-wrap gap-2 pt-1">
+                <p className="w-full text-xs font-medium text-neutral-400">
+                  {t.suggestions}
+                </p>
+                {ask.data.suggestedQuestions.map((suggestion) => (
+                  <Button
+                    key={suggestion}
+                    variant="secondary"
+                    onClick={() => setQuestion(suggestion)}
+                  >
+                    {suggestion}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
       </Card>
@@ -256,6 +294,7 @@ export function FinanceUltimate({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-semibold">{t.analytics}</h2>
           <Select
+            uiLocale={locale}
             aria-label={t.period}
             value={period}
             onChange={(event) =>
@@ -270,9 +309,14 @@ export function FinanceUltimate({
           </Select>
         </div>
         {analytics.isLoading ? (
-          <LoadingState />
+          <LoadingState text={t.loading} />
         ) : analytics.isError || !analytics.data ? (
-          <ErrorState text={t.error} />
+          <div className="space-y-2">
+            <ErrorState text={t.error} />
+            <Button variant="secondary" onClick={() => analytics.refetch()}>
+              {common.retry}
+            </Button>
+          </div>
         ) : (
           <Analytics data={analytics.data} labels={t} />
         )}
@@ -327,6 +371,10 @@ function Analytics({
       {list(labels.merchants, data.merchants)}
       {list(labels.accounts, data.accounts)}
       {list(labels.items, data.items.rows, data.items.currency)}
+      {list(
+        labels.trend,
+        data.trend.map((row) => ({ name: row.date, amount: row.amount })),
+      )}
       <p className="text-xs text-neutral-400 sm:col-span-2">
         {labels.coverage
           .replace("{available}", String(data.items.availablePurchaseCount))

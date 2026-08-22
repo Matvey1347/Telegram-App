@@ -161,6 +161,11 @@ type BulkProgressCallback = (
 
 const TELEGRAM_IMPORTED_SYSTEM_GROUP_KEY = 'TELEGRAM_IMPORTED';
 const TELEGRAM_IMPORTED_SYSTEM_GROUP_TITLE = 'Created in Telegram';
+const TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_NAME = 'telegram-system-group-icon';
+const TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_IMAGE_URL =
+  'https://telegram.org/img/t_logo.png';
+const TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_FALLBACK_ID =
+  'telegram-system-group-icon';
 
 type TelegramChannelSyncSelection = {
   syncIncludePublicInfo: boolean;
@@ -278,7 +283,6 @@ type NormalizedManagedPostImportRow = {
   text: string | null;
   imageUrls: string[];
   icon: string | null;
-  groupPosition: number | null;
   groupId: string | null | undefined;
   scheduledAt: Date | null;
 };
@@ -318,6 +322,7 @@ export class TelegramChannelsService {
   private readonly managedPostRevisionRetentionMs = 7 * 24 * 60 * 60 * 1000;
   private managedPostRevisionStorageState: 'unknown' | 'available' | 'missing' =
     'unknown';
+  private telegramSystemGroupIconId: string | undefined;
   private telegramManagedPostOriginColumnsAvailable: boolean | null = null;
   private ensureTelegramManagedPostOriginColumnsPromise: Promise<void> | null =
     null;
@@ -5077,6 +5082,102 @@ export class TelegramChannelsService {
     ...this.postGroupBaseInclude,
   } as const;
 
+  private async resolveTelegramImportedSystemGroupIconId(): Promise<string> {
+    if (this.telegramSystemGroupIconId !== undefined) {
+      return this.telegramSystemGroupIconId;
+    }
+
+    const iconClient = (this.prisma as { icon?: typeof this.prisma.icon }).icon;
+    if (!iconClient) {
+      this.telegramSystemGroupIconId =
+        TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_FALLBACK_ID;
+      return TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_FALLBACK_ID;
+    }
+
+    const existingIcon = await iconClient.findFirst({
+      where: {
+        workspaceId: null,
+        type: 'image',
+        name: TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_NAME,
+      },
+      select: { id: true },
+    });
+
+    if (existingIcon) {
+      this.telegramSystemGroupIconId = existingIcon.id;
+      return existingIcon.id;
+    }
+
+    try {
+      const createdIcon = await iconClient.create({
+        data: {
+          workspaceId: null,
+          type: 'image',
+          name: TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_NAME,
+          imageUrl: TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_IMAGE_URL,
+        },
+        select: { id: true },
+      });
+      this.telegramSystemGroupIconId = createdIcon.id;
+      return createdIcon.id;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const createdIcon = await iconClient.findFirst({
+          where: {
+            workspaceId: null,
+            type: 'image',
+            name: TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_NAME,
+          },
+          select: { id: true },
+        });
+        if (createdIcon) {
+          this.telegramSystemGroupIconId = createdIcon.id;
+          return createdIcon.id;
+        }
+      }
+      throw error;
+    }
+  }
+
+  private async resolveTelegramImportedSystemGroupIconPresentation() {
+    const iconId = await this.resolveTelegramImportedSystemGroupIconId();
+    return iconToResolvedEmoji({
+      id: iconId || TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_FALLBACK_ID,
+      type: 'image',
+      name: TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_NAME,
+      imageUrl: TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_IMAGE_URL,
+      emoji: null,
+    });
+  }
+
+  private isTelegramImportedSystemGroup(group?: {
+    isSystem?: boolean | null;
+    systemKey?: string | null;
+    title?: string | null;
+  } | null) {
+    return (
+      group?.systemKey === TELEGRAM_IMPORTED_SYSTEM_GROUP_KEY ||
+      (group?.isSystem === true &&
+        group?.title === TELEGRAM_IMPORTED_SYSTEM_GROUP_TITLE)
+    );
+  }
+
+  private isSystemGroupIconCandidate(group?: {
+    icon?: string | null;
+    isSystem?: boolean | null;
+    systemKey?: string | null;
+    title?: string | null;
+  } | null,
+    hasResolvedIcon = false,
+  ) {
+    return (
+      this.isTelegramImportedSystemGroup(group) && !hasResolvedIcon
+    );
+  }
+
   private memberSummary<
     T extends {
       avatarIcon?: Parameters<typeof iconToResolvedEmoji>[0] | null;
@@ -5123,10 +5224,18 @@ export class TelegramChannelsService {
       assignedMember?: {
         avatarIcon?: Parameters<typeof iconToResolvedEmoji>[0] | null;
       } | null;
-      group?: Record<string, unknown> | null;
+      group?: {
+        icon?: string | null;
+        isSystem?: boolean | null;
+        systemKey?: string | null;
+        title?: string | null;
+        [key: string]: unknown;
+      } | null;
     },
   >(posts: T[]) {
     const workspaceId = posts[0]?.workspaceId;
+    const fallbackSystemGroupIcon =
+      await this.resolveTelegramImportedSystemGroupIconPresentation();
     const iconsById = workspaceId
       ? await this.loadIconsByIds(workspaceId, [
           ...posts.map((post) => post.icon),
@@ -5149,8 +5258,19 @@ export class TelegramChannelsService {
             ...post.group,
             iconPresentation:
               typeof post.group.icon === 'string'
-                ? iconToResolvedEmoji(iconsById.get(post.group.icon))
-                : null,
+                ? iconToResolvedEmoji(iconsById.get(post.group.icon)) ??
+                  (this.isSystemGroupIconCandidate(
+                    post.group,
+                    Boolean(iconsById.get(post.group.icon)),
+                  )
+                    ? fallbackSystemGroupIcon
+                    : null)
+                : this.isSystemGroupIconCandidate(
+                    post.group,
+                    false,
+                  )
+                  ? fallbackSystemGroupIcon
+                  : null,
           }
         : post.group,
     }));
@@ -5160,6 +5280,9 @@ export class TelegramChannelsService {
     T extends {
       workspaceId: string;
       icon?: string | null;
+      isSystem?: boolean | null;
+      systemKey?: string | null;
+      title?: string | null;
       createdByMember?: {
         avatarIcon?: Parameters<typeof iconToResolvedEmoji>[0] | null;
       } | null;
@@ -5170,6 +5293,8 @@ export class TelegramChannelsService {
     const nestedPostIcons = groups.flatMap((group) =>
       (group.posts ?? []).map((post) => post.icon),
     );
+    const fallbackSystemGroupIcon =
+      await this.resolveTelegramImportedSystemGroupIconPresentation();
     const iconsById = workspaceId
       ? await this.loadIconsByIds(workspaceId, [
           ...groups.map((group) => group.icon),
@@ -5182,8 +5307,16 @@ export class TelegramChannelsService {
         ? this.memberSummary(group.createdByMember)
         : group.createdByMember,
       iconPresentation: group.icon
-        ? iconToResolvedEmoji(iconsById.get(group.icon))
-        : null,
+        ? iconToResolvedEmoji(iconsById.get(group.icon)) ??
+          (this.isSystemGroupIconCandidate(
+            group,
+            Boolean(group.icon && iconsById.get(group.icon)),
+          )
+            ? fallbackSystemGroupIcon
+            : null)
+        : this.isSystemGroupIconCandidate(group, false)
+          ? fallbackSystemGroupIcon
+          : null,
       posts: group.posts
         ? group.posts.map((post) => ({
             ...post,
@@ -5228,15 +5361,41 @@ export class TelegramChannelsService {
       where: {
         workspaceId,
         telegramChannelId: channelId,
-        systemKey: TELEGRAM_IMPORTED_SYSTEM_GROUP_KEY,
+        OR: [
+          { systemKey: TELEGRAM_IMPORTED_SYSTEM_GROUP_KEY },
+          { isSystem: true, title: TELEGRAM_IMPORTED_SYSTEM_GROUP_TITLE },
+        ],
       },
     });
+    const systemGroupIconId =
+      await this.resolveTelegramImportedSystemGroupIconId();
+    const hasExpectedSystemGroupIcon =
+      systemGroupIconId === TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_FALLBACK_ID
+        ? !existing?.icon
+        : existing?.icon === systemGroupIconId;
+    const withSystemGroupIcon =
+      systemGroupIconId === TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_FALLBACK_ID
+        ? {}
+        : { icon: systemGroupIconId };
     if (existing) {
       if (
         existing.isSystem &&
         existing.title === TELEGRAM_IMPORTED_SYSTEM_GROUP_TITLE
       ) {
-        return existing;
+        if (
+          existing.systemKey === TELEGRAM_IMPORTED_SYSTEM_GROUP_KEY &&
+          hasExpectedSystemGroupIcon
+        )
+          return existing;
+        return this.prisma.postGroup.update({
+          where: { id: existing.id },
+          data: {
+            isSystem: true,
+            systemKey: TELEGRAM_IMPORTED_SYSTEM_GROUP_KEY,
+            title: TELEGRAM_IMPORTED_SYSTEM_GROUP_TITLE,
+            ...withSystemGroupIcon,
+          },
+        });
       }
       return this.prisma.postGroup.update({
         where: { id: existing.id },
@@ -5244,6 +5403,7 @@ export class TelegramChannelsService {
           isSystem: true,
           systemKey: TELEGRAM_IMPORTED_SYSTEM_GROUP_KEY,
           title: TELEGRAM_IMPORTED_SYSTEM_GROUP_TITLE,
+          ...withSystemGroupIcon,
         },
       });
     }
@@ -5254,6 +5414,7 @@ export class TelegramChannelsService {
         title: TELEGRAM_IMPORTED_SYSTEM_GROUP_TITLE,
         isSystem: true,
         systemKey: TELEGRAM_IMPORTED_SYSTEM_GROUP_KEY,
+        ...withSystemGroupIcon,
         createdByMemberId,
       },
     });
@@ -7516,29 +7677,12 @@ export class TelegramChannelsService {
         return { error: 'Image URLs must be strings' };
       }
       const parts = value
-        .split(/[\n,]+/)
+        .split(/\r?\n|,\s*(?=https?:\/\/)/i)
         .map((part) => part.trim())
         .filter(Boolean);
       urls.push(...parts.map((part) => this.cleanImportImageUrl(part)));
     }
     return { imageUrls: urls };
-  }
-
-  private groupPositionFromImportRow(row: ImportTelegramManagedPostRowDto) {
-    const raw = row.groupPosition ?? row.order;
-    if (raw === undefined || raw === null || raw === '') {
-      return { groupPosition: null };
-    }
-    const value =
-      typeof raw === 'number'
-        ? raw
-        : typeof raw === 'string'
-          ? Number(raw.trim())
-          : Number.NaN;
-    if (!Number.isInteger(value) || value < 0) {
-      return { error: 'groupPosition/order must be a non-negative integer' };
-    }
-    return { groupPosition: value };
   }
 
   private normalizeManagedPostImportRow(row: ImportTelegramManagedPostRowDto): {
@@ -7552,8 +7696,6 @@ export class TelegramChannelsService {
       null;
     const images = this.imageUrlsFromImportRow(row);
     if (images.error) return { error: images.error };
-    const position = this.groupPositionFromImportRow(row);
-    if (position.error) return { error: position.error };
     const icon =
       this.stringFromImportCell(row.icon) ||
       this.stringFromImportCell(row.emoji) ||
@@ -7588,7 +7730,6 @@ export class TelegramChannelsService {
         text,
         imageUrls: images.imageUrls ?? [],
         icon,
-        groupPosition: position.groupPosition ?? null,
         groupId:
           rawGroupId === undefined ? undefined : rawGroupId?.trim() || null,
         scheduledAt,
@@ -7723,6 +7864,7 @@ export class TelegramChannelsService {
     channelId: string,
     dto: ImportTelegramManagedPostsDto,
     onProgress?: ManagedPostImportProgressHandler,
+    signal?: AbortSignal,
   ) {
     const maxBatchSize = 25;
     if (dto.rows.length > maxBatchSize) {
@@ -7838,6 +7980,7 @@ export class TelegramChannelsService {
     let defaultGroupPositionOffset = 0;
     let processedRows = 0;
     for (const invalid of rows.filter((row) => row.status === 'skipped')) {
+      if (signal?.aborted) break;
       processedRows += 1;
       onProgress?.(
         {
@@ -7851,18 +7994,55 @@ export class TelegramChannelsService {
       );
     }
     for (const row of validRowsWithIcons) {
+      if (signal?.aborted) break;
       const identity = identityFor(row.value);
       let post = existingByIdentity.get(identity);
       if (post) {
-        rows.push({ index: row.index, status: 'alreadyExists', post });
+        if (
+          row.value.scheduledAt &&
+          post.status !== TelegramManagedPostStatus.SCHEDULED &&
+          post.status !== TelegramManagedPostStatus.PUBLISHED
+        ) {
+          try {
+            post = await this.publishManagedPost(
+              workspaceId,
+              channelId,
+              post.id,
+              row.value.scheduledAt,
+            );
+            rows.push({ index: row.index, status: 'scheduled', post });
+          } catch (error) {
+            rows.push({
+              index: row.index,
+              status: 'scheduleFailed',
+              post,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : 'Could not schedule post',
+            });
+          }
+        } else {
+          rows.push({ index: row.index, status: 'alreadyExists', post });
+        }
         processedRows += 1;
+        const resultRow = rows.at(-1);
         onProgress?.(
           {
             index: row.index,
-            status: 'alreadyExists',
+            status: resultRow?.status ?? 'alreadyExists',
             title: row.value.title,
             postId: post.id,
-            message: `Post already exists: ${row.value.title}`,
+            error:
+              resultRow && 'error' in resultRow
+                ? resultRow.error
+                : undefined,
+            message:
+              resultRow?.status === 'scheduleFailed'
+                ? `Could not schedule ${row.value.title}: ${resultRow.error}`
+                : resultRow?.status === 'scheduled'
+                  ? `Post scheduled: ${row.value.title}`
+                  : `Post already exists: ${row.value.title}`,
           },
           processedRows,
           normalized.length,
@@ -7883,12 +8063,10 @@ export class TelegramChannelsService {
           imageUrls: row.value.imageUrls,
           icon: row.value.icon,
           groupId: effectiveGroupId,
-          groupPosition: effectiveGroupId
-            ? (row.value.groupPosition ??
-              (effectiveGroupId === defaultGroup?.id
-                ? defaultGroupPositionStart + defaultGroupPositionOffset++
-                : null))
-            : null,
+          groupPosition:
+            effectiveGroupId === defaultGroup?.id
+              ? defaultGroupPositionStart + defaultGroupPositionOffset++
+              : null,
           jsonImportKey: identity,
         });
         if (effectiveGroupId) touchedGroupIds.add(effectiveGroupId);
@@ -7949,16 +8127,28 @@ export class TelegramChannelsService {
           });
       }
       processedRows += 1;
+      const resultRow = rows.at(-1);
       onProgress?.(
         {
           index: row.index,
           status:
-            rows.at(-1)?.status === 'scheduleFailed'
-              ? 'scheduleFailed'
+            resultRow?.status === 'scheduled' ||
+            resultRow?.status === 'scheduleFailed' ||
+            resultRow?.status === 'skipped'
+              ? resultRow.status
               : 'created',
           title: row.value.title,
           postId: post?.id,
-          message: `Post processed: ${row.value.title}`,
+          error:
+            resultRow && 'error' in resultRow ? resultRow.error : undefined,
+          message:
+            resultRow?.status === 'scheduleFailed'
+              ? `Could not schedule ${row.value.title}: ${resultRow.error}`
+              : resultRow?.status === 'skipped'
+                ? `Could not import ${row.value.title}: ${resultRow.error}`
+                : resultRow?.status === 'scheduled'
+                  ? `Post scheduled: ${row.value.title}`
+                  : `Post created: ${row.value.title}`,
         },
         processedRows,
         normalized.length,
@@ -7973,17 +8163,17 @@ export class TelegramChannelsService {
         row,
       ): row is Extract<
         ManagedPostImportResultRow,
-        { status: 'created' | 'scheduled' | 'scheduleFailed' }
+        { status: 'created' | 'scheduled' }
       > =>
-        row.status === 'created' ||
-        row.status === 'scheduled' ||
-        row.status === 'scheduleFailed',
+        row.status === 'created' || row.status === 'scheduled',
     );
 
     rows.sort((left, right) => left.index - right.index);
     return {
       createdCount: createdRows.length,
-      skippedCount: rows.filter((row) => row.status === 'skipped').length,
+      skippedCount: rows.filter(
+        (row) => row.status === 'skipped' || row.status === 'scheduleFailed',
+      ).length,
       rows,
     };
   }

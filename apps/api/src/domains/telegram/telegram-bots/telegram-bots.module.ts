@@ -41,6 +41,7 @@ import { FinanceContextService } from './finance/finance-context.service';
 import { FinanceConsumerSessionService } from './finance/finance-consumer-session.service';
 import { FinanceConsumerRuntimeEnvironmentService } from './finance/finance-consumer-runtime-environment.service';
 import { FinanceConsumerTransferService } from './finance/finance-consumer-transfer.service';
+import { FinanceBotBrowserLogin } from './finance/finance-bot-browser-login';
 import { FinanceCoreService } from './finance/finance-core.service';
 import { FinanceLedgerService } from './finance/finance-ledger.service';
 import { FinanceTransferService } from './finance/finance-transfer.service';
@@ -100,6 +101,7 @@ import { GreeterTestModeService } from './greeter/greeter-test-mode.service';
     FinanceConsumerSessionService,
     FinanceConsumerRuntimeEnvironmentService,
     FinanceConsumerTransferService,
+    FinanceBotBrowserLogin,
     FinanceCoreService,
     FinanceLedgerService,
     FinanceTransferService,

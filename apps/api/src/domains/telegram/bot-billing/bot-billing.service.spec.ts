@@ -14,7 +14,11 @@ function setup() {
     botSubscriptionPlan: { findMany: jest.fn().mockResolvedValue([]) },
     botCoupon: { findMany: jest.fn().mockResolvedValue([]) },
     botSubscription: { findMany: jest.fn() },
-    telegramBotUser: { count: jest.fn().mockResolvedValue(250) },
+    telegramBotUser: {
+      count: jest.fn().mockResolvedValue(250),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    financeProfile: { findFirst: jest.fn(), update: jest.fn() },
     botBillingEvent: { groupBy: jest.fn().mockResolvedValue([]), findMany: jest.fn().mockResolvedValue([]) },
   };
   const workspace = {
@@ -26,7 +30,7 @@ function setup() {
     prisma as never,
     workspace as never,
     {} as never,
-    {} as never,
+    { info: jest.fn() } as never,
     {} as never,
     {} as never,
     new BotBillingAnalyticsService(prisma as never),
@@ -69,6 +73,28 @@ describe('BotBillingService overview', () => {
         where: expect.objectContaining({ mode: BotBillingProviderMode.LIVE }),
       }),
     );
+    expect(prisma.telegramBotUser.count).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        runtimeInstance: { is: { environment: 'PRODUCTION' } },
+      }),
+    });
+  });
+
+  it('keeps local runtime data out of production analytics', async () => {
+    const { prisma, service } = setup();
+    prisma.botSubscription.findMany.mockResolvedValue([]);
+
+    await service.overview('owner-1', 'bot-1', 'LOCAL');
+
+    expect(prisma.botSubscription.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          telegramBotUser: {
+            runtimeInstance: { is: { environment: 'LOCAL' } },
+          },
+        }),
+      }),
+    );
   });
 
   it('does not expose another workspace bot', async () => {
@@ -79,6 +105,86 @@ describe('BotBillingService overview', () => {
       NotFoundException,
     );
     expect(prisma.botSubscription.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('BotBillingService user support', () => {
+  it('lists free and paid users from only the selected runtime', async () => {
+    const { prisma, service } = setup();
+    prisma.telegramBotUser.findMany.mockResolvedValue([{
+      id: 'telegram-user-1', telegramUserId: '42', username: null, firstName: 'User', lastName: null,
+      languageCode: 'ru-RU', firstSeenAt: new Date('2026-08-01T00:00:00Z'), lastInteractionAt: new Date('2026-08-22T00:00:00Z'),
+      runtimeInstance: { environment: 'LOCAL' },
+      financeProfiles: [{ id: 'profile-1', locale: null, defaultCurrency: 'UAH', timezone: 'Europe/Warsaw', onboardingCompletedAt: null }],
+      billingSubscriptions: [],
+    }]);
+
+    await expect(
+      service.users('owner-1', 'bot-1', { environment: 'LOCAL', limit: 25 }),
+    ).resolves.toMatchObject({
+      items: [{ environment: 'LOCAL', profile: { locale: 'ru', onboardingCompleted: false }, subscription: null }],
+      nextCursor: null,
+    });
+    expect(prisma.telegramBotUser.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          workspaceId: 'workspace-1',
+          botIntegrationId: 'bot-1',
+          runtimeInstance: { is: { environment: 'LOCAL' } },
+        }),
+      }),
+    );
+  });
+
+  it('repairs a finance profile only after bot and workspace scoping', async () => {
+    const { prisma, service } = setup();
+    prisma.financeProfile.findFirst.mockResolvedValue({ id: 'profile-1' });
+    prisma.financeProfile.update.mockResolvedValue({ id: 'profile-1', locale: 'ru' });
+
+    await service.updateFinanceSupportProfile(
+      'owner-1',
+      'bot-1',
+      'telegram-user-1',
+      { locale: 'ru', currency: 'uah', resetOnboarding: true },
+    );
+
+    expect(prisma.financeProfile.findFirst).toHaveBeenCalledWith({
+      where: {
+        botIntegrationId: 'bot-1',
+        telegramBotUserId: 'telegram-user-1',
+        botIntegration: { workspaceId: 'workspace-1' },
+      },
+      select: { id: true },
+    });
+    expect(prisma.financeProfile.update).toHaveBeenCalledWith({
+      where: { id: 'profile-1' },
+      data: {
+        locale: 'ru',
+        defaultCurrency: 'UAH',
+        onboardingCompletedAt: null,
+      },
+      select: {
+        id: true,
+        locale: true,
+        defaultCurrency: true,
+        timezone: true,
+        onboardingCompletedAt: true,
+      },
+    });
+  });
+
+  it('rejects an invalid support timezone before writing', async () => {
+    const { prisma, service } = setup();
+
+    await expect(
+      service.updateFinanceSupportProfile(
+        'owner-1',
+        'bot-1',
+        'telegram-user-1',
+        { timezone: 'Not/A_Timezone' },
+      ),
+    ).rejects.toThrow('Unknown timezone');
+    expect(prisma.financeProfile.update).not.toHaveBeenCalled();
   });
 });
 

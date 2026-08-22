@@ -16,6 +16,7 @@ import {
 
 export class CreateFinanceAccountDto {
   @IsString() @MinLength(1) @MaxLength(80) name!: string;
+  @IsOptional() @IsString() @MaxLength(16) emoji?: string | null;
   @IsIn(['CASH', 'CARD', 'SAVINGS', 'OTHER']) type!:
     | 'CASH'
     | 'CARD'
@@ -26,6 +27,7 @@ export class CreateFinanceAccountDto {
 }
 export class UpdateFinanceAccountDto {
   @IsOptional() @IsString() @MinLength(1) @MaxLength(80) name?: string;
+  @IsOptional() @IsString() @MaxLength(16) emoji?: string | null;
   @IsOptional() @IsIn(['CASH', 'CARD', 'SAVINGS', 'OTHER']) type?:
     | 'CASH'
     | 'CARD'
@@ -52,7 +54,11 @@ export class CreateFinanceTransactionDto {
   @IsOptional() @IsNumberString() exchangeRateToDefault?: string;
   @IsOptional() @IsString() @MaxLength(240) description?: string;
   @IsOptional() @IsString() @MaxLength(240) merchantDisplay?: string;
-  @IsOptional() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => FinanceTransactionItemDto) items?: FinanceTransactionItemDto[];
+  @IsOptional()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => FinanceTransactionItemDto)
+  items?: FinanceTransactionItemDto[];
   @IsDateString() occurredAt!: string;
 }
 export class UpdateFinanceTransactionDto extends CreateFinanceTransactionDto {}
@@ -76,7 +82,9 @@ export class FinanceHistoryQueryDto {
 }
 /** All Ultimate reads are deliberately bounded so analytical requests remain index-friendly. */
 export class FinanceUltimateQueryDto {
-  @IsOptional() @IsIn(['LAST_3_MONTHS', 'LAST_6_MONTHS', 'LAST_12_MONTHS']) period?: 'LAST_3_MONTHS' | 'LAST_6_MONTHS' | 'LAST_12_MONTHS';
+  @IsOptional()
+  @IsIn(['LAST_3_MONTHS', 'LAST_6_MONTHS', 'LAST_12_MONTHS'])
+  period?: 'LAST_3_MONTHS' | 'LAST_6_MONTHS' | 'LAST_12_MONTHS';
   @IsOptional() @IsDateString() from?: string;
   @IsOptional() @IsDateString() to?: string;
   @IsOptional() @IsString() @MaxLength(120) merchant?: string;
@@ -92,11 +100,13 @@ export class UpdateFinanceSettingsDto {
 }
 export class CreateFinanceCategoryDto {
   @IsString() @MinLength(1) @MaxLength(80) name!: string;
+  @IsOptional() @IsString() @MaxLength(16) emoji?: string | null;
   @IsIn(['INCOME', 'EXPENSE']) type!: 'INCOME' | 'EXPENSE';
   @IsOptional() @IsString() parentId?: string;
 }
 export class UpdateFinanceCategoryDto {
   @IsString() @MinLength(1) @MaxLength(80) name!: string;
+  @IsOptional() @IsString() @MaxLength(16) emoji?: string | null;
   @IsIn(['INCOME', 'EXPENSE']) type!: 'INCOME' | 'EXPENSE';
   @IsOptional() @IsString() parentId?: string | null;
 }

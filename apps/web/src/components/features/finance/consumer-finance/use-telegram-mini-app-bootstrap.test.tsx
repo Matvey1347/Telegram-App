@@ -36,10 +36,10 @@ describe("useTelegramMiniAppBootstrap", () => {
     expect(expand).toHaveBeenCalledOnce();
   });
 
-  it("classifies a direct browser visit immediately without waiting for the SDK", () => {
+  it("classifies a direct browser visit without waiting for the SDK", async () => {
     const { result } = renderHook(() => useTelegramMiniAppBootstrap());
 
-    expect(result.current).toEqual({ status: "browser" });
+    await waitFor(() => expect(result.current).toEqual({ status: "browser" }));
     window.dispatchEvent(new Event(TELEGRAM_WEB_APP_SDK_FAILED_EVENT));
     expect(result.current).toEqual({ status: "browser" });
   });
@@ -89,6 +89,21 @@ describe("useTelegramMiniAppBootstrap", () => {
     expect(result.current).toEqual({ status: "error" });
   });
 
+  it("uses signed launch data when the external Telegram SDK does not load", async () => {
+    vi.useFakeTimers();
+    const initData = "query_id=launch&auth_date=123&hash=abc";
+    window.history.replaceState(
+      {},
+      "",
+      `/finance/bot#tgWebAppVersion=8.0&tgWebAppData=${encodeURIComponent(initData)}`,
+    );
+    const { result } = renderHook(() => useTelegramMiniAppBootstrap());
+
+    await act(() => vi.advanceTimersByTimeAsync(2_000));
+
+    expect(result.current).toEqual({ status: "ready", initData });
+  });
+
   it("keeps an SDK-loaded ordinary browser in browser mode", async () => {
     window.Telegram = { WebApp: { initData: "   " } };
 
@@ -108,5 +123,21 @@ describe("useTelegramMiniAppBootstrap", () => {
     const { result } = renderHook(() => useTelegramMiniAppBootstrap());
 
     await waitFor(() => expect(result.current).toEqual({ status: "error" }));
+  });
+
+  it("falls back to signed launch data when the loaded SDK exposes an empty value", async () => {
+    const initData = "query_id=launch&auth_date=123&hash=abc";
+    window.history.replaceState(
+      {},
+      "",
+      `/finance/bot#tgWebAppVersion=8.0&tgWebAppData=${encodeURIComponent(initData)}`,
+    );
+    window.Telegram = { WebApp: { initData: "   " } };
+
+    const { result } = renderHook(() => useTelegramMiniAppBootstrap());
+
+    await waitFor(() =>
+      expect(result.current).toEqual({ status: "ready", initData }),
+    );
   });
 });

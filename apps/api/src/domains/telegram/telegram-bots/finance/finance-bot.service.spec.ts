@@ -1,8 +1,10 @@
+import { FinanceBotService } from './finance-bot.service';
 import {
-  FinanceBotService,
+  parseFinanceBrowserLoginToken,
   parseFinanceChatCommand,
+  parseFinanceMenuText,
   parseFinanceQuickInput,
-} from './finance-bot.service';
+} from './finance-chat-input-parser';
 import {
   FinanceBotChatResponderService,
   financeMainMenu,
@@ -46,6 +48,34 @@ describe('parseFinanceChatCommand', () => {
     expect(parseFinanceChatCommand('/unknown 250 coffee')).toBeNull());
 });
 
+describe('parseFinanceMenuText', () => {
+  it.each([
+    ['⚙️ Settings', 'settings'],
+    ['⚙️ Настройки', 'settings'],
+    ['⚙️ Налаштування', 'settings'],
+    ['💸 Add expense', 'expense'],
+    ['💸 Добавить расход', 'expense'],
+    ['💸 Додати витрату', 'expense'],
+  ])('keeps a stale localized Telegram keyboard action usable: %s', (input, expected) => {
+    expect(parseFinanceMenuText(input)).toBe(expected);
+  });
+
+  it('does not interpret ordinary text as a menu action', () => {
+    expect(parseFinanceMenuText('Settings for next month')).toBeNull();
+  });
+});
+
+describe('parseFinanceBrowserLoginToken', () => {
+  it('extracts only a bounded Finance browser-login deep link', () => {
+    const token = 'a'.repeat(32);
+    expect(parseFinanceBrowserLoginToken(`/start finlogin_${token}`)).toBe(
+      token,
+    );
+    expect(parseFinanceBrowserLoginToken('/start finlogin_short')).toBeNull();
+    expect(parseFinanceBrowserLoginToken(`/start other_${token}`)).toBeNull();
+  });
+});
+
 describe('FinanceBotService chat UX', () => {
   const bot = {
     id: 'finance-bot',
@@ -72,13 +102,21 @@ describe('FinanceBotService chat UX', () => {
     };
     const delivery = {
       send: jest.fn().mockResolvedValue(undefined),
+      edit: jest.fn().mockResolvedValue(undefined),
     };
-    const durable = { enqueueSendMessage: jest.fn().mockResolvedValue(undefined) };
-    const ai = { extractText: jest.fn(), extractReceipt: jest.fn(), transcribeVoice: jest.fn() };
+    const durable = {
+      enqueueSendMessage: jest.fn().mockResolvedValue(undefined),
+    };
+    const ai = {
+      extractText: jest.fn(),
+      extractReceipt: jest.fn(),
+      transcribeVoice: jest.fn(),
+    };
     const entitlements = { has: jest.fn() };
     const botApi = {
       answerCallbackQuery: jest.fn().mockResolvedValue(true),
       sendChatAction: jest.fn().mockResolvedValue(true),
+      deleteMessage: jest.fn().mockResolvedValue(true),
       getFile: jest.fn(),
       downloadFile: jest.fn(),
     };
@@ -99,7 +137,24 @@ describe('FinanceBotService chat UX', () => {
       sendSettings: jest.fn().mockResolvedValue(undefined),
     };
     const flows = {
-      startAccount: jest.fn(), cancel: jest.fn(), consume: jest.fn().mockResolvedValue(null), consumeText: jest.fn().mockResolvedValue(null), currencyKeyboard: jest.fn(), activeAccounts: jest.fn(), startTransfer: jest.fn(), startTransaction: jest.fn(),
+      startAccount: jest.fn(),
+      cancel: jest.fn(),
+      cancelFlow: jest.fn(),
+      consume: jest.fn().mockResolvedValue(null),
+      consumeText: jest.fn().mockResolvedValue(null),
+      consumeCallback: jest.fn(),
+      currencyKeyboard: jest.fn(),
+      activeAccounts: jest.fn(),
+      startTransfer: jest.fn(),
+      startTransaction: jest.fn(),
+      bindMessage: jest.fn().mockResolvedValue(undefined),
+    };
+    const flowPresenter = {
+      present: jest.fn(),
+      completionText: jest.fn().mockReturnValue('Saved'),
+    };
+    const browserLogin = {
+      handle: jest.fn().mockResolvedValue(false),
     };
     const instance = new FinanceBotService(
       users as any,
@@ -113,7 +168,8 @@ describe('FinanceBotService chat UX', () => {
       billing as any,
       chat as any,
       flows as any,
-      { present: jest.fn() } as any,
+      browserLogin as any,
+      flowPresenter as any,
     );
     return {
       instance,
@@ -127,9 +183,38 @@ describe('FinanceBotService chat UX', () => {
       botApi,
       chat,
       flows,
+      browserLogin,
+      flowPresenter,
       ...overrides,
     };
   }
+
+  it('approves a browser login deep link for the current bot user', async () => {
+    const test = service();
+    const token = 'a'.repeat(32);
+    test.browserLogin.handle.mockResolvedValue(true);
+
+    await test.instance.handle({
+      bot,
+      runtime,
+      token: 'bot-token',
+      updateLogId: 'update-1',
+      update: {
+        message: {
+          text: `/start finlogin_${token}`,
+          chat: { id: 'chat-1' },
+        },
+      },
+    });
+
+    expect(test.browserLogin.handle).toHaveBeenCalledWith(
+      expect.objectContaining({ token: 'bot-token' }),
+      'chat-1',
+      'profile-1',
+      'en',
+    );
+    expect(test.chat.sendMainMenu).not.toHaveBeenCalled();
+  });
 
   it('builds a canonical Mini App URL and complete main-menu keyboard', () => {
     expect(financeMiniAppUrl('bot id', 'https://app.example/')).toBe(
@@ -152,6 +237,29 @@ describe('FinanceBotService chat UX', () => {
     ]);
   });
 
+  it('routes a stale English settings button under a Russian profile instead of parsing it as finance input', async () => {
+    const test = service();
+    test.contexts.ensureProfile.mockResolvedValue({ ...profile, locale: 'ru' });
+
+    await test.instance.handle({
+      bot,
+      runtime,
+      token: 'bot-token',
+      updateLogId: 'stale-settings-button',
+      update: {
+        message: { text: '⚙️ Settings', chat: { id: 'chat-1' } },
+      },
+    } as any);
+
+    expect(test.chat.sendSettings).toHaveBeenCalledWith(
+      expect.anything(),
+      'chat-1',
+      'ru',
+      'USD',
+    );
+    expect(test.proposals.createQuick).not.toHaveBeenCalled();
+  });
+
   it('acknowledges proposal callbacks and keeps failure details out of chat', async () => {
     const test = service();
     test.proposals.confirm.mockRejectedValue(
@@ -159,7 +267,8 @@ describe('FinanceBotService chat UX', () => {
     );
 
     await test.instance.handle({
-      bot, runtime,
+      bot,
+      runtime,
       token: 'bot-token',
       updateLogId: 'update-1',
       update: {
@@ -176,9 +285,9 @@ describe('FinanceBotService chat UX', () => {
       callback_query_id: 'callback-1',
       text: '',
     });
-    expect(test.botApi.answerCallbackQuery.mock.invocationCallOrder[0]).toBeLessThan(
-      test.users.upsertFromUpdate.mock.invocationCallOrder[0],
-    );
+    expect(
+      test.botApi.answerCallbackQuery.mock.invocationCallOrder[0],
+    ).toBeLessThan(test.users.upsertFromUpdate.mock.invocationCallOrder[0]);
     expect(test.proposals.confirm).toHaveBeenCalledWith(
       expect.objectContaining({
         token: 'proposal-1',
@@ -188,28 +297,72 @@ describe('FinanceBotService chat UX', () => {
       }),
     );
     expect(test.delivery.send).toHaveBeenCalledWith(
-      'bot-token', 'chat-1', expect.objectContaining({
+      'bot-token',
+      'chat-1',
+      expect.objectContaining({
         text: 'That proposal is no longer available. Please create a new one and try again.',
       }),
     );
-    expect(
-      JSON.stringify(test.delivery.send.mock.calls),
-    ).not.toContain('credentials');
+    expect(JSON.stringify(test.delivery.send.mock.calls)).not.toContain(
+      'credentials',
+    );
   });
 
-  it('keeps post-commit proposal confirmation on durable delivery', async () => {
+  it('sends post-commit proposal confirmation immediately without durable delivery', async () => {
     const test = service();
-    test.proposals.confirm.mockResolvedValue({ transactionId: 'tx-1', transactionIds: ['tx-1'] });
+    test.proposals.confirm.mockResolvedValue({
+      transactionId: 'tx-1',
+      transactionIds: ['tx-1'],
+    });
 
     await test.instance.handle({
-      bot, runtime, token: 'bot-token', updateLogId: 'update-saved',
-      update: { callback_query: { id: 'callback-saved', data: 'fin:save:proposal-1', from: { id: 'telegram-id' }, message: { chat: { id: 'chat-1' } } } },
+      bot,
+      runtime,
+      token: 'bot-token',
+      updateLogId: 'update-saved',
+      update: {
+        callback_query: {
+          id: 'callback-saved',
+          data: 'fin:save:proposal-1',
+          from: { id: 'telegram-id' },
+          message: { chat: { id: 'chat-1' } },
+        },
+      },
     } as any);
 
-    expect(test.durable.enqueueSendMessage).toHaveBeenCalledWith(expect.objectContaining({
+    expect(test.delivery.send).toHaveBeenCalledWith('bot-token', 'chat-1', {
       text: 'Transaction saved. You can undo it in Finance for the next 10 minutes.',
-      idempotencyKey: expect.stringContaining('finance-proposal-saved:'),
-    }));
+    });
+    expect(test.durable.enqueueSendMessage).not.toHaveBeenCalled();
+  });
+
+  it('sends a completed live flow immediately without enqueueing a delivery row', async () => {
+    const test = service();
+    test.flows.consumeCallback.mockResolvedValue({
+      kind: 'created',
+      flow: 'TRANSACTION_CREATE',
+      id: 'tx-1',
+      payload: { type: 'EXPENSE' },
+    });
+    await test.instance.handle({
+      bot,
+      runtime,
+      token: 'bot-token',
+      updateLogId: 'flow-saved',
+      update: {
+        callback_query: {
+          id: 'callback-flow',
+          data: 'fin:flow:confirm:rev-1',
+          from: { id: 'telegram-id' },
+          message: { chat: { id: 'chat-1' } },
+        },
+      },
+    } as any);
+    expect(test.delivery.send).toHaveBeenCalledWith('bot-token', 'chat-1', {
+      text: 'Saved',
+      removeInlineKeyboard: true,
+    });
+    expect(test.durable.enqueueSendMessage).not.toHaveBeenCalled();
   });
 
   it('sends the Web App CTA through the durable delivery payload', async () => {
@@ -218,7 +371,8 @@ describe('FinanceBotService chat UX', () => {
     process.env.FINANCE_MINI_APP_URL = 'https://app.example';
     try {
       await test.instance.handle({
-        bot, runtime,
+        bot,
+        runtime,
         updateLogId: 'update-2',
         update: {
           message: {
@@ -242,22 +396,285 @@ describe('FinanceBotService chat UX', () => {
 
   it('does not let an active draft swallow commands or persistent menu actions', async () => {
     const test = service();
-    await test.instance.handle({ bot, runtime, token: 'bot-token', updateLogId: 'menu-over-draft', update: { message: { text: '/start', chat: { id: 'chat-1' } } } } as any);
+    await test.instance.handle({
+      bot,
+      runtime,
+      token: 'bot-token',
+      updateLogId: 'menu-over-draft',
+      update: { message: { text: '/start', chat: { id: 'chat-1' } } },
+    } as any);
     expect(test.flows.consumeText).not.toHaveBeenCalled();
     expect(test.chat.sendMainMenu).toHaveBeenCalled();
+  });
+
+  it.each([
+    ['/income', 'INCOME'],
+    ['/expense', 'EXPENSE'],
+  ] as const)(
+    'starts %s once and sends its account picker',
+    async (text, type) => {
+      const test = service();
+      const result = {
+        kind: 'prompt',
+        flow: 'TRANSACTION_CREATE',
+        step: 'TRANSACTION_ACCOUNT',
+        payload: { type },
+        choices: [{ id: 'a-1', label: 'Cash · USD' }],
+      };
+      test.flows.startTransaction.mockResolvedValue(result);
+      test.flowPresenter.present.mockResolvedValue({
+        text: 'Choose account',
+        inlineButtons: [],
+      });
+
+      await test.instance.handle({
+        bot,
+        runtime,
+        token: 'bot-token',
+        updateLogId: `start-${type}`,
+        update: {
+          message: {
+            text,
+            chat: { id: 'chat-1' },
+            from: { id: 'telegram-id' },
+          },
+        },
+      } as any);
+
+      expect(test.flows.startTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({ type }),
+      );
+      expect(test.flows.activeAccounts).not.toHaveBeenCalled();
+      expect(test.delivery.send).toHaveBeenCalledWith(
+        'bot-token',
+        'chat-1',
+        expect.objectContaining({ text: 'Choose account' }),
+      );
+    },
+  );
+
+  it('replaces the account step with category choices and keeps Back in one message', async () => {
+    const test = service();
+    test.flows.consumeCallback.mockResolvedValue({
+      kind: 'prompt',
+      flow: 'TRANSACTION_CREATE',
+      step: 'TRANSACTION_CATEGORY',
+      payload: {
+        type: 'INCOME',
+        revision: 'rev-1',
+        accountId: 'a-1',
+        accountName: 'Cash',
+        accountCurrency: 'USD',
+      },
+    });
+    test.flowPresenter.present.mockResolvedValue({
+      text: 'Choose category',
+      inlineButtons: [[{ text: 'Back', callbackData: 'fin:flow:back:rev-1' }]],
+    });
+
+    await test.instance.handle({
+      bot,
+      runtime,
+      token: 'bot-token',
+      updateLogId: 'income-account-selected',
+      update: {
+        callback_query: {
+          id: 'callback-account',
+          data: 'fin:flow:account:rev-1.a-1',
+          from: { id: 'telegram-id' },
+          message: { message_id: 73, chat: { id: 'chat-1' } },
+        },
+      },
+    } as any);
+
+    expect(test.delivery.edit).toHaveBeenCalledWith(
+      'bot-token',
+      'chat-1',
+      73,
+      expect.objectContaining({ text: 'Choose category' }),
+    );
+    expect(test.delivery.send).not.toHaveBeenCalled();
+  });
+
+  it('sends the next step normally when Telegram can no longer edit the old prompt', async () => {
+    const test = service();
+    test.delivery.edit.mockRejectedValueOnce(new Error('message not editable'));
+    test.flows.consumeCallback.mockResolvedValue({
+      kind: 'prompt',
+      flow: 'TRANSACTION_CREATE',
+      step: 'TRANSACTION_CATEGORY',
+      payload: { type: 'INCOME', revision: 'rev-1', accountId: 'a-1' },
+    });
+    test.flowPresenter.present.mockResolvedValue({
+      text: 'Choose category',
+      inlineButtons: [],
+    });
+
+    await test.instance.handle({
+      bot,
+      runtime,
+      token: 'bot-token',
+      updateLogId: 'income-edit-fallback',
+      update: {
+        callback_query: {
+          id: 'callback-account',
+          data: 'fin:flow:account:rev-1.a-1',
+          from: { id: 'telegram-id' },
+          message: { message_id: 73, chat: { id: 'chat-1' } },
+        },
+      },
+    } as any);
+
+    expect(test.delivery.send).toHaveBeenCalledWith(
+      'bot-token',
+      'chat-1',
+      expect.objectContaining({ text: 'Choose category' }),
+    );
+  });
+
+  it('deletes an accepted amount and edits the tracked flow message', async () => {
+    const test = service();
+    test.flows.consumeText.mockResolvedValue({
+      kind: 'prompt',
+      flow: 'TRANSACTION_CREATE',
+      step: 'TRANSACTION_DESCRIPTION',
+      payload: { revision: 'rev-1', messageId: '73', amount: '100' },
+    });
+    test.flowPresenter.present.mockResolvedValue({
+      text: 'Optional comment',
+      inlineButtons: [],
+    });
+
+    await test.instance.handle({
+      bot,
+      runtime,
+      token: 'bot-token',
+      updateLogId: 'amount-accepted',
+      update: {
+        message: {
+          message_id: 91,
+          text: '100',
+          chat: { id: 'chat-1' },
+          from: { id: 'telegram-id' },
+        },
+      },
+    } as any);
+
+    expect(test.botApi.deleteMessage).toHaveBeenCalledWith('bot-token', {
+      chat_id: 'chat-1',
+      message_id: 91,
+    });
+    expect(test.delivery.edit).toHaveBeenCalledWith(
+      'bot-token',
+      'chat-1',
+      73,
+      expect.objectContaining({ text: 'Optional comment' }),
+    );
+    expect(test.delivery.send).not.toHaveBeenCalled();
+  });
+
+  it('finalizes confirm in place and removes every stale action', async () => {
+    const test = service();
+    test.flows.consumeCallback.mockResolvedValue({
+      kind: 'created',
+      flow: 'TRANSACTION_CREATE',
+      id: 'tx-1',
+      payload: { revision: 'rev-1', messageId: '73' },
+    });
+
+    await test.instance.handle({
+      bot,
+      runtime,
+      token: 'bot-token',
+      updateLogId: 'flow-confirmed-in-place',
+      update: {
+        callback_query: {
+          id: 'callback-confirm',
+          data: 'fin:flow:confirm:rev-1',
+          from: { id: 'telegram-id' },
+          message: { message_id: 73, chat: { id: 'chat-1' } },
+        },
+      },
+    } as any);
+
+    expect(test.delivery.edit).toHaveBeenCalledWith('bot-token', 'chat-1', 73, {
+      text: 'Saved',
+      removeInlineKeyboard: true,
+    });
+    expect(test.delivery.send).not.toHaveBeenCalled();
+  });
+
+  it('acknowledges a repeated finalized callback without posting an unavailable message', async () => {
+    const test = service();
+    test.flows.consumeCallback.mockResolvedValue(null);
+
+    await test.instance.handle({
+      bot,
+      runtime,
+      token: 'bot-token',
+      updateLogId: 'flow-confirmed-twice',
+      update: {
+        callback_query: {
+          id: 'callback-confirm-again',
+          data: 'fin:flow:confirm:rev-1',
+          from: { id: 'telegram-id' },
+          message: { message_id: 73, chat: { id: 'chat-1' } },
+        },
+      },
+    } as any);
+
+    expect(test.botApi.answerCallbackQuery).toHaveBeenCalled();
+    expect(test.chat.sendSafe).not.toHaveBeenCalled();
+    expect(test.delivery.send).not.toHaveBeenCalled();
+  });
+
+  it('offers account creation when a transaction has no active account', async () => {
+    const test = service();
+    test.flows.startTransaction.mockResolvedValue(null);
+    await test.instance.handle({
+      bot,
+      runtime,
+      token: 'bot-token',
+      updateLogId: 'no-account',
+      update: {
+        message: {
+          text: '/expense',
+          chat: { id: 'chat-1' },
+          from: { id: 'telegram-id' },
+        },
+      },
+    } as any);
+    expect(test.chat.sendAccounts).toHaveBeenCalledWith(
+      expect.anything(),
+      'telegram-user-1',
+      'profile-1',
+      'chat-1',
+      'en',
+    );
   });
 
   it('starts the guided transfer immediately when two active accounts exist', async () => {
     const test = service();
     test.flows.activeAccounts.mockResolvedValue([{ id: 'a-1' }, { id: 'a-2' }]);
-    test.flows.startTransfer.mockResolvedValue({ kind: 'prompt', flow: 'TRANSFER_CREATE', step: 'TRANSFER_DESCRIPTION', payload: {} });
+    test.flows.startTransfer.mockResolvedValue({
+      kind: 'prompt',
+      flow: 'TRANSFER_CREATE',
+      step: 'TRANSFER_DESCRIPTION',
+      payload: {},
+    });
 
     await test.instance.handle({
       bot,
       runtime,
       token: 'bot-token',
       updateLogId: 'update-transfer',
-      update: { message: { text: '/transfer', chat: { id: 'chat-1' }, from: { id: 'telegram-id' } } },
+      update: {
+        message: {
+          text: '/transfer',
+          chat: { id: 'chat-1' },
+          from: { id: 'telegram-id' },
+        },
+      },
     } as any);
 
     expect(test.flows.startTransfer).toHaveBeenCalled();
@@ -310,7 +727,11 @@ describe('FinanceBotService chat UX', () => {
 
     await responder.sendMainMenu(context, 'telegram-user-1', 'chat-1');
     await responder.sendMainMenu(context, 'telegram-user-1', 'chat-1');
-    await responder.sendMainMenu({ ...context, updateLogId: 'update-4' }, 'telegram-user-1', 'chat-1');
+    await responder.sendMainMenu(
+      { ...context, updateLogId: 'update-4' },
+      'telegram-user-1',
+      'chat-1',
+    );
 
     expect(delivery.send).toHaveBeenCalledTimes(3);
   });
@@ -319,13 +740,30 @@ describe('FinanceBotService chat UX', () => {
     const test = service();
     test.contexts.ensureProfile.mockResolvedValue({ ...profile, locale: 'uk' });
     test.proposals.createQuick.mockResolvedValue({
-      token: 'proposal-1', payload: { type: 'EXPENSE', amount: '25', currency: 'UAH', description: null },
-      category: { name: 'Food' }, account: { name: 'Cash' },
+      token: 'proposal-1',
+      payload: {
+        type: 'EXPENSE',
+        amount: '25',
+        currency: 'UAH',
+        description: null,
+      },
+      category: { name: 'Food' },
+      account: { name: 'Cash' },
     });
-    await test.instance.handle({ bot, runtime, token: 'bot-token', updateLogId: 'uk-preview', update: { message: { text: '25 кава', chat: { id: 'chat-1' } } } } as any);
-    expect(test.delivery.send).toHaveBeenCalledWith('bot-token', 'chat-1', expect.objectContaining({
-      text: expect.stringContaining('Сума: 25 UAH'),
-    }));
+    await test.instance.handle({
+      bot,
+      runtime,
+      token: 'bot-token',
+      updateLogId: 'uk-preview',
+      update: { message: { text: '25 кава', chat: { id: 'chat-1' } } },
+    } as any);
+    expect(test.delivery.send).toHaveBeenCalledWith(
+      'bot-token',
+      'chat-1',
+      expect.objectContaining({
+        text: expect.stringContaining('Сума: 25 UAH'),
+      }),
+    );
   });
 
   it('localizes Russian receipt proposal titles and previews', async () => {
@@ -333,20 +771,54 @@ describe('FinanceBotService chat UX', () => {
     test.contexts.ensureProfile.mockResolvedValue({ ...profile, locale: 'ru' });
     test.entitlements.has.mockResolvedValue(true);
     test.botApi.getFile.mockResolvedValue({ file_path: 'receipt.jpg' });
-    test.botApi.downloadFile.mockResolvedValue({ bytes: Buffer.from('image'), contentType: 'image/jpeg' });
+    test.botApi.downloadFile.mockResolvedValue({
+      bytes: Buffer.from('image'),
+      contentType: 'image/jpeg',
+    });
     test.ai.extractReceipt.mockResolvedValue([{ amount: '9' }]);
-    test.proposals.createBatch.mockResolvedValue({ token: 'proposal-2', preview: [], operations: [{}] });
+    test.proposals.createBatch.mockResolvedValue({
+      token: 'proposal-2',
+      preview: [],
+      operations: [{}],
+    });
     test.chat.batchPreview.mockReturnValue('💸 Расход — 9 RUB');
-    await test.instance.handle({ bot, runtime, token: 'bot-token', updateLogId: 'ru-receipt', update: { message: { photo: [{ file_id: 'photo-1' }], chat: { id: 'chat-1' } } } } as any);
+    await test.instance.handle({
+      bot,
+      runtime,
+      token: 'bot-token',
+      updateLogId: 'ru-receipt',
+      update: {
+        message: { photo: [{ file_id: 'photo-1' }], chat: { id: 'chat-1' } },
+      },
+    } as any);
     expect(test.chat.batchPreview).toHaveBeenCalledWith([], 'ru');
-    expect(test.delivery.send).toHaveBeenCalledWith('bot-token', 'chat-1', expect.objectContaining({
-      text: expect.stringContaining('Предложение из чека'),
-    }));
+    expect(test.delivery.send).toHaveBeenCalledWith(
+      'bot-token',
+      'chat-1',
+      expect.objectContaining({
+        text: expect.stringContaining('Предложение из чека'),
+      }),
+    );
   });
 
   it('renders batch preview labels in Ukrainian and Russian', () => {
-    const responder = new FinanceBotChatResponderService({} as any, {} as any, {} as any);
-    const items = [{ payload: { type: 'EXPENSE' as const, amount: '10', currency: 'UAH', description: null }, accountName: 'Cash', categoryName: null }];
+    const responder = new FinanceBotChatResponderService(
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    const items = [
+      {
+        payload: {
+          type: 'EXPENSE' as const,
+          amount: '10',
+          currency: 'UAH',
+          description: null,
+        },
+        accountName: 'Cash',
+        categoryName: null,
+      },
+    ];
     expect(responder.batchPreview(items, 'uk')).toContain('💸 Витрата');
     expect(responder.batchPreview(items, 'ru')).toContain('💸 Расход');
   });

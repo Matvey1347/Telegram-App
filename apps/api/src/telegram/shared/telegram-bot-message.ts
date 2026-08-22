@@ -4,6 +4,7 @@ export type TelegramBotMessage = {
   text: string;
   parseMode?: string;
   removeReplyKeyboard?: boolean;
+  removeInlineKeyboard?: boolean;
   inlineButtons?: Array<
     Array<{
       text: string;
@@ -26,23 +27,25 @@ export function telegramBotMessagePayload(
     parse_mode: message.parseMode,
     reply_markup: message.removeReplyKeyboard
       ? { remove_keyboard: true }
-      : message.inlineButtons?.length
-        ? {
-            inline_keyboard: message.inlineButtons.map((row) =>
-              row.map((button) => ({
-                text: button.text,
-                ...(button.url ? { url: button.url } : {}),
-                ...(button.webAppUrl
-                  ? { web_app: { url: button.webAppUrl } }
-                  : {}),
-                ...(button.callbackData
-                  ? { callback_data: button.callbackData }
-                  : {}),
-              })),
-            ),
-          }
-        : message.replyKeyboard?.length
-          ? createCollapsibleReplyKeyboard(message.replyKeyboard)
-          : undefined,
+      : message.removeInlineKeyboard
+        ? { inline_keyboard: [] }
+        : message.inlineButtons?.length
+          ? {
+              inline_keyboard: message.inlineButtons.map((row) =>
+                row.map((button) => ({
+                  text: button.text,
+                  ...(button.url ? { url: button.url } : {}),
+                  ...(button.webAppUrl
+                    ? { web_app: { url: button.webAppUrl } }
+                    : {}),
+                  ...(button.callbackData
+                    ? { callback_data: button.callbackData }
+                    : {}),
+                })),
+              ),
+            }
+          : message.replyKeyboard?.length
+            ? createCollapsibleReplyKeyboard(message.replyKeyboard)
+            : undefined,
   };
 }

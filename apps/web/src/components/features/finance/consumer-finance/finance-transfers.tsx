@@ -129,6 +129,7 @@ export function FinanceTransfers({
             }
           />
           <Select
+            uiLocale={locale}
             className="col-span-2"
             aria-label={t.account}
             value={filters.accountId ?? ""}
@@ -144,6 +145,7 @@ export function FinanceTransfers({
             ))}
           </Select>
           <DateRangeInput
+            uiLocale={locale}
             from={filters.from}
             to={filters.to}
             onChange={({ from, to }) =>
@@ -161,7 +163,7 @@ export function FinanceTransfers({
       </Card>
       <Card>
         {history.isLoading ? (
-          <LoadingState />
+          <LoadingState text={t.loading} />
         ) : history.isError ? (
           <div className="space-y-3">
             <ErrorState text={t.transferLoadError} />
@@ -244,14 +246,14 @@ function TransferRow({
       </div>
       <button
         aria-label={t.editTransfer}
-        className="p-2 text-neutral-400"
+        className="flex min-h-11 min-w-11 items-center justify-center rounded text-neutral-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
         onClick={onEdit}
       >
         <Pencil size={16} />
       </button>
       <button
         aria-label={t.deleteTransferLabel}
-        className="p-2 text-rose-300"
+        className="flex min-h-11 min-w-11 items-center justify-center rounded text-rose-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
         onClick={onDelete}
       >
         <Trash2 size={16} />

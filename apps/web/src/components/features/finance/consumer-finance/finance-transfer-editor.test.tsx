@@ -1,11 +1,20 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   ConsumerFinanceAccount,
   ConsumerFinanceTransfer,
 } from "@telegram-system/shared";
 import { FinanceTransferEditor } from "./finance-transfer-editor";
+
+const apiMocks = vi.hoisted(() => ({
+  createTransfer: vi.fn(),
+  updateTransfer: vi.fn(),
+}));
+
+vi.mock("@/lib/features/finance/consumer-finance-api", () => ({
+  consumerFinanceApi: apiMocks,
+}));
 
 const account = (
   id: string,
@@ -14,6 +23,7 @@ const account = (
 ): ConsumerFinanceAccount => ({
   id,
   name,
+  iconPresentation: { type: "unicode", value: "💳" },
   type: "CARD",
   currency: "USD",
   openingBalance: "0",
@@ -42,6 +52,10 @@ const renderEditor = (
   );
 
 describe("FinanceTransferEditor", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("loads edit values when the parent switches the keyed editor from create to edit", () => {
     const client = new QueryClient();
     const editing: ConsumerFinanceTransfer = {
@@ -160,5 +174,41 @@ describe("FinanceTransferEditor", () => {
     expect(
       screen.getByRole("button", { name: /save transfer/i }),
     ).toBeDisabled();
+  });
+
+  it("creates a transfer through the authoritative API response", async () => {
+    const saved: ConsumerFinanceTransfer = {
+      id: "saved",
+      fromAccountId: "a",
+      toAccountId: "b",
+      fromAmount: "4",
+      toAmount: "4",
+      fromCurrency: "USD",
+      toCurrency: "USD",
+      exchangeRate: "1",
+      occurredAt: "2026-08-21T12:00:00.000Z",
+      fromAccount: { id: "a", name: "Cash", currency: "USD" },
+      toAccount: { id: "b", name: "Card", currency: "USD" },
+    };
+    apiMocks.createTransfer.mockResolvedValue(saved);
+    const onSaved = vi.fn();
+    renderEditor({ initiallyOpen: true, onSaved });
+
+    fireEvent.click(screen.getByRole("button", { name: "Select account" }));
+    fireEvent.click(screen.getByRole("button", { name: /Card · USD/ }));
+    const amount = screen.getAllByRole("textbox")[0];
+    fireEvent.change(amount, { target: { value: "4" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save transfer" }));
+
+    await waitFor(() => expect(apiMocks.createTransfer).toHaveBeenCalledOnce());
+    expect(apiMocks.createTransfer).toHaveBeenCalledWith(
+      "bot",
+      expect.objectContaining({
+        fromAccountId: "a",
+        toAccountId: "b",
+        amount: "4",
+      }),
+    );
+    expect(onSaved).toHaveBeenCalledWith(saved);
   });
 });

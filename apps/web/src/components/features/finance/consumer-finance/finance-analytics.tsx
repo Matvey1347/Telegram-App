@@ -83,7 +83,14 @@ export function FinanceAnalytics({
         </div>
       ) : null}
       {analytics.isLoading ? <LoadingState text={t.loadingAnalytics} /> : null}
-      {analytics.isError ? <ErrorState text={t.analyticsError} /> : null}
+      {analytics.isError ? (
+        <div className="mt-3 space-y-2">
+          <ErrorState text={t.analyticsError} />
+          <Button variant="secondary" onClick={() => analytics.refetch()}>
+            {t.retry}
+          </Button>
+        </div>
+      ) : null}
       {analytics.data ? (
         <AnalyticsPresentation data={analytics.data} locale={locale} />
       ) : null}

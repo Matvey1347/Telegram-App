@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
-  ConsumerFinanceAccount,
   ConsumerFinanceCategory,
   ConsumerFinanceDashboard,
 } from "@telegram-system/shared";
@@ -32,7 +31,6 @@ export function FinanceBudget({
   onUpgrade,
 }: {
   botId: string;
-  accounts: ConsumerFinanceAccount[];
   categories: ConsumerFinanceCategory[];
   dashboard: ConsumerFinanceDashboard;
   locale: FinanceLocale;
@@ -114,6 +112,7 @@ export function FinanceBudget({
       <Card>
         <FormField label={t.expenseCategories}>
           <Select
+            uiLocale={locale}
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
           >
@@ -146,6 +145,9 @@ export function FinanceBudget({
         >
           {t.saveBudget}
         </Button>
+        {save.isError ? (
+          <p className="mt-2 text-sm text-rose-300">{t.financeUnavailable}</p>
+        ) : null}
       </Card>
       <Card>
         <h2 className="font-medium">{t.financialGoal}</h2>

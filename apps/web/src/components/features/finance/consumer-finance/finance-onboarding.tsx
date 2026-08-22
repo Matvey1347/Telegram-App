@@ -2,19 +2,17 @@
 
 import { useState } from "react";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
-import {
-  Button,
-  Card,
-  FormField,
-  Input,
-  Select,
-} from "@/components/ui/primitives";
+import { Button, Card, FormField, Select } from "@/components/ui/primitives";
 import {
   financeCopy,
   normalizeFinanceLocale,
   supportedFinanceLocales,
   type FinanceLocale,
 } from "./finance-i18n";
+import {
+  financeTimezoneLabel,
+  financeTimezoneOptions,
+} from "./finance-timezones";
 
 const currencies = ["UAH", "USD", "EUR", "PLN"];
 
@@ -29,7 +27,7 @@ export function FinanceOnboarding({
     defaultCurrency: string;
     timezone: string;
     locale: FinanceLocale;
-  }) => void;
+  }) => void | Promise<unknown>;
 }) {
   const [step, setStep] = useState(0);
   const [locale, setLocale] = useState<FinanceLocale>(() =>
@@ -43,13 +41,24 @@ export function FinanceOnboarding({
         : Intl.DateTimeFormat().resolvedOptions().timeZone) ||
       "UTC",
   );
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState(false);
   const t = financeCopy(locale);
-  const finish = () =>
-    onComplete({
-      defaultCurrency: currency,
-      timezone,
-      locale,
-    });
+  const finish = async () => {
+    setPending(true);
+    setError(false);
+    try {
+      await onComplete({
+        defaultCurrency: currency,
+        timezone,
+        locale,
+      });
+    } catch {
+      setError(true);
+    } finally {
+      setPending(false);
+    }
+  };
   return (
     <Card className="space-y-4 p-5">
       {step === 0 ? (
@@ -69,6 +78,7 @@ export function FinanceOnboarding({
           <p className="text-sm text-neutral-400">{t.onboardingCurrencyHelp}</p>
           <FormField label={t.language}>
             <Select
+              uiLocale={locale}
               value={locale}
               onChange={(event) =>
                 setLocale(event.target.value as FinanceLocale)
@@ -87,6 +97,7 @@ export function FinanceOnboarding({
           </FormField>
           <FormField label={t.mainCurrency}>
             <Select
+              uiLocale={locale}
               value={currency}
               onChange={(event) => setCurrency(event.target.value)}
             >
@@ -96,10 +107,18 @@ export function FinanceOnboarding({
             </Select>
           </FormField>
           <FormField label={t.onboardingTimezone}>
-            <Input
+            <Select
+              uiLocale={locale}
+              aria-label={t.onboardingTimezone}
               value={timezone}
               onChange={(event) => setTimezone(event.target.value)}
-            />
+            >
+              {financeTimezoneOptions(timezone).map((item) => (
+                <option key={item} value={item}>
+                  {financeTimezoneLabel(item)}
+                </option>
+              ))}
+            </Select>
           </FormField>
           <Button className="w-full" onClick={() => setStep(2)}>
             {t.continue}
@@ -111,9 +130,16 @@ export function FinanceOnboarding({
           <h1 className="text-xl font-semibold">{t.onboardingChat}</h1>
           <p className="text-sm text-neutral-400">{t.onboardingChatHelp}</p>
           <p className="text-sm text-neutral-400">{t.onboardingAccount}</p>
-          <Button className="w-full" disabled={!timezone} onClick={finish}>
-            {t.finish}
+          <Button
+            className="w-full"
+            disabled={!timezone || pending}
+            onClick={() => void finish()}
+          >
+            {pending ? t.saving : t.finish}
           </Button>
+          {error ? (
+            <p className="text-sm text-rose-300">{t.financeUnavailable}</p>
+          ) : null}
         </>
       ) : null}
     </Card>

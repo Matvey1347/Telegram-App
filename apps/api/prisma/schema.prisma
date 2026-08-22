@@ -2613,6 +2613,7 @@ model TelegramBotIntegration {
   greeterTestSessions          GreeterTestSession[]
   greeterUserEnvironmentStates GreeterUserEnvironmentState[]
   financeProfiles              FinanceProfile[]
+  financeBrowserLoginChallenges FinanceBrowserLoginChallenge[]
   financeAiProviderConfigs     FinanceAiProviderConfig[]
   billingProviderConfigs       BotBillingProviderConfig[]
   billingPlans                 BotSubscriptionPlan[]
@@ -3175,6 +3176,7 @@ model FinanceProfile {
   aiUsage               FinanceAiUsage[]
   chatFlows             FinanceChatFlow[]
   consumerTransfers     FinanceConsumerTransfer[]
+  browserLoginChallenges FinanceBrowserLoginChallenge[]
 
   @@unique([botIntegrationId, telegramBotUserId])
 }
@@ -3192,6 +3194,26 @@ model FinanceConsumerTransfer {
   profile FinanceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
+}
+
+// Browser login is approved by the same Telegram user inside the Finance bot.
+// Only a hash of the deep-link bearer token is persisted. Expiry is enforced
+// while approving and consuming, so no recurring cleanup job is required.
+model FinanceBrowserLoginChallenge {
+  id               String   @id @default(cuid())
+  botIntegrationId String
+  approvedProfileId String?
+  tokenHash        String   @unique
+  expiresAt        DateTime
+  approvedAt       DateTime?
+  consumedAt       DateTime?
+  createdAt        DateTime @default(now())
+
+  botIntegration TelegramBotIntegration @relation(fields: [botIntegrationId], references: [id], onDelete: Cascade)
+  approvedProfile FinanceProfile? @relation(fields: [approvedProfileId], references: [id], onDelete: Cascade)
+
+  @@index([botIntegrationId, expiresAt])
+  @@index([approvedProfileId])
 }
 
 // A nullable bot means a workspace default. A bot-specific row overrides it.
@@ -3221,6 +3243,7 @@ model FinanceAccount {
   id                String               @id @default(cuid())
   profileId         String
   name              String
+  emoji             String?              @db.VarChar(16)
   type              FinanceAccountType   @default(OTHER)
   currency          String               @db.VarChar(3)
   openingBalance    Decimal              @default(0)
@@ -3240,6 +3263,7 @@ model FinanceCategory {
   profileId    String
   parentId     String?
   name         String
+  emoji        String?                 @db.VarChar(16)
   type         FinanceTransactionType
   key          String?
   archivedAt   DateTime?

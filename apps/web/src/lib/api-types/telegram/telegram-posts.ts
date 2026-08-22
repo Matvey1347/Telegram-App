@@ -102,8 +102,6 @@ export type TelegramManagedPostsImportRow = {
   images?: unknown;
   imageSearch?: unknown;
   groupId?: unknown;
-  groupPosition?: unknown;
-  order?: unknown;
   scheduledAt?: unknown;
   imported?: unknown;
   approved?: unknown;
@@ -133,7 +131,13 @@ export type TelegramManagedPostsImportResult = {
 };
 export type TelegramManagedPostsImportProgressItem = {
   index: number;
-  status: "created" | "skipped";
+  status:
+    | "created"
+    | "skipped"
+    | "alreadyExists"
+    | "scheduled"
+    | "scheduleFailed"
+    | "failed";
   title?: string;
   postId?: string;
   error?: string;

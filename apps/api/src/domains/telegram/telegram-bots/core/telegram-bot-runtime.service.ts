@@ -429,6 +429,7 @@ export class TelegramBotRuntimeService implements OnModuleInit {
     secretHeader: string | undefined,
     update: TelegramBotWebhookUpdate,
   ) {
+    const startedAt = Date.now();
     const entry = await this.registry.resolve(
       runtimeId,
       this.requiredEnvironment(),
@@ -444,6 +445,7 @@ export class TelegramBotRuntimeService implements OnModuleInit {
       update,
     );
     if (claimed.duplicate) return { ok: true, duplicate: true };
+    const claimedAt = Date.now();
     try {
       const result = await this.executionContext.run(runtimeId, () =>
         this.dispatcher.dispatch({
@@ -457,16 +459,14 @@ export class TelegramBotRuntimeService implements OnModuleInit {
       const status = result.handled
         ? TelegramBotUpdateStatus.PROCESSED
         : TelegramBotUpdateStatus.SKIPPED;
-      await this.prisma.$transaction([
-        this.prisma.telegramBotUpdateLog.update({
-          where: { id: claimed.log.id },
-          data: { status, processedAt: new Date(), error: null },
-        }),
-        this.prisma.telegramBotRuntimeInstance.update({
-          where: { id: runtimeId },
-          data: { lastUpdateProcessedAt: new Date(), lastRuntimeError: null },
-        }),
-      ]);
+      const dispatchedAt = Date.now();
+      await this.prisma.telegramBotUpdateLog.update({
+        where: { id: claimed.log.id },
+        data: { status, processedAt: new Date(), error: null },
+      });
+      const totalMs = Date.now() - startedAt;
+      if (totalMs >= 1_000)
+        this.logger.warn(JSON.stringify({ event: 'telegram_bot.slow_webhook', runtimeId, applicationType: entry.runtime.botIntegration.applicationType, claimMs: claimedAt - startedAt, dispatchMs: dispatchedAt - claimedAt, finalizeMs: Date.now() - dispatchedAt, totalMs }));
       return { ok: true, duplicate: false, status };
     } catch (error) {
       await this.prisma.telegramBotUpdateLog.update({

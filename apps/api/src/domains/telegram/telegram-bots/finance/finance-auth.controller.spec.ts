@@ -56,6 +56,8 @@ describe('FinanceController consumer auth', () => {
     );
     const core = {
       profile: jest.fn().mockResolvedValue(profile),
+      updateSettings: jest.fn().mockResolvedValue(profile),
+      notificationTarget: jest.fn().mockResolvedValue(null),
       limits: jest.fn().mockResolvedValue([]),
       goal: jest.fn().mockResolvedValue(null),
     };
@@ -75,23 +77,41 @@ describe('FinanceController consumer auth', () => {
       }),
       history: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
     };
+    const transfers = {
+      createBrowserLogin: jest.fn().mockResolvedValue({
+        token: 'a'.repeat(32),
+        expiresAt: new Date('2026-08-21T10:05:00.000Z'),
+        loginUrl: `https://t.me/finance_bot?start=finlogin_${'a'.repeat(32)}`,
+      }),
+      consumeBrowserLogin: jest.fn(),
+    };
+    const delivery = { enqueueSendMessage: jest.fn().mockResolvedValue(undefined) };
     const controller = new FinanceController(
       contexts as never,
       sessions,
-      {} as never,
+      transfers as never,
       core as never,
       ledger as never,
       {} as never,
       {} as never,
       {} as never,
-      {} as never,
+      delivery as never,
     );
     const response = {
       cookie: jest.fn(),
       clearCookie: jest.fn(),
       redirect: jest.fn(),
     } as unknown as Response;
-    return { controller, contexts, sessions, core, ledger, response };
+    return {
+      controller,
+      contexts,
+      sessions,
+      transfers,
+      core,
+      ledger,
+      delivery,
+      response,
+    };
   }
 
   function request(cookie?: string, forwardedProtocol?: string): Request {
@@ -246,6 +266,55 @@ describe('FinanceController consumer auth', () => {
     }
   });
 
+  it('refreshes the Telegram keyboard in the selected language and exact runtime', async () => {
+    const { controller, sessions, core, delivery } = setup();
+    const token = (
+      await sessions.issue({
+        profileId: 'profile-1',
+        botIntegrationId: 'bot-1',
+        telegramBotUserId: 'telegram-user-1',
+        workspaceId: 'workspace-1',
+        defaultCurrency: 'UAH',
+      })
+    ).token;
+    core.profile.mockResolvedValueOnce({ ...profile, locale: 'en' });
+    core.updateSettings.mockResolvedValue({ ...profile, locale: 'ru' });
+    core.notificationTarget.mockResolvedValue({
+      botIntegrationId: 'bot-1',
+      botIntegration: { workspaceId: 'workspace-1' },
+      telegramUser: {
+        id: 'telegram-user-1',
+        telegramChatId: '12345',
+        languageCode: 'en',
+        runtimeInstanceId: 'production-runtime',
+      },
+    });
+
+    await controller.settings(
+      'bot-1',
+      Object.assign(request(`finance_consumer_session=${token}`), {
+        method: 'PATCH',
+        headers: {
+          cookie: `finance_consumer_session=${token}`,
+          'x-finance-consumer-request': '1',
+        },
+      }),
+      { locale: 'ru' },
+    );
+
+    expect(delivery.enqueueSendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runtimeInstanceId: 'production-runtime',
+        text: '✅ Язык обновлён.',
+        replyKeyboard: expect.arrayContaining([
+          expect.arrayContaining([
+            expect.objectContaining({ text: '💸 Добавить расход' }),
+          ]),
+        ]),
+      }),
+    );
+  });
+
   it('bootstraps from initData and emits a secure cookie behind the HTTPS gateway', async () => {
     const { controller, contexts, response } = setup();
 
@@ -369,6 +438,52 @@ describe('FinanceController consumer auth', () => {
     );
     expect(response.redirect).toHaveBeenCalledWith(
       'https://finance.example/finance/bot-1',
+    );
+  });
+
+  it('creates a domain-independent Telegram deep-link login challenge', async () => {
+    const { controller, contexts, transfers } = setup();
+    const loginRequest = trustedMutationRequest('https');
+
+    await expect(
+      controller.createBrowserLoginChallenge('bot-1', loginRequest),
+    ).resolves.toMatchObject({
+      token: expect.stringMatching(/^[A-Za-z0-9_-]{32}$/u),
+      loginUrl: expect.stringContaining('https://t.me/finance_bot?start='),
+    });
+    expect(contexts.browserLoginConfig).toHaveBeenCalledWith('bot-1');
+    expect(transfers.createBrowserLogin).toHaveBeenCalledWith(
+      'bot-1',
+      'finance_bot',
+    );
+  });
+
+  it('issues the browser session only after the bot approved the challenge', async () => {
+    const { controller, transfers, response } = setup();
+    transfers.consumeBrowserLogin.mockResolvedValue({
+      status: 'approved',
+      session: {
+        profileId: 'profile-1',
+        botIntegrationId: 'bot-1',
+        telegramBotUserId: 'telegram-user-1',
+        telegramChatId: '12345',
+        workspaceId: 'workspace-1',
+        defaultCurrency: 'UAH',
+      },
+    });
+
+    await expect(
+      controller.consumeBrowserLoginChallenge(
+        'bot-1',
+        { token: 'a'.repeat(32) },
+        trustedMutationRequest('https'),
+        response,
+      ),
+    ).resolves.toEqual({ status: 'authenticated', profile });
+    expect(response.cookie).toHaveBeenCalledWith(
+      'finance_consumer_session',
+      expect.any(String),
+      expect.objectContaining({ secure: true, sameSite: 'none' }),
     );
   });
 

@@ -19,6 +19,24 @@ import type {
 import { financeChatLocale } from './i18n/finance-chat-i18n';
 import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
 import { FinanceLimitService } from './finance-limit.service';
+import {
+  financeAccountEmoji,
+  financeCategoryEmoji,
+  financeIconPresentation,
+} from './finance-entity-emoji';
+
+function categoryView<
+  T extends { emoji: string | null; name: string; key: string | null },
+>(row: T) {
+  const { emoji, ...category } = row;
+  return {
+    ...category,
+    iconPresentation: financeIconPresentation(
+      emoji,
+      financeCategoryEmoji(row.name, row.key),
+    ),
+  };
+}
 
 @Injectable()
 export class FinanceCoreService {
@@ -58,19 +76,31 @@ export class FinanceCoreService {
       onboardingCompletedAt: profile.onboardingCompletedAt,
     };
   }
-  categories(profileId: string) {
-    return this.prisma.financeCategory.findMany({
+  notificationTarget(profileId: string) {
+    return this.prisma.financeProfile.findUnique({
+      where: { id: profileId },
+      select: {
+        botIntegrationId: true,
+        botIntegration: { select: { workspaceId: true } },
+        telegramUser: { select: { id: true, telegramChatId: true, runtimeInstanceId: true, languageCode: true } },
+      },
+    });
+  }
+  async categories(profileId: string) {
+    const categories = await this.prisma.financeCategory.findMany({
       where: { profileId },
       select: {
         id: true,
         parentId: true,
         name: true,
+        emoji: true,
         key: true,
         type: true,
         archivedAt: true,
       },
       orderBy: [{ archivedAt: 'asc' }, { type: 'asc' }, { name: 'asc' }],
     });
+    return categories.map(categoryView);
   }
   async limits(profileId: string, categoryId?: string) {
     return new FinanceLimitService(this.prisma, this.conversion).list(
@@ -123,24 +153,37 @@ export class FinanceCoreService {
       select: { defaultCurrency: true },
     });
     if (!profile) throw new NotFoundException('Finance profile not found');
-    return this.prisma.financeAccount.create({
-      data: {
-        ...(id ? { id } : {}),
-        profileId,
-        name: dto.name.trim(),
-        type: dto.type,
-        currency: (dto.currency || profile.defaultCurrency).toUpperCase(),
-        openingBalance: opening,
-      },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        currency: true,
-        openingBalance: true,
-        archivedAt: true,
-      },
-    });
+    return this.prisma.financeAccount
+      .create({
+        data: {
+          ...(id ? { id } : {}),
+          profileId,
+          name: dto.name.trim(),
+          emoji: dto.emoji || null,
+          type: dto.type,
+          currency: (dto.currency || profile.defaultCurrency).toUpperCase(),
+          openingBalance: opening,
+        },
+        select: {
+          id: true,
+          name: true,
+          emoji: true,
+          type: true,
+          currency: true,
+          openingBalance: true,
+          archivedAt: true,
+        },
+      })
+      .then((account) => {
+        const { emoji, ...rest } = account;
+        return {
+          ...rest,
+          iconPresentation: financeIconPresentation(
+            emoji,
+            financeAccountEmoji(account.type),
+          ),
+        };
+      });
   }
   async updateAccount(
     profileId: string,
@@ -156,6 +199,9 @@ export class FinanceCoreService {
       data: {
         ...(dto.name ? { name: dto.name.trim() } : {}),
         ...(dto.type ? { type: dto.type } : {}),
+        ...(Object.prototype.hasOwnProperty.call(dto, 'emoji')
+          ? { emoji: dto.emoji || null }
+          : {}),
       },
       select: { id: true },
     });
@@ -189,24 +235,28 @@ export class FinanceCoreService {
       });
       if (!parent) throw new NotFoundException('Parent category not found');
     }
-    return this.prisma.financeCategory.create({
-      data: {
-        ...(id ? { id } : {}),
-        profileId,
-        name: dto.name.trim(),
-        type: dto.type,
-        parentId: dto.parentId || null,
-        key: null,
-      },
-      select: {
-        id: true,
-        parentId: true,
-        name: true,
-        key: true,
-        type: true,
-        archivedAt: true,
-      },
-    });
+    return this.prisma.financeCategory
+      .create({
+        data: {
+          ...(id ? { id } : {}),
+          profileId,
+          name: dto.name.trim(),
+          emoji: dto.emoji || null,
+          type: dto.type,
+          parentId: dto.parentId || null,
+          key: null,
+        },
+        select: {
+          id: true,
+          parentId: true,
+          name: true,
+          emoji: true,
+          key: true,
+          type: true,
+          archivedAt: true,
+        },
+      })
+      .then(categoryView);
   }
   async updateCategory(
     profileId: string,
@@ -265,27 +315,33 @@ export class FinanceCoreService {
         ancestorId = byId.get(ancestorId)?.parentId || null;
       }
     }
-    return this.prisma.financeCategory.update({
-      where: { id },
-      data: {
-        name: dto.name.trim(),
-        type: dto.type,
-        ...(existing.key && dto.name.trim() !== existing.name
-          ? { key: null }
-          : {}),
-        ...(Object.prototype.hasOwnProperty.call(dto, 'parentId')
-          ? { parentId: dto.parentId ?? null }
-          : {}),
-      },
-      select: {
-        id: true,
-        parentId: true,
-        name: true,
-        key: true,
-        type: true,
-        archivedAt: true,
-      },
-    });
+    return this.prisma.financeCategory
+      .update({
+        where: { id },
+        data: {
+          name: dto.name.trim(),
+          type: dto.type,
+          ...(Object.prototype.hasOwnProperty.call(dto, 'emoji')
+            ? { emoji: dto.emoji || null }
+            : {}),
+          ...(existing.key && dto.name.trim() !== existing.name
+            ? { key: null }
+            : {}),
+          ...(Object.prototype.hasOwnProperty.call(dto, 'parentId')
+            ? { parentId: dto.parentId ?? null }
+            : {}),
+        },
+        select: {
+          id: true,
+          parentId: true,
+          name: true,
+          emoji: true,
+          key: true,
+          type: true,
+          archivedAt: true,
+        },
+      })
+      .then(categoryView);
   }
   async archiveCategory(profileId: string, id: string) {
     const category = await this.prisma.financeCategory.findFirst({
@@ -293,18 +349,21 @@ export class FinanceCoreService {
       select: { id: true },
     });
     if (!category) throw new NotFoundException('Finance category not found');
-    return this.prisma.financeCategory.update({
-      where: { id: category.id },
-      data: { archivedAt: new Date() },
-      select: {
-        id: true,
-        parentId: true,
-        name: true,
-        key: true,
-        type: true,
-        archivedAt: true,
-      },
-    });
+    return this.prisma.financeCategory
+      .update({
+        where: { id: category.id },
+        data: { archivedAt: new Date() },
+        select: {
+          id: true,
+          parentId: true,
+          name: true,
+          emoji: true,
+          key: true,
+          type: true,
+          archivedAt: true,
+        },
+      })
+      .then(categoryView);
   }
 
   async upsertLimit(profileId: string, dto: UpsertFinanceLimitDto) {

@@ -73,9 +73,7 @@ export class TelegramChannelsController {
   ) {}
   private async streamBulkAction(
     res: Response,
-    action: (
-      onProgress: (item: unknown, current: number, total: number) => void,
-    ) => Promise<unknown>,
+    action: (onProgress: (item: unknown, current: number, total: number) => void, signal: AbortSignal) => Promise<unknown>,
     eventPrefix: string,
   ) {
     return this.streamResponse.stream(res, { eventPrefix, action });
@@ -464,8 +462,9 @@ export class TelegramChannelsController {
   ) {
     return this.streamBulkAction(
       res,
-      (onProgress) =>
-        this.service.importManagedPosts(user.sub, id, dto, onProgress as never),
+      (onProgress, signal) => this.service.importManagedPosts(
+        user.sub, id, dto, onProgress as never, signal,
+      ),
       'telegram_channel.managed_posts_import_stream',
     );
   }

@@ -1,4 +1,5 @@
 import { act, fireEvent, screen } from "@testing-library/react";
+import { useRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { API_MUTATION_EVENT } from "@/lib/api";
 import {
@@ -7,19 +8,19 @@ import {
 } from "@/providers/toast-provider";
 import { renderWithProviders } from "@/test/render-with-providers";
 
+const cancelOperation = vi.fn();
+
 function OperationHarness() {
   const operation = useOperationFeedback();
   const { pushToast, setProgress } = useAppToast();
-  let primaryHandle: ReturnType<typeof operation.start> | null = null;
-  let firstHandle: ReturnType<typeof operation.start> | null = null;
-  let secondHandle: ReturnType<typeof operation.start> | null = null;
+  const primaryHandle = useRef<ReturnType<typeof operation.start> | null>(null);
 
   return (
     <div>
       <button
         type="button"
         onClick={() => {
-          primaryHandle = operation.start({
+          primaryHandle.current = operation.start({
             id: "sync:1",
             title: "Sync channel",
             message: "Starting sync…",
@@ -31,7 +32,7 @@ function OperationHarness() {
       <button
         type="button"
         onClick={() =>
-          primaryHandle?.update({
+          primaryHandle.current?.update({
             message: "Resolving Telegram entity",
             current: 2,
             total: 4,
@@ -43,7 +44,7 @@ function OperationHarness() {
       <button
         type="button"
         onClick={() =>
-          primaryHandle?.succeed({
+          primaryHandle.current?.succeed({
             message: "Channel sync completed",
             details: "4 synced · 0 failed",
           })
@@ -54,7 +55,7 @@ function OperationHarness() {
       <button
         type="button"
         onClick={() =>
-          primaryHandle?.fail({
+          primaryHandle.current?.fail({
             message: "Permission denied",
             code: "FORBIDDEN",
             correlationId: "corr-1",
@@ -83,12 +84,12 @@ function OperationHarness() {
       <button
         type="button"
         onClick={() => {
-          firstHandle = operation.start({
+          const firstHandle = operation.start({
             id: "parallel:1",
             title: "First operation",
             message: "First loading",
           });
-          secondHandle = operation.start({
+          const secondHandle = operation.start({
             id: "parallel:2",
             title: "Second operation",
             message: "Second loading",
@@ -146,6 +147,26 @@ function OperationHarness() {
       >
         Duplicate toast
       </button>
+      <button
+        type="button"
+        onClick={() =>
+          operation.start({
+            id: "cancelable-import",
+            title: "Import posts",
+            message: "Post 3",
+            current: 3,
+            total: 10,
+            onCancel: cancelOperation,
+          }).update({
+            message: "Post 3",
+            current: 3,
+            total: 10,
+            progressSummary: { successful: 2, failed: 1 },
+          })
+        }
+      >
+        Cancelable import
+      </button>
     </div>
   );
 }
@@ -153,6 +174,7 @@ function OperationHarness() {
 describe("ToastProvider", () => {
   afterEach(() => {
     vi.useRealTimers();
+    cancelOperation.mockReset();
   });
 
   it("start creates one loading toast", async () => {
@@ -162,6 +184,19 @@ describe("ToastProvider", () => {
 
     expect(await screen.findByText("Starting sync…")).toBeInTheDocument();
     expect(screen.getByText("Sync channel")).toBeInTheDocument();
+  });
+
+  it("shows live success and failure counts and cancels a loading operation", async () => {
+    renderWithProviders(<OperationHarness />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancelable import" }));
+
+    expect(await screen.findByText("2 successful")).toBeInTheDocument();
+    expect(screen.getByText("1 failed")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Stop operation" }));
+
+    expect(cancelOperation).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Post 3")).not.toBeInTheDocument();
   });
 
   it("update changes the same toast", async () => {

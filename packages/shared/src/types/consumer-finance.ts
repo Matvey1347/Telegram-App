@@ -1,3 +1,5 @@
+import type { ResolvedEmoji } from "./resolved-emoji";
+
 export type FinanceLocale = "uk" | "ru" | "en";
 export type ConsumerFinanceProfile = {
   id: string;
@@ -64,6 +66,7 @@ export type ConsumerFinanceBalanceEquivalent = {
 export type ConsumerFinanceAccount = {
   id: string;
   name: string;
+  iconPresentation: ResolvedEmoji;
   type: ConsumerFinanceAccountType;
   /** The account's native ISO currency and balance. */
   currency: string;
@@ -78,6 +81,7 @@ export type ConsumerFinanceCategory = {
   id: string;
   parentId?: string | null;
   name: string;
+  iconPresentation: ResolvedEmoji;
   key?: string | null;
   type: ConsumerFinanceTransactionType;
   archivedAt?: string | null;
@@ -104,12 +108,18 @@ export type ConsumerFinanceTransaction = {
   merchantNormalized?: string | null;
   source?: ConsumerFinanceTransactionSource;
   itemCount?: number;
-  account?: { id: string; name: string; currency: string };
+  account?: {
+    id: string;
+    name: string;
+    currency: string;
+    iconPresentation: ResolvedEmoji;
+  };
   category?: {
     id: string;
     name: string;
     key?: string | null;
     type: ConsumerFinanceTransactionType;
+    iconPresentation: ResolvedEmoji;
   } | null;
 };
 /** Line-item data is deliberately absent from transaction collections. */
@@ -163,21 +173,24 @@ export type ConsumerFinanceTransactionInput = {
 };
 export type ConsumerFinanceAccountInput = {
   name: string;
+  emoji?: string | null;
   type: ConsumerFinanceAccountType;
   currency: string;
   openingBalance?: string;
 };
 export type ConsumerFinanceAccountUpdate = Pick<
   ConsumerFinanceAccountInput,
-  "name" | "type"
+  "name" | "type" | "emoji"
 >;
 export type ConsumerFinanceCategoryInput = {
   name: string;
+  emoji?: string | null;
   type: ConsumerFinanceTransactionType;
   parentId?: string;
 };
 export type ConsumerFinanceCategoryUpdate = {
   name: string;
+  emoji?: string | null;
   type: ConsumerFinanceTransactionType;
   parentId?: string | null;
 };

@@ -2,7 +2,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { ConsumerFinanceTransaction } from "@telegram-system/shared";
-import { ErrorState, LoadingState, Modal } from "@/components/ui/primitives";
+import {
+  Button,
+  ErrorState,
+  LoadingState,
+  Modal,
+} from "@/components/ui/primitives";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
 import { formatMoney } from "@/lib/features/finance/money";
 import { consumerFinanceKeys } from "@/lib/query-keys";
@@ -37,9 +42,14 @@ export function FinanceTransactionDetailModal({
       closeLabel={t.close}
     >
       {detail.isLoading ? (
-        <LoadingState />
+        <LoadingState text={t.loading} />
       ) : detail.isError ? (
-        <ErrorState text={t.receiptItemsLoadError} />
+        <div className="space-y-3">
+          <ErrorState text={t.receiptItemsLoadError} />
+          <Button variant="secondary" onClick={() => detail.refetch()}>
+            {t.retry}
+          </Button>
+        </div>
       ) : detail.data ? (
         <div className="space-y-3">
           <div className="flex items-start justify-between gap-3 border-b border-neutral-800 pb-3">

@@ -82,6 +82,23 @@ export type BotBillingSubscriberPage = {
   nextCursor: string | null;
 };
 
+export type BotBillingUserPage = {
+  items: Array<{
+    id: string;
+    telegramUserId: string;
+    username: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    languageCode: string | null;
+    environment: "LOCAL" | "PRODUCTION";
+    firstSeenAt: string;
+    lastInteractionAt: string;
+    profile: { id: string; locale: string; defaultCurrency: string; timezone: string; onboardingCompleted: boolean } | null;
+    subscription: { id: string; status: BotSubscriptionStatus; source: BotSubscriptionSource; currentPeriodEnd: string | null; plan: { id: string; name: string; code: string } | null } | null;
+  }>;
+  nextCursor: string | null;
+};
+
 export type BotBillingEntitlements = {
   botIntegrationId: string;
   telegramBotUserId: string;

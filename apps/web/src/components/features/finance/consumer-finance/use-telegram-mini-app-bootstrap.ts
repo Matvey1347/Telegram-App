@@ -40,60 +40,76 @@ function hasTelegramLaunchSignal(location: Location) {
   );
 }
 
-function initialBootstrapState(): TelegramMiniAppBootstrap {
-  if (typeof window === "undefined") return { status: "loading" };
-  const webApp = window.Telegram?.WebApp;
-  const initData = webApp?.initData?.trim();
-  if (initData) return { status: "ready", initData };
-  // The public SDK creates an empty WebApp object in ordinary browsers too.
-  // Only Telegram launch parameters make that empty object a Mini App signal.
-  if (hasTelegramLaunchSignal(window.location)) {
-    return { status: "loading" };
+function telegramInitDataFromLocation(location: Location) {
+  const sources = [
+    new URLSearchParams(location.search),
+    new URLSearchParams(location.hash.replace(/^#/, "")),
+  ];
+  for (const params of sources) {
+    const initData = params.get("tgWebAppData")?.trim();
+    if (initData) return initData;
   }
-  return { status: "browser" };
+  return null;
 }
 
 export function useTelegramMiniAppBootstrap(): TelegramMiniAppBootstrap {
   const configuredWebApp = useRef(false);
-  const [state, setState] = useState<TelegramMiniAppBootstrap>(
-    initialBootstrapState,
-  );
+  // The first browser render must match SSR. Environment detection happens in
+  // the effect so React never hydrates a Telegram shell as a browser shell.
+  const [state, setState] = useState<TelegramMiniAppBootstrap>({
+    status: "loading",
+  });
 
   useEffect(() => {
+    let disposed = false;
+    const commit = (next: TelegramMiniAppBootstrap) => {
+      window.queueMicrotask(() => {
+        if (!disposed) setState(next);
+      });
+    };
+    const telegramLaunch = hasTelegramLaunchSignal(window.location);
+    const launchInitData = telegramInitDataFromLocation(window.location);
     const bootstrap = () => {
       const webApp = window.Telegram?.WebApp;
       if (!webApp) return false;
+
+      const initData = webApp.initData?.trim() || launchInitData;
+      if (!initData) {
+        commit({ status: telegramLaunch ? "error" : "browser" });
+        return true;
+      }
 
       if (!configuredWebApp.current) {
         configuredWebApp.current = true;
         webApp.ready?.();
         if (!webApp.isExpanded) webApp.expand?.();
       }
-      const initData = webApp.initData?.trim();
-      setState(
-        initData ? { status: "ready", initData } : { status: "error" },
-      );
+      commit({ status: "ready", initData });
       return true;
     };
 
-    // Browser classification is deliberately immediate and sticky. Loading
-    // Telegram's SDK globally must not turn a normal browser visit into a Mini App.
-    if (state.status === "browser" || state.status === "error") return;
-    if (state.status === "ready" && configuredWebApp.current) return;
-    if (bootstrap()) return;
+    if (bootstrap()) return () => void (disposed = true);
+    if (!telegramLaunch) {
+      commit({ status: "browser" });
+      return () => void (disposed = true);
+    }
 
-    const reportError = () => setState({ status: "error" });
+    const reportError = () =>
+      commit(
+        launchInitData
+          ? { status: "ready", initData: launchInitData }
+          : { status: "error" },
+      );
     const timeout = window.setTimeout(reportError, SDK_LOAD_TIMEOUT_MS);
     window.addEventListener(TELEGRAM_WEB_APP_SDK_READY_EVENT, bootstrap, {
       once: true,
     });
-    window.addEventListener(
-      TELEGRAM_WEB_APP_SDK_FAILED_EVENT,
-      reportError,
-      { once: true },
-    );
+    window.addEventListener(TELEGRAM_WEB_APP_SDK_FAILED_EVENT, reportError, {
+      once: true,
+    });
 
     return () => {
+      disposed = true;
       window.clearTimeout(timeout);
       window.removeEventListener(TELEGRAM_WEB_APP_SDK_READY_EVENT, bootstrap);
       window.removeEventListener(
@@ -101,7 +117,7 @@ export function useTelegramMiniAppBootstrap(): TelegramMiniAppBootstrap {
         reportError,
       );
     };
-  }, [state.status]);
+  }, []);
 
   return state;
 }

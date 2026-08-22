@@ -3,7 +3,7 @@ import { CurrentUser } from '../../../common/current-user.decorator';
 import type { JwtUser } from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { BotBillingService } from './bot-billing.service';
-import { BillingSubscribersQueryDto, CreateBillingCouponDto, CreateBillingGrantDto, CreateBillingPlanDto, CreateBillingPlanPriceDto, RevokeBillingGrantDto, SetBillingPriceVisibilityDto, UpsertBillingProviderConfigDto } from './dto';
+import { BillingSubscribersQueryDto, BillingUsersQueryDto, CreateBillingCouponDto, CreateBillingGrantDto, CreateBillingPlanDto, CreateBillingPlanPriceDto, RevokeBillingGrantDto, SetBillingPriceVisibilityDto, UpdateFinanceSupportProfileDto, UpsertBillingProviderConfigDto } from './dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller()
@@ -19,10 +19,12 @@ export class BotBillingController {
   @Patch('telegram-bots/:botId/billing/prices/:priceId') priceVisibility(@CurrentUser() user: JwtUser, @Param('botId') botId: string, @Param('priceId') priceId: string, @Body() dto: SetBillingPriceVisibilityDto) { return this.billing.setPriceVisibility(user.sub, botId, priceId, dto); }
   @Post('telegram-bots/:botId/billing/grants') grant(@CurrentUser() user: JwtUser, @Param('botId') botId: string, @Body() dto: CreateBillingGrantDto) { return this.billing.grant(user.sub, botId, dto); }
   @Patch('telegram-bots/:botId/billing/grants/:grantId/revoke') revoke(@CurrentUser() user: JwtUser, @Param('botId') botId: string, @Param('grantId') grantId: string, @Body() dto: RevokeBillingGrantDto) { return this.billing.revokeGrant(user.sub, botId, grantId, dto.reason); }
-  @Get('telegram-bots/:botId/billing/overview') overview(@CurrentUser() user: JwtUser, @Param('botId') botId: string) { return this.billing.overview(user.sub, botId); }
+  @Get('telegram-bots/:botId/billing/overview') overview(@CurrentUser() user: JwtUser, @Param('botId') botId: string, @Query() query: BillingUsersQueryDto) { return this.billing.overview(user.sub, botId, query.environment); }
   @Get('telegram-bots/:botId/billing/plans') plans(@CurrentUser() user: JwtUser, @Param('botId') botId: string) { return this.billing.plans(user.sub, botId); }
   @Get('telegram-bots/:botId/billing/coupons') coupons(@CurrentUser() user: JwtUser, @Param('botId') botId: string) { return this.billing.coupons(user.sub, botId); }
   @Get('telegram-bots/:botId/billing/subscribers') subscribers(@CurrentUser() user: JwtUser, @Param('botId') botId: string, @Query() query: BillingSubscribersQueryDto) { return this.billing.subscribers(user.sub, botId, query); }
+  @Get('telegram-bots/:botId/billing/users') users(@CurrentUser() user: JwtUser, @Param('botId') botId: string, @Query() query: BillingUsersQueryDto) { return this.billing.users(user.sub, botId, query); }
+  @Patch('telegram-bots/:botId/billing/users/:telegramBotUserId/finance-profile') repairUser(@CurrentUser() user: JwtUser, @Param('botId') botId: string, @Param('telegramBotUserId') telegramBotUserId: string, @Body() dto: UpdateFinanceSupportProfileDto) { return this.billing.updateFinanceSupportProfile(user.sub, botId, telegramBotUserId, dto); }
   @Post('telegram-bots/:botId/billing/coupons') coupon(@CurrentUser() user: JwtUser, @Param('botId') botId: string, @Body() dto: CreateBillingCouponDto) { return this.billing.createCoupon(user.sub, botId, dto); }
   @Post('telegram-bots/:botId/finance-billing/sync') syncFinance(@CurrentUser() user: JwtUser, @Param('botId') botId: string) { return this.billing.syncFinanceCatalog(user.sub, botId); }
   @Post('telegram-bots/:botId/finance-billing/coupons/:couponId/sync') syncFinanceCoupon(@CurrentUser() user: JwtUser, @Param('botId') botId: string, @Param('couponId') couponId: string) { return this.billing.syncCouponToStripe(user.sub, botId, couponId); }

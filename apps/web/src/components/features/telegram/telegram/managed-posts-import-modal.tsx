@@ -3,7 +3,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -35,39 +34,46 @@ import {
 } from "@/components/ui/primitives";
 import {
   telegramChannelsApi,
+  type TelegramManagedPostsImportProgressItem,
   type TelegramManagedPostsImportResult,
-  type TelegramManagedPostsImportRow,
-  type ResolvedEmoji,
 } from "@/lib/api";
 import { telegramPostKeys } from "@/lib/query-keys";
 import { buildTelegramPostsUrl } from "@/lib/features/telegram/telegram-posts-url";
 import { useAppToast } from "@/providers/toast-provider";
+import { ManagedPostsImportList } from "./managed-posts-import-list";
+import {
+  ManagedPostsImportErrors,
+  ManagedPostsImportStats,
+} from "./managed-posts-import-summary";
+import {
+  editableRowsToJsonContent,
+  editableRowToImportRow,
+  gptImportPromptFormat,
+  importImageSearchToArray,
+  importIconPresentation,
+  isFailedImportStatus,
+  isSuccessfulImportStatus,
+  normalizeImportRows,
+  removeEditableImportRow,
+  rowIndicesForTab,
+  rowToEditable,
+  summarizeImportProgress,
+  summarizeResult,
+  urlsTextToArray,
+  type EditableImportRow,
+  type ImportRowTab,
+} from "./managed-posts-import-model";
 
+export {
+  editableRowsToJsonContent,
+  editableRowToImportRow,
+  normalizeImportRows,
+  removeEditableImportRow,
+  rowToEditable,
+} from "./managed-posts-import-model";
 const noGroupValue = "__no_group__";
 const useDefaultGroupValue = "__use_default_group__";
 const MAX_MANAGED_POST_IMPORT_BATCH_SIZE = 25;
-const gptImportPromptFormat = `Ask GPT to return only a JSON array. Each array item is one post:
-
-[
-  {
-    "title": "Post title",
-    "text": "Telegram-ready post text",
-    "icon": "🔥",
-    "urls": ["https://example.com/1.png"],
-    "groupId": null,
-    "groupPosition": null,
-    "scheduledAt": null,
-    "imported": false,
-    "approved": false,
-    "imageSearch": [
-      "mountain rest",
-      "quiet lake",
-      "empty viewpoint"
-    ]
-  }
-]
-
-Required: \`title\`. New generated rows must use \`imported: false\` and \`approved: false\`. Use an exact groupId from the GPT context, or \`null\` for no group. \`scheduledAt\` is an ISO timestamp or null. \`imageSearch\` is shown only in this import preview for easy copying and is not saved to posts.`;
 
 function apiErrorMessage(error: unknown, fallback: string) {
   const apiError = error as {
@@ -78,399 +84,6 @@ function apiErrorMessage(error: unknown, fallback: string) {
   return Array.isArray(message)
     ? message.join(", ")
     : message || apiError.message || fallback;
-}
-
-function detectDelimiter(content: string, fileName?: string | null) {
-  const lowerFileName = fileName?.toLocaleLowerCase() ?? "";
-  if (lowerFileName.endsWith(".tsv")) return "\t";
-  if (lowerFileName.endsWith(".csv")) return ",";
-  const firstLine = content.split(/\r?\n/, 1)[0] ?? "";
-  if (firstLine.includes("\t")) return "\t";
-  if (firstLine.includes(",")) return ",";
-  return null;
-}
-
-function parseDelimitedLine(line: string, delimiter: string) {
-  const values: string[] = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
-    const next = line[index + 1];
-
-    if (char === '"') {
-      if (inQuotes && next === '"') {
-        current += '"';
-        index += 1;
-        continue;
-      }
-      inQuotes = !inQuotes;
-      continue;
-    }
-
-    if (char === delimiter && !inQuotes) {
-      values.push(current);
-      current = "";
-      continue;
-    }
-
-    current += char;
-  }
-
-  values.push(current);
-  return values.map((value) => value.replace(/\r/g, "").trim());
-}
-
-function parseDelimitedRecords(content: string, delimiter: string) {
-  const records: string[][] = [];
-  let current = "";
-  let inQuotes = false;
-  let recordHasContent = false;
-
-  for (let index = 0; index < content.length; index += 1) {
-    const char = content[index];
-    const next = content[index + 1];
-
-    if (char === '"') {
-      current += char;
-      recordHasContent = true;
-      if (inQuotes && next === '"') {
-        current += next;
-        index += 1;
-        continue;
-      }
-      inQuotes = !inQuotes;
-      continue;
-    }
-
-    if ((char === "\n" || char === "\r") && !inQuotes) {
-      if (char === "\r" && next === "\n") {
-        index += 1;
-      }
-      if (recordHasContent || current.trim()) {
-        records.push(parseDelimitedLine(current, delimiter));
-      }
-      current = "";
-      recordHasContent = false;
-      continue;
-    }
-
-    current += char;
-    if (!/\s/.test(char)) {
-      recordHasContent = true;
-    }
-  }
-
-  if (recordHasContent || current.trim()) {
-    records.push(parseDelimitedLine(current, delimiter));
-  }
-
-  return records;
-}
-
-function parseDelimitedRows(content: string, delimiter: string) {
-  const records = parseDelimitedRecords(content, delimiter);
-  if (!records.length) return [];
-
-  const headerCells = records[0].map((cell) => cell.toLocaleLowerCase());
-  const hasHeader = headerCells.some((cell) =>
-    [
-      "title",
-      "text",
-      "icon",
-      "emoji",
-      "icontext",
-      "urls",
-      "imagesearch",
-      "groupposition",
-      "order",
-    ].includes(cell.replace(/\s+/g, "")),
-  );
-
-  const headers = hasHeader
-    ? headerCells
-    : ["title", "text", "urls", "icon", "groupposition"];
-  const startIndex = hasHeader ? 1 : 0;
-
-  return records.slice(startIndex).map((cells) => {
-    const row: Record<string, unknown> = {};
-    headers.forEach((header, index) => {
-      row[header.replace(/\s+/g, "")] = cells[index] ?? "";
-    });
-    return row;
-  });
-}
-
-function parsePlainTextRows(content: string) {
-  return content
-    .split(/\n\s*\n/)
-    .map((block) => block.trim())
-    .filter(Boolean)
-    .map((block) => {
-      const lines = block
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean);
-      const [title = "", ...rest] = lines;
-      const urlLines = rest.filter((line) => /^urls?:/i.test(line));
-      const bodyLines = rest.filter((line) => !/^urls?:/i.test(line));
-      const urls = urlLines
-        .flatMap((line) => line.replace(/^urls?:/i, "").split(/[,\s]+/))
-        .map((value) => value.trim())
-        .filter(Boolean);
-
-      return {
-        title,
-        text: bodyLines.join("\n"),
-        urls,
-      };
-    });
-}
-
-type ParsedImportRow = Record<string, unknown>;
-
-type EditableImportRow = {
-  title: string;
-  text: string;
-  icon: string;
-  urlsText: string;
-  imageSearchText: string;
-  groupPosition: string;
-  order: string;
-  groupId: string | null | undefined;
-  scheduledAt: string | null;
-  imported: boolean;
-  approved: boolean;
-};
-
-function importValueToString(value: unknown) {
-  if (value === null || value === undefined) return "";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  return "";
-}
-
-function isEmojiLikeIcon(value: string) {
-  return /\p{Extended_Pictographic}/u.test(value);
-}
-
-function importIconPresentation(value: string): ResolvedEmoji | null {
-  const icon = value.trim();
-  if (!icon || !isEmojiLikeIcon(icon)) return null;
-  return { type: "unicode", value: icon, name: icon };
-}
-
-function cleanRepeatedMarkdownLinks(value: string) {
-  return value.replace(
-    /\[\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)\]\(\2\)/gi,
-    "[$1]($2)",
-  );
-}
-
-function cleanImportImageUrl(value: string) {
-  let nextValue = value.trim().replace(/^["']|["']$/g, "");
-  const markdownLink = nextValue.match(/\]\((https?:\/\/[^)\s]+)\)/i);
-  if (markdownLink?.[1]) {
-    nextValue = markdownLink[1];
-  }
-  const bareUrl = nextValue.match(/https?:\/\/[^\s"',\])]+/i);
-  return bareUrl?.[0] ?? nextValue;
-}
-
-function importUrlsToArray(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value
-      .flatMap((item) => importUrlsToArray(item))
-      .map(cleanImportImageUrl)
-      .filter(Boolean);
-  }
-  if (typeof value !== "string") return [];
-  return value
-    .split(/[\n,]+/)
-    .map(cleanImportImageUrl)
-    .filter(Boolean);
-}
-
-function importImageSearchToArray(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value
-      .flatMap((item) => importImageSearchToArray(item))
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-  if (typeof value !== "string") return [];
-  return value
-    .split(/[\n,]+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function urlsTextToArray(value: string) {
-  return value
-    .split(/\r?\n/)
-    .map(cleanImportImageUrl)
-    .filter(Boolean);
-}
-
-export function rowToEditable(
-  row: TelegramManagedPostsImportRow,
-): EditableImportRow {
-  const icon =
-    importValueToString(row.icon) ||
-    importValueToString(row.emoji) ||
-    importValueToString(row.iconText);
-
-  return {
-    title: cleanRepeatedMarkdownLinks(importValueToString(row.title)),
-    text: cleanRepeatedMarkdownLinks(importValueToString(row.text)),
-    icon,
-    urlsText: importUrlsToArray(row.urls ?? row.imageUrls ?? row.images).join(
-      "\n",
-    ),
-    imageSearchText: importImageSearchToArray(row.imageSearch).join("\n"),
-    groupPosition: importValueToString(row.groupPosition),
-    order: importValueToString(row.order),
-    groupId: row.groupId === undefined ? undefined : typeof row.groupId === "string" ? row.groupId : null,
-    scheduledAt: typeof row.scheduledAt === "string" ? row.scheduledAt : null,
-    imported: row.imported === true || row.imported === "true",
-    approved: row.approved === true || row.approved === "true",
-  };
-}
-
-export function editableRowToImportRow(
-  row: EditableImportRow,
-): TelegramManagedPostsImportRow {
-  return {
-    title: row.title,
-    text: row.text,
-    icon: row.icon,
-    urls: urlsTextToArray(row.urlsText),
-    groupPosition: row.groupPosition || null,
-    order: row.order || undefined,
-    groupId: row.groupId,
-    scheduledAt: row.scheduledAt,
-    imported: row.imported,
-    approved: row.approved,
-  };
-}
-
-export function editableRowsToJsonContent(rows: EditableImportRow[]) {
-  return JSON.stringify(
-    rows.map((row) => {
-      const imageSearch = importImageSearchToArray(row.imageSearchText);
-      return {
-        title: row.title,
-        text: row.text,
-        icon: row.icon,
-        urls: urlsTextToArray(row.urlsText),
-        groupPosition: row.groupPosition || null,
-        ...(row.groupId !== undefined ? { groupId: row.groupId } : {}),
-        scheduledAt: row.scheduledAt,
-        imported: row.imported,
-        approved: row.approved,
-        ...(imageSearch.length ? { imageSearch } : {}),
-      };
-    }),
-    null,
-    2,
-  );
-}
-
-export function removeEditableImportRow(
-  rows: EditableImportRow[],
-  index: number,
-) {
-  return rows.filter((_, rowIndex) => rowIndex !== index);
-}
-
-function parseJsonRows(content: string): ParsedImportRow[] | null {
-  const trimmed = content.trim();
-  if (!trimmed) return [];
-  try {
-    const parsed = JSON.parse(trimmed) as unknown;
-    if (Array.isArray(parsed)) {
-      return parsed.filter(
-        (item): item is ParsedImportRow =>
-          Boolean(item) && typeof item === "object" && !Array.isArray(item),
-      );
-    }
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      if ("title" in parsed || "text" in parsed) {
-        return [parsed as ParsedImportRow];
-      }
-      const rows = (parsed as { posts?: unknown }).posts;
-      if (Array.isArray(rows)) {
-        return rows.filter(
-          (item): item is ParsedImportRow =>
-            Boolean(item) && typeof item === "object" && !Array.isArray(item),
-        );
-      }
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-export function normalizeImportRows(
-  content: string,
-  fileName?: string | null,
-): TelegramManagedPostsImportRow[] {
-  const jsonRows = parseJsonRows(content);
-  if (jsonRows) {
-    return jsonRows.map((row) => ({
-      title: row.title,
-      text: row.text,
-      icon: row.icon,
-      emoji: row.emoji,
-      iconText: row.icontext ?? row.iconText,
-      urls: row.urls ?? row.imageUrls ?? row.images,
-      imageSearch: row.imagesearch ?? row.imageSearch,
-      groupPosition: row.groupposition ?? row.groupPosition,
-      groupId: row.groupid ?? row.groupId,
-      scheduledAt: row.scheduledat ?? row.scheduledAt,
-      imported: row.imported,
-      approved: row.approved,
-      order: row.order,
-    }));
-  }
-
-  const delimiter = detectDelimiter(content, fileName);
-  const rows: ParsedImportRow[] = (
-    delimiter
-      ? parseDelimitedRows(content, delimiter)
-      : parsePlainTextRows(content)
-  ) as ParsedImportRow[];
-
-  return rows.map((row) => ({
-    title: row.title,
-    text: row.text,
-    icon: row.icon,
-    emoji: row.emoji,
-    iconText: row.icontext ?? row.iconText,
-    urls: row.urls ?? row.imageUrls ?? row.images,
-    imageSearch: row.imagesearch ?? row.imageSearch,
-    groupPosition: row.groupposition ?? row.groupPosition,
-    groupId: row.groupid ?? row.groupId,
-    scheduledAt: row.scheduledat ?? row.scheduledAt,
-    imported: row.imported,
-    approved: row.approved,
-    order: row.order,
-  }));
-}
-
-function summarizeResult(result: TelegramManagedPostsImportResult | null) {
-  if (!result) {
-    return { created: 0, skipped: 0, errors: 0 };
-  }
-  return {
-    created: result.createdCount,
-    skipped: result.skippedCount,
-    errors: result.rows.filter((row) => row.status === "skipped").length,
-  };
 }
 
 export function ManagedPostsImportModal({
@@ -508,7 +121,11 @@ export function ManagedPostsImportModal({
   const [result, setResult] = useState<TelegramManagedPostsImportResult | null>(
     null,
   );
-  const [activeTab, setActiveTab] = useState<"new" | "imported">("new");
+  const [progressItems, setProgressItems] = useState<
+    TelegramManagedPostsImportProgressItem[]
+  >([]);
+  const [activeTab, setActiveTab] = useState<ImportRowTab>("new");
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const postGroups = useQuery({
     queryKey: telegramPostKeys.postGroups(channelId),
@@ -550,7 +167,17 @@ export function ManagedPostsImportModal({
     () => editableRows.map(editableRowToImportRow),
     [editableRows],
   );
-  const selectedRow = editableRows[selectedRowIndex] ?? null;
+  const importableRowIndices = useMemo(
+    () => editableRows.flatMap((row, index) => (row.imported ? [] : [index])),
+    [editableRows],
+  );
+  const visibleRowIndices = useMemo(
+    () => rowIndicesForTab(editableRows, activeTab),
+    [activeTab, editableRows],
+  );
+  const selectedRow = visibleRowIndices.includes(selectedRowIndex)
+    ? editableRows[selectedRowIndex]
+    : null;
   const selectedIconPresentation = importIconPresentation(
     selectedRow?.icon ?? "",
   );
@@ -574,24 +201,32 @@ export function ManagedPostsImportModal({
         : [],
     [managedPosts.data, selectedRow],
   );
-  const newRowIndices = useMemo(
-    () => editableRows.flatMap((row, index) => (row.imported ? [] : [index])),
+  const tabCounts = useMemo(
+    () => ({
+      new: rowIndicesForTab(editableRows, "new").length,
+      approved: rowIndicesForTab(editableRows, "approved").length,
+      imported: rowIndicesForTab(editableRows, "imported").length,
+    }),
     [editableRows],
   );
-  const importedCount = editableRows.length - newRowIndices.length;
-  const visibleRowIndices = useMemo(
-    () => editableRows.flatMap((row, index) =>
-      row.imported === (activeTab === "imported") ? [index] : [],
-    ),
-    [activeTab, editableRows],
+  const canImport = Boolean(channelId) && importableRowIndices.length > 0;
+  const liveSummary = summarizeImportProgress(progressItems);
+  const resultSummary = progressItems.length
+    ? {
+        created: liveSummary.successful,
+        skipped: progressItems.filter((row) => row.status === "skipped").length,
+        errors: liveSummary.failed,
+      }
+    : summarizeResult(result);
+  const errorRows = progressItems.filter(
+    (row): row is typeof row & { error: string } =>
+      isFailedImportStatus(row.status) && Boolean(row.error),
   );
-  const canImport = Boolean(channelId) && newRowIndices.length > 0;
-  const resultSummary = summarizeResult(result);
-  const skippedRows =
-    result?.rows.filter(
-      (row): row is typeof row & { status: "skipped"; error: string } =>
-        row.status === "skipped",
-    ) ?? [];
+
+  const selectTab = (tab: ImportRowTab) => {
+    setActiveTab(tab);
+    setSelectedRowIndex(rowIndicesForTab(editableRows, tab)[0] ?? 0);
+  };
 
   const updateEditableRow = (
     index: number,
@@ -604,6 +239,10 @@ export function ManagedPostsImportModal({
       );
       setContent(editableRowsToJsonContent(nextRows));
       setFileName(null);
+      const nextVisibleRows = rowIndicesForTab(nextRows, activeTab);
+      if (!nextVisibleRows.includes(index)) {
+        setSelectedRowIndex(nextVisibleRows[0] ?? 0);
+      }
       return nextRows;
     });
   };
@@ -614,12 +253,8 @@ export function ManagedPostsImportModal({
     setEditableRows(nextRows);
     setContent(editableRowsToJsonContent(nextRows));
     setFileName(null);
-    setSelectedRowIndex((currentIndex) => {
-      if (!nextRows.length) return 0;
-      return index < currentIndex
-        ? currentIndex - 1
-        : Math.min(currentIndex, nextRows.length - 1);
-    });
+    const nextVisibleRows = rowIndicesForTab(nextRows, activeTab);
+    setSelectedRowIndex(nextVisibleRows[0] ?? 0);
   };
 
   const applyImportContent = (
@@ -628,43 +263,110 @@ export function ManagedPostsImportModal({
   ) => {
     setContent(nextContent);
     setFileName(nextFileName);
-    setEditableRows(
-      normalizeImportRows(nextContent, nextFileName).map(rowToEditable),
-    );
-    setSelectedRowIndex(0);
+    const nextRows = normalizeImportRows(nextContent, nextFileName).map(rowToEditable);
+    const nextTab: ImportRowTab = rowIndicesForTab(nextRows, "new").length
+      ? "new"
+      : rowIndicesForTab(nextRows, "approved").length
+        ? "approved"
+        : "imported";
+    setEditableRows(nextRows);
+    setActiveTab(nextTab);
+    setSelectedRowIndex(rowIndicesForTab(nextRows, nextTab)[0] ?? 0);
     setResult(null);
+    setProgressItems([]);
   };
 
   const runImport = async () => {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const progressByIndex = new Map<
+      number,
+      TelegramManagedPostsImportProgressItem
+    >();
     const operation = startOperation({
       id: `managed-post-import:${channelId}`,
       title: "Import posts",
       message: "Starting import...",
       current: 0,
-      total: newRowIndices.length,
+      total: importableRowIndices.length,
+      onCancel: () => controller.abort(),
     });
     setImporting(true);
+    setResult(null);
+    setProgressItems([]);
+    setLocalError("");
+
+    const allRows: TelegramManagedPostsImportResult["rows"] = [];
     try {
       let completed = 0;
-      const allRows: TelegramManagedPostsImportResult["rows"] = [];
-      for (let offset = 0; offset < newRowIndices.length; offset += MAX_MANAGED_POST_IMPORT_BATCH_SIZE) {
-        const indexes = newRowIndices.slice(offset, offset + MAX_MANAGED_POST_IMPORT_BATCH_SIZE);
-        const batchResult = await telegramChannelsApi.importManagedPostsWithProgress(
-          channelId,
-          { postGroupId: postGroupId === noGroupValue ? null : postGroupId, rows: indexes.map((index) => importRows[index]) },
-          (item, current) => operation.update({ message: `Batch ${Math.floor(offset / MAX_MANAGED_POST_IMPORT_BATCH_SIZE) + 1}: ${item.message}`, current: completed + current, total: newRowIndices.length }),
+      for (
+        let offset = 0;
+        offset < importableRowIndices.length;
+        offset += MAX_MANAGED_POST_IMPORT_BATCH_SIZE
+      ) {
+        const indexes = importableRowIndices.slice(
+          offset,
+          offset + MAX_MANAGED_POST_IMPORT_BATCH_SIZE,
         );
+        const batchNumber =
+          Math.floor(offset / MAX_MANAGED_POST_IMPORT_BATCH_SIZE) + 1;
+        const batchResult =
+          await telegramChannelsApi.importManagedPostsWithProgress(
+            channelId,
+            {
+              postGroupId:
+                postGroupId === noGroupValue ? null : postGroupId,
+              rows: indexes.map((index) => importRows[index]),
+            },
+            (item, current) => {
+              const absoluteIndex = indexes[item.index];
+              const progressItem = { ...item, index: absoluteIndex };
+              progressByIndex.set(absoluteIndex, progressItem);
+              const nextProgress = [...progressByIndex.values()].sort(
+                (left, right) => left.index - right.index,
+              );
+              const summary = summarizeImportProgress(nextProgress);
+              setProgressItems(nextProgress);
+              if (isSuccessfulImportStatus(item.status)) {
+                setEditableRows((rows) => {
+                  const nextRows = rows.map((row, index) =>
+                    index === absoluteIndex ? { ...row, imported: true } : row,
+                  );
+                  setContent(editableRowsToJsonContent(nextRows));
+                  const nextVisibleRows = rowIndicesForTab(nextRows, activeTab);
+                  setSelectedRowIndex((current) => nextVisibleRows.includes(current)
+                    ? current : (nextVisibleRows[0] ?? 0));
+                  return nextRows;
+                });
+              }
+              operation.update({
+                message: `Batch ${batchNumber}: ${item.message}`,
+                current: completed + current,
+                total: importableRowIndices.length,
+                progressSummary: summary,
+              });
+            },
+            { signal: controller.signal },
+          );
         completed += indexes.length;
-        const successful = new Set(batchResult.rows.filter((row) => row.status !== "skipped" && row.status !== "failed").map((row) => indexes[row.index]));
-        setEditableRows((rows) => {
-          const nextRows = rows.map((row, index) => successful.has(index) ? { ...row, imported: true } : row);
-          setContent(editableRowsToJsonContent(nextRows));
-          return nextRows;
+        allRows.push(
+          ...(batchResult.rows.map((row) => ({
+            ...row,
+            index: indexes[row.index],
+          })) as TelegramManagedPostsImportResult["rows"]),
+        );
+        setResult({
+          createdCount: allRows.filter((row) =>
+            isSuccessfulImportStatus(row.status),
+          ).length,
+          skippedCount: allRows.filter((row) =>
+            isFailedImportStatus(row.status),
+          ).length,
+          rows: allRows,
         });
-        allRows.push(...batchResult.rows.map((row) => ({ ...row, index: indexes[row.index] })) as TelegramManagedPostsImportResult["rows"]);
-        setResult({ createdCount: allRows.filter((row) => row.status === "created" || row.status === "scheduled").length, skippedCount: allRows.filter((row) => row.status === "skipped" || row.status === "failed").length, rows: allRows });
       }
-      const nextResult = { createdCount: allRows.filter((row) => row.status === "created" || row.status === "scheduled").length, skippedCount: allRows.filter((row) => row.status === "skipped" || row.status === "failed").length, rows: allRows };
+
+      const summary = summarizeImportProgress([...progressByIndex.values()]);
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: telegramPostKeys.managed(channelId),
@@ -679,24 +381,31 @@ export function ManagedPostsImportModal({
           queryKey: telegramPostKeys.postGroups(channelId),
         }),
       ]);
-      const nextSummary = summarizeResult(nextResult);
-      operation.succeed({
-        message: `Imported ${nextSummary.created} posts. Skipped ${nextSummary.skipped}. Errors ${nextSummary.errors}.`,
-      });
-      pushToast(
-        `Imported ${nextSummary.created} posts. Skipped ${nextSummary.skipped}. Errors ${nextSummary.errors}.`,
-        nextSummary.errors ? "info" : "success",
-        5000,
-      );
+      const completion = {
+        message: `Import finished: ${summary.successful} successful, ${summary.failed} failed.`,
+        details: summary.failed
+          ? "Failed rows stay outside Imported and can be retried."
+          : undefined,
+      };
+      if (summary.failed) operation.fail(completion);
+      else operation.succeed(completion);
     } catch (error) {
-      const message = apiErrorMessage(error, "Could not import managed posts");
-      setLocalError(message);
-      operation.fail({ message });
+      if (controller.signal.aborted) {
+        const summary = summarizeImportProgress([...progressByIndex.values()]);
+        const message = `Import stopped. ${summary.successful} successful, ${summary.failed} failed before cancellation.`;
+        setLocalError(message);
+        operation.dismiss();
+        pushToast(message, "info", 8000);
+      } else {
+        const message = apiErrorMessage(error, "Could not import managed posts");
+        setLocalError(message);
+        operation.fail({ message });
+      }
     } finally {
+      abortControllerRef.current = null;
       setImporting(false);
     }
   };
-
   const handleFile = async (file?: File | null) => {
     if (!file) return;
     setLocalError("");
@@ -704,8 +413,13 @@ export function ManagedPostsImportModal({
   };
 
   const close = () => {
+    if (importing) {
+      abortControllerRef.current?.abort();
+      return;
+    }
     setLocalError("");
     setResult(null);
+    setProgressItems([]);
     onClose();
   };
 
@@ -814,24 +528,12 @@ export function ManagedPostsImportModal({
         </FormField>
         <p className="text-xs text-neutral-500">Up to {MAX_MANAGED_POST_IMPORT_BATCH_SIZE} posts are processed per request. Larger imports are processed sequentially in batches.</p>
 
-        <div className="grid gap-2 sm:grid-cols-4">
-          <ImportStat label="Parsed rows" value={editableRows.length} />
-          <ImportStat
-            label="Created"
-            value={resultSummary.created}
-            tone="success"
-          />
-          <ImportStat
-            label="Skipped"
-            value={resultSummary.skipped}
-            tone="warning"
-          />
-          <ImportStat
-            label="Errors"
-            value={resultSummary.errors}
-            tone="danger"
-          />
-        </div>
+        <ManagedPostsImportStats
+          parsed={editableRows.length}
+          successful={resultSummary.created}
+          skipped={resultSummary.skipped}
+          errors={resultSummary.errors}
+        />
 
         {editableRows.length ? (
           <div className="rounded-lg border border-neutral-800 bg-neutral-950/70 p-3">
@@ -859,10 +561,11 @@ export function ManagedPostsImportModal({
                   type="button"
                   variant="secondary"
                   className="px-2 py-2"
-                  disabled={selectedRowIndex === 0 || importing}
-                  onClick={() =>
-                    setSelectedRowIndex((index) => Math.max(0, index - 1))
-                  }
+                  disabled={visibleRowIndices.indexOf(selectedRowIndex) <= 0 || importing}
+                  onClick={() => {
+                    const position = visibleRowIndices.indexOf(selectedRowIndex);
+                    setSelectedRowIndex(visibleRowIndices[position - 1]);
+                  }}
                 >
                   <ChevronLeft size={14} />
                 </Button>
@@ -871,23 +574,18 @@ export function ManagedPostsImportModal({
                   variant="secondary"
                   className="px-2 py-2"
                   disabled={
-                    selectedRowIndex >= editableRows.length - 1 || importing
+                    visibleRowIndices.indexOf(selectedRowIndex) >=
+                      visibleRowIndices.length - 1 || importing
                   }
-                  onClick={() =>
-                    setSelectedRowIndex((index) =>
-                      Math.min(editableRows.length - 1, index + 1),
-                    )
-                  }
+                  onClick={() => {
+                    const position = visibleRowIndices.indexOf(selectedRowIndex);
+                    setSelectedRowIndex(visibleRowIndices[position + 1]);
+                  }}
                 >
                   <ChevronRight size={14} />
                 </Button>
               </div>
             </div>
-            <div className="mb-3 flex items-center gap-2 border-b border-neutral-800 pb-2 text-sm">
-              <button type="button" onClick={() => setActiveTab("new")} className={activeTab === "new" ? "text-blue-300" : "text-neutral-400"}>New ({newRowIndices.length})</button>
-              <button type="button" onClick={() => setActiveTab("imported")} className={activeTab === "imported" ? "text-blue-300" : "text-neutral-400"}>Imported ({importedCount})</button>
-            </div>
-
             <div className="grid gap-3 xl:grid-cols-[minmax(270px,0.72fr)_minmax(420px,1.25fr)_minmax(260px,0.7fr)]">
               <div className="min-h-[360px] overflow-hidden rounded-lg border border-neutral-800 bg-[#0e1b26]">
                 <TelegramPostPreview
@@ -911,18 +609,7 @@ export function ManagedPostsImportModal({
 
               {selectedRow ? (
                 <div className="space-y-3">
-                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_96px]">
-                    <FormField label="Title">
-                      <Input
-                        value={selectedRow.title}
-                        disabled={importing}
-                        onChange={(event) =>
-                          updateEditableRow(selectedRowIndex, {
-                            title: event.target.value,
-                          })
-                        }
-                      />
-                    </FormField>
+                  <div className="grid gap-3 sm:grid-cols-[96px_minmax(0,1fr)]">
                     <FormField label="Icon">
                       <IconPicker
                         compact
@@ -943,6 +630,17 @@ export function ManagedPostsImportModal({
                         buttonLabel="Add emoji"
                         className="!h-9 !w-9"
                         iconClassName="!h-6 !w-6 !bg-transparent"
+                      />
+                    </FormField>
+                    <FormField label="Title">
+                      <Input
+                        value={selectedRow.title}
+                        disabled={importing}
+                        onChange={(event) =>
+                          updateEditableRow(selectedRowIndex, {
+                            title: event.target.value,
+                          })
+                        }
                       />
                     </FormField>
                   </div>
@@ -984,8 +682,7 @@ export function ManagedPostsImportModal({
                       );
                     }}
                   />
-                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_130px]">
-                    <FormField label="Image URLs">
+                  <FormField label="Image URLs">
                       <Textarea
                         rows={4}
                         value={selectedRow.urlsText}
@@ -998,20 +695,7 @@ export function ManagedPostsImportModal({
                           })
                         }
                       />
-                    </FormField>
-                    <FormField label="Group position">
-                      <Input
-                        value={selectedRow.groupPosition}
-                        disabled={importing}
-                        placeholder="Default"
-                        onChange={(event) =>
-                          updateEditableRow(selectedRowIndex, {
-                            groupPosition: event.target.value,
-                          })
-                        }
-                      />
-                    </FormField>
-                  </div>
+                  </FormField>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="flex items-center gap-2 text-sm text-neutral-200"><input type="checkbox" checked={selectedRow.approved} disabled={importing} onChange={(event) => updateEditableRow(selectedRowIndex, { approved: event.target.checked })} /> Approved</label>
                     <label className="flex items-center gap-2 text-sm text-neutral-200"><input type="checkbox" checked={selectedRow.imported} disabled={importing} onChange={(event) => updateEditableRow(selectedRowIndex, { imported: event.target.checked })} /> Imported</label>
@@ -1061,58 +745,21 @@ export function ManagedPostsImportModal({
                 </div>
               ) : null}
 
-              <div className="max-h-[420px] space-y-1 overflow-y-auto pr-1">
-                {visibleRowIndices.map((index) => { const row = editableRows[index]; return (
-                  <button
-                    key={`${index}-${row.title}`}
-                    type="button"
-                    disabled={importing}
-                    onClick={() => setSelectedRowIndex(index)}
-                    className={`flex w-full min-w-0 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition ${
-                      index === selectedRowIndex
-                        ? "border-blue-500 bg-blue-950/40 text-white"
-                        : "border-neutral-800 bg-neutral-900/70 text-neutral-300 hover:border-neutral-600"
-                    }`}
-                  >
-                    <span className="w-5 shrink-0 text-center text-xs tabular-nums text-neutral-500">
-                      {index + 1}
-                    </span>
-                    {row.icon ? <span className="shrink-0">{row.icon}</span> : null}
-                    <span className="min-w-0 flex-1 truncate font-medium">
-                      {row.title || "Untitled post"}
-                    </span>
-                    {urlsTextToArray(row.urlsText).length ? (
-                      <span className="shrink-0 rounded bg-neutral-800 px-1.5 py-0.5 text-[11px] text-neutral-300">
-                        img
-                      </span>
-                    ) : null}
-                    {importImageSearchToArray(row.imageSearchText).length ? (
-                      <span className="shrink-0 rounded bg-blue-950/60 px-1.5 py-0.5 text-[11px] text-blue-200">
-                        search
-                      </span>
-                    ) : null}
-                  </button>
-                ); })}
-              </div>
+              <ManagedPostsImportList
+                rows={editableRows}
+                visibleRowIndices={visibleRowIndices}
+                selectedRowIndex={selectedRowIndex}
+                activeTab={activeTab}
+                tabCounts={tabCounts}
+                disabled={importing}
+                onSelectRow={setSelectedRowIndex}
+                onSelectTab={selectTab}
+              />
             </div>
           </div>
         ) : null}
 
-        {skippedRows.length ? (
-          <div className="rounded-lg border border-rose-800/70 bg-rose-950/25 p-3 text-sm text-rose-100">
-            <div className="mb-2 flex items-center gap-2 font-medium">
-              <AlertTriangle size={16} />
-              Import errors ({skippedRows.length})
-            </div>
-            <ul className="space-y-1 text-xs">
-              {skippedRows.slice(0, 5).map((item) => (
-                <li key={`${item.index}-${item.error}`}>
-                  Row {item.index + 1}: {item.error}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
+        <ManagedPostsImportErrors rows={errorRows} />
 
         {localError ? (
           <p className="rounded-lg border border-rose-800/70 bg-rose-950/25 p-3 text-sm text-rose-200">
@@ -1133,7 +780,7 @@ export function ManagedPostsImportModal({
             type="button"
             onClick={submit}
             disabled={!canImport || importing}
-            title={!newRowIndices.length ? "All posts are already marked as imported." : undefined}
+            title={!importableRowIndices.length ? "All posts are already marked as imported." : undefined}
           >
             <span className="inline-flex items-center gap-2">
               {importing ? (
@@ -1141,36 +788,11 @@ export function ManagedPostsImportModal({
               ) : (
                 <FileUp size={15} />
               )}
-              {importing ? "Importing..." : !newRowIndices.length ? "All posts are already marked as imported" : "Import posts"}
+              {importing ? "Importing..." : !importableRowIndices.length ? "All posts are already marked as imported" : "Import posts"}
             </span>
           </Button>
         </div>
       </div>
     </Modal>
-  );
-}
-
-function ImportStat({
-  label,
-  value,
-  tone = "muted",
-}: {
-  label: string;
-  value: number | string;
-  tone?: "muted" | "success" | "warning" | "danger";
-}) {
-  const toneClass =
-    tone === "success"
-      ? "text-emerald-200"
-      : tone === "warning"
-        ? "text-amber-200"
-        : tone === "danger"
-          ? "text-rose-200"
-          : "text-neutral-100";
-  return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-3">
-      <div className="text-xs text-neutral-500">{label}</div>
-      <div className={`mt-1 text-lg font-semibold ${toneClass}`}>{value}</div>
-    </div>
   );
 }

@@ -37,7 +37,13 @@ import type {
 import type { AxiosRequestConfig, AxiosResponse } from "axios";
 import { api as internalApi, type ConsumerApiRequestConfig } from "../../api";
 
-const consumerRequest = (): ConsumerApiRequestConfig => ({ consumer: true });
+const consumerRequest = (): ConsumerApiRequestConfig => ({
+  consumer: true,
+  // Consumer Finance owns its loading, error and success states locally. The
+  // shared mutation interceptor would otherwise show generic toasts during
+  // startup authentication and duplicate feedback for ordinary form saves.
+  feedback: { mode: "silent" },
+});
 export const CONSUMER_FINANCE_REQUEST_TIMEOUT_MS = 15_000;
 const startupRequest = (): ConsumerApiRequestConfig => ({
   ...consumerRequest(),
@@ -50,24 +56,99 @@ const telegramBootstrapRequest = (
   headers: { "X-Telegram-Init-Data": initData },
 });
 const root = (botId: string) => `/finance-bots/${botId}`;
+
+type ConsumerFinanceApiResolutionConfig = {
+  apiUrl?: string;
+  gatewayOrigins?: string;
+};
+
+export type ConsumerFinanceBrowserLoginChallenge = {
+  token: string;
+  loginUrl: string;
+  expiresAt: string;
+};
+
+export type ConsumerFinanceBrowserLoginStatus =
+  | { status: "pending" }
+  | { status: "expired" }
+  | {
+      status: "authenticated";
+      profile: Extract<
+        ConsumerFinanceSessionState,
+        { authenticated: true }
+      >["profile"];
+    };
+
+function normalizedOrigin(value: string | undefined) {
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    return ["http:", "https:"].includes(parsed.protocol) ? parsed.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizedApiBase(value: string | undefined) {
+  const configured = value?.trim();
+  if (!configured) return "/api";
+  if (configured.startsWith("/")) {
+    const relative = configured.replace(/\/+$/u, "");
+    if (!relative) return "/api";
+    return relative.endsWith("/api") ? relative : `${relative}/api`;
+  }
+  try {
+    const parsed = new URL(configured);
+    if (!["http:", "https:"].includes(parsed.protocol)) return "/api";
+    const absolute = parsed.toString().replace(/\/+$/u, "");
+    return absolute.endsWith("/api") ? absolute : `${absolute}/api`;
+  } catch {
+    return "/api";
+  }
+}
+
+function isLoopbackApi(value: string) {
+  try {
+    const hostname = new URL(value).hostname;
+    return (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "[::1]"
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function resolveConsumerFinanceApiBase(
   location = typeof window === "undefined" ? undefined : window.location,
+  config: ConsumerFinanceApiResolutionConfig = {
+    apiUrl: process.env.NEXT_PUBLIC_API_URL,
+    gatewayOrigins: process.env.NEXT_PUBLIC_FINANCE_CONSUMER_GATEWAY_ORIGINS,
+  },
 ) {
-  const currentOriginIsBotGateway =
-    location &&
-    (location.port === "4100" ||
-      /\.ngrok(?:-free)?\.app$/u.test(location.hostname));
-  if (currentOriginIsBotGateway) {
-    // `dev:bots` exposes both Next and Nest through one ngrok gateway. The
-    // browser must use that gateway, not NEXT_PUBLIC_API_URL from .env. This
-    // also makes http://localhost:4100 work as the local Mini App preview.
-    return `${location.origin}/api`;
+  const currentOrigin = normalizedOrigin(location?.origin);
+  const gatewayOrigins = new Set(
+    (config.gatewayOrigins ?? "")
+      .split(",")
+      .map((value) => normalizedOrigin(value.trim()))
+      .filter((value): value is string => !!value),
+  );
+  if (currentOrigin && gatewayOrigins.has(currentOrigin)) {
+    return `${currentOrigin}/api`;
   }
-  const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
-  if (!configured) return "/api";
-  return configured.endsWith("/api")
-    ? configured
-    : `${configured.replace(/\/+$/, "")}/api`;
+  const configured = normalizedApiBase(config.apiUrl);
+  // A remote HTTPS page can never safely use a development machine's
+  // loopback HTTP address. This protects Mini Apps when gateway injection is
+  // missing or malformed without depending on a tunnel provider hostname.
+  if (
+    currentOrigin &&
+    location?.protocol === "https:" &&
+    isLoopbackApi(configured)
+  ) {
+    return `${currentOrigin}/api`;
+  }
+  return configured;
 }
 
 /** Keeps this domain on the shared client while marking every request as consumer-scoped. */
@@ -163,6 +244,22 @@ export const consumerFinanceApi = {
         { ...startupRequest(), params: { returnTo } },
       )
     ).data,
+  createBrowserLoginChallenge: async (botId: string) =>
+    (
+      await api.post<ConsumerFinanceBrowserLoginChallenge>(
+        `${root(botId)}/auth/browser-challenge`,
+        {},
+        startupRequest(),
+      )
+    ).data,
+  consumeBrowserLoginChallenge: async (botId: string, token: string) =>
+    (
+      await api.post<ConsumerFinanceBrowserLoginStatus>(
+        `${root(botId)}/auth/browser-challenge/consume`,
+        { token },
+        startupRequest(),
+      )
+    ).data,
   createBrowserTransfer: async (botId: string) =>
     (
       await api.post<{ token: string; expiresAt: string }>(
@@ -187,17 +284,36 @@ export const consumerFinanceApi = {
       })
     ).data,
   ultimateOverview: async (botId: string) =>
-    (await api.get<ConsumerFinanceUltimateOverview>(`${root(botId)}/ultimate/overview`, consumerRequest())).data,
+    (
+      await api.get<ConsumerFinanceUltimateOverview>(
+        `${root(botId)}/ultimate/overview`,
+        consumerRequest(),
+      )
+    ).data,
   ultimateAnalytics: async (
     botId: string,
     period: ConsumerFinanceUltimateAnalyticsPeriod,
   ) =>
-    (await api.get<ConsumerFinanceUltimateAnalytics>(`${root(botId)}/ultimate/analytics`, {
-      ...consumerRequest(),
-      params: { period },
-    })).data,
-  askFinance: async (botId: string, payload: ConsumerFinanceUltimateQuestionInput) =>
-    (await api.post<ConsumerFinanceUltimateAnswer>(`${root(botId)}/ultimate/ask`, payload, consumerRequest())).data,
+    (
+      await api.get<ConsumerFinanceUltimateAnalytics>(
+        `${root(botId)}/ultimate/analytics`,
+        {
+          ...consumerRequest(),
+          params: { period },
+        },
+      )
+    ).data,
+  askFinance: async (
+    botId: string,
+    payload: ConsumerFinanceUltimateQuestionInput,
+  ) =>
+    (
+      await api.post<ConsumerFinanceUltimateAnswer>(
+        `${root(botId)}/ultimate/ask`,
+        payload,
+        consumerRequest(),
+      )
+    ).data,
   accounts: async (botId: string) =>
     (await api.get<ConsumerFinanceAccount[]>(`${root(botId)}/accounts`, {}))
       .data,
@@ -369,13 +485,23 @@ export const consumerFinanceApi = {
     botId: string,
     payload: { categoryId: string; amount: string; currency: string },
   ) =>
-    (await api.post<ConsumerFinanceLimit>(`${root(botId)}/limits`, payload, {}))
-      .data,
+    (
+      await api.post<ConsumerFinanceLimit>(
+        `${root(botId)}/limits`,
+        payload,
+        consumerRequest(),
+      )
+    ).data,
   goal: async (botId: string) =>
     (await api.get<ConsumerFinanceGoal | null>(`${root(botId)}/goal`, {})).data,
   saveGoal: async (botId: string, payload: ConsumerFinanceGoalInput) =>
-    (await api.post<ConsumerFinanceGoal>(`${root(botId)}/goal`, payload, {}))
-      .data,
+    (
+      await api.post<ConsumerFinanceGoal>(
+        `${root(botId)}/goal`,
+        payload,
+        consumerRequest(),
+      )
+    ).data,
   deleteGoal: async (botId: string, id: string) =>
     api.delete(`${root(botId)}/goal/${id}`, consumerRequest()),
   reminders: async (botId: string) =>
@@ -434,10 +560,28 @@ export const consumerFinanceApi = {
       )
     ).data,
   cancelAutoRenew: async (botId: string) =>
-    (await api.post(`${root(botId)}/billing/cancel-auto-renew`, {}, consumerRequest())).data,
+    (
+      await api.post(
+        `${root(botId)}/billing/cancel-auto-renew`,
+        {},
+        consumerRequest(),
+      )
+    ).data,
   resumeAutoRenew: async (botId: string) =>
-    (await api.post(`${root(botId)}/billing/resume-auto-renew`, {}, consumerRequest())).data,
+    (
+      await api.post(
+        `${root(botId)}/billing/resume-auto-renew`,
+        {},
+        consumerRequest(),
+      )
+    ).data,
   paymentPortal: async (botId: string) =>
-    (await api.post<{ url: string }>(`${root(botId)}/billing/payment-portal`, {}, consumerRequest())).data,
+    (
+      await api.post<{ url: string }>(
+        `${root(botId)}/billing/payment-portal`,
+        {},
+        consumerRequest(),
+      )
+    ).data,
   exportUrl: (botId: string) => `${root(botId)}/export`,
 };

@@ -19,6 +19,7 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
+  Table,
 } from "@/components/ui/primitives";
 import { useAppToast } from "@/providers/toast-provider";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
@@ -28,13 +29,20 @@ import {
   removeConsumerTransactionFromCaches,
 } from "@/lib/features/finance/transaction-cache";
 import { consumerFinanceKeys } from "@/lib/query-keys";
-import { TransactionRow } from "./finance-dashboard";
-import { financeCopy, type FinanceLocale } from "./finance-i18n";
+import {
+  financeCopy,
+  financeIntlLocale,
+  localizeFinanceCategory,
+  type FinanceLocale,
+} from "./finance-i18n";
+import type { ConsumerFinanceSurface } from "./consumer-finance-navigation";
+import { formatMoney } from "@/lib/features/finance/money";
 import { FinanceTransactionEditor } from "./finance-transaction-editor";
 import { FinanceTransactionFilters } from "./finance-transaction-filters";
 import { useDebouncedValue } from "./use-debounced-value";
 import { FinanceConfirmModal } from "./finance-confirm-modal";
 import { FinanceTransactionDetailModal } from "./finance-transaction-detail-modal";
+import { FinanceMobileTransactionRow } from "./finance-mobile-transaction-row";
 
 export function FinanceTransactions({
   botId,
@@ -43,6 +51,7 @@ export function FinanceTransactions({
   locale,
   timezone,
   initiallyOpenType = null,
+  surface,
 }: {
   botId: string;
   accounts: ConsumerFinanceAccount[];
@@ -50,6 +59,7 @@ export function FinanceTransactions({
   locale: FinanceLocale;
   timezone: string;
   initiallyOpenType?: "EXPENSE" | "INCOME" | null;
+  surface: ConsumerFinanceSurface;
 }) {
   const client = useQueryClient();
   const t = financeCopy(locale);
@@ -137,6 +147,7 @@ export function FinanceTransactions({
         locale={locale}
         timezone={timezone}
         initiallyOpenType={initiallyOpenType}
+        showCreateActions={false}
         onClose={() => setEditing(null)}
         onSaved={(item) => {
           reconcileConsumerTransactionCaches(client, botId, item, timezone);
@@ -149,49 +160,40 @@ export function FinanceTransactions({
         accounts={accounts}
         categories={categories}
         locale={locale}
+        surface={surface}
         onChange={setFilters}
       />
-      <Card>
+      <Card className={surface === "telegram" ? "overflow-hidden !p-0" : ""}>
         {history.isLoading ? (
-          <LoadingState />
+          <LoadingState text={t.loading} />
         ) : history.isError ? (
           <div className="space-y-3">
             <ErrorState text={t.transactionLoadError} />
             <Button onClick={() => history.refetch()}>{t.retry}</Button>
           </div>
+        ) : items.length && surface === "browser" ? (
+          <DesktopTransactionTable
+            items={items}
+            locale={locale}
+            timezone={timezone}
+            onDetail={setDetail}
+            onEdit={setEditing}
+            onDelete={setDeleting}
+          />
         ) : items.length ? (
-          items.map((item) => (
-            <div key={item.id} className="flex items-center gap-1">
-              <div className="min-w-0 flex-1">
-                <TransactionRow
-                  item={item}
-                  locale={locale}
-                  timezone={timezone}
-                />
-              </div>
-              <button
-                aria-label={t.transactionDetails}
-                onClick={() => setDetail(item)}
-                className="flex min-h-11 min-w-11 items-center justify-center rounded text-sky-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
-              >
-                <List size={16} />
-              </button>
-              <button
-                aria-label={t.editTransactionLabel}
-                onClick={() => setEditing(item)}
-                className="flex min-h-11 min-w-11 items-center justify-center rounded text-neutral-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
-              >
-                <Pencil size={16} />
-              </button>
-              <button
-                aria-label={t.deleteTransactionLabel}
-                onClick={() => setDeleting(item)}
-                className="flex min-h-11 min-w-11 items-center justify-center rounded text-rose-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          ))
+          <div className="divide-y divide-neutral-800">
+            {items.map((item) => (
+              <FinanceMobileTransactionRow
+                key={item.id}
+                item={item}
+                locale={locale}
+                timezone={timezone}
+                onDetail={() => setDetail(item)}
+                onEdit={() => setEditing(item)}
+                onDelete={() => setDeleting(item)}
+              />
+            ))}
+          </div>
         ) : (
           <EmptyState text={t.noTransactions} />
         )}
@@ -234,5 +236,131 @@ export function FinanceTransactions({
         onClose={() => setDetail(null)}
       />
     </div>
+  );
+}
+
+function DesktopTransactionTable({
+  items,
+  locale,
+  timezone,
+  onDetail,
+  onEdit,
+  onDelete,
+}: {
+  items: ConsumerFinanceTransaction[];
+  locale: FinanceLocale;
+  timezone: string;
+  onDetail: (item: ConsumerFinanceTransaction) => void;
+  onEdit: (item: ConsumerFinanceTransaction) => void;
+  onDelete: (item: ConsumerFinanceTransaction) => void;
+}) {
+  const t = financeCopy(locale);
+  return (
+    <Table>
+      <thead className="border-b border-neutral-700 text-xs uppercase text-neutral-500">
+        <tr>
+          <th className="px-3 py-2 font-medium">{t.description}</th>
+          <th className="px-3 py-2 font-medium">{t.date}</th>
+          <th className="px-3 py-2 font-medium">{t.account}</th>
+          <th className="px-3 py-2 font-medium">{t.category}</th>
+          <th className="px-3 py-2 text-right font-medium">{t.amount}</th>
+          <th className="w-36 px-3 py-2" aria-label={t.edit} />
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-neutral-800">
+        {items.map((item) => {
+          const income = item.type === "INCOME";
+          return (
+            <tr key={item.id} className="hover:bg-neutral-800/40">
+              <td className="max-w-80 px-3 py-2.5">
+                <button
+                  type="button"
+                  className="block max-w-full truncate text-left text-sky-200 hover:underline"
+                  onClick={() => onDetail(item)}
+                >
+                  {item.merchantDisplay ||
+                    item.description ||
+                    (income ? t.income : t.expense)}
+                </button>
+              </td>
+              <td className="whitespace-nowrap px-3 py-2.5 text-neutral-400">
+                {new Intl.DateTimeFormat(financeIntlLocale(locale), {
+                  timeZone: timezone,
+                }).format(new Date(item.occurredAt))}
+              </td>
+              <td className="px-3 py-2.5">
+                {item.account?.iconPresentation.type === "unicode"
+                  ? `${item.account.iconPresentation.value} `
+                  : ""}
+                {item.account?.name ?? t.accountFallback}
+              </td>
+              <td className="px-3 py-2.5 text-neutral-400">
+                {item.category
+                  ? `${item.category.iconPresentation.type === "unicode" ? `${item.category.iconPresentation.value} ` : ""}${localizeFinanceCategory(
+                      item.category.name,
+                      item.category.key,
+                      locale,
+                    )}`
+                  : t.uncategorized}
+              </td>
+              <td
+                className={`whitespace-nowrap px-3 py-2.5 text-right font-medium tabular-nums ${income ? "text-emerald-300" : "text-rose-300"}`}
+              >
+                {income ? "+" : "−"}
+                {formatMoney(item.amount, item.currency, "symbol")}
+              </td>
+              <td className="px-2 py-1.5">
+                <div className="flex justify-end gap-1">
+                  <RowAction
+                    label={t.transactionDetails}
+                    tone="text-sky-300"
+                    onClick={() => onDetail(item)}
+                  >
+                    <List size={16} />
+                  </RowAction>
+                  <RowAction
+                    label={t.editTransactionLabel}
+                    tone="text-neutral-300"
+                    onClick={() => onEdit(item)}
+                  >
+                    <Pencil size={16} />
+                  </RowAction>
+                  <RowAction
+                    label={t.deleteTransactionLabel}
+                    tone="text-rose-300"
+                    onClick={() => onDelete(item)}
+                  >
+                    <Trash2 size={16} />
+                  </RowAction>
+                </div>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </Table>
+  );
+}
+
+function RowAction({
+  label,
+  tone,
+  onClick,
+  children,
+}: {
+  label: string;
+  tone: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      className={`flex min-h-9 min-w-9 items-center justify-center rounded outline-none hover:bg-neutral-700 focus-visible:ring-2 focus-visible:ring-sky-300 ${tone}`}
+    >
+      {children}
+    </button>
   );
 }

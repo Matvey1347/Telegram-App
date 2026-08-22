@@ -1,0 +1,243 @@
+export const uiLocales = ["en", "uk", "ru"] as const;
+export type UiLocale = (typeof uiLocales)[number];
+
+export function normalizeUiLocale(value?: string | null): UiLocale {
+  const locale = value?.toLowerCase().split("-")[0];
+  return uiLocales.includes(locale as UiLocale) ? (locale as UiLocale) : "en";
+}
+
+const copy = {
+  en: {
+    select: "Select",
+    search: "Search…",
+    noOptions: "No options found",
+    selectPeriod: "Select period",
+    clear: "Clear",
+    today: "Today",
+    selectStartDate: "Select start date",
+    selectEndDate: "Select end date",
+    weekdays: ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"],
+    icons: "Icons",
+    upload: "Upload",
+    remove: "Remove",
+    changeIcon: "Change icon",
+    addIcon: "Add icon",
+    searchIcon: "Search icon by name",
+    results: "Results",
+    items: "items",
+    recent: "Recent",
+    standard: "Standard",
+    custom: "Custom",
+    loadingIcons: "Loading icons…",
+    noIcons: "No icons found.",
+    noStandardIcons: "No standard icons found.",
+    loadingCustomIcons: "Loading custom icons…",
+    noCustomIcons: "No custom icons yet.",
+    people: "People",
+    nature: "Nature",
+    uploadingImage: "Uploading image…",
+    preparingPreview: "Preparing preview",
+    uploadImage: "Upload an image",
+    dropImage: "Paste or drag and drop works too",
+    preview: "Preview",
+    readyOnce: "Ready to use once",
+    iconName: "Icon name",
+    iconNameExample: "e.g. office logo",
+    save: "Save",
+    useOnce: "Use once",
+    saveCustomIcon: "Save custom icon",
+    back: "Back",
+    food: "Food",
+    activity: "Activity",
+    travel: "Travel",
+    objects: "Objects",
+    symbols: "Symbols",
+    flags: "Flags",
+  },
+  uk: {
+    select: "Оберіть",
+    search: "Пошук…",
+    noOptions: "Нічого не знайдено",
+    selectPeriod: "Оберіть період",
+    clear: "Очистити",
+    today: "Сьогодні",
+    selectStartDate: "Оберіть початкову дату",
+    selectEndDate: "Оберіть кінцеву дату",
+    weekdays: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"],
+    icons: "Емодзі",
+    upload: "Завантажити",
+    remove: "Прибрати",
+    changeIcon: "Змінити емодзі",
+    addIcon: "Додати емодзі",
+    searchIcon: "Пошук емодзі за назвою",
+    results: "Результати",
+    items: "елементів",
+    recent: "Нещодавні",
+    standard: "Стандартні",
+    custom: "Власні",
+    loadingIcons: "Завантажуємо емодзі…",
+    noIcons: "Емодзі не знайдено.",
+    noStandardIcons: "Стандартних емодзі не знайдено.",
+    loadingCustomIcons: "Завантажуємо власні емодзі…",
+    noCustomIcons: "Власних емодзі ще немає.",
+    people: "Люди",
+    nature: "Природа",
+    uploadingImage: "Завантажуємо зображення…",
+    preparingPreview: "Готуємо попередній перегляд",
+    uploadImage: "Завантажити зображення",
+    dropImage: "Також можна вставити або перетягнути файл",
+    preview: "Попередній перегляд",
+    readyOnce: "Готове для одноразового використання",
+    iconName: "Назва емодзі",
+    iconNameExample: "наприклад, логотип офісу",
+    save: "Зберегти",
+    useOnce: "Використати один раз",
+    saveCustomIcon: "Зберегти власне емодзі",
+    back: "Назад",
+    food: "Їжа",
+    activity: "Активності",
+    travel: "Подорожі",
+    objects: "Предмети",
+    symbols: "Символи",
+    flags: "Прапори",
+  },
+  ru: {
+    select: "Выберите",
+    search: "Поиск…",
+    noOptions: "Ничего не найдено",
+    selectPeriod: "Выберите период",
+    clear: "Очистить",
+    today: "Сегодня",
+    selectStartDate: "Выберите начальную дату",
+    selectEndDate: "Выберите конечную дату",
+    weekdays: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
+    icons: "Эмодзи",
+    upload: "Загрузить",
+    remove: "Убрать",
+    changeIcon: "Изменить эмодзи",
+    addIcon: "Добавить эмодзи",
+    searchIcon: "Поиск эмодзи по названию",
+    results: "Результаты",
+    items: "элементов",
+    recent: "Недавние",
+    standard: "Стандартные",
+    custom: "Свои",
+    loadingIcons: "Загружаем эмодзи…",
+    noIcons: "Эмодзи не найдены.",
+    noStandardIcons: "Стандартные эмодзи не найдены.",
+    loadingCustomIcons: "Загружаем свои эмодзи…",
+    noCustomIcons: "Своих эмодзи пока нет.",
+    people: "Люди",
+    nature: "Природа",
+    uploadingImage: "Загружаем изображение…",
+    preparingPreview: "Готовим предпросмотр",
+    uploadImage: "Загрузить изображение",
+    dropImage: "Также можно вставить или перетащить файл",
+    preview: "Предпросмотр",
+    readyOnce: "Готово для одноразового использования",
+    iconName: "Название эмодзи",
+    iconNameExample: "например, логотип офиса",
+    save: "Сохранить",
+    useOnce: "Использовать один раз",
+    saveCustomIcon: "Сохранить своё эмодзи",
+    back: "Назад",
+    food: "Еда",
+    activity: "Активности",
+    travel: "Путешествия",
+    objects: "Предметы",
+    symbols: "Символы",
+    flags: "Флаги",
+  },
+} as const;
+
+export function uiCopy(locale?: string | null) {
+  return copy[normalizeUiLocale(locale)];
+}
+
+const localizedEmojiAliases: Record<
+  Exclude<UiLocale, "en">,
+  Record<string, string>
+> = {
+  ru: {
+    people: "люди человек лицо семья ребёнок ребенок",
+    nature: "природа животное растение погода",
+    food: "еда продукты ресторан кофе напиток",
+    activity: "спорт активность развлечение игра",
+    travel:
+      "путешествие транспорт машина автобус поезд самолёт самолет топливо бензин",
+    objects:
+      "предмет деньги кошелёк кошелек карта банк дом здоровье медицина подарок работа зарплата покупки подписка",
+    symbols: "символ знак стрелка сердце",
+    flags: "флаг страна",
+  },
+  uk: {
+    people: "люди людина обличчя сім'я дитина",
+    nature: "природа тварина рослина погода",
+    food: "їжа продукти ресторан кава напій",
+    activity: "спорт активність розвага гра",
+    travel: "подорож транспорт машина автобус потяг літак пальне бензин",
+    objects:
+      "предмет гроші гаманець картка банк дім здоров'я медицина подарунок робота зарплата покупки підписка",
+    symbols: "символ знак стрілка серце",
+    flags: "прапор країна",
+  },
+};
+
+const localizedEmojiNames: Record<
+  Exclude<UiLocale, "en">,
+  Record<string, string>
+> = {
+  ru: {
+    money: "деньги доход зарплата",
+    wallet: "кошелёк кошелек",
+    card: "карта счёт счет",
+    bank: "банк",
+    house: "дом жильё жилье",
+    fuel: "топливо бензин",
+    car: "машина авто",
+    bus: "автобус",
+    train: "поезд",
+    taxi: "такси",
+    coffee: "кофе",
+    food: "еда продукты",
+    shopping: "покупки магазин",
+    gift: "подарок",
+    medical: "здоровье медицина",
+    game: "развлечения игра",
+  },
+  uk: {
+    money: "гроші дохід зарплата",
+    wallet: "гаманець",
+    card: "картка рахунок",
+    bank: "банк",
+    house: "дім житло",
+    fuel: "пальне бензин",
+    car: "машина авто",
+    bus: "автобус",
+    train: "потяг",
+    taxi: "таксі",
+    coffee: "кава",
+    food: "їжа продукти",
+    shopping: "покупки магазин",
+    gift: "подарунок",
+    medical: "здоров'я медицина",
+    game: "розваги гра",
+  },
+};
+
+export function emojiLocalizedSearchTerms(
+  name: string,
+  category: string,
+  locale?: string | null,
+) {
+  const normalized = normalizeUiLocale(locale);
+  if (normalized === "en") return "";
+  const aliases = localizedEmojiNames[normalized];
+  const normalizedName = name.toLowerCase();
+  return `${localizedEmojiAliases[normalized][category] ?? ""} ${Object.entries(
+    aliases,
+  )
+    .filter(([key]) => normalizedName.includes(key))
+    .map(([, value]) => value)
+    .join(" ")}`;
+}

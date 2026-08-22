@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import type {
   ConsumerFinanceCategory,
   ConsumerFinanceTransactionType,
@@ -26,6 +26,8 @@ import {
   type FinanceLocale,
 } from "./finance-i18n";
 import { FinanceConfirmModal } from "./finance-confirm-modal";
+import { IconAvatar } from "@/components/icons/icon-avatar";
+import { IconPicker } from "@/components/icons/icon-picker";
 
 export function FinanceCategories({
   botId,
@@ -123,33 +125,41 @@ export function FinanceCategories({
                     key={item.id}
                     className="flex items-center justify-between gap-2 py-2"
                   >
-                    <div className="min-w-0">
-                      <p className="truncate">
-                        {localizeFinanceCategory(item.name, item.key, locale)}
-                      </p>
-                      {item.parentId ? (
-                        <p className="truncate text-xs text-neutral-500">
-                          {t.parentCategory}:{" "}
-                          {localizeFinanceCategory(
-                            rows.find((row) => row.id === item.parentId)
-                              ?.name ?? "—",
-                            rows.find((row) => row.id === item.parentId)?.key,
-                            locale,
-                          )}
+                    <div className="flex min-w-0 items-center gap-3">
+                      <IconAvatar
+                        icon={item.iconPresentation}
+                        label={item.name}
+                        size="sm"
+                        bordered={false}
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate">
+                          {localizeFinanceCategory(item.name, item.key, locale)}
                         </p>
-                      ) : null}
+                        {item.parentId ? (
+                          <p className="truncate text-xs text-neutral-500">
+                            {t.parentCategory}:{" "}
+                            {localizeFinanceCategory(
+                              rows.find((row) => row.id === item.parentId)
+                                ?.name ?? "—",
+                              rows.find((row) => row.id === item.parentId)?.key,
+                              locale,
+                            )}
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
                     <div className="flex shrink-0">
                       <button
                         aria-label={`${t.editCategory}: ${item.name}`}
-                        className="p-2 text-neutral-300"
+                        className="flex min-h-11 min-w-11 items-center justify-center rounded text-neutral-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
                         onClick={() => setEditing(item)}
                       >
                         <Pencil size={16} />
                       </button>
                       <button
                         aria-label={`${t.archiveCategory}: ${item.name}`}
-                        className="p-2 text-rose-300"
+                        className="flex min-h-11 min-w-11 items-center justify-center rounded text-rose-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
                         onClick={() => setArchiving(item)}
                       >
                         <Trash2 size={16} />
@@ -224,16 +234,23 @@ function CategoryEditor({
     editing?.type ?? "EXPENSE",
   );
   const [parentId, setParentId] = useState(editing?.parentId ?? "");
+  const [emoji, setEmoji] = useState(
+    editing?.iconPresentation.type === "unicode"
+      ? editing.iconPresentation.value
+      : "🏷️",
+  );
   const mutation = useMutation({
     mutationFn: () =>
       editing
         ? consumerFinanceApi.updateCategory(botId, editing.id, {
             name: name.trim(),
+            emoji,
             type,
             parentId: parentId || null,
           })
         : consumerFinanceApi.createCategory(botId, {
             name: name.trim(),
+            emoji,
             type,
             parentId: parentId || undefined,
           }),
@@ -246,7 +263,11 @@ function CategoryEditor({
   });
   return (
     <>
-      <Button className="w-full" onClick={() => setOpen(true)}>
+      <Button
+        className="min-h-10 self-start px-3"
+        onClick={() => setOpen(true)}
+      >
+        <Plus size={16} aria-hidden="true" />
         {t.addCategory}
       </Button>
       <Modal
@@ -259,6 +280,15 @@ function CategoryEditor({
         title={editing ? t.editCategory : t.addCategory}
       >
         <div className="space-y-3">
+          <IconPicker
+            uiLocale={locale}
+            icon={{ type: "unicode", value: emoji }}
+            iconId={null}
+            onChange={() => undefined}
+            onEmojiChange={(value) => value && setEmoji(value)}
+            allowImages={false}
+            buttonLabel={t.categoryName}
+          />
           <FormField label={t.categoryName}>
             <Input
               autoFocus
@@ -268,6 +298,7 @@ function CategoryEditor({
           </FormField>
           <FormField label={t.categoryType}>
             <Select
+              uiLocale={locale}
               value={type}
               onChange={(event) => {
                 setType(event.target.value as ConsumerFinanceTransactionType);
@@ -280,6 +311,7 @@ function CategoryEditor({
           </FormField>
           <FormField label={t.parentCategory}>
             <Select
+              uiLocale={locale}
               value={parentId}
               onChange={(event) => setParentId(event.target.value)}
             >

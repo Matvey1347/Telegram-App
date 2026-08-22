@@ -185,8 +185,7 @@ export const memberKeys = workspaceKeys;
 
 export const consumerFinanceKeys = {
   root: (botId: string) => ["consumer-finance", botId] as const,
-  session: (botId: string) =>
-    ["consumer-finance", botId, "session"] as const,
+  session: (botId: string) => ["consumer-finance", botId, "session"] as const,
   dashboard: (botId: string) =>
     ["consumer-finance", botId, "dashboard"] as const,
   analyticsRoot: (botId: string) =>
@@ -219,6 +218,10 @@ export const consumerFinanceKeys = {
   settings: (botId: string) => ["consumer-finance", botId, "settings"] as const,
   browserLoginConfig: (botId: string) =>
     ["consumer-finance", botId, "browser-login-config"] as const,
+  browserLoginChallenge: (botId: string) =>
+    ["consumer-finance", botId, "browser-login-challenge"] as const,
+  browserLoginApproval: (botId: string, token: string) =>
+    ["consumer-finance", botId, "browser-login-approval", token] as const,
   billing: (botId: string) => ["consumer-finance", botId, "billing"] as const,
   entitlements: (botId: string) =>
     ["consumer-finance", botId, "entitlements"] as const,
@@ -227,12 +230,14 @@ export const consumerFinanceKeys = {
 export const botBillingKeys = {
   workspaceProviders: () => ["bot-billing", "workspace", "providers"] as const,
   root: (botId: string) => ["bot-billing", botId] as const,
-  overview: (botId: string) => ["bot-billing", botId, "overview"] as const,
+  overview: (botId: string, environment = "PRODUCTION") => ["bot-billing", botId, "overview", environment] as const,
   analytics: (botId: string) => ["bot-billing", botId, "analytics"] as const,
   plans: (botId: string) => ["bot-billing", botId, "plans"] as const,
   coupons: (botId: string) => ["bot-billing", botId, "coupons"] as const,
   subscribers: (botId: string, filters: Record<string, unknown>) =>
     ["bot-billing", botId, "subscribers", filters] as const,
+  users: (botId: string, filters: Record<string, unknown>) =>
+    ["bot-billing", botId, "users", filters] as const,
   providers: (botId: string) => ["bot-billing", botId, "providers"] as const,
   financeAi: (botId: string) => ["bot-billing", botId, "finance-ai"] as const,
   workspaceFinanceAi: () => ["bot-billing", "workspace", "finance-ai"] as const,

@@ -14,6 +14,7 @@ export type TelegramBotUpdateActor = {
 export type TelegramBotWebhookUpdate = {
   update_id?: number | string;
   message?: {
+    message_id?: number;
     chat?: { id?: number | string; type?: string };
     from?: TelegramBotUpdateActor;
     text?: string;

@@ -1,10 +1,19 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle } from "lucide-react";
-import type {
-  BotBillingAnalyticsView,
-  BotBillingOverviewView,
-} from "@telegram-system/shared";
+import {
+  AlertTriangle,
+  BadgeDollarSign,
+  CircleDollarSign,
+  CreditCard,
+  Gift,
+  ReceiptText,
+  TrendingUp,
+  UserRoundCheck,
+  UsersRound,
+} from "lucide-react";
+import type { TelegramBotRuntimeEnvironment } from "@telegram-system/shared";
+import type { BotBillingOverviewView } from "@telegram-system/shared";
+import { IconAvatar } from "@/components/icons/icon-avatar";
 import { Card } from "@/components/ui/primitives";
 import { QueryContentState } from "@/components/ui/query-content-state";
 import { botBillingApi } from "@/lib/features/finance/bot-billing-api";
@@ -13,10 +22,16 @@ import {
   formatBillingDate,
   formatBillingMoney,
 } from "./finance-billing-format";
-export function FinanceOverviewSection({ botId }: { botId: string }) {
+export function FinanceOverviewSection({
+  botId,
+  environment,
+}: {
+  botId: string;
+  environment: TelegramBotRuntimeEnvironment;
+}) {
   const overview = useQuery({
-    queryKey: botBillingKeys.overview(botId),
-    queryFn: () => botBillingApi.overview(botId),
+    queryKey: botBillingKeys.overview(botId, environment),
+    queryFn: () => botBillingApi.overview(botId, environment),
   });
   return (
     <QueryContentState
@@ -40,24 +55,63 @@ function Overview({ data }: { data: BotBillingOverviewView }) {
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Registered users" value={analytics.registeredUsers} />
-        <Metric label="Paid users" value={analytics.paidUsers} />
         <Metric
+          icon={UsersRound}
+          emoji="👥"
+          label="Registered users"
+          value={analytics.registeredUsers}
+        />
+        <Metric
+          icon={UserRoundCheck}
+          emoji="💎"
+          label="Paid users"
+          value={analytics.paidUsers}
+        />
+        <Metric
+          icon={CreditCard}
+          emoji="💳"
           label="Active subscriptions"
           value={analytics.activeSubscriptions}
         />
         <Metric
+          icon={AlertTriangle}
+          emoji="⚠️"
           label="Failed payments"
           value={analytics.failedPayments}
           attention={analytics.failedPayments > 0}
         />
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Free users" value={analytics.freeUsers} />
-        <Metric label="Conversion" value={`${conversion.toFixed(1)}%`} />
-        <Metric label="Monthly subscribers" value={analytics.monthly} />
-        <Metric label="Yearly subscribers" value={analytics.yearly} />
-        <Metric label="Canceled" value={analytics.canceled} />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <Metric
+          icon={Gift}
+          emoji="🎁"
+          label="Free users"
+          value={analytics.freeUsers}
+        />
+        <Metric
+          icon={TrendingUp}
+          emoji="📈"
+          label="Conversion"
+          value={`${conversion.toFixed(1)}%`}
+        />
+        <Metric
+          icon={ReceiptText}
+          emoji="🗓️"
+          label="Monthly subscribers"
+          value={analytics.monthly}
+        />
+        <Metric
+          icon={BadgeDollarSign}
+          emoji="📆"
+          label="Yearly subscribers"
+          value={analytics.yearly}
+        />
+        <Metric
+          icon={CircleDollarSign}
+          emoji="⛔"
+          label="Canceled"
+          value={analytics.canceled}
+        />
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
         <MoneyRows
@@ -102,20 +156,33 @@ function Metric({
   label,
   value,
   attention = false,
+  icon: Icon,
+  emoji,
 }: {
   label: string;
   value: number | string;
   attention?: boolean;
+  icon: typeof AlertTriangle;
+  emoji: string;
 }) {
   return (
-    <Card className={attention ? "border-amber-700/70" : ""}>
-      <p className="text-xs uppercase text-neutral-500">{label}</p>
-      <p
-        className={`mt-1 flex items-center gap-2 text-2xl font-semibold ${attention ? "text-amber-300" : "text-white"}`}
-      >
-        {attention ? <AlertTriangle size={18} aria-hidden /> : null}
-        {typeof value === "number" ? value.toLocaleString() : value}
-      </p>
+    <Card
+      className={`flex items-center gap-3 p-3 ${attention ? "border-amber-700/70" : ""}`}
+    >
+      <IconAvatar
+        icon={{ type: "unicode", value: emoji }}
+        label={label}
+        size="md"
+      />
+      <div className="min-w-0">
+        <p className="truncate text-xs text-neutral-500">{label}</p>
+        <p
+          className={`mt-0.5 flex items-center gap-1.5 text-xl font-semibold ${attention ? "text-amber-300" : "text-white"}`}
+        >
+          {attention ? <Icon size={15} aria-hidden /> : null}
+          {typeof value === "number" ? value.toLocaleString() : value}
+        </p>
+      </div>
     </Card>
   );
 }

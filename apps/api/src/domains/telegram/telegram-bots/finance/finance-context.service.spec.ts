@@ -1,6 +1,8 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { createHash, createHmac } from 'crypto';
 import { FinanceContextService } from './finance-context.service';
+import { DEFAULT_FINANCE_CATEGORIES } from './finance-defaults';
 
 function signed(token: string, authDate = Math.floor(Date.now() / 1000)) {
   const values = new URLSearchParams({
@@ -104,14 +106,6 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
   };
 
   function setup() {
-    const tx = {
-      financeProfile: {
-        findUnique: jest.fn(),
-        create: jest.fn(),
-      },
-      financeCategory: { createMany: jest.fn() },
-      financeAccount: { findFirst: jest.fn(), create: jest.fn() },
-    };
     const prisma = {
       telegramBotIntegration: { findFirst: jest.fn().mockResolvedValue(bot) },
       telegramBotUser: {
@@ -121,7 +115,8 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
           Promise.resolve({ ...telegramUser, ...data }),
         ),
       },
-      $transaction: jest.fn((callback) => callback(tx)),
+      financeProfile: { findUnique: jest.fn(), create: jest.fn() },
+      $transaction: jest.fn(),
     };
     const encryption = { decrypt: jest.fn().mockReturnValue('bot-token') };
     const service = new FinanceContextService(
@@ -133,13 +128,13 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
       user: { id: 12345, username: 'ada', first_name: 'Ada' },
       authDate: 0,
     });
-    return { service, prisma, tx };
+    return { service, prisma };
   }
 
   it('does not update an unchanged established consumer identity or reinitialize its profile', async () => {
-    const { service, prisma, tx } = setup();
+    const { service, prisma } = setup();
     const profile = { id: 'profile-1' };
-    tx.financeProfile.findUnique.mockResolvedValue(profile);
+    prisma.financeProfile.findUnique.mockResolvedValue(profile);
 
     await expect(
       service.fromInitData('bot-1', 'signed-data'),
@@ -150,27 +145,39 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
 
     expect(prisma.telegramBotUser.create).not.toHaveBeenCalled();
     expect(prisma.telegramBotUser.update).not.toHaveBeenCalled();
-    expect(tx.financeCategory.createMany).not.toHaveBeenCalled();
-    expect(tx.financeAccount.findFirst).not.toHaveBeenCalled();
-    expect(prisma.telegramBotIntegration.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        select: expect.objectContaining({
-          runtimeInstances: expect.objectContaining({
-            where: { environment: 'PRODUCTION', runtimeStatus: 'ACTIVE' },
-            take: 1,
-          }),
-        }),
-      }),
-    );
+    expect(prisma.financeProfile.create).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.telegramBotIntegration.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'bot-1',
+        applicationType: 'FINANCE',
+        isActive: true,
+      },
+      select: {
+        id: true,
+        workspaceId: true,
+        runtimeInstances: {
+          where: { environment: 'PRODUCTION', runtimeStatus: 'ACTIVE' },
+          select: {
+            id: true,
+            username: true,
+            botTokenEncrypted: true,
+            botTokenIv: true,
+            botTokenAuthTag: true,
+          },
+          take: 1,
+        },
+      },
+    });
   });
 
   it('updates only changed Telegram identity fields without recording consumer API activity', async () => {
-    const { service, prisma, tx } = setup();
+    const { service, prisma } = setup();
     prisma.telegramBotUser.findUnique.mockResolvedValue({
       ...telegramUser,
       username: 'old-ada',
     });
-    tx.financeProfile.findUnique.mockResolvedValue({ id: 'profile-1' });
+    prisma.financeProfile.findUnique.mockResolvedValue({ id: 'profile-1' });
 
     await service.fromInitData('bot-1', 'signed-data');
 
@@ -183,18 +190,15 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
         languageCode: null,
       },
     });
-    expect(
-      prisma.telegramBotUser.update.mock.calls[0][0].data,
-    ).not.toHaveProperty('lastInteractionAt');
   });
 
   it('does not erase a known Telegram language when browser login omits language_code', async () => {
-    const { service, prisma, tx } = setup();
+    const { service, prisma } = setup();
     prisma.telegramBotUser.findUnique.mockResolvedValue({
       ...telegramUser,
       languageCode: 'uk',
     });
-    tx.financeProfile.findUnique.mockResolvedValue({ id: 'profile-1' });
+    prisma.financeProfile.findUnique.mockResolvedValue({ id: 'profile-1' });
     jest.spyOn(service, 'verifyLoginData').mockReturnValue({
       id: '12345',
       username: 'ada',
@@ -207,29 +211,71 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
     expect(prisma.telegramBotUser.update).not.toHaveBeenCalled();
   });
 
+  it('resolves Mini App initData and browser Telegram Login to one bot-scoped Finance profile', async () => {
+    const { service, prisma } = setup();
+    const profile = { id: 'profile-shared' };
+    prisma.financeProfile.findUnique.mockResolvedValue(profile);
+    jest.spyOn(service, 'verifyLoginData').mockReturnValue({
+      id: '12345',
+      username: 'ada',
+      first_name: 'Ada',
+      last_name: undefined,
+    });
+
+    const miniApp = await service.fromInitData('bot-1', 'signed-data');
+    const browser = await service.fromTelegramLogin('bot-1', {});
+
+    expect(miniApp.telegramUser.id).toBe(browser.telegramUser.id);
+    expect(miniApp.profile.id).toBe('profile-shared');
+    expect(browser.profile.id).toBe('profile-shared');
+    expect(prisma.telegramBotUser.create).not.toHaveBeenCalled();
+    expect(prisma.financeProfile.create).not.toHaveBeenCalled();
+  });
+
   it('initializes defaults exactly once for a first Finance profile', async () => {
-    const { service, tx } = setup();
-    tx.financeProfile.findUnique.mockResolvedValue(null);
-    tx.financeProfile.create.mockResolvedValue({
+    const { service, prisma } = setup();
+    prisma.financeProfile.findUnique.mockResolvedValue(null);
+    prisma.financeProfile.create.mockResolvedValue({
       id: 'profile-1',
       defaultCurrency: 'UAH',
     });
-    tx.financeAccount.findFirst.mockResolvedValue(null);
 
     await service.ensureProfile('bot-1', 'user-1');
 
-    expect(tx.financeProfile.create).toHaveBeenCalledWith({
-      data: { botIntegrationId: 'bot-1', telegramBotUserId: 'user-1' },
+    expect(prisma.financeProfile.create).toHaveBeenCalledWith({
+      data: {
+        botIntegrationId: 'bot-1',
+        telegramBotUserId: 'user-1',
+        categories: {
+          create: DEFAULT_FINANCE_CATEGORIES.map((item) => ({
+            name: item.name,
+            type: item.type,
+            key: item.name.toLowerCase().replace(/\s+/g, '-'),
+          })),
+        },
+        accounts: { create: { name: 'Cash', type: 'CASH', currency: 'UAH' } },
+      },
     });
-    expect(tx.financeCategory.createMany).toHaveBeenCalledWith(
-      expect.objectContaining({ skipDuplicates: true }),
-    );
-    expect(tx.financeAccount.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        profileId: 'profile-1',
-        name: 'Cash',
-        currency: 'UAH',
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('reuses a concurrently initialized profile instead of recreating defaults', async () => {
+    const { service, prisma } = setup();
+    const profile = { id: 'profile-concurrent' };
+    prisma.financeProfile.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(profile);
+    prisma.financeProfile.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('duplicate', {
+        code: 'P2002',
+        clientVersion: 'test',
       }),
-    });
+    );
+
+    await expect(service.ensureProfile('bot-1', 'user-1')).resolves.toBe(
+      profile,
+    );
+    expect(prisma.financeProfile.create).toHaveBeenCalledTimes(1);
+    expect(prisma.financeProfile.findUnique).toHaveBeenCalledTimes(2);
   });
 });
