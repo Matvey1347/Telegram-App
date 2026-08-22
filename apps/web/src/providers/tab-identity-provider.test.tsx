@@ -44,7 +44,7 @@ describe("TabIdentityProvider", () => {
     `;
   });
 
-  it("sets Finance title and emoji favicon", async () => {
+  it("sets Finance title and branded favicon", async () => {
     currentPathname = "/finance";
 
     renderWithTabProvider();
@@ -52,7 +52,9 @@ describe("TabIdentityProvider", () => {
     await waitFor(() => {
       expect(document.title).toBe("Finance · Telegram System");
     });
-    expectEmojiFavicon("💰");
+    await waitFor(() =>
+      expect(iconHref("icon")).toBe("/brand/favicon-finance.png"),
+    );
   });
 
   it("sets Dashboard metadata for root route", async () => {
@@ -180,7 +182,9 @@ describe("TabIdentityProvider", () => {
     await waitFor(() => {
       expect(document.title).toBe("Finance · Telegram System");
     });
-    expectEmojiFavicon("💰");
+    await waitFor(() =>
+      expect(iconHref("icon")).toBe("/brand/favicon-finance.png"),
+    );
   });
 
   it("does not create duplicate favicon links across rerenders", async () => {
@@ -199,7 +203,7 @@ describe("TabIdentityProvider", () => {
     expect(document.querySelectorAll('link[rel="apple-touch-icon"]')).toHaveLength(1);
   });
 
-  it("replaces channel avatar favicon with Finance emoji when leaving channel page", async () => {
+  it("replaces channel avatar favicon with Finance branding when leaving channel page", async () => {
     currentPathname = "/telegram-posts";
     currentSearch = "channelId=channel-1";
     const channelIcon =
@@ -220,7 +224,9 @@ describe("TabIdentityProvider", () => {
     await waitFor(() => {
       expect(document.title).toBe("Finance · Telegram System");
     });
-    expectEmojiFavicon("💰");
+    await waitFor(() =>
+      expect(iconHref("icon")).toBe("/brand/favicon-finance.png"),
+    );
   });
 
   it("applies correct title and favicon after hard reload style async data hydration", async () => {
@@ -371,6 +377,8 @@ describe("TabIdentityProvider", () => {
     for (const rel of ["icon", "shortcut icon", "apple-touch-icon"] as const) {
       expect(iconHref(rel)).toBeTruthy();
     }
-    expectEmojiFavicon("💰");
+    await waitFor(() =>
+      expect(iconHref("icon")).toBe("/brand/favicon-finance.png"),
+    );
   });
 });

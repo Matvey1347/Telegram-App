@@ -1,5 +1,7 @@
 "use client";
 
+import { SYSTEM_BRAND } from "@/lib/app-brand";
+
 const APP_NAME = "Telegram System";
 
 export type TabIdentity = {
@@ -119,8 +121,13 @@ export function resolveRouteTabIdentity({
   if (pathname === "/") {
     return { title: pageTitle("Dashboard"), emoji: "📊", color: "#0f766e" };
   }
-  if (pathname === "/finance") {
-    return { title: pageTitle("Finance"), emoji: "💰", color: "#166534" };
+  if (pathname === "/finance" || pathname.startsWith("/finance/")) {
+    return {
+      title: pageTitle("Finance"),
+      emoji: "💰",
+      color: "#166534",
+      iconUrl: SYSTEM_BRAND.financeFavicon,
+    };
   }
   if (pathname === "/accounts") {
     return { title: pageTitle("Accounts"), emoji: "💳", color: "#1d4ed8" };
@@ -254,7 +261,12 @@ export function resolveRouteTabIdentity({
     return { title: pageTitle("Investments"), emoji: "💼", color: "#166534" };
   }
 
-  return { title: APP_NAME, emoji: "✳️", color: "#111827" };
+  return {
+    title: APP_NAME,
+    emoji: "✳️",
+    color: "#111827",
+    iconUrl: SYSTEM_BRAND.productionFavicon,
+  };
 }
 
 export function mergeTabIdentity(
@@ -265,6 +277,9 @@ export function mergeTabIdentity(
     title: override?.title?.trim() || fallback.title,
     emoji: override?.emoji?.trim() || fallback.emoji,
     color: override?.color?.trim() || fallback.color,
-    iconUrl: override?.iconUrl?.trim() || null,
+    iconUrl:
+      override?.iconUrl === undefined
+        ? fallback.iconUrl?.trim() || null
+        : override.iconUrl?.trim() || null,
   };
 }

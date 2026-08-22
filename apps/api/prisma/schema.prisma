@@ -2638,6 +2638,10 @@ model TelegramBotRuntimeInstance {
   botId                         String?
   username                      String?
   firstName                     String?
+  avatarImage                   Bytes?
+  avatarMimeType                String?
+  avatarTelegramFileId          String?
+  avatarUpdatedAt               DateTime?
   lastErrorMessage              String?
   lastCheckedAt                 DateTime?
   runtimeStatus                 TelegramBotRuntimeStatus      @default(DISABLED)

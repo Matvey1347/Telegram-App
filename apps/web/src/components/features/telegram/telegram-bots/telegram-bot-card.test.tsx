@@ -113,6 +113,25 @@ describe("TelegramBotCard", () => {
     expect(screen.queryByText("Last real update")).toBeNull();
   });
 
+  it("renders the selected runtime avatar pulled from Telegram", () => {
+    const financeBot = bot("FINANCE");
+    financeBot.runtimes[0].avatarUrl =
+      "https://api.example/avatar/runtime-1?v=1";
+    render(
+      <TelegramBotCard
+        bot={financeBot}
+        checkingEnvironment={null}
+        onCheck={vi.fn()}
+        onRequestDelete={vi.fn()}
+        onSwitch={vi.fn()}
+        onConfigureRuntime={vi.fn()}
+      />,
+    );
+    expect(
+      document.querySelector('img[src="https://api.example/avatar/runtime-1?v=1"]'),
+    ).toBeInTheDocument();
+  });
+
   it("shows one stopped status when the runtime and webhook are stopped", () => {
     const stoppedBot = bot("FINANCE");
     stoppedBot.runtimes[0] = {

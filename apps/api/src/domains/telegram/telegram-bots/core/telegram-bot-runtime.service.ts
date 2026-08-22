@@ -32,6 +32,7 @@ import {
 } from './telegram-bot-runtime-registry.service';
 import type { TelegramBotWebhookUpdate } from './telegram-bot-update.types';
 import { publicApiOrigin } from '../../../../config/deployment-config';
+import { assertSafeTelegramWebhookBase } from './telegram-bot-webhook-url';
 
 @Injectable()
 export class TelegramBotRuntimeService implements OnModuleInit {
@@ -83,7 +84,7 @@ export class TelegramBotRuntimeService implements OnModuleInit {
         'Telegram bot webhook base URL is not configured',
       );
     }
-    this.assertSafeWebhookBase(base, environment);
+    assertSafeTelegramWebhookBase(base, environment);
     return `${base.endsWith('/api') ? base : `${base}/api`}/telegram/bots/runtime/${runtimeId}/webhook`;
   }
 
@@ -238,7 +239,7 @@ export class TelegramBotRuntimeService implements OnModuleInit {
     this.registry.invalidate(runtime.id);
     try {
       await this.botApi.setWebhook(token, url, secret);
-      await this.presentation.reconcile(
+      const presentation = await this.presentation.reconcile(
         token,
         runtime.botIntegration.applicationType,
         runtime.botIntegrationId,
@@ -265,6 +266,7 @@ export class TelegramBotRuntimeService implements OnModuleInit {
             pendingWebhookSecretAuthTag: null,
             runtimeTransitionStartedAt: null,
             lastRuntimeError: null,
+            ...this.reconciledPresentationData(presentation),
           },
         },
       );
@@ -411,11 +413,16 @@ export class TelegramBotRuntimeService implements OnModuleInit {
       entry.runtime.runtimeStatus !== TelegramBotRuntimeStatus.ACTIVE
     )
       return;
-    await this.presentation.reconcile(
+    const presentation = await this.presentation.reconcile(
       entry.token,
       entry.runtime.botIntegration.applicationType,
       entry.runtime.botIntegrationId,
     );
+    await this.prisma.telegramBotRuntimeInstance.update({
+      where: { id: runtimeId },
+      data: this.reconciledPresentationData(presentation),
+    });
+    await this.registry.refresh(runtimeId, environment);
   }
 
   async handleWebhook(
@@ -493,15 +500,19 @@ export class TelegramBotRuntimeService implements OnModuleInit {
           this.decryptSecret(runtime),
         );
       }
-      await this.presentation.reconcile(
+      const presentation = await this.presentation.reconcile(
         entry.token,
         runtime.botIntegration.applicationType,
         runtime.botIntegrationId,
       );
+      const miniAppUrl = presentation?.miniAppUrl ?? null;
       if (
         runtime.webhookStatus !== TelegramBotWebhookStatus.CONFIGURED ||
         runtime.webhookUrl !== expectedUrl ||
-        runtime.lastRuntimeError
+        runtime.lastRuntimeError ||
+        (presentation !== undefined &&
+          (runtime.miniAppExpectedUrl !== miniAppUrl ||
+            runtime.miniAppActualUrl !== miniAppUrl))
       ) {
         await this.prisma.telegramBotRuntimeInstance.updateMany({
           where: { id: runtime.id, environment: runtime.environment },
@@ -513,6 +524,7 @@ export class TelegramBotRuntimeService implements OnModuleInit {
                 ? runtime.webhookConfiguredAt
                 : new Date(),
             lastRuntimeError: null,
+            ...this.reconciledPresentationData(presentation),
           },
         });
         await this.registry.refresh(runtime.id, runtime.environment);
@@ -614,7 +626,7 @@ export class TelegramBotRuntimeService implements OnModuleInit {
         authTag: runtime.pendingWebhookSecretAuthTag,
       });
       await this.botApi.setWebhook(token, runtime.pendingWebhookUrl, secret);
-      await this.presentation.reconcile(
+      const presentation = await this.presentation.reconcile(
         token,
         runtime.botIntegration.applicationType,
         runtime.botIntegrationId,
@@ -635,6 +647,7 @@ export class TelegramBotRuntimeService implements OnModuleInit {
           pendingWebhookSecretAuthTag: null,
           runtimeTransitionStartedAt: null,
           lastRuntimeError: null,
+          ...this.reconciledPresentationData(presentation),
         },
       });
     } catch (error) {
@@ -642,6 +655,24 @@ export class TelegramBotRuntimeService implements OnModuleInit {
       // startup attempt; only its observed webhook state becomes ERROR.
       await this.markError(runtime.id, runtime.environment, error);
     }
+  }
+
+  private reconciledPresentationData(presentation: {
+    miniAppUrl: string | null;
+  } | undefined) {
+    return presentation?.miniAppUrl
+      ? {
+          miniAppStatus: 'CONFIGURED',
+          miniAppExpectedUrl: presentation.miniAppUrl,
+          miniAppActualUrl: presentation.miniAppUrl,
+          miniAppError: null,
+        }
+      : {
+          miniAppStatus: 'NOT_CONFIGURED',
+          miniAppExpectedUrl: null,
+          miniAppActualUrl: null,
+          miniAppError: null,
+        };
   }
 
   private async claimUpdate(
@@ -816,42 +847,6 @@ export class TelegramBotRuntimeService implements OnModuleInit {
 
   private webhookUrl(info: Record<string, unknown> | null) {
     return typeof info?.url === 'string' ? info.url : null;
-  }
-
-  private assertSafeWebhookBase(
-    base: string,
-    environment: TelegramBotRuntimeEnvironment,
-  ) {
-    let url: URL;
-    try {
-      url = new URL(base);
-    } catch {
-      throw new BadRequestException(
-        'Telegram bot webhook base URL must be an absolute HTTPS URL',
-      );
-    }
-    if (url.protocol !== 'https:') {
-      throw new BadRequestException(
-        'Telegram bot webhook base URL must use HTTPS',
-      );
-    }
-    if (environment !== TelegramBotRuntimeEnvironment.PRODUCTION) return;
-
-    const host = url.hostname.toLowerCase();
-    const localHost =
-      host === 'localhost' || host === '::1' || host === '127.0.0.1';
-    const developmentTunnelHost =
-      host === 'ngrok.io' ||
-      host.endsWith('.ngrok.io') ||
-      host === 'ngrok-free.app' ||
-      host.endsWith('.ngrok-free.app') ||
-      host === 'trycloudflare.com' ||
-      host.endsWith('.trycloudflare.com');
-    if (localHost || developmentTunnelHost) {
-      throw new BadRequestException(
-        'Production Telegram webhooks cannot use localhost or development tunnel URLs',
-      );
-    }
   }
 
   private updateType(update: TelegramBotWebhookUpdate) {

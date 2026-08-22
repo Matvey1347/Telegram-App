@@ -29,6 +29,7 @@ import { TelegramBotApplicationRegistryService } from './telegram-bot-applicatio
 import { TelegramBotRuntimeService } from './telegram-bot-runtime.service';
 import { TelegramBotIdentityService } from './telegram-bot-identity.service';
 import { TelegramBotIntegrationViewService } from './telegram-bot-integration-view.service';
+import { TelegramBotProfileService } from './telegram-bot-profile.service';
 import {
   isProductionEnvironment,
   telegramBotRuntimeEnvironmentName,
@@ -46,6 +47,7 @@ export class TelegramBotsService {
     private readonly applicationLogger: ApplicationLoggerService,
     private readonly identity: TelegramBotIdentityService,
     private readonly viewService: TelegramBotIntegrationViewService,
+    private readonly profiles: TelegramBotProfileService,
   ) {}
 
   private async workspace(userId: string) {
@@ -310,6 +312,7 @@ export class TelegramBotsService {
       dto.botToken,
       String(configured.botId),
     );
+    await this.profiles.sync(logical.id, environment);
     return this.findOne(userId, logical.id);
   }
 
@@ -469,6 +472,7 @@ export class TelegramBotsService {
       environment: selectedEnvironment,
       token: dto.botToken,
     });
+    await this.profiles.sync(id, selectedEnvironment);
     if (
       selectedEnvironment === TelegramBotRuntimeEnvironment.LOCAL &&
       this.runtime.canAutoEnable(selectedEnvironment)
@@ -485,6 +489,19 @@ export class TelegramBotsService {
     await this.adminWorkspace(userId);
     await this.findOneRaw(userId, id);
     await this.runtime.checkRuntime(id, this.environment(environment));
+    await this.profiles.sync(id, this.environment(environment));
+    return this.findOne(userId, id);
+  }
+
+  async updateRuntimeProfile(
+    userId: string,
+    id: string,
+    environment: string,
+    input: { name?: string; avatar?: Express.Multer.File },
+  ) {
+    await this.adminWorkspace(userId);
+    await this.findOneRaw(userId, id);
+    await this.profiles.update(id, this.environment(environment), input);
     return this.findOne(userId, id);
   }
 

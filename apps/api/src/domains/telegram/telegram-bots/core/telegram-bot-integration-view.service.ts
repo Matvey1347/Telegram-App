@@ -4,6 +4,7 @@ import type { TelegramBotIntegrationView } from '@telegram-system/shared';
 import { BotBillingAnalyticsService } from '../../bot-billing/bot-billing-analytics.service';
 import { TelegramBotApplicationRegistryService } from './telegram-bot-application-registry.service';
 import { TelegramBotRuntimeEnvironmentService } from './telegram-bot-runtime-environment.service';
+import { publicApiOrigin } from '../../../../config/deployment-config';
 
 @Injectable()
 export class TelegramBotIntegrationViewService {
@@ -99,6 +100,8 @@ export class TelegramBotIntegrationViewService {
       botId: (runtime.botId as string | null) || null,
       username: (runtime.username as string | null) || null,
       firstName: (runtime.firstName as string | null) || null,
+      avatarUrl: this.avatarUrl(runtime),
+      avatarUpdatedAt: this.iso(runtime.avatarUpdatedAt),
       lastErrorMessage: (runtime.lastErrorMessage as string | null) || null,
       lastCheckedAt: this.iso(runtime.lastCheckedAt),
       runtimeStatus: runtime.runtimeStatus as never,
@@ -129,6 +132,13 @@ export class TelegramBotIntegrationViewService {
     return value === 'AVAILABLE' || value === 'ERROR' || value === 'NOT_CONFIGURED'
       ? value
       : ('UNKNOWN' as const);
+  }
+
+  private avatarUrl(runtime: Record<string, unknown>) {
+    const updatedAt = this.iso(runtime.avatarUpdatedAt);
+    if (!updatedAt) return null;
+    const path = `/api/telegram-bot-runtime-avatars/${encodeURIComponent(String(runtime.id))}?v=${encodeURIComponent(updatedAt)}`;
+    return publicApiOrigin() ? `${publicApiOrigin()}${path}` : path;
   }
 
   private miniAppStatus(value: unknown) {

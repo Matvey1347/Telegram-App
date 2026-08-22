@@ -22,6 +22,7 @@ import { useAppToast } from "@/providers/toast-provider";
 import { CustomSelect } from "@/components/ui/primitives";
 import { IconPicker } from "@/components/icons/icon-picker";
 import { IconAvatar } from "@/components/icons/icon-avatar";
+import { SystemBrandLogo } from "@/components/layout/system-brand-logo";
 import {
   Bug,
   Bot,
@@ -352,7 +353,7 @@ export function AppShell({ children }: PropsWithChildren) {
         >
           <Menu size={20} />
         </button>
-        <span className="text-sm font-semibold">Telegram System</span>
+        <SystemBrandLogo compact />
         <button
           type="button"
           onClick={() => void handleGlobalRefresh()}
@@ -388,7 +389,7 @@ export function AppShell({ children }: PropsWithChildren) {
         </button>
         <div className="mb-8">
           <div className="flex items-center justify-between gap-2 pr-10 lg:pr-0">
-            <h1 className="text-xl font-semibold">Telegram System</h1>
+            <SystemBrandLogo />
             <button
               type="button"
               onClick={() => void handleGlobalRefresh()}

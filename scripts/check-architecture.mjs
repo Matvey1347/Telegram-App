@@ -56,7 +56,7 @@ const TRANSITION_BASELINE = new Map([
   ],
   [
     "apps/api/src/domains/telegram/telegram-bots/core/telegram-bot-runtime.service.ts",
-    908,
+    903,
   ],
   ["apps/api/src/domains/growth/ad-hypotheses/ad-hypotheses.service.ts", 906],
   [

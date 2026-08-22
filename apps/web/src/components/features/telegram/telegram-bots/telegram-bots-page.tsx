@@ -31,6 +31,7 @@ import {
 } from "@/lib/features/telegram/telegram-bot-cache";
 import { useAppToast } from "@/providers/toast-provider";
 import { TelegramBotCard } from "./telegram-bot-card";
+import { RuntimeProfileModal } from "./runtime-profile-modal";
 
 function errorMessage(error: unknown, fallback: string) {
   const responseError = error as { response?: { data?: { message?: string } } };
@@ -51,6 +52,10 @@ export function TelegramBotsPage() {
   } | null>(null);
   const [switching, setSwitching] = useState<TelegramBot | null>(null);
   const [runtimeConfig, setRuntimeConfig] = useState<{
+    bot: TelegramBot;
+    environment: TelegramBotRuntimeEnvironment;
+  } | null>(null);
+  const [profileConfig, setProfileConfig] = useState<{
     bot: TelegramBot;
     environment: TelegramBotRuntimeEnvironment;
   } | null>(null);
@@ -107,6 +112,30 @@ export function TelegramBotsPage() {
     },
     onError: (error: unknown) =>
       pushToast(errorMessage(error, "Failed to save runtime token."), "error"),
+  });
+  const profileMutation = useMutation({
+    mutationFn: ({
+      botId,
+      environment,
+      name,
+      avatar,
+    }: {
+      botId: string;
+      environment: TelegramBotRuntimeEnvironment;
+      name?: string;
+      avatar?: File;
+    }) =>
+      telegramBotsApi.updateRuntimeProfile(botId, environment, {
+        name,
+        avatar,
+      }),
+    onSuccess: (bot) => {
+      reconcileTelegramBotCache(qc, bot);
+      setProfileConfig(null);
+      pushToast("Telegram bot name and profile photo updated.", "success");
+    },
+    onError: (error: unknown) =>
+      pushToast(errorMessage(error, "Failed to update Telegram profile."), "error"),
   });
   const removeRuntimeMutation = useMutation({
     mutationFn: ({
@@ -207,6 +236,9 @@ export function TelegramBotsPage() {
               onConfigureRuntime={(environment) =>
                 setRuntimeConfig({ bot, environment })
               }
+              onEditProfile={(environment) =>
+                setProfileConfig({ bot, environment })
+              }
             />
           ))}
         </div>
@@ -242,6 +274,21 @@ export function TelegramBotsPage() {
             exists: runtimeConfig.bot.runtimes.some(
               (runtime) => runtime.environment === runtimeConfig.environment,
             ),
+          });
+        }}
+      />
+      <RuntimeProfileModal
+        key={`${profileConfig?.bot.id || "none"}:${profileConfig?.environment || "none"}`}
+        config={profileConfig}
+        saving={profileMutation.isPending}
+        onClose={() => setProfileConfig(null)}
+        onSubmit={({ name, avatar }) => {
+          if (!profileConfig) return;
+          profileMutation.mutate({
+            botId: profileConfig.bot.id,
+            environment: profileConfig.environment,
+            name,
+            avatar,
           });
         }}
       />

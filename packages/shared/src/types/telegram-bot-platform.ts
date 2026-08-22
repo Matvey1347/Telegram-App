@@ -69,6 +69,8 @@ export type TelegramBotRuntimeSummary = {
   botId?: string | null;
   username?: string | null;
   firstName?: string | null;
+  avatarUrl?: string | null;
+  avatarUpdatedAt?: string | null;
   lastErrorMessage?: string | null;
   lastCheckedAt?: string | null;
   runtimeStatus: TelegramBotRuntimeStatus;

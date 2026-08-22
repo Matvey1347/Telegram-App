@@ -26,6 +26,8 @@ import { TelegramBotsService } from './core/telegram-bots.service';
 import { TelegramBotIdentityService } from './core/telegram-bot-identity.service';
 import { TelegramBotIntegrationViewService } from './core/telegram-bot-integration-view.service';
 import { TelegramBotLoadingFeedbackService } from './core/telegram-bot-loading-feedback.service';
+import { TelegramBotProfileService } from './core/telegram-bot-profile.service';
+import { TelegramBotRuntimeAvatarController } from './core/telegram-bot-runtime-avatar.controller';
 import { GreeterService } from './greeter/greeter.service';
 import { GreeterController } from './greeter/greeter.controller';
 import { GreeterAutomationService } from './greeter/greeter-automation.service';
@@ -67,6 +69,7 @@ import { GreeterTestModeService } from './greeter/greeter-test-mode.service';
   controllers: [
     TelegramBotsController,
     TelegramBotRuntimeController,
+    TelegramBotRuntimeAvatarController,
     GreeterController,
     FinanceAiConfigController,
     FinanceController,
@@ -77,6 +80,7 @@ import { GreeterTestModeService } from './greeter/greeter-test-mode.service';
     TelegramBotIdentityService,
     TelegramBotIntegrationViewService,
     TelegramBotLoadingFeedbackService,
+    TelegramBotProfileService,
     TelegramSourceAccessService,
     TelegramBotApiClient,
     TelegramBotInteractiveReplyService,

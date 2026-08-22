@@ -46,6 +46,40 @@ export class TelegramBotApiClient {
     }>(token, 'getMe', {}, 'GET');
   }
 
+  async getMyName(token: string) {
+    return this.call<{ name?: string }>(token, 'getMyName', {}, 'GET');
+  }
+
+  async setMyName(token: string, name: string) {
+    return this.call<boolean>(token, 'setMyName', { name });
+  }
+
+  async getUserProfilePhotos(token: string, userId: string) {
+    return this.call<{
+      total_count?: number;
+      photos?: Array<Array<{ file_id: string; width?: number; height?: number }>>;
+    }>(
+      token,
+      'getUserProfilePhotos',
+      { user_id: userId, offset: 0, limit: 1 },
+      'GET',
+    );
+  }
+
+  async setMyProfilePhoto(token: string, jpeg: Buffer) {
+    const form = new FormData();
+    form.append(
+      'photo',
+      JSON.stringify({ type: 'static', photo: 'attach://profile_photo' }),
+    );
+    form.append(
+      'profile_photo',
+      new Blob([Uint8Array.from(jpeg)], { type: 'image/jpeg' }),
+      'profile-photo.jpg',
+    );
+    return this.callForm<boolean>(token, 'setMyProfilePhoto', form);
+  }
+
   async getChatMember(token: string, chatId: string, userId: string) {
     return this.call<Record<string, unknown>>(token, 'getChatMember', {
       chat_id: chatId,
@@ -349,6 +383,22 @@ export class TelegramBotApiClient {
       }
     }
     const response = await fetch(url, init);
+    const payload = (await response.json()) as TelegramApiResponse<TResult>;
+    if (!response.ok || !payload.ok) {
+      throw this.toError(payload.description, response.status);
+    }
+    return payload.result as TResult;
+  }
+
+  private async callForm<TResult>(token: string, method: string, body: FormData) {
+    const response = await fetch(
+      `https://api.telegram.org/bot${token}/${method}`,
+      {
+        method: 'POST',
+        body,
+        signal: AbortSignal.timeout(20_000),
+      },
+    );
     const payload = (await response.json()) as TelegramApiResponse<TResult>;
     if (!response.ok || !payload.ok) {
       throw this.toError(payload.description, response.status);

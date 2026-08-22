@@ -6,8 +6,11 @@ import {
   Param,
   Patch,
   Post,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser } from '../../../../common/current-user.decorator';
 import type { JwtUser } from '../../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../../common/jwt-auth.guard';
@@ -15,6 +18,7 @@ import {
   CreateTelegramBotDto,
   SwitchTelegramBotApplicationDto,
   UpdateTelegramBotDto,
+  UpdateTelegramBotRuntimeProfileDto,
   UpsertTelegramBotRuntimeDto,
 } from './dto';
 import { TelegramBotsService } from './telegram-bots.service';
@@ -72,6 +76,21 @@ export class TelegramBotsController {
     @Param('environment') environment: 'LOCAL' | 'PRODUCTION',
   ) {
     return this.service.checkRuntime(user.sub, id, environment);
+  }
+
+  @Patch(':id/runtimes/:environment/profile')
+  @UseInterceptors(FileInterceptor('avatar', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  updateRuntimeProfile(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Param('environment') environment: 'LOCAL' | 'PRODUCTION',
+    @Body() dto: UpdateTelegramBotRuntimeProfileDto,
+    @UploadedFile() avatar: Express.Multer.File | undefined,
+  ) {
+    return this.service.updateRuntimeProfile(user.sub, id, environment, {
+      name: dto.name,
+      avatar,
+    });
   }
 
   @Post(':id/runtimes/:environment/enable')

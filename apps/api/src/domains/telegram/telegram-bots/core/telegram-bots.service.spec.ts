@@ -74,6 +74,7 @@ function setup() {
     isEligible: jest.fn().mockResolvedValue(true),
   };
   const views = { toView: jest.fn((row) => row) };
+  const profiles = { sync: jest.fn(), update: jest.fn() };
   const service = new TelegramBotsService(
     prisma as never,
     workspaces as never,
@@ -84,8 +85,9 @@ function setup() {
     { writeStructured: jest.fn() } as never,
     {} as never,
     views as never,
+    profiles as never,
   );
-  return { service, prisma, runtime, applications };
+  return { service, prisma, runtime, applications, profiles };
 }
 
 describe('TelegramBotsService runtime instances', () => {

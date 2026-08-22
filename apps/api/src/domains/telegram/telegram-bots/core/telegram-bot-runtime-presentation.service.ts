@@ -42,6 +42,7 @@ export class TelegramBotRuntimePresentationService {
       token,
       presentation?.menuButton(botIntegrationId) ?? { type: 'commands' },
     );
+    return { miniAppUrl: presentation?.miniAppUrl?.(botIntegrationId) ?? null };
   }
 
   application(applicationType: TelegramBotApplicationType) {

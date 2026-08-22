@@ -189,6 +189,22 @@ export function createTelegramSourcesApi({
           `/telegram-bots/${id}/runtimes/${environment}/check`,
         )
       ).data,
+    updateRuntimeProfile: async (
+      id: string,
+      environment: TelegramBotRuntimeEnvironment,
+      payload: { name?: string; avatar?: File },
+    ) => {
+      const form = new FormData();
+      if (payload.name?.trim()) form.append("name", payload.name.trim());
+      if (payload.avatar) form.append("avatar", payload.avatar);
+      form.append("confirmTelegramUpdate", "true");
+      return (
+        await api.patch<TelegramBot>(
+          `/telegram-bots/${id}/runtimes/${environment}/profile`,
+          form,
+        )
+      ).data;
+    },
     enableRuntime: async (
       id: string,
       environment: TelegramBotRuntimeEnvironment,

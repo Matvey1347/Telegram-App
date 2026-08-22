@@ -10,6 +10,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
@@ -20,6 +21,7 @@ import {
   type TabIdentity,
   type TabIdentityOverride,
 } from "@/lib/tab-identity";
+import { SYSTEM_BRAND, systemBrandForHost } from "@/lib/app-brand";
 
 type TabIdentityEntry = {
   order: number;
@@ -118,7 +120,7 @@ function writeCachedRouteIdentity(key: string, identity: CachedTabIdentity) {
 }
 
 function preloadFavicon(url: string) {
-  if (url.startsWith("data:")) {
+  if (url.startsWith("data:") || url.startsWith("/")) {
     rememberFaviconSuccess(url);
     return Promise.resolve(true);
   }
@@ -239,6 +241,11 @@ export function TabIdentityProvider({ children }: PropsWithChildren) {
   const isApplyingRef = useRef(false);
   const [entriesSnapshot, setEntriesSnapshot] = useState<TabIdentityEntry[]>([]);
   const [resolvedIconUrls, setResolvedIconUrls] = useState<Record<string, string | null>>({});
+  const hostFavicon = useSyncExternalStore(
+    () => () => undefined,
+    () => systemBrandForHost(window.location.hostname).favicon,
+    () => SYSTEM_BRAND.productionFavicon,
+  );
 
   const routeIdentity = useMemo(
     () => resolveRouteTabIdentity({ pathname, searchParams }),
@@ -262,10 +269,15 @@ export function TabIdentityProvider({ children }: PropsWithChildren) {
     [pathname, routeCacheKey],
   );
 
-  const effectiveIdentity = useMemo(
-    () => mergeTabIdentity(routeIdentity, activeOverride ?? cachedRouteIdentity),
-    [activeOverride, cachedRouteIdentity, routeIdentity],
-  );
+  const effectiveIdentity = useMemo(() => {
+    const merged = mergeTabIdentity(
+      routeIdentity,
+      activeOverride ?? cachedRouteIdentity,
+    );
+    return merged.iconUrl === SYSTEM_BRAND.productionFavicon
+      ? { ...merged, iconUrl: hostFavicon }
+      : merged;
+  }, [activeOverride, cachedRouteIdentity, hostFavicon, routeIdentity]);
 
   useEffect(() => {
     initialTitleRef.current = document.title;

@@ -5,16 +5,14 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowLeftRight,
-  Bot,
   CheckCircle2,
   CircleX,
-  Handshake,
   LoaderCircle,
   Pencil,
   RefreshCw,
   Settings,
+  UserRoundPen,
   Trash2,
-  Wallet,
 } from "lucide-react";
 import type {
   TelegramBotApplicationType,
@@ -24,6 +22,7 @@ import type {
 import type { TelegramBot } from "@/lib/api";
 import { Button, Tooltip } from "@/components/ui/primitives";
 import { runtimeAppPresentation } from "./runtime-app-presentation";
+import { BotRuntimeAvatar } from "./bot-runtime-avatar";
 
 export function BotCardShell({
   bot,
@@ -32,6 +31,7 @@ export function BotCardShell({
   onRequestDelete,
   onSwitch,
   onConfigureRuntime,
+  onEditProfile,
   children,
 }: {
   bot: TelegramBot;
@@ -40,6 +40,7 @@ export function BotCardShell({
   onRequestDelete: (environment: TelegramBotRuntimeEnvironment) => void;
   onSwitch: () => void;
   onConfigureRuntime: (environment: TelegramBotRuntimeEnvironment) => void;
+  onEditProfile?: (environment: TelegramBotRuntimeEnvironment) => void;
   children:
     | ReactNode
     | ((environment: TelegramBotRuntimeEnvironment) => ReactNode);
@@ -71,7 +72,7 @@ export function BotCardShell({
     <article className="rounded-lg border border-neutral-800 bg-neutral-950 p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <AppIcon type={appType} />
+          <BotRuntimeAvatar type={appType} avatarUrl={runtime?.avatarUrl} />
           <div className="min-w-0">
             <h3 className="truncate text-base font-semibold text-white">
               {runtime?.firstName || bot.label}
@@ -104,6 +105,13 @@ export function BotCardShell({
             onClick={() => onConfigureRuntime(environment)}
           >
             <Pencil size={16} />
+          </CardAction>
+          <CardAction
+            label="Edit Telegram name and profile photo"
+            disabled={!runtime}
+            onClick={() => onEditProfile?.(environment)}
+          >
+            <UserRoundPen size={16} />
           </CardAction>
           <CardAction label="Change bot app" onClick={onSwitch}>
             <ArrowLeftRight data-testid="change-bot-app-icon" size={16} />
@@ -311,24 +319,6 @@ function financeAppUrl(
   const index = runtime.webhookUrl.indexOf(marker);
   if (index < 0) return null;
   return `${runtime.webhookUrl.slice(0, index)}/finance/${encodeURIComponent(botId)}`;
-}
-function AppIcon({ type }: { type: TelegramBotApplicationType }) {
-  const Icon =
-    type === "GREETER" ? Handshake : type === "FINANCE" ? Wallet : Bot;
-  const tone =
-    type === "FINANCE"
-      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-      : type === "GREETER"
-        ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
-        : "border-sky-500/30 bg-sky-500/10 text-sky-200";
-  return (
-    <div
-      aria-label={`${applicationLabel(type)} bot`}
-      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${tone}`}
-    >
-      <Icon size={20} aria-hidden="true" />
-    </div>
-  );
 }
 function CardAction({
   label,

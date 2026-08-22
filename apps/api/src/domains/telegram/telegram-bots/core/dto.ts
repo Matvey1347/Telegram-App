@@ -2,7 +2,9 @@ import {
   IsArray,
   IsIn,
   IsOptional,
+  Equals,
   IsString,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 
@@ -41,6 +43,11 @@ export class UpdateTelegramBotDto {
 
 export class UpsertTelegramBotRuntimeDto {
   @IsString() @MinLength(10) botToken!: string;
+}
+
+export class UpdateTelegramBotRuntimeProfileDto {
+  @IsOptional() @IsString() @MaxLength(64) name?: string;
+  @Equals('true') confirmTelegramUpdate!: string;
 }
 
 export class SwitchTelegramBotApplicationDto {

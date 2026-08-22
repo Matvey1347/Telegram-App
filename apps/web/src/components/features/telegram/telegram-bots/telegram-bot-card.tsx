@@ -12,6 +12,7 @@ export function TelegramBotCard({
   onRequestDelete,
   onSwitch,
   onConfigureRuntime,
+  onEditProfile,
 }: {
   bot: TelegramBot;
   checkingEnvironment: TelegramBotRuntimeEnvironment | null;
@@ -19,6 +20,7 @@ export function TelegramBotCard({
   onRequestDelete: (environment: TelegramBotRuntimeEnvironment) => void;
   onSwitch: () => void;
   onConfigureRuntime: (environment: TelegramBotRuntimeEnvironment) => void;
+  onEditProfile?: (environment: TelegramBotRuntimeEnvironment) => void;
 }) {
   const appType = bot.applicationType;
   return (
@@ -29,6 +31,7 @@ export function TelegramBotCard({
       onRequestDelete={onRequestDelete}
       onSwitch={onSwitch}
       onConfigureRuntime={onConfigureRuntime}
+      onEditProfile={onEditProfile}
     >
       {appType === "FINANCE" ? (environment: TelegramBotRuntimeEnvironment) => (
         <FinanceBotSummary summary={bot.applicationSummary?.finance?.[environment]} />

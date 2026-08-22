@@ -242,6 +242,46 @@ describe('TelegramBotRuntimeService environment isolation', () => {
     );
   });
 
+  it('records the reconciled Finance Mini App URL during startup', async () => {
+    environment.current.mockReturnValue(
+      TelegramBotRuntimeEnvironment.PRODUCTION,
+    );
+    const production = {
+      ...runtime('production-1', TelegramBotRuntimeEnvironment.PRODUCTION),
+      miniAppExpectedUrl: null,
+      miniAppActualUrl: null,
+    };
+    registry.bootstrap.mockResolvedValue([
+      { runtime: production, token: 'production-token' },
+    ]);
+    api.getWebhookInfo.mockResolvedValue({ url: production.webhookUrl });
+    presentation.reconcile.mockResolvedValue({
+      miniAppUrl: 'https://www.nexeloq.com/finance/bot-1',
+    });
+    prisma.telegramBotRuntimeInstance.updateMany.mockResolvedValue({ count: 1 });
+    registry.refresh.mockResolvedValue({
+      runtime: production,
+      token: 'production-token',
+    });
+
+    await service.onModuleInit();
+
+    expect(prisma.telegramBotRuntimeInstance.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'production-1',
+          environment: TelegramBotRuntimeEnvironment.PRODUCTION,
+        },
+        data: expect.objectContaining({
+          miniAppStatus: 'CONFIGURED',
+          miniAppExpectedUrl: 'https://www.nexeloq.com/finance/bot-1',
+          miniAppActualUrl: 'https://www.nexeloq.com/finance/bot-1',
+          miniAppError: null,
+        }),
+      }),
+    );
+  });
+
   it('rejects a LOCAL runtime id in a PRODUCTION process before dispatch', async () => {
     environment.current.mockReturnValue(
       TelegramBotRuntimeEnvironment.PRODUCTION,
