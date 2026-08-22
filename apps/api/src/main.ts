@@ -2,7 +2,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ApplicationLoggerService } from './domains/operations/application-logs/application-logger.service';
-import { corsOrigins } from './common/http/cors-origins';
+import { corsOrigins, webCorsOrigins } from './common/http/cors-origins';
 import { apiPort, publicWebOrigin } from './config/deployment-config';
 
 async function bootstrap() {
@@ -16,7 +16,7 @@ async function bootstrap() {
     'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:4000',
-    frontendUrl,
+    ...webCorsOrigins(frontendUrl),
   );
 
   app.enableCors({
