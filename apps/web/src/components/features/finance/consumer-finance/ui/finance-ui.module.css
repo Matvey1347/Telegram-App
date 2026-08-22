@@ -1,0 +1,36 @@
+.themeRoot {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.toast {
+  animation: finance-notification-in 180ms ease-out;
+}
+
+.toastHost {
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+:global(body:has([data-finance-surface="telegram"])) .toastHost {
+  bottom: calc(5.5rem + env(safe-area-inset-bottom));
+}
+
+@media (max-width: 639px) {
+  .themeRoot input,
+  .themeRoot select,
+  .themeRoot textarea {
+    font-size: 16px;
+  }
+}
+
+@keyframes finance-notification-in {
+  from {
+    opacity: 0;
+    transform: translate3d(16px, 8px, 0) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}

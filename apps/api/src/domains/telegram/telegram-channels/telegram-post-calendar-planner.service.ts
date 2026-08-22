@@ -1,36 +1,37 @@
 import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
+BadRequestException,
+Injectable,
+NotFoundException,
 } from '@nestjs/common';
-import { randomUUID } from 'crypto';
 import {
-  Prisma,
-  TelegramManagedPostStatus,
-  type TelegramPostPlannerFormat,
-  type TelegramPostPlannerSlot,
+Prisma,
+TelegramManagedPostStatus,
+type TelegramPostPlannerFormat,
+type TelegramPostPlannerSlot,
 } from '@prisma/client';
 import type {
-  TelegramPostPlannerApplyResult,
-  TelegramPostPlannerAssignment,
-  TelegramPostPlannerPreviewResult,
+TelegramPostPlannerApplyResult,
+TelegramPostPlannerAssignment,
+TelegramPostPlannerPreviewResult,
 } from '@telegram-system/shared';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { randomUUID } from 'crypto';
 import { WorkspaceService } from '../../../common/workspace.service';
+import { PrismaService } from '../../../prisma/prisma.service';
 import {
-  utcDateKey,
-  zonedDateTimeToUtc,
+utcDateKey,
+zonedDateTimeToUtc,
 } from '../telegram-ad-sales/domain/timezone';
-import { TelegramChannelsService } from './telegram-channels.service';
 import {
-  CreatePostPlannerFormatDto,
-  CreatePostPlannerSlotDto,
-  PostPlannerApplyDto,
-  PostPlannerPreviewDto,
-  PostPlannerRerollDayDto,
-  UpdatePostPlannerFormatDto,
-  UpdatePostPlannerSlotDto,
+CreatePostPlannerFormatDto,
+CreatePostPlannerSlotDto,
+PostPlannerApplyDto,
+PostPlannerPreviewDto,
+PostPlannerRerollDayDto,
+UpdatePostPlannerFormatDto,
+UpdatePostPlannerSlotDto,
 } from './dto';
+import { TelegramManagedPostBulkService } from './telegram-managed-post-bulk.service';
+import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
 
 type PlannerPost = {
   id: string;
@@ -45,9 +46,8 @@ export class TelegramPostCalendarPlannerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
-    private readonly telegramChannelsService: TelegramChannelsService,
+    private readonly telegramManagedPostBulkService: TelegramManagedPostBulkService, private readonly telegramManagedPostPublicationService: TelegramManagedPostPublicationService,
   ) {}
-
   private async workspace(userId: string) {
     return this.workspaceService.resolveWorkspaceIdForUser(userId);
   }
@@ -298,7 +298,7 @@ export class TelegramPostCalendarPlannerService {
       throw new BadRequestException('Planner produced no assignments');
     }
     const plannerRunId = randomUUID();
-    const schedule = await this.telegramChannelsService.scheduleManagedPostsBatch(
+    const schedule = await this.telegramManagedPostBulkService.scheduleManagedPostsBatch(
       userId,
       channelId,
       {
@@ -379,7 +379,7 @@ export class TelegramPostCalendarPlannerService {
       select: { id: true },
     });
     for (const post of autoPosts) {
-      await this.telegramChannelsService.returnManagedPostToDraft(
+      await this.telegramManagedPostPublicationService.returnManagedPostToDraft(
         userId,
         channelId,
         post.id,

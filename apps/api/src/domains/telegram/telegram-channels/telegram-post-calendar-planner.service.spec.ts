@@ -123,6 +123,7 @@ describe('TelegramPostCalendarPlannerService', () => {
       prisma as never,
       workspaceService as never,
       telegramChannelsService as never,
+      telegramChannelsService as never,
     );
     return { prisma, service, telegramChannelsService };
   };

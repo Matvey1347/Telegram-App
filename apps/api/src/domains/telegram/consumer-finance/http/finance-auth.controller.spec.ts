@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/unbound-method -- Jest assertions inspect mock methods without invoking them. */
 import type { Request, Response } from 'express';
-import { FinanceConsumerSessionService } from './finance-consumer-session.service';
+import { FinanceConsumerSessionService } from '../identity/finance-consumer-session.service';
 import { FinanceController } from './finance.controller';
 
 describe('FinanceController consumer auth', () => {
   const previousFrontend = process.env.FRONTEND_URL;
+  const previousApiPublicUrl = process.env.API_PUBLIC_URL;
   const previousNodeEnvironment = process.env.NODE_ENV;
   const profile = {
     id: 'profile-1',
@@ -25,11 +26,14 @@ describe('FinanceController consumer auth', () => {
 
   beforeAll(() => {
     process.env.FRONTEND_URL = 'https://finance.example';
+    process.env.API_PUBLIC_URL = 'https://api.example';
   });
 
   afterAll(() => {
     if (previousFrontend === undefined) delete process.env.FRONTEND_URL;
     else process.env.FRONTEND_URL = previousFrontend;
+    if (previousApiPublicUrl === undefined) delete process.env.API_PUBLIC_URL;
+    else process.env.API_PUBLIC_URL = previousApiPublicUrl;
     if (previousNodeEnvironment === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = previousNodeEnvironment;
   });
@@ -85,7 +89,9 @@ describe('FinanceController consumer auth', () => {
       }),
       consumeBrowserLogin: jest.fn(),
     };
-    const delivery = { enqueueSendMessage: jest.fn().mockResolvedValue(undefined) };
+    const delivery = {
+      enqueueSendMessage: jest.fn().mockResolvedValue(undefined),
+    };
     const controller = new FinanceController(
       contexts as never,
       sessions,
@@ -299,7 +305,11 @@ describe('FinanceController consumer auth', () => {
           'x-finance-consumer-request': '1',
         },
       }),
-      { locale: 'ru' },
+      {
+        defaultCurrency: profile.defaultCurrency,
+        timezone: profile.timezone,
+        locale: 'ru',
+      },
     );
 
     expect(delivery.enqueueSendMessage).toHaveBeenCalledWith(
@@ -408,6 +418,9 @@ describe('FinanceController consumer auth', () => {
     const state = new URL(config.callbackUrl).searchParams.get('state');
 
     expect(state).toBeTruthy();
+    expect(config.callbackUrl).toContain(
+      'https://api.example/api/finance-bots/bot-1/auth/browser?',
+    );
     expect(response.cookie).toHaveBeenCalledWith(
       'finance_browser_login_state',
       state,

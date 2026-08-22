@@ -31,6 +31,7 @@ import {
   TelegramBotRuntimeRegistryService,
 } from './telegram-bot-runtime-registry.service';
 import type { TelegramBotWebhookUpdate } from './telegram-bot-update.types';
+import { publicApiOrigin } from '../../../../config/deployment-config';
 
 @Injectable()
 export class TelegramBotRuntimeService implements OnModuleInit {
@@ -76,14 +77,7 @@ export class TelegramBotRuntimeService implements OnModuleInit {
   }
 
   webhookUrlFor(runtimeId: string, environment = this.requiredEnvironment()) {
-    const base = (
-      process.env.TELEGRAM_BOT_WEBHOOK_BASE_URL ||
-      process.env.API_PUBLIC_URL ||
-      process.env.PUBLIC_API_URL ||
-      ''
-    )
-      .trim()
-      .replace(/\/+$/, '');
+    const base = publicApiOrigin() || '';
     if (!base) {
       throw new BadRequestException(
         'Telegram bot webhook base URL is not configured',

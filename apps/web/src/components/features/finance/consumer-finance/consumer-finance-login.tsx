@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Send } from "lucide-react";
-import { Button, ErrorState, LoadingState } from "@/components/ui/primitives";
+import { Button, ErrorState, LoadingState } from "./ui";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-import { consumerFinanceKeys } from "@/lib/query-keys";
+import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
 import { financeCopy, normalizeFinanceLocale } from "./finance-i18n";
 
 /** Browser authentication is delegated to the API so Telegram verifies identity server-side. */
@@ -132,7 +132,8 @@ export function ConsumerFinanceBootstrapError({
 }) {
   const t = financeCopy(
     normalizeFinanceLocale(
-      locale ?? (typeof navigator === "undefined" ? undefined : navigator.language),
+      locale ??
+        (typeof navigator === "undefined" ? undefined : navigator.language),
     ),
   );
   return (

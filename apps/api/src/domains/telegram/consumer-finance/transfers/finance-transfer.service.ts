@@ -10,11 +10,11 @@ import type {
   CreateFinanceTransferDto,
   FinanceTransferQueryDto,
   UpdateFinanceTransferDto,
-} from './finance.dto';
+} from '../http/finance.dto';
 import {
   financeHistoryDateRange,
   financeOccurredAtFilter,
-} from './finance-history-date-range';
+} from '../ledger/finance-history-date-range';
 
 const transferSelect = {
   id: true,

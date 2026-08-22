@@ -67,17 +67,20 @@ describe('TelegramWorkspaceFullSyncService', () => {
   });
 
   it('filters disabled automatic sync channels before canonical sync is invoked', async () => {
-    const original = process.env.TELEGRAM_MTTPROTO_SYNC_ENABLED;
-    process.env.TELEGRAM_MTTPROTO_SYNC_ENABLED = 'false';
     const prisma = {
       workspace: { findUniqueOrThrow: jest.fn().mockResolvedValue({ name: 'Business' }) },
       workspaceMember: { findFirst: jest.fn().mockResolvedValue({ userId: 'actor-1' }) },
       telegramChannel: { findMany: jest.fn().mockResolvedValue([]) },
     };
-    const service = new TelegramWorkspaceFullSyncService(prisma as never, {} as never);
+    const moduleRef = {
+      registerRequestByContextId: jest.fn(),
+      resolve: jest.fn(),
+    };
+    const service = new TelegramWorkspaceFullSyncService(
+      prisma as never,
+      moduleRef as never,
+    );
     await service.syncWorkspace({ workspaceId: 'workspace-1', actor: { type: 'SCHEDULED_TASK' } });
-    if (original === undefined) delete process.env.TELEGRAM_MTTPROTO_SYNC_ENABLED;
-    else process.env.TELEGRAM_MTTPROTO_SYNC_ENABLED = original;
 
     expect(prisma.telegramChannel.findMany).toHaveBeenCalledWith(
       expect.objectContaining({

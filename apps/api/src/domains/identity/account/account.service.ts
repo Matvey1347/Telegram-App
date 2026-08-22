@@ -18,12 +18,26 @@ import { WorkspaceService } from '../../../common/workspace.service';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { UpdateMeDto, UpdatePasswordDto, UpdateWorkspaceDto } from './dto';
 import { normalizeTelegramUsername } from '../../../telegram/shared/telegram-import.helpers';
-import { TelegramChannelsService } from '../../telegram/telegram-channels/telegram-channels.service';
+import { TelegramInviteAttributionService } from '../../telegram/telegram-channels/telegram-invite-attribution.service';
 
 const editorCommandIds = new Set<EditorCommandId>([
-  'bold', 'italic', 'underline', 'strikethrough', 'spoiler', 'inlineCode',
-  'codeBlock', 'quote', 'pullQuote', 'heading', 'bulletedList',
-  'numberedList', 'table', 'formula', 'link', 'emoji', 'buttons',
+  'bold',
+  'italic',
+  'underline',
+  'strikethrough',
+  'spoiler',
+  'inlineCode',
+  'codeBlock',
+  'quote',
+  'pullQuote',
+  'heading',
+  'bulletedList',
+  'numberedList',
+  'table',
+  'formula',
+  'link',
+  'emoji',
+  'buttons',
 ]);
 
 @Injectable()
@@ -31,7 +45,7 @@ export class AccountService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
-    private readonly telegramChannelsService: TelegramChannelsService,
+    private readonly telegramInviteAttributionService: TelegramInviteAttributionService,
   ) {}
 
   private mapAccountCapabilities(account: {
@@ -56,9 +70,7 @@ export class AccountService {
       maxUploadFileSizeMb: Number(
         premiumCapabilities?.maxUploadFileSizeMb ?? 0,
       ),
-      supportsCustomEmoji: Boolean(
-        premiumCapabilities?.supportsCustomEmoji,
-      ),
+      supportsCustomEmoji: Boolean(premiumCapabilities?.supportsCustomEmoji),
       checkedAt: account.premiumCheckedAt.toISOString(),
       limitsSource:
         premiumCapabilities?.limitsSource === 'telegram_config'
@@ -70,7 +82,13 @@ export class AccountService {
   async me(userId: string) {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
-      select: { id: true, email: true, name: true, createdAt: true, editorShortcuts: true },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        createdAt: true,
+        editorShortcuts: true,
+      },
     });
     const membership =
       await this.workspaceService.resolveWorkspaceMembershipForUser(userId);
@@ -81,8 +99,9 @@ export class AccountService {
       avatarIconId: membership.avatarIconId,
       avatarIcon: membership.avatarIcon ?? null,
       avatarPresentation: iconToResolvedEmoji(membership.avatarIcon),
-      telegramUsername: (membership as { telegramUsername?: string | null })
-        .telegramUsername ?? null,
+      telegramUsername:
+        (membership as { telegramUsername?: string | null }).telegramUsername ??
+        null,
       assignedTelegramUserAccounts: (
         await this.prisma.telegramUserAccountIntegration.findMany({
           where: {
@@ -116,7 +135,9 @@ export class AccountService {
         timezone: membership.workspace.timezone,
         role: membership.role,
         avatarIcon: membership.workspace.avatarIcon ?? null,
-        avatarPresentation: iconToResolvedEmoji(membership.workspace.avatarIcon),
+        avatarPresentation: iconToResolvedEmoji(
+          membership.workspace.avatarIcon,
+        ),
       },
     };
   }
@@ -154,8 +175,13 @@ export class AccountService {
           typeof shortcut === 'string' &&
           /^Mod(?:\+Shift)?\+[A-Z0-9]$/.test(shortcut),
       );
-      if (!valid || new Set(entries.map(([, shortcut]) => shortcut)).size !== entries.length) {
-        throw new ConflictException('Editor shortcuts must be unique supported key combinations');
+      if (
+        !valid ||
+        new Set(entries.map(([, shortcut]) => shortcut)).size !== entries.length
+      ) {
+        throw new ConflictException(
+          'Editor shortcuts must be unique supported key combinations',
+        );
       }
       data.editorShortcuts = dto.editorShortcuts as Prisma.InputJsonValue;
     }
@@ -219,14 +245,17 @@ export class AccountService {
             'One or more Telegram accounts are already linked to another workspace member',
           );
         }
-        const currentAccounts = await tx.telegramUserAccountIntegration.findMany({
-          where: {
-            workspaceId: membership.workspaceId,
-            assignedMemberId: membership.id,
-          },
-          select: { id: true },
-        });
-        const currentIds = new Set(currentAccounts.map((account) => account.id));
+        const currentAccounts =
+          await tx.telegramUserAccountIntegration.findMany({
+            where: {
+              workspaceId: membership.workspaceId,
+              assignedMemberId: membership.id,
+            },
+            select: { id: true },
+          });
+        const currentIds = new Set(
+          currentAccounts.map((account) => account.id),
+        );
         const requestedSet = new Set(requestedIds);
         const toAssign = requestedIds.filter((id) => !currentIds.has(id));
         const toUnassign = currentAccounts
@@ -280,7 +309,7 @@ export class AccountService {
       normalizedTelegramUsername !== undefined ||
       dto.telegramUserAccountIds !== undefined
     ) {
-      await this.telegramChannelsService.reattributeWorkspaceInviteLinks(
+      await this.telegramInviteAttributionService.reattributeWorkspaceInviteLinks(
         membership.workspaceId,
       );
     }

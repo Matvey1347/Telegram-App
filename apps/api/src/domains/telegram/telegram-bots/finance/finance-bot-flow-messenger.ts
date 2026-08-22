@@ -1,13 +1,16 @@
 import { TelegramBotInteractiveReplyService } from '../../../../telegram/shared/telegram-bot-interactive-reply.service';
 import type { TelegramBotApplicationContext } from '../core/telegram-bot-update.types';
 import { FinanceBotChatResponderService } from './finance-bot-chat-responder.service';
-import { FinanceChatFlowPresenterService } from './finance-chat-flow-presenter.service';
+import { FinanceChatFlowPresenterService } from '../../consumer-finance/chat-flows/finance-chat-flow-presenter.service';
 import {
   FinanceChatFlowService,
   type AccountFlowResult,
   type FinanceFlowResult,
-} from './finance-chat-flow.service';
-import { financeChatLocale, t } from './i18n/finance-chat-i18n';
+} from '../../consumer-finance/chat-flows/finance-chat-flow.service';
+import {
+  financeChatLocale,
+  t,
+} from '../../consumer-finance/i18n/finance-chat-i18n';
 
 export class FinanceBotFlowMessenger {
   constructor(

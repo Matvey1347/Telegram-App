@@ -17,17 +17,17 @@ import {
   LoadingState,
   Modal,
   Select,
-} from "@/components/ui/primitives";
+} from "./ui";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-import { consumerFinanceKeys } from "@/lib/query-keys";
+import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
 import {
   financeCopy,
   localizeFinanceCategory,
   type FinanceLocale,
 } from "./finance-i18n";
 import { FinanceConfirmModal } from "./finance-confirm-modal";
-import { IconAvatar } from "@/components/icons/icon-avatar";
-import { IconPicker } from "@/components/icons/icon-picker";
+import { IconAvatar } from "./ui/finance-icon-avatar";
+import { IconPicker } from "./ui/finance-icon-picker";
 
 export function FinanceCategories({
   botId,

@@ -1,98 +1,38 @@
 import { Injectable } from '@nestjs/common';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { PrismaService } from '../../../../prisma/prisma.service';
-import { FinanceCoreService } from './finance-core.service';
-import { FinanceLedgerService } from './finance-ledger.service';
-import { FinanceTransferService } from './finance-transfer.service';
+import { FinanceCoreService } from '../catalog/finance-core.service';
+import { FinanceLedgerService } from '../ledger/finance-ledger.service';
+import { FinanceTransferService } from '../transfers/finance-transfer.service';
 import {
   FINANCE_EMOJI_CHOICES,
   financeAccountEmoji,
-} from './finance-entity-emoji';
+} from '../catalog/finance-entity-emoji';
 import { FinanceChatFlowReadModel } from './finance-chat-flow-read-model';
 import { FinanceChatFlowWriter } from './finance-chat-flow-writer';
+import type {
+  AccountFlowResult,
+  FinanceFlowCallback,
+  FinanceFlowChoice,
+  FinanceFlowInput,
+  FinanceFlowKind,
+  FinanceFlowPayload,
+  FinanceFlowResult,
+} from './finance-chat-flow.types';
+
+export type {
+  AccountFlowResult,
+  FinanceFlowCallback,
+  FinanceFlowInput,
+  FinanceFlowKind,
+  FinanceFlowPayload,
+  FinanceFlowResult,
+} from './finance-chat-flow.types';
 
 const FLOW_TTL_MS = 15 * 60 * 1000;
 const COMMON_CURRENCIES = ['UAH', 'USD', 'EUR', 'PLN'] as const;
 
-export type FinanceFlowKind =
-  | 'TRANSACTION_CREATE'
-  | 'ACCOUNT_CREATE'
-  | 'ACCOUNT_EDIT'
-  | 'CATEGORY_CREATE'
-  | 'CATEGORY_EDIT'
-  | 'CATEGORY_ARCHIVE'
-  | 'TRANSFER_CREATE'
-  | 'SETTINGS_LANGUAGE';
-export type FinanceFlowPayload = Record<string, string | null | undefined>;
 type Payload = FinanceFlowPayload;
-type FinanceFlowChoice = {
-  id: string;
-  label: string;
-  key?: string | null;
-  emoji?: string;
-};
-export type FinanceFlowInput = {
-  profileId: string;
-  botIntegrationId: string;
-  telegramBotUserId: string;
-};
-export type FinanceFlowCallback =
-  | { action: 'back' | 'cancel' | 'confirm' | 'skip'; revision?: string }
-  | {
-      action:
-        | 'account'
-        | 'category'
-        | 'parent'
-        | 'type'
-        | 'currency'
-        | 'language'
-        | 'page'
-        | 'emoji';
-      id: string;
-      revision?: string;
-    };
-export type FinanceFlowResult =
-  | {
-      kind: 'prompt';
-      flow: FinanceFlowKind;
-      step: string;
-      payload: Payload;
-      page?: number;
-      choices?: FinanceFlowChoice[];
-    }
-  | {
-      kind: 'review';
-      flow: FinanceFlowKind;
-      step: string;
-      payload: Payload;
-      page?: number;
-    }
-  | {
-      kind: 'created' | 'updated';
-      flow: FinanceFlowKind;
-      id: string;
-      payload: Payload;
-    }
-  | {
-      kind: 'invalid';
-      flow: FinanceFlowKind;
-      reason: 'text' | 'amount' | 'currency' | 'selection';
-    }
-  | { kind: 'cancelled' | 'expired'; flow?: FinanceFlowKind; payload?: Payload }
-  | null;
-export type AccountFlowResult =
-  | { kind: 'name' }
-  | { kind: 'currency'; name: string }
-  | { kind: 'balance' }
-  | { kind: 'created'; name: string; currency: string; balance: string }
-  | {
-      kind:
-        | 'invalid-name'
-        | 'invalid-currency'
-        | 'invalid-balance'
-        | 'cancelled';
-    }
-  | null;
 
 /** Durable one-user state machine. Callbacks contain an action and opaque id only. */
 @Injectable()

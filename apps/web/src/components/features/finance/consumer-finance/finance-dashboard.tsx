@@ -3,8 +3,8 @@ import type {
   ConsumerFinanceDashboard,
   ConsumerFinanceTransaction,
 } from "@telegram-system/shared";
-import { Button, Card, EmptyState } from "@/components/ui/primitives";
-import { formatMoney } from "@/lib/features/finance/money";
+import { Button, Card, EmptyState } from "./ui";
+import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
 import type { ConsumerFinanceScreen } from "./consumer-finance-screens";
 import type { ConsumerFinanceAction } from "./consumer-finance-navigation";
 import type { ConsumerFinanceSurface } from "./consumer-finance-navigation";

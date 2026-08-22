@@ -4,48 +4,37 @@ import {
   OnApplicationBootstrap,
   OnApplicationShutdown,
 } from '@nestjs/common';
+import {
+  deploymentFlag,
+  positiveDeploymentNumber,
+} from '../../config/deployment-config';
+import { MEMORY_MONITOR_CONFIG } from './memory-monitor.config';
 
 export type MemoryMetadata = Record<
   string,
   string | number | boolean | null | undefined
 >;
 
-const DEFAULT_INTERVAL_MS = 30_000;
-const DEFAULT_WARN_RSS_MB = 400;
-const DEFAULT_REMINDER_INTERVAL_MS = 15 * 60_000;
-const DEFAULT_RECOVERY_RATIO = 0.9;
-
-function readPositiveNumber(
-  value: string | undefined,
-  fallback: number,
-): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
 @Injectable()
 export class MemoryMonitorService
   implements OnApplicationBootstrap, OnApplicationShutdown
 {
   private readonly logger = new Logger('MemoryMonitor');
-  private readonly enabled = process.env.MEMORY_MONITOR_ENABLED !== 'false';
-  private readonly intervalMs = readPositiveNumber(
-    process.env.MEMORY_MONITOR_INTERVAL_MS,
-    DEFAULT_INTERVAL_MS,
+  private readonly enabled =
+    deploymentFlag('MEMORY_MONITOR_ENABLED') !== 'false';
+  private readonly intervalMs = MEMORY_MONITOR_CONFIG.intervalMs;
+  private readonly warnRssMb = positiveDeploymentNumber(
+    'MEMORY_MONITOR_WARN_RSS_MB',
+    MEMORY_MONITOR_CONFIG.defaultWarningRssMb,
   );
-  private readonly warnRssMb = readPositiveNumber(
-    process.env.MEMORY_MONITOR_WARN_RSS_MB,
-    DEFAULT_WARN_RSS_MB,
-  );
-  private readonly recoveryRssMb = this.readRecoveryThreshold();
-  private readonly reminderIntervalMs = readPositiveNumber(
-    process.env.MEMORY_MONITOR_REMINDER_INTERVAL_MS,
-    DEFAULT_REMINDER_INTERVAL_MS,
-  );
+  private readonly recoveryRssMb =
+    this.warnRssMb * MEMORY_MONITOR_CONFIG.recoveryRatio;
+  private readonly reminderIntervalMs =
+    MEMORY_MONITOR_CONFIG.reminderIntervalMs;
   // Detailed samples are useful during an investigation, but must be opt-in:
   // Nest's production logger can persist ordinary logs to ApplicationLog.
   private readonly detailedTelemetry =
-    process.env.MEMORY_MONITOR_DETAILED_TELEMETRY === 'true';
+    deploymentFlag('MEMORY_MONITOR_DETAILED_TELEMETRY') === 'true';
   private timer?: NodeJS.Timeout;
   private warningActive = false;
   private lastWarningAt = 0;
@@ -162,14 +151,5 @@ export class MemoryMonitorService
 
   private toMb(bytes: number): number {
     return Math.round((bytes / 1024 / 1024) * 10) / 10;
-  }
-
-  private readRecoveryThreshold() {
-    const fallback = this.warnRssMb * DEFAULT_RECOVERY_RATIO;
-    const configured = readPositiveNumber(
-      process.env.MEMORY_MONITOR_RECOVERY_RSS_MB,
-      fallback,
-    );
-    return configured < this.warnRssMb ? configured : fallback;
   }
 }

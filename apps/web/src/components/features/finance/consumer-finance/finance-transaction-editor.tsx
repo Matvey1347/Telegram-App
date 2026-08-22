@@ -9,20 +9,13 @@ import type {
   ConsumerFinanceTransaction,
   ConsumerFinanceTransactionInput,
 } from "@telegram-system/shared";
-import {
-  Button,
-  DateInput,
-  FormField,
-  Input,
-  Modal,
-  Select,
-} from "@/components/ui/primitives";
+import { Button, DateInput, FormField, Input, Modal, Select } from "./ui";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
 import {
   financeCalendarDate,
   financeOccurredAtForDate,
   financeToday,
-} from "@/lib/features/finance/finance-date";
+} from "@/lib/features/finance/consumer-finance-date";
 import {
   financeCopy,
   localizeFinanceCategory,

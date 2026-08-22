@@ -12,6 +12,7 @@
 - NestJS decorators, DTO validation classes or services.
 - React components, hooks, browser APIs or Next.js code.
 - Domain implementation that is only used by one app.
+- Product UI, services, state, hooks, localization, presenters, cache/query behavior or business policy moved here only to bypass a product boundary.
 
 ## Contract Rules
 
@@ -24,6 +25,7 @@
 - Split shared contract files by domain when they approach 400-500 lines; no shared type file should remain above the 800-line architecture hard policy.
 - Keep index/barrel files type-only and below 250 lines.
 - Do not replace one large shared type file with a single large `types.ts` in another folder.
+- Similar names across internal Finance and consumer Finance do not make a contract shared. Add a cross-app contract only when both sides intentionally consume the same stable serializable semantics.
 
 ## Validation
 

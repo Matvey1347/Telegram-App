@@ -1,4 +1,8 @@
 import { TelegramChannelsService } from './telegram-channels.service';
+import {
+  createTelegramChannelsTestHarness,
+  type TelegramChannelsTestHarness,
+} from './__fixtures__/telegram-channels.test-harness';
 
 describe('TelegramChannelsService syncPostsMetricsForWorkspace', () => {
   const prisma = {
@@ -19,11 +23,11 @@ describe('TelegramChannelsService syncPostsMetricsForWorkspace', () => {
     getChannelPostsMetrics: jest.fn(),
   };
 
-  let service: TelegramChannelsService;
+  let service: TelegramChannelsTestHarness;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new TelegramChannelsService(
+    service = createTelegramChannelsTestHarness(
       prisma as never,
       {} as never,
       { clearByPrefix: jest.fn() } as never,
@@ -54,9 +58,6 @@ describe('TelegramChannelsService syncPostsMetricsForWorkspace', () => {
         apiHash: 'hash',
         session: 'session',
       } as never);
-    jest
-      .spyOn(service as never, 'persistPostMetrics' as never)
-      .mockResolvedValue({ affectedDays: 0 } as never);
     jest
       .spyOn(service as never, 'createAudienceSnapshotSafely' as never)
       .mockResolvedValue(null as never);
@@ -90,7 +91,9 @@ describe('TelegramChannelsService syncPostsMetricsForWorkspace', () => {
 
     expect(mtprotoClient.getChannelPostsMetrics).toHaveBeenCalled();
     expect(prisma.telegramChannel.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'channel-1', workspaceId: 'workspace-1', isActive: true } }),
+      expect.objectContaining({
+        where: { id: 'channel-1', workspaceId: 'workspace-1', isActive: true },
+      }),
     );
   });
 
@@ -98,24 +101,47 @@ describe('TelegramChannelsService syncPostsMetricsForWorkspace', () => {
     jest.restoreAllMocks();
     const postDate = new Date('2026-08-12T10:00:00.000Z');
     const metric = {
-      telegramMessageId: '101', postDate, text: 'same', formattedText: 'same',
-      hasMedia: false, mediaKind: null, viewsCount: 10, forwardsCount: 1,
-      reactionsCount: 2, commentsCount: 0, reactions: { '👍': 2 }, rawMessage: { id: 101 },
+      telegramMessageId: '101',
+      postDate,
+      text: 'same',
+      formattedText: 'same',
+      hasMedia: false,
+      mediaKind: null,
+      viewsCount: 10,
+      forwardsCount: 1,
+      reactionsCount: 2,
+      commentsCount: 0,
+      reactions: { '👍': 2 },
+      rawMessage: { id: 101 },
     };
-    prisma.telegramPost.findMany.mockResolvedValueOnce([{ id: 'post-1', ...metric }]);
+    prisma.telegramPost.findMany.mockResolvedValueOnce([
+      { id: 'post-1', ...metric },
+    ]);
     const internals = service as unknown as {
       persistPostMetrics: (
         workspaceId: string,
         channelId: string,
         metrics: unknown[],
-      ) => Promise<{ affectedDays: number; changedPosts: number; snapshotsCreated: number }>;
+      ) => Promise<{
+        affectedDays: number;
+        changedPosts: number;
+        snapshotsCreated: number;
+      }>;
       recalculateDailyStatsFromPosts: jest.Mock;
     };
     internals.recalculateDailyStatsFromPosts = jest.fn();
 
-    const result = await internals.persistPostMetrics('workspace-1', 'channel-1', [metric]);
+    const result = await internals.persistPostMetrics(
+      'workspace-1',
+      'channel-1',
+      [metric],
+    );
 
-    expect(result).toEqual({ affectedDays: 0, changedPosts: 0, snapshotsCreated: 0 });
+    expect(result).toEqual({
+      affectedDays: 0,
+      changedPosts: 0,
+      snapshotsCreated: 0,
+    });
     expect(prisma.telegramPost.update).not.toHaveBeenCalled();
     expect(prisma.telegramPost.create).not.toHaveBeenCalled();
     expect(prisma.telegramPostMetricSnapshot.create).not.toHaveBeenCalled();
@@ -126,6 +152,8 @@ describe('TelegramChannelsService syncPostsMetricsForWorkspace', () => {
     await service.syncPostsMetricsForWorkspace('workspace-1', 'channel-1', {});
 
     expect(sourceAccessService.recordDataSource).not.toHaveBeenCalled();
-    expect((service as any).createAudienceSnapshotSafely).toHaveBeenCalledTimes(0);
+    expect((service as any).createAudienceSnapshotSafely).toHaveBeenCalledTimes(
+      0,
+    );
   });
 });

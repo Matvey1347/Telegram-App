@@ -6,7 +6,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
 import { PrismaService } from '../../../../prisma/prisma.service';
-import { financeAnalyticsDateRange } from './finance-history-date-range';
+import { financeAnalyticsDateRange } from '../ledger/finance-history-date-range';
 import { financeLimitView } from './finance-limit-view';
 
 type LimitSpendRow = {

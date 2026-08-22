@@ -10,6 +10,8 @@ import { ApplicationLoggerService } from './application-logger.service';
 import { APPLICATION_LOG_HTTP_EXCLUDED_PATHS } from './application-logs.constants';
 import { RequestContextService } from '../../../common/request-context/request-context.service';
 import { sanitizeLogMetadata } from './application-logs.sanitizer';
+import { deploymentFlag } from '../../../config/deployment-config';
+import { APPLICATION_LOGGING_CONFIG } from './application-logging.config';
 
 @Injectable()
 export class ApplicationLogsHttpInterceptor implements NestInterceptor {
@@ -25,7 +27,7 @@ export class ApplicationLogsHttpInterceptor implements NestInterceptor {
     const path = request.originalUrl || request.url;
     const shouldSkip =
       request.method === 'OPTIONS' ||
-      process.env.APP_LOG_HTTP_ENABLED === 'false' ||
+      deploymentFlag('APP_LOG_HTTP_ENABLED') === 'false' ||
       APPLICATION_LOG_HTTP_EXCLUDED_PATHS.some((pattern) => pattern.test(path));
 
     return next.handle().pipe(
@@ -36,8 +38,8 @@ export class ApplicationLogsHttpInterceptor implements NestInterceptor {
           const durationMs = Date.now() - startedAt;
           const statusCode = response.statusCode;
           const persistSuccessfulRequest =
-            process.env.APP_LOG_HTTP_SUCCESS_ENABLED === 'true';
-          const slowRequestMs = Number(process.env.APP_LOG_HTTP_SLOW_REQUEST_MS);
+            deploymentFlag('APP_LOG_HTTP_SUCCESS_ENABLED') === 'true';
+          const slowRequestMs = APPLICATION_LOGGING_CONFIG.slowRequestMs;
           const isSlow =
             Number.isFinite(slowRequestMs) &&
             slowRequestMs > 0 &&

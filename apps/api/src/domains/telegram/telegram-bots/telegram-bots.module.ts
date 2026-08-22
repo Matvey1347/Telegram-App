@@ -2,13 +2,16 @@ import { Module } from '@nestjs/common';
 import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
 import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
 import { TelegramBotInteractiveReplyService } from '../../../telegram/shared/telegram-bot-interactive-reply.service';
+import { TelegramBotApplicationDispatcherService } from './core/telegram-bot-application-dispatcher.service';
 import {
-  TelegramBotApplicationDispatcherService,
-  TelegramBotFinanceHandler,
-  TelegramBotGreeterHandler,
-} from './core/telegram-bot-application-dispatcher.service';
+  TELEGRAM_BOT_FINANCE_HANDLER,
+  TELEGRAM_BOT_FINANCE_PRESENTATION,
+  TELEGRAM_BOT_GREETER_HANDLER,
+  TELEGRAM_BOT_GREETER_PRESENTATION,
+} from './core/telegram-bot-application.ports';
 import { TelegramBotApplicationRegistryService } from './core/telegram-bot-application-registry.service';
 import { TelegramBotDeliveryService } from './core/telegram-bot-delivery.service';
+import { FINANCE_REMINDER_DELIVERY_PORT } from './core/telegram-bot-delivery.ports';
 import { TelegramBotRuntimeController } from './core/telegram-bot-runtime.controller';
 import { TelegramBotRuntimeService } from './core/telegram-bot-runtime.service';
 import { TelegramBotRuntimeEnvironmentService } from './core/telegram-bot-runtime-environment.service';
@@ -26,27 +29,30 @@ import { TelegramBotLoadingFeedbackService } from './core/telegram-bot-loading-f
 import { GreeterService } from './greeter/greeter.service';
 import { GreeterController } from './greeter/greeter.controller';
 import { GreeterAutomationService } from './greeter/greeter-automation.service';
+import { GreeterTelegramPresentationService } from './greeter/greeter-telegram-presentation.service';
 import { FinanceBotService } from './finance/finance-bot.service';
+import { FinanceTelegramPresentationService } from './finance/finance-telegram-presentation.service';
 import { FinanceBotChatResponderService } from './finance/finance-bot-chat-responder.service';
-import { FinanceChatFlowService } from './finance/finance-chat-flow.service';
-import { FinanceChatFlowPresenterService } from './finance/finance-chat-flow-presenter.service';
-import { FinanceEntitlementService } from './finance/finance-entitlement.service';
+import { FinanceChatFlowService } from '../consumer-finance/chat-flows/finance-chat-flow.service';
+import { FinanceChatFlowPresenterService } from '../consumer-finance/chat-flows/finance-chat-flow-presenter.service';
+import { FinanceEntitlementService } from '../consumer-finance/billing/finance-entitlement.service';
 import { BotBillingModule } from '../bot-billing/bot-billing.module';
-import { FinanceAiConfigService } from './finance/finance-ai-config.service';
-import { FinanceAiConfigController } from './finance/finance-ai-config.controller';
-import { FinanceController } from './finance/finance.controller';
-import { FinanceUltimateController } from './finance/finance-ultimate.controller';
-import { FinanceUltimateService } from './finance/finance-ultimate.service';
-import { FinanceContextService } from './finance/finance-context.service';
-import { FinanceConsumerSessionService } from './finance/finance-consumer-session.service';
-import { FinanceConsumerRuntimeEnvironmentService } from './finance/finance-consumer-runtime-environment.service';
-import { FinanceConsumerTransferService } from './finance/finance-consumer-transfer.service';
+import { FinanceAiConfigService } from '../consumer-finance/ai/finance-ai-config.service';
+import { FinanceAiConfigController } from '../consumer-finance/ai/finance-ai-config.controller';
+import { FinanceController } from '../consumer-finance/http/finance.controller';
+import { FinanceUltimateController } from '../consumer-finance/ultimate/finance-ultimate.controller';
+import { FinanceUltimateService } from '../consumer-finance/ultimate/finance-ultimate.service';
+import { FinanceContextService } from '../consumer-finance/identity/finance-context.service';
+import { FinanceConsumerSessionService } from '../consumer-finance/identity/finance-consumer-session.service';
+import { FinanceConsumerRuntimeEnvironmentService } from '../consumer-finance/identity/finance-consumer-runtime-environment.service';
+import { FinanceConsumerTransferService } from '../consumer-finance/identity/finance-consumer-transfer.service';
 import { FinanceBotBrowserLogin } from './finance/finance-bot-browser-login';
-import { FinanceCoreService } from './finance/finance-core.service';
-import { FinanceLedgerService } from './finance/finance-ledger.service';
-import { FinanceTransferService } from './finance/finance-transfer.service';
-import { FinanceProposalService } from './finance/finance-proposal.service';
-import { FinanceAiProviderService } from './finance/finance-ai.provider';
+import { FinanceCoreService } from '../consumer-finance/catalog/finance-core.service';
+import { FinanceLedgerService } from '../consumer-finance/ledger/finance-ledger.service';
+import { FinanceTransferService } from '../consumer-finance/transfers/finance-transfer.service';
+import { FinanceProposalService } from '../consumer-finance/chat-flows/finance-proposal.service';
+import { FinanceAiProviderService } from '../consumer-finance/ai/finance-ai.provider';
+import { FinanceReminderDeliveryService } from '../consumer-finance/planning/finance-reminder-delivery.service';
 import { GreeterExpiryService } from './greeter/greeter-expiry.service';
 import { OperationalHistoryRetentionService } from './core/operational-history-retention.service';
 import { GreeterAdminService } from './greeter/greeter-admin.service';
@@ -108,8 +114,23 @@ import { GreeterTestModeService } from './greeter/greeter-test-mode.service';
     FinanceUltimateService,
     FinanceProposalService,
     FinanceAiProviderService,
-    TelegramBotGreeterHandler,
-    TelegramBotFinanceHandler,
+    FinanceReminderDeliveryService,
+    GreeterTelegramPresentationService,
+    FinanceTelegramPresentationService,
+    { provide: TELEGRAM_BOT_GREETER_HANDLER, useExisting: GreeterService },
+    { provide: TELEGRAM_BOT_FINANCE_HANDLER, useExisting: FinanceBotService },
+    {
+      provide: TELEGRAM_BOT_GREETER_PRESENTATION,
+      useExisting: GreeterTelegramPresentationService,
+    },
+    {
+      provide: TELEGRAM_BOT_FINANCE_PRESENTATION,
+      useExisting: FinanceTelegramPresentationService,
+    },
+    {
+      provide: FINANCE_REMINDER_DELIVERY_PORT,
+      useExisting: FinanceReminderDeliveryService,
+    },
     TelegramBotApplicationDispatcherService,
     TelegramBotDeliveryService,
     GreeterExpiryService,

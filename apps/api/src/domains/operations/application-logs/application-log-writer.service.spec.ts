@@ -1,23 +1,9 @@
 import { ApplicationLogWriterService } from './application-log-writer.service';
 
 describe('ApplicationLogWriterService idle behavior', () => {
-  const originalBatchSize = process.env.APP_LOG_BATCH_SIZE;
-  const originalFlushInterval = process.env.APP_LOG_FLUSH_INTERVAL_MS;
-
   beforeAll(() => jest.useFakeTimers());
   beforeEach(() => {
     jest.clearAllTimers();
-    process.env.APP_LOG_BATCH_SIZE = '50';
-    process.env.APP_LOG_FLUSH_INTERVAL_MS = '1000';
-  });
-  afterEach(() => {
-    if (originalBatchSize === undefined) delete process.env.APP_LOG_BATCH_SIZE;
-    else process.env.APP_LOG_BATCH_SIZE = originalBatchSize;
-    if (originalFlushInterval === undefined) {
-      delete process.env.APP_LOG_FLUSH_INTERVAL_MS;
-    } else {
-      process.env.APP_LOG_FLUSH_INTERVAL_MS = originalFlushInterval;
-    }
   });
   afterAll(() => jest.useRealTimers());
 

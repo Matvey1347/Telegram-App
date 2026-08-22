@@ -29,6 +29,10 @@ import { TelegramBotApplicationRegistryService } from './telegram-bot-applicatio
 import { TelegramBotRuntimeService } from './telegram-bot-runtime.service';
 import { TelegramBotIdentityService } from './telegram-bot-identity.service';
 import { TelegramBotIntegrationViewService } from './telegram-bot-integration-view.service';
+import {
+  isProductionEnvironment,
+  telegramBotRuntimeEnvironmentName,
+} from '../../../../config/deployment-config';
 
 @Injectable()
 export class TelegramBotsService {
@@ -56,13 +60,13 @@ export class TelegramBotsService {
   }
 
   private environment(value?: string) {
-    const configured = value || process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT;
+    const configured = value || telegramBotRuntimeEnvironmentName();
     if (configured === TelegramBotRuntimeEnvironment.LOCAL) {
       return TelegramBotRuntimeEnvironment.LOCAL;
     }
     if (
       configured === TelegramBotRuntimeEnvironment.PRODUCTION ||
-      (!configured && process.env.NODE_ENV === 'production')
+      (!configured && isProductionEnvironment())
     ) {
       return TelegramBotRuntimeEnvironment.PRODUCTION;
     }

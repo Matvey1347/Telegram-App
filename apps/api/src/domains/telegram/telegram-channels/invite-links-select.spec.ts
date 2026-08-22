@@ -1,4 +1,8 @@
 import { TelegramChannelsService } from './telegram-channels.service';
+import {
+  createTelegramChannelsTestHarness,
+  type TelegramChannelsTestHarness,
+} from './__fixtures__/telegram-channels.test-harness';
 
 describe('TelegramChannelsService inviteLinksForSelect', () => {
   it('returns only unused invite links for campaign creation', async () => {
@@ -19,7 +23,7 @@ describe('TelegramChannelsService inviteLinksForSelect', () => {
         ]),
       },
     };
-    const service = new TelegramChannelsService(
+    const service = createTelegramChannelsTestHarness(
       prisma as never,
       {} as never,
       { clearByPrefix: jest.fn() } as never,
@@ -86,7 +90,7 @@ describe('TelegramChannelsService inviteLinksForSelect', () => {
         ]),
       },
     };
-    const service = new TelegramChannelsService(
+    const service = createTelegramChannelsTestHarness(
       prisma as never,
       {} as never,
       { clearByPrefix: jest.fn() } as never,
@@ -118,10 +122,7 @@ describe('TelegramChannelsService inviteLinksForSelect', () => {
               telegramChannelId: 'channel-1',
             },
             {
-              OR: [
-                { adCampaignId: null },
-                { adCampaignId: 'campaign-1' },
-              ],
+              OR: [{ adCampaignId: null }, { adCampaignId: 'campaign-1' }],
             },
           ],
         },

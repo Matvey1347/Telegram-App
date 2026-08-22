@@ -9,6 +9,12 @@ import { APPLICATION_LOG_SERVICE } from './application-logs.constants';
 import { sanitizeLogMetadata } from './application-logs.sanitizer';
 import { ApplicationLogWriterService } from './application-log-writer.service';
 import { RequestContextService } from '../../../common/request-context/request-context.service';
+import {
+  configuredRuntimeEnvironmentName,
+  deploymentValue,
+  runtimeEnvironmentName,
+} from '../../../config/deployment-config';
+import { APPLICATION_LOGGING_CONFIG } from './application-logging.config';
 
 type StructuredLogInput = {
   level?: ApplicationLogLevel;
@@ -54,19 +60,24 @@ function normalizeMinimumLevel(
 }
 
 export function applicationLogMinimumLevel(
-  environment: NodeJS.ProcessEnv = process.env,
+  environment?: NodeJS.ProcessEnv,
 ) {
+  const environmentName = environment
+    ? configuredRuntimeEnvironmentName(environment)
+    : configuredRuntimeEnvironmentName();
   const developmentLike =
-    environment.NODE_ENV === 'development' || environment.NODE_ENV === 'test';
+    environmentName === 'development' || environmentName === 'test';
   return normalizeMinimumLevel(
-    environment.APP_LOG_MIN_LEVEL,
+    environment
+      ? deploymentValue('APP_LOG_MIN_LEVEL', environment)
+      : deploymentValue('APP_LOG_MIN_LEVEL'),
     developmentLike ? 'info' : 'warn',
   );
 }
 
 function consoleLogLevels(): LogLevel[] {
   const minimum = normalizeMinimumLevel(
-    process.env.APP_CONSOLE_LOG_LEVEL || 'warn',
+    deploymentValue('APP_CONSOLE_LOG_LEVEL') || 'warn',
   );
   const levels: Array<[ApplicationLogLevel, LogLevel]> = [
     ['debug', 'debug'],
@@ -132,7 +143,7 @@ export class ApplicationLoggerService
       userId: input.userId ?? context?.userId ?? null,
       level,
       kind: input.kind || 'application',
-      environment: process.env.NODE_ENV || 'development',
+      environment: runtimeEnvironmentName(),
       service: APPLICATION_LOG_SERVICE,
       source: input.source ?? null,
       event: input.event,
@@ -153,9 +164,10 @@ export class ApplicationLoggerService
   }
 
   private computeExpiresAt() {
-    const retentionDays = Number(process.env.APP_LOG_RETENTION_DAYS ?? 90);
-    if (!Number.isFinite(retentionDays) || retentionDays <= 0) return null;
-    return new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000);
+    return new Date(
+      Date.now() +
+        APPLICATION_LOGGING_CONFIG.retentionDays * 24 * 60 * 60 * 1000,
+    );
   }
 
   private writeFromNest(

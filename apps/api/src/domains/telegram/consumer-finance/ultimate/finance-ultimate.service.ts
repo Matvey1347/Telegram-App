@@ -1,14 +1,14 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../../prisma/prisma.service';
-import { financeHistoryDateRange } from './finance-history-date-range';
-import type { FinanceUltimateQueryDto } from './finance.dto';
-import { FinanceLedgerService } from './finance-ledger.service';
-import { financeBalanceSummary } from './finance-balance-summary';
+import { financeHistoryDateRange } from '../ledger/finance-history-date-range';
+import type { FinanceUltimateQueryDto } from '../http/finance.dto';
+import { FinanceLedgerService } from '../ledger/finance-ledger.service';
+import { financeBalanceSummary } from '../ledger/finance-balance-summary';
 import {
   financeChatLocale,
   type FinanceChatLocale,
-} from './i18n/finance-chat-i18n';
+} from '../i18n/finance-chat-i18n';
 
 type AggregateRow = {
   label: string | null;

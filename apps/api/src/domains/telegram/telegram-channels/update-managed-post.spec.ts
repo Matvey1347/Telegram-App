@@ -4,6 +4,10 @@ import {
   TelegramSourceType,
 } from '@prisma/client';
 import { TelegramChannelsService } from './telegram-channels.service';
+import {
+  createTelegramChannelsTestHarness,
+  type TelegramChannelsTestHarness,
+} from './__fixtures__/telegram-channels.test-harness';
 
 describe('TelegramChannelsService updateManagedPost', () => {
   it('recovers telegram message ids from the saved URL and reuses an editable source', async () => {
@@ -78,7 +82,7 @@ describe('TelegramChannelsService updateManagedPost', () => {
         },
       ]),
     };
-    const service = new TelegramChannelsService(
+    const service = createTelegramChannelsTestHarness(
       prisma as never,
       {
         resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace'),
@@ -205,7 +209,7 @@ describe('TelegramChannelsService updateManagedPost', () => {
         },
       ]),
     };
-    const service = new TelegramChannelsService(
+    const service = createTelegramChannelsTestHarness(
       prisma as never,
       {
         resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace'),
@@ -341,7 +345,7 @@ describe('TelegramChannelsService updateManagedPost', () => {
         .fn()
         .mockImplementation(async (callback) => callback(prisma)),
     };
-    const service = new TelegramChannelsService(
+    const service = createTelegramChannelsTestHarness(
       prisma as never,
       {
         resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace'),
@@ -374,7 +378,7 @@ describe('TelegramChannelsService updateManagedPost', () => {
 
   it('rejects a manual Telegram URL while the post is still scheduled', async () => {
     const update = jest.fn();
-    const service = new TelegramChannelsService(
+    const service = createTelegramChannelsTestHarness(
       {
         telegramManagedPost: {
           findFirst: jest
@@ -440,7 +444,7 @@ describe('TelegramChannelsService updateManagedPost', () => {
       .mockResolvedValueOnce([mtprotoSource])
       .mockResolvedValueOnce([mtprotoSource, botSource]);
     const upsertAccess = jest.fn().mockResolvedValue(undefined);
-    const service = new TelegramChannelsService(
+    const service = createTelegramChannelsTestHarness(
       {} as never,
       {} as never,
       {} as never,

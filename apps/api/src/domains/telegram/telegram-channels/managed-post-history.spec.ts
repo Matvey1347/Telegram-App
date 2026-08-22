@@ -3,6 +3,10 @@ import {
   TelegramManagedPostStatus,
 } from '@prisma/client';
 import { TelegramChannelsService } from './telegram-channels.service';
+import {
+  createTelegramChannelsTestHarness,
+  type TelegramChannelsTestHarness,
+} from './__fixtures__/telegram-channels.test-harness';
 
 describe('TelegramChannelsService managed post history', () => {
   it('restores a revision into draft and keeps a backup of the current state', async () => {
@@ -124,7 +128,7 @@ describe('TelegramChannelsService managed post history', () => {
         .fn()
         .mockImplementation(async (callback) => callback(prisma)),
     };
-    const service = new TelegramChannelsService(
+    const service = createTelegramChannelsTestHarness(
       prisma as never,
       {} as never,
       { clearByPrefix: jest.fn() } as never,

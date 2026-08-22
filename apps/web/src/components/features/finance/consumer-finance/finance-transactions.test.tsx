@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ToastProvider } from "@/providers/toast-provider";
+import { FinanceFeedbackProvider } from "./ui/finance-feedback";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
 import { FinanceTransactions } from "./finance-transactions";
 
@@ -26,7 +26,7 @@ function renderTransactions(
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      <ToastProvider>
+      <FinanceFeedbackProvider>
         <FinanceTransactions
           botId="bot-1"
           accounts={[]}
@@ -35,7 +35,7 @@ function renderTransactions(
           timezone="UTC"
           surface={surface}
         />
-      </ToastProvider>
+      </FinanceFeedbackProvider>
     </QueryClientProvider>,
   );
 }
@@ -79,7 +79,9 @@ describe("FinanceTransactions receipt detail", () => {
     fireEvent.click(period);
 
     expect(screen.getByText("Выберите начальную дату")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Очистить" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Очистить" }),
+    ).toBeInTheDocument();
     expect(period.nextElementSibling).toHaveClass("right-0");
   });
 

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramChannelsService } from '../telegram-channels/telegram-channels.service';
+import { TelegramPostMetricsService } from '../telegram-channels/telegram-post-metrics.service';
+import { TelegramBroadcastStatsService } from '../telegram-channels/telegram-broadcast-stats.service';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
 
 @Injectable()
@@ -9,17 +10,12 @@ export class TelegramWorkspaceSyncTasksService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly telegramChannelsService: TelegramChannelsService,
+    private readonly telegramPostMetricsService: TelegramPostMetricsService,
+    private readonly telegramBroadcastStatsService: TelegramBroadcastStatsService,
     private readonly applicationLogger: ApplicationLoggerService,
   ) {}
 
   async syncPostMetricsForWorkspace(workspaceId: string) {
-    if (process.env.TELEGRAM_MTTPROTO_SYNC_ENABLED === 'false') {
-      return {
-        summary: 'MTProto sync is disabled by environment.',
-        skipped: true,
-      };
-    }
     const startedAt = Date.now();
     const selection = await this.postMetricsChannelSelection(workspaceId);
     const channels = selection.eligible;
@@ -31,11 +27,12 @@ export class TelegramWorkspaceSyncTasksService {
     let dailyStatsRecalculated = 0;
     for (const channel of channels) {
       try {
-        const result = await this.telegramChannelsService.syncPostsMetricsForWorkspace(
-          workspaceId,
-          channel.id,
-          { postLimit: 100 },
-        );
+        const result =
+          await this.telegramPostMetricsService.syncPostsMetricsForWorkspace(
+            workspaceId,
+            channel.id,
+            { postLimit: 100 },
+          );
         synced += 1;
         postsFetched += result.syncedPosts;
         postsChanged += result.changedPosts;
@@ -58,12 +55,6 @@ export class TelegramWorkspaceSyncTasksService {
   }
 
   async syncBroadcastStatsForWorkspace(workspaceId: string) {
-    if (process.env.TELEGRAM_MTTPROTO_SYNC_ENABLED === 'false') {
-      return {
-        summary: 'MTProto sync is disabled by environment.',
-        skipped: true,
-      };
-    }
     const startedAt = Date.now();
     const channels = await this.broadcastStatsChannels(workspaceId);
     let synced = 0;
@@ -75,7 +66,7 @@ export class TelegramWorkspaceSyncTasksService {
           orderBy: { createdAt: 'asc' },
         });
         if (!link) continue;
-        await this.telegramChannelsService.syncBroadcastStatsForWorkspace(
+        await this.telegramBroadcastStatsService.syncBroadcastStatsForWorkspace(
           workspaceId,
           channel.id,
           link.telegramUserAccountIntegrationId,
@@ -103,9 +94,13 @@ export class TelegramWorkspaceSyncTasksService {
       select: { id: true, autoSyncEnabled: true, syncIncludePostMetrics: true },
     });
     return {
-      eligible: rows.filter((row) => row.autoSyncEnabled && row.syncIncludePostMetrics),
+      eligible: rows.filter(
+        (row) => row.autoSyncEnabled && row.syncIncludePostMetrics,
+      ),
       autoSyncDisabled: rows.filter((row) => !row.autoSyncEnabled).length,
-      selectionDisabled: rows.filter((row) => row.autoSyncEnabled && !row.syncIncludePostMetrics).length,
+      selectionDisabled: rows.filter(
+        (row) => row.autoSyncEnabled && !row.syncIncludePostMetrics,
+      ).length,
     };
   }
 

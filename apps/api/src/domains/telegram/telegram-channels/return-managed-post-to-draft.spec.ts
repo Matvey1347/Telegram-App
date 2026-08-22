@@ -5,6 +5,10 @@ import {
   TelegramSourceType,
 } from '@prisma/client';
 import { TelegramChannelsService } from './telegram-channels.service';
+import {
+  createTelegramChannelsTestHarness,
+  type TelegramChannelsTestHarness,
+} from './__fixtures__/telegram-channels.test-harness';
 
 describe('TelegramChannelsService returnManagedPostToDraft', () => {
   it('cancels the scheduled Telegram post and returns it to draft', async () => {
@@ -80,7 +84,7 @@ describe('TelegramChannelsService returnManagedPostToDraft', () => {
     const mtprotoClient = {
       deleteScheduledPost: jest.fn().mockResolvedValue(undefined),
     };
-    const service = new TelegramChannelsService(
+    const service = createTelegramChannelsTestHarness(
       prisma as never,
       {} as never,
       { clearByPrefix: jest.fn() } as never,
@@ -160,7 +164,7 @@ describe('TelegramChannelsService returnManagedPostToDraft', () => {
         }),
       },
     };
-    const service = new TelegramChannelsService(
+    const service = createTelegramChannelsTestHarness(
       prisma as never,
       {} as never,
       { clearByPrefix: jest.fn() } as never,
@@ -183,7 +187,7 @@ describe('TelegramChannelsService returnManagedPostToDraft', () => {
         findFirst: jest.fn().mockResolvedValue(null),
       },
     };
-    const service = new TelegramChannelsService(
+    const service = createTelegramChannelsTestHarness(
       prisma as never,
       {} as never,
       { clearByPrefix: jest.fn() } as never,

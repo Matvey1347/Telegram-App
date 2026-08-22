@@ -5,7 +5,7 @@ import { DashboardService } from '../../operations/dashboard/dashboard.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ScheduledTasksService } from '../../operations/scheduled-tasks/scheduled-tasks.service';
 import { TelegramWorkspaceFullSyncService } from '../telegram-sync/telegram-workspace-full-sync.service';
-import { TelegramChannelsService } from '../telegram-channels/telegram-channels.service';
+import { TelegramChannelSyncOrchestrator } from '../telegram-channels/telegram-channel-sync.orchestrator';
 
 @Injectable()
 export class TelegramSystemBotDomainGatewayService {
@@ -82,7 +82,7 @@ export class TelegramSystemBotDomainGatewayService {
       contextId,
     );
     const service = await this.moduleRef.resolve(
-      TelegramChannelsService,
+      TelegramChannelSyncOrchestrator,
       contextId,
       { strict: false },
     );

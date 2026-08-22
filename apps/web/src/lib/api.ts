@@ -1,4 +1,10 @@
 import axios, { type AxiosRequestConfig } from "axios";
+import { publicWebEnvironment } from "@/config/public-env";
+import {
+  createHttpTransport,
+  createRequestCorrelationId,
+} from "./http/transport";
+import { resolveBrowserApiBase } from "./http/api-base";
 import type {
   BulkActionResult,
   BulkActionResultItem,
@@ -44,31 +50,13 @@ export type {
 } from "@telegram-system/shared";
 
 function resolveApiBaseUrl() {
-  const raw = process.env.NEXT_PUBLIC_API_URL?.trim();
-
-  if (!raw && process.env.NODE_ENV === "production") {
-    throw new Error("NEXT_PUBLIC_API_URL is not defined");
-  }
-
-  const base = raw || "http://localhost:4000/api";
-
-  return base.endsWith("/api") ? base : `${base.replace(/\/+$/, "")}/api`;
+  return resolveBrowserApiBase(publicWebEnvironment.apiUrl);
 }
 
-export const api = axios.create({
-  baseURL: resolveApiBaseUrl(),
-  withCredentials: true,
-});
+export const api = createHttpTransport({ baseURL: resolveApiBaseUrl });
 
 let lastCorrelationId: string | null = null;
 let freshReadRequestsInFlight = 0;
-
-function createCorrelationId() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
 
 export function getLastCorrelationId() {
   return lastCorrelationId;
@@ -207,13 +195,6 @@ function errorFeedback(error: unknown, fallback?: string) {
 
 type FeedbackAwareConfig = AxiosRequestConfig & {
   feedback?: ApiFeedbackConfig;
-  /** A Telegram Mini App request that must not participate in internal auth. */
-  consumer?: boolean;
-};
-
-export type ConsumerApiRequestConfig = AxiosRequestConfig & {
-  consumer: true;
-  feedback?: ApiFeedbackConfig;
 };
 
 function withFeedback(config: FeedbackAwareConfig): FeedbackAwareConfig {
@@ -244,7 +225,7 @@ async function streamAction<TResult, TItem = BulkActionResultItem>(
   onProgress: StreamProgressHandler<TItem>,
   options?: StreamRequestOptions,
 ): Promise<TResult> {
-  const correlationId = createCorrelationId();
+  const correlationId = createRequestCorrelationId();
   lastCorrelationId = correlationId;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -347,15 +328,12 @@ export function isApiNetworkError(error: unknown) {
 }
 
 api.interceptors.request.use((config) => {
-  const isConsumerRequest =
-    (config as FeedbackAwareConfig).consumer === true ||
-    String(config.url || "").startsWith("/finance-bots/");
-  const correlationId = createCorrelationId();
+  const correlationId = createRequestCorrelationId();
   lastCorrelationId = correlationId;
   config.headers["X-Correlation-Id"] = correlationId;
-  const token = isConsumerRequest ? null : getAccessToken();
+  const token = getAccessToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
-  if (!isConsumerRequest && typeof window !== "undefined") {
+  if (typeof window !== "undefined") {
     const workspaceId = localStorage.getItem("selected-workspace-id");
     if (workspaceId) config.headers["X-Workspace-Id"] = workspaceId;
   }
@@ -366,9 +344,6 @@ api.interceptors.request.use((config) => {
     config.headers["X-Bypass-Response-Cache"] = "1";
     config.headers["Cache-Control"] = "no-cache";
     config.headers.Pragma = "no-cache";
-  }
-  if (config.baseURL?.includes(".ngrok-free.app")) {
-    config.headers["ngrok-skip-browser-warning"] = "true";
   }
   if (isMutationMethod(config.method)) {
     const feedback = (config as FeedbackAwareConfig).feedback;
@@ -451,8 +426,6 @@ api.interceptors.response.use(
     if (
       axios.isAxiosError(error) &&
       error.response?.status === 401 &&
-      (error.config as FeedbackAwareConfig | undefined)?.consumer !== true &&
-      !String(error.config?.url || "").startsWith("/finance-bots/") &&
       typeof window !== "undefined"
     ) {
       clearAccessToken();

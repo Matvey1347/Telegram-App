@@ -6,9 +6,9 @@ import type {
   ConsumerFinanceCategory,
   ConsumerFinanceProfile,
 } from "@telegram-system/shared";
-import { Button, ErrorState, LoadingState } from "@/components/ui/primitives";
+import { Button, ErrorState, LoadingState } from "./ui";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-import { consumerFinanceKeys } from "@/lib/query-keys";
+import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
 import { FinanceAccounts } from "./finance-accounts";
 import { FinanceAnalytics } from "./finance-analytics";
 import { FinanceBudget } from "./finance-budget";

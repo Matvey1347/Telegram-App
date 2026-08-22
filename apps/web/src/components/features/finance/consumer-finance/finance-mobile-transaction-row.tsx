@@ -1,6 +1,6 @@
 import { Pencil, Trash2 } from "lucide-react";
 import type { ConsumerFinanceTransaction } from "@telegram-system/shared";
-import { formatMoney } from "@/lib/features/finance/money";
+import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
 import {
   financeCopy,
   financeIntlLocale,

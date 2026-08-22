@@ -14,10 +14,10 @@ import {
   FormField,
   Input,
   Select,
-} from "@/components/ui/primitives";
+} from "./ui";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-import { formatMoney } from "@/lib/features/finance/money";
-import { consumerFinanceKeys } from "@/lib/query-keys";
+import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
+import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
 import {
   financeCopy,
   localizeFinanceCategory,

@@ -21,7 +21,15 @@ describe('TelegramBotLocalDevelopmentService', () => {
     botIntegration: {
       applicationType: TelegramBotApplicationType.FINANCE,
     },
-    users: [{ id: 'user-1', telegramChatId: '42', languageCode: 'ru', localLifecycleMessageId: 77 }],
+    users: [
+      {
+        id: 'user-1',
+        telegramChatId: '42',
+        languageCode: 'en',
+        localLifecycleMessageId: 77,
+        financeProfiles: [{ locale: 'ru' }],
+      },
+    ],
   };
   const prisma = {
     telegramBotRuntimeInstance: {
@@ -42,6 +50,41 @@ describe('TelegramBotLocalDevelopmentService', () => {
   const environment = { current: jest.fn() } as any;
   const presentation = {
     reconcile: jest.fn().mockResolvedValue(undefined),
+    application: jest.fn(),
+  } as any;
+  const financePresentation = {
+    localDevelopmentActive: jest.fn().mockReturnValue(true),
+    miniAppUrl: jest
+      .fn()
+      .mockReturnValue('https://new.trycloudflare.com/finance/finance-1'),
+    resolveLocale: jest
+      .fn()
+      .mockImplementation((preferred, fallback) =>
+        preferred?.startsWith('ru') || fallback?.startsWith('ru') ? 'ru' : 'en',
+      ),
+    localLifecycle: jest.fn().mockImplementation((state, botIntegrationId) => ({
+      text:
+        state === 'started'
+          ? '✅ Локальная версия Finance запущена. Ссылка Mini App обновлена.'
+          : 'Локальная версия Finance не запущена.',
+      ...(state === 'started'
+        ? {
+            replyKeyboard: [
+              [
+                {
+                  text: 'Open',
+                  webAppUrl: `https://new.trycloudflare.com/finance/${botIntegrationId}`,
+                },
+              ],
+            ],
+          }
+        : {}),
+    })),
+    menuButton: jest.fn().mockReturnValue({
+      type: 'web_app',
+      text: 'Open',
+      webAppUrl: 'https://new.trycloudflare.com/finance/finance-1',
+    }),
   } as any;
   const registry = {
     invalidate: jest.fn(),
@@ -51,13 +94,13 @@ describe('TelegramBotLocalDevelopmentService', () => {
     reconcileLocalDevelopment: jest.fn().mockResolvedValue(undefined),
   } as any;
   let service: TelegramBotLocalDevelopmentService;
-  const previousUrl = process.env.FINANCE_MINI_APP_URL;
+  const previousUrl = process.env.FRONTEND_URL;
   const previousSecret = process.env.LOCAL_DEV_BOTS_CONTROL_SECRET;
 
   beforeEach(() => {
     jest.clearAllMocks();
     environment.current.mockReturnValue(TelegramBotRuntimeEnvironment.LOCAL);
-    process.env.FINANCE_MINI_APP_URL = 'https://new.trycloudflare.com';
+    process.env.FRONTEND_URL = 'https://new.trycloudflare.com';
     process.env.LOCAL_DEV_BOTS_CONTROL_SECRET = 'control-secret';
     service = new TelegramBotLocalDevelopmentService(
       prisma,
@@ -68,11 +111,12 @@ describe('TelegramBotLocalDevelopmentService', () => {
       registry,
       runtimeService,
     );
+    presentation.application.mockReturnValue(financePresentation);
   });
 
   afterAll(() => {
-    if (previousUrl === undefined) delete process.env.FINANCE_MINI_APP_URL;
-    else process.env.FINANCE_MINI_APP_URL = previousUrl;
+    if (previousUrl === undefined) delete process.env.FRONTEND_URL;
+    else process.env.FRONTEND_URL = previousUrl;
     if (previousSecret === undefined)
       delete process.env.LOCAL_DEV_BOTS_CONTROL_SECRET;
     else process.env.LOCAL_DEV_BOTS_CONTROL_SECRET = previousSecret;
@@ -102,8 +146,14 @@ describe('TelegramBotLocalDevelopmentService', () => {
         }),
       }),
     );
-    expect(api.deleteMessage).toHaveBeenCalledWith('local-token', { chat_id: '42', message_id: 77 });
-    expect(prisma.telegramBotUser.update).toHaveBeenCalledWith({ where: { id: 'user-1' }, data: { localLifecycleMessageId: 1 } });
+    expect(api.deleteMessage).toHaveBeenCalledWith('local-token', {
+      chat_id: '42',
+      message_id: 77,
+    });
+    expect(prisma.telegramBotUser.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { localLifecycleMessageId: 1 },
+    });
     expect(api.sendMessage.mock.calls[0][1].text).toContain('✅');
     expect(prisma.telegramBotRuntimeInstance.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -120,6 +170,16 @@ describe('TelegramBotLocalDevelopmentService', () => {
         webAppUrl: 'https://new.trycloudflare.com/finance/finance-1',
       }),
       '42',
+    );
+    expect(financePresentation.resolveLocale).toHaveBeenCalledWith('ru', 'en');
+    expect(financePresentation.localLifecycle).toHaveBeenCalledWith(
+      'started',
+      'finance-1',
+      'ru',
+    );
+    expect(financePresentation.menuButton).toHaveBeenCalledWith(
+      'finance-1',
+      'ru',
     );
   });
 

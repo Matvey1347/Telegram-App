@@ -3,7 +3,7 @@ import {
   financeCategoryLabel,
   t,
   type FinanceChatLocale,
-} from './i18n/finance-chat-i18n';
+} from '../i18n/finance-chat-i18n';
 import {
   FinanceChatFlowService,
   type FinanceFlowResult,
@@ -12,7 +12,7 @@ import {
   FINANCE_EMOJI_CHOICES,
   financeAccountEmoji,
   financeCategoryEmoji,
-} from './finance-entity-emoji';
+} from '../catalog/finance-entity-emoji';
 
 type Button = { text: string; callbackData: string };
 

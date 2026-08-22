@@ -5,34 +5,17 @@ import {
   TelegramBotRuntimeStatus,
   TelegramBotWebhookStatus,
 } from '@prisma/client';
+import { deploymentValue } from '../../../../config/deployment-config';
 import { timingSafeEqual } from 'node:crypto';
 import { sanitizeOperationalError } from '../../../../common/security/operational-error';
 import { TokenEncryptionService } from '../../../../common/security/token-encryption.service';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
 import { telegramBotMessagePayload } from '../../../../telegram/shared/telegram-bot-message';
-import {
-  financeChatMenuButton,
-  financeMainMenu,
-  financeMiniAppUrl,
-} from '../finance/finance-bot-chat-responder.service';
-import { financeChatLocale } from '../finance/i18n/finance-chat-i18n';
 import { TelegramBotRuntimeEnvironmentService } from './telegram-bot-runtime-environment.service';
 import { TelegramBotRuntimePresentationService } from './telegram-bot-runtime-presentation.service';
 import { TelegramBotRuntimeRegistryService } from './telegram-bot-runtime-registry.service';
 import { TelegramBotRuntimeService } from './telegram-bot-runtime.service';
-
-const LOCAL_STOPPED = {
-  uk: 'Локальну версію Finance не запущено. Запустіть pnpm dev:bots, а потім надішліть /start.',
-  ru: 'Локальная версия Finance не запущена. Запустите pnpm dev:bots, затем отправьте /start.',
-  en: 'Local Finance is not running. Start pnpm dev:bots, then send /start.',
-} as const;
-
-const LOCAL_STARTED = {
-  uk: '✅ Локальну версію Finance запущено. Посилання Mini App оновлено.',
-  ru: '✅ Локальная версия Finance запущена. Ссылка Mini App обновлена.',
-  en: '✅ Local Finance is running. The Mini App link has been refreshed.',
-} as const;
 
 /**
  * Bounded LOCAL-only lifecycle invoked by dev:bots. It performs no recurring
@@ -70,7 +53,13 @@ export class TelegramBotLocalDevelopmentService {
         botIntegration: true,
         users: {
           where: { blockedAt: null, telegramChatId: { not: null } },
-          select: { id: true, telegramChatId: true, languageCode: true, localLifecycleMessageId: true },
+          select: {
+            id: true,
+            telegramChatId: true,
+            languageCode: true,
+            localLifecycleMessageId: true,
+            financeProfiles: { take: 1, select: { locale: true } },
+          },
         },
       },
     });
@@ -82,13 +71,26 @@ export class TelegramBotLocalDevelopmentService {
         runtime.botIntegration.applicationType ===
         TelegramBotApplicationType.FINANCE
       ) {
+        const financePresentation = this.financePresentation();
         await this.forEachUser(runtime.users, async (user) => {
-          const locale = financeChatLocale(null, user.languageCode);
+          const locale = financePresentation.resolveLocale(
+            user.financeProfiles[0]?.locale ?? null,
+            user.languageCode,
+          );
+          const lifecycle = financePresentation.localLifecycle!(
+            'stopped',
+            runtime.botIntegrationId,
+            locale,
+          );
           await Promise.all([
-            this.replaceLifecycleMessage(token, user, telegramBotMessagePayload(user.telegramChatId!, {
-                text: LOCAL_STOPPED[locale],
+            this.replaceLifecycleMessage(
+              token,
+              user,
+              telegramBotMessagePayload(user.telegramChatId!, {
+                text: lifecycle.text,
                 removeReplyKeyboard: true,
-              })),
+              }),
+            ),
             this.botApi.setChatMenuButton(
               token,
               { type: 'commands' },
@@ -151,8 +153,8 @@ export class TelegramBotLocalDevelopmentService {
   }
 
   private async refreshChangedFinanceKeyboards() {
-    const expectedBase = process.env.FINANCE_MINI_APP_URL?.trim();
-    if (!expectedBase) return;
+    const financePresentation = this.financePresentation();
+    if (!financePresentation.localDevelopmentActive!()) return;
     const runtimes = await this.prisma.telegramBotRuntimeInstance.findMany({
       where: {
         environment: TelegramBotRuntimeEnvironment.LOCAL,
@@ -166,24 +168,44 @@ export class TelegramBotLocalDevelopmentService {
       include: {
         users: {
           where: { blockedAt: null, telegramChatId: { not: null } },
-          select: { id: true, telegramChatId: true, languageCode: true, localLifecycleMessageId: true },
+          select: {
+            id: true,
+            telegramChatId: true,
+            languageCode: true,
+            localLifecycleMessageId: true,
+            financeProfiles: { take: 1, select: { locale: true } },
+          },
         },
       },
     });
     for (const runtime of runtimes) {
-      const expectedUrl = financeMiniAppUrl(runtime.botIntegrationId);
+      const expectedUrl = financePresentation.miniAppUrl(
+        runtime.botIntegrationId,
+      );
       if (!expectedUrl || runtime.miniAppExpectedUrl === expectedUrl) continue;
       const token = this.decryptToken(runtime);
       await this.forEachUser(runtime.users, async (user) => {
-        const locale = financeChatLocale(null, user.languageCode);
+        const locale = financePresentation.resolveLocale(
+          user.financeProfiles[0]?.locale ?? null,
+          user.languageCode,
+        );
+        const lifecycle = financePresentation.localLifecycle!(
+          'started',
+          runtime.botIntegrationId,
+          locale,
+        );
         await Promise.all([
-          this.replaceLifecycleMessage(token, user, telegramBotMessagePayload(user.telegramChatId!, {
-              text: LOCAL_STARTED[locale],
-              replyKeyboard: financeMainMenu(runtime.botIntegrationId, locale),
-            })),
+          this.replaceLifecycleMessage(
+            token,
+            user,
+            telegramBotMessagePayload(user.telegramChatId!, {
+              text: lifecycle.text,
+              replyKeyboard: lifecycle.replyKeyboard,
+            }),
+          ),
           this.botApi.setChatMenuButton(
             token,
-            financeChatMenuButton(runtime.botIntegrationId, locale),
+            financePresentation.menuButton(runtime.botIntegrationId, locale),
             user.telegramChatId!,
           ),
         ]);
@@ -221,27 +243,49 @@ export class TelegramBotLocalDevelopmentService {
     }
   }
 
+  private financePresentation() {
+    const presentation = this.presentation.application(
+      TelegramBotApplicationType.FINANCE,
+    );
+    if (!presentation?.localDevelopmentActive || !presentation.localLifecycle) {
+      throw new Error('Finance local presentation is not registered');
+    }
+    return presentation;
+  }
+
   private async replaceLifecycleMessage(
     token: string,
-    user: { id: string; telegramChatId: string | null; localLifecycleMessageId: number | null },
+    user: {
+      id: string;
+      telegramChatId: string | null;
+      localLifecycleMessageId: number | null;
+    },
     payload: { chat_id: string; text: string; reply_markup?: unknown },
   ) {
     if (user.localLifecycleMessageId) {
       try {
-        await this.botApi.deleteMessage(token, { chat_id: payload.chat_id, message_id: user.localLifecycleMessageId });
+        await this.botApi.deleteMessage(token, {
+          chat_id: payload.chat_id,
+          message_id: user.localLifecycleMessageId,
+        });
       } catch (error) {
-        this.logger.warn(`Unable to replace a LOCAL Finance status message: ${sanitizeOperationalError(error)}`);
+        this.logger.warn(
+          `Unable to replace a LOCAL Finance status message: ${sanitizeOperationalError(error)}`,
+        );
       }
     }
     const message = await this.botApi.sendMessage(token, payload);
-    await this.prisma.telegramBotUser.update({ where: { id: user.id }, data: { localLifecycleMessageId: message.message_id } });
+    await this.prisma.telegramBotUser.update({
+      where: { id: user.id },
+      data: { localLifecycleMessageId: message.message_id },
+    });
   }
 
   private assertAuthorized(secret: string | undefined) {
     if (this.environment.current() !== TelegramBotRuntimeEnvironment.LOCAL) {
       throw new ForbiddenException('LOCAL Telegram runtime is not selected');
     }
-    const expected = process.env.LOCAL_DEV_BOTS_CONTROL_SECRET;
+    const expected = deploymentValue('LOCAL_DEV_BOTS_CONTROL_SECRET');
     if (!expected || !secret)
       throw new ForbiddenException('Invalid dev control secret');
     const actualBuffer = Buffer.from(secret);

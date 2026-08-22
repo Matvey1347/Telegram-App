@@ -40,7 +40,8 @@ describe('normalizeManagedPostImportRows', () => {
       {
         index: 3,
         title: 'Bad image',
-        error: 'Image URL must start with http:// or https://: ftp://example.com/a.png',
+        error:
+          'Image URL must start with http:// or https://: ftp://example.com/a.png',
       },
     ]);
   });

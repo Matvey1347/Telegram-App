@@ -284,6 +284,8 @@ function createService() {
     currencyConversionService,
     financeCategoriesService,
     telegramChannelsService,
+    telegramChannelsService,
+    telegramChannelsService,
     mtprotoClient,
     sourceAccessService,
     encryptionService,

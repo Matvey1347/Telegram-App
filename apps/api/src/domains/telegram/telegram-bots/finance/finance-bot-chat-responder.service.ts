@@ -1,66 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { TelegramBotInteractiveReplyService } from '../../../../telegram/shared/telegram-bot-interactive-reply.service';
 import type { TelegramBotApplicationContext } from '../core/telegram-bot-update.types';
-import { FinanceHistoryQueryDto } from './finance.dto';
-import { FinanceLedgerService } from './finance-ledger.service';
-import { FinanceCoreService } from './finance-core.service';
-import type { TelegramChatMenuButton } from '../../../../telegram/shared/telegram-bot-api.client';
+import { FinanceHistoryQueryDto } from '../../consumer-finance/http/finance.dto';
+import { FinanceLedgerService } from '../../consumer-finance/ledger/finance-ledger.service';
+import { FinanceCoreService } from '../../consumer-finance/catalog/finance-core.service';
 import {
   financeCategoryLabel,
   t,
   type FinanceChatLocale,
-} from './i18n/finance-chat-i18n';
-import { financeCategoryEmoji } from './finance-entity-emoji';
-export { financeCategoryEmoji } from './finance-entity-emoji';
-
-export function financeMiniAppUrl(
-  botId: string,
-  base = process.env.FINANCE_MINI_APP_URL || process.env.FRONTEND_URL,
-  screen?: 'accounts' | 'transactions' | 'more',
-  transfer = false,
-) {
-  const normalized = base?.trim().replace(/\/$/u, '');
-  if (!normalized) return null;
-  const query = new URLSearchParams();
-  if (screen) query.set('screen', screen);
-  if (transfer) query.set('transfer', '1');
-  const suffix = query.size ? `?${query.toString()}` : '';
-  return `${normalized}/finance/${encodeURIComponent(botId)}${suffix}`;
-}
-
-export function financeChatMenuButton(
-  botId: string,
-  locale: FinanceChatLocale = 'en',
-): TelegramChatMenuButton {
-  const webAppUrl = financeMiniAppUrl(botId);
-  return webAppUrl
-    ? {
-        type: 'web_app',
-        text: t(locale, 'menuOpen').replace(/^📱\s*/u, ''),
-        webAppUrl,
-      }
-    : { type: 'commands' };
-}
-
-export function financeMainMenu(
-  botId: string,
-  locale: FinanceChatLocale = 'en',
-) {
-  const webAppUrl = financeMiniAppUrl(botId);
-  return [
-    [{ text: t(locale, 'menuExpense') }, { text: t(locale, 'menuIncome') }],
-    [
-      { text: t(locale, 'menuOpen'), ...(webAppUrl ? { webAppUrl } : {}) },
-      { text: t(locale, 'menuRecent') },
-    ],
-    [
-      { text: t(locale, 'menuAccounts') },
-      { text: t(locale, 'menuCategories') },
-    ],
-    [{ text: t(locale, 'menuTransfer') }, { text: t(locale, 'menuSettings') }],
-    [{ text: t(locale, 'menuHelp') }],
-  ];
-}
+} from '../../consumer-finance/i18n/finance-chat-i18n';
+import { financeCategoryEmoji } from '../../consumer-finance/catalog/finance-entity-emoji';
+import {
+  financeChatMenuButton,
+  financeMainMenu,
+  financeMiniAppUrl,
+} from '../../consumer-finance/telegram-presentation/finance-telegram-menu';
+import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
+export { financeCategoryEmoji } from '../../consumer-finance/catalog/finance-entity-emoji';
 
 function rowsOfTwo<T>(items: T[]) {
   const rows: T[][] = [];
@@ -82,6 +38,7 @@ export class FinanceBotChatResponderService {
     private readonly interactive: TelegramBotInteractiveReplyService,
     private readonly ledger: FinanceLedgerService,
     private readonly core: FinanceCoreService,
+    private readonly botApi: TelegramBotApiClient,
   ) {}
 
   proposalButtons(
@@ -142,10 +99,18 @@ export class FinanceBotChatResponderService {
     chatId: string,
     locale: FinanceChatLocale = 'en',
   ) {
-    await this.interactive.send(context.token, chatId, {
-      text: t(locale, 'welcome'),
-      replyKeyboard: financeMainMenu(context.bot.id, locale),
-    });
+    const [message] = await Promise.allSettled([
+      this.interactive.send(context.token, chatId, {
+        text: t(locale, 'welcome'),
+        replyKeyboard: financeMainMenu(context.bot.id, locale),
+      }),
+      this.botApi.setChatMenuButton(
+        context.token,
+        financeChatMenuButton(context.bot.id, locale),
+        chatId,
+      ),
+    ]);
+    if (message.status === 'rejected') throw message.reason;
   }
 
   async sendFinanceCta(

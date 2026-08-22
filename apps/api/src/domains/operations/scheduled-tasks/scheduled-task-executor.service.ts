@@ -11,7 +11,7 @@ import { OperationalHistoryRetentionService } from '../../telegram/telegram-bots
 import { DailyAnalyticsSyncService } from '../../telegram/telegram-sync/daily-analytics-sync.service';
 import { TelegramWorkspaceFullSyncService } from '../../telegram/telegram-sync/telegram-workspace-full-sync.service';
 import { TelegramWorkspaceSyncTasksService } from '../../telegram/telegram-sync/telegram-workspace-sync-tasks.service';
-import { TelegramChannelsService } from '../../telegram/telegram-channels/telegram-channels.service';
+import { TelegramManagedPostReconciliationService } from '../../telegram/telegram-channels/telegram-managed-post-reconciliation.service';
 import type {
   ScheduledTaskExecutionContext,
   ScheduledTaskExecutionResult,
@@ -24,7 +24,7 @@ export class ScheduledTaskExecutorService {
   readonly executors = {
     'telegram.managed_posts.reconcile_due': async () => {
       const result = await (
-        await this.telegramChannelsService()
+        await this.telegramManagedPostReconciliationService()
       ).reconcileAllDueManagedPosts();
       return {
         summary: `Checked ${result.checked} due managed posts; verified ${result.verified}, missing ${result.missing}.`,
@@ -56,7 +56,10 @@ export class ScheduledTaskExecutorService {
         return { summary: `Updated ${result.updated} exchange rates.` };
       }),
     'telegram_ad_sales.due_deletions': async () => {
-      const lifecycle = this.moduleRef.get(TelegramAdPlacementLifecycleService, { strict: false });
+      const lifecycle = this.moduleRef.get(
+        TelegramAdPlacementLifecycleService,
+        { strict: false },
+      );
       const lifecycleResult = await lifecycle.reconcilePublishedPlacements();
       const result = await (
         await this.adSalesService()
@@ -115,12 +118,6 @@ export class ScheduledTaskExecutorService {
   >;
 
   private async runDailyAnalytics(context: ScheduledTaskExecutionContext) {
-    if (process.env.TELEGRAM_DAILY_ANALYTICS_SYNC_ENABLED === 'false') {
-      return {
-        summary: 'Daily analytics sync is disabled by environment.',
-        skipped: true,
-      };
-    }
     type DailyAnalyticsResult = {
       channelsProcessed: number;
       campaignsProcessed: number;
@@ -152,10 +149,14 @@ export class ScheduledTaskExecutorService {
     );
   }
 
-  private telegramChannelsService() {
-    return this.moduleRef.resolve(TelegramChannelsService, undefined, {
-      strict: false,
-    });
+  private telegramManagedPostReconciliationService() {
+    return this.moduleRef.resolve(
+      TelegramManagedPostReconciliationService,
+      undefined,
+      {
+        strict: false,
+      },
+    );
   }
 
   private fullSyncService() {

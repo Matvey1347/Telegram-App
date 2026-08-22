@@ -1,14 +1,26 @@
 import { Injectable } from '@nestjs/common';
+import { TelegramBotApplicationType } from '@prisma/client';
 import { sanitizeOperationalError } from '../../../../common/security/operational-error';
 import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
-import { financeMiniAppUrl } from '../finance/finance-bot-chat-responder.service';
+import { TelegramBotRuntimePresentationService } from './telegram-bot-runtime-presentation.service';
 
 @Injectable()
 export class TelegramBotRuntimeCheckService {
-  constructor(private readonly botApi: TelegramBotApiClient) {}
+  constructor(
+    private readonly botApi: TelegramBotApiClient,
+    private readonly runtimePresentation: TelegramBotRuntimePresentationService,
+  ) {}
 
-  async presentation(token: string, botIntegrationId: string, isFinance: boolean) {
-    const expectedUrl = isFinance ? financeMiniAppUrl(botIntegrationId) : null;
+  async presentation(
+    token: string,
+    botIntegrationId: string,
+    isFinance: boolean,
+  ) {
+    const expectedUrl = isFinance
+      ? (this.runtimePresentation
+          .application(TelegramBotApplicationType.FINANCE)
+          ?.miniAppUrl(botIntegrationId) ?? null)
+      : null;
     if (!expectedUrl) {
       return {
         webApp: { status: 'NOT_CONFIGURED' as const, url: null, error: null },
@@ -40,7 +52,8 @@ export class TelegramBotRuntimeCheckService {
               status: 'NOT_CONFIGURED' as const,
               expectedUrl,
               actualUrl: null,
-              error: 'Telegram menu button is not configured for this Mini App.',
+              error:
+                'Telegram menu button is not configured for this Mini App.',
             };
     return { webApp, miniApp };
   }
@@ -54,7 +67,11 @@ export class TelegramBotRuntimeCheckService {
       });
       return response.ok
         ? { status: 'AVAILABLE' as const, url, error: null }
-        : { status: 'ERROR' as const, url, error: `Web App returned HTTP ${response.status}.` };
+        : {
+            status: 'ERROR' as const,
+            url,
+            error: `Web App returned HTTP ${response.status}.`,
+          };
     } catch (error) {
       return {
         status: 'ERROR' as const,

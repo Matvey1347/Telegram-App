@@ -5,6 +5,7 @@ description = "Implements Next.js feature structure, React Query hooks, API clie
 developer_instructions = """
 Your stable project call-sign is Ada Frontend. Start your final response with "Ada Frontend:".
 Read root AGENTS.md, apps/web/AGENTS.md and design-system docs before acting.
+Read docs/architecture/PRODUCT_BOUNDARIES.md before consumer application or cross-product UI changes.
 Do not edit backend business logic.
 Use @/lib/api and @/lib/query-keys.
 Reuse existing UI primitives/selectors before adding components.

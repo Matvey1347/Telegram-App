@@ -103,11 +103,11 @@ describe('TelegramBotRuntimeService environment isolation', () => {
   const identity = { ensureAvailable: jest.fn() } as any;
   const executionContext = new TelegramBotRuntimeExecutionContext();
   let service: TelegramBotRuntimeService;
-  const originalBase = process.env.TELEGRAM_BOT_WEBHOOK_BASE_URL;
+  const originalBase = process.env.API_PUBLIC_URL;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    process.env.TELEGRAM_BOT_WEBHOOK_BASE_URL = 'https://api.example';
+    process.env.API_PUBLIC_URL = 'https://api.example';
     prisma.telegramBotRuntimeInstance.findMany.mockResolvedValue([]);
     registry.bootstrap.mockResolvedValue([]);
     service = new TelegramBotRuntimeService(
@@ -126,8 +126,8 @@ describe('TelegramBotRuntimeService environment isolation', () => {
 
   afterAll(() => {
     if (originalBase === undefined)
-      delete process.env.TELEGRAM_BOT_WEBHOOK_BASE_URL;
-    else process.env.TELEGRAM_BOT_WEBHOOK_BASE_URL = originalBase;
+      delete process.env.API_PUBLIC_URL;
+    else process.env.API_PUBLIC_URL = originalBase;
   });
 
   it('does no workspace runtime work in an ordinary development process', async () => {
@@ -141,7 +141,7 @@ describe('TelegramBotRuntimeService environment isolation', () => {
   });
 
   it('rejects an ngrok webhook base for a PRODUCTION runtime', () => {
-    process.env.TELEGRAM_BOT_WEBHOOK_BASE_URL =
+    process.env.API_PUBLIC_URL =
       'https://example.ngrok-free.app';
 
     expect(() =>
@@ -155,7 +155,7 @@ describe('TelegramBotRuntimeService environment isolation', () => {
   });
 
   it('allows an ngrok webhook base for a LOCAL runtime', () => {
-    process.env.TELEGRAM_BOT_WEBHOOK_BASE_URL =
+    process.env.API_PUBLIC_URL =
       'https://example.ngrok-free.app';
 
     expect(
@@ -166,7 +166,7 @@ describe('TelegramBotRuntimeService environment isolation', () => {
   });
 
   it('allows a Cloudflare Quick Tunnel only for a LOCAL runtime', () => {
-    process.env.TELEGRAM_BOT_WEBHOOK_BASE_URL =
+    process.env.API_PUBLIC_URL =
       'https://finance-dev.trycloudflare.com';
 
     expect(
@@ -441,8 +441,8 @@ describe('TelegramBotRuntimeService environment isolation', () => {
       runtime: local,
       token: 'local-token',
     });
-    const previousMiniAppUrl = process.env.FINANCE_MINI_APP_URL;
-    process.env.FINANCE_MINI_APP_URL = 'https://local.example';
+    const previousFrontendUrl = process.env.FRONTEND_URL;
+    process.env.FRONTEND_URL = 'https://local.example';
     await service.checkRuntime('bot-1', TelegramBotRuntimeEnvironment.LOCAL);
 
     expect(api.getMe).toHaveBeenCalledWith('token');
@@ -467,8 +467,7 @@ describe('TelegramBotRuntimeService environment isolation', () => {
       }),
     );
     expect(checks.presentation).toHaveBeenCalledWith('token', 'bot-1', true);
-    if (previousMiniAppUrl === undefined)
-      delete process.env.FINANCE_MINI_APP_URL;
-    else process.env.FINANCE_MINI_APP_URL = previousMiniAppUrl;
+    if (previousFrontendUrl === undefined) delete process.env.FRONTEND_URL;
+    else process.env.FRONTEND_URL = previousFrontendUrl;
   });
 });

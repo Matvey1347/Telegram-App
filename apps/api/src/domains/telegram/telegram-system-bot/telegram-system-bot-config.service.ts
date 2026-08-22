@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes, timingSafeEqual } from 'crypto';
+import {
+  publicApiOrigin,
+  publicWebOrigin,
+} from '../../../config/deployment-config';
 
 @Injectable()
 export class TelegramSystemBotConfigService {
@@ -28,14 +32,16 @@ export class TelegramSystemBotConfigService {
   }
 
   get frontendUrl() {
-    const value = this.config.get<string>('FRONTEND_URL');
-    return value?.replace(/\/$/, '') || null;
+    return (
+      publicWebOrigin({ FRONTEND_URL: this.config.get<string>('FRONTEND_URL') }) ||
+      null
+    );
   }
 
   get webhookUrl() {
-    const base = this.config
-      .get<string>('TELEGRAM_SYSTEM_BOT_WEBHOOK_BASE_URL')
-      ?.replace(/\/$/, '');
+    const base = publicApiOrigin({
+      API_PUBLIC_URL: this.config.get<string>('API_PUBLIC_URL'),
+    });
     if (!base) return null;
     return `${base}${base.endsWith('/api') ? '' : '/api'}/telegram/system-bot/webhook`;
   }

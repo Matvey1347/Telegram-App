@@ -25,10 +25,12 @@ import {
   UpdateTelegramUserAccountDto,
 } from './dto';
 import { ConfigService } from '@nestjs/config';
-import { TelegramChannelsService } from '../telegram-channels/telegram-channels.service';
+import { TelegramChannelImportPolicyService } from '../telegram-channels/telegram-channel-import-policy.service';
+import { TelegramChannelSyncOrchestrator } from '../telegram-channels/telegram-channel-sync.orchestrator';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
 import type { TelegramAccountCapabilities } from '@telegram-system/shared';
 import type { TelegramAccountProfile } from '../../../telegram/shared/telegram-mtproto.client';
+import { TELEGRAM_ACCOUNT_CAPABILITY_CONFIG } from './telegram-capability.config';
 
 type ProgressCallback = (
   item: { message: string },
@@ -39,10 +41,6 @@ type ProgressCallback = (
 @Injectable()
 export class TelegramUserAccountsService {
   private readonly logger = new Logger(TelegramUserAccountsService.name);
-  private readonly defaultCapabilityTtlHours = 24;
-  private readonly defaultCapabilityRefreshConcurrency = 2;
-  private readonly defaultCapabilityCheckTimeoutMs = 20_000;
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
@@ -50,11 +48,12 @@ export class TelegramUserAccountsService {
     private readonly mtprotoClient: TelegramMtprotoClient,
     private readonly sourceAccessService: TelegramSourceAccessService,
     private readonly configService: ConfigService,
-    private readonly telegramChannelsService: TelegramChannelsService,
-    private readonly applicationLogger: ApplicationLoggerService = ({
+    private readonly telegramChannelImportPolicyService: TelegramChannelImportPolicyService,
+    private readonly telegramChannelSyncOrchestrator: TelegramChannelSyncOrchestrator,
+    private readonly applicationLogger: ApplicationLoggerService = {
       info: () => undefined,
       writeStructured: () => undefined,
-    } as unknown) as ApplicationLoggerService,
+    } as unknown as ApplicationLoggerService,
   ) {}
 
   private async notifyProgress(
@@ -94,36 +93,15 @@ export class TelegramUserAccountsService {
   }
 
   private capabilityTtlMs() {
-    const ttlHours = Math.max(
-      1,
-      Number(
-        this.configService.get<string>('TELEGRAM_ACCOUNT_CAPABILITY_TTL_HOURS') ??
-          this.defaultCapabilityTtlHours,
-      ) || this.defaultCapabilityTtlHours,
-    );
-    return ttlHours * 60 * 60 * 1000;
+    return TELEGRAM_ACCOUNT_CAPABILITY_CONFIG.ttlHours * 60 * 60 * 1000;
   }
 
   private capabilityRefreshConcurrency() {
-    return Math.max(
-      1,
-      Number(
-        this.configService.get<string>(
-          'TELEGRAM_ACCOUNT_CAPABILITY_REFRESH_CONCURRENCY',
-        ) ?? this.defaultCapabilityRefreshConcurrency,
-      ) || this.defaultCapabilityRefreshConcurrency,
-    );
+    return TELEGRAM_ACCOUNT_CAPABILITY_CONFIG.refreshConcurrency;
   }
 
   private capabilityCheckTimeoutMs() {
-    return Math.max(
-      1_000,
-      Number(
-        this.configService.get<string>(
-          'TELEGRAM_ACCOUNT_CAPABILITY_CHECK_TIMEOUT_MS',
-        ) ?? this.defaultCapabilityCheckTimeoutMs,
-      ) || this.defaultCapabilityCheckTimeoutMs,
-    );
+    return TELEGRAM_ACCOUNT_CAPABILITY_CONFIG.checkTimeoutMs;
   }
 
   private accountCapabilityUpdate(profile: TelegramAccountProfile) {
@@ -140,9 +118,7 @@ export class TelegramUserAccountsService {
     };
   }
 
-  private isCapabilityStale(account: {
-    premiumCheckedAt?: Date | null;
-  }) {
+  private isCapabilityStale(account: { premiumCheckedAt?: Date | null }) {
     if (!account.premiumCheckedAt) return true;
     return (
       Date.now() - account.premiumCheckedAt.getTime() > this.capabilityTtlMs()
@@ -809,10 +785,9 @@ export class TelegramUserAccountsService {
     }
 
     const row =
-      (await this.refreshAccountCapabilities(
-        account as never,
-        { force: true },
-      )) ||
+      (await this.refreshAccountCapabilities(account as never, {
+        force: true,
+      })) ||
       (await this.prisma.telegramUserAccountIntegration.findFirstOrThrow({
         where: { id: account.id, workspaceId },
         include: {
@@ -823,11 +798,7 @@ export class TelegramUserAccountsService {
     return this.safe(row);
   }
 
-  async syncDialogs(
-    userId: string,
-    id: string,
-    onProgress?: ProgressCallback,
-  ) {
+  async syncDialogs(userId: string, id: string, onProgress?: ProgressCallback) {
     const workspaceId = await this.getWorkspaceId(userId);
     const account = await this.prisma.telegramUserAccountIntegration.findFirst({
       where: { id, workspaceId, isActive: true },
@@ -923,12 +894,7 @@ export class TelegramUserAccountsService {
       };
     };
 
-    await this.notifyProgress(
-      onProgress,
-      3,
-      3,
-      'Saving channel access links',
-    );
+    await this.notifyProgress(onProgress, 3, 3, 'Saving channel access links');
     await this.prisma.$transaction(async (tx) => {
       await tx.telegramUserAccountIntegration.update({
         where: { id: account.id },
@@ -1032,9 +998,7 @@ export class TelegramUserAccountsService {
     const selectedIds = new Set(
       dto.channels.map((value) => String(value.telegramChannelId)),
     );
-    const requestedPolicies = new Map(
-      dto.channels.map((value) => [String(value.telegramChannelId), value] as const),
-    );
+    const requestedPolicies = new Map(dto.channels.map((value) => [String(value.telegramChannelId), value] as const));
     const selectedChannels = dialogs.filter((channel) =>
       selectedIds.has(channel.id),
     );
@@ -1049,7 +1013,7 @@ export class TelegramUserAccountsService {
       totalSteps,
       'Preparing selected Telegram channels',
     );
-    await this.telegramChannelsService.ensureTelegramChannelImportPolicyColumnsAvailable();
+    await this.telegramChannelImportPolicyService.ensureStorageAvailable();
 
     const existingChannels = (await this.prisma.$queryRaw(Prisma.sql`
       SELECT
@@ -1107,16 +1071,14 @@ export class TelegramUserAccountsService {
       );
       const { rawPermissions, normalized } = this.channelAccessPayload(channel);
       const existingId = findExistingId(channel);
-      const existingChannel =
-        existingChannels.find((candidate) => candidate.id === existingId) ?? null;
-      const importPolicy =
-        await this.telegramChannelsService.resolveChannelImportPolicy({
-          workspaceId,
-          channelId: existingId ?? null,
-          input: requestedPolicies.get(channel.id),
-          existing: existingChannel,
-          defaultNow: defaultCutoff,
-        });
+      const existingChannel = existingChannels.find((candidate) => candidate.id === existingId) ?? null;
+      const importPolicy = await this.telegramChannelImportPolicyService.resolveChannelImportPolicy({
+        workspaceId,
+        channelId: existingId ?? null,
+        input: requestedPolicies.get(channel.id),
+        existing: existingChannel,
+        defaultNow: defaultCutoff,
+      });
       const workspaceChannel = existingId
         ? await (this.prisma.telegramChannel as any).update({
             where: { id: existingId },
@@ -1204,7 +1166,7 @@ export class TelegramUserAccountsService {
         totalSteps,
         `Importing data for ${workspaceChannel.title}`,
       );
-      await this.telegramChannelsService.syncNow(userId, workspaceChannel.id);
+      await this.telegramChannelSyncOrchestrator.syncNow(userId, workspaceChannel.id);
     }
 
     return {

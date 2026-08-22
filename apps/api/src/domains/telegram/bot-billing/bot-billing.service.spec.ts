@@ -246,3 +246,75 @@ describe('BotBillingService provider credentials', () => {
     expect(result).toMatchObject({ provider: 'TELEGRAM_STARS', mode: 'LIVE', status: 'NOT_CONFIGURED', source: 'NONE' });
   });
 });
+
+describe('BotBillingService Stripe redirects', () => {
+  it('passes the consumer application return routes to Stripe unchanged', async () => {
+    const prisma = {
+      botPlanPrice: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'price-1',
+          planId: 'plan-1',
+          currency: 'UAH',
+          interval: 'MONTH',
+          amountMinor: 14900,
+          version: 1,
+          providerPriceIdentity: {
+            STRIPE: { LIVE: { configId: 'stripe-config', priceId: 'stripe-price' } },
+          },
+          plan: {
+            id: 'plan-1',
+            code: 'PRO',
+            name: 'Pro',
+            workspaceId: 'workspace-1',
+          },
+        }),
+      },
+      telegramBotIntegration: {
+        findUnique: jest.fn().mockResolvedValue({ applicationType: 'FINANCE' }),
+      },
+      telegramBotUser: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'subscriber-1',
+          workspaceId: 'workspace-1',
+        }),
+      },
+      botSubscription: {
+        create: jest.fn().mockResolvedValue({ id: 'subscription-1' }),
+        delete: jest.fn(),
+      },
+    };
+    const stripe = {
+      configId: jest.fn().mockResolvedValue('stripe-config'),
+      customer: jest.fn().mockResolvedValue('customer-1'),
+      checkout: jest.fn().mockResolvedValue({ url: 'https://checkout.example' }),
+    };
+    const service = new BotBillingService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      stripe as never,
+      {} as never,
+      {} as never,
+    );
+
+    await service.createStripeCheckout({
+      botIntegrationId: 'finance-bot',
+      telegramBotUserId: 'subscriber-1',
+      priceId: 'price-1',
+      requestedMode: 'LIVE',
+      successUrl: 'https://web.example/finance/finance-bot?checkout=success',
+      cancelUrl:
+        'https://web.example/finance/finance-bot?checkout=cancelled',
+    });
+
+    expect(stripe.checkout).toHaveBeenCalledWith(
+      expect.objectContaining({
+        successUrl:
+          'https://web.example/finance/finance-bot?checkout=success',
+        cancelUrl:
+          'https://web.example/finance/finance-bot?checkout=cancelled',
+      }),
+    );
+  });
+});

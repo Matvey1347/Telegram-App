@@ -4,6 +4,10 @@ import {
   TelegramManagedPostStatus,
 } from '@prisma/client';
 import { TelegramChannelsService } from './telegram-channels.service';
+import {
+  createTelegramChannelsTestHarness,
+  type TelegramChannelsTestHarness,
+} from './__fixtures__/telegram-channels.test-harness';
 
 describe('TelegramChannelsService syncManagedPosts', () => {
   const setup = (
@@ -36,10 +40,12 @@ describe('TelegramChannelsService syncManagedPosts', () => {
         data.telegramMessageUrls ?? post.telegramMessageUrls ?? [],
       scheduledAt: data.scheduledAt ?? post.scheduledAt ?? null,
       publishedAt:
-        data.publishedAt === undefined ? post.publishedAt ?? null : data.publishedAt,
+        data.publishedAt === undefined
+          ? (post.publishedAt ?? null)
+          : data.publishedAt,
       remoteImportKey:
         data.remoteImportKey === undefined
-          ? post.remoteImportKey ?? null
+          ? (post.remoteImportKey ?? null)
           : data.remoteImportKey,
       origin: data.origin ?? post.origin ?? 'SYSTEM',
       assignedMemberId:
@@ -59,8 +65,7 @@ describe('TelegramChannelsService syncManagedPosts', () => {
       scheduledAt: data.scheduledAt ?? null,
       publishedAt: null,
       telegramMessageIds: data.telegramMessageIds ?? [],
-      telegramScheduledMessageIds:
-        data.telegramScheduledMessageIds ?? [],
+      telegramScheduledMessageIds: data.telegramScheduledMessageIds ?? [],
       telegramMessageUrls: [],
       sourceType: data.sourceType ?? null,
       sourceId: data.sourceId ?? null,
@@ -78,16 +83,21 @@ describe('TelegramChannelsService syncManagedPosts', () => {
     }));
     const createRevision = jest.fn().mockResolvedValue({});
     const deleteOldRevisions = jest.fn().mockResolvedValue({ count: 0 });
-    const findMany = jest.fn().mockImplementation(async (args?: { where?: Record<string, unknown> }) => {
-      const where = args?.where ?? {};
-      if (
-        where.status === TelegramManagedPostStatus.PUBLISHED &&
-        where.telegramRemoteStatus === TelegramManagedPostRemoteStatus.PUBLISHED
-      ) {
-        return [];
-      }
-      return [post];
-    });
+    const findMany = jest
+      .fn()
+      .mockImplementation(
+        async (args?: { where?: Record<string, unknown> }) => {
+          const where = args?.where ?? {};
+          if (
+            where.status === TelegramManagedPostStatus.PUBLISHED &&
+            where.telegramRemoteStatus ===
+              TelegramManagedPostRemoteStatus.PUBLISHED
+          ) {
+            return [];
+          }
+          return [post];
+        },
+      );
     const prisma = {
       telegramManagedPost: {
         findMany,
@@ -96,7 +106,9 @@ describe('TelegramChannelsService syncManagedPosts', () => {
         count: jest.fn().mockResolvedValue(0),
       },
       telegramChannel: {
-        findFirst: jest.fn().mockResolvedValue({ assignedMemberId: 'member-1' }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ assignedMemberId: 'member-1' }),
       },
       workspaceMember: {
         findFirst: jest.fn().mockResolvedValue({ id: 'member-1' }),
@@ -122,7 +134,9 @@ describe('TelegramChannelsService syncManagedPosts', () => {
         .fn()
         .mockResolvedValue([{ exists: '"TelegramManagedPostRevision"' }]),
       $executeRaw: jest.fn().mockResolvedValue(0),
-      $transaction: jest.fn().mockImplementation(async (callback) => callback(prisma)),
+      $transaction: jest
+        .fn()
+        .mockImplementation(async (callback) => callback(prisma)),
     };
     const mtprotoClient = {
       getManagedPostMessages: jest.fn().mockResolvedValue({
@@ -135,7 +149,7 @@ describe('TelegramChannelsService syncManagedPosts', () => {
         .mockResolvedValue(remote?.scheduledHistory ?? []),
       downloadChannelMessageMedia: jest.fn().mockResolvedValue(null),
     };
-    const service = new TelegramChannelsService(
+    const service = createTelegramChannelsTestHarness(
       prisma as never,
       {} as never,
       { clearByPrefix: jest.fn() } as never,
@@ -604,40 +618,42 @@ describe('TelegramChannelsService syncManagedPosts', () => {
     }));
     const prisma = {
       telegramManagedPost: {
-        findMany: jest
-          .fn()
-          .mockResolvedValueOnce([
-            {
-              id: 'imported-calendar',
-              telegramChannelId: 'channel',
-              title: 'цвуакпецуак',
-              text: 'цвуакпецуак',
-              status: TelegramManagedPostStatus.SCHEDULED,
-              scheduledAt: new Date('2026-07-26T10:09:00.000Z'),
-              publishedAt: null,
-              origin: 'TELEGRAM',
-              telegramRemoteStatus: TelegramManagedPostRemoteStatus.SCHEDULED,
-              telegramMessageIds: ['3'],
-              telegramMessageUrls: [],
-              imageUrls: [],
-              group: null,
-              assignedMember: {
-                id: 'member-1',
-                workspaceId: 'workspace',
-                user: { name: 'Matthew', email: 'm@example.com' },
-                avatarIcon: null,
-                role: 'MEMBER',
-              },
+        findMany: jest.fn().mockResolvedValueOnce([
+          {
+            id: 'imported-calendar',
+            telegramChannelId: 'channel',
+            title: 'цвуакпецуак',
+            text: 'цвуакпецуак',
+            status: TelegramManagedPostStatus.SCHEDULED,
+            scheduledAt: new Date('2026-07-26T10:09:00.000Z'),
+            publishedAt: null,
+            origin: 'TELEGRAM',
+            telegramRemoteStatus: TelegramManagedPostRemoteStatus.SCHEDULED,
+            telegramMessageIds: ['3'],
+            telegramMessageUrls: [],
+            imageUrls: [],
+            group: null,
+            assignedMember: {
+              id: 'member-1',
+              workspaceId: 'workspace',
+              user: { name: 'Matthew', email: 'm@example.com' },
+              avatarIcon: null,
+              role: 'MEMBER',
             },
-          ]),
+          },
+        ]),
         create,
         count: jest.fn().mockResolvedValue(1),
         findFirst: jest
           .fn()
-          .mockResolvedValue({ scheduledAt: new Date('2026-07-26T10:09:00.000Z') }),
+          .mockResolvedValue({
+            scheduledAt: new Date('2026-07-26T10:09:00.000Z'),
+          }),
       },
       telegramChannel: {
-        findFirst: jest.fn().mockResolvedValue({ assignedMemberId: 'member-1' }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ assignedMemberId: 'member-1' }),
       },
       workspaceMember: {
         findFirst: jest.fn().mockResolvedValue({ id: 'member-1' }),
@@ -657,7 +673,7 @@ describe('TelegramChannelsService syncManagedPosts', () => {
       },
       $executeRawUnsafe: jest.fn().mockResolvedValue(undefined),
     };
-    const service = new TelegramChannelsService(
+    const service = createTelegramChannelsTestHarness(
       prisma as never,
       {} as never,
       {
@@ -728,13 +744,17 @@ describe('TelegramChannelsService syncManagedPosts', () => {
         count: jest.fn().mockResolvedValue(1),
         findFirst: jest
           .fn()
-          .mockResolvedValue({ scheduledAt: new Date('2026-07-28T17:15:00.000Z') }),
+          .mockResolvedValue({
+            scheduledAt: new Date('2026-07-28T17:15:00.000Z'),
+          }),
       },
       telegramChannel: {
-        findFirst: jest.fn().mockResolvedValue({ assignedMemberId: 'member-1' }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ assignedMemberId: 'member-1' }),
       },
     };
-    const service = new TelegramChannelsService(
+    const service = createTelegramChannelsTestHarness(
       prisma as never,
       {} as never,
       {
@@ -1003,7 +1023,9 @@ describe('TelegramChannelsService syncManagedPosts', () => {
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       telegramChannel: {
-        findFirst: jest.fn().mockResolvedValue({ assignedMemberId: 'member-1' }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ assignedMemberId: 'member-1' }),
       },
       workspaceMember: {
         findFirst: jest.fn().mockResolvedValue({ id: 'member-1' }),
@@ -1011,7 +1033,9 @@ describe('TelegramChannelsService syncManagedPosts', () => {
       $queryRaw: jest
         .fn()
         .mockResolvedValue([{ exists: '"TelegramManagedPostRevision"' }]),
-      $transaction: jest.fn().mockImplementation(async (callback) => callback(prisma)),
+      $transaction: jest
+        .fn()
+        .mockImplementation(async (callback) => callback(prisma)),
     };
     const mtprotoClient = {
       getManagedPostMessages: jest.fn().mockResolvedValue({
@@ -1028,7 +1052,7 @@ describe('TelegramChannelsService syncManagedPosts', () => {
         ],
       }),
     };
-    const service = new TelegramChannelsService(
+    const service = createTelegramChannelsTestHarness(
       prisma as never,
       {} as never,
       { clearByPrefix: jest.fn() } as never,

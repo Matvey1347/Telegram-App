@@ -1,15 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { LoadingState } from "@/components/ui/primitives";
+import { LoadingState } from "./ui";
 import {
   ConsumerFinanceScreens,
   type ConsumerFinanceScreen,
 } from "./consumer-finance-screens";
 import { useTelegramMiniAppBootstrap } from "./use-telegram-mini-app-bootstrap";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-import { consumerFinanceKeys } from "@/lib/query-keys";
+import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
 import {
   ConsumerFinanceBootstrapError,
   ConsumerFinanceLogin,
@@ -27,6 +27,8 @@ import {
   readConsumerFinanceScreen,
   type ConsumerFinanceAction,
 } from "./consumer-finance-navigation";
+
+const subscribeToStaticBrowserState = () => () => undefined;
 
 export function ConsumerFinanceApp({ botId }: { botId: string }) {
   const localeStorageKey = `consumer-finance-locale:${botId}`;
@@ -70,10 +72,11 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
     ?.authenticated
     ? session.data.profile
     : undefined;
-  const rememberedLocale =
-    typeof window === "undefined"
-      ? undefined
-      : window.localStorage.getItem(localeStorageKey) || navigator.language;
+  const rememberedLocale = useSyncExternalStore(
+    subscribeToStaticBrowserState,
+    () => window.localStorage.getItem(localeStorageKey) || navigator.language,
+    () => undefined,
+  );
   const locale = normalizeFinanceLocale(profile?.locale ?? rememberedLocale);
   const t = financeCopy(locale);
   const surface = financeSurfaceForBootstrap(bootstrap.status);
@@ -182,7 +185,10 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
     );
   if (!profile)
     return shell(
-      <ConsumerFinanceBootstrapError locale={locale} onRetry={() => void session.refetch()} />,
+      <ConsumerFinanceBootstrapError
+        locale={locale}
+        onRetry={() => void session.refetch()}
+      />,
     );
   return shell(
     <ConsumerFinanceScreens

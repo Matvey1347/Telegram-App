@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { consumerFinanceKeys } from "./query-keys";
+import { consumerFinanceKeys } from "./features/finance/consumer-finance-query-keys";
 
 describe("consumerFinanceKeys", () => {
   it("keeps history caches distinct for filter combinations", () => {

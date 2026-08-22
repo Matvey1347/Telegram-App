@@ -2,7 +2,7 @@ import { PrismaService } from '../../../../prisma/prisma.service';
 import {
   financeAccountEmoji,
   financeCategoryEmoji,
-} from './finance-entity-emoji';
+} from '../catalog/finance-entity-emoji';
 
 type Payload = Record<string, string | null | undefined>;
 type Result = { step: string; payload: Payload };

@@ -6,6 +6,16 @@
 - NestJS modules own domain behavior. Controllers stay thin: auth/context, DTO validation, service call, response mapping.
 - Do not put Telegram Bot API or MTProto details outside `src/telegram/shared` or a clearly named adapter/facade.
 - Do not create repository layers for every Prisma call. Extract repositories only for repeated, complex or transactional persistence logic.
+- Controllers must not inject `PrismaService`; move persistence orchestration into an application/domain service.
+- Production services do not add direct `process.env` reads. Read validated deployment configuration at an explicit config/runtime boundary and inject the result; product constants are not environment topology.
+
+## Consumer applications
+
+- Read `docs/architecture/PRODUCT_BOUNDARIES.md` before changing bot applications or platform wiring.
+- `src/domains/finance/*` is internal Telegram System Finance. `src/domains/telegram/consumer-finance/*` is the independent consumer Finance application, while `src/domains/telegram/telegram-bots/finance/*` is its Telegram adapter; neither product imports the other's implementation.
+- Finance and Greeter own their business behavior, API/use cases, localization and Telegram presentation. They may depend on `telegram-bots/core` ports and `src/telegram/shared` adapters, but never on each other.
+- `telegram-bots/core` must not import concrete Finance/Greeter services, presenters, localization or menu behavior. Only `telegram-bots.module.ts` composes platform and product providers.
+- New application integration starts from the concrete Finance and Greeter use cases. Do not invent a generic application framework without duplicated, semantically identical platform behavior.
 
 ## Finance Bot required reading
 

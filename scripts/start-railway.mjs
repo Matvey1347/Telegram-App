@@ -1,11 +1,13 @@
 import { spawn } from "node:child_process";
+import { railwayPublicEnvironment } from "./public-origin-environment.mjs";
 
 const publicPort = process.env.PORT || "3000";
 const internalApiPort = "4000";
-const railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim();
-const publicOrigin = railwayDomain
-  ? `https://${railwayDomain.replace(/^https?:\/\//u, "").replace(/\/+$/u, "")}`
-  : undefined;
+const publicDeployment = railwayPublicEnvironment(
+  process.env.RAILWAY_PUBLIC_DOMAIN,
+  process.env,
+);
+const publicOrigin = publicDeployment?.publicOrigin;
 const children = new Set();
 let stopping = false;
 
@@ -57,16 +59,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => void stop());
 }
 
-const productionUrls = publicOrigin
-  ? {
-      API_PUBLIC_URL: process.env.API_PUBLIC_URL || publicOrigin,
-      PUBLIC_API_URL: process.env.PUBLIC_API_URL || publicOrigin,
-      TELEGRAM_BOT_WEBHOOK_BASE_URL:
-        process.env.TELEGRAM_BOT_WEBHOOK_BASE_URL || publicOrigin,
-      FINANCE_MINI_APP_URL: process.env.FINANCE_MINI_APP_URL || publicOrigin,
-      FRONTEND_URL: process.env.FRONTEND_URL || publicOrigin,
-    }
-  : {};
+const productionUrls = publicDeployment?.values ?? {};
 
 start("API", "node", ["apps/api/dist/main.js"], {
   PORT: internalApiPort,
@@ -90,6 +83,6 @@ if (publicOrigin) {
   process.stdout.write(`[railway] Public Finance app: ${publicOrigin}\n`);
 } else {
   process.stderr.write(
-    "[railway] RAILWAY_PUBLIC_DOMAIN is unavailable; configure FRONTEND_URL, FINANCE_MINI_APP_URL and TELEGRAM_BOT_WEBHOOK_BASE_URL explicitly.\n",
+    "[railway] RAILWAY_PUBLIC_DOMAIN is unavailable; configure FRONTEND_URL and API_PUBLIC_URL explicitly.\n",
   );
 }

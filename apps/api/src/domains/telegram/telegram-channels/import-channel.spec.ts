@@ -1,6 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
 import { TelegramChannelsService } from './telegram-channels.service';
 import {
+  createTelegramChannelsTestHarness,
+  type TelegramChannelsTestHarness,
+} from './__fixtures__/telegram-channels.test-harness';
+import {
   buildResolvedTelegramEntity,
   buildTelegramChannel,
   buildTelegramUserAccount,
@@ -29,12 +33,12 @@ describe('TelegramChannelsService importChannel', () => {
   };
   const analyticsService = {};
 
-  let service: TelegramChannelsService;
+  let service: TelegramChannelsTestHarness;
 
   beforeEach(() => {
     jest.clearAllMocks();
     resetTelegramTestBuilders();
-    service = new TelegramChannelsService(
+    service = createTelegramChannelsTestHarness(
       prisma as never,
       workspaceService as never,
       responseCache as never,
@@ -70,23 +74,25 @@ describe('TelegramChannelsService importChannel', () => {
   });
 
   it('imports an invite-resolved channel, stores inviteLink and backfill metadata', async () => {
-    mtprotoClient.getPublicChannelInfo.mockResolvedValue(buildResolvedTelegramEntity({
-      telegramChatId: '123456',
-      title: 'Смак Життя',
-      username: null,
-      description: 'About',
-      participantsCount: 77,
-      photoUrl: 'https://example.com/photo.jpg',
-      inviteLink: 'https://t.me/+dtmYmT-l2Mo1Yzgy',
-      joinedByInvite: true,
-    }));
+    mtprotoClient.getPublicChannelInfo.mockResolvedValue(
+      buildResolvedTelegramEntity({
+        telegramChatId: '123456',
+        title: 'Смак Життя',
+        username: null,
+        description: 'About',
+        participantsCount: 77,
+        photoUrl: 'https://example.com/photo.jpg',
+        inviteLink: 'https://t.me/+dtmYmT-l2Mo1Yzgy',
+        joinedByInvite: true,
+      }),
+    );
     const tx = {
       telegramChannel: {
         create: jest.fn().mockResolvedValue({ id: 'channel-1' }),
       },
     };
-    prisma.$transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
-      callback(tx),
+    prisma.$transaction.mockImplementation(
+      async (callback: (tx: unknown) => Promise<unknown>) => callback(tx),
     );
 
     const result = await service.importChannel('user-1', {
@@ -120,25 +126,33 @@ describe('TelegramChannelsService importChannel', () => {
   });
 
   it('updates an existing canonical channel instead of creating a duplicate', async () => {
-    mtprotoClient.findAccessibleChannelInfoByTitle.mockResolvedValue(buildResolvedTelegramEntity({
-      telegramChatId: '123456',
-      title: 'Смак Життя',
-      username: 'smak_zhyttia',
-      description: 'About',
-      participantsCount: 88,
-      photoUrl: null,
-      joinedByInvite: false,
-    }));
-    jest.spyOn(service as never, 'findMatchingChannels' as never).mockResolvedValue([
-      { id: 'channel-1', createdAt: new Date('2026-01-01T00:00:00Z'), adminLinks: [] },
-    ] as never);
+    mtprotoClient.findAccessibleChannelInfoByTitle.mockResolvedValue(
+      buildResolvedTelegramEntity({
+        telegramChatId: '123456',
+        title: 'Смак Життя',
+        username: 'smak_zhyttia',
+        description: 'About',
+        participantsCount: 88,
+        photoUrl: null,
+        joinedByInvite: false,
+      }),
+    );
+    jest
+      .spyOn(service as never, 'findMatchingChannels' as never)
+      .mockResolvedValue([
+        {
+          id: 'channel-1',
+          createdAt: new Date('2026-01-01T00:00:00Z'),
+          adminLinks: [],
+        },
+      ] as never);
     const tx = {
       telegramChannel: {
         update: jest.fn().mockResolvedValue({ id: 'channel-1' }),
       },
     };
-    prisma.$transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
-      callback(tx),
+    prisma.$transaction.mockImplementation(
+      async (callback: (tx: unknown) => Promise<unknown>) => callback(tx),
     );
 
     await service.importChannel('user-1', { input: 'Смак Життя' });
@@ -147,34 +161,38 @@ describe('TelegramChannelsService importChannel', () => {
   });
 
   it('keeps the same channel row when a public channel becomes private', async () => {
-    mtprotoClient.getPublicChannelInfo.mockResolvedValue(buildResolvedTelegramEntity({
-      telegramChatId: '123456',
-      title: 'Смак Життя',
-      username: null,
-      description: 'Now private',
-      participantsCount: 88,
-      photoUrl: null,
-      inviteLink: 'https://t.me/+AbC_123-xyz',
-      joinedByInvite: false,
-      accessMode: 'PRIVATE_JOIN_REQUEST',
-      requiresJoinRequest: true,
-      telegramAccessHash: '999',
-    }));
-    jest.spyOn(service as never, 'findMatchingChannels' as never).mockResolvedValue([
-      buildTelegramChannel({
-        id: 'channel-1',
-        adminLinks: [{ id: 'admin-1' }],
-        username: 'smak_zhyttia',
+    mtprotoClient.getPublicChannelInfo.mockResolvedValue(
+      buildResolvedTelegramEntity({
         telegramChatId: '123456',
-      } as never),
-    ] as never);
+        title: 'Смак Життя',
+        username: null,
+        description: 'Now private',
+        participantsCount: 88,
+        photoUrl: null,
+        inviteLink: 'https://t.me/+AbC_123-xyz',
+        joinedByInvite: false,
+        accessMode: 'PRIVATE_JOIN_REQUEST',
+        requiresJoinRequest: true,
+        telegramAccessHash: '999',
+      }),
+    );
+    jest
+      .spyOn(service as never, 'findMatchingChannels' as never)
+      .mockResolvedValue([
+        buildTelegramChannel({
+          id: 'channel-1',
+          adminLinks: [{ id: 'admin-1' }],
+          username: 'smak_zhyttia',
+          telegramChatId: '123456',
+        } as never),
+      ] as never);
     const tx = {
       telegramChannel: {
         update: jest.fn().mockResolvedValue({ id: 'channel-1' }),
       },
     };
-    prisma.$transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
-      callback(tx),
+    prisma.$transaction.mockImplementation(
+      async (callback: (tx: unknown) => Promise<unknown>) => callback(tx),
     );
 
     await service.importChannel('user-1', {

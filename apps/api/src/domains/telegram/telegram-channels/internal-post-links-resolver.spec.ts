@@ -1,6 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
 import { TelegramManagedPostStatus } from '@prisma/client';
 import { TelegramChannelsService } from './telegram-channels.service';
+import {
+  createTelegramChannelsTestHarness,
+  type TelegramChannelsTestHarness,
+} from './__fixtures__/telegram-channels.test-harness';
 
 describe('TelegramChannelsService internal post link resolver', () => {
   const serviceWithTargets = (targets: unknown[]) => {
@@ -17,7 +21,7 @@ describe('TelegramChannelsService internal post link resolver', () => {
     const responseCache = {
       clearByPrefix: jest.fn(),
     };
-    return new TelegramChannelsService(
+    return createTelegramChannelsTestHarness(
       prisma as never,
       {} as never,
       responseCache as never,
@@ -156,7 +160,10 @@ describe('TelegramChannelsService internal post link resolver', () => {
         imageUrls: [],
         telegramMessageIds: ['33'],
         telegramMessageUrls: ['https://t.me/old_username/33'],
-        telegramChannel: { username: 'example', telegramChatId: '-1003976683330' },
+        telegramChannel: {
+          username: 'example',
+          telegramChatId: '-1003976683330',
+        },
       },
       {
         id: 'post-a',
@@ -168,7 +175,10 @@ describe('TelegramChannelsService internal post link resolver', () => {
         imageUrls: [],
         telegramMessageIds: ['32'],
         telegramMessageUrls: ['https://t.me/old_username/32'],
-        telegramChannel: { username: 'example', telegramChatId: '-1003976683330' },
+        telegramChannel: {
+          username: 'example',
+          telegramChatId: '-1003976683330',
+        },
       },
     ]);
     await expect(
@@ -223,7 +233,10 @@ describe('TelegramChannelsService internal post link resolver', () => {
         imageUrls: [],
         telegramMessageIds: ['42'],
         telegramMessageUrls: ['https://t.me/example/42'],
-        telegramChannel: { username: 'example', telegramChatId: '-1003976683330' },
+        telegramChannel: {
+          username: 'example',
+          telegramChatId: '-1003976683330',
+        },
       },
     ]);
     await expect(
@@ -247,7 +260,10 @@ describe('TelegramChannelsService internal post link resolver', () => {
         imageUrls: [],
         telegramMessageIds: ['42'],
         telegramMessageUrls: [],
-        telegramChannel: { username: '@example', telegramChatId: '-1003976683330' },
+        telegramChannel: {
+          username: '@example',
+          telegramChatId: '-1003976683330',
+        },
       },
     ]);
     await expect(
@@ -272,7 +288,10 @@ describe('TelegramChannelsService internal post link resolver', () => {
         imageUrls: [],
         telegramMessageIds: ['42'],
         telegramMessageUrls: [],
-        telegramChannel: { username: 'example', telegramChatId: '-1003976683330' },
+        telegramChannel: {
+          username: 'example',
+          telegramChatId: '-1003976683330',
+        },
       },
     ]);
     await expect(

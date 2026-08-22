@@ -7,11 +7,15 @@ import {
   UpdateTelegramManagedPostDto,
 } from './dto';
 
-const buttonRows = [[{
-  text: 'Open',
-  url: 'https://example.com',
-  style: 'primary',
-}]];
+const buttonRows = [
+  [
+    {
+      text: 'Open',
+      url: 'https://example.com',
+      style: 'primary',
+    },
+  ],
+];
 
 describe('managed post button DTOs', () => {
   it.each([CreateTelegramManagedPostDto, UpdateTelegramManagedPostDto])(
@@ -19,8 +23,9 @@ describe('managed post button DTOs', () => {
     (Dto) => {
       const dto = plainToInstance(Dto, { title: 'Post', buttonRows });
 
-      expect(validateSync(dto, { whitelist: true, forbidNonWhitelisted: true }))
-        .toEqual([]);
+      expect(
+        validateSync(dto, { whitelist: true, forbidNonWhitelisted: true }),
+      ).toEqual([]);
     },
   );
 });

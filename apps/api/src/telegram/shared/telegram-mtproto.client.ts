@@ -36,6 +36,10 @@ import {
   normalizeTelegramCustomEmojiPackSource,
   parseTelegramCustomEmojiDocumentId,
 } from './telegram-custom-emoji-pack';
+import {
+  maskTelegramInviteHash,
+  maskTelegramReferenceForLog,
+} from './telegram-invite-log';
 
 type ApiCredentials = { apiId: string; apiHash: string };
 type SessionParams = ApiCredentials & { session?: string };
@@ -590,15 +594,6 @@ export class TelegramMtprotoClient {
     return `${this.now() - startedAt}ms`;
   }
 
-  private maskInviteHash(value?: string | null) {
-    const hash = String(value || '')
-      .trim()
-      .replace(/^\+/, '');
-    if (!hash) return 'n/a';
-    if (hash.length <= 6) return `${hash.slice(0, 2)}***`;
-    return `${hash.slice(0, 4)}***${hash.slice(-2)}`;
-  }
-
   private sessionFingerprint(session?: string | null) {
     const raw = String(session || '').trim();
     if (!raw) return 'empty';
@@ -1029,7 +1024,7 @@ export class TelegramMtprotoClient {
   ): Promise<ResolvedTelegramEntity & { raw: Record<string, unknown> }> {
     const startedAt = this.now();
     this.logger.log(
-      `Describing Telegram entity: kind=${this.entityKind(entity)} id=${this.entityIdToString(entity) || 'n/a'} fallback=${fallbackRef}`,
+      `Describing Telegram entity: kind=${this.entityKind(entity)} id=${this.entityIdToString(entity) || 'n/a'} fallback=${maskTelegramReferenceForLog(fallbackRef)}`,
     );
     let fullChannel: unknown = null;
     if (!(entity instanceof Api.User)) {
@@ -1538,9 +1533,9 @@ export class TelegramMtprotoClient {
     inviteHash: string,
   ) {
     const inviteLink = canonicalTelegramInviteLink(inviteHash);
-    const maskedInvite = this.maskInviteHash(inviteHash);
+    const maskedInvite = maskTelegramInviteHash(inviteHash);
     this.logger.log(
-      `Resolving Telegram invite link: invite=${maskedInvite} fallback=${fallbackRef}`,
+      `Resolving Telegram invite link: invite=${maskedInvite} fallback=${maskTelegramReferenceForLog(fallbackRef)}`,
     );
     let invite: Api.TypeChatInvite;
     try {
@@ -1847,7 +1842,7 @@ export class TelegramMtprotoClient {
   }) {
     const startedAt = this.now();
     this.logger.log(
-      `Starting Telegram public channel lookup: ref=${params.channelRef || params.channel?.telegramChatId || params.channel?.username || 'n/a'} invite=${this.maskInviteHash(params.inviteHash)}`,
+      `Starting Telegram public channel lookup: ref=${maskTelegramReferenceForLog(params.channelRef || params.channel?.telegramChatId || params.channel?.username)} invite=${maskTelegramInviteHash(params.inviteHash)}`,
     );
     const client = await this.createClient(params);
     try {
@@ -1858,7 +1853,7 @@ export class TelegramMtprotoClient {
           params.inviteHash,
         );
         this.logger.log(
-          `Telegram invite-based lookup finished in ${this.elapsed(startedAt)}: ref=${params.channelRef || params.channel?.telegramChatId || 'n/a'} chatId=${resolved.telegramChatId || 'n/a'}`,
+          `Telegram invite-based lookup finished in ${this.elapsed(startedAt)}: ref=${maskTelegramReferenceForLog(params.channelRef || params.channel?.telegramChatId)} chatId=${resolved.telegramChatId || 'n/a'}`,
         );
         return resolved;
       }
@@ -1881,7 +1876,7 @@ export class TelegramMtprotoClient {
         'Telegram entity lookup',
       );
       this.logger.log(
-        `Telegram entity lookup completed in ${this.elapsed(entityStartedAt)}: ref=${params.channelRef} type=${entity?.constructor?.name || 'unknown'}`,
+        `Telegram entity lookup completed in ${this.elapsed(entityStartedAt)}: ref=${maskTelegramReferenceForLog(params.channelRef)} type=${entity?.constructor?.name || 'unknown'}`,
       );
       if (!this.isImportableTelegramEntity(entity)) {
         throw new BadRequestException(
@@ -1894,7 +1889,7 @@ export class TelegramMtprotoClient {
         params.channelRef || 'Telegram channel',
       );
       this.logger.log(
-        `Telegram public channel lookup finished in ${this.elapsed(startedAt)}: ref=${params.channelRef} chatId=${described.telegramChatId || 'n/a'}`,
+        `Telegram public channel lookup finished in ${this.elapsed(startedAt)}: ref=${maskTelegramReferenceForLog(params.channelRef)} chatId=${described.telegramChatId || 'n/a'}`,
       );
       return described;
     } finally {

@@ -7,14 +7,7 @@ import type {
   ConsumerFinanceCategory,
   ConsumerFinanceHistoryQuery,
 } from "@telegram-system/shared";
-import {
-  Button,
-  Card,
-  DateRangeInput,
-  Input,
-  Modal,
-  Select,
-} from "@/components/ui/primitives";
+import { Button, Card, DateRangeInput, Input, Modal, Select } from "./ui";
 import {
   financeCopy,
   localizeFinanceCategory,

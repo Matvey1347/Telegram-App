@@ -1,9 +1,13 @@
 import { TelegramChannelsService } from './telegram-channels.service';
+import {
+  createTelegramChannelsTestHarness,
+  type TelegramChannelsTestHarness,
+} from './__fixtures__/telegram-channels.test-harness';
 
 describe('TelegramChannelsService channel lifecycle', () => {
   const prisma = { telegramChannel: { updateMany: jest.fn() } };
   const workspaceService = { resolveWorkspaceIdForUser: jest.fn() };
-  const service = new TelegramChannelsService(
+  const service = createTelegramChannelsTestHarness(
     prisma as never,
     workspaceService as never,
     {} as never,
@@ -29,7 +33,11 @@ describe('TelegramChannelsService channel lifecycle', () => {
 
     expect(prisma.telegramChannel.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'channel-1', workspaceId: 'workspace-1', archivedAt: null },
+        where: {
+          id: 'channel-1',
+          workspaceId: 'workspace-1',
+          archivedAt: null,
+        },
         data: { archivedAt: expect.any(Date) },
       }),
     );

@@ -2,7 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { AdCampaignAnalyticsService } from '../../growth/ad-campaigns/ad-campaign-analytics.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramChannelAnalyticsService } from '../telegram-channels/telegram-channel-analytics.service';
-import { TelegramChannelsService } from '../telegram-channels/telegram-channels.service';
+import { TelegramPostMetricsService } from '../telegram-channels/telegram-post-metrics.service';
+import { TelegramBroadcastStatsService } from '../telegram-channels/telegram-broadcast-stats.service';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
 
 @Injectable()
@@ -11,16 +12,19 @@ export class DailyAnalyticsSyncService {
 
   constructor(
     private prisma: PrismaService,
-    private telegramChannelsService: TelegramChannelsService,
+    private telegramPostMetricsService: TelegramPostMetricsService,
+    private telegramBroadcastStatsService: TelegramBroadcastStatsService,
     private telegramChannelAnalyticsService: TelegramChannelAnalyticsService,
     private adCampaignAnalyticsService: AdCampaignAnalyticsService,
-    private readonly applicationLogger: ApplicationLoggerService = ({
+    private readonly applicationLogger: ApplicationLoggerService = {
       info: () => undefined,
       writeStructured: () => undefined,
-    } as unknown) as ApplicationLoggerService,
+    } as unknown as ApplicationLoggerService,
   ) {}
 
-  async runDailyAnalyticsSync(options: { workspaceId?: string; source?: 'cron' | 'manual' } = {}) {
+  async runDailyAnalyticsSync(
+    options: { workspaceId?: string; source?: 'cron' | 'manual' } = {},
+  ) {
     const source = options.source || 'cron';
     const startedAt = Date.now();
     this.applicationLogger.info({
@@ -69,26 +73,35 @@ export class DailyAnalyticsSyncService {
         for (const channel of channels) {
           try {
             if (channel.syncIncludePostMetrics) {
-              await this.telegramChannelsService.syncPostsMetricsForWorkspace(
+              await this.telegramPostMetricsService.syncPostsMetricsForWorkspace(
                 channel.workspaceId,
                 channel.id,
                 { postLimit: 100 },
               );
             }
             if (channel.syncIncludeChannelStats) {
-              const adminLink = await this.prisma.telegramChannelAdminLink.findFirst({
-                where: { workspaceId: channel.workspaceId, telegramChannelId: channel.id },
-                orderBy: { createdAt: 'asc' },
-              });
+              const adminLink =
+                await this.prisma.telegramChannelAdminLink.findFirst({
+                  where: {
+                    workspaceId: channel.workspaceId,
+                    telegramChannelId: channel.id,
+                  },
+                  orderBy: { createdAt: 'asc' },
+                });
               if (adminLink) {
-                await this.telegramChannelsService.syncBroadcastStatsForWorkspace(
-                  channel.workspaceId, channel.id, adminLink.telegramUserAccountIntegrationId,
+                await this.telegramBroadcastStatsService.syncBroadcastStatsForWorkspace(
+                  channel.workspaceId,
+                  channel.id,
+                  adminLink.telegramUserAccountIntegrationId,
                 );
               }
             }
             // Post-metrics sync is the canonical owner when it is selected;
             // avoid a second, identical snapshot in the same daily workflow.
-            if (channel.syncIncludeAudienceSnapshot && !channel.syncIncludePostMetrics) {
+            if (
+              channel.syncIncludeAudienceSnapshot &&
+              !channel.syncIncludePostMetrics
+            ) {
               await this.telegramChannelAnalyticsService.createAudienceSnapshot(
                 channel.id,
                 source === 'manual' ? 'manual_daily_sync' : 'daily_cron',
@@ -109,17 +122,22 @@ export class DailyAnalyticsSyncService {
             workspaceId: workspace.id,
             excludeFromAnalytics: false,
             ...(source === 'cron'
-              ? { telegramChannel: { is: { isActive: true, autoSyncEnabled: true } } }
+              ? {
+                  telegramChannel: {
+                    is: { isActive: true, autoSyncEnabled: true },
+                  },
+                }
               : {}),
           },
           select: { id: true },
         });
         for (const campaign of campaigns) {
           try {
-            const recalculated = await this.adCampaignAnalyticsService.recalculateCampaignAnalytics(
-              workspace.id,
-              campaign.id,
-            );
+            const recalculated =
+              await this.adCampaignAnalyticsService.recalculateCampaignAnalytics(
+                workspace.id,
+                campaign.id,
+              );
             if (recalculated.changed) {
               await (this.prisma.adCampaign as any).update({
                 where: { id: campaign.id },
@@ -134,7 +152,9 @@ export class DailyAnalyticsSyncService {
             errorsCount += 1;
             const message = `campaign=${campaign.id}: ${error instanceof Error ? error.message : 'unknown error'}`;
             errors.push(message);
-            this.logger.warn(`Daily analytics campaign recalc failed: ${message}`);
+            this.logger.warn(
+              `Daily analytics campaign recalc failed: ${message}`,
+            );
           }
         }
       }

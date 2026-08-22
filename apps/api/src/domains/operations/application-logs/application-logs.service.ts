@@ -16,6 +16,8 @@ import { isApplicationLogStorageMissing } from './application-logs-storage';
 import { ApplicationLogsRepository } from './application-logs.repository';
 import { ApplicationLogsQueryDto } from './dto/application-logs-query.dto';
 import { ClientLogDto } from './dto/client-log.dto';
+import { runtimeEnvironmentName } from '../../../config/deployment-config';
+import { APPLICATION_LOGGING_CONFIG } from './application-logging.config';
 
 function encodeCursor(createdAt: Date, id: string) {
   return Buffer.from(`${createdAt.toISOString()}::${id}`).toString('base64url');
@@ -351,7 +353,7 @@ export class ApplicationLogsService {
         userId,
         level: 'error',
         kind: 'client',
-        environment: process.env.NODE_ENV || 'development',
+        environment: runtimeEnvironmentName(),
         service: 'web',
         source: 'ClientErrorReporter',
         event: 'client.runtime_error',
@@ -379,10 +381,7 @@ export class ApplicationLogsService {
   }
 
   async cleanupExpiredLogs() {
-    const retentionDays = Number(process.env.APP_LOG_RETENTION_DAYS ?? 90);
-    if (!Number.isFinite(retentionDays) || retentionDays <= 0) {
-      return { deletedCount: 0, disabled: true };
-    }
+    const retentionDays = APPLICATION_LOGGING_CONFIG.retentionDays;
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - retentionDays);
     if (this.shouldSkipForMissingStorage()) {

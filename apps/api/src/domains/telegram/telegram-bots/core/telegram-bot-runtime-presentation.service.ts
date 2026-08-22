@@ -1,36 +1,54 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { TelegramBotApplicationType } from '@prisma/client';
 import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
-import { financeChatMenuButton } from '../finance/finance-bot-chat-responder.service';
-import { commandsForTelegramBot } from './telegram-bot-commands';
+import {
+  TELEGRAM_BOT_FINANCE_PRESENTATION,
+  TELEGRAM_BOT_GREETER_PRESENTATION,
+  type TelegramBotApplicationPresentation,
+} from './telegram-bot-application.ports';
 
 @Injectable()
 export class TelegramBotRuntimePresentationService {
-  constructor(private readonly botApi: TelegramBotApiClient) {}
+  constructor(
+    private readonly botApi: TelegramBotApiClient,
+    @Inject(TELEGRAM_BOT_GREETER_PRESENTATION)
+    private readonly greeter: TelegramBotApplicationPresentation,
+    @Inject(TELEGRAM_BOT_FINANCE_PRESENTATION)
+    private readonly finance: TelegramBotApplicationPresentation,
+  ) {}
 
   async reconcile(
     token: string,
     applicationType: TelegramBotApplicationType,
     botIntegrationId: string,
   ) {
-    const commands = commandsForTelegramBot(applicationType);
+    const presentation = this.application(applicationType);
+    const commands = presentation?.commands() ?? [];
     await this.botApi.setMyCommands(token, commands);
-    if (applicationType === TelegramBotApplicationType.FINANCE) {
+    if (presentation) {
       await Promise.all(
-        (['uk', 'ru', 'en'] as const).map((locale) =>
-          this.botApi.setMyCommands(
-            token,
-            commandsForTelegramBot(applicationType, locale),
-            locale,
+        presentation
+          .supportedLocales()
+          .map((locale) =>
+            this.botApi.setMyCommands(
+              token,
+              presentation.commands(locale),
+              locale,
+            ),
           ),
-        ),
       );
     }
     await this.botApi.setChatMenuButton(
       token,
-      applicationType === TelegramBotApplicationType.FINANCE
-        ? financeChatMenuButton(botIntegrationId)
-        : { type: 'commands' },
+      presentation?.menuButton(botIntegrationId) ?? { type: 'commands' },
     );
+  }
+
+  application(applicationType: TelegramBotApplicationType) {
+    if (applicationType === TelegramBotApplicationType.FINANCE)
+      return this.finance;
+    if (applicationType === TelegramBotApplicationType.GREETER)
+      return this.greeter;
+    return null;
   }
 }

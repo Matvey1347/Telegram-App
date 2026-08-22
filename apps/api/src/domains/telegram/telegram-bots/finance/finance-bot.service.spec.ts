@@ -5,11 +5,11 @@ import {
   parseFinanceMenuText,
   parseFinanceQuickInput,
 } from './finance-chat-input-parser';
+import { FinanceBotChatResponderService } from './finance-bot-chat-responder.service';
 import {
-  FinanceBotChatResponderService,
   financeMainMenu,
   financeMiniAppUrl,
-} from './finance-bot-chat-responder.service';
+} from '../../consumer-finance/telegram-presentation/finance-telegram-menu';
 
 describe('parseFinanceQuickInput', () => {
   it.each([
@@ -56,9 +56,12 @@ describe('parseFinanceMenuText', () => {
     ['💸 Add expense', 'expense'],
     ['💸 Добавить расход', 'expense'],
     ['💸 Додати витрату', 'expense'],
-  ])('keeps a stale localized Telegram keyboard action usable: %s', (input, expected) => {
-    expect(parseFinanceMenuText(input)).toBe(expected);
-  });
+  ])(
+    'keeps a stale localized Telegram keyboard action usable: %s',
+    (input, expected) => {
+      expect(parseFinanceMenuText(input)).toBe(expected);
+    },
+  );
 
   it('does not interpret ordinary text as a menu action', () => {
     expect(parseFinanceMenuText('Settings for next month')).toBeNull();
@@ -367,8 +370,8 @@ describe('FinanceBotService chat UX', () => {
 
   it('sends the Web App CTA through the durable delivery payload', async () => {
     const test = service();
-    const previous = process.env.FINANCE_MINI_APP_URL;
-    process.env.FINANCE_MINI_APP_URL = 'https://app.example';
+    const previous = process.env.FRONTEND_URL;
+    process.env.FRONTEND_URL = 'https://app.example';
     try {
       await test.instance.handle({
         bot,
@@ -383,8 +386,8 @@ describe('FinanceBotService chat UX', () => {
         },
       } as any);
     } finally {
-      if (previous === undefined) delete process.env.FINANCE_MINI_APP_URL;
-      else process.env.FINANCE_MINI_APP_URL = previous;
+      if (previous === undefined) delete process.env.FRONTEND_URL;
+      else process.env.FRONTEND_URL = previous;
     }
     expect(test.chat.sendMainMenu).toHaveBeenCalledWith(
       expect.anything(),
@@ -689,9 +692,10 @@ describe('FinanceBotService chat UX', () => {
       delivery as any,
       {} as any,
       {} as any,
+      { setChatMenuButton: jest.fn().mockResolvedValue(true) } as any,
     );
-    const previous = process.env.FINANCE_MINI_APP_URL;
-    process.env.FINANCE_MINI_APP_URL = 'https://app.example';
+    const previous = process.env.FRONTEND_URL;
+    process.env.FRONTEND_URL = 'https://app.example';
     try {
       await responder.sendMainMenu(
         { bot, updateLogId: 'update-3', update: {} } as any,
@@ -699,8 +703,8 @@ describe('FinanceBotService chat UX', () => {
         'chat-1',
       );
     } finally {
-      if (previous === undefined) delete process.env.FINANCE_MINI_APP_URL;
-      else process.env.FINANCE_MINI_APP_URL = previous;
+      if (previous === undefined) delete process.env.FRONTEND_URL;
+      else process.env.FRONTEND_URL = previous;
     }
     const payload = delivery.send.mock.calls[0][2];
     expect(payload.replyKeyboard).toEqual(
@@ -722,6 +726,7 @@ describe('FinanceBotService chat UX', () => {
       delivery as any,
       {} as any,
       {} as any,
+      { setChatMenuButton: jest.fn().mockResolvedValue(true) } as any,
     );
     const context = { bot, updateLogId: 'update-3', update: {} } as any;
 
@@ -803,6 +808,7 @@ describe('FinanceBotService chat UX', () => {
 
   it('renders batch preview labels in Ukrainian and Russian', () => {
     const responder = new FinanceBotChatResponderService(
+      {} as any,
       {} as any,
       {} as any,
       {} as any,

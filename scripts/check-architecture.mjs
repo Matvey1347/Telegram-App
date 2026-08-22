@@ -1,5 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import {
+  inspectArchitectureExceptionInventory,
+  inspectArchitectureSource,
+} from "./architecture-policy.mjs";
 
 const root = process.cwd();
 
@@ -16,10 +20,6 @@ const STRICT_MODE = process.env.ARCHITECTURE_STRICT === "1";
 // Transitional baseline: these files must shrink and may never grow.
 // Final strict mode ignores this map and fails every production file above policy.
 const TRANSITION_BASELINE = new Map([
-  [
-    "apps/api/src/domains/telegram/telegram-channels/telegram-channels.service.ts",
-    12788,
-  ],
   ["apps/web/src/app/(internal)/(telegram)/telegram-posts/page.tsx", 8370],
   [
     "apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.service.ts",
@@ -27,52 +27,48 @@ const TRANSITION_BASELINE = new Map([
   ],
   [
     "apps/web/src/app/(internal)/(telegram)/telegram/channels/[id]/page.tsx",
-    4000,
+    3997,
   ],
   ["apps/web/src/app/(internal)/(telegram)/telegram-channels/page.tsx", 3621],
-  ["apps/api/src/telegram/shared/telegram-mtproto.client.ts", 3548],
-  ["apps/web/src/components/features/growth/ad-sales/ad-sales-page.tsx", 3102],
-  ["apps/web/src/lib/api.ts", 2235],
-  ["apps/web/src/app/(internal)/(growth)/ad-campaigns/page.tsx", 2503],
-  ["apps/api/src/domains/growth/ad-campaigns/ad-campaigns.service.ts", 1864],
+  ["apps/api/src/telegram/shared/telegram-mtproto.client.ts", 3543],
+  ["apps/web/src/components/features/growth/ad-sales/ad-sales-page.tsx", 2868],
+  ["apps/web/src/lib/api.ts", 764],
+  ["apps/web/src/app/(internal)/(growth)/ad-campaigns/page.tsx", 2500],
+  ["apps/api/src/domains/growth/ad-campaigns/ad-campaigns.service.ts", 1859],
   ["apps/web/src/components/ui/primitives.tsx", 1936],
   [
     "apps/web/src/components/features/growth/ad-campaigns/campaigns-table.tsx",
-    1307,
+    1294,
   ],
   [
     "apps/api/src/domains/telegram/telegram-user-accounts/telegram-user-accounts.service.ts",
-    1217,
+    1179,
   ],
   [
     "apps/web/src/components/features/telegram/telegram/telegram-account-panels.tsx",
     1185,
   ],
-  [
-    "apps/web/src/components/features/telegram/telegram/managed-posts-import-modal.tsx",
-    1177,
-  ],
   ["apps/web/src/components/icons/icon-picker.tsx", 1165],
-  ["apps/web/src/components/features/growth/ad-sales/ad-sale-modal.tsx", 1048],
+  ["apps/web/src/components/features/growth/ad-sales/ad-sale-modal.tsx", 1043],
   [
     "apps/api/src/domains/growth/ad-campaigns/ad-campaign-admission-analytics.service.ts",
     1017,
   ],
   [
     "apps/api/src/domains/telegram/telegram-bots/core/telegram-bot-runtime.service.ts",
-    914,
+    908,
   ],
   ["apps/api/src/domains/growth/ad-hypotheses/ad-hypotheses.service.ts", 906],
   [
     "apps/web/src/components/features/telegram/telegram/telegram-post-preview.tsx",
     1175,
   ],
-  ["packages/shared/src/types/telegram-ad-sales.ts", 857],
+  ["packages/shared/src/types/telegram-ad-sales.ts", 836],
   ["apps/api/src/domains/finance/transactions/transactions.service.ts", 848],
   ["apps/web/src/lib/features/telegram/telegram-channels-api.ts", 848],
   [
     "apps/api/src/domains/telegram/telegram-channels/telegram-channels.controller.ts",
-    826,
+    825,
   ],
   ["apps/web/src/app/(internal)/(operations)/system-logs/page.tsx", 806],
   ["apps/web/src/app/(internal)/page.tsx", 646],
@@ -170,14 +166,31 @@ for (const file of files) {
       failures.push(
         `${file} has grown from legacy allowance ${allowedLines} to ${lines} lines.`,
       );
+    } else if (lines < allowedLines) {
+      failures.push(
+        `${file} shrank from legacy allowance ${allowedLines} to ${lines} lines; lower or remove the stale allowance.`,
+      );
     }
-    continue;
-  }
-
-  if (lines > limit) {
+  } else if (lines > limit) {
     failures.push(`${file} is ${lines} lines, above hard policy ${limit}.`);
   }
+
+  failures.push(
+    ...inspectArchitectureSource(
+      file,
+      fs.readFileSync(path.join(root, file), "utf8"),
+    ),
+  );
 }
+
+for (const file of TRANSITION_BASELINE.keys()) {
+  if (!files.includes(file)) {
+    failures.push(
+      `${file} no longer exists; remove its stale file-size allowance.`,
+    );
+  }
+}
+failures.push(...inspectArchitectureExceptionInventory(files));
 
 if (warnings.length) {
   console.log(

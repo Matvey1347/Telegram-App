@@ -10,6 +10,14 @@
 - Keep `page.tsx` files below 300 lines by moving UI sections, query hooks, mutations and domain utilities into feature modules.
 - Keep React components and hooks below 400 lines. Split by real workflow or UI responsibility, not by arbitrary line ranges.
 - Keep `@/lib/api` as a small compatibility facade only; domain endpoint implementations belong in domain API modules that reuse the single base client.
+- A new `page.tsx` must not own React Query calls or import domain API/helper implementations; render a feature container. Existing exceptions are shrinking-only architecture debt.
+
+## Product UI boundaries
+
+- Read `docs/architecture/PRODUCT_BOUNDARIES.md` for consumer applications and cross-product work.
+- `(consumer-finance)`, `components/features/finance/consumer-finance`, its provider and `consumer-finance-api` form the consumer Finance frontend boundary. Internal `(finance)` routes and non-consumer Finance feature implementation are a different product.
+- Consumer Finance owns its Web App/Mini App UI, state/query layer and localization. Internal/admin products must not reuse consumer components, and consumer code must not import Telegram System primitives/providers or internal Finance UI/helpers.
+- Share neutral technical foundations and stable serializable contracts, not concrete product UI, hooks, presenters, API clients, query keys, cache rules, or business helpers. Extract a neutral pure helper only when two real products require identical semantics.
 
 ## Finance Bot required reading
 
@@ -17,13 +25,14 @@
 
 ## API And Query
 
-- Use `@/lib/api` for API calls. Do not create another fetch/axios wrapper.
-- Use `@/lib/query-keys` for React Query keys and invalidation.
+- Internal Telegram System features use `@/lib/api`; Consumer Finance uses its product-owned API clients. Both reuse the single neutral HTTP transport rather than creating another Axios framework.
+- Internal features use `@/lib/query-keys`; Consumer Finance uses its product-owned query-key factory and cache helpers.
 - Keep mutation invalidation narrow and typed.
 - Do not add inline string-array query keys when a shared factory exists; add the factory first when the key is cross-page or domain-owned.
 - Preserve selected selector values even if they are not in the current search/pagination result.
 - Treat backend read models as purpose-built contracts. Do not compensate for trimmed collection responses with per-row detail fetches or frontend join systems unless the workflow explicitly needs that shape.
 - Read `docs/runtime-cost-efficiency.md` before adding `refetchInterval`, polling, repeated invalidation, or a new API read model. Polling needs an explicit operational justification; use narrow shared query keys, compact server read models, and never add per-row HTTP joins for display.
+- `refetchInterval` is prohibited by the architecture checker unless a bounded, documented exception names its active and stop conditions.
 - Read `docs/frontend-cache-efficiency.md` before production mutation or React Query cache work. Reconcile authoritative mutation responses into cache; broad invalidation needs an explicit correctness reason.
 
 ## Design System

@@ -14,7 +14,12 @@ describe('TelegramWorkspaceSyncTasksService automatic selections', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new TelegramWorkspaceSyncTasksService(prisma as never, channels as never, logger as never);
+    service = new TelegramWorkspaceSyncTasksService(
+      prisma as never,
+      channels as never,
+      channels as never,
+      logger as never,
+    );
     channels.syncPostsMetricsForWorkspace.mockResolvedValue({ syncedPosts: 0, changedPosts: 0, snapshotsCreated: 0, affectedDays: 0 });
     channels.syncBroadcastStatsForWorkspace.mockResolvedValue({});
     prisma.telegramChannelAdminLink.findFirst.mockResolvedValue({ telegramUserAccountIntegrationId: 'account-1' });

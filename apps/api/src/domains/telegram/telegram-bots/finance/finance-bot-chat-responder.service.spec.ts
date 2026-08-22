@@ -9,18 +9,54 @@ describe('FinanceBotChatResponderService', () => {
   const interactive = { send: jest.fn().mockResolvedValue(undefined) };
   const ledger = { history: jest.fn(), accounts: jest.fn() };
   const core = { categories: jest.fn() };
+  const botApi = { setChatMenuButton: jest.fn().mockResolvedValue(true) };
   const responder = new FinanceBotChatResponderService(
     interactive as any,
     ledger as any,
     core as any,
+    botApi as any,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
-    process.env.FINANCE_MINI_APP_URL = 'https://finance.example';
+    process.env.FRONTEND_URL = 'https://finance.example';
   });
 
-  afterAll(() => delete process.env.FINANCE_MINI_APP_URL);
+  afterAll(() => delete process.env.FRONTEND_URL);
+
+  it('updates the per-chat Mini App button together with the localized main menu', async () => {
+    await responder.sendMainMenu(context, 'user-1', 'chat-1', 'ru');
+
+    expect(interactive.send).toHaveBeenCalledWith(
+      'bot-token',
+      'chat-1',
+      expect.objectContaining({
+        replyKeyboard: expect.arrayContaining([
+          expect.arrayContaining([
+            expect.objectContaining({ text: '💸 Добавить расход' }),
+          ]),
+        ]),
+      }),
+    );
+    expect(botApi.setChatMenuButton).toHaveBeenCalledWith(
+      'bot-token',
+      expect.objectContaining({ text: 'Открыть Finance' }),
+      'chat-1',
+    );
+  });
+
+  it('still sends the localized keyboard when Telegram rejects the menu-button refresh', async () => {
+    botApi.setChatMenuButton.mockRejectedValueOnce(new Error('unsupported'));
+
+    await expect(
+      responder.sendMainMenu(context, 'user-1', 'chat-1', 'ru'),
+    ).resolves.toBeUndefined();
+    expect(interactive.send).toHaveBeenCalledWith(
+      'bot-token',
+      'chat-1',
+      expect.objectContaining({ text: expect.stringContaining('Finance') }),
+    );
+  });
 
   it('returns a useful localized error when the compact recent read fails', async () => {
     ledger.history.mockRejectedValue(new Error('database unavailable'));

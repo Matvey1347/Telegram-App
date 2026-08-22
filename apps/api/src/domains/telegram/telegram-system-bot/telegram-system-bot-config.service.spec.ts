@@ -37,6 +37,16 @@ describe('TelegramSystemBotConfigService', () => {
     expect(service.frontendUrl).toBe('https://telegram-system-web.vercel.app');
   });
 
+  it('builds the webhook URL from the canonical public API origin', () => {
+    const service = createService({
+      API_PUBLIC_URL: 'https://telegram-system-api.example/',
+    });
+
+    expect(service.webhookUrl).toBe(
+      'https://telegram-system-api.example/api/telegram/system-bot/webhook',
+    );
+  });
+
   it('selects only credentials for the explicit environment', () => {
     const values = {
       TELEGRAM_SYSTEM_BOT_ENVIRONMENT: 'LOCAL',

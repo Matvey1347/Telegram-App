@@ -6,8 +6,8 @@ import {
 import { FinanceTransactionSource, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
-import { FINANCE_UNDO_TTL_MS } from './finance-defaults';
-import { financeAccountView } from './finance-account-view';
+import { FINANCE_UNDO_TTL_MS } from '../catalog/finance-defaults';
+import { financeAccountView } from '../catalog/finance-account-view';
 import {
   financeAnalyticsDateRange,
   financeHistoryDateRange,
@@ -17,7 +17,7 @@ import { financeBalanceSummary } from './finance-balance-summary';
 import {
   financeAnalyticsView,
   type FinanceAnalyticsAggregateRow,
-} from './finance-analytics-view';
+} from '../analytics/finance-analytics-view';
 import {
   financeTransactionSearchFilter,
   financeTransactionSelect,
@@ -27,11 +27,11 @@ import type {
   CreateFinanceTransactionDto,
   FinanceHistoryQueryDto,
   UpdateFinanceTransactionDto,
-} from './finance.dto';
+} from '../http/finance.dto';
 import {
   financeAccountEmoji,
   financeIconPresentation,
-} from './finance-entity-emoji';
+} from '../catalog/finance-entity-emoji';
 type ProfileContext = {
   id: string;
   defaultCurrency: string;

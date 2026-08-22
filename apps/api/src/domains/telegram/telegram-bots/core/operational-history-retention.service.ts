@@ -5,6 +5,7 @@ import {
   TelegramBotUpdateStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../../prisma/prisma.service';
+import { OPERATIONAL_HISTORY_RETENTION_CONFIG } from './operational-history-retention.config';
 
 const DAY_MS = 24 * 60 * 60_000;
 
@@ -15,13 +16,11 @@ export class OperationalHistoryRetentionService {
   async cleanup(now = new Date()) {
     const botCutoff = this.cutoff(
       now,
-      'TELEGRAM_OPERATIONAL_HISTORY_RETENTION_DAYS',
-      30,
+      OPERATIONAL_HISTORY_RETENTION_CONFIG.telegramBotDays,
     );
     const taskCutoff = this.cutoff(
       now,
-      'SCHEDULED_TASK_RUN_RETENTION_DAYS',
-      90,
+      OPERATIONAL_HISTORY_RETENTION_CONFIG.scheduledTaskRunDays,
     );
     const [updates, deliveries, taskRuns, systemBotUpdates] = await Promise.all(
       [
@@ -78,10 +77,7 @@ export class OperationalHistoryRetentionService {
     };
   }
 
-  private cutoff(now: Date, variable: string, fallbackDays: number) {
-    const configured = Number(process.env[variable] ?? fallbackDays);
-    const days =
-      Number.isFinite(configured) && configured > 0 ? configured : fallbackDays;
+  private cutoff(now: Date, days: number) {
     return new Date(now.getTime() - days * DAY_MS);
   }
 }

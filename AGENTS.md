@@ -2,7 +2,7 @@
 
 ## Project map
 
-- `apps/api`: NestJS API. Business modules live under `src/domains/{finance,growth,identity,operations,telegram,workspace}`; cross-domain infrastructure remains in `src/common`, `src/prisma`, and `src/telegram/shared`.
+- `apps/api`: NestJS API. Business modules live under `src/domains/{finance,growth,identity,operations,telegram,workspace}`; cross-domain infrastructure remains in `src/common`, `src/prisma`, and `src/telegram/shared`. Internal Finance under `src/domains/finance` is not the consumer Finance application under `src/domains/telegram/consumer-finance`; `telegram-bots/finance` contains only its Telegram runtime adapter.
 - `apps/web`: Next.js app router frontend. URL-preserving route groups live under `src/app/(domain)`; domain UI and clients live under `src/components/features` and `src/lib/features`; shared providers, UI primitives, and app-wide utilities remain at their top-level locations.
 - `packages/shared`: shared TypeScript contracts used across API and web. Put stable cross-app response types here when both sides consume them.
 - `apps/api/prisma/schema.prisma` and `apps/api/prisma/migrations`: database contract and migrations. Schema/API changes are incomplete until both are updated.
@@ -19,6 +19,16 @@
 - Parallel write agents must never edit the same files.
 - Significant refactors use `docs/refactoring/PROJECT_REFACTOR_EXEC_PLAN.md` and update progress as work lands.
 - After implementation, the tech lead verifies integration, workspace isolation, query invalidation, tests and docs.
+- Architecture-foundation/refactor tasks start with Grace Explorer read-only analysis and finish with Turing Review read-only integration review. The main agent owns final boundary decisions.
+
+## Product boundaries
+
+- Read `docs/architecture/PRODUCT_BOUNDARIES.md` before adding or moving a product, consumer application, bot application, cross-product import, shared abstraction, configuration access, or architecture exception.
+- A consumer application owns its behavior, API/use cases, UI/presentation, state/query layer, localization, and Telegram-specific presentation. Its surfaces may share code inside that application boundary.
+- `telegram-bots/core` is platform infrastructure and must not import Finance or Greeter implementation. `telegram-bots.module.ts` may compose products through stable providers/ports.
+- Internal Finance and consumer Finance are separate products. Do not share their implementation paths automatically because their concepts or names overlap.
+- Product-to-product UI, services, hooks, state, presenters, query behavior, localization, and business-rule imports are forbidden. Reuse stable contracts and technical infrastructure; extract a neutral helper only after two real use cases prove identical semantics.
+- Do not add architecture exceptions as ordinary feature work. Existing exact exceptions are shrinking-only and name their reason/removal slice; the completed Consumer Finance boundary has no import exceptions.
 
 ## Reuse before creation
 
@@ -30,7 +40,7 @@ Before adding a selector, picker, modal, table, form field, metric card, chart w
 - `rg "export type|export interface" packages/shared/src apps/web/src/lib apps/api/src`
 - `rg "PrismaService|workspaceId|WorkspaceService" apps/api/src`
 
-Prefer existing primitives, `apps/web/src/lib/query-keys.ts`, shared contracts and Telegram adapters over local duplicates.
+Prefer existing primitives, `apps/web/src/lib/query-keys.ts`, shared contracts and Telegram adapters over local duplicates, except where a documented consumer product owns its visual and query layer.
 
 ## Required reading
 
@@ -39,6 +49,7 @@ Prefer existing primitives, `apps/web/src/lib/query-keys.ts`, shared contracts a
 - Shared contract tasks: `packages/shared/AGENTS.md`, backend DTO/controller and frontend API client usage.
 - Cross-stack tasks: shared contracts, frontend API client, controller/DTO, relevant query keys and invalidation paths.
 - Any production implementation that can create runtime work: `docs/runtime-cost-efficiency.md`.
+- Product/application boundaries or architecture checks: `docs/architecture/PRODUCT_BOUNDARIES.md` and `docs/refactoring/PROJECT_REFACTOR_EXEC_PLAN.md`.
 
 ## Runtime cost efficiency
 
@@ -155,6 +166,7 @@ A change is not done until:
 - App Router `page.tsx` files must trend below 300 lines and should only read params/search params and render feature containers.
 - API compatibility facades must trend below 400 lines; type barrels/index files below 250 lines; UI barrels below 150 lines.
 - Existing files above these limits are transitional debt only. They are tracked in `scripts/check-architecture.mjs` as shrinking-only baseline entries and must never grow.
+- Legacy ceilings must equal the current violation size. When debt shrinks, lower or remove the stale ceiling in the same change; the checker fails stale allowances so files cannot silently regrow.
 - `ARCHITECTURE_STRICT=1 pnpm architecture:check` is the final gate: no transitional baseline, no god-file exceptions.
 - Significant refactors must reduce or remove transitional baseline entries instead of adding new ones.
 - When touching a file over the limit, consider a local cohesive extraction, but do not mix unrelated mass refactors into small features.

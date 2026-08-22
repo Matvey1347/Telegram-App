@@ -1,8 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import type { ConsumerFinanceTransfer } from "@telegram-system/shared";
-import { consumerFinanceKeys } from "@/lib/query-keys";
-import { reconcileConsumerTransferCaches } from "./transfer-cache";
+import { consumerFinanceKeys } from "./consumer-finance-query-keys";
+import { reconcileConsumerTransferCaches } from "./consumer-finance-cache";
 
 const transfer: ConsumerFinanceTransfer = {
   id: "t",
@@ -19,7 +19,7 @@ const transfer: ConsumerFinanceTransfer = {
   toAccount: { id: "b", name: "Card", currency: "EUR" },
 };
 
-describe("transfer cache", () => {
+describe("consumer Finance transfer cache", () => {
   it("removes edited transfers from filters they no longer match", () => {
     const client = new QueryClient();
     const rentKey = consumerFinanceKeys.transfers("bot", {

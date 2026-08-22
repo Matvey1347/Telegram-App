@@ -21,14 +21,14 @@ import {
   Input,
   LoadingState,
   Select,
-} from "@/components/ui/primitives";
+} from "./ui";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-import { formatMoney } from "@/lib/features/finance/money";
+import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
 import {
   reconcileConsumerTransferCaches,
   removeConsumerTransferFromCaches,
-} from "@/lib/features/finance/transfer-cache";
-import { consumerFinanceKeys } from "@/lib/query-keys";
+} from "@/lib/features/finance/consumer-finance-cache";
+import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
 import { FinanceConfirmModal } from "./finance-confirm-modal";
 import { FinanceTransferEditor } from "./finance-transfer-editor";
 import { useDebouncedValue } from "./use-debounced-value";

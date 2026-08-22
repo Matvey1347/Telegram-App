@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Input, Modal } from "@/components/ui/primitives";
+import { Button, Input, Modal } from "./ui";
 import { financeCopy, type FinanceLocale } from "./finance-i18n";
 
 export function FinanceConfirmModal({

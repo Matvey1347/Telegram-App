@@ -2,7 +2,7 @@ import { ForbiddenException, Injectable } from '@nestjs/common';
 import { ContextIdFactory, ModuleRef } from '@nestjs/core';
 import { sanitizeOperationalError } from '../../../common/security/operational-error';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramChannelsService } from '../telegram-channels/telegram-channels.service';
+import { TelegramChannelSyncOrchestrator } from '../telegram-channels/telegram-channel-sync.orchestrator';
 
 export type TelegramWorkspaceFullSyncActor =
   | { type: 'SYSTEM_BOT'; userId: string }
@@ -59,25 +59,13 @@ export class TelegramWorkspaceFullSyncService {
       this.actorUserId(input.workspaceId, input.actor),
     ]);
 
-    if (process.env.TELEGRAM_MTTPROTO_SYNC_ENABLED === 'false') {
-      return this.result(
-        workspace.name,
-        channels.length,
-        0,
-        0,
-        channels.length,
-        [],
-        startedAt,
-      );
-    }
-
     const contextId = ContextIdFactory.create();
     this.moduleRef.registerRequestByContextId(
       { headers: { 'x-workspace-id': input.workspaceId } },
       contextId,
     );
     const channelService = await this.moduleRef.resolve(
-      TelegramChannelsService,
+      TelegramChannelSyncOrchestrator,
       contextId,
       { strict: false },
     );
@@ -140,12 +128,10 @@ export class TelegramWorkspaceFullSyncService {
       status?: string;
       message?: string | null;
       errorCode?: string | null;
-    }>; 
+    }>;
   }) {
     const problems = (outcome.steps ?? [])
-      .filter(
-        (step) => step.status === 'failed' || step.status === 'partial',
-      )
+      .filter((step) => step.status === 'failed' || step.status === 'partial')
       .slice(0, 3)
       .map((step) => {
         const label = step.step || 'sync step';

@@ -7,6 +7,8 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import { hydrateRoot, type Root } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
 import { ConsumerFinanceApp } from "./consumer-finance-app";
@@ -85,6 +87,14 @@ function renderApp() {
   );
 }
 
+function appElement(client: QueryClient) {
+  return (
+    <QueryClientProvider client={client}>
+      <ConsumerFinanceApp botId="bot-1" />
+    </QueryClientProvider>
+  );
+}
+
 beforeEach(() => {
   mocks.bootstrap = { status: "browser" };
   mocks.auth.mockReset();
@@ -97,6 +107,41 @@ beforeEach(() => {
 });
 
 describe("ConsumerFinanceApp bootstrap", () => {
+  it("hydrates with a remembered browser locale without changing the SSR bootstrap", async () => {
+    mocks.bootstrap = { status: "loading" };
+    window.localStorage.setItem("consumer-finance-locale:bot-1", "ru");
+    const browserWindow = window;
+    const serverClient = new QueryClient();
+    vi.stubGlobal("window", undefined);
+    const serverHtml = renderToString(appElement(serverClient));
+    vi.stubGlobal("window", browserWindow);
+
+    expect(serverHtml).toContain("Opening Finance…");
+    const container = document.createElement("div");
+    container.innerHTML = serverHtml;
+    document.body.appendChild(container);
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    let root: Root | undefined;
+
+    await act(async () => {
+      root = hydrateRoot(container, appElement(new QueryClient()));
+      await Promise.resolve();
+    });
+
+    expect(container).toHaveTextContent("Открываем Финансы…");
+    expect(
+      consoleError.mock.calls.some((call) =>
+        call.some((value) => String(value).includes("Hydration failed")),
+      ),
+    ).toBe(false);
+
+    await act(async () => root?.unmount());
+    consoleError.mockRestore();
+    container.remove();
+  });
+
   it("keeps SSR bootstrap neutral until the runtime surface is known", () => {
     mocks.bootstrap = { status: "loading" };
 

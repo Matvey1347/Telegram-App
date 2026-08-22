@@ -7,9 +7,6 @@ const MB = 1024 * 1024;
 describe('MemoryMonitorService', () => {
   const originalUptime = process.uptime;
   const originalWarnThreshold = process.env.MEMORY_MONITOR_WARN_RSS_MB;
-  const originalRecoveryThreshold = process.env.MEMORY_MONITOR_RECOVERY_RSS_MB;
-  const originalReminderInterval =
-    process.env.MEMORY_MONITOR_REMINDER_INTERVAL_MS;
   const originalDetailedTelemetry =
     process.env.MEMORY_MONITOR_DETAILED_TELEMETRY;
 
@@ -25,8 +22,6 @@ describe('MemoryMonitorService', () => {
     nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
     process.uptime = jest.fn(() => 12.4);
     process.env.MEMORY_MONITOR_WARN_RSS_MB = '400';
-    process.env.MEMORY_MONITOR_RECOVERY_RSS_MB = '360';
-    process.env.MEMORY_MONITOR_REMINDER_INTERVAL_MS = '900000';
     process.env.MEMORY_MONITOR_DETAILED_TELEMETRY = 'true';
   });
 
@@ -45,17 +40,6 @@ describe('MemoryMonitorService', () => {
       delete process.env.MEMORY_MONITOR_DETAILED_TELEMETRY;
     } else {
       process.env.MEMORY_MONITOR_DETAILED_TELEMETRY = originalDetailedTelemetry;
-    }
-    if (originalRecoveryThreshold === undefined) {
-      delete process.env.MEMORY_MONITOR_RECOVERY_RSS_MB;
-    } else {
-      process.env.MEMORY_MONITOR_RECOVERY_RSS_MB = originalRecoveryThreshold;
-    }
-    if (originalReminderInterval === undefined) {
-      delete process.env.MEMORY_MONITOR_REMINDER_INTERVAL_MS;
-    } else {
-      process.env.MEMORY_MONITOR_REMINDER_INTERVAL_MS =
-        originalReminderInterval;
     }
   });
 

@@ -1,5 +1,9 @@
 import { TelegramDataSourceStatus } from '@prisma/client';
 import { TelegramChannelsService } from './telegram-channels.service';
+import {
+  createTelegramChannelsTestHarness,
+  type TelegramChannelsTestHarness,
+} from './__fixtures__/telegram-channels.test-harness';
 
 describe('TelegramChannelsService invite link sync', () => {
   const prisma = {
@@ -46,11 +50,11 @@ describe('TelegramChannelsService invite link sync', () => {
     getChannelFinancialSummary: jest.fn(),
   };
 
-  let service: TelegramChannelsService;
+  let service: TelegramChannelsTestHarness;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new TelegramChannelsService(
+    service = createTelegramChannelsTestHarness(
       prisma as never,
       workspaceService as never,
       responseCache as never,
@@ -347,7 +351,9 @@ describe('TelegramChannelsService invite link sync', () => {
   it('retries invite-link upsert without requestedCount when the running Prisma client is outdated', async () => {
     prisma.telegramInviteLink.upsert
       .mockRejectedValueOnce(
-        new Error('Unknown argument `requestedCount`. Available options are marked with ?.'),
+        new Error(
+          'Unknown argument `requestedCount`. Available options are marked with ?.',
+        ),
       )
       .mockResolvedValueOnce({
         id: 'link-1',
@@ -426,8 +432,12 @@ describe('TelegramChannelsService invite link sync', () => {
     );
     expect(prisma.telegramInviteLink.upsert.mock.calls[1]?.[0]).toEqual(
       expect.objectContaining({
-        create: expect.not.objectContaining({ requestedCount: expect.anything() }),
-        update: expect.not.objectContaining({ requestedCount: expect.anything() }),
+        create: expect.not.objectContaining({
+          requestedCount: expect.anything(),
+        }),
+        update: expect.not.objectContaining({
+          requestedCount: expect.anything(),
+        }),
       }),
     );
   });
@@ -515,7 +525,9 @@ describe('TelegramChannelsService invite link sync', () => {
     );
     expect(prisma.telegramInviteLink.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.not.objectContaining({ requestedCount: expect.anything() }),
+        data: expect.not.objectContaining({
+          requestedCount: expect.anything(),
+        }),
       }),
     );
     expect(prisma.telegramInviteLink.update).not.toHaveBeenCalled();
@@ -587,7 +599,9 @@ describe('TelegramChannelsService invite link sync', () => {
     expect(prisma.telegramInviteLink.create).toHaveBeenCalledTimes(1);
     expect(prisma.telegramInviteLink.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.not.objectContaining({ requestedCount: expect.anything() }),
+        data: expect.not.objectContaining({
+          requestedCount: expect.anything(),
+        }),
         select: expect.objectContaining({
           id: true,
           adCampaignId: true,
@@ -697,54 +711,54 @@ describe('TelegramChannelsService invite link sync', () => {
   it('avoids selecting the missing requestedCount column while syncing partial invite links', async () => {
     (service as any).telegramInviteLinkRequestedCountSupported = false;
     const result = await (service as any).syncChannelInviteLinks({
-        workspaceId: 'ws-1',
-        channelId: 'cmrf6qlrb000g2igcrc7pkabz',
-        account: {
-          id: 'tg-account-1',
-          label: 'Owner',
-          username: 'matviikpr',
-          firstName: 'Matvii',
-          apiId: '1',
-          apiHashEncrypted: 'enc',
-          apiHashIv: 'iv',
-          apiHashAuthTag: 'tag',
-          sessionEncrypted: 'sess',
-          sessionIv: 'sess-iv',
-          sessionAuthTag: 'sess-tag',
-        },
-        channelReference: {
-          telegramChatId: '4492379514',
-        },
-        prefetchedRemote: {
-          scope: 'PARTIAL_ADMINS',
-          expectedTotalLinks: 24,
-          admins: [],
-          links: [
-            {
-              url: 'https://t.me/+mbliuCdzB4k0ODdk',
-              title: null,
-              telegramCreatorUserId: '100',
-              creatorUsername: 'owner_admin',
-              creatorFirstName: 'Matvii',
-              creatorLastName: null,
-              creatorPhotoUrl: null,
-              createdAt: null,
-              startDate: null,
-              expireDate: null,
-              usageLimit: null,
-              usage: 0,
-              requested: 0,
-              requestNeeded: true,
-              permanent: true,
-              revoked: false,
-            },
-          ],
-          warnings: [
-            'Admin 6894032839 invite-link sync failed: Telegram admin 6894032839 could not be resolved as an input user.',
-          ],
-        },
-        progressStep: { current: 2, total: 8 },
-      });
+      workspaceId: 'ws-1',
+      channelId: 'cmrf6qlrb000g2igcrc7pkabz',
+      account: {
+        id: 'tg-account-1',
+        label: 'Owner',
+        username: 'matviikpr',
+        firstName: 'Matvii',
+        apiId: '1',
+        apiHashEncrypted: 'enc',
+        apiHashIv: 'iv',
+        apiHashAuthTag: 'tag',
+        sessionEncrypted: 'sess',
+        sessionIv: 'sess-iv',
+        sessionAuthTag: 'sess-tag',
+      },
+      channelReference: {
+        telegramChatId: '4492379514',
+      },
+      prefetchedRemote: {
+        scope: 'PARTIAL_ADMINS',
+        expectedTotalLinks: 24,
+        admins: [],
+        links: [
+          {
+            url: 'https://t.me/+mbliuCdzB4k0ODdk',
+            title: null,
+            telegramCreatorUserId: '100',
+            creatorUsername: 'owner_admin',
+            creatorFirstName: 'Matvii',
+            creatorLastName: null,
+            creatorPhotoUrl: null,
+            createdAt: null,
+            startDate: null,
+            expireDate: null,
+            usageLimit: null,
+            usage: 0,
+            requested: 0,
+            requestNeeded: true,
+            permanent: true,
+            revoked: false,
+          },
+        ],
+        warnings: [
+          'Admin 6894032839 invite-link sync failed: Telegram admin 6894032839 could not be resolved as an input user.',
+        ],
+      },
+      progressStep: { current: 2, total: 8 },
+    });
 
     expect(result).toEqual({
       imported: 1,
@@ -791,28 +805,30 @@ describe('TelegramChannelsService invite link sync', () => {
       '2026-07-18',
     );
 
-    expect((service as any).telegramInviteLinkRequestedCountColumnAvailable).toBe(
-      null,
-    );
+    expect(
+      (service as any).telegramInviteLinkRequestedCountColumnAvailable,
+    ).toBe(null);
     expect(prisma.telegramInviteLink.findMany).not.toHaveBeenCalled();
     expect(result.summary.joinedHistoricalByLinks).toBe(12);
     expect((result as Record<string, unknown>).inviteLinks).toBeUndefined();
   });
 
   it('persists invite-link history snapshots during syncHistorical remote invite-link syncs', async () => {
-    jest.spyOn(service as never, 'connectedAccount' as never).mockResolvedValue({
-      id: 'tg-account-1',
-      label: 'Owner',
-      username: 'owner_admin',
-      firstName: 'Owner',
-      apiId: '1',
-      apiHashEncrypted: 'enc',
-      apiHashIv: 'iv',
-      apiHashAuthTag: 'tag',
-      sessionEncrypted: 'sess',
-      sessionIv: 'sess-iv',
-      sessionAuthTag: 'sess-tag',
-    } as never);
+    jest
+      .spyOn(service as never, 'connectedAccount' as never)
+      .mockResolvedValue({
+        id: 'tg-account-1',
+        label: 'Owner',
+        username: 'owner_admin',
+        firstName: 'Owner',
+        apiId: '1',
+        apiHashEncrypted: 'enc',
+        apiHashIv: 'iv',
+        apiHashAuthTag: 'tag',
+        sessionEncrypted: 'sess',
+        sessionIv: 'sess-iv',
+        sessionAuthTag: 'sess-tag',
+      } as never);
     jest
       .spyOn(service as never, 'buildInviteAttributionMaps' as never)
       .mockResolvedValue({} as never);
@@ -876,13 +892,11 @@ describe('TelegramChannelsService invite link sync', () => {
     ]);
     jest
       .spyOn(service as never, 'persistInviteLinkFromRemote' as never)
-      .mockImplementation(
-        (async ({ link }: { link: { url: string } }) => {
-          const persisted = persistedByUrl.get(link.url);
-          if (!persisted) throw new Error(`Unexpected link ${link.url}`);
-          return persisted as never;
-        }) as never,
-      );
+      .mockImplementation((async ({ link }: { link: { url: string } }) => {
+        const persisted = persistedByUrl.get(link.url);
+        if (!persisted) throw new Error(`Unexpected link ${link.url}`);
+        return persisted as never;
+      }) as never);
 
     mtprotoClient.getChannelHistorical.mockImplementation(
       async (params: {

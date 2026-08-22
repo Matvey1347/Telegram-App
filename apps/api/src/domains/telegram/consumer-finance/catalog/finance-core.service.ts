@@ -15,10 +15,10 @@ import type {
   UpdateFinanceAccountDto,
   UpdateFinanceSettingsDto,
   UpsertFinanceLimitDto,
-} from './finance.dto';
-import { financeChatLocale } from './i18n/finance-chat-i18n';
+} from '../http/finance.dto';
+import { financeChatLocale } from '../i18n/finance-chat-i18n';
 import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
-import { FinanceLimitService } from './finance-limit.service';
+import { FinanceLimitService } from '../planning/finance-limit.service';
 import {
   financeAccountEmoji,
   financeCategoryEmoji,
@@ -82,7 +82,14 @@ export class FinanceCoreService {
       select: {
         botIntegrationId: true,
         botIntegration: { select: { workspaceId: true } },
-        telegramUser: { select: { id: true, telegramChatId: true, runtimeInstanceId: true, languageCode: true } },
+        telegramUser: {
+          select: {
+            id: true,
+            telegramChatId: true,
+            runtimeInstanceId: true,
+            languageCode: true,
+          },
+        },
       },
     });
   }

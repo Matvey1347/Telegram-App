@@ -49,9 +49,9 @@ const delivery = {
 
 function setup(
   sendMessage = jest.fn().mockResolvedValue({ message_id: 1 }),
-  environment: TelegramBotRuntimeEnvironment =
-    TelegramBotRuntimeEnvironment.PRODUCTION,
+  environment: TelegramBotRuntimeEnvironment = TelegramBotRuntimeEnvironment.PRODUCTION,
   runtimeId: string | null = null,
+  financeReminders = { scheduleNext: jest.fn().mockResolvedValue(null) },
 ) {
   const prisma = {
     telegramBotDelivery: {
@@ -91,8 +91,9 @@ function setup(
     botApi as never,
     { current: () => environment } as never,
     { currentRuntimeId: () => runtimeId } as never,
+    financeReminders as never,
   );
-  return { service, prisma, botApi };
+  return { service, prisma, botApi, financeReminders };
 }
 
 describe('TelegramBotDeliveryService', () => {
@@ -197,6 +198,44 @@ describe('TelegramBotDeliveryService', () => {
     ]);
     expect(prisma.telegramBotDelivery.upsert.mock.calls[0][0].update).toEqual(
       {},
+    );
+  });
+
+  it('asks the Finance reminder port for the next durable occurrence after send', async () => {
+    const nextDelivery = {
+      workspaceId: 'workspace-1',
+      botIntegrationId: 'bot-1',
+      telegramBotUserId: 'bot-user-1',
+      financeReminderId: 'reminder-1',
+      chatId: '123',
+      text: 'Next reminder',
+      scheduledAt: new Date('2026-09-01T09:00:00.000Z'),
+      idempotencyKey: 'finance-reminder:reminder-1:next',
+    };
+    const financeReminders = {
+      scheduleNext: jest.fn().mockResolvedValue(nextDelivery),
+    };
+    const { service, prisma } = setup(
+      undefined,
+      TelegramBotRuntimeEnvironment.PRODUCTION,
+      null,
+      financeReminders,
+    );
+    prisma.telegramBotDelivery.findMany.mockResolvedValue([
+      { ...delivery, financeReminderId: 'reminder-1' },
+    ]);
+
+    await service.processDue();
+
+    expect(financeReminders.scheduleNext).toHaveBeenCalledWith('reminder-1');
+    expect(prisma.telegramBotDelivery.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          financeReminderId: 'reminder-1',
+          idempotencyKey: nextDelivery.idempotencyKey,
+          scheduledAt: nextDelivery.scheduledAt,
+        }),
+      }),
     );
   });
 

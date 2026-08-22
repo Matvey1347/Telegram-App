@@ -20,7 +20,7 @@ Environment-specific credentials:
 
 Shared process configuration:
 
-- `TELEGRAM_SYSTEM_BOT_WEBHOOK_BASE_URL`: public API origin
+- `API_PUBLIC_URL`: canonical public API origin used for webhook routes
 - `FRONTEND_URL`: web origin used in secure connection links
 
 Webhook secrets are optional. When the selected environment's secret is empty, the API generates one in memory at startup and registers that value with Telegram. Configure a stable secret for multiple API replicas so every replica validates the same header.
@@ -48,6 +48,10 @@ laptop is currently online.
 
 ## Production flow
 
-Set `TELEGRAM_SYSTEM_BOT_ENVIRONMENT=PRODUCTION`, the three `TELEGRAM_SYSTEM_BOT_PRODUCTION_*` credentials, and the production `TELEGRAM_SYSTEM_BOT_WEBHOOK_BASE_URL` in the deployment. Startup registers commands and the webhook only through the production token. It never reads or modifies the local BotFather bot.
+Set `TELEGRAM_SYSTEM_BOT_ENVIRONMENT=PRODUCTION`, the three
+`TELEGRAM_SYSTEM_BOT_PRODUCTION_*` credentials, and the production
+`API_PUBLIC_URL` in the deployment. Startup registers commands and the webhook
+only through the production token. It never reads or modifies the local
+BotFather bot.
 
 The runtime does one bounded Telegram configuration pass at startup. It adds no polling loop, heartbeat, recurring database query, or status write.

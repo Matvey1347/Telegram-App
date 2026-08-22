@@ -1,11 +1,19 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import process from "node:process";
 
 const runtimeFile = ".env";
 const templateFile = ".env.example";
 
-if (existsSync(".env.prod")) {
-  console.error(".env.prod is no longer supported; keep runtime values in .env.");
+const extraProfiles = [".", "apps/api", "apps/web"].flatMap((directory) =>
+  readdirSync(directory)
+    .filter((name) => name.startsWith(".env"))
+    .map((name) => (directory === "." ? name : `${directory}/${name}`)),
+).filter((file) => file !== runtimeFile && file !== templateFile);
+
+if (extraProfiles.length) {
+  console.error(
+    `Unsupported environment profile: ${extraProfiles.join(", ")}. Keep runtime values in .env.`,
+  );
   process.exit(1);
 }
 

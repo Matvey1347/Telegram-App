@@ -2,10 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { TelegramBotUsersService } from '../core/telegram-bot-users.service';
 import { TelegramBotDeliveryService } from '../core/telegram-bot-delivery.service';
 import { TelegramBotInteractiveReplyService } from '../../../../telegram/shared/telegram-bot-interactive-reply.service';
-import { FinanceContextService } from './finance-context.service';
-import { FinanceProposalService } from './finance-proposal.service';
-import { FinanceAiProviderService } from './finance-ai.provider';
-import { FinanceEntitlementService } from './finance-entitlement.service';
+import { FinanceContextService } from '../../consumer-finance/identity/finance-context.service';
+import { FinanceProposalService } from '../../consumer-finance/chat-flows/finance-proposal.service';
+import { FinanceAiProviderService } from '../../consumer-finance/ai/finance-ai.provider';
+import { FinanceEntitlementService } from '../../consumer-finance/billing/finance-entitlement.service';
 import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
 import { BotBillingService } from '../../bot-billing/bot-billing.service';
 import type { TelegramBotApplicationContext } from '../core/telegram-bot-update.types';
@@ -17,13 +17,16 @@ import {
   acknowledgeFinanceCallback,
   sendFinanceTyping,
 } from './finance-bot-telegram-interactions';
-import { financeChatLocale, t } from './i18n/finance-chat-i18n';
+import {
+  financeChatLocale,
+  t,
+} from '../../consumer-finance/i18n/finance-chat-i18n';
 import {
   FinanceChatFlowService,
   type FinanceFlowCallback,
   type FinanceFlowResult,
-} from './finance-chat-flow.service';
-import { FinanceChatFlowPresenterService } from './finance-chat-flow-presenter.service';
+} from '../../consumer-finance/chat-flows/finance-chat-flow.service';
+import { FinanceChatFlowPresenterService } from '../../consumer-finance/chat-flows/finance-chat-flow-presenter.service';
 import { FinanceBotFlowMessenger } from './finance-bot-flow-messenger';
 import {
   parseFinanceChatCommand,
@@ -33,11 +36,9 @@ import {
 import { financeBotProButtons } from './finance-bot-pro-buttons';
 import { warnSlowFinanceContext } from './finance-bot-observability';
 import { FinanceBotBrowserLogin } from './finance-bot-browser-login';
-
 @Injectable()
 export class FinanceBotService {
   private readonly flowMessages: FinanceBotFlowMessenger;
-
   constructor(
     private readonly users: TelegramBotUsersService,
     private readonly contexts: FinanceContextService,
@@ -60,7 +61,6 @@ export class FinanceBotService {
       flowPresenter,
     );
   }
-
   async handle(context: TelegramBotApplicationContext) {
     const incomingCallback = context.update.callback_query;
     if (incomingCallback?.id) {

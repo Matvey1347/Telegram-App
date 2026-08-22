@@ -22,7 +22,6 @@ import {
   TelegramAdvertiserStatus,
   TelegramAdvertiserTaskPriority,
   TelegramAdvertiserTaskStatus,
-  TelegramAdvertiserTaskType,
   TransactionType,
   WorkspaceRole,
 } from '@prisma/client';
@@ -36,7 +35,9 @@ import { ApplicationLoggerService } from '../../operations/application-logs/appl
 import { adDeletionReadyWhere } from '../../operations/scheduled-tasks/due-work-predicates';
 import { notifyScheduledTaskDueWorkChanged } from '../../operations/scheduled-tasks/scheduled-task-wake-notifier';
 import { FinanceCategoriesService } from '../../finance/finance-categories/finance-categories.service';
-import { TelegramChannelsService } from '../telegram-channels/telegram-channels.service';
+import { TelegramManagedPostCommandService } from '../telegram-channels/telegram-managed-post-command.service';
+import { TelegramManagedPostPublicationService } from '../telegram-channels/telegram-managed-post-publication.service';
+import { TelegramManagedPostRemoteSyncService } from '../telegram-channels/telegram-managed-post-remote-sync.service';
 import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
 import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
 import {
@@ -114,7 +115,9 @@ export class TelegramAdSalesService {
     private readonly responseCache: ResponseCacheService,
     private readonly currencyConversionService: CurrencyConversionService,
     private readonly financeCategoriesService: FinanceCategoriesService,
-    private readonly telegramChannelsService: TelegramChannelsService,
+    private readonly telegramManagedPostCommandService: TelegramManagedPostCommandService,
+    private readonly telegramManagedPostPublicationService: TelegramManagedPostPublicationService,
+    private readonly telegramManagedPostRemoteSyncService: TelegramManagedPostRemoteSyncService,
     private readonly mtprotoClient: TelegramMtprotoClient,
     private readonly sourceAccessService: TelegramSourceAccessService,
     private readonly encryptionService: TokenEncryptionService,
@@ -5058,7 +5061,7 @@ export class TelegramAdSalesService {
     const sale = await this.getSaleDetails(workspaceId, saleId);
     const placement = sale.placements.find((item: any) => item.id === placementId);
     if (!placement) throw new NotFoundException('Telegram ad sale placement not found');
-    const managedPost = await this.telegramChannelsService.createManagedPost(
+    const managedPost = await this.telegramManagedPostCommandService.createManagedPost(
       userId,
       placement.telegramChannelId,
       {
@@ -5179,10 +5182,7 @@ export class TelegramAdSalesService {
     return this.mapPlacement(this.appendPlacementFinancials(updated));
   }
 
-  private assertSaleTransition(
-    from: TelegramAdSaleStatus,
-    to: TelegramAdSaleStatus,
-  ) {
+  private assertSaleTransition(from: TelegramAdSaleStatus, to: TelegramAdSaleStatus) {
     const transitions: Record<TelegramAdSaleStatus, TelegramAdSaleStatus[]> = {
       DRAFT: [TelegramAdSaleStatus.RESERVED, TelegramAdSaleStatus.CANCELLED],
       RESERVED: [TelegramAdSaleStatus.CONFIRMED, TelegramAdSaleStatus.CANCELLED],
@@ -5257,7 +5257,7 @@ export class TelegramAdSalesService {
       placement.telegramChannelId,
       scheduledAt,
     );
-    await this.telegramChannelsService.scheduleManagedPost(
+    await this.telegramManagedPostPublicationService.scheduleManagedPost(
       userId,
       placement.telegramChannelId,
       placement.managedPostId,
@@ -5331,7 +5331,7 @@ export class TelegramAdSalesService {
     });
     if (!placement) throw new NotFoundException('Telegram ad sale placement not found');
     if (!placement.managedPostId) throw new BadRequestException('Managed post is required');
-    const publishedManagedPost = await this.telegramChannelsService.publishManagedPostNow(
+    const publishedManagedPost = await this.telegramManagedPostPublicationService.publishManagedPostNow(
       userId,
       placement.telegramChannelId,
       placement.managedPostId,
@@ -5605,7 +5605,7 @@ export class TelegramAdSalesService {
     const sale = await this.getSaleDetails(workspaceId, saleId);
     const channelIds = [...new Set(sale.placements.map((placement: any) => placement.telegramChannelId))];
     for (const channelId of channelIds) {
-      await this.telegramChannelsService.syncManagedPosts(userId, channelId);
+      await this.telegramManagedPostRemoteSyncService.syncManagedPosts(userId, channelId);
     }
 
     const refreshed = await this.getSaleDetails(workspaceId, saleId);

@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { TelegramBotRuntimeEnvironment } from '@prisma/client';
+import { telegramBotRuntimeEnvironmentName } from '../../../../config/deployment-config';
 
 export function configuredTelegramBotRuntimeEnvironment(): TelegramBotRuntimeEnvironment | null {
-  const configured =
-    process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT?.trim().toUpperCase();
+  const configured = telegramBotRuntimeEnvironmentName();
   if (configured === TelegramBotRuntimeEnvironment.LOCAL) {
     return TelegramBotRuntimeEnvironment.LOCAL;
   }

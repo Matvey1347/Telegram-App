@@ -8,7 +8,7 @@ import { OperationalHistoryRetentionService } from '../../telegram/telegram-bots
 import { TelegramWorkspaceFullSyncService } from '../../telegram/telegram-sync/telegram-workspace-full-sync.service';
 import { ScheduledTaskExecutorService } from './scheduled-task-executor.service';
 import { ScheduledTaskRegistryService } from './scheduled-task-registry.service';
-import { TelegramChannelsService } from '../../telegram/telegram-channels/telegram-channels.service';
+import { TelegramManagedPostReconciliationService } from '../../telegram/telegram-channels/telegram-managed-post-reconciliation.service';
 
 describe('scheduled task registry executors', () => {
   function setup() {
@@ -56,7 +56,7 @@ describe('scheduled task registry executors', () => {
       [CurrenciesService, {}],
       [TelegramAdSalesService, {}],
       [ApplicationLogsService, {}],
-      [TelegramChannelsService, managedPosts],
+      [TelegramManagedPostReconciliationService, managedPosts],
     ]);
     const moduleRef = {
       resolve: jest.fn((token: unknown) =>

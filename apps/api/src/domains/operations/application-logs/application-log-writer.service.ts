@@ -6,6 +6,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { isApplicationLogStorageMissing } from './application-logs-storage';
+import { APPLICATION_LOGGING_CONFIG } from './application-logging.config';
 
 type ApplicationLogWriteInput = {
   workspaceId?: string | null;
@@ -46,14 +47,9 @@ export class ApplicationLogWriterService implements OnModuleDestroy {
   private storageState: 'unknown' | 'available' | 'missing' = 'unknown';
   private nextStorageProbeAt = 0;
   private destroying = false;
-  private readonly batchSize = Math.max(
-    1,
-    Number(process.env.APP_LOG_BATCH_SIZE || 50),
-  );
-  private readonly flushIntervalMs = Math.max(
-    200,
-    Number(process.env.APP_LOG_FLUSH_INTERVAL_MS || 1000),
-  );
+  private readonly batchSize = APPLICATION_LOGGING_CONFIG.batchSize;
+  private readonly flushIntervalMs =
+    APPLICATION_LOGGING_CONFIG.flushIntervalMs;
   private readonly maxQueueSize = Math.max(this.batchSize * 10, 500);
 
   constructor(private readonly prisma: PrismaService) {}
@@ -121,7 +117,8 @@ export class ApplicationLogWriterService implements OnModuleDestroy {
     } catch (error) {
       if (isApplicationLogStorageMissing(error)) {
         this.storageState = 'missing';
-        this.nextStorageProbeAt = Date.now() + 5000;
+        this.nextStorageProbeAt =
+          Date.now() + APPLICATION_LOGGING_CONFIG.storageProbeIntervalMs;
         this.queue.length = 0;
         return;
       }

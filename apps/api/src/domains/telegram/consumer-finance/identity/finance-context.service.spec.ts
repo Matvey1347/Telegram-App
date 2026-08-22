@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createHash, createHmac } from 'crypto';
 import { FinanceContextService } from './finance-context.service';
-import { DEFAULT_FINANCE_CATEGORIES } from './finance-defaults';
+import { DEFAULT_FINANCE_CATEGORIES } from '../catalog/finance-defaults';
 
 function signed(token: string, authDate = Math.floor(Date.now() / 1000)) {
   const values = new URLSearchParams({

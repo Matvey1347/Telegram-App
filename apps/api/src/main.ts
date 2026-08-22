@@ -1,27 +1,22 @@
 import { ValidationPipe } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ApplicationLoggerService } from './domains/operations/application-logs/application-logger.service';
 import { corsOrigins } from './common/http/cors-origins';
+import { apiPort, publicWebOrigin } from './config/deployment-config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
   app.useLogger(app.get(ApplicationLoggerService));
 
-  const configService = app.get(ConfigService);
-
-  const port = Number(process.env.PORT || configService.get<number>('API_PORT') || 4000);
-
-  const frontendUrl = configService.get<string>('FRONTEND_URL');
-  const financeMiniAppUrl = configService.get<string>('FINANCE_MINI_APP_URL');
+  const port = apiPort();
+  const frontendUrl = publicWebOrigin();
 
   const allowedOrigins = corsOrigins(
     'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:4000',
     frontendUrl,
-    financeMiniAppUrl,
   );
 
   app.enableCors({

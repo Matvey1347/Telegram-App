@@ -20,16 +20,16 @@ import { randomBytes, timingSafeEqual } from 'crypto';
 import type { CookieOptions, Request, Response } from 'express';
 import { BotBillingService } from '../../bot-billing/bot-billing.service';
 import { CreateStripeCheckoutDto } from '../../bot-billing/dto';
-import { TelegramBotDeliveryService } from '../core/telegram-bot-delivery.service';
+import { TelegramBotDeliveryService } from '../../telegram-bots/core/telegram-bot-delivery.service';
 import {
   FinanceConsumerSession,
   FinanceConsumerSessionService,
-} from './finance-consumer-session.service';
-import { FinanceConsumerTransferService } from './finance-consumer-transfer.service';
-import { FinanceContextService } from './finance-context.service';
-import { FinanceCoreService } from './finance-core.service';
-import { FinanceLedgerService } from './finance-ledger.service';
-import { FinanceTransferService } from './finance-transfer.service';
+} from '../identity/finance-consumer-session.service';
+import { FinanceConsumerTransferService } from '../identity/finance-consumer-transfer.service';
+import { FinanceContextService } from '../identity/finance-context.service';
+import { FinanceCoreService } from '../catalog/finance-core.service';
+import { FinanceLedgerService } from '../ledger/finance-ledger.service';
+import { FinanceTransferService } from '../transfers/finance-transfer.service';
 import {
   CreateFinanceAccountDto,
   CreateFinanceCategoryDto,
@@ -46,11 +46,19 @@ import {
   UpdateFinanceTransferDto,
   UpsertFinanceLimitDto,
 } from './finance.dto';
-import { FinanceEntitlementService } from './finance-entitlement.service';
-import { forecastMonthlyLimit } from './finance-smart-limits';
-import { financeAnalyticsDateRange } from './finance-history-date-range';
-import { financeChatLocale, t } from './i18n/finance-chat-i18n';
-import { financeMainMenu } from './finance-bot-chat-responder.service';
+import { FinanceEntitlementService } from '../billing/finance-entitlement.service';
+import { forecastMonthlyLimit } from '../planning/finance-smart-limits';
+import { financeAnalyticsDateRange } from '../ledger/finance-history-date-range';
+import { financeChatLocale, t } from '../i18n/finance-chat-i18n';
+import {
+  financeCheckoutReturnUrl,
+  financeMainMenu,
+} from '../telegram-presentation/finance-telegram-menu';
+import {
+  isProductionEnvironment,
+  publicApiOrigin,
+  publicWebOrigin,
+} from '../../../../config/deployment-config';
 
 class DeleteFinanceDataDto {
   @IsIn(['DELETE MY FINANCE DATA']) confirmation!: 'DELETE MY FINANCE DATA';
@@ -119,7 +127,7 @@ export class FinanceController {
       ? forwarded[0]
       : forwarded;
     return (
-      process.env.NODE_ENV === 'production' ||
+      isProductionEnvironment() ||
       request.secure ||
       request.protocol === 'https' ||
       forwardedProtocol?.split(',')[0]?.trim().toLowerCase() === 'https'
@@ -198,8 +206,7 @@ export class FinanceController {
   }
   private browserRedirect(botId: string, returnTo?: string) {
     const path = this.financeReturnPath(botId, returnTo);
-    const origin =
-      process.env.FRONTEND_URL || process.env.FINANCE_MINI_APP_URL || '';
+    const origin = publicWebOrigin();
     return origin ? new URL(path, origin).toString() : path;
   }
   @Post('auth') async authBootstrap(
@@ -264,11 +271,7 @@ export class FinanceController {
     const config = await this.contexts.browserLoginConfig(botId);
     const target = this.financeReturnPath(botId, returnTo);
     const state = randomBytes(32).toString('base64url');
-    const apiOrigin = (
-      process.env.API_PUBLIC_URL ||
-      process.env.PUBLIC_API_URL ||
-      'http://localhost:4000'
-    ).replace(/\/$/, '');
+    const apiOrigin = publicApiOrigin() || 'http://localhost:4000';
     res.cookie(
       this.browserLoginStateCookie,
       state,
@@ -395,7 +398,10 @@ export class FinanceController {
     if (d.locale && before?.locale !== updated?.locale) {
       const target = await this.core.notificationTarget(session.profileId);
       if (target?.telegramUser.telegramChatId) {
-        const locale = financeChatLocale(updated?.locale, target.telegramUser.languageCode);
+        const locale = financeChatLocale(
+          updated?.locale,
+          target.telegramUser.languageCode,
+        );
         await this.delivery.enqueueSendMessage({
           workspaceId: target.botIntegration.workspaceId,
           botIntegrationId: target.botIntegrationId,
@@ -714,12 +720,19 @@ export class FinanceController {
     @Req() r: Request,
     @Body() d: CreateStripeCheckoutDto,
   ) {
+    const successUrl = financeCheckoutReturnUrl(b, 'success');
+    const cancelUrl = financeCheckoutReturnUrl(b, 'cancelled');
+    if (!successUrl || !cancelUrl) {
+      throw new BadRequestException('Public web origin is not configured');
+    }
     return this.billing.createStripeCheckout({
       botIntegrationId: b,
       telegramBotUserId: this.auth(b, r).telegramBotUserId,
       priceId: d.priceId,
       requestedMode: d.mode,
       couponCode: d.couponCode,
+      successUrl,
+      cancelUrl,
     });
   }
   @Post('billing/stars/checkout') starsCheckout(

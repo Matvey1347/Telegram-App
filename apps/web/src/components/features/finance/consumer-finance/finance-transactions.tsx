@@ -20,15 +20,15 @@ import {
   ErrorState,
   LoadingState,
   Table,
-} from "@/components/ui/primitives";
-import { useAppToast } from "@/providers/toast-provider";
+} from "./ui";
+import { useFinanceFeedback } from "./ui/finance-feedback";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
 import {
   prependConsumerTransactionToCaches,
   reconcileConsumerTransactionCaches,
   removeConsumerTransactionFromCaches,
-} from "@/lib/features/finance/transaction-cache";
-import { consumerFinanceKeys } from "@/lib/query-keys";
+} from "@/lib/features/finance/consumer-finance-cache";
+import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
 import {
   financeCopy,
   financeIntlLocale,
@@ -36,7 +36,7 @@ import {
   type FinanceLocale,
 } from "./finance-i18n";
 import type { ConsumerFinanceSurface } from "./consumer-finance-navigation";
-import { formatMoney } from "@/lib/features/finance/money";
+import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
 import { FinanceTransactionEditor } from "./finance-transaction-editor";
 import { FinanceTransactionFilters } from "./finance-transaction-filters";
 import { useDebouncedValue } from "./use-debounced-value";
@@ -63,7 +63,7 @@ export function FinanceTransactions({
 }) {
   const client = useQueryClient();
   const t = financeCopy(locale);
-  const { pushToast } = useAppToast();
+  const { pushToast } = useFinanceFeedback();
   const [filters, setFilters] = useState<ConsumerFinanceHistoryQuery>({
     limit: 30,
   });

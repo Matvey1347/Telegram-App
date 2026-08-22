@@ -10,9 +10,9 @@ import {
   LoadingState,
   ErrorState,
   Select,
-} from "@/components/ui/primitives";
+} from "./ui";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-import { consumerFinanceKeys } from "@/lib/query-keys";
+import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
 import {
   financeCopy,
   financeIntlLocale,

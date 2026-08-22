@@ -11,10 +11,10 @@ import {
   FormField,
   Input,
   LoadingState,
-} from "@/components/ui/primitives";
+} from "./ui";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-import { formatMoney } from "@/lib/features/finance/money";
-import { consumerFinanceKeys } from "@/lib/query-keys";
+import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
+import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
 import {
   financeCopy,
   financeIntlLocale,
@@ -73,7 +73,10 @@ export function FinanceReminders({
       <p className="mt-1 text-sm text-neutral-400">{t.remindersHelp}</p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <FormField label={t.reminderName}>
-          <Input value={name} onChange={(event) => setName(event.target.value)} />
+          <Input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
         </FormField>
         <FormField label={`${t.reminderAmount} (${currency})`}>
           <Input
@@ -81,7 +84,9 @@ export function FinanceReminders({
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
           />
-          <p className="mt-1 text-xs text-neutral-500">{t.reminderAmountHelp}</p>
+          <p className="mt-1 text-xs text-neutral-500">
+            {t.reminderAmountHelp}
+          </p>
         </FormField>
         <FormField label={t.reminderDay}>
           <Input
@@ -124,11 +129,19 @@ export function FinanceReminders({
         {reminders.data?.length ? (
           <div className="divide-y divide-neutral-800">
             {reminders.data.map((reminder) => (
-              <div className="flex justify-between gap-3 py-3" key={reminder.id}>
+              <div
+                className="flex justify-between gap-3 py-3"
+                key={reminder.id}
+              >
                 <div>
                   <p className="text-sm font-medium">{reminder.name}</p>
                   <p className="text-xs text-neutral-500">
-                    {t.nextReminder}: {new Intl.DateTimeFormat(financeIntlLocale(locale), { dateStyle: "medium", timeStyle: "short", timeZone: timezone }).format(new Date(reminder.nextOccurrenceAt))}
+                    {t.nextReminder}:{" "}
+                    {new Intl.DateTimeFormat(financeIntlLocale(locale), {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                      timeZone: timezone,
+                    }).format(new Date(reminder.nextOccurrenceAt))}
                   </p>
                 </div>
                 <strong className="shrink-0 text-sm">

@@ -5,17 +5,17 @@ import {
   TelegramManagedPostRemoteStatus,
   TelegramManagedPostStatus,
 } from '@prisma/client';
-import { HTMLParser } from 'telegram/extensions/html';
-import {
-  telegramHtmlToManagedMarkup,
-  telegramMarkupToHtml,
-} from '../../../telegram/shared/telegram-markup';
-import { buildStableTelegramPostUrl } from '../../../telegram/shared/telegram-post-url';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   extractInternalPostLinkIds,
   replaceInternalPostLinks,
 } from '../../../telegram/shared/internal-post-links';
+import { parseTelegramHtml } from '../../../telegram/shared/telegram-html-parser';
+import {
+  telegramHtmlToManagedMarkup,
+  telegramMarkupToHtml,
+} from '../../../telegram/shared/telegram-markup';
+import { buildStableTelegramPostUrl } from '../../../telegram/shared/telegram-post-url';
 import {
   MANAGED_POST_DEPENDENT_REPAIR_PENDING_NOTE,
   managedPostIdentityCandidateWhere,
@@ -60,7 +60,7 @@ export class TelegramManagedPostIdentityService {
       /\[([^\]\n]+)\]\(tg-post:[a-zA-Z0-9_-]+\)/g,
       '$1',
     );
-    const [plain] = HTMLParser.parse(telegramMarkupToHtml(safe));
+    const [plain] = parseTelegramHtml(telegramMarkupToHtml(safe));
     return plain.replace(/\s+/g, ' ').trim().toLowerCase();
   }
 

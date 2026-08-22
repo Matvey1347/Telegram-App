@@ -41,13 +41,20 @@ export function parseFinanceChatCommand(
 }
 
 const menuCommands: Array<[FinanceChatCommand, Parameters<typeof t>[1]]> = [
-  ['income', 'menuIncome'], ['expense', 'menuExpense'], ['recent', 'menuRecent'],
-  ['accounts', 'menuAccounts'], ['categories', 'menuCategories'], ['transfer', 'menuTransfer'],
-  ['settings', 'menuSettings'], ['help', 'menuHelp'],
+  ['income', 'menuIncome'],
+  ['expense', 'menuExpense'],
+  ['recent', 'menuRecent'],
+  ['accounts', 'menuAccounts'],
+  ['categories', 'menuCategories'],
+  ['transfer', 'menuTransfer'],
+  ['settings', 'menuSettings'],
+  ['help', 'menuHelp'],
 ];
 
 /** Accepts a persisted reply-keyboard button from any supported language. */
-export function parseFinanceMenuText(input: string): FinanceChatCommand | 'open' | null {
+export function parseFinanceMenuText(
+  input: string,
+): FinanceChatCommand | 'open' | null {
   for (const locale of FINANCE_CHAT_LOCALES) {
     if (input === t(locale, 'menuOpen')) return 'open';
     const command = menuCommands.find(([, key]) => input === t(locale, key));
@@ -55,4 +62,7 @@ export function parseFinanceMenuText(input: string): FinanceChatCommand | 'open'
   }
   return null;
 }
-import { FINANCE_CHAT_LOCALES, t } from './i18n/finance-chat-i18n';
+import {
+  FINANCE_CHAT_LOCALES,
+  t,
+} from '../../consumer-finance/i18n/finance-chat-i18n';

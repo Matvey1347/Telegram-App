@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button, Card } from "@/components/ui/primitives";
+import { Button, Card } from "./ui";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
-import { consumerFinanceKeys } from "@/lib/query-keys";
+import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
 import { FinanceConfirmModal } from "./finance-confirm-modal";
 import { financeCopy, type FinanceLocale } from "./finance-i18n";
 

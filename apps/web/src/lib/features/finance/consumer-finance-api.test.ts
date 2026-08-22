@@ -1,18 +1,17 @@
 import type { AxiosAdapter, InternalAxiosRequestConfig } from "axios";
 import { AxiosError } from "axios";
 import { afterEach, describe, expect, it } from "vitest";
-import { API_MUTATION_EVENT, api } from "@/lib/api";
 import { AUTH_TOKEN_KEY } from "@/lib/features/identity/auth";
 import {
   CONSUMER_FINANCE_REQUEST_TIMEOUT_MS,
   consumerFinanceApi,
-  resolveConsumerFinanceApiBase,
 } from "./consumer-finance-api";
+import { consumerFinanceHttp } from "./consumer-finance-http";
 
-const originalAdapter = api.defaults.adapter;
+const originalAdapter = consumerFinanceHttp.defaults.adapter;
 
 afterEach(() => {
-  api.defaults.adapter = originalAdapter;
+  consumerFinanceHttp.defaults.adapter = originalAdapter;
   localStorage.clear();
 });
 
@@ -21,7 +20,7 @@ describe("consumerFinanceApi", () => {
     localStorage.setItem(AUTH_TOKEN_KEY, "internal-token");
     localStorage.setItem("selected-workspace-id", "workspace-id");
     let request: InternalAxiosRequestConfig | undefined;
-    api.defaults.adapter = async (config) => {
+    consumerFinanceHttp.defaults.adapter = async (config) => {
       request = config;
       return { data: {}, status: 200, statusText: "OK", headers: {}, config };
     };
@@ -32,111 +31,12 @@ describe("consumerFinanceApi", () => {
     expect(request?.headers.get("X-Workspace-Id")).toBeUndefined();
     expect(request?.headers.get("X-Telegram-Init-Data")).toBeUndefined();
     expect(request?.headers.get("X-Finance-Consumer-Request")).toBe("1");
-    expect((request as unknown as { consumer?: boolean }).consumer).toBe(true);
     expect(request?.timeout).toBe(0);
   });
 
-  it("uses the local Mini App gateway when opened through localhost:4100", () => {
-    expect(
-      resolveConsumerFinanceApiBase(
-        {
-          origin: "http://localhost:4100",
-          hostname: "localhost",
-          port: "4100",
-          protocol: "http:",
-        } as Location,
-        {
-          apiUrl: "http://localhost:4000/api",
-          gatewayOrigins: "http://localhost:4100",
-        },
-      ),
-    ).toBe("http://localhost:4100/api");
-  });
-
-  it("uses the configured local API when opened through localhost:3000", () => {
-    expect(
-      resolveConsumerFinanceApiBase(
-        {
-          origin: "http://localhost:3000",
-          hostname: "localhost",
-          port: "3000",
-          protocol: "http:",
-        } as Location,
-        {
-          apiUrl: "http://localhost:4000",
-          gatewayOrigins: "http://localhost:4100",
-        },
-      ),
-    ).toBe("http://localhost:4000/api");
-  });
-
-  it("uses the explicitly configured Cloudflare gateway origin", () => {
-    expect(
-      resolveConsumerFinanceApiBase(
-        {
-          origin: "https://finance-example.trycloudflare.com",
-          hostname: "finance-example.trycloudflare.com",
-          port: "",
-          protocol: "https:",
-        } as Location,
-        {
-          apiUrl: "http://localhost:4000/api",
-          gatewayOrigins:
-            "http://localhost:4100,https://finance-example.trycloudflare.com",
-        },
-      ),
-    ).toBe("https://finance-example.trycloudflare.com/api");
-  });
-
-  it("uses the configured production API for a normal production frontend", () => {
-    expect(
-      resolveConsumerFinanceApiBase(
-        {
-          origin: "https://finance.example.com",
-          hostname: "finance.example.com",
-          port: "",
-          protocol: "https:",
-        } as Location,
-        {
-          apiUrl: "https://api.example.com/api",
-          gatewayOrigins: "",
-        },
-      ),
-    ).toBe("https://api.example.com/api");
-  });
-
-  it("falls back to same-origin when an HTTPS consumer page receives a loopback API", () => {
-    expect(
-      resolveConsumerFinanceApiBase(
-        {
-          origin: "https://temporary-gateway.example",
-          hostname: "temporary-gateway.example",
-          port: "",
-          protocol: "https:",
-        } as Location,
-        {
-          apiUrl: "http://localhost:4000/api",
-          gatewayOrigins: "malformed gateway config",
-        },
-      ),
-    ).toBe("https://temporary-gateway.example/api");
-  });
-
-  it.each([undefined, "not a URL", "file:///tmp/api", "/"])(
-    "uses a safe relative API for missing or malformed config: %s",
-    (apiUrl) => {
-      expect(
-        resolveConsumerFinanceApiBase(undefined, {
-          apiUrl,
-          gatewayOrigins: "",
-        }),
-      ).toBe("/api");
-    },
-  );
-
   it("keeps the internal token after a consumer 401", async () => {
     localStorage.setItem(AUTH_TOKEN_KEY, "internal-token");
-    api.defaults.adapter = ((config) =>
+    consumerFinanceHttp.defaults.adapter = ((config) =>
       Promise.reject(
         new AxiosError("Unauthorized", undefined, config, undefined, {
           status: 401,
@@ -155,7 +55,7 @@ describe("consumerFinanceApi", () => {
 
   it("requests analytics as a single filtered consumer read", async () => {
     let request: InternalAxiosRequestConfig | undefined;
-    api.defaults.adapter = async (config) => {
+    consumerFinanceHttp.defaults.adapter = async (config) => {
       request = config;
       return {
         data: {
@@ -197,7 +97,7 @@ describe("consumerFinanceApi", () => {
 
   it("loads entitlements and transaction items only through their explicit reads", async () => {
     const requests: InternalAxiosRequestConfig[] = [];
-    api.defaults.adapter = async (config) => {
+    consumerFinanceHttp.defaults.adapter = async (config) => {
       requests.push(config);
       return {
         data: config.url?.endsWith("/entitlements")
@@ -227,34 +127,23 @@ describe("consumerFinanceApi", () => {
 
   it("sends Telegram initData only to the one-time authentication bootstrap", async () => {
     let request: InternalAxiosRequestConfig | undefined;
-    const mutationEvents: Event[] = [];
-    const onMutation = (event: Event) => mutationEvents.push(event);
-    api.defaults.adapter = async (config) => {
+    consumerFinanceHttp.defaults.adapter = async (config) => {
       request = config;
       return { data: {}, status: 200, statusText: "OK", headers: {}, config };
     };
 
-    window.addEventListener(API_MUTATION_EVENT, onMutation);
-    try {
-      await consumerFinanceApi.auth("bot-id", "signed-init-data");
-    } finally {
-      window.removeEventListener(API_MUTATION_EVENT, onMutation);
-    }
+    await consumerFinanceApi.auth("bot-id", "signed-init-data");
 
     expect(request?.url).toBe("/finance-bots/bot-id/auth");
     expect(request?.headers.get("X-Telegram-Init-Data")).toBe(
       "signed-init-data",
     );
-    expect(
-      (request as unknown as { feedback?: { mode?: string } })?.feedback,
-    ).toEqual({ mode: "silent" });
-    expect(mutationEvents).toEqual([]);
     expect(request?.timeout).toBe(CONSUMER_FINANCE_REQUEST_TIMEOUT_MS);
   });
 
   it("logs out through the scoped Finance endpoint without exposing Telegram credentials", async () => {
     let request: InternalAxiosRequestConfig | undefined;
-    api.defaults.adapter = async (config) => {
+    consumerFinanceHttp.defaults.adapter = async (config) => {
       request = config;
       return {
         data: { authenticated: false },
@@ -276,7 +165,7 @@ describe("consumerFinanceApi", () => {
 
   it("creates a browser transfer from the cookie-backed consumer session", async () => {
     let request: InternalAxiosRequestConfig | undefined;
-    api.defaults.adapter = async (config) => {
+    consumerFinanceHttp.defaults.adapter = async (config) => {
       request = config;
       return {
         data: {
@@ -305,7 +194,7 @@ describe("consumerFinanceApi", () => {
 
   it("loads the browser login widget configuration with a safe return location", async () => {
     let request: InternalAxiosRequestConfig | undefined;
-    api.defaults.adapter = async (config) => {
+    consumerFinanceHttp.defaults.adapter = async (config) => {
       request = config;
       return {
         data: {
@@ -327,7 +216,7 @@ describe("consumerFinanceApi", () => {
 
   it("creates and consumes a bot-approved browser login challenge", async () => {
     const requests: InternalAxiosRequestConfig[] = [];
-    api.defaults.adapter = async (config) => {
+    consumerFinanceHttp.defaults.adapter = async (config) => {
       requests.push(config);
       return {
         data: config.url?.endsWith("/consume")
@@ -364,7 +253,7 @@ describe("consumerFinanceApi", () => {
 
   it("lists and edits transfers without sending a manual rate or destination amount", async () => {
     const requests: InternalAxiosRequestConfig[] = [];
-    api.defaults.adapter = async (config) => {
+    consumerFinanceHttp.defaults.adapter = async (config) => {
       requests.push(config);
       return {
         data:

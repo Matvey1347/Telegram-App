@@ -1,5 +1,9 @@
 import { NotFoundException } from '@nestjs/common';
 import { TelegramChannelsService } from './telegram-channels.service';
+import {
+  createTelegramChannelsTestHarness,
+  type TelegramChannelsTestHarness,
+} from './__fixtures__/telegram-channels.test-harness';
 
 describe('TelegramChannelsService importManagedPosts', () => {
   const setup = (options?: { groupFound?: boolean }) => {
@@ -143,7 +147,7 @@ describe('TelegramChannelsService importManagedPosts', () => {
         assignedMemberId: 'member-1',
       }),
     };
-    const service = new TelegramChannelsService(
+    const service = createTelegramChannelsTestHarness(
       prisma as never,
       workspaceService as never,
       { clearByPrefix: jest.fn() } as never,
@@ -316,9 +320,7 @@ describe('TelegramChannelsService importManagedPosts', () => {
       rows: [
         {
           title: 'Comma URL',
-          urls: [
-            'https://loremflickr.com/1280/800/open,door,road?lock=22003',
-          ],
+          urls: ['https://loremflickr.com/1280/800/open,door,road?lock=22003'],
         },
       ],
     });
@@ -384,12 +386,15 @@ describe('TelegramChannelsService importManagedPosts', () => {
     const { service, create } = setup();
     const onProgress = jest.fn();
     const publish = jest
-      .spyOn(service as never, 'publishManagedPost' as never)
+      .spyOn(service as any, 'publishManagedPost')
       .mockRejectedValueOnce(new Error('Telegram rejected the image') as never)
-      .mockImplementationOnce(async (...args: unknown[]) => ({
-        id: args[2],
-        status: 'SCHEDULED',
-      }) as never);
+      .mockImplementationOnce(
+        async (...args: unknown[]) =>
+          ({
+            id: args[2],
+            status: 'SCHEDULED',
+          }) as never,
+      );
     const payload = {
       rows: [
         {

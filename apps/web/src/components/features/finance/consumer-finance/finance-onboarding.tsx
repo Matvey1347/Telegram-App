@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
-import { Button, Card, FormField, Select } from "@/components/ui/primitives";
+import { Button, Card, FormField, Select } from "./ui";
 import {
   financeCopy,
   normalizeFinanceLocale,

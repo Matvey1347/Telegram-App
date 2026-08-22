@@ -9,8 +9,8 @@ import { PrismaService } from '../../../../prisma/prisma.service';
 import {
   DEFAULT_FINANCE_CATEGORIES,
   FINANCE_PROPOSAL_TTL_MS,
-} from './finance-defaults';
-import { FinanceLedgerService } from './finance-ledger.service';
+} from '../catalog/finance-defaults';
+import { FinanceLedgerService } from '../ledger/finance-ledger.service';
 
 type ProposalPayload = {
   type: 'INCOME' | 'EXPENSE';
@@ -19,7 +19,13 @@ type ProposalPayload = {
   description: string | null;
   accountHint?: string;
   merchantDisplay?: string;
-  items?: Array<{ displayName: string; quantity?: string; unitPrice?: string; totalAmount: string; currency: string }>;
+  items?: Array<{
+    displayName: string;
+    quantity?: string;
+    unitPrice?: string;
+    totalAmount: string;
+    currency: string;
+  }>;
   accountId: string;
   categoryId: string | null;
   occurredAt: string;
@@ -185,7 +191,13 @@ export class FinanceProposalService {
       occurredAt: string;
       accountHint?: string;
       merchantDisplay?: string;
-      items?: Array<{ displayName: string; quantity?: string; unitPrice?: string; totalAmount: string; currency: string }>;
+      items?: Array<{
+        displayName: string;
+        quantity?: string;
+        unitPrice?: string;
+        totalAmount: string;
+        currency: string;
+      }>;
     }>;
   }) {
     if (!input.operations.length || input.operations.length > 10)
@@ -203,7 +215,11 @@ export class FinanceProposalService {
       categoryName: string | null;
     }> = [];
     for (const item of input.operations) {
-      const account = this.resolveAccount(accounts, item.accountHint, item.currency);
+      const account = this.resolveAccount(
+        accounts,
+        item.accountHint,
+        item.currency,
+      );
       if (!account)
         throw new BadRequestException(
           'Create an account before adding transactions',
@@ -321,15 +337,29 @@ export class FinanceProposalService {
   ) {
     const normalizedHint = hint ? this.ledger.normalizeMerchant(hint) : '';
     const hinted = normalizedHint
-      ? accounts.filter((account) => this.ledger.normalizeMerchant(account.name).includes(normalizedHint) || normalizedHint.includes(this.ledger.normalizeMerchant(account.name)))
+      ? accounts.filter(
+          (account) =>
+            this.ledger
+              .normalizeMerchant(account.name)
+              .includes(normalizedHint) ||
+            normalizedHint.includes(
+              this.ledger.normalizeMerchant(account.name),
+            ),
+        )
       : [];
     if (hinted.length === 1) return hinted[0];
     if (hinted.length > 1)
-      throw new BadRequestException('More than one account matches this AI proposal');
-    const currencyMatches = accounts.filter((account) => account.currency === currency);
+      throw new BadRequestException(
+        'More than one account matches this AI proposal',
+      );
+    const currencyMatches = accounts.filter(
+      (account) => account.currency === currency,
+    );
     if (currencyMatches.length === 1) return currencyMatches[0];
     if (currencyMatches.length > 1)
-      throw new BadRequestException(`More than one ${currency} account is available for this AI proposal`);
+      throw new BadRequestException(
+        `More than one ${currency} account is available for this AI proposal`,
+      );
     return accounts[0];
   }
   private hash(token: string) {

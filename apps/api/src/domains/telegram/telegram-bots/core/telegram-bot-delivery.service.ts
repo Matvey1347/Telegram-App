@@ -1,4 +1,5 @@
 import {
+  Inject,
   Injectable,
   Logger,
   OnModuleDestroy,
@@ -17,12 +18,18 @@ import {
   TelegramBotApiClient,
   TelegramBotApiError,
 } from '../../../../telegram/shared/telegram-bot-api.client';
-import { telegramBotMessagePayload, type TelegramBotMessage } from '../../../../telegram/shared/telegram-bot-message';
+import {
+  telegramBotMessagePayload,
+  type TelegramBotMessage,
+} from '../../../../telegram/shared/telegram-bot-message';
 import { sanitizeOperationalError } from '../../../../common/security/operational-error';
 import { TelegramBotDeliveryScheduler } from './telegram-bot-delivery-scheduler';
 import { TelegramBotRuntimeEnvironmentService } from './telegram-bot-runtime-environment.service';
 import { TelegramBotRuntimeExecutionContext } from './telegram-bot-runtime-execution-context';
-import { financeChatLocale, t } from '../finance/i18n/finance-chat-i18n';
+import {
+  FINANCE_REMINDER_DELIVERY_PORT,
+  type FinanceReminderDeliveryPort,
+} from './telegram-bot-delivery.ports';
 
 type SendMessagePayload = TelegramBotMessage;
 
@@ -50,6 +57,8 @@ export class TelegramBotDeliveryService
     private readonly botApi: TelegramBotApiClient,
     private readonly runtimeEnvironment: TelegramBotRuntimeEnvironmentService,
     private readonly executionContext: TelegramBotRuntimeExecutionContext,
+    @Inject(FINANCE_REMINDER_DELIVERY_PORT)
+    private readonly financeReminders: FinanceReminderDeliveryPort,
   ) {
     this.scheduler = new TelegramBotDeliveryScheduler({
       batchSize: DELIVERY_BATCH_SIZE,
@@ -325,7 +334,7 @@ export class TelegramBotDeliveryService
       if (!finalized) return;
       await this.reconcileBroadcast(delivery.id);
       if (delivery.financeReminderId)
-        await this.scheduleNextFinanceReminder(delivery);
+        await this.scheduleNextFinanceReminder(delivery.financeReminderId);
     } catch (error) {
       await this.markFailedDelivery(delivery, error);
     }
@@ -447,51 +456,8 @@ export class TelegramBotDeliveryService
     });
   }
 
-  private async scheduleNextFinanceReminder(delivery: ClaimedDelivery) {
-    const reminder = await this.prisma.financeReminder.findFirst({
-      where: { id: delivery.financeReminderId!, enabled: true },
-      include: {
-        profile: { include: { telegramUser: true, botIntegration: true } },
-      },
-    });
-    if (!reminder || !reminder.profile.telegramUser.telegramChatId) return;
-    const current = reminder.nextOccurrenceAt;
-    let year = current.getUTCFullYear();
-    let month = current.getUTCMonth() + 1;
-    if (month === 12) {
-      month = 0;
-      year += 1;
-    }
-    const day = Math.min(
-      reminder.dayOfMonth,
-      new Date(Date.UTC(year, month + 1, 0)).getUTCDate(),
-    );
-    const next = new Date(
-      Date.UTC(
-        year,
-        month,
-        day,
-        current.getUTCHours(),
-        current.getUTCMinutes(),
-      ),
-    );
-    await this.prisma.financeReminder.updateMany({
-      where: { id: reminder.id, nextOccurrenceAt: current, enabled: true },
-      data: { nextOccurrenceAt: next },
-    });
-    await this.enqueueSendMessage({
-      workspaceId: reminder.profile.botIntegration.workspaceId,
-      botIntegrationId: reminder.profile.botIntegrationId,
-      telegramBotUserId: reminder.profile.telegramBotUserId,
-      financeReminderId: reminder.id,
-      chatId: reminder.profile.telegramUser.telegramChatId,
-      text: t(financeChatLocale(reminder.profile.locale, reminder.profile.telegramUser.languageCode), 'reminderNotification', {
-        name: reminder.name, amount: reminder.amount.toString(), currency: reminder.currency,
-      }),
-      scheduledAt: new Date(
-        next.getTime() - reminder.reminderOffsetMinutes * 60000,
-      ),
-      idempotencyKey: `finance-reminder:${reminder.id}:${next.toISOString()}`,
-    });
+  private async scheduleNextFinanceReminder(reminderId: string) {
+    const delivery = await this.financeReminders.scheduleNext(reminderId);
+    if (delivery) await this.enqueueSendMessage(delivery);
   }
 }

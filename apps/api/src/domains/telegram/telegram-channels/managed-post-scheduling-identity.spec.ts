@@ -4,6 +4,10 @@ import {
   TelegramSourceType,
 } from '@prisma/client';
 import { TelegramChannelsService } from './telegram-channels.service';
+import {
+  createTelegramChannelsTestHarness,
+  type TelegramChannelsTestHarness,
+} from './__fixtures__/telegram-channels.test-harness';
 import { scheduledTaskWakeNotifier } from '../../operations/scheduled-tasks/scheduled-task-wake-notifier';
 
 describe('Telegram managed post scheduled identity', () => {
@@ -21,7 +25,8 @@ describe('Telegram managed post scheduled identity', () => {
       text: 'A real post',
       imageUrls: [],
       status,
-      scheduledAt: status === 'SCHEDULED' ? new Date('2026-08-10T08:00:00Z') : null,
+      scheduledAt:
+        status === 'SCHEDULED' ? new Date('2026-08-10T08:00:00Z') : null,
       telegramScheduledMessageIds: scheduledIds,
       telegramMessageIds: [],
       telegramMessageUrls: [],
@@ -55,7 +60,7 @@ describe('Telegram managed post scheduled identity', () => {
       publishPost: jest.fn().mockResolvedValue(['2806']),
       deleteScheduledPost: jest.fn().mockResolvedValue(undefined),
     };
-    const service = new TelegramChannelsService(
+    const service = createTelegramChannelsTestHarness(
       prisma as never,
       {} as never,
       { clearByPrefix: jest.fn() } as never,
@@ -73,8 +78,12 @@ describe('Telegram managed post scheduled identity', () => {
       {} as never,
     );
     service['workspace'] = jest.fn().mockResolvedValue('workspace');
-    service['createManagedPostRevision'] = jest.fn().mockResolvedValue(undefined);
-    service['resolveInternalPostLinksForPublish'] = jest.fn().mockResolvedValue('A real post');
+    service['createManagedPostRevision'] = jest
+      .fn()
+      .mockResolvedValue(undefined);
+    service['resolveInternalPostLinksForPublish'] = jest
+      .fn()
+      .mockResolvedValue('A real post');
     service['connectedAccount'] = jest.fn().mockResolvedValue({});
     service['accountCredentials'] = jest.fn().mockReturnValue({
       apiId: '1',
@@ -134,8 +143,20 @@ describe('Telegram managed post scheduled identity', () => {
 
   it('executes reversed batch input in chronological order', async () => {
     const posts = [
-      { id: 'a', title: 'A', status: TelegramManagedPostStatus.DRAFT, origin: 'SYSTEM', scheduledAt: null },
-      { id: 'b', title: 'B', status: TelegramManagedPostStatus.DRAFT, origin: 'SYSTEM', scheduledAt: null },
+      {
+        id: 'a',
+        title: 'A',
+        status: TelegramManagedPostStatus.DRAFT,
+        origin: 'SYSTEM',
+        scheduledAt: null,
+      },
+      {
+        id: 'b',
+        title: 'B',
+        status: TelegramManagedPostStatus.DRAFT,
+        origin: 'SYSTEM',
+        scheduledAt: null,
+      },
     ];
     const prisma = {
       telegramManagedPost: {
@@ -145,7 +166,7 @@ describe('Telegram managed post scheduled identity', () => {
           .mockResolvedValueOnce([]),
       },
     };
-    const service = new TelegramChannelsService(
+    const service = createTelegramChannelsTestHarness(
       prisma as never,
       {} as never,
       { clearByPrefix: jest.fn() } as never,
@@ -157,10 +178,12 @@ describe('Telegram managed post scheduled identity', () => {
     service['workspace'] = jest.fn().mockResolvedValue('workspace');
     service['findOne'] = jest.fn().mockResolvedValue({ id: 'channel' });
     const execution: string[] = [];
-    service['publishManagedPost'] = jest.fn(async (_workspace, _channel, postId, at) => {
-      execution.push(postId);
-      return { status: TelegramManagedPostStatus.SCHEDULED, scheduledAt: at };
-    }) as never;
+    service['publishManagedPost'] = jest.fn(
+      async (_workspace, _channel, postId, at) => {
+        execution.push(postId);
+        return { status: TelegramManagedPostStatus.SCHEDULED, scheduledAt: at };
+      },
+    ) as never;
     await service.scheduleManagedPostsBatch('user', 'channel', {
       items: [
         { postId: 'b', scheduledAt: '2026-08-10T12:15:00.000Z' },
@@ -185,14 +208,18 @@ describe('Telegram managed post scheduled identity', () => {
         findMany: jest.fn().mockImplementation(({ where }) => {
           const needle = where.text.contains as string;
           if (needle === 'tg-post:a') {
-            return Promise.resolve([...manyForA, makePost('wrong-prefix', 'ab')]);
+            return Promise.resolve([
+              ...manyForA,
+              makePost('wrong-prefix', 'ab'),
+            ]);
           }
-          if (needle === 'tg-post:b') return Promise.resolve([makePost('c', 'b')]);
+          if (needle === 'tg-post:b')
+            return Promise.resolve([makePost('c', 'b')]);
           return Promise.resolve([]);
         }),
       },
     };
-    const service = new TelegramChannelsService(
+    const service = createTelegramChannelsTestHarness(
       prisma as never,
       {} as never,
       { clearByPrefix: jest.fn() } as never,
@@ -202,15 +229,23 @@ describe('Telegram managed post scheduled identity', () => {
       {} as never,
     );
     const repaired: string[] = [];
-    service['publishManagedPost'] = jest.fn(async (_workspace, _channel, id) => {
-      repaired.push(id);
-      return {};
-    }) as never;
+    service['publishManagedPost'] = jest.fn(
+      async (_workspace, _channel, id) => {
+        repaired.push(id);
+        return {};
+      },
+    ) as never;
     await service['repairScheduledPostDependants'](
-      'workspace', 'channel', 'a', new Date('2026-08-10T08:00:00.000Z'),
+      'workspace',
+      'channel',
+      'a',
+      new Date('2026-08-10T08:00:00.000Z'),
     );
     await service['repairScheduledPostDependants'](
-      'workspace', 'channel', 'b', new Date('2026-08-10T08:00:00.000Z'),
+      'workspace',
+      'channel',
+      'b',
+      new Date('2026-08-10T08:00:00.000Z'),
     );
     expect(repaired).toHaveLength(31);
     expect(repaired).toContain('b');

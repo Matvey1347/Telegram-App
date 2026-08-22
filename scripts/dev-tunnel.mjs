@@ -6,6 +6,7 @@ import {
 import { connect as connectToUpstream, createServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 import { randomBytes } from "node:crypto";
+import { localBotPublicEnvironment } from "./public-origin-environment.mjs";
 
 const withCloudflare = process.argv.includes("--cloudflare");
 const withBots = process.argv.includes("--bots");
@@ -329,25 +330,17 @@ start("Backend", "pnpm", ["--filter", "api", "dev"], {
   TELEGRAM_SYSTEM_BOT_ENVIRONMENT: withBots ? "LOCAL" : "",
   TELEGRAM_BOT_RUNTIME_ENVIRONMENT: withBots ? "LOCAL" : "",
   LOCAL_DEV_BOTS_CONTROL_SECRET: withBots ? localDevControlSecret : "",
-  ...(publicApiUrl ? { TELEGRAM_BOT_WEBHOOK_BASE_URL: publicApiUrl } : {}),
   ...(withBots && publicApiUrl
     ? {
-        API_PUBLIC_URL: publicApiUrl,
-        PUBLIC_API_URL: publicApiUrl,
-        TELEGRAM_SYSTEM_BOT_WEBHOOK_BASE_URL: publicApiUrl,
-        FINANCE_MINI_APP_URL: publicApiUrl,
+        ...localBotPublicEnvironment(publicApiUrl),
       }
     : {}),
 });
 start("Frontend", "pnpm", ["--filter", "web", "dev"], {
-  // localhost:3000 talks directly to the configured local API. The explicit
-  // gateway list lets consumer pages use same-origin /api without inferring a
-  // tunnel vendor from the hostname.
+  // localhost:3000 talks directly to the configured local API. Any public
+  // HTTPS page receiving this loopback URL resolves API calls to same-origin
+  // /api, without a product-specific origin list or tunnel-vendor check.
   NEXT_PUBLIC_API_URL: "http://localhost:4000/api",
-  NEXT_PUBLIC_FINANCE_CONSUMER_GATEWAY_ORIGINS:
-    withBots && publicApiUrl
-      ? `http://localhost:${botGatewayPort},${publicApiUrl}`
-      : "",
   NEXT_ALLOWED_DEV_ORIGIN: publicApiUrl || "",
 });
 

@@ -11,6 +11,10 @@ import type { CreateBillingCouponDto } from './dto';
 import { StripeBillingProvider } from './stripe-billing.provider';
 import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
 import { BotBillingAnalyticsService } from './bot-billing-analytics.service';
+import {
+  isProductionEnvironment,
+  telegramBotRuntimeEnvironmentName,
+} from '../../../config/deployment-config';
 
 type Provider = 'STRIPE' | 'TELEGRAM_STARS';
 type Mode = 'TEST' | 'LIVE';
@@ -224,12 +228,12 @@ export class BotBillingService {
     ]);
     const resolvedProviders = new Map<string, (typeof providers)[number]>();
     for (const item of providers) { const key = `${item.provider}:${item.mode}`; if (!resolvedProviders.has(key) || item.botIntegrationId === botIntegrationId) resolvedProviders.set(key, item); }
-    const available = [...resolvedProviders.values()].filter((item) => item.mode === 'LIVE' || process.env.NODE_ENV !== 'production').map((item) => ({ provider: item.provider, mode: item.mode, capabilities: BILLING_PROVIDER_CAPABILITIES[item.provider] }));
+    const available = [...resolvedProviders.values()].filter((item) => item.mode === 'LIVE' || !isProductionEnvironment()).map((item) => ({ provider: item.provider, mode: item.mode, capabilities: BILLING_PROVIDER_CAPABILITIES[item.provider] }));
     return { plans, subscriptions: entitlement, providers: available };
   }
 
-  async createStripeCheckout(input: { botIntegrationId: string; telegramBotUserId: string; priceId: string; requestedMode?: Mode; couponCode?: string }) {
-    const mode = process.env.NODE_ENV === 'production' ? BotBillingProviderMode.LIVE : (input.requestedMode || BotBillingProviderMode.LIVE) as BotBillingProviderMode;
+  async createStripeCheckout(input: { botIntegrationId: string; telegramBotUserId: string; priceId: string; requestedMode?: Mode; couponCode?: string; successUrl: string; cancelUrl: string }) {
+    const mode = isProductionEnvironment() ? BotBillingProviderMode.LIVE : (input.requestedMode || BotBillingProviderMode.LIVE) as BotBillingProviderMode;
     const price = await this.prisma.botPlanPrice.findFirst({ where: { id: input.priceId, isActive: true, isPublic: true, plan: { botIntegrationId: input.botIntegrationId, isActive: true } }, include: { plan: true } });
     if (!price) throw new NotFoundException('Public billing price not found');
     const isFinance = await this.assertFinanceCanonicalPrice(input.botIntegrationId, price.plan.code, price.currency, price.interval, price.amountMinor);
@@ -244,10 +248,8 @@ export class BotBillingService {
     if (coupon && !promotionCodeId) throw new BadRequestException('Coupon is not synchronized with the selected Stripe mode');
     const customerId = await this.stripe.customer({ botIntegrationId: input.botIntegrationId, workspaceId: subscriber.workspaceId, telegramBotUserId: subscriber.id, mode });
     const subscription = await this.prisma.botSubscription.create({ data: { workspaceId: subscriber.workspaceId, botIntegrationId: input.botIntegrationId, telegramBotUserId: subscriber.id, planId: price.planId, planPriceId: price.id, source: 'STRIPE', status: 'INCOMPLETE', currency: price.currency, interval: price.interval, amountMinor: price.amountMinor, priceVersion: price.version, providerCustomerId: customerId } });
-    const base = (process.env.FINANCE_MINI_APP_URL || process.env.FRONTEND_URL || '').replace(/\/$/, '');
-    if (!base) throw new BadRequestException('Finance Mini App URL is not configured');
     try {
-      const checkout = await this.stripe.checkout({ botIntegrationId: input.botIntegrationId, mode, customerId, priceId: providerPriceId, subscriptionId: subscription.id, successUrl: `${base}/finance/${input.botIntegrationId}?checkout=success`, cancelUrl: `${base}/finance/${input.botIntegrationId}?checkout=cancelled`, discount: promotionCodeId ? { code: promotionCodeId } : undefined });
+      const checkout = await this.stripe.checkout({ botIntegrationId: input.botIntegrationId, mode, customerId, priceId: providerPriceId, subscriptionId: subscription.id, successUrl: input.successUrl, cancelUrl: input.cancelUrl, discount: promotionCodeId ? { code: promotionCodeId } : undefined });
       if (coupon) await this.prisma.botCouponRedemption.create({ data: { couponId: coupon.id, telegramBotUserId: subscriber.id, planPriceId: price.id, subscriptionId: subscription.id, idempotencyKey: `checkout:${subscription.id}` } });
       return { ...checkout, subscriptionId: subscription.id };
     } catch (error) {
@@ -338,9 +340,10 @@ export class BotBillingService {
     const starConfigs = await this.prisma.botBillingProviderConfig.findMany({ where: { workspaceId: price.plan.workspaceId, provider: 'TELEGRAM_STARS', mode: 'LIVE', connectionStatus: 'CONNECTED', OR: [{ botIntegrationId: input.botIntegrationId }, { botIntegrationId: null }] } });
     const config = starConfigs.find((item) => item.botIntegrationId === input.botIntegrationId) || starConfigs.find((item) => item.botIntegrationId === null);
     if (!config) throw new BadRequestException('Telegram Stars is not enabled');
-    const environment = process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT === 'LOCAL'
+    const configuredEnvironment = telegramBotRuntimeEnvironmentName();
+    const environment = configuredEnvironment === 'LOCAL'
       ? TelegramBotRuntimeEnvironment.LOCAL
-      : process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT === 'PRODUCTION' || process.env.NODE_ENV === 'production'
+      : configuredEnvironment === 'PRODUCTION' || isProductionEnvironment()
         ? TelegramBotRuntimeEnvironment.PRODUCTION
         : null;
     const bot = environment ? await this.prisma.telegramBotRuntimeInstance.findFirst({ where: { botIntegrationId: input.botIntegrationId, workspaceId: price.plan.workspaceId, environment, runtimeStatus: 'ACTIVE' }, select: { botTokenEncrypted: true, botTokenIv: true, botTokenAuthTag: true } }) : null;

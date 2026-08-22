@@ -11,6 +11,10 @@ import {
   GreeterAutomationEnvironment,
   TelegramSourceType,
 } from '@prisma/client';
+import {
+  isProductionEnvironment,
+  telegramBotRuntimeEnvironmentName,
+} from '../../../../config/deployment-config';
 import type {
   GreeterButtonRows,
   GreeterChannelOverrideInput,
@@ -243,7 +247,7 @@ export class GreeterConfigurationService {
     const runtime =
       runtimes.find(
         (item) =>
-          item.environment === process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT,
+          item.environment === telegramBotRuntimeEnvironmentName(),
       ) ??
       runtimes.find((item) => item.environment === 'PRODUCTION') ??
       runtimes[0];
@@ -355,10 +359,10 @@ export class GreeterConfigurationService {
       throw new BadRequestException('Telegram channel chat id is unavailable');
     try {
       const environment =
-        process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT === 'LOCAL'
+        telegramBotRuntimeEnvironmentName() === 'LOCAL'
           ? 'LOCAL'
-          : process.env.TELEGRAM_BOT_RUNTIME_ENVIRONMENT === 'PRODUCTION' ||
-              process.env.NODE_ENV === 'production'
+          : telegramBotRuntimeEnvironmentName() === 'PRODUCTION' ||
+              isProductionEnvironment()
             ? 'PRODUCTION'
             : null;
       const runtime = environment

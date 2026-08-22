@@ -22,7 +22,7 @@ import {
 } from "@/lib/features/finance/bot-billing-api";
 import { botBillingKeys } from "@/lib/query-keys";
 import { formatBillingDate } from "./finance-billing-format";
-import { financeTimezoneOptions } from "@/components/features/finance/consumer-finance/finance-timezones";
+import { financeAdminTimezoneOptions } from "@/lib/features/finance/finance-admin-timezones";
 
 type FinanceUser = BotBillingUserPage["items"][number];
 
@@ -186,7 +186,7 @@ function UserSupportModal({
   const [timezone, setTimezone] = useState(
     user?.profile?.timezone ?? "Europe/Warsaw",
   );
-  const timezoneOptions = financeTimezoneOptions(timezone);
+  const timezoneOptions = financeAdminTimezoneOptions(timezone);
   const plans = useQuery({
     queryKey: botBillingKeys.plans(botId),
     queryFn: () => botBillingApi.plans(botId),
