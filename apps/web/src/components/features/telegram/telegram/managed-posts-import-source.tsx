@@ -1,6 +1,11 @@
 "use client";
 
-import { useState, type ClipboardEvent, type DragEvent } from "react";
+import {
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type DragEvent,
+} from "react";
 import { Copy, FileUp, RotateCcw, Upload } from "lucide-react";
 import {
   Button,
@@ -36,6 +41,7 @@ export function ManagedPostsImportSource({
   onCopyContent: () => void;
 }) {
   const [dragging, setDragging] = useState(false);
+  const emptyFileInputRef = useRef<HTMLInputElement>(null);
 
   const paste = (event: ClipboardEvent<HTMLElement>) => {
     if (disabled) return;
@@ -122,11 +128,13 @@ export function ManagedPostsImportSource({
             />
           </div>
         ) : (
-          <label
-            className={`flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-neutral-950 px-4 py-5 text-center transition ${
+          <div
+            role="region"
+            aria-label="File drop and paste area"
+            className={`flex min-h-28 flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-neutral-950 px-4 py-5 text-center transition ${
               dragging
                 ? "border-blue-500 bg-blue-950/30 text-white"
-                : "border-neutral-700 text-neutral-300 hover:border-blue-600 hover:text-white"
+                : "border-neutral-700 text-neutral-300 focus-within:border-blue-600 hover:border-blue-600"
             }`}
             onPaste={paste}
             onDragEnter={() => setDragging(true)}
@@ -136,16 +144,25 @@ export function ManagedPostsImportSource({
             tabIndex={disabled ? -1 : 0}
           >
             <span className="inline-flex items-center gap-2 text-sm font-medium">
-              <FileUp size={18} /> Drop, paste, or choose a file
+              <FileUp size={18} /> Drop or paste a file here
             </span>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => emptyFileInputRef.current?.click()}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-blue-500/70 bg-blue-600/15 px-4 text-sm font-medium text-blue-200 transition hover:bg-blue-600/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Upload size={14} /> Choose file
+            </button>
             <span className="text-xs text-neutral-500">
               JSON, CSV, TSV, TXT, or plain text
             </span>
             <span className="inline-flex items-center gap-1 text-xs text-blue-300">
-              <Upload size={12} /> Text pasted here opens the editor
+              Text pasted here opens the editor
               automatically
             </span>
             <input
+              ref={emptyFileInputRef}
               type="file"
               accept=".json,.csv,.tsv,.txt,application/json,text/csv,text/tab-separated-values,text/plain"
               className="sr-only"
@@ -156,7 +173,7 @@ export function ManagedPostsImportSource({
                 event.currentTarget.value = "";
               }}
             />
-          </label>
+          </div>
         )}
       </FormField>
     </div>

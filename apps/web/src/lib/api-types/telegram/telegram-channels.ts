@@ -153,6 +153,8 @@ export type TelegramChannel = EntityAssignment & {
     financialSummary: TelegramChannelFinancialSummary;
     bookingSchedule?: {
       futureScheduledTotal: number;
+      draftTotal: number;
+      pendingJoinRequests: number;
       lastScheduledAt: string | null;
       nextAvailableDate?: string | null;
       bookedThroughDate?: string | null;

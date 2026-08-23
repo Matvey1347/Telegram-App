@@ -134,6 +134,10 @@ export function buildResolvedTelegramEntity(
       overrides.description === undefined ? `Description ${numeric}` : overrides.description,
     participantsCount:
       overrides.participantsCount === undefined ? 100 + sequence : overrides.participantsCount,
+    pendingJoinRequestsCount:
+      overrides.pendingJoinRequestsCount === undefined
+        ? 0
+        : overrides.pendingJoinRequestsCount,
     photoUrl:
       overrides.photoUrl === undefined
         ? `https://example.com/channel-${numeric}.jpg`

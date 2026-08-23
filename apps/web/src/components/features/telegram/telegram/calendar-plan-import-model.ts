@@ -108,6 +108,21 @@ export function parseCalendarPlanImport(
   };
 }
 
+export function serializeCalendarPlanImport(
+  preview: TelegramPostPlannerPreviewResult,
+) {
+  return JSON.stringify(
+    {
+      items: preview.assignments.map((assignment) => ({
+        postId: assignment.postId,
+        scheduledAt: assignment.scheduledAt,
+      })),
+    },
+    null,
+    2,
+  );
+}
+
 function importedScheduledAt(row: Record<string, unknown>) {
   if (typeof row.scheduledAt === "string" && row.scheduledAt.trim()) {
     return row.scheduledAt.trim();

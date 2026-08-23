@@ -16,6 +16,12 @@ export type TelegramAdSaleStatus =
   | "COMPLETED"
   | "CANCELLED";
 
+export type TelegramAdSaleOrigin =
+  | "DIRECT"
+  | "REPEAT"
+  | "ADSELL_IO"
+  | "COLLABORATOR_PRO";
+
 export type TelegramAdPlacementStatus =
   | "DRAFT"
   | "RESERVED"
@@ -467,6 +473,7 @@ export type TelegramAdSale = {
   title: string | null;
   notes: string | null;
   status: TelegramAdSaleStatus;
+  origin: TelegramAdSaleOrigin;
   crmDealStage: TelegramAdCrmDealStage;
   expectedCloseAt: string | null;
   lostReason: string | null;

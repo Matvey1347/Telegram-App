@@ -2230,10 +2230,7 @@ export default function TelegramChannelsPage() {
           {channelsInitialError ? (
             <div className="text-red-300">Failed to load channels</div>
           ) : null}
-          <MasonryGrid
-            className="!columns-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
-            itemClassName="mb-0"
-          >
+          <MasonryGrid>
             {filteredChannels.map((channel: TelegramChannel) => {
               const hasAdminLink = isOwnChannel(channel);
               const username = normalizeUsername(channel.username);

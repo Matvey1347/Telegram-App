@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Download } from "lucide-react";
 import {
   buildTelegramCalendarPlanInstructionFilename,
@@ -20,6 +20,8 @@ export function CalendarPlanImport({
   posts,
   timezone,
   disabled,
+  content,
+  onContentChange,
   onPreview,
 }: {
   channelId: string;
@@ -27,13 +29,19 @@ export function CalendarPlanImport({
   posts: PlanPost[];
   timezone: string;
   disabled: boolean;
-  onPreview: (preview: TelegramPostPlannerPreviewResult) => void;
+  content: string;
+  onContentChange: (content: string) => void;
+  onPreview: (preview: TelegramPostPlannerPreviewResult | null) => void;
 }) {
   const { pushToast } = useAppToast();
-  const [content, setContent] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileError, setFileError] = useState("");
   const [instructionLoading, setInstructionLoading] = useState(false);
+  const onPreviewRef = useRef(onPreview);
+  const lastPreviewInputRef = useRef<string | null>(null);
+  useEffect(() => {
+    onPreviewRef.current = onPreview;
+  }, [onPreview]);
   const parsed = useMemo(() => {
     if (!content.trim()) return { preview: null, error: "" };
     try {
@@ -49,6 +57,18 @@ export function CalendarPlanImport({
     }
   }, [content, posts, timezone]);
   const error = fileError || parsed.error;
+  const previewInputKey = JSON.stringify({
+    content,
+    error,
+    posts: posts.map(({ id, title, groupId }) => ({ id, title, groupId })),
+    timezone,
+  });
+
+  useEffect(() => {
+    if (lastPreviewInputRef.current === previewInputKey) return;
+    lastPreviewInputRef.current = previewInputKey;
+    onPreviewRef.current(error ? null : parsed.preview);
+  }, [error, parsed.preview, previewInputKey]);
 
   return (
     <div className="space-y-4">
@@ -100,7 +120,7 @@ export function CalendarPlanImport({
         fileName={fileName}
         disabled={disabled}
         onContent={(value) => {
-          setContent(value);
+          onContentChange(value);
           setFileName(null);
           setFileError("");
         }}
@@ -108,14 +128,14 @@ export function CalendarPlanImport({
           void file
             .text()
             .then((value) => {
-              setContent(value);
+              onContentChange(value);
               setFileName(file.name);
               setFileError("");
             })
             .catch(() => setFileError("Could not read this file."));
         }}
         onClear={() => {
-          setContent("");
+          onContentChange("");
           setFileName(null);
           setFileError("");
         }}
@@ -126,15 +146,6 @@ export function CalendarPlanImport({
           {error}
         </p>
       ) : null}
-      <div className="flex justify-end">
-        <Button
-          type="button"
-          disabled={disabled || !parsed.preview || Boolean(error)}
-          onClick={() => parsed.preview && onPreview(parsed.preview)}
-        >
-          Preview {parsed.preview?.assignments.length || ""} posts
-        </Button>
-      </div>
     </div>
   );
 }

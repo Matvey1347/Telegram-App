@@ -97,6 +97,7 @@ describe('TelegramChannelGptContextExporter', () => {
       id: 'available',
       title: 'Available post',
       text: 'Available text',
+      imageUrls: [],
       origin: 'SYSTEM',
       status: 'DRAFT',
       scheduledAt: null,
@@ -119,6 +120,11 @@ describe('TelegramChannelGptContextExporter', () => {
       post({
         id: 'reserved',
         title: 'Reserved post',
+        text: 'Full scheduled text that must remain complete instead of using a shortened title preview.',
+        imageUrls: [
+          'https://cdn.test/reserved.jpg',
+          'data:image/jpeg;base64,LEGACY_VALUE',
+        ],
         status: 'SCHEDULED',
         scheduledAt: new Date('2026-08-25T07:00:00.000Z'),
       }),
@@ -143,6 +149,7 @@ describe('TelegramChannelGptContextExporter', () => {
     expect(result.filename).toMatch(
       /^CH_\d{2}-\d{2}_calendar-plan-instruction\.txt$/,
     );
+    expect(text).toContain('FORMAT VERSION: 2');
     expect(text).toContain('TIMEZONE: Europe/Warsaw');
     expect(text).toContain('- 09:00 — Morning — slot_id: morning');
     expect(text).toContain('postId: available\navailability: AVAILABLE');
@@ -151,8 +158,14 @@ describe('TelegramChannelGptContextExporter', () => {
       'internal link target "Future target" is not published',
     );
     expect(text).toContain(
-      '- 2026-08-25T07:00:00.000Z — reserved — Reserved post',
+      'OCCUPIED POST\nscheduled_at: 2026-08-25T07:00:00.000Z\npostId: reserved\ntitle: Reserved post',
     );
+    expect(text).toContain('images:\n- https://cdn.test/reserved.jpg');
+    expect(text).toContain(
+      'text:\nFull scheduled text that must remain complete instead of using a shortened title preview.',
+    );
+    expect(text).not.toContain('LEGACY_VALUE');
+    expect(text).not.toContain('data:image');
     expect(text).toContain('local_time: 2026-08-20 09:00');
     expect(text).toContain('text:\nA successful morning topic');
     expect(text).toContain(
@@ -198,13 +211,15 @@ describe('TelegramChannelGptContextExporter', () => {
     const text = result.buffer.toString('utf8');
 
     expect(result.filename).toMatch(/^CH_\d{2}-\d{2}\.txt$/);
-    expect(text).toContain('FORMAT VERSION: 4');
+    expect(text).toContain('FORMAT VERSION: 5');
     expect(text).toContain('id: telegram-post:telegram-post-1');
     expect(text).toContain('reference: telegram-source-post:telegram-post-1');
     expect(text).not.toContain(
       'reference: tg-post:telegram-post:telegram-post-1',
     );
     expect(text).toContain('telegram_url: https://t.me/example_channel/42');
+    expect(text).toContain('published_at: 2026-08-20T10:00:00.000Z');
+    expect(text).toContain('scheduled_at: null');
     expect(text).toContain('adjusted_views: 900');
     expect(text).toContain('subscribers: 800');
     expect(text).toContain('err: 112.50%');
@@ -273,6 +288,8 @@ describe('TelegramChannelGptContextExporter', () => {
         imageUrls: [],
         text: 'Managed copy',
         createdAt: new Date('2026-08-20T09:00:00.000Z'),
+        scheduledAt: null,
+        publishedAt: null,
         telegramMessageIds: ['42'],
         telegramMessageUrls: [],
       },
@@ -281,8 +298,36 @@ describe('TelegramChannelGptContextExporter', () => {
     const result = await exporter.export('user-1', 'channel-1');
     const text = result.buffer.toString('utf8');
     expect(text).toContain('id: managed-1');
+    expect(text).toContain('published_at: 2026-08-20T10:00:00.000Z');
+    expect(text).toContain('scheduled_at: null');
     expect(text).toContain('views: 1000');
     expect(text).not.toContain('id: telegram-post:telegram-post-1');
+  });
+
+  it('exports the reserved time for a scheduled managed post', async () => {
+    const { exporter, prisma } = setup();
+    prisma.telegramManagedPost.findMany.mockResolvedValueOnce([
+      {
+        id: 'scheduled-1',
+        title: 'Scheduled title',
+        status: 'SCHEDULED',
+        groupId: null,
+        imageUrls: [],
+        text: 'Scheduled copy',
+        createdAt: new Date('2026-08-20T09:00:00.000Z'),
+        scheduledAt: new Date('2026-09-16T07:15:00.000Z'),
+        publishedAt: null,
+        telegramMessageIds: [],
+        telegramMessageUrls: [],
+      },
+    ]);
+
+    const result = await exporter.export('user-1', 'channel-1');
+    const text = result.buffer.toString('utf8');
+
+    expect(text).toContain(
+      'title: Scheduled title\nstatus: SCHEDULED\npublished_at: null\nscheduled_at: 2026-09-16T07:15:00.000Z',
+    );
   });
 
   it('exports each managed post group and summarizes group statuses', async () => {
@@ -338,10 +383,10 @@ describe('TelegramChannelGptContextExporter', () => {
       '- Ungrouped — null — posts: 1 — statuses: SCHEDULED=1',
     );
     expect(text).toContain(
-      'title: Draft post\nstatus: DRAFT\ngroup_id: group-1\ngroup_title: Evergreen',
+      'title: Draft post\nstatus: DRAFT\npublished_at: null\nscheduled_at: null\ngroup_id: group-1\ngroup_title: Evergreen',
     );
     expect(text).toContain(
-      'title: Ungrouped post\nstatus: SCHEDULED\ngroup_id: null\ngroup_title: Ungrouped',
+      'title: Ungrouped post\nstatus: SCHEDULED\npublished_at: null\nscheduled_at: null\ngroup_id: null\ngroup_title: Ungrouped',
     );
   });
 

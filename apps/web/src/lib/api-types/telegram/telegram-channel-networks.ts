@@ -11,6 +11,7 @@ export type TelegramChannelNetworkSummary = {
   currency?: string | null;
   channelsCount: number;
   totalSubscribers: number;
+  pendingJoinRequestsCount?: number;
   activeSubscribersEstimate: number;
   paidActiveSubscribersEstimate: number;
   viewRate: number | null;
@@ -55,6 +56,7 @@ export type TelegramChannelNetworkMember = {
   photoUrl?: string | null;
   accessMode?: TelegramChannelAccessMode;
   subscribersCount?: number | null;
+  pendingJoinRequestsCount?: number | null;
   currentSubscribersCount?: number | null;
   activeSubscribersEstimate?: number | null;
 };
@@ -67,6 +69,7 @@ export type TelegramChannelNetworkChannelSummary = {
   username?: string | null;
   photoUrl?: string | null;
   subscribersCount?: number | null;
+  pendingJoinRequestsCount?: number | null;
   currentSubscribersCount?: number | null;
   activeSubscribersEstimate?: number | null;
   paidActiveSubscribersEstimate?: number | null;

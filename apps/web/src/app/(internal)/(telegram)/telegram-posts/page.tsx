@@ -47,6 +47,7 @@ import { IconPicker } from "@/components/icons/icon-picker";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageTabHead } from "@/components/layout/page-tab-head";
 import { ManagedPostsImportModal } from "@/components/features/telegram/telegram/managed-posts-import-modal";
+import { GptContextDownloadButton } from "@/components/features/telegram/telegram/gpt-context-download-button";
 import { PostGroupsImportModal } from "@/components/features/telegram/telegram/post-groups-import-modal";
 import {
   TelegramCardActionsMenu,
@@ -55,6 +56,7 @@ import {
 import { CalendarPostGroupSection } from "@/components/features/telegram/telegram/calendar-post-group-section";
 import { AutoCalendarPlannerPreview } from "@/components/features/telegram/telegram/auto-calendar-planner-preview";
 import { CalendarPlanImport } from "@/components/features/telegram/telegram/calendar-plan-import";
+import { serializeCalendarPlanImport } from "@/components/features/telegram/telegram/calendar-plan-import-model";
 import {
   LongImageTextModePanel,
   PostStatusIcon,
@@ -133,7 +135,6 @@ import {
   telegramPostKeys,
 } from "@/lib/query-keys";
 import {
-  buildTelegramGptContextFilename,
   type ScheduleManagedPostsBatchItem,
   type TelegramManagedPostCalendarResult,
   type TelegramPostPlannerPreviewResult,
@@ -682,25 +683,10 @@ export function TelegramPostsPageClient({
                     <span className="inline-flex items-center gap-2"><Upload size={15} /> Import</span>
                   </Button>
                   <TimePostsControl channelId={channel.id} timePosts={channel.timePosts || []} />
-                  <Button
-                    variant="secondary"
-                    className="shrink-0"
-                    onClick={async () => {
-                      try {
-                        pushToast("Preparing GPT context…", "info");
-                        const blob = await telegramChannelsApi.gptContext(channel.id);
-                        const url = URL.createObjectURL(blob);
-                        const link = document.createElement("a");
-                        link.href = url; link.download = buildTelegramGptContextFilename(channel.title);
-                        document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
-                        pushToast("GPT context downloaded.", "success");
-                      } catch (error) {
-                        pushToast(apiErrorMessage(error, "Could not download GPT context"), "error");
-                      }
-                    }}
-                  >
-                    GPT Context
-                  </Button>
+                  <GptContextDownloadButton
+                    channelId={channel.id}
+                    channelTitle={channel.title}
+                  />
                   <Button
                     className="shrink-0"
                     onClick={() => {
@@ -899,6 +885,8 @@ function TelegramPostWorkspace({
   const [editingPlannerSlotGroupIds, setEditingPlannerSlotGroupIds] = useState<string[]>([]);
   const [autoPlannerPreview, setAutoPlannerPreview] =
     useState<TelegramPostPlannerPreviewResult | null>(null);
+  const [calendarPlanImportContent, setCalendarPlanImportContent] =
+    useState("");
   const [autoPlannerRerollingDate, setAutoPlannerRerollingDate] = useState<
     string | null
   >(null);
@@ -2216,6 +2204,17 @@ function TelegramPostWorkspace({
     }
   };
 
+  const updateEditedPlannerPreview = (
+    preview: TelegramPostPlannerPreviewResult | null,
+  ) => {
+    setAutoPlannerPreview(preview);
+    if (autoPlannerPreviewSource === "import") {
+      setCalendarPlanImportContent(
+        preview ? serializeCalendarPlanImport(preview) : "",
+      );
+    }
+  };
+
   const scheduleAutoPlannerPreview = async () => {
     if (!autoPlannerPreview?.assignments.length || autoPlannerBusy) return;
     const assignments = autoPlannerPreview.assignments;
@@ -2289,7 +2288,7 @@ function TelegramPostWorkspace({
         const remaining = assignments.filter((assignment) =>
           failedPostIds.has(assignment.postId),
         );
-        setAutoPlannerPreview({
+        updateEditedPlannerPreview({
           ...autoPlannerPreview,
           assignments: remaining,
           summary: {
@@ -2302,7 +2301,7 @@ function TelegramPostWorkspace({
           },
         });
       } else {
-        setAutoPlannerPreview(null);
+        updateEditedPlannerPreview(null);
       }
       await invalidatePlannerCalendar();
       pushToast(
@@ -2322,21 +2321,21 @@ function TelegramPostWorkspace({
     }
   };
 
-  const removeAutoPlannerAssignment = (postId: string, scheduledAt: string) => setAutoPlannerPreview((current) => {
-    if (!current) return current;
-    const assignments = current.assignments.filter(
+  const removeAutoPlannerAssignment = (postId: string, scheduledAt: string) => {
+    if (!autoPlannerPreview) return;
+    const assignments = autoPlannerPreview.assignments.filter(
       (assignment) => assignment.postId !== postId || assignment.scheduledAt !== scheduledAt,
     );
-    return {
-      ...current,
+    updateEditedPlannerPreview({
+      ...autoPlannerPreview,
       assignments,
       summary: {
-        ...current.summary,
+        ...autoPlannerPreview.summary,
         plannedPosts: assignments.length,
-        unfilledSlots: Math.max(0, current.summary.availableSlots - assignments.length),
+        unfilledSlots: Math.max(0, autoPlannerPreview.summary.availableSlots - assignments.length),
       },
-    };
-  });
+    });
+  };
 
   const replaceAutoPlannerAssignmentPost = (
     currentPostId: string,
@@ -2351,9 +2350,10 @@ function TelegramPostWorkspace({
       pushToast("This post is already used in the plan.", "error");
       return;
     }
-    setAutoPlannerPreview((current) => current ? {
-      ...current,
-      assignments: current.assignments.map((assignment) =>
+    if (!autoPlannerPreview) return;
+    updateEditedPlannerPreview({
+      ...autoPlannerPreview,
+      assignments: autoPlannerPreview.assignments.map((assignment) =>
         assignment.postId === currentPostId && assignment.scheduledAt === scheduledAt
           ? {
               ...assignment,
@@ -2364,7 +2364,7 @@ function TelegramPostWorkspace({
             }
           : assignment,
       ),
-    } : current);
+    });
   };
 
   const toggleCalendarBatchPostSelection = (postId: string) => {
@@ -3534,6 +3534,8 @@ function TelegramPostWorkspace({
                   }))}
                   timezone={Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"}
                   disabled={autoPlannerBusy}
+                  content={calendarPlanImportContent}
+                  onContentChange={setCalendarPlanImportContent}
                   onPreview={(preview) => {
                     setAutoPlannerPreview(preview);
                     setAutoPlannerPreviewSource("import");
@@ -3548,9 +3550,16 @@ function TelegramPostWorkspace({
                     availablePosts={calendarSchedulablePosts.map((post) => ({
                       id: post.id,
                       title: post.title,
+                      iconPresentation: post.iconPresentation,
                     }))}
                     onRemoveAssignment={removeAutoPlannerAssignment}
                     onReplaceAssignmentPost={replaceAutoPlannerAssignmentPost}
+                    onOpenPostInNewTab={(postId) => {
+                      const post = calendarSchedulablePosts.find(
+                        (item) => item.id === postId,
+                      );
+                      if (post) openPostInNewTab(post);
+                    }}
                   />
                 ) : null}
               </Card>
@@ -3685,9 +3694,16 @@ function TelegramPostWorkspace({
                   availablePosts={calendarSchedulablePosts.map((post) => ({
                     id: post.id,
                     title: post.title,
+                    iconPresentation: post.iconPresentation,
                   }))}
                   onRemoveAssignment={removeAutoPlannerAssignment}
                   onReplaceAssignmentPost={replaceAutoPlannerAssignmentPost}
+                  onOpenPostInNewTab={(postId) => {
+                    const post = calendarSchedulablePosts.find(
+                      (item) => item.id === postId,
+                    );
+                    if (post) openPostInNewTab(post);
+                  }}
                 />
               ) : null}
             </Card>

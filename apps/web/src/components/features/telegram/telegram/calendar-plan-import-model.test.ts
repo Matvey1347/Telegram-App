@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parseCalendarPlanImport } from "./calendar-plan-import-model";
+import {
+  parseCalendarPlanImport,
+  serializeCalendarPlanImport,
+} from "./calendar-plan-import-model";
 
 describe("parseCalendarPlanImport", () => {
   const posts = [{ id: "post-1", title: "First", groupId: "group-1" }];
@@ -18,6 +21,14 @@ describe("parseCalendarPlanImport", () => {
       groupId: "group-1",
     });
     expect(result.summary.plannedPosts).toBe(1);
+    expect(JSON.parse(serializeCalendarPlanImport(result))).toEqual({
+      items: [
+        {
+          postId: "post-1",
+          scheduledAt: result.assignments[0].scheduledAt,
+        },
+      ],
+    });
   });
 
   it("rejects unknown posts and duplicate publishing times", () => {
@@ -29,5 +40,34 @@ describe("parseCalendarPlanImport", () => {
         new Date("2099-01-01T00:00:00Z"),
       ),
     ).toThrow("not available");
+  });
+
+  it("serializes the current edited assignments back into import JSON", () => {
+    const result = parseCalendarPlanImport(
+      JSON.stringify({
+        items: [
+          { postId: "post-1", scheduledAt: "2099-08-10T09:30:00Z" },
+        ],
+      }),
+      posts,
+      "Europe/Warsaw",
+      new Date("2099-08-01T00:00:00Z"),
+    );
+    const edited = {
+      ...result,
+      assignments: result.assignments.map((assignment) => ({
+        ...assignment,
+        scheduledAt: "2099-08-11T10:15:00.000Z",
+      })),
+    };
+
+    expect(JSON.parse(serializeCalendarPlanImport(edited))).toEqual({
+      items: [
+        {
+          postId: "post-1",
+          scheduledAt: "2099-08-11T10:15:00.000Z",
+        },
+      ],
+    });
   });
 });

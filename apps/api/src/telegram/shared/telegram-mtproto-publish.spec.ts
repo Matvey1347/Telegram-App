@@ -1,14 +1,19 @@
 const sharpToBufferMock = jest.fn();
+const sharpMetadataMock = jest.fn();
 const sharpJpegMock = jest.fn(() => ({
   toBuffer: sharpToBufferMock,
 }));
-const sharpRotateMock = jest.fn(() => ({
+const sharpResizeMock = jest.fn(() => ({
   jpeg: sharpJpegMock,
+}));
+const sharpRotateMock = jest.fn(() => ({
+  resize: sharpResizeMock,
 }));
 
 jest.mock('sharp', () => ({
   __esModule: true,
   default: jest.fn(() => ({
+    metadata: sharpMetadataMock,
     rotate: sharpRotateMock,
   })),
 }));
@@ -18,7 +23,9 @@ import { TelegramMtprotoClient } from './telegram-mtproto.client';
 describe('TelegramMtprotoClient publishPost', () => {
   beforeEach(() => {
     sharpToBufferMock.mockReset();
+    sharpMetadataMock.mockReset();
     sharpJpegMock.mockClear();
+    sharpResizeMock.mockClear();
     sharpRotateMock.mockClear();
   });
 
@@ -141,16 +148,14 @@ describe('TelegramMtprotoClient publishPost', () => {
   it('converts avif images to jpeg before Telegram upload', async () => {
     const client = new TelegramMtprotoClient();
     sharpToBufferMock.mockResolvedValue(Buffer.from('jpeg-binary'));
-    const fetchMock = jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValue({
-        ok: true,
-        headers: new Headers({
-          'content-type': 'image/avif',
-          'content-length': '11',
-        }),
-        arrayBuffer: async () => Buffer.from('avif-binary'),
-      } as unknown as Response);
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      headers: new Headers({
+        'content-type': 'image/avif',
+        'content-length': '11',
+      }),
+      arrayBuffer: async () => Buffer.from('avif-binary'),
+    } as unknown as Response);
 
     const file = await (client as any).downloadPublishImage(
       'https://example.com/post-image.avif',
@@ -159,10 +164,43 @@ describe('TelegramMtprotoClient publishPost', () => {
 
     expect(fetchMock).toHaveBeenCalled();
     expect(sharpRotateMock).toHaveBeenCalled();
+    expect(sharpResizeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ width: 4096, height: 4096 }),
+    );
     expect(sharpJpegMock).toHaveBeenCalled();
     expect(file.name).toBe('telegram-post-1.jpg');
     expect(file.size).toBe(Buffer.from('jpeg-binary').length);
 
+    fetchMock.mockRestore();
+  });
+
+  it('resizes oversized jpeg dimensions before Telegram upload', async () => {
+    const client = new TelegramMtprotoClient();
+    sharpMetadataMock.mockResolvedValue({ width: 9504, height: 5499 });
+    sharpToBufferMock.mockResolvedValue(Buffer.from('resized-jpeg'));
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      headers: new Headers({
+        'content-type': 'image/jpeg',
+        'content-length': '12',
+      }),
+      arrayBuffer: async () => Buffer.from('jpeg-binary'),
+    } as unknown as Response);
+
+    const file = await (client as any).downloadPublishImage(
+      'https://example.com/oversized.jpg',
+      0,
+    );
+
+    expect(sharpMetadataMock).toHaveBeenCalled();
+    expect(sharpResizeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        width: 4096,
+        height: 4096,
+        fit: 'inside',
+      }),
+    );
+    expect(file.size).toBe(Buffer.from('resized-jpeg').length);
     fetchMock.mockRestore();
   });
 
@@ -174,16 +212,14 @@ describe('TelegramMtprotoClient publishPost', () => {
     jest
       .spyOn(client as never, 'convertImageBufferWithSips' as never)
       .mockResolvedValue(Buffer.from('jpeg-from-sips') as never);
-    const fetchMock = jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValue({
-        ok: true,
-        headers: new Headers({
-          'content-type': 'image/avif',
-          'content-length': '11',
-        }),
-        arrayBuffer: async () => Buffer.from('avif-binary'),
-      } as unknown as Response);
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      headers: new Headers({
+        'content-type': 'image/avif',
+        'content-length': '11',
+      }),
+      arrayBuffer: async () => Buffer.from('avif-binary'),
+    } as unknown as Response);
 
     const file = await (client as any).downloadPublishImage(
       'https://example.com/post-image.avif',

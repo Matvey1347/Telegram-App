@@ -81,6 +81,7 @@ describe('TelegramChannelsService importChannel', () => {
         username: null,
         description: 'About',
         participantsCount: 77,
+        pendingJoinRequestsCount: 302,
         photoUrl: 'https://example.com/photo.jpg',
         inviteLink: 'https://t.me/+dtmYmT-l2Mo1Yzgy',
         joinedByInvite: true,
@@ -105,6 +106,7 @@ describe('TelegramChannelsService importChannel', () => {
         data: expect.objectContaining({
           telegramChatId: '123456',
           inviteLink: 'https://t.me/+dtmYmT-l2Mo1Yzgy',
+          pendingJoinRequestsCount: 302,
         }),
       }),
     );

@@ -38,6 +38,7 @@ import {
   TELEGRAM_TEXT_MESSAGE_LIMIT,
 } from './telegram-channels.internal';
 import { TelegramManagedPostPresentationService } from './telegram-managed-post-presentation.service';
+import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-media-storage.service';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 
@@ -52,6 +53,7 @@ export class TelegramManagedPostPublisherService {
     private readonly telegramManagedPostPresentationService: TelegramManagedPostPresentationService,
     private readonly telegramManagedPostRevisionStore: TelegramManagedPostRevisionStore,
     private readonly telegramPostGroupsService: TelegramPostGroupsService,
+    private readonly telegramManagedPostMediaStorageService: TelegramManagedPostMediaStorageService,
   ) {}
 
   private readonly iconSelect = {
@@ -95,7 +97,7 @@ export class TelegramManagedPostPublisherService {
     scheduleAt?: Date,
     longTextMode: 'IMAGES_THEN_TEXT' | 'CAPTION_THEN_TEXT' = 'IMAGES_THEN_TEXT',
   ) {
-    const [post, channel, initialSources] = await Promise.all([
+    const [foundPost, channel, initialSources] = await Promise.all([
       this.prisma.telegramManagedPost.findFirst({
         where: { id: postId, workspaceId, telegramChannelId: channelId },
       }),
@@ -104,8 +106,9 @@ export class TelegramManagedPostPublisherService {
       }),
       this.sourceAccessService.sourcesForChannel(workspaceId, channelId),
     ]);
-    if (!post || !channel)
+    if (!foundPost || !channel)
       throw new NotFoundException('Post or channel not found');
+    let post = foundPost;
     let sources = initialSources;
     if (!post.text?.trim() && !post.imageUrls.length)
       throw new BadRequestException('Text or at least one image is required');
@@ -179,6 +182,16 @@ export class TelegramManagedPostPublisherService {
       throw new BadRequestException('Channel has no Telegram reference');
     let previousScheduledMessageCancelled = false;
     try {
+      const storedImageUrls =
+        await this.telegramManagedPostMediaStorageService.persistImageUrls(
+          post.imageUrls,
+        );
+      if (storedImageUrls.some((url, index) => url !== post.imageUrls[index])) {
+        post = await this.prisma.telegramManagedPost.update({
+          where: { id: post.id },
+          data: { imageUrls: storedImageUrls },
+        });
+      }
       const resolvedText =
         await this.telegramManagedPostPresentationService.resolveInternalPostLinksForPublish(
           workspaceId,

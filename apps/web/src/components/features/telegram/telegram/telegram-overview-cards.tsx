@@ -78,10 +78,7 @@ export function TelegramNetworkCards({
   });
 
   return (
-    <MasonryGrid
-      className="!columns-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
-      itemClassName="mb-0"
-    >
+    <MasonryGrid>
       {networks.map((network) => {
         return (
           <TelegramNetworkCard
@@ -111,10 +108,7 @@ export function TelegramPeopleCards({
   onDelete: (person: PersonCard) => void;
 }) {
   return (
-    <MasonryGrid
-      className="!columns-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
-      itemClassName="mb-0"
-    >
+    <MasonryGrid>
       {people.map((person) => {
         const username = String(person.username || "").replace(/^@/, "");
         return (

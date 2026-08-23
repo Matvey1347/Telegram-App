@@ -54,6 +54,7 @@ const network = {
   summary: {
     channelsCount: 2,
     totalSubscribers: 20000,
+    pendingJoinRequestsCount: 302,
     activeSubscribersEstimate: 4000,
     paidActiveSubscribersEstimate: 1000,
     viewRate: 20,
@@ -132,6 +133,12 @@ describe("telegram overview cards", () => {
 
     expect(screen.getByRole("link", { name: "Creators" })).toBeInTheDocument();
     expect(screen.getByText("20,000")).toBeInTheDocument();
+    expect(screen.getByText("302")).toBeInTheDocument();
+    expect(screen.getByLabelText("Pending join requests")).toBeInTheDocument();
+    expect(screen.getByLabelText("Audience").parentElement).toBe(
+      screen.getByLabelText("Pending join requests").parentElement,
+    );
+    expect(screen.getByText("302")).toHaveClass("justify-self-end");
     expect(
       screen.getByLabelText("Reaction rate").parentElement,
     ).toHaveTextContent("3.5%");

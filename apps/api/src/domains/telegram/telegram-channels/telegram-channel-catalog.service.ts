@@ -226,6 +226,13 @@ export class TelegramChannelCatalogService {
       this.telegramChannelBookingReadService.summariesForChannels(
         workspaceId,
         channelIds,
+        new Date(),
+        new Map(
+          channels.map((channel) => [
+            channel.id,
+            Number(channel.pendingJoinRequestsCount ?? 0),
+          ]),
+        ),
       ),
     ]);
 
@@ -308,6 +315,8 @@ export class TelegramChannelCatalogService {
           financialSummary,
           bookingSchedule: bookingSummaryByChannel.get(channel.id) ?? {
             futureScheduledTotal: 0,
+            draftTotal: 0,
+            pendingJoinRequests: 0,
             lastScheduledAt: null,
             nextAvailableDate: null,
             bookedThroughDate: null,

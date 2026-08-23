@@ -1,7 +1,15 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Eye, Megaphone, Percent, UserCheck, UserRound } from "lucide-react";
+import {
+  CalendarCheck2,
+  Eye,
+  FilePenLine,
+  Megaphone,
+  Percent,
+  UserCheck,
+  UserRound,
+} from "lucide-react";
 import type { CurrencySettings, TelegramChannel } from "@/lib/api";
 import { Tooltip } from "@/components/ui/primitives";
 import { getChannelBookingIndicator } from "./channel-booking-indicator";
@@ -81,7 +89,7 @@ export function ChannelEconomicsSummary({
   currencySettings?: CurrencySettings | null;
 }) {
   const economics = channel.preview?.financialSummary.assetEconomics;
-  if (!hasMeaningfulChannelEconomics(channel)) return null;
+  const hasEconomics = hasMeaningfulChannelEconomics(channel);
   const financialSummary = channel.preview?.financialSummary;
   const audience = channel.preview?.audience;
   const currency =
@@ -107,14 +115,40 @@ export function ChannelEconomicsSummary({
   const activeCpa =
     invested > 0 && activeSubscribers > 0 ? invested / activeSubscribers : 0;
   const booking = getChannelBookingIndicator(channel.preview?.bookingSchedule);
+  const draftTotal = channel.preview?.bookingSchedule?.draftTotal ?? 0;
+
+  const operationalStatus = (
+    <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-neutral-400">
+      <span
+        className={`inline-flex items-center gap-1.5 ${booking.tone}`}
+        title="Booked through"
+      >
+        <CalendarCheck2 size={14} aria-label="Booked through" />
+        {booking.compactLabel}
+      </span>
+      <span className="inline-flex items-center gap-1.5" title="Drafts">
+        <FilePenLine size={14} className="text-sky-300" aria-label="Drafts" />
+        <strong className="font-semibold text-white">{draftTotal}</strong>
+      </span>
+    </span>
+  );
 
   return (
     <section className="mt-2">
-      {economics?.conversionUnavailable ? (
-        <p className="mt-3 rounded-md border border-amber-900/70 bg-amber-950/20 px-2.5 py-2 text-xs text-amber-200">
-          Some revenue cannot be converted to {currency}; add the missing
-          exchange rate.
-        </p>
+      {!hasEconomics ? (
+        <div className="flex justify-end border-t border-neutral-800/80 pt-2 text-xs">
+          {operationalStatus}
+        </div>
+      ) : economics?.conversionUnavailable ? (
+        <>
+          <p className="mt-3 rounded-md border border-amber-900/70 bg-amber-950/20 px-2.5 py-2 text-xs text-amber-200">
+            Some revenue cannot be converted to {currency}; add the missing
+            exchange rate.
+          </p>
+          <div className="mt-2 flex justify-end text-xs">
+            {operationalStatus}
+          </div>
+        </>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 sm:flex sm:items-start sm:justify-between">
@@ -152,11 +186,7 @@ export function ChannelEconomicsSummary({
             ) : (
               <span />
             )}
-            <span
-              className={`inline-flex items-center gap-1.5 ${booking.tone}`}
-            >
-              {booking.label}
-            </span>
+            {operationalStatus}
           </div>
           <div className="mt-2 grid grid-cols-3 gap-1.5">
             <FormatPrice

@@ -30,7 +30,14 @@ function renderModal(overrides: Partial<ComponentProps<typeof AdSaleModal>> = {}
         photoUrl: "https://example.test/channel.png",
       },
     ] as never,
-    networks: [],
+    networks: [
+      {
+        id: "network-1",
+        name: "Improvement",
+        iconPresentation: { type: "unicode", value: "🧘" },
+        channels: [{ id: "channel-1" }],
+      },
+    ] as never,
     productsByChannelId: {
       "channel-1": [
         {
@@ -88,20 +95,62 @@ function renderModal(overrides: Partial<ComponentProps<typeof AdSaleModal>> = {}
 }
 
 describe("AdSaleModal", () => {
-  it("uses one toggled field for network or channel selection", () => {
+  it("submits the selected sale origin", async () => {
+    const onSubmit = vi.fn().mockResolvedValue({});
+    renderModal({ onSubmit });
+
+    expect(screen.getByRole("button", { name: /New sales/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /New sales/ }));
+    const repeatOption = await screen.findByRole("button", {
+      name: /Repeat sales/,
+    });
+    expect(repeatOption.textContent).toContain("🔁");
+    const collaboratorOption = screen.getByRole("button", {
+      name: "Collaborator.pro",
+    });
+    expect(collaboratorOption.querySelector("img")?.getAttribute("src")).toBe(
+      "https://collaborator.pro/favicon-collaborator.ico",
+    );
+    const adsellOption = screen.getByRole("button", { name: "adsell.io" });
+    expect(adsellOption.querySelector("img")?.getAttribute("src")).toBe(
+      "https://adsell.io/assets/img/favicon.png",
+    );
+    fireEvent.click(
+      adsellOption,
+    );
+    await screen.findByText("Recommended: 125 UAH");
+    fireEvent.click(screen.getByRole("button", { name: "Create sale" }));
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          origin: "ADSELL_IO",
+          advertiserId: null,
+          advertiserName: "Direct sale",
+          createAdvertiser: false,
+        }),
+      ),
+    );
+  });
+
+  it("groups optional contact details and shows the network emoji", async () => {
     renderModal();
 
     const responsibleMember = screen.getByText("Responsible member");
     const detailsRow = responsibleMember.parentElement?.parentElement;
-    expect(detailsRow?.textContent).toContain("Placement source");
-    expect(detailsRow?.textContent).toContain("Network");
-    expect(detailsRow?.textContent).toContain("Channels");
+    expect(detailsRow?.textContent).toContain("Contact");
+    expect(detailsRow?.textContent).toContain("Financial account");
+    expect(detailsRow?.textContent).toContain("Sale origin");
+    expect(screen.getByText("Contact").parentElement?.textContent).toBe("Contact");
+    expect(screen.queryByText(/Currency is taken automatically/)).toBeNull();
     expect(screen.getByRole("button", { name: "Channels" }).getAttribute("aria-pressed")).toBe(
       "true",
     );
     expect(screen.getByRole("button", { name: "Example channel" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Network" }));
-    expect(screen.getByRole("button", { name: "Choose network" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Choose network" }));
+    const networkOption = await screen.findByRole("button", { name: /Improvement/ });
+    expect(networkOption.textContent).toContain("🧘");
     expect(screen.queryByRole("button", { name: "Example channel" })).toBeNull();
     expect(screen.queryByText(/Expected views:/)).toBeNull();
     expect(screen.queryByText(/Minimum:/)).toBeNull();
@@ -119,6 +168,19 @@ describe("AdSaleModal", () => {
 
     const secondRecommendation = await screen.findByText("Recommended: 250 UAH");
     expect(secondRecommendation.parentElement?.querySelector("input")?.value).toBe("250");
+  });
+
+  it("creates placement rows for every selected date without a separate bulk mode", async () => {
+    renderModal({ initialScheduledAt: "2026-08-10T12:00:00.000Z" });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "10.08.2026" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "11" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "12" })[0]);
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: "Configure post" })).toHaveLength(2),
+    );
+    expect(screen.queryByRole("button", { name: /Bulk sales/ })).toBeNull();
   });
 
   it("uses nearby only for the date and marks past and available dates", async () => {
@@ -164,10 +226,11 @@ describe("AdSaleModal", () => {
       onLoadPublishedPosts,
     });
 
-    expect(await screen.findByText("Advertising post")).toBeTruthy();
+    expect((await screen.findAllByText("Advertising post")).length).toBeGreaterThan(0);
     expect(onLoadPublishedPosts).not.toHaveBeenCalled();
     expect(screen.getByDisplayValue("12:00")).toBeTruthy();
 
+    fireEvent.click(screen.getByRole("button", { name: "Configure post" }));
     fireEvent.click(screen.getByRole("button", { name: "Load published posts" }));
     expect(onLoadPublishedPosts).toHaveBeenCalledTimes(1);
 
@@ -183,6 +246,7 @@ describe("AdSaleModal", () => {
     const onLoadPublishedPosts = vi.fn().mockRejectedValue(new Error("Telegram unavailable"));
     renderModal({ onLoadPublishedPosts });
 
+    fireEvent.click(screen.getByRole("button", { name: "Configure post" }));
     await screen.findByRole("button", { name: "Select a published post" });
     fireEvent.click(screen.getByRole("button", { name: "Load published posts" }));
     await waitFor(() => expect(screen.queryByText("Loading posts...")).toBeNull());
@@ -190,6 +254,6 @@ describe("AdSaleModal", () => {
     expect(onLoadPublishedPosts).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "Load published posts" }));
     await waitFor(() => expect(onLoadPublishedPosts).toHaveBeenCalledTimes(2));
-    expect(screen.getByText("Advertising post")).toBeTruthy();
+    expect(screen.getAllByText("Advertising post").length).toBeGreaterThan(0);
   });
 });

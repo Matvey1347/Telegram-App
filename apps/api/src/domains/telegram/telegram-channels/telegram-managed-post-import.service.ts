@@ -17,6 +17,7 @@ import {
 import { TelegramManagedPostCommandService } from './telegram-managed-post-command.service';
 import { TelegramManagedPostImportParserService } from './telegram-managed-post-import-parser.service';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
+import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-media-storage.service';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 
 @Injectable()
@@ -29,6 +30,7 @@ export class TelegramManagedPostImportService {
     private readonly telegramManagedPostPublicationService: TelegramManagedPostPublicationService,
     private readonly telegramManagedPostCommandService: TelegramManagedPostCommandService,
     private readonly telegramManagedPostImportParserService: TelegramManagedPostImportParserService,
+    private readonly telegramManagedPostMediaStorageService: TelegramManagedPostMediaStorageService,
   ) {}
 
   private readonly iconSelect = {
@@ -260,6 +262,10 @@ export class TelegramManagedPostImportService {
           ? (defaultGroup?.id ?? null)
           : row.value.groupId;
       try {
+        const imageUrls =
+          await this.telegramManagedPostMediaStorageService.persistImageUrls(
+            row.value.imageUrls,
+          );
         post =
           await this.telegramManagedPostCommandService.createManagedPostRecord(
             this.prisma,
@@ -269,7 +275,7 @@ export class TelegramManagedPostImportService {
               assignedMemberId,
               title: row.value.title,
               text: row.value.text,
-              imageUrls: row.value.imageUrls,
+              imageUrls,
               icon: row.value.icon,
               groupId: effectiveGroupId,
               groupPosition:

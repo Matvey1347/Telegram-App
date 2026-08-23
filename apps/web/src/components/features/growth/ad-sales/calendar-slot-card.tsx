@@ -39,6 +39,7 @@ export function CalendarSlotCard({
   saleTitle,
   paymentStatus,
   agreedPrice,
+  agreedCurrency,
   onClick,
 }: {
   slot: TelegramAdCalendarSlot;
@@ -46,6 +47,7 @@ export function CalendarSlotCard({
   saleTitle?: string | null;
   paymentStatus?: TelegramAdSaleComputedPaymentStatus | "UNPAID" | null;
   agreedPrice?: string | null;
+  agreedCurrency?: string | null;
   onClick?: () => void;
 }) {
   const interactive = Boolean(onClick);
@@ -78,7 +80,9 @@ export function CalendarSlotCard({
             ) : null}
           </div>
           {agreedPrice ? (
-            <p className="pt-1 text-xs opacity-90">Agreed {agreedPrice} {slot.currency}</p>
+            <p className="pt-1 text-xs opacity-90">
+              Agreed {agreedPrice} {agreedCurrency || slot.currency}
+            </p>
           ) : null}
           {slot.existingPlacement.status !== "RESERVED" ? (
             <p className="text-xs opacity-70">

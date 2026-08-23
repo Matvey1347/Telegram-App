@@ -9,6 +9,7 @@ function channel(
   return {
     currency: 'UAH',
     subscribersCount: 1000,
+    pendingJoinRequestsCount: 302,
     activeSubscribersEstimate: 200,
     paidActiveSubscribersEstimate: 100,
     avgViewsAdjusted: 400,
@@ -70,6 +71,7 @@ describe('aggregateChannelNetworkSummary', () => {
     expect(summary).toMatchObject({
       channelsCount: 2,
       totalSubscribers: 1500,
+      pendingJoinRequestsCount: 604,
       activeSubscribersEstimate: 400,
       reactionRate: 2.5,
       totalAdSpend: 1800,

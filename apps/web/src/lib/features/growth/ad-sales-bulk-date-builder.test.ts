@@ -1,7 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { expandBulkDateSelections } from "./ad-sales-bulk-date-builder";
+import {
+  expandAdSaleDateRange,
+  expandBulkDateSelections,
+} from "./ad-sales-bulk-date-builder";
 
 describe("ad-sales bulk date builder", () => {
+  it("turns the unified sale date range into placement dates", () => {
+    expect(
+      expandAdSaleDateRange({ from: "2026-08-10", to: "2026-08-12" }),
+    ).toEqual(["2026-08-10", "2026-08-11", "2026-08-12"]);
+    expect(expandAdSaleDateRange({ from: "2026-08-10", to: "" })).toEqual([
+      "2026-08-10",
+    ]);
+  });
+
   it("expands ranges and singles into sorted unique local date keys", () => {
     const result = expandBulkDateSelections([
       { id: "range-1", type: "range", from: "2026-08-16", to: "2026-08-20" },

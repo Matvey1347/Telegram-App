@@ -26,6 +26,7 @@ import { TelegramManagedPostEditTransportService } from './telegram-managed-post
 import { TelegramManagedPostGroupPresentationService } from './telegram-managed-post-group-presentation.service';
 import { TelegramManagedPostPresentationService } from './telegram-managed-post-presentation.service';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
+import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-media-storage.service';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 
@@ -43,6 +44,7 @@ export class TelegramManagedPostHistoryService {
     private readonly telegramManagedPostGroupPresentationService: TelegramManagedPostGroupPresentationService,
     private readonly telegramPostGroupsService: TelegramPostGroupsService,
     private readonly telegramManagedPostPublicationService: TelegramManagedPostPublicationService,
+    private readonly telegramManagedPostMediaStorageService: TelegramManagedPostMediaStorageService,
   ) {}
 
   private readonly iconSelect = {
@@ -251,6 +253,12 @@ export class TelegramManagedPostHistoryService {
       dto.buttonRows === undefined
         ? normalizeTelegramPostButtonRows(post.buttonRows)
         : normalizeTelegramPostButtonRows(dto.buttonRows);
+    const nextImageUrls =
+      dto.imageUrls === undefined
+        ? undefined
+        : await this.telegramManagedPostMediaStorageService.persistImageUrls(
+            dto.imageUrls,
+          );
     const convertsNativeScheduleToLocal =
       post.status === TelegramManagedPostStatus.SCHEDULED &&
       nextButtonRows.length > 0 &&
@@ -331,7 +339,7 @@ export class TelegramManagedPostHistoryService {
         data: {
           title: dto.title?.trim(),
           text: dto.text,
-          imageUrls: dto.imageUrls,
+          imageUrls: nextImageUrls,
           buttonRows: dto.buttonRows === undefined ? undefined : nextButtonRows,
           scheduleMode: convertsNativeScheduleToLocal ? 'LOCAL' : undefined,
           telegramRemoteStatus: convertsNativeScheduleToLocal

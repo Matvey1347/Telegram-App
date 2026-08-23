@@ -4,6 +4,7 @@ import {
   TelegramAdCrmDealStage,
   TelegramAdCrmOwnerMode,
   TelegramAdPricingMode,
+  TelegramAdSaleOrigin,
   TelegramAdSalePaymentStatus,
   TelegramAdSaleStatus,
   TelegramAdSlotStrategy,
@@ -413,6 +414,7 @@ export class CreateTelegramAdSaleDto {
   @IsOptional() @IsString() advertiserCompanyName?: string | null;
   @IsOptional() @IsString() title?: string | null;
   @IsOptional() @IsString() notes?: string | null;
+  @IsOptional() @IsEnum(TelegramAdSaleOrigin) origin?: TelegramAdSaleOrigin;
   @Transform(normalizeCurrency) @IsString() @Matches(/^[A-Z]{3}$/) settlementCurrency!: string;
   @IsOptional() @IsString() assignedMemberId?: string | null;
   @IsOptional() @ValidateIf((_, value) => value !== null && value !== undefined) @IsDateString() reservedUntil?: string | null;
@@ -433,6 +435,7 @@ export class UpdateTelegramAdSaleDto {
   @IsOptional() @IsString() advertiserCompanyName?: string | null;
   @IsOptional() @IsString() title?: string | null;
   @IsOptional() @IsString() notes?: string | null;
+  @IsOptional() @IsEnum(TelegramAdSaleOrigin) origin?: TelegramAdSaleOrigin;
   @IsOptional() @Transform(normalizeCurrency) @IsString() @Matches(/^[A-Z]{3}$/) settlementCurrency?: string;
   @IsOptional() @IsString() assignedMemberId?: string | null;
   @IsOptional() @ValidateIf((_, value) => value !== null && value !== undefined) @IsDateString() reservedUntil?: string | null;

@@ -11,6 +11,7 @@ import { TelegramChannelCatalogService } from './telegram-channel-catalog.servic
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 import { TelegramManagedPostGroupPresentationService } from './telegram-managed-post-group-presentation.service';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
+import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-media-storage.service';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 
 @Injectable()
@@ -23,6 +24,7 @@ export class TelegramManagedPostCommandService {
     private readonly telegramManagedPostGroupPresentationService: TelegramManagedPostGroupPresentationService,
     private readonly telegramPostGroupsService: TelegramPostGroupsService,
     private readonly telegramManagedPostPublicationService: TelegramManagedPostPublicationService,
+    private readonly telegramManagedPostMediaStorageService: TelegramManagedPostMediaStorageService,
   ) {}
 
   private readonly iconSelect = {
@@ -161,12 +163,16 @@ export class TelegramManagedPostCommandService {
     await this.telegramChannelCatalogService.findOne(userId, channelId);
     const title = dto.title.trim();
     if (!title) throw new BadRequestException('Title is required');
+    const imageUrls =
+      await this.telegramManagedPostMediaStorageService.persistImageUrls(
+        dto.imageUrls ?? [],
+      );
     const post = await this.createManagedPostRecord(this.prisma, {
       workspaceId,
       channelId,
       title,
       text: dto.text ?? null,
-      imageUrls: dto.imageUrls ?? [],
+      imageUrls,
       buttonRows: dto.buttonRows,
       assignedMemberId,
       icon: dto.icon?.trim() || null,

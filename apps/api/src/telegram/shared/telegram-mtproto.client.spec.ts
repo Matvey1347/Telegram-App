@@ -47,7 +47,13 @@ describe('TelegramMtprotoClient import resolution', () => {
     fakeClient.getEntity.mockResolvedValue(entity);
     fakeClient.invoke.mockImplementation((request: unknown) => {
       if (request instanceof Api.channels.GetFullChannel) {
-        return { fullChat: { about: 'About', participantsCount: 10 } };
+        return {
+          fullChat: {
+            about: 'About',
+            participantsCount: 10,
+            requestsPending: 302,
+          },
+        };
       }
       throw new Error('Unexpected invoke');
     });
@@ -66,6 +72,7 @@ describe('TelegramMtprotoClient import resolution', () => {
       username: 'public_channel',
       description: 'About',
       participantsCount: 10,
+      pendingJoinRequestsCount: 302,
     });
   });
 
@@ -1049,11 +1056,12 @@ describe('TelegramMtprotoClient media batches', () => {
     const ids = Array.from({ length: 26 }, (_, index) => String(index + 1));
     const telegram = {
       getEntity: jest.fn().mockResolvedValue({ id: 'channel' }),
-      getMessages: jest.fn(async (_entity: unknown, params: { ids: number[] }) =>
-        params.ids.map((id) => ({
-          id,
-          media: { className: 'MessageMediaPhoto' },
-        })),
+      getMessages: jest.fn(
+        async (_entity: unknown, params: { ids: number[] }) =>
+          params.ids.map((id) => ({
+            id,
+            media: { className: 'MessageMediaPhoto' },
+          })),
       ),
       downloadMedia: jest.fn(async (message: { id: number }) => {
         if (message.id === 2) throw new Error('media unavailable');
@@ -1091,7 +1099,9 @@ describe('TelegramMtprotoClient media batches', () => {
         apiHash: 'hash',
         session: 'session',
         channelRef: '@channel',
-        messageIds: Array.from({ length: 101 }, (_, index) => String(index + 1)),
+        messageIds: Array.from({ length: 101 }, (_, index) =>
+          String(index + 1),
+        ),
       }),
     ).rejects.toThrow('Telegram media batch limit is 100 messages.');
   });

@@ -66,6 +66,7 @@ import { TelegramPostGroupStore } from './telegram-post-group.store';
 import { TelegramPostMetricsService } from './telegram-post-metrics.service';
 import { TelegramRemoteScheduledPostImportService } from './telegram-remote-scheduled-post-import.service';
 import { TelegramPostMediaBackfillService } from './telegram-post-media-backfill.service';
+import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-media-storage.service';
 
 @Module({
   imports: [AdCampaignsModule],
@@ -108,6 +109,7 @@ import { TelegramPostMediaBackfillService } from './telegram-post-media-backfill
     TelegramManagedPostAutoRepairService,
     TelegramRemoteScheduledPostImportService,
     TelegramPostMediaBackfillService,
+    TelegramManagedPostMediaStorageService,
     TelegramManagedPostCommandService,
     TelegramManagedPostHistoryService,
     TelegramManagedPostPublicationService,

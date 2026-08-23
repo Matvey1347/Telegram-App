@@ -9,6 +9,7 @@ import {
   Smile,
   Trash2,
   UserCheck,
+  UserPlus,
   UserRound,
   Users,
 } from "lucide-react";
@@ -170,6 +171,7 @@ export function TelegramNetworkCard({
     positiveAmount(summary.totalSubscribers) +
     positiveAmount(summary.totalPendingSubscribers);
   const activeSubscribers = positiveAmount(summary.activeSubscribersEstimate);
+  const pendingJoinRequests = positiveAmount(summary.pendingJoinRequestsCount);
   const subscriberCost =
     invested > 0 && subscriberBase > 0 ? invested / subscriberBase : null;
   const activeCost =
@@ -214,13 +216,27 @@ export function TelegramNetworkCard({
               </span>
             ) : null}
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-neutral-400">
-            <span>{number(summary.totalSubscribers)}</span>
-            <Users
-              size={14}
-              className="text-violet-300"
-              aria-label="Audience"
-            />
+          <div className="mt-1 flex flex-wrap items-start gap-1.5 text-sm text-neutral-400">
+            <span className="grid grid-cols-[max-content_14px] items-center gap-x-1.5 gap-y-1">
+              <span>{number(summary.totalSubscribers)}</span>
+              <Users
+                size={14}
+                className="text-violet-300"
+                aria-label="Audience"
+              />
+              {pendingJoinRequests > 0 ? (
+                <>
+                  <strong className="justify-self-end font-semibold text-white">
+                    {number(pendingJoinRequests)}
+                  </strong>
+                  <UserPlus
+                    size={14}
+                    className="text-amber-300"
+                    aria-label="Pending join requests"
+                  />
+                </>
+              ) : null}
+            </span>
             <span className="text-neutral-600">/</span>
             <Eye size={14} className="text-sky-300" aria-hidden="true" />
             <span>{percent(summary.viewRate)}</span>

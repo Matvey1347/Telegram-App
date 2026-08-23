@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   TelegramAdAvailabilitySlot,
   TelegramAdPriceQuote,
   TelegramAdProduct,
   TelegramAdSale,
+  TelegramAdSaleOrigin,
   TelegramAdvertiser,
   TelegramAdStructuredError,
 } from "@telegram-system/shared";
@@ -20,7 +21,6 @@ import {
   channelLocalDateKey,
   channelLocalTime,
   expandNetworkChannelIds,
-  getChannelOptionLabel,
   toNumber,
   zonedDateTimeToUtc,
 } from "@/lib/features/growth/telegram-ad-sales";
@@ -31,12 +31,10 @@ import {
   FormField,
   Input,
   Modal,
-  MultiSelect,
   Select,
   Skeleton,
   Textarea,
   TimeInput,
-  ToggleRow,
 } from "@/components/ui/primitives";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import { MemberSelect } from "@/components/features/workspace/member-select";
@@ -44,47 +42,13 @@ import {
   PlacementPostComposer,
   type PlacementManagedPostDraft,
 } from "./placement-post/placement-post-composer";
+import type { PublishedPostOption, QuoteRequestDraft, SalePlacementDraft } from "./ad-sale-types";
+import { expandAdSaleDateRange } from "@/lib/features/growth/ad-sales-bulk-date-builder";
+import { AdSalePlacementScope } from "./ad-sale-placement-scope";
 
-export type SalePlacementDraft = {
-  key: string;
-  channelId: string;
-  date: string;
-  time: string;
-  timezone: string;
-  productId: string;
-  expectedViews: number | null;
-  targetCpm: string;
-  recommendedPrice: string;
-  minimumPrice: string;
-  agreedPrice: string;
-  pricingMode: "CPM" | "FIXED" | "MANUAL";
-  manualPriceReason: string;
-  warnings: string[];
-  conflict: string | null;
-  agreedPriceManuallyEdited: boolean;
-  inventoryOpportunityKey?: string | null;
-  telegramPostId?: string | null;
-  managedPostDraft?: PlacementManagedPostDraft | null;
-};
-
-type PublishedPostOption = {
-  id: string;
-  title: string;
-  publishedAt: string;
-};
-
-type QuoteRequestDraft = {
-  key: string;
-  channelId: string;
-  productId: string;
-  pricingMode: SalePlacementDraft["pricingMode"];
-  date: string;
-  time: string;
-  timezone: string;
-};
-
-function channelKey(channelId: string) {
-  return `placement:${channelId}`;
+export type { SalePlacementDraft } from "./ad-sale-types";
+function channelKey(channelId: string, date: string) {
+  return `placement:${channelId}:${date}`;
 }
 
 function productPrice(product: TelegramAdProduct | undefined) {
@@ -101,7 +65,7 @@ function createPlacementDraft(params: {
 }): SalePlacementDraft {
   const price = productPrice(params.product);
   return {
-    key: channelKey(params.channelId),
+    key: channelKey(params.channelId, params.date),
     channelId: params.channelId,
     date: params.date,
     time: params.time,
@@ -140,6 +104,8 @@ export function AdSaleModal({
   initialChannelId,
   initialScheduledAt,
   initialInventoryOpportunityKey,
+  headerAction,
+  sessionOpen,
 }: {
   open: boolean;
   onClose: () => void;
@@ -175,6 +141,7 @@ export function AdSaleModal({
     advertiserTelegram?: string;
     advertiserContact?: string;
     notes?: string;
+    origin: TelegramAdSaleOrigin;
     assignedMemberId?: string | null;
     accountId: string;
     paymentAmount: number;
@@ -199,6 +166,8 @@ export function AdSaleModal({
   initialChannelId?: string | null;
   initialScheduledAt?: string | null;
   initialInventoryOpportunityKey?: string | null;
+  headerAction?: ReactNode;
+  sessionOpen?: boolean;
 }) {
   const [advertiserTelegram, setAdvertiserTelegram] = useState("");
   const [advertiserContact, setAdvertiserContact] = useState("");
@@ -206,12 +175,15 @@ export function AdSaleModal({
   const [selectedAdvertiserId, setSelectedAdvertiserId] = useState<string | null>(null);
   const [advertiserMatches, setAdvertiserMatches] = useState<TelegramAdvertiser[]>([]);
   const [assignedMemberId, setAssignedMemberId] = useState("");
+  const [saleOrigin, setSaleOrigin] = useState<TelegramAdSaleOrigin>("DIRECT");
   const [accountId, setAccountId] = useState("");
   const [channelSelectionMode, setChannelSelectionMode] = useState<"network" | "channels">(
     "network",
   );
   const [selectedNetworkId, setSelectedNetworkId] = useState("");
   const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
+  const [placementDateRange, setPlacementDateRange] = useState({ from: "", to: "" });
+  const [expandedPostPlacementKey, setExpandedPostPlacementKey] = useState<string | null>(null);
   const [placements, setPlacements] = useState<SalePlacementDraft[]>([]);
   const [submissionError, setSubmissionError] = useState("");
   const [slotPickerPlacementKey, setSlotPickerPlacementKey] = useState<string | null>(null);
@@ -231,10 +203,11 @@ export function AdSaleModal({
   );
 
   useEffect(() => {
-    if (!open) {
+    if (!(sessionOpen ?? open)) {
       modalInitializedRef.current = false;
       return;
     }
+    if (!open) return;
     if (modalInitializedRef.current) return;
     modalInitializedRef.current = true;
     setAdvertiserTelegram("");
@@ -243,18 +216,22 @@ export function AdSaleModal({
     setSelectedAdvertiserId(null);
     setAdvertiserMatches([]);
     setAssignedMemberId("");
+    setSaleOrigin("DIRECT");
     const preferredAccount = accounts.find((account) => account.isActive) ?? accounts[0];
     setAccountId(preferredAccount?.id ?? "");
     setChannelSelectionMode(initialChannelId ? "channels" : "network");
     setSelectedNetworkId("");
     setSelectedChannelIds(initialChannelId ? [initialChannelId] : []);
+    setExpandedPostPlacementKey(null);
+    const initialDate = initialScheduledAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
+    setPlacementDateRange({ from: initialDate, to: initialDate });
     setPlacements(
       initialChannelId
         ? [
             createPlacementDraft({
               channelId: initialChannelId,
               product: productsByChannelId[initialChannelId]?.[0],
-              date: initialScheduledAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+              date: initialDate,
               time: initialScheduledAt
                 ? new Date(initialScheduledAt).toISOString().slice(11, 16)
                 : "12:00",
@@ -280,6 +257,7 @@ export function AdSaleModal({
     initialScheduledAt,
     open,
     productsByChannelId,
+    sessionOpen,
     workspaceTimezone,
   ]);
 
@@ -311,15 +289,20 @@ export function AdSaleModal({
       }),
     [networks, selectedChannelIds, selectedNetworkId],
   );
+  const selectedPlacementDates = useMemo(
+    () => expandAdSaleDateRange(placementDateRange),
+    [placementDateRange],
+  );
 
   useEffect(() => {
     // Placement rows are derived from selected channels and products can arrive after opening.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPlacements((current) => {
-      if (!effectiveChannelIds.length) return [];
-      const byChannelId = new Map(current.map((item) => [item.channelId, item] as const));
-      return effectiveChannelIds.map((channelId) => {
-        const existing = byChannelId.get(channelId);
+      if (!effectiveChannelIds.length || !selectedPlacementDates.length) return [];
+      const byPlacementKey = new Map(current.map((item) => [item.key, item] as const));
+      return effectiveChannelIds.flatMap((channelId) => selectedPlacementDates.map((date) => {
+        const key = channelKey(channelId, date);
+        const existing = byPlacementKey.get(key);
         const defaultProduct = productsByChannelId[channelId]?.[0];
         if (existing) {
           if (existing.productId || !defaultProduct) return existing;
@@ -338,13 +321,13 @@ export function AdSaleModal({
         return createPlacementDraft({
           channelId,
           product: defaultProduct,
-          date: new Date().toISOString().slice(0, 10),
+          date,
           time: "12:00",
           timezone: workspaceTimezone,
         });
-      });
+      }));
     });
-  }, [effectiveChannelIds, productsByChannelId, workspaceTimezone]);
+  }, [effectiveChannelIds, productsByChannelId, selectedPlacementDates, workspaceTimezone]);
 
   const loadPublishedPosts = async (placement: SalePlacementDraft) => {
     const cacheKey = `${placement.channelId}:${placement.date}`;
@@ -522,16 +505,18 @@ export function AdSaleModal({
     setSubmissionError("");
     try {
       const normalizedContact = advertiserContact.trim();
-      const derivedAdvertiserName = selectedAdvertiser?.displayName || normalizedContact || "Advertiser";
+      const hasAdvertiserDetails = Boolean(normalizedContact || selectedAdvertiserId);
+      const derivedAdvertiserName = selectedAdvertiser?.displayName || normalizedContact || "Direct sale";
       const submission = onSubmit({
         advertiserId: selectedAdvertiserId,
-        createAdvertiser: !selectedAdvertiserId,
+        createAdvertiser: !selectedAdvertiserId && hasAdvertiserDetails,
         advertiserName: derivedAdvertiserName,
         advertiserTelegram:
           normalizedContact.startsWith("@") && !advertiserTelegram.trim()
             ? normalizedContact
             : advertiserTelegram.trim() || undefined,
         advertiserContact: normalizedContact || undefined,
+        origin: saleOrigin,
         assignedMemberId: assignedMemberId || null,
         accountId,
         paymentAmount,
@@ -588,7 +573,7 @@ export function AdSaleModal({
 
   return (
     <>
-      <Modal open={open} onClose={onClose} title="New ad sale" size="xl">
+      <Modal open={open} onClose={onClose} title="New ad sale" headerAction={headerAction} size="xl">
       <div className="max-h-[78vh] space-y-6 overflow-y-auto pr-1">
         <section className="space-y-4">
           <div>
@@ -600,8 +585,8 @@ export function AdSaleModal({
               the same screen.
             </p>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <FormField label="Contact" required>
+          <div className="grid gap-3 xl:grid-cols-4 xl:items-start">
+            <FormField label="Contact">
               <div className="space-y-2">
                 <Input
                   value={advertiserContact}
@@ -682,76 +667,58 @@ export function AdSaleModal({
                     iconFallback: account.name,
                   }))}
               />
-              <p className="mt-2 text-xs text-neutral-500">
-                Currency is taken automatically from the selected account.
-              </p>
             </FormField>
 
+            <FormField label="Sale origin">
+              <CustomSelect
+                value={saleOrigin}
+                onChange={(value) => setSaleOrigin(value as TelegramAdSaleOrigin)}
+                options={[
+                  { value: "DIRECT", label: "New sales", iconEmoji: "✨" },
+                  { value: "REPEAT", label: "Repeat sales", iconEmoji: "🔁" },
+                  {
+                    value: "ADSELL_IO",
+                    label: "adsell.io",
+                    iconUrl: "https://adsell.io/assets/img/favicon.png",
+                  },
+                  {
+                    value: "COLLABORATOR_PRO",
+                    label: "Collaborator.pro",
+                    iconUrl:
+                      "https://collaborator.pro/favicon-collaborator.ico",
+                  },
+                ]}
+              />
+            </FormField>
+            <FormField label="Responsible member">
+              <MemberSelect
+                value={assignedMemberId}
+                onChange={setAssignedMemberId}
+                defaultToCurrent
+              />
+            </FormField>
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-          <FormField label="Responsible member">
-            <MemberSelect value={assignedMemberId} onChange={setAssignedMemberId} defaultToCurrent />
-          </FormField>
-          <FormField label="Placement source">
-            <div className="space-y-2">
-              <div className="inline-grid grid-cols-2 rounded-lg border border-neutral-700 bg-neutral-950 p-1">
-                {(["network", "channels"] as const).map((mode) => {
-                  const selected = channelSelectionMode === mode;
-                  return (
-                    <button
-                      key={mode}
-                      type="button"
-                      aria-pressed={selected}
-                      onClick={() => {
-                        setChannelSelectionMode(mode);
-                        if (mode === "network") {
-                          setSelectedChannelIds([]);
-                        } else {
-                          setSelectedNetworkId("");
-                        }
-                      }}
-                      className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
-                        selected
-                          ? "bg-blue-600 text-white shadow-sm"
-                          : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
-                      }`}
-                    >
-                      {mode === "network" ? "Network" : "Channels"}
-                    </button>
-                  );
-                })}
-              </div>
-              {channelSelectionMode === "network" ? (
-                <Select
-                  value={selectedNetworkId}
-                  onChange={(event) => setSelectedNetworkId(event.target.value)}
-                >
-                  <option value="">Choose network</option>
-                  {networks.map((network) => (
-                    <option key={network.id} value={network.id}>
-                      {network.name}
-                    </option>
-                  ))}
-                </Select>
-              ) : (
-                <MultiSelect
-                  value={selectedChannelIds}
-                  onChange={setSelectedChannelIds}
-                  placeholder="Choose channels"
-                  options={channels.map((channel) => ({
-                    value: channel.id,
-                    label: getChannelOptionLabel(channel),
-                    selectedLabel: channel.title,
-                    iconUrl: channel.photoUrl,
-                    iconFallback: channel.title,
-                  }))}
-                />
-              )}
-            </div>
-          </FormField>
-        </section>
+        <AdSalePlacementScope
+          mode={channelSelectionMode}
+          selectedNetworkId={selectedNetworkId}
+          selectedChannelIds={selectedChannelIds}
+          dateRange={placementDateRange}
+          networks={networks}
+          channels={channels}
+          onModeChange={(mode) => {
+            setChannelSelectionMode(mode);
+            if (mode === "network") {
+              setSelectedChannelIds([]);
+            } else {
+              setSelectedNetworkId("");
+            }
+          }}
+          onNetworkChange={setSelectedNetworkId}
+          onChannelsChange={setSelectedChannelIds}
+          onDateRangeChange={setPlacementDateRange}
+        />
 
         <section className="space-y-4">
           <div className="flex items-center justify-between gap-3">
@@ -760,7 +727,7 @@ export function AdSaleModal({
                 Placements
               </h3>
               <p className="mt-1 text-sm text-neutral-500">
-                One booking card appears for every selected channel. No extra steps.
+                Choose one date for a single placement or a range for multiple placements.
               </p>
             </div>
             <div className="rounded-full border border-neutral-800 bg-neutral-950 px-3 py-1 text-xs text-neutral-400">
@@ -796,7 +763,7 @@ export function AdSaleModal({
                       </Button>
                     </div>
 
-                    <div className="grid gap-3 lg:grid-cols-4">
+                    <div className="grid gap-3 lg:grid-cols-5">
                       <FormField label="Date">
                         <DateInput
                           value={placement.date}
@@ -887,6 +854,24 @@ export function AdSaleModal({
                           </p>
                         </div>
                       </FormField>
+                      <FormField label="Advertising post">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="w-full justify-center"
+                          onClick={() =>
+                            setExpandedPostPlacementKey((current) =>
+                              current === placement.key ? null : placement.key,
+                            )
+                          }
+                        >
+                          {placement.managedPostDraft
+                            ? "Edit custom post"
+                            : placement.telegramPostId
+                              ? "Edit linked post"
+                              : "Configure post"}
+                        </Button>
+                      </FormField>
                     </div>
 
                     {(() => {
@@ -901,7 +886,13 @@ export function AdSaleModal({
                       const isFuturePlacement = placementScheduledAt > Date.now();
                       const isPastPlacement = placementScheduledAt < Date.now();
                       return (
-                        <div className="mt-3">
+                        <div
+                          className={
+                            expandedPostPlacementKey === placement.key
+                              ? "mt-3"
+                              : "hidden"
+                          }
+                        >
                           <PlacementPostComposer
                             channelTitle={channel?.title ?? "Channel"}
                             channelPhotoUrl={channel?.photoUrl}

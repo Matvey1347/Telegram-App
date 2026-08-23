@@ -10,6 +10,7 @@ import {
   TelegramAdSalePaymentStatus,
   TelegramAdPlacementStatus,
   TelegramAdPricingMode,
+  TelegramAdSaleOrigin,
   TelegramAdSaleStatus,
   TelegramManagedPostIdVerificationStatus,
   TelegramManagedPostRemoteStatus,
@@ -4460,6 +4461,7 @@ export class TelegramAdSalesService {
         advertiserCompanySnapshot: advertiser?.companyName ?? (dto.advertiserCompanyName?.trim() || null),
         title: dto.title?.trim() || null,
         notes: dto.notes?.trim() || null,
+        origin: dto.origin ?? TelegramAdSaleOrigin.DIRECT,
         crmDealStage: dto.crmDealStage ?? TelegramAdCrmDealStage.NEW_LEAD,
         expectedCloseAt: dto.expectedCloseAt ? new Date(dto.expectedCloseAt) : null,
         lostReason: dto.lostReason?.trim() || null,
@@ -4527,6 +4529,7 @@ export class TelegramAdSalesService {
           : { advertiserCompanySnapshot: dto.advertiserCompanyName?.trim() || null }),
         ...(dto.title === undefined ? {} : { title: dto.title?.trim() || null }),
         ...(dto.notes === undefined ? {} : { notes: dto.notes?.trim() || null }),
+        ...(dto.origin === undefined ? {} : { origin: dto.origin }),
         ...(dto.settlementCurrency === undefined ? {} : { settlementCurrency: dto.settlementCurrency }),
         ...(dto.reservedUntil === undefined
           ? {}

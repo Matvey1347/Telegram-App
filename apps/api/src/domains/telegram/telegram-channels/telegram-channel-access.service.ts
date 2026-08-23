@@ -192,6 +192,9 @@ export class TelegramChannelAccessService {
       inviteLink: info.inviteLink || undefined,
       description: info.description,
       currentSubscribersCount: info.participantsCount,
+      ...(info.pendingJoinRequestsCount == null
+        ? {}
+        : { pendingJoinRequestsCount: info.pendingJoinRequestsCount }),
       photoUrl: info.photoUrl,
       accessMode:
         info.accessMode ||

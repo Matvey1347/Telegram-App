@@ -154,6 +154,7 @@ describe('TelegramChannelNetworksService system All network', () => {
       username: 'included',
       photoUrl: null,
       currentSubscribersCount: 100,
+      pendingJoinRequestsCount: 302,
       audienceSnapshots: [
         {
           subscribersCount: 100,
@@ -222,7 +223,11 @@ describe('TelegramChannelNetworksService system All network', () => {
         url: 'https://telegram.org/img/t_logo.png',
       },
       channels: [{ id: 'channel-1', title: 'Included' }],
-      summary: { channelsCount: 1, totalAttributedSubscribers: 10 },
+      summary: {
+        channelsCount: 1,
+        totalAttributedSubscribers: 10,
+        pendingJoinRequestsCount: 302,
+      },
     });
     expect(test.prisma.telegramChannel.findMany).toHaveBeenCalledWith(
       expect.objectContaining({

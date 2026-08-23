@@ -1,14 +1,66 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   canonicalizeTimeInputValue,
   CustomSelect,
   isValidTimeInputValue,
   Input,
+  MasonryGrid,
   Modal,
   Tooltip,
 } from "@/components/ui/primitives";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+describe("MasonryGrid", () => {
+  it("measures every card independently instead of using the tallest row", () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class ResizeObserverMock {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function getBoundingClientRect(this: HTMLElement) {
+        const height = this.textContent === "Tall card" ? 220 : 120;
+        return {
+          bottom: height,
+          height,
+          left: 0,
+          right: 0,
+          top: 0,
+          width: 0,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        };
+      },
+    );
+
+    const { container } = render(
+      <MasonryGrid>
+        <article>Tall card</article>
+        <article>Short card</article>
+      </MasonryGrid>,
+    );
+
+    const grid = container.firstElementChild;
+    const tallItem = screen.getByText("Tall card").parentElement?.parentElement;
+    const shortItem = screen.getByText("Short card").parentElement?.parentElement;
+
+    expect(grid).toHaveClass("grid", "[grid-auto-rows:1px]", "gap-x-4");
+    expect(tallItem).toHaveStyle({ gridRowEnd: "span 220" });
+    expect(shortItem).toHaveStyle({ gridRowEnd: "span 120" });
+    expect(tallItem).toHaveClass("md:col-start-1", "xl:col-start-1");
+    expect(shortItem).toHaveClass("md:col-start-2", "xl:col-start-2");
+  });
+});
 
 describe("Modal", () => {
   it("renders an action beside the dialog title", () => {

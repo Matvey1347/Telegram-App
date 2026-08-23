@@ -1,7 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 
 export type TelegramImportInput =
   | {
@@ -26,6 +23,7 @@ export type ResolvedTelegramEntity = {
   username: string | null;
   description: string | null;
   participantsCount: number | null;
+  pendingJoinRequestsCount?: number | null;
   photoUrl: string | null;
   telegramAccessHash?: string | null;
   inviteLink?: string | null;
@@ -64,7 +62,11 @@ export const MatchScore = {
 const TELEGRAM_USERNAME_RE = /^[a-z][a-z0-9_]{3,31}$/i;
 
 export function isTelegramUsername(value?: string | null) {
-  return TELEGRAM_USERNAME_RE.test(String(value || '').trim().replace(/^@/, ''));
+  return TELEGRAM_USERNAME_RE.test(
+    String(value || '')
+      .trim()
+      .replace(/^@/, ''),
+  );
 }
 
 export function normalizeTelegramUsername(value?: string | null) {
@@ -95,7 +97,9 @@ export function normalizeTelegramTitle(value: string) {
 }
 
 export function canonicalTelegramInviteLink(inviteHash: string) {
-  const normalized = String(inviteHash || '').trim().replace(/^\+/, '');
+  const normalized = String(inviteHash || '')
+    .trim()
+    .replace(/^\+/, '');
   if (!normalized) {
     throw new BadRequestException('Telegram invite link is invalid.');
   }
@@ -161,7 +165,9 @@ function parseTelegramUrl(input: string) {
   return { type: 'username', username, channelRef: `@${username}` } as const;
 }
 
-export function parseTelegramImportInput(rawInput: string): TelegramImportInput {
+export function parseTelegramImportInput(
+  rawInput: string,
+): TelegramImportInput {
   const trimmed = String(rawInput || '').trim();
   if (!trimmed) {
     throw new BadRequestException('Telegram channel input is required');
@@ -230,8 +236,12 @@ export function resolveTelegramTitleCandidates<T>(
   }
 
   const exact = top.score >= MatchScore.EXACT_USERNAME;
-  const sameTopScore = scored.filter((candidate) => candidate.score === top.score);
-  const sameKindTop = sameTopScore.filter((candidate) => candidate.kind === top.kind);
+  const sameTopScore = scored.filter(
+    (candidate) => candidate.score === top.score,
+  );
+  const sameKindTop = sameTopScore.filter(
+    (candidate) => candidate.kind === top.kind,
+  );
   if (exact && sameKindTop.length > 1) {
     throw new ConflictException(
       `Several Telegram channels named "${query}" were found. Use an exact @username or invite link.`,

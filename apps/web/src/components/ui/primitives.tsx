@@ -32,6 +32,7 @@ import { createPortal } from "react-dom";
 import { Modal } from "./modal";
 import { uiCopy, type UiLocale } from "@/lib/ui-i18n";
 export { Modal } from "./modal";
+export { MasonryGrid } from "./masonry-grid";
 
 export type ToastItem = {
   id: number | string;
@@ -1321,29 +1322,6 @@ export function Card({
       className={`rounded-lg border border-neutral-800 bg-neutral-900 p-4 sm:p-5 ${className}`}
     >
       {children}
-    </div>
-  );
-}
-
-export function MasonryGrid({
-  children,
-  className = "",
-  itemClassName = "",
-}: PropsWithChildren<{ className?: string; itemClassName?: string }>) {
-  return (
-    <div className={`columns-1 gap-4 md:columns-2 xl:columns-3 ${className}`}>
-      {Children.map(children, (child, index) => (
-        <div
-          key={
-            isValidElement(child) && child.key != null
-              ? String(child.key)
-              : index
-          }
-          className={`mb-4 break-inside-avoid ${itemClassName}`}
-        >
-          {child}
-        </div>
-      ))}
     </div>
   );
 }

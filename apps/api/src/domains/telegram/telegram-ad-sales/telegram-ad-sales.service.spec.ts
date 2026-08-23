@@ -7,6 +7,7 @@ import {
   Prisma,
   TelegramAdPlacementStatus,
   TelegramAdPricingMode,
+  TelegramAdSaleOrigin,
   TelegramAdSalePaymentStatus,
   TelegramAdSaleStatus,
   TelegramAdvertiserLifecycleStage,
@@ -19,6 +20,7 @@ import {
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import {
+  CreateTelegramAdSaleDto,
   TelegramAdAlertsQueryDto,
   TelegramAdAnalyticsQueryDto,
   TelegramAdAnalyticsSeriesQueryDto,
@@ -306,6 +308,50 @@ describe('TelegramAdSalesService', () => {
   afterEach(() => {
     jest.useRealTimers();
     jest.restoreAllMocks();
+  });
+
+  it('persists and returns the selected sale origin', async () => {
+    const { service, prisma } = createService();
+    prisma.telegramAdSale.create.mockImplementation(({ data }: any) =>
+      Promise.resolve(
+        makeSale({
+          ...data,
+          advertiserId: null,
+          origin: TelegramAdSaleOrigin.ADSELL_IO,
+          placements: [],
+        }),
+      ),
+    );
+
+    const sale = await service.createSale('user-1', {
+      advertiserId: null,
+      advertiserName: 'Exchange advertiser',
+      settlementCurrency: 'USD',
+      origin: TelegramAdSaleOrigin.ADSELL_IO,
+    });
+
+    expect(prisma.telegramAdSale.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ origin: TelegramAdSaleOrigin.ADSELL_IO }),
+      }),
+    );
+    expect(sale.origin).toBe(TelegramAdSaleOrigin.ADSELL_IO);
+  });
+
+  it('rejects an unsupported sale origin', async () => {
+    const dto = plainToInstance(CreateTelegramAdSaleDto, {
+      advertiserName: 'Advertiser',
+      settlementCurrency: 'USD',
+      origin: 'UNKNOWN_MARKETPLACE',
+    });
+
+    const errors = await validate(dto);
+
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ property: 'origin' }),
+      ]),
+    );
   });
 
   it('excludes deletion retries until their persisted backoff is due', async () => {

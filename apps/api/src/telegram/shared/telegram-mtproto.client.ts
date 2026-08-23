@@ -201,6 +201,9 @@ export class TelegramMtprotoClient {
   private readonly maxInviteLinkPages = 200;
   private readonly defaultTelegramPaletteSize = 7;
   private readonly maxPublishImageBytes = 10 * 1024 * 1024;
+  private readonly maxTelegramPhotoDimension = 4096;
+  private readonly maxTelegramPhotoDimensionSum = 10_000;
+  private readonly maxTelegramPhotoAspectRatio = 20;
   private readonly telegramResolveTimeoutMs = 20_000;
   private readonly telegramMetadataTimeoutMs = 10_000;
   private readonly publishableTelegramPhotoTypes = new Set([
@@ -1109,6 +1112,9 @@ export class TelegramMtprotoClient {
       this.toFiniteNumber(
         (entity as { participantsCount?: unknown }).participantsCount,
       );
+    const pendingJoinRequestsCount = this.toFiniteNumber(
+      (fullChannel as { requestsPending?: unknown } | null)?.requestsPending,
+    );
     const photoUrl =
       (await this.profilePhotoDataUrl(client, entity)) ||
       this.telegramPublicPhotoUrl(username);
@@ -1125,6 +1131,7 @@ export class TelegramMtprotoClient {
           | string
           | null) || null,
       participantsCount,
+      pendingJoinRequestsCount,
       photoUrl,
       telegramAccessHash,
       accessMode: this.inferAccessMode({
@@ -1151,6 +1158,8 @@ export class TelegramMtprotoClient {
           participantsCount: (
             fullChannel as { participantsCount?: unknown } | null
           )?.participantsCount,
+          requestsPending: (fullChannel as { requestsPending?: unknown } | null)
+            ?.requestsPending,
         }),
       },
     };
@@ -3113,12 +3122,36 @@ export class TelegramMtprotoClient {
     index: number,
   ) {
     if (this.publishableTelegramPhotoTypes.has(contentType)) {
-      return { buffer, contentType };
+      try {
+        const metadata = await sharp(buffer).metadata();
+        const width = metadata.width ?? 0;
+        const height = metadata.height ?? 0;
+        const aspectRatio =
+          width > 0 && height > 0
+            ? Math.max(width / height, height / width)
+            : Number.POSITIVE_INFINITY;
+        if (
+          width > 0 &&
+          height > 0 &&
+          width + height <= this.maxTelegramPhotoDimensionSum &&
+          aspectRatio <= this.maxTelegramPhotoAspectRatio
+        ) {
+          return { buffer, contentType };
+        }
+      } catch {
+        // Re-encode below so corrupt metadata cannot reach Telegram unchanged.
+      }
     }
 
     try {
       const converted = await sharp(buffer, { animated: true })
         .rotate()
+        .resize({
+          width: this.maxTelegramPhotoDimension,
+          height: this.maxTelegramPhotoDimension,
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
         .jpeg({ quality: 92, mozjpeg: true })
         .toBuffer();
       if (!converted.length) {
@@ -3495,39 +3528,73 @@ export class TelegramMtprotoClient {
   }
 
   async downloadChannelMessagesMedia(params: {
-    apiId: string; apiHash: string; session: string;
+    apiId: string;
+    apiHash: string;
+    session: string;
     channelRef?: string;
     channel?: StoredTelegramChannelReference;
     messageIds: string[];
   }) {
     const uniqueMessageIds = [...new Set(params.messageIds)];
-    if (uniqueMessageIds.length > 100) throw new BadRequestException('Telegram media batch limit is 100 messages.'); if (!uniqueMessageIds.length) return [];
+    if (uniqueMessageIds.length > 100)
+      throw new BadRequestException(
+        'Telegram media batch limit is 100 messages.',
+      );
+    if (!uniqueMessageIds.length) return [];
     const client = await this.createClient(params);
     try {
-      const resolved = params.channel ? await this.resolveStoredChannel(client, params.channel) : null;
-      const entity = resolved ? resolved.entity : await client.getEntity(params.channelRef as string);
-      const media: Array<{ messageId: string; buffer: Buffer; mimeType: string }> = [];
+      const resolved = params.channel
+        ? await this.resolveStoredChannel(client, params.channel)
+        : null;
+      const entity = resolved
+        ? resolved.entity
+        : await client.getEntity(params.channelRef as string);
+      const media: Array<{
+        messageId: string;
+        buffer: Buffer;
+        mimeType: string;
+      }> = [];
       for (let offset = 0; offset < uniqueMessageIds.length; offset += 25) {
         const chunk = uniqueMessageIds.slice(offset, offset + 25);
         let messages: any[] = [];
-        try { messages = (await client.getMessages(entity, { ids: chunk.map(Number) })) as any[];
+        try {
+          messages = (await client.getMessages(entity, {
+            ids: chunk.map(Number),
+          })) as any[];
         } catch (error) {
-          this.logger.warn(`Telegram media message batch unavailable: count=${chunk.length} reason=${error instanceof Error ? error.message : 'unknown error'}`);
+          this.logger.warn(
+            `Telegram media message batch unavailable: count=${chunk.length} reason=${error instanceof Error ? error.message : 'unknown error'}`,
+          );
           continue;
         }
-        const byId = new Map(messages.filter((message) => message?.id && message?.media).map((message) => [String(message.id), message] as const));
+        const byId = new Map(
+          messages
+            .filter((message) => message?.id && message?.media)
+            .map((message) => [String(message.id), message] as const),
+        );
         for (const messageId of chunk) {
-          const message = byId.get(messageId); if (!message) continue;
+          const message = byId.get(messageId);
+          if (!message) continue;
           let downloaded: unknown = null;
-          try { downloaded = await client.downloadMedia(message, {});
+          try {
+            downloaded = await client.downloadMedia(message, {});
           } catch (error) {
-            this.logger.warn(`Telegram media unavailable for message=${messageId}: ${error instanceof Error ? error.message : 'unknown error'}`);
+            this.logger.warn(
+              `Telegram media unavailable for message=${messageId}: ${error instanceof Error ? error.message : 'unknown error'}`,
+            );
             continue;
           }
-          if (!Buffer.isBuffer(downloaded)) continue; const mimeType = String(message.media?.document?.mimeType || (String(message.media?.className || '').includes('Photo') ? 'image/jpeg' : 'application/octet-stream'));
+          if (!Buffer.isBuffer(downloaded)) continue;
+          const mimeType = String(
+            message.media?.document?.mimeType ||
+              (String(message.media?.className || '').includes('Photo')
+                ? 'image/jpeg'
+                : 'application/octet-stream'),
+          );
           media.push({ messageId, buffer: downloaded, mimeType });
         }
-      } return media;
+      }
+      return media;
     } finally {
       await this.closeClient(client);
     }

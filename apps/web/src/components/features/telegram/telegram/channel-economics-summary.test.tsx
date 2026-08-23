@@ -172,6 +172,8 @@ describe("ChannelEconomicsSummary", () => {
               },
               bookingSchedule: {
                 futureScheduledTotal: 4,
+                draftTotal: 7,
+                pendingJoinRequests: 302,
                 lastScheduledAt: "2026-08-30T12:00:00.000Z",
               },
             },
@@ -207,15 +209,14 @@ describe("ChannelEconomicsSummary", () => {
     expect(container.querySelector(".lucide-circle-minus")).toBeNull();
     expect(screen.queryByText("Audience")).not.toBeInTheDocument();
     expect(screen.getByText("CPM 300.00 UAH")).toBeInTheDocument();
+    expect(screen.getByText("Aug 30")).toHaveClass("text-amber-300");
+    expect(screen.getByLabelText("Booked through")).toBeInTheDocument();
+    expect(screen.getByLabelText("Drafts")).toBeInTheDocument();
+    expect(screen.getByText("7")).toBeInTheDocument();
     expect(
-      screen.getByText("Booked to Aug 30 · write from Aug 31"),
-    ).toHaveClass("text-amber-300");
-    expect(
-      screen
-        .getByText("Booked to Aug 30 · write from Aug 31")
-        .closest("span")
-        ?.querySelector("svg"),
-    ).toBeNull();
+      screen.queryByText("Booked to Aug 30 · write from Aug 31"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("pending")).not.toBeInTheDocument();
     expect(container.querySelector(".lucide-badge-dollar-sign")).toBeNull();
     expect(screen.getByText("13").tagName).toBe("STRONG");
     expect(screen.getByText("ads to break even")).toBeInTheDocument();
@@ -259,7 +260,7 @@ describe("ChannelEconomicsSummary", () => {
     expect(screen.getByRole("button", { name: "UAH" })).toBeInTheDocument();
   });
 
-  it("omits the whole economics block when every value is zero or negligible", () => {
+  it("keeps operational channel counts when economics are empty", () => {
     const { container } = render(
       <ChannelEconomicsSummary
         channel={
@@ -267,6 +268,12 @@ describe("ChannelEconomicsSummary", () => {
             id: "channel-1",
             title: "No activity",
             preview: {
+              bookingSchedule: {
+                futureScheduledTotal: 0,
+                draftTotal: 2,
+                pendingJoinRequests: 11,
+                lastScheduledAt: null,
+              },
               financialSummary: {
                 assetEconomics: {
                   currency: "UAH",
@@ -283,7 +290,11 @@ describe("ChannelEconomicsSummary", () => {
       />,
     );
 
-    expect(container).toBeEmptyDOMElement();
+    expect(container).not.toBeEmptyDOMElement();
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByLabelText("Drafts")).toBeInTheDocument();
+    expect(screen.queryByText("11")).not.toBeInTheDocument();
+    expect(screen.queryByText("pending")).not.toBeInTheDocument();
     expect(screen.queryByText("Spend")).not.toBeInTheDocument();
     expect(screen.queryByText("Not enough data")).not.toBeInTheDocument();
   });

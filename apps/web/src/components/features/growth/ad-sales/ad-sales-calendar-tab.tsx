@@ -8,14 +8,14 @@ import type {
 import { CalendarSlotCard } from "@/components/features/growth/ad-sales/calendar-slot-card";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import { Card, FormField, Select, Skeleton } from "@/components/ui/primitives";
-import type { CurrencySettings, ExchangeRate, TelegramChannel } from "@/lib/api";
+import type { CurrencySettings, TelegramChannel } from "@/lib/api";
 import {
   buildAdCalendarSlots,
   channelLocalDateKey,
   channelLocalTime,
   toNumber,
 } from "@/lib/features/growth/telegram-ad-sales";
-import { formatMoneyPreview } from "@/lib/features/finance/money";
+import { formatMoney } from "@/lib/features/finance/money";
 
 const adSalesPanelClass =
   "rounded-[22px] border border-neutral-800 bg-[#171717]";
@@ -26,6 +26,14 @@ type SlotsLayoutView = "calendar" | "list";
 
 function dateKey(value: Date) {
   return channelLocalDateKey(value);
+}
+
+export function formatCalendarTransactionMoney(
+  amount: number,
+  currency: string,
+  settings?: CurrencySettings,
+) {
+  return formatMoney(amount, currency, settings?.currencyDisplayMode ?? "code");
 }
 
 export function CalendarTab(props: {
@@ -54,7 +62,6 @@ export function CalendarTab(props: {
     adsCountForDay: number;
   }>;
   settings?: CurrencySettings;
-  rates?: ExchangeRate[];
   workspaceTimezone: string;
   onCreateFromSlot: (slot: TelegramAdAvailabilitySlot) => void;
   onOpenSale: (saleId: string) => void;
@@ -134,6 +141,9 @@ export function CalendarTab(props: {
     const sale = slot.existingPlacement?.saleId
       ? saleById.get(slot.existingPlacement.saleId)
       : undefined;
+    const placement = sale?.placements.find(
+      (item) => item.id === slot.existingPlacement?.id,
+    );
     return (
       <CalendarSlotCard
         key={slot.id}
@@ -141,11 +151,8 @@ export function CalendarTab(props: {
         advertiserName={sale?.advertiserName}
         saleTitle={sale?.title}
         paymentStatus={sale?.paymentStatus || "UNPAID"}
-        agreedPrice={
-          sale?.placements.find(
-            (placement) => placement.id === slot.existingPlacement?.id,
-          )?.agreedPrice
-        }
+        agreedPrice={placement?.agreedPrice}
+        agreedCurrency={sale?.settlementCurrency || placement?.currency}
         onClick={
           slot.existingPlacement?.saleId
             ? () => props.onOpenSale(slot.existingPlacement!.saleId)
@@ -170,7 +177,7 @@ export function CalendarTab(props: {
       sale,
       placement,
       price: toNumber(placement?.agreedPrice),
-      currency: placement?.currency || slot.currency,
+      currency: sale?.settlementCurrency || placement?.currency || slot.currency,
     };
   };
   const summarizeRevenue = (slots: ReturnType<typeof buildAdCalendarSlots>) => {
@@ -186,12 +193,7 @@ export function CalendarTab(props: {
     return Array.from(totals.entries()).map(([currency, amount]) => ({
       currency,
       amount,
-      label: formatMoneyPreview({
-        amount,
-        currency,
-        settings: props.settings,
-        rates: props.rates,
-      }),
+      label: formatCalendarTransactionMoney(amount, currency, props.settings),
     }));
   };
   const createManualSlot = (
@@ -324,11 +326,11 @@ export function CalendarTab(props: {
                 return (
                   <div
                     key={day.toISOString()}
-                    className={`group/day relative min-h-[96px] border-b border-r border-slate-900/70 p-2 ${outsideMonth ? "bg-black/20 opacity-45" : "bg-[#111111]"}`}
+                    className={`group/day relative min-h-[72px] border-b border-r border-slate-900/70 p-1.5 ${outsideMonth ? "bg-black/20 opacity-45" : "bg-[#111111]"}`}
                   >
-                    <div className="mb-1.5 flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <div className="flex shrink-0 items-center gap-1.5">
                           <span className="text-sm font-semibold text-white">
                             {day.getDate()}
                           </span>
@@ -339,9 +341,9 @@ export function CalendarTab(props: {
                           ) : null}
                         </div>
                         {revenue.length ? (
-                          <div className="mt-0.5 space-y-0.5 text-[10px] font-semibold leading-tight text-emerald-300">
+                          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-[10px] font-semibold leading-tight text-emerald-300">
                             {revenue.map((item) => (
-                              <p key={item.currency}>{item.label}</p>
+                              <span key={item.currency}>{item.label}</span>
                             ))}
                           </div>
                         ) : null}
@@ -373,7 +375,7 @@ export function CalendarTab(props: {
                                 props.onOpenSale(slot.existingPlacement.saleId);
                               }
                             }}
-                            title={`${channel.title} · ${details.sale?.advertiserName || "Ad placement"} · ${formatMoneyPreview({ amount: details.price, currency: details.currency, settings: props.settings, rates: props.rates })}`}
+                            title={`${channel.title} · ${details.sale?.advertiserName || "Ad placement"} · ${formatCalendarTransactionMoney(details.price, details.currency, props.settings)}`}
                             className="flex w-full items-center gap-1.5 rounded-md border border-sky-800/70 bg-sky-950/20 px-1.5 py-1 text-left text-[10px] font-medium text-sky-100 transition hover:border-sky-500"
                           >
                             <TelegramEntityAvatar
@@ -386,7 +388,7 @@ export function CalendarTab(props: {
                               {details.sale?.advertiserName || channel.title}
                             </span>
                             <span className="ml-auto shrink-0 text-[9px] opacity-80">
-                              {formatMoneyPreview({ amount: details.price, currency: details.currency, settings: props.settings, rates: props.rates })}
+                              {formatCalendarTransactionMoney(details.price, details.currency, props.settings)}
                             </span>
                           </button>
                         );
@@ -490,7 +492,7 @@ export function CalendarTab(props: {
                     return (
                       <div
                         key={dayKey}
-                        className="group/day min-h-24 border-r border-slate-900/60 p-2"
+                        className="group/day min-h-20 border-r border-slate-900/60 p-1.5"
                       >
                         {loadingChannelIds.has(channel.id) ? (
                           <>

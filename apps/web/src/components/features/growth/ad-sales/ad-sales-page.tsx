@@ -10,18 +10,10 @@ import {
 } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  BarChart3,
-  CalendarDays,
-  CalendarRange,
-  ChevronLeft,
-  ChevronRight,
-  CircleDollarSign,
   Info,
   Pencil,
   Plus,
-  Settings2,
   Trash2,
-  Users,
 } from "lucide-react";
 import type {
   TelegramAdAvailabilitySlot,
@@ -39,14 +31,12 @@ import {
   Card,
   ConfirmDeleteModal,
   CurrencySelect,
-  DateRangeInput,
   EmptyState,
   ErrorState,
   FormField,
   Input,
   LoadingState,
   Modal,
-  MultiSelect,
   PageHeader,
   Select,
   Skeleton,
@@ -61,7 +51,7 @@ import {
 } from "@/components/features/growth/ad-sales/sale-status-actions";
 import { RegisterPaymentModal } from "@/components/features/growth/ad-sales/register-payment-modal";
 import { AdSaleModal } from "@/components/features/growth/ad-sales/ad-sale-modal";
-import { BulkAdSaleModal } from "@/components/features/growth/ad-sales/bulk/bulk-ad-sale-modal";
+import { AdSalesWorkspaceHero } from "@/components/features/growth/ad-sales/ad-sales-workspace-hero";
 import { CalendarTab } from "@/components/features/growth/ad-sales/ad-sales-calendar-tab";
 import { AdSalesAnalyticsPanel } from "@/components/features/growth/ad-sales/ad-sales-analytics-panel";
 import { AdSalesClientsPanel } from "@/components/features/growth/ad-sales/ad-sales-clients-panel";
@@ -98,42 +88,8 @@ import {
   invalidateTelegramAdSalesQueries,
   telegramAdSalesKeys,
 } from "@/lib/features/growth/telegram-ad-sales-query";
+import { resolveAdSalesPreferenceSelection } from "@/lib/features/growth/ad-sales-preferences-hydration";
 import { useAppToast } from "@/providers/toast-provider";
-
-const tabs: Array<{
-  id: TelegramAdSalesTab;
-  label: string;
-  icon: typeof CalendarRange;
-}> = [
-  { id: "calendar", label: "Slots", icon: CalendarRange },
-  { id: "sales", label: "Deals", icon: CircleDollarSign },
-  { id: "clients", label: "Clients", icon: Users },
-  { id: "analytics", label: "Analytics", icon: BarChart3 },
-  { id: "settings", label: "Setup", icon: Settings2 },
-];
-
-const calendarRangeModes: Array<{
-  id: TelegramAdSalesCalendarRangeMode;
-  label: string;
-  icon: typeof CalendarRange;
-}> = [
-  { id: "week", label: "Week", icon: CalendarRange },
-  { id: "month", label: "Month", icon: CalendarDays },
-  { id: "threeMonths", label: "3 months", icon: CalendarDays },
-];
-
-const tabDescriptions: Record<TelegramAdSalesTab, string> = {
-  calendar:
-    "See ad opportunities here and switch between calendar and list layout for the selected period.",
-  sales:
-    "Track created deals here: reserved, confirmed, paid, published, and completed placements.",
-  clients:
-    "Review CRM advertisers by revenue, RFM segment, owner, urgency, and next task.",
-  analytics:
-    "See revenue, fill rate, overdue payments, and channel performance for the current selection.",
-  settings:
-    "Configure formats, audience baseline, and the posting rule that turns organic posts into ad slots.",
-};
 
 const adSalesPanelClass =
   "rounded-[22px] border border-neutral-800 bg-[#171717]";
@@ -353,12 +309,6 @@ function monthLabel(value: Date) {
   });
 }
 
-function tabButtonClass(active: boolean) {
-  return active
-    ? "border-blue-500 bg-blue-600 text-white shadow-[0_0_24px_rgba(37,99,235,0.22)]"
-    : "border-slate-800/80 bg-[#0b1220] text-neutral-300 hover:border-slate-700 hover:text-white";
-}
-
 function isSaleUnderpriced(sale: TelegramAdSale) {
   return sale.placements.some(
     (placement) =>
@@ -428,7 +378,6 @@ export function AdSalesPage() {
   const [unpaidOnly, setUnpaidOnly] = useState(false);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [adSaleModalOpen, setAdSaleModalOpen] = useState(false);
-  const [bulkAdSaleModalOpen, setBulkAdSaleModalOpen] = useState(false);
   const [settingsChannelId, setSettingsChannelId] = useState("");
   const [adSaleSeedSlot, setAdSaleSeedSlot] =
     useState<TelegramAdAvailabilitySlot | null>(null);
@@ -504,16 +453,18 @@ export function AdSalesPage() {
     queryFn: currenciesApi.listRates,
     staleTime: 5 * 60 * 1000,
   });
-  const { data: channels = [] } = useQuery({
+  const channelsQuery = useQuery({
     queryKey: telegramChannelKeys.list(),
     queryFn: telegramChannelsApi.list,
     staleTime: 60 * 1000,
   });
-  const { data: networks = [] } = useQuery({
+  const channels = useMemo(() => channelsQuery.data ?? [], [channelsQuery.data]);
+  const networksQuery = useQuery({
     queryKey: ["telegram-channel-networks"],
     queryFn: telegramChannelNetworksApi.list,
     staleTime: 60 * 1000,
   });
+  const networks = useMemo(() => networksQuery.data ?? [], [networksQuery.data]);
   const { data: accounts = [] } = useQuery({
     queryKey: ["accounts"],
     queryFn: accountsApi.list,
@@ -621,27 +572,16 @@ export function AdSalesPage() {
 
   useEffect(() => {
     const preferences = preferencesQuery.data;
-    if (!preferences) return;
-    const allowedIds = new Set(saleableChannelIdsList);
-    const filteredPreferenceIds = preferences.selectedChannelIds.filter(
-      (channelId) => allowedIds.has(channelId),
-    );
-    const nextNetworkId = preferences.initialized
-      ? (preferences.selectedNetworkId ?? "")
-      : "";
-    const networkChannelIds = nextNetworkId
-      ? (
-          saleableNetworks.find((network) => network.id === nextNetworkId)
-            ?.channels ?? []
-        ).map((channel) => channel.id)
-      : [];
-    const nextIds = preferences.initialized
-      ? nextNetworkId
-        ? networkChannelIds
-        : filteredPreferenceIds.length
-          ? filteredPreferenceIds
-          : saleableChannelIdsList
-      : saleableChannelIdsList;
+    const resolvedSelection = resolveAdSalesPreferenceSelection({
+      preferences,
+      channelsReady: channelsQuery.isSuccess,
+      networksReady: networksQuery.isSuccess,
+      saleableChannelIds: saleableChannelIdsList,
+      networks: saleableNetworks,
+    });
+    if (!preferences || !resolvedSelection) return;
+    const nextNetworkId = resolvedSelection.selectedNetworkId;
+    const nextIds = resolvedSelection.selectedChannelIds;
     const storedRangeMode = readAdSalesCalendarRangeMode(window.localStorage);
     const normalizedView =
       storedRangeMode === "threeMonths"
@@ -688,11 +628,12 @@ export function AdSalesPage() {
 
     if (
       preferences.initialized &&
-      nextIds.length !== preferences.selectedChannelIds.length
+      (!sameStringArray(nextIds, preferences.selectedChannelIds) ||
+        nextNetworkId !== (preferences.selectedNetworkId ?? ""))
     ) {
       savePreferencesMutation.mutate({
         selectedChannelIds: nextIds,
-        selectedNetworkId: preferences.selectedNetworkId,
+        selectedNetworkId: nextNetworkId || null,
         calendarView:
           nextCalendarRangeMode === "threeMonths"
             ? "month"
@@ -700,7 +641,13 @@ export function AdSalesPage() {
         initialized: true,
       });
     }
-  }, [preferencesQuery.data, saleableChannelIdsList, saleableNetworks]);
+  }, [
+    channelsQuery.isSuccess,
+    networksQuery.isSuccess,
+    preferencesQuery.data,
+    saleableChannelIdsList,
+    saleableNetworks,
+  ]);
 
   const persistCalendarPreferences = (
     payload: Partial<{
@@ -810,25 +757,23 @@ export function AdSalesPage() {
   )
     ? settingsChannelId
     : (effectiveChannelIds[0] ?? "");
-  const productQueryChannelIds = bulkAdSaleModalOpen
-    ? saleableChannelIdsList
-    : [
-        ...new Set([
-          ...(tab === "settings"
-            ? activeSettingsChannelId
-              ? [activeSettingsChannelId]
-              : []
-            : effectiveChannelIds),
-          ...(adSaleModalOpen && adSaleSeedSlot?.channelId
-            ? [adSaleSeedSlot.channelId]
-            : []),
-        ]),
-      ];
+  const productQueryChannelIds = [
+    ...new Set([
+      ...(tab === "settings"
+        ? activeSettingsChannelId
+          ? [activeSettingsChannelId]
+          : []
+        : effectiveChannelIds),
+      ...(adSaleModalOpen && adSaleSeedSlot?.channelId
+        ? [adSaleSeedSlot.channelId]
+        : []),
+    ]),
+  ];
   const channelProductQueries = useQueries({
     queries: productQueryChannelIds.map((channelId) => ({
       queryKey: telegramAdSalesKeys.channelProducts(channelId),
       queryFn: () => telegramAdSalesApi.listChannelProducts(channelId),
-      enabled: adSaleModalOpen || bulkAdSaleModalOpen,
+      enabled: adSaleModalOpen,
       staleTime: 60 * 1000,
     })),
   });
@@ -989,6 +934,7 @@ export function AdSalesPage() {
         advertiserName: payload.advertiserName,
         advertiserTelegram: payload.advertiserTelegram,
         advertiserContact: payload.advertiserContact,
+        origin: payload.origin,
         settlementCurrency: payload.paymentCurrency,
         assignedMemberId: payload.assignedMemberId,
       },
@@ -1185,68 +1131,6 @@ export function AdSalesPage() {
     }
   }
 
-  async function submitBulkAdSale(
-    payload: Parameters<typeof telegramAdSalesApi.bulkCreate>[0],
-    options: { paymentAccountId: string },
-  ) {
-    const operation = startOperation({
-      id: `ad-sale-bulk-create:${Date.now()}`,
-      title: "Creating ad sales",
-      message: "Saving and reserving the selected placements...",
-    });
-    try {
-      const result = await telegramAdSalesApi.bulkCreate(payload, true);
-      const paymentAccount = (accounts as Account[]).find(
-        (account) => account.id === options.paymentAccountId,
-      );
-      if (!paymentAccount) {
-        throw new Error("Payment account not found.");
-      }
-      for (const sale of result.sales) {
-        const paymentAmount = sale.placements.reduce(
-          (sum, placement) => sum + toNumber(placement.agreedPrice),
-          0,
-        );
-        const autoAllocation = autoAllocatePayment({
-          amount: paymentAmount,
-          placements: sale.placements.map((placement) => ({
-            id: placement.id,
-            agreedPrice: placement.agreedPrice,
-            paidAllocatedAmount: placement.paidAllocatedAmount,
-          })),
-        });
-        if (autoAllocation.allocatedTotal <= 0) continue;
-        await telegramAdSalesApi.createPayment(
-          sale.id,
-          {
-            accountId: paymentAccount.id,
-            amount: autoAllocation.allocatedTotal,
-            currency: paymentAccount.currency,
-            paidAt: new Date().toISOString(),
-            allocations: autoAllocation.allocations,
-          },
-          true,
-        );
-      }
-      await invalidateTelegramAdSalesQueries(queryClient, {
-        channelIds: result.channelIds,
-      });
-      operation.succeed({
-        title: "Ad sales created",
-        message: `${result.createdPlacementCount} placements were created.`,
-      });
-    } catch (error) {
-      operation.fail({
-        title: "Bulk ad creation failed",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Could not create bulk ad sales.",
-      });
-      throw error;
-    }
-  }
-
   async function refreshSaleAfterMutation(
     saleId: string,
     channelIds: string[],
@@ -1273,162 +1157,43 @@ export function AdSalesPage() {
         title="Advertising sales"
         subtitle="Sell ad placements across your own Telegram channels and networks."
         action={
-          <div className="flex w-full flex-col gap-3 xl:w-[760px]">
-            <div className="grid gap-3 md:grid-cols-[minmax(180px,260px)_minmax(260px,1fr)]">
-              <div className="min-w-0">
-                <FormField label="Network">
-                  <Select
-                    value={selectedNetworkId}
-                    onChange={(event) =>
-                      handleSelectedNetworkIdChange(event.target.value)
-                    }
-                  >
-                    <option value="">All networks</option>
-                    {saleableNetworks.map((network) => (
-                      <option key={network.id} value={network.id}>
-                        {network.name}
-                      </option>
-                    ))}
-                  </Select>
-                </FormField>
-              </div>
-              <div className="min-w-0">
-                <FormField label="Channels">
-                  <MultiSelect
-                    value={selectedChannelIds}
-                    onChange={handleSelectedChannelIdsChange}
-                    placeholder="Choose channels"
-                    allSelectedLabel="All channels"
-                    options={saleableChannels.map((channel) => ({
-                      value: channel.id,
-                      label: channel.title,
-                      selectedLabel: channel.title,
-                      iconUrl: channel.photoUrl,
-                      iconFallback: channel.title,
-                    }))}
-                  />
-                </FormField>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-end gap-2">
-              <Button
-                variant="secondary"
-                className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl px-5 leading-none whitespace-nowrap"
-                onClick={() => setBulkAdSaleModalOpen(true)}
-              >
-                <span className="inline-flex items-center justify-center gap-2 leading-none">
-                  <Plus size={18} className="shrink-0" />
-                  Mass add ads
-                </span>
-              </Button>
-              <Button
-                className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl px-5 leading-none whitespace-nowrap"
-                onClick={() => {
-                  setAdSaleSeedSlot(null);
-                  setAdSaleModalOpen(true);
-                }}
-              >
-                <span className="inline-flex items-center justify-center gap-2 leading-none">
-                  <Plus size={18} className="shrink-0" />
-                  New sale
-                </span>
-              </Button>
-            </div>
-          </div>
+          <Button
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5"
+            onClick={() => {
+              setAdSaleSeedSlot(null);
+              setAdSaleModalOpen(true);
+            }}
+          >
+            <Plus size={18} />
+            New ad sale
+          </Button>
         }
       />
 
-      <Card className={`mb-5 ${adSalesPanelClass}`}>
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_auto_auto_300px] xl:items-end">
-          <div>
-            <h2 className="text-3xl font-semibold tracking-tight text-white">
-              {`${from.toLocaleDateString()} - ${to.toLocaleDateString()}`}
-            </h2>
-            <p className="mt-1 text-sm text-neutral-400">
-              Shared reporting period and workspace scope for all ad-sales tabs.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            {calendarRangeModes.map((view) => {
-              const Icon = view.icon;
-              return (
-                <button
-                  key={view.id}
-                  type="button"
-                  onClick={() => handleCalendarRangeModeChange(view.id)}
-                  className={`inline-flex h-10 items-center justify-center gap-2 rounded-full border px-3 text-sm ${tabButtonClass(calendarRangeMode === view.id)}`}
-                >
-                  <Icon size={15} />
-                  {view.label}
-                </button>
-              );
-            })}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => shiftCalendarRange(-1)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-800/80 bg-[#0b1220] text-neutral-300 transition hover:border-slate-700 hover:bg-[#10192b] hover:text-white"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setCalendarRangeSelection(null);
-                setCalendarCursor(new Date());
-              }}
-              className="inline-flex h-10 items-center rounded-xl border border-slate-800/80 bg-[#0b1220] px-4 text-sm font-medium text-white transition hover:border-slate-700 hover:bg-[#10192b]"
-            >
-              Today
-            </button>
-            <button
-              type="button"
-              onClick={() => shiftCalendarRange(1)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-800/80 bg-[#0b1220] text-neutral-300 transition hover:border-slate-700 hover:bg-[#10192b] hover:text-white"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-          <DateRangeInput
-            from={calendarRangeSelection?.from || dateKey(from)}
-            to={calendarRangeSelection?.to || dateKey(to)}
-            onChange={handleCalendarRangeChange}
-            className="w-full"
-          />
-        </div>
-      </Card>
-
-      <Card className={`mb-5 ${adSalesPanelClass}`}>
-        <div className="flex flex-wrap gap-2">
-          {tabs.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Tooltip
-                key={item.id}
-                side="top"
-                align="center"
-                content={
-                  <span className="block w-72">{tabDescriptions[item.id]}</span>
-                }
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTab(item.id);
-                    router.replace(tabRouteMap[item.id]);
-                  }}
-                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium ${tabButtonClass(tab === item.id)}`}
-                >
-                  <Icon size={16} />
-                  {item.label}
-                  <Info size={14} className="text-neutral-300" />
-                </button>
-              </Tooltip>
-            );
-          })}
-        </div>
-      </Card>
+      <AdSalesWorkspaceHero
+        from={from}
+        to={to}
+        rangeMode={calendarRangeMode}
+        rangeSelection={calendarRangeSelection}
+        activeTab={tab}
+        selectedNetworkId={selectedNetworkId}
+        selectedChannelIds={selectedChannelIds}
+        networks={saleableNetworks as TelegramChannelNetwork[]}
+        channels={saleableChannels}
+        onRangeModeChange={handleCalendarRangeModeChange}
+        onRangeChange={handleCalendarRangeChange}
+        onShiftRange={shiftCalendarRange}
+        onToday={() => {
+          setCalendarRangeSelection(null);
+          setCalendarCursor(new Date());
+        }}
+        onNetworkChange={handleSelectedNetworkIdChange}
+        onChannelsChange={handleSelectedChannelIdsChange}
+        onTabChange={(nextTab) => {
+          setTab(nextTab);
+          router.replace(tabRouteMap[nextTab]);
+        }}
+      />
 
       {tab === "calendar" ? (
         <CalendarTab
@@ -1451,7 +1216,6 @@ export function AdSalesPage() {
           sales={calendarSalesQuery.data?.items ?? []}
           daySummaries={[]}
           settings={settings}
-          rates={rates}
           workspaceTimezone={workspaceTimezone}
           onCreateFromSlot={(slot) => {
             setAdSaleSeedSlot(slot);
@@ -1667,61 +1431,6 @@ export function AdSalesPage() {
           }));
         }}
         onSubmit={submitAdSale}
-      />
-
-      <BulkAdSaleModal
-        open={bulkAdSaleModalOpen}
-        onClose={() => setBulkAdSaleModalOpen(false)}
-        accounts={accounts as Account[]}
-        channels={saleableChannels}
-        networks={saleableNetworks as TelegramChannelNetwork[]}
-        productsByChannelId={productsByChannelId}
-        defaultCurrency={settings?.primaryCurrency || "USD"}
-        workspaceTimezone={workspaceTimezone}
-        onLoadPublishedPosts={async ({ channelId, date, timezone }) => {
-          const from = zonedDateTimeToUtc(
-            date,
-            "00:00:00",
-            timezone,
-          ).toISOString();
-          const to = zonedDateTimeToUtc(
-            date,
-            "23:59:59",
-            timezone,
-          ).toISOString();
-          const result = await getTelegramChannelPosts(channelId, {
-            page: 1,
-            pageSize: 100,
-            from,
-            to,
-          });
-          return result.items.map((post) => ({
-            id: post.id,
-            title:
-              post.text?.trim().split("\n").find(Boolean)?.slice(0, 90) ||
-              "Telegram post",
-            publishedAt: post.postDate,
-          }));
-        }}
-        onRequestQuote={async ({
-          channelId,
-          productId,
-          pricingMode,
-          currency,
-          scheduledAt,
-        }) =>
-          telegramAdSalesApi.createQuote(
-            {
-              telegramChannelId: channelId,
-              telegramAdProductId: productId,
-              pricingMode,
-              currency,
-              scheduledAt,
-            },
-            true,
-          )
-        }
-        onSubmit={submitBulkAdSale}
       />
 
       <RegisterPaymentModal

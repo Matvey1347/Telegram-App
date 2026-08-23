@@ -116,6 +116,26 @@ export class TelegramChannelGptContextExporter {
     ].join('\n');
   }
 
+  private calendarOccupiedPostBlock(post: {
+    id: string;
+    title: string;
+    text: string | null;
+    imageUrls: string[];
+    scheduledAt: Date;
+  }) {
+    const imageUrls = post.imageUrls.filter((url) => /^https?:\/\//i.test(url));
+    return [
+      'OCCUPIED POST',
+      `scheduled_at: ${post.scheduledAt.toISOString()}`,
+      `postId: ${post.id}`,
+      `title: ${post.title}`,
+      'images:',
+      ...(imageUrls.length ? imageUrls.map((url) => `- ${url}`) : ['[]']),
+      'text:',
+      post.text || '',
+    ].join('\n');
+  }
+
   async exportCalendarPlanInstruction(
     userId: string,
     channelId: string,
@@ -148,6 +168,7 @@ export class TelegramChannelGptContextExporter {
             id: true,
             title: true,
             text: true,
+            imageUrls: true,
             origin: true,
             status: true,
             scheduledAt: true,
@@ -250,9 +271,11 @@ export class TelegramChannelGptContextExporter {
           post.scheduledAt > exportedAt &&
           post.scheduledAt <= horizonEnd,
       )
-      .map(
-        (post) =>
-          `- ${post.scheduledAt!.toISOString()} — ${post.id} — ${post.title}`,
+      .map((post) =>
+        this.calendarOccupiedPostBlock({
+          ...post,
+          scheduledAt: post.scheduledAt!,
+        }),
       );
     const history = [...publishedHistory].reverse().map((post) => {
       const text = post.text || post.formattedText || '';
@@ -262,7 +285,7 @@ export class TelegramChannelGptContextExporter {
     const planningTo = this.localDateTime(horizonEnd, timezone).slice(0, 10);
     const content = [
       'TELEGRAM CALENDAR PLAN — GPT INSTRUCTION',
-      'FORMAT VERSION: 1',
+      'FORMAT VERSION: 2',
       `CHANNEL: ${channel.title}`,
       `CHANNEL_ID: ${channel.id}`,
       `TIMEZONE: ${timezone}`,
@@ -371,6 +394,8 @@ export class TelegramChannelGptContextExporter {
           imageUrls: true,
           text: true,
           createdAt: true,
+          scheduledAt: true,
+          publishedAt: true,
           telegramMessageIds: true,
           telegramMessageUrls: true,
         },
@@ -461,23 +486,28 @@ export class TelegramChannelGptContextExporter {
     const permanentImageUrls = (urls: string[] | undefined) =>
       (urls ?? []).filter((url) => /^https?:\/\//i.test(url));
     const managedPostBlocks = managedPosts.map((post) => {
-      const metrics = this.linkedTelegramMessageIds(post).flatMap(
+      const linkedTelegramPosts = this.linkedTelegramMessageIds(post).flatMap(
         (messageId) => {
           const telegramPost = telegramPostByMessageId.get(messageId);
           if (!telegramPost || matchedTelegramPostIds.has(telegramPost.id)) {
             return [];
           }
           matchedTelegramPostIds.add(telegramPost.id);
-          return [
-            this.metricContext(
-              engagementFor(telegramPost),
-              telegramPostUrl(channel, telegramPost.telegramMessageId),
-            ),
-          ];
+          return [telegramPost];
         },
       );
+      const metrics = linkedTelegramPosts.map((telegramPost) =>
+        this.metricContext(
+          engagementFor(telegramPost),
+          telegramPostUrl(channel, telegramPost.telegramMessageId),
+        ),
+      );
+      const linkedPublishedAt = linkedTelegramPosts
+        .map((telegramPost) => telegramPost.postDate)
+        .sort((left, right) => left.getTime() - right.getTime())[0];
+      const publishedAt = post.publishedAt ?? linkedPublishedAt ?? null;
       const imageUrls = permanentImageUrls(post.imageUrls);
-      return `POST\nid: ${post.id}\nreference: tg-post:${post.id}\ntitle: ${post.title}\nstatus: ${post.status}\ngroup_id: ${post.groupId ?? 'null'}\ngroup_title: ${post.groupId ? (groupTitleById.get(post.groupId) ?? 'unknown') : 'Ungrouped'}\nimages:\n${imageUrls.length ? imageUrls.map((url) => `- ${url}`).join('\n') : '[]'}\nengagement:\n${metrics.length ? metrics.join('\n---\n') : 'unavailable'}\ntext:\n${post.text || ''}`;
+      return `POST\nid: ${post.id}\nreference: tg-post:${post.id}\ntitle: ${post.title}\nstatus: ${post.status}\npublished_at: ${publishedAt?.toISOString() ?? 'null'}\nscheduled_at: ${post.scheduledAt?.toISOString() ?? 'null'}\ngroup_id: ${post.groupId ?? 'null'}\ngroup_title: ${post.groupId ? (groupTitleById.get(post.groupId) ?? 'unknown') : 'Ungrouped'}\nimages:\n${imageUrls.length ? imageUrls.map((url) => `- ${url}`).join('\n') : '[]'}\nengagement:\n${metrics.length ? metrics.join('\n---\n') : 'unavailable'}\ntext:\n${post.text || ''}`;
     });
     const importedPostBlocks = typedTelegramPosts
       .filter((post) => !matchedTelegramPostIds.has(post.id))
@@ -491,19 +521,19 @@ export class TelegramChannelGptContextExporter {
               !/photo|image/i.test(post.mediaKind)
             ? `[]\nmedia: ${post.mediaKind}`
             : '[]';
-        return `POST\nid: telegram-post:${post.id}\nreference: telegram-source-post:${post.id}\ntitle: ${telegramPostTitle(post)}\nstatus: PUBLISHED\ngroup_id: null\ngroup_title: Ungrouped\nsource: synchronized_telegram\nimages:\n${imageContext}\nengagement:\n${this.metricContext(engagementFor(post), url)}\ntext:\n${post.text || post.formattedText || ''}`;
+        return `POST\nid: telegram-post:${post.id}\nreference: telegram-source-post:${post.id}\ntitle: ${telegramPostTitle(post)}\nstatus: PUBLISHED\npublished_at: ${post.postDate.toISOString()}\nscheduled_at: null\ngroup_id: null\ngroup_title: Ungrouped\nsource: synchronized_telegram\nimages:\n${imageContext}\nengagement:\n${this.metricContext(engagementFor(post), url)}\ntext:\n${post.text || post.formattedText || ''}`;
       });
 
     const exportedAt = new Date();
     const content = [
       'TELEGRAM GPT CONTEXT',
-      'FORMAT VERSION: 4',
+      'FORMAT VERSION: 5',
       `CHANNEL: ${channel.title}`,
       `CHANNEL_ID: ${channel.id}`,
       `EXPORTED_AT: ${exportedAt.toISOString()}`,
       '',
       'GPT RULES',
-      'This is the canonical source of truth for this channel. Return canonical post text exactly; do not change tg-post IDs; do not invent Premium Emoji document IDs. Engagement metrics show which published posts resonated with the audience. Subscribers and ERR use the last recorded audience snapshot at or before each post publication; unknown means no audience history existed yet. Only managed posts with a tg-post:<id> reference may be used as internal tg-post links; telegram-source-post references are read-only analytics context.',
+      'This is the canonical source of truth for this channel. Return canonical post text exactly; do not change tg-post IDs; do not invent Premium Emoji document IDs. published_at is the actual Telegram publication time when known; scheduled_at is the reserved publication time when present. Engagement metrics show which published posts resonated with the audience. Subscribers and ERR use the last recorded audience snapshot at or before each post publication; unknown means no audience history existed yet. Only managed posts with a tg-post:<id> reference may be used as internal tg-post links; telegram-source-post references are read-only analytics context.',
       '',
       'ALL FORMATTING',
       TELEGRAM_RICH_FORMATTING_GUIDE,

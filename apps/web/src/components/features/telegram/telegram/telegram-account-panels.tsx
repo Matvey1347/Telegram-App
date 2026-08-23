@@ -276,10 +276,7 @@ export function MtprotoAccountsPanel({
   return (
     <>
       {isLoading && !data.length ? <LoadingState /> : null}
-      <MasonryGrid
-        className="!columns-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
-        itemClassName="mb-0"
-      >
+      <MasonryGrid>
         {data.map((account) => {
           const isStartingLogin =
             startLoginMutation.isPending &&

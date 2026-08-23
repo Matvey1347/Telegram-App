@@ -64,6 +64,7 @@ function hasMonetaryActivity(channel: ChannelNetworkSummaryInput) {
 export type ChannelNetworkSummaryInput = {
   currency?: string | null;
   subscribersCount?: number | null;
+  pendingJoinRequestsCount?: number | null;
   activeSubscribersEstimate?: number | null;
   paidActiveSubscribersEstimate?: number | null;
   avgViewsAdjusted?: number | null;
@@ -213,6 +214,10 @@ export function aggregateChannelNetworkSummary(
     (sum, channel) => sum + Number(channel.activeSubscribersEstimate || 0),
     0,
   );
+  const pendingJoinRequestsCount = channelSummaries.reduce(
+    (sum, channel) => sum + Number(channel.pendingJoinRequestsCount || 0),
+    0,
+  );
   const paidActiveSubscribersEstimate = channelSummaries.reduce(
     (sum, channel) => sum + Number(channel.paidActiveSubscribersEstimate || 0),
     0,
@@ -254,6 +259,7 @@ export function aggregateChannelNetworkSummary(
   return {
     channelsCount: channelSummaries.length,
     totalSubscribers,
+    pendingJoinRequestsCount,
     activeSubscribersEstimate,
     paidActiveSubscribersEstimate,
     viewRate:

@@ -1,5 +1,7 @@
 export type ChannelBookingSchedule = {
   futureScheduledTotal: number;
+  draftTotal?: number;
+  pendingJoinRequests?: number;
   lastScheduledAt: string | null;
   nextAvailableDate?: string | null;
   bookedThroughDate?: string | null;
@@ -38,6 +40,9 @@ export function getChannelBookingIndicator(
       label: bookedThroughDate
         ? `Booked to ${date(bookedThroughDate)} · write for ${date(nextAvailableDate)}`
         : `⚠️ Free ${date(nextAvailableDate)} · write now`,
+      compactLabel: bookedThroughDate
+        ? date(bookedThroughDate)
+        : `Free ${date(nextAvailableDate)}`,
       tone:
         daysAhead <= 3
           ? "text-rose-300"
@@ -53,6 +58,7 @@ export function getChannelBookingIndicator(
   if (!lastScheduledAt || Number.isNaN(lastScheduledAt.getTime())) {
     return {
       label: "⚠️ Free today",
+      compactLabel: "Free today",
       tone: "text-rose-300",
       daysAhead: 0,
     };
@@ -68,6 +74,7 @@ export function getChannelBookingIndicator(
   writeFrom.setDate(writeFrom.getDate() + 1);
   return {
     label: `Booked to ${date(lastScheduledAt)} · write from ${date(writeFrom)}`,
+    compactLabel: date(lastScheduledAt),
     tone:
       daysAhead <= 3
         ? "text-rose-300"

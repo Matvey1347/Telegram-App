@@ -1,8 +1,23 @@
 "use client";
 
-import type { TelegramPostPlannerPreviewResult } from "@telegram-system/shared";
-import { CalendarCheck2, LoaderCircle, RotateCcw, Trash2 } from "lucide-react";
+import type {
+  ResolvedEmoji,
+  TelegramPostPlannerPreviewResult,
+} from "@telegram-system/shared";
+import {
+  CalendarCheck2,
+  ExternalLink,
+  LoaderCircle,
+  RotateCcw,
+  Trash2,
+} from "lucide-react";
 import { Button, CustomSelect } from "@/components/ui/primitives";
+
+type PlannerPostOption = {
+  id: string;
+  title: string;
+  iconPresentation?: ResolvedEmoji | null;
+};
 
 export function AutoCalendarPlannerPreview({
   preview,
@@ -13,19 +28,21 @@ export function AutoCalendarPlannerPreview({
   availablePosts,
   onRemoveAssignment,
   onReplaceAssignmentPost,
+  onOpenPostInNewTab,
 }: {
   preview: TelegramPostPlannerPreviewResult;
   busy: boolean;
   rerollingDate: string | null;
   onRerollDay?: (date: string) => void;
   onScheduleAll: () => void;
-  availablePosts?: Array<{ id: string; title: string }>;
+  availablePosts?: PlannerPostOption[];
   onRemoveAssignment?: (postId: string, scheduledAt: string) => void;
   onReplaceAssignmentPost?: (
     currentPostId: string,
     scheduledAt: string,
     nextPostId: string,
   ) => void;
+  onOpenPostInNewTab?: (postId: string) => void;
 }) {
   const assignmentsByDate = new Map<string, typeof preview.assignments>();
   for (const assignment of preview.assignments) {
@@ -37,27 +54,11 @@ export function AutoCalendarPlannerPreview({
 
   return (
     <div className="mt-4 space-y-3 rounded-lg border border-blue-900/60 bg-blue-950/10 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h4 className="text-sm font-semibold text-white">Plan preview</h4>
-          <p className="mt-0.5 text-xs text-neutral-400">
-            Nothing is scheduled until you confirm the complete plan.
-          </p>
-        </div>
-        <Button
-          type="button"
-          onClick={onScheduleAll}
-          disabled={busy || !preview.assignments.length}
-        >
-          <span className="inline-flex items-center gap-2">
-            {busy && !rerollingDate ? (
-              <LoaderCircle size={15} className="animate-spin" />
-            ) : (
-              <CalendarCheck2 size={15} />
-            )}
-            Schedule all {preview.assignments.length} posts
-          </span>
-        </Button>
+      <div>
+        <h4 className="text-sm font-semibold text-white">Plan preview</h4>
+        <p className="mt-0.5 text-xs text-neutral-400">
+          Nothing is scheduled until you confirm the complete plan.
+        </p>
       </div>
 
       <div className="grid gap-2 text-sm sm:grid-cols-3">
@@ -138,6 +139,16 @@ export function AutoCalendarPlannerPreview({
                       options={availablePosts.map((post) => ({
                         value: post.id,
                         label: post.title,
+                        iconUrl:
+                          post.iconPresentation?.type === "image"
+                            ? post.iconPresentation.url
+                            : undefined,
+                        iconEmoji:
+                          post.iconPresentation?.type === "unicode"
+                            ? post.iconPresentation.value
+                            : post.iconPresentation
+                              ? undefined
+                              : "📝",
                       }))}
                     />
                   </div>
@@ -146,6 +157,17 @@ export function AutoCalendarPlannerPreview({
                     {assignment.title}
                   </span>
                 )}
+                {onOpenPostInNewTab ? (
+                  <button
+                    type="button"
+                    aria-label={`Open ${assignment.title} in new tab`}
+                    title="Open post in new tab"
+                    onClick={() => onOpenPostInNewTab(assignment.postId)}
+                    className="shrink-0 rounded-md p-1.5 text-blue-300 hover:bg-blue-950/50 hover:text-blue-200"
+                  >
+                    <ExternalLink size={14} />
+                  </button>
+                ) : null}
                 <span className="shrink-0 tabular-nums text-neutral-400">
                   {new Date(assignment.scheduledAt).toLocaleTimeString([], {
                     hour: "2-digit",
@@ -178,6 +200,23 @@ export function AutoCalendarPlannerPreview({
           No matching draft posts were found for the available times.
         </div>
       ) : null}
+
+      <div className="flex justify-end border-t border-neutral-800 pt-3">
+        <Button
+          type="button"
+          onClick={onScheduleAll}
+          disabled={busy || !preview.assignments.length}
+        >
+          <span className="inline-flex items-center gap-2">
+            {busy && !rerollingDate ? (
+              <LoaderCircle size={15} className="animate-spin" />
+            ) : (
+              <CalendarCheck2 size={15} />
+            )}
+            Schedule all {preview.assignments.length} posts
+          </span>
+        </Button>
+      </div>
     </div>
   );
 }

@@ -64,6 +64,7 @@ describe("AutoCalendarPlannerPreview", () => {
   it("allows an imported assignment to be replaced or removed before scheduling", () => {
     const onRemoveAssignment = vi.fn();
     const onReplaceAssignmentPost = vi.fn();
+    const onOpenPostInNewTab = vi.fn();
     render(
       <AutoCalendarPlannerPreview
         preview={preview}
@@ -71,15 +72,26 @@ describe("AutoCalendarPlannerPreview", () => {
         rerollingDate={null}
         onScheduleAll={vi.fn()}
         availablePosts={[
-          { id: "post-1", title: "First post" },
+          {
+            id: "post-1",
+            title: "First post",
+            iconPresentation: { type: "unicode", value: "🧠" },
+          },
           { id: "post-2", title: "Second post" },
         ]}
         onRemoveAssignment={onRemoveAssignment}
         onReplaceAssignmentPost={onReplaceAssignmentPost}
+        onOpenPostInNewTab={onOpenPostInNewTab}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "First post" }));
+    expect(screen.getAllByText("🧠").length).toBeGreaterThan(0);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open First post in new tab" }),
+    );
+    expect(onOpenPostInNewTab).toHaveBeenCalledWith("post-1");
+
+    fireEvent.click(screen.getByRole("button", { name: "🧠 First post" }));
     fireEvent.click(screen.getByText("Second post"));
     expect(onReplaceAssignmentPost).toHaveBeenCalledWith(
       "post-1",
@@ -90,5 +102,16 @@ describe("AutoCalendarPlannerPreview", () => {
       screen.getByRole("button", { name: "Remove First post from plan" }),
     );
     expect(onRemoveAssignment).toHaveBeenCalledOnce();
+
+    const removeButton = screen.getByRole("button", {
+      name: "Remove First post from plan",
+    });
+    const scheduleButton = screen.getByRole("button", {
+      name: /Schedule all 1 posts/i,
+    });
+    expect(
+      removeButton.compareDocumentPosition(scheduleButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });

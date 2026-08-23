@@ -9,7 +9,10 @@ describe("ChannelPreview", () => {
         channel={{
           title: "Psychology",
           currentSubscribersCount: 11_695,
-          preview: { audience: { viewRate: 6.5, reactionRate: 2.4 } },
+          preview: {
+            audience: { viewRate: 6.5, reactionRate: 2.4 },
+            bookingSchedule: { pendingJoinRequests: 302 },
+          },
         }}
       />,
     );
@@ -20,16 +23,31 @@ describe("ChannelPreview", () => {
     expect(screen.getByText("6.5%")).toBeInTheDocument();
     expect(screen.getByLabelText("Reaction rate")).toBeInTheDocument();
     expect(screen.getByText("2.4%")).toBeInTheDocument();
+    expect(screen.getByLabelText("Pending join requests")).toBeInTheDocument();
+    expect(screen.getByText("302")).toBeInTheDocument();
+    expect(screen.queryByText("pending")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Subscribers").parentElement).toBe(
+      screen.getByLabelText("Pending join requests").parentElement,
+    );
+    expect(screen.getByLabelText("Subscribers").parentElement).toHaveClass(
+      "grid-cols-[max-content_14px]",
+    );
+    expect(screen.getByText("302")).toHaveClass("justify-self-end");
   });
 
   it("does not show a zero view rate when audience data is missing", () => {
     render(
       <ChannelPreview
-        channel={{ title: "New channel", currentSubscribersCount: 120 }}
+        channel={{
+          title: "New channel",
+          currentSubscribersCount: 120,
+          preview: { bookingSchedule: { pendingJoinRequests: 0 } },
+        }}
       />,
     );
 
     expect(screen.queryByText("0.0%")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Reaction rate")).not.toBeInTheDocument();
+    expect(screen.queryByText("pending")).not.toBeInTheDocument();
   });
 });

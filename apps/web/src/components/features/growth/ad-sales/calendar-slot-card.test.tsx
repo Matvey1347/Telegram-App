@@ -35,12 +35,15 @@ describe("CalendarSlotCard", () => {
         saleTitle="August package"
         paymentStatus="PAID"
         agreedPrice="175"
+        agreedCurrency="UAH"
       />,
     );
 
     expect(screen.getByText("Ad placement")).toBeTruthy();
     expect(screen.getByText("Acme")).toBeTruthy();
     expect(screen.getByText("Paid")).toBeTruthy();
+    expect(screen.getByText("Agreed 175 UAH")).toBeTruthy();
+    expect(screen.queryByText("Agreed 175 USD")).toBeNull();
     expect(screen.queryByText("Product")).toBeNull();
     expect(screen.queryByText("Slot")).toBeNull();
     expect(screen.queryByText(/Recommended/)).toBeNull();

@@ -33,7 +33,14 @@ describe('TelegramChannelBookingReadService', () => {
       workspace: {
         findUnique: jest.fn().mockResolvedValue({ timezone: 'UTC' }),
       },
-      telegramManagedPost: { findMany },
+      telegramManagedPost: {
+        findMany,
+        groupBy: jest
+          .fn()
+          .mockResolvedValue([
+            { telegramChannelId: 'channel-1', _count: { _all: 7 } },
+          ]),
+      },
     } as never);
     const now = new Date('2026-08-23T10:00:00.000Z');
 
@@ -41,6 +48,7 @@ describe('TelegramChannelBookingReadService', () => {
       'workspace-1',
       ['channel-1'],
       now,
+      new Map([['channel-1', 302]]),
     );
     const horizon = new Date(now.getTime() + 370 * 24 * 60 * 60 * 1000);
 
@@ -65,6 +73,8 @@ describe('TelegramChannelBookingReadService', () => {
     });
     expect(result.get('channel-1')).toEqual({
       futureScheduledTotal: 3,
+      draftTotal: 7,
+      pendingJoinRequests: 302,
       lastScheduledAt: '2026-09-30T12:00:00.000Z',
       nextAvailableDate: '2026-08-26',
       bookedThroughDate: '2026-08-25',
@@ -85,6 +95,7 @@ describe('TelegramChannelBookingReadService', () => {
             text: 'Підпишись 👉[Де гроші](https://t.me/example)',
           }),
         ]),
+        groupBy: jest.fn().mockResolvedValue([]),
       },
     } as never);
 
@@ -96,6 +107,8 @@ describe('TelegramChannelBookingReadService', () => {
 
     expect(result.get('channel-money')).toEqual({
       futureScheduledTotal: 0,
+      draftTotal: 0,
+      pendingJoinRequests: 0,
       lastScheduledAt: null,
       nextAvailableDate: '2026-08-24',
       bookedThroughDate: null,
@@ -104,10 +117,11 @@ describe('TelegramChannelBookingReadService', () => {
 
   it('does not query the database for an empty channel list', async () => {
     const findMany = jest.fn();
+    const groupBy = jest.fn();
     const findUnique = jest.fn();
     const service = new TelegramChannelBookingReadService({
       workspace: { findUnique },
-      telegramManagedPost: { findMany },
+      telegramManagedPost: { findMany, groupBy },
     } as never);
 
     await expect(
@@ -115,5 +129,6 @@ describe('TelegramChannelBookingReadService', () => {
     ).resolves.toEqual(new Map());
     expect(findMany).not.toHaveBeenCalled();
     expect(findUnique).not.toHaveBeenCalled();
+    expect(groupBy).not.toHaveBeenCalled();
   });
 });

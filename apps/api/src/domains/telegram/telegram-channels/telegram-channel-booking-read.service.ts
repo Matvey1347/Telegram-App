@@ -7,6 +7,8 @@ import { PrismaService } from '../../../prisma/prisma.service';
 
 export type TelegramChannelBookingSummary = {
   futureScheduledTotal: number;
+  draftTotal: number;
+  pendingJoinRequests: number;
   lastScheduledAt: string | null;
   nextAvailableDate: string;
   bookedThroughDate: string | null;
@@ -83,13 +85,14 @@ export class TelegramChannelBookingReadService {
     workspaceId: string,
     channelIds: string[],
     now = new Date(),
+    pendingJoinRequestsByChannel: ReadonlyMap<string, number> = new Map(),
   ) {
     if (!channelIds.length) {
       return new Map<string, TelegramChannelBookingSummary>();
     }
 
     const horizon = new Date(now.getTime() + BOOKING_LOOKAHEAD_DAYS * DAY_MS);
-    const [workspace, posts] = await Promise.all([
+    const [workspace, posts, draftCounts] = await Promise.all([
       this.prisma.workspace.findUnique({
         where: { id: workspaceId },
         select: { timezone: true },
@@ -113,11 +116,23 @@ export class TelegramChannelBookingReadService {
         },
         orderBy: { scheduledAt: 'asc' },
       }),
+      this.prisma.telegramManagedPost.groupBy({
+        by: ['telegramChannelId'],
+        where: {
+          workspaceId,
+          telegramChannelId: { in: channelIds },
+          status: TelegramManagedPostStatus.DRAFT,
+        },
+        _count: { _all: true },
+      }),
     ]);
     const timezone = workspace?.timezone || 'UTC';
     const toDateKey = createDateKeyFormatter(timezone);
     const firstPlanningDate = addCalendarDays(toDateKey(now), 1);
     const postsByChannel = new Map<string, typeof posts>();
+    const draftTotalByChannel = new Map(
+      draftCounts.map((row) => [row.telegramChannelId, row._count._all]),
+    );
     for (const post of posts) {
       if (isStandaloneSubscriptionEnding(post)) continue;
       const rows = postsByChannel.get(post.telegramChannelId) ?? [];
@@ -150,6 +165,9 @@ export class TelegramChannelBookingReadService {
           channelId,
           {
             futureScheduledTotal: channelPosts.length,
+            draftTotal: draftTotalByChannel.get(channelId) ?? 0,
+            pendingJoinRequests:
+              pendingJoinRequestsByChannel.get(channelId) ?? 0,
             lastScheduledAt: lastScheduledAt?.toISOString() ?? null,
             nextAvailableDate,
             bookedThroughDate,

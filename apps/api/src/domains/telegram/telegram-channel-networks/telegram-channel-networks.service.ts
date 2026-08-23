@@ -150,6 +150,7 @@ export class TelegramChannelNetworksService {
       username: string | null;
       photoUrl: string | null;
       currentSubscribersCount: number | null;
+      pendingJoinRequestsCount: number;
     },
     audience: any,
     finance: any,
@@ -163,6 +164,7 @@ export class TelegramChannelNetworksService {
       photoUrl: channel.photoUrl,
       subscribersCount: audience.subscribersCount,
       currentSubscribersCount: channel.currentSubscribersCount,
+      pendingJoinRequestsCount: channel.pendingJoinRequestsCount,
       activeSubscribersEstimate: audience.activeSubscribersEstimate,
       paidActiveSubscribersEstimate: audience.paidActiveSubscribersEstimate,
       viewRate: audience.viewRate,
@@ -241,6 +243,7 @@ export class TelegramChannelNetworksService {
         username: channel.username,
         photoUrl: channel.photoUrl,
         subscribersCount: channel.subscribersCount,
+        pendingJoinRequestsCount: channel.pendingJoinRequestsCount,
         currentSubscribersCount: channel.currentSubscribersCount,
         activeSubscribersEstimate: channel.activeSubscribersEstimate,
       })),
@@ -253,6 +256,7 @@ export class TelegramChannelNetworksService {
     const economics = finance.assetEconomics;
     return Boolean(
       channel.currentSubscribersCount != null ||
+      Number(channel.pendingJoinRequestsCount || 0) > 0 ||
       audience.hasSnapshot ||
       Number(finance.campaignsCount || 0) > 0 ||
       Number(finance.totalAdSpend || 0) !== 0 ||

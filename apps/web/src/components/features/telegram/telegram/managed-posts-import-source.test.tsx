@@ -24,7 +24,7 @@ describe("ManagedPostsImportSource", () => {
     const { onContent } = renderSource();
 
     fireEvent.paste(
-      screen.getByText("Drop, paste, or choose a file").closest("label")!,
+      screen.getByRole("region", { name: "File drop and paste area" }),
       {
         clipboardData: {
           files: [],
@@ -61,12 +61,27 @@ describe("ManagedPostsImportSource", () => {
     });
 
     fireEvent.drop(
-      screen.getByText("Drop, paste, or choose a file").closest("label")!,
+      screen.getByRole("region", { name: "File drop and paste area" }),
       {
         dataTransfer: { files: [file] },
       },
     );
 
     expect(onFile).toHaveBeenCalledWith(file);
+  });
+
+  it("opens the file picker only from the Choose file button", () => {
+    renderSource();
+    const zone = screen.getByRole("region", {
+      name: "File drop and paste area",
+    });
+    const input = zone.querySelector('input[type="file"]') as HTMLInputElement;
+    const inputClick = vi.spyOn(input, "click");
+
+    fireEvent.click(zone);
+    expect(inputClick).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose file" }));
+    expect(inputClick).toHaveBeenCalledOnce();
   });
 });

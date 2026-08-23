@@ -52,6 +52,7 @@ import { TelegramManagedPostGroupBulkService } from '../telegram-managed-post-gr
 import { TelegramManagedPostGroupPresentationService } from '../telegram-managed-post-group-presentation.service';
 import { TelegramManagedPostHistoryService } from '../telegram-managed-post-history.service';
 import { TelegramManagedPostLinksService } from '../telegram-managed-post-links.service';
+import { TelegramManagedPostMediaStorageService } from '../telegram-managed-post-media-storage.service';
 import { TelegramManagedPostImportService } from '../telegram-managed-post-import.service';
 import { TelegramManagedPostImportParserService } from '../telegram-managed-post-import-parser.service';
 import { TelegramManagedPostIdentityService } from '../telegram-managed-post-identity.service';
@@ -160,6 +161,9 @@ export function createTelegramChannelsTestHarness(
       reused: 0,
     }),
   } as unknown as B2ObjectStorageService,
+  mediaStorage: TelegramManagedPostMediaStorageService = {
+    persistImageUrls: (imageUrls: string[]) => Promise.resolve(imageUrls),
+  } as TelegramManagedPostMediaStorageService,
 ): TelegramChannelsTestHarness {
   const instances = new Map<unknown, unknown>([
     [PrismaService, prisma],
@@ -177,6 +181,7 @@ export function createTelegramChannelsTestHarness(
     [TelegramSystemBotConfigService, systemBotConfig],
     [CurrencyConversionService, currencyConversionService],
     [B2ObjectStorageService, objectStorage],
+    [TelegramManagedPostMediaStorageService, mediaStorage],
   ]);
 
   const pending = [...narrowProviders];
