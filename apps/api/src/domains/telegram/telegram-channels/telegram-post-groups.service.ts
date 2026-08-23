@@ -12,6 +12,7 @@ import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   CreatePostGroupDto,
+  ImportPostGroupsDto,
   PostGroupsQueryDto,
   PostIdsDto,
   ReorderPostGroupDto,
@@ -36,6 +37,41 @@ export class TelegramPostGroupsService {
     private readonly telegramManagedPostGroupPresentationService: TelegramManagedPostGroupPresentationService,
     private readonly telegramPostGroupStore: TelegramPostGroupStore,
   ) {}
+
+  private async resolvePostGroupIconId(
+    workspaceId: string,
+    userId: string,
+    rawIcon: string | null | undefined,
+    title: string,
+  ) {
+    const icon = rawIcon?.trim();
+    if (!icon) return null;
+    const existingById = await this.prisma.icon.findFirst({
+      where: {
+        id: icon,
+        OR: [{ workspaceId }, { workspaceId: null }],
+      },
+      select: { id: true },
+    });
+    if (existingById) return existingById.id;
+    const existingByEmoji = await this.prisma.icon.findFirst({
+      where: { workspaceId, type: 'emoji', emoji: icon },
+      select: { id: true },
+    });
+    if (existingByEmoji) return existingByEmoji.id;
+    return (
+      await this.prisma.icon.create({
+        data: {
+          workspaceId,
+          type: 'emoji',
+          name: title,
+          emoji: icon,
+          createdByUserId: userId,
+        },
+        select: { id: true },
+      })
+    ).id;
+  }
 
   ensureTelegramImportedSystemGroup(
     ...args: Parameters<
@@ -235,10 +271,31 @@ export class TelegramPostGroupsService {
     if (!channel) throw new NotFoundException('Telegram channel not found');
     const title = dto.title.trim();
     if (!title) throw new BadRequestException('Title is required');
+    const createdByMemberId = dto.createdByMemberId?.trim() || membership.id;
+    if (createdByMemberId !== membership.id) {
+      const member = await this.prisma.workspaceMember.findFirst({
+        where: {
+          id: createdByMemberId,
+          workspaceId: membership.workspaceId,
+        },
+        select: { id: true },
+      });
+      if (!member) {
+        throw new BadRequestException(
+          'Group member must belong to the current workspace',
+        );
+      }
+    }
     const postIds = [...new Set(dto.postIds ?? [])];
     if (postIds.length !== (dto.postIds?.length ?? 0)) {
       throw new BadRequestException('postIds must not contain duplicates');
     }
+    const iconId = await this.resolvePostGroupIconId(
+      membership.workspaceId,
+      userId,
+      dto.icon,
+      title,
+    );
     const previousGroupIds = await this.prisma.$transaction(async (tx) => {
       const posts = postIds.length
         ? await tx.telegramManagedPost.findMany({
@@ -261,9 +318,9 @@ export class TelegramPostGroupsService {
           telegramChannelId: channel.id,
           title,
           description: dto.description?.trim() || null,
-          icon: dto.icon?.trim() || null,
+          icon: iconId,
           statusNumberingEnabled: dto.statusNumberingEnabled ?? false,
-          createdByMemberId: membership.id,
+          createdByMemberId,
         },
       });
       await Promise.all(
@@ -297,6 +354,48 @@ export class TelegramPostGroupsService {
       membership.workspaceId,
       previousGroupIds.groupId,
     );
+  }
+
+  async importPostGroups(
+    userId: string,
+    dto: ImportPostGroupsDto,
+    onProgress?: (item: unknown, current: number, total: number) => void,
+  ) {
+    const results: Array<Record<string, unknown>> = [];
+    for (const [index, group] of dto.groups.entries()) {
+      try {
+        const created = await this.createPostGroup(userId, group);
+        const item = {
+          index,
+          title: group.title,
+          success: true,
+          action: 'CREATED',
+          groupId: created.id,
+          message: `Created ${group.title}`,
+        };
+        results.push(item);
+        onProgress?.(item, index + 1, dto.groups.length);
+      } catch (error) {
+        const item = {
+          index,
+          title: group.title,
+          success: false,
+          action: 'FAILED',
+          error:
+            error instanceof Error ? error.message : 'Could not create group',
+          message: `Failed ${group.title}`,
+        };
+        results.push(item);
+        onProgress?.(item, index + 1, dto.groups.length);
+      }
+    }
+    return {
+      total: results.length,
+      successCount: results.filter((item) => item.success).length,
+      failedCount: results.filter((item) => !item.success).length,
+      skippedCount: 0,
+      results,
+    };
   }
 
   async updatePostGroup(

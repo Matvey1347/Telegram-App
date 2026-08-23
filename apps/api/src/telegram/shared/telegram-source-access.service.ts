@@ -5,6 +5,7 @@ import {
   TelegramChannelSourceRole,
   TelegramDataSourceStatus,
   TelegramSourceType,
+  TelegramUserAccountStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { TelegramPublishingCapabilities } from '@telegram-system/shared';
@@ -192,7 +193,8 @@ export class TelegramSourceAccessService {
       status === TelegramDataSourceStatus.SUCCESS &&
       previous?.status === TelegramDataSourceStatus.SUCCESS &&
       previous.errorMessage == null &&
-      JSON.stringify(previous.metadata ?? null) === JSON.stringify(metadata ?? null);
+      JSON.stringify(previous.metadata ?? null) ===
+        JSON.stringify(metadata ?? null);
     if (unchangedSuccess) return previous;
     return this.prisma.telegramChannelDataSource.create({
       data: {
@@ -266,6 +268,10 @@ export class TelegramSourceAccessService {
         where: {
           workspaceId,
           isActive: true,
+          status: TelegramUserAccountStatus.connected,
+          sessionEncrypted: { not: null },
+          sessionIv: { not: null },
+          sessionAuthTag: { not: null },
           id: {
             in: rows
               .filter((row) => row.sourceType === TelegramSourceType.MTPROTO)
@@ -281,7 +287,8 @@ export class TelegramSourceAccessService {
     return rows
       .filter((row) =>
         row.sourceType === TelegramSourceType.BOT
-          ? botById.has(row.sourceId) || row.sourceId === TELEGRAM_SYSTEM_BOT_SOURCE_ID
+          ? botById.has(row.sourceId) ||
+            row.sourceId === TELEGRAM_SYSTEM_BOT_SOURCE_ID
           : accountById.has(row.sourceId),
       )
       .map((row) => {
@@ -313,15 +320,19 @@ export class TelegramSourceAccessService {
               : false,
           captionLengthMax:
             row.sourceType === TelegramSourceType.MTPROTO
-              ? account?.captionLengthMax ?? BOT_API_CAPTION_LIMIT
+              ? (account?.captionLengthMax ?? BOT_API_CAPTION_LIMIT)
               : BOT_API_CAPTION_LIMIT,
           messageLengthMax:
             row.sourceType === TelegramSourceType.MTPROTO
-              ? account?.messageLengthMax ?? BOT_API_MESSAGE_LIMIT
+              ? (account?.messageLengthMax ?? BOT_API_MESSAGE_LIMIT)
               : BOT_API_MESSAGE_LIMIT,
           premiumCheckedAt:
             row.sourceType === TelegramSourceType.MTPROTO
-              ? account?.premiumCheckedAt ?? null
+              ? (account?.premiumCheckedAt ?? null)
+              : null,
+          accountLastCheckedAt:
+            row.sourceType === TelegramSourceType.MTPROTO
+              ? (account?.lastCheckedAt ?? null)
               : null,
           canBeUsedForAnalytics: this.canBeUsedForAnalytics(
             permissions,
@@ -386,6 +397,10 @@ export class TelegramSourceAccessService {
         where: {
           workspaceId,
           isActive: true,
+          status: TelegramUserAccountStatus.connected,
+          sessionEncrypted: { not: null },
+          sessionIv: { not: null },
+          sessionAuthTag: { not: null },
           id: {
             in: rows
               .filter((row) => row.sourceType === TelegramSourceType.MTPROTO)
@@ -404,13 +419,16 @@ export class TelegramSourceAccessService {
           captionLengthMax: true,
           messageLengthMax: true,
           premiumCheckedAt: true,
+          lastCheckedAt: true,
           premiumCapabilities: true,
         },
       }),
     ]);
 
     const botById = new Map(bots.map((bot) => [bot.id, bot]));
-    const accountById = new Map(accounts.map((account) => [account.id, account]));
+    const accountById = new Map(
+      accounts.map((account) => [account.id, account]),
+    );
     const result = new Map<string, TelegramPublishingCapabilities>();
 
     for (const channelId of uniqueChannelIds) {
@@ -422,14 +440,21 @@ export class TelegramSourceAccessService {
           (botById.has(row.sourceId) ||
             row.sourceId === TELEGRAM_SYSTEM_BOT_SOURCE_ID),
       );
-      const preferredSource =
-        rows.find(
+      const preferredMtprotoSource = rows
+        .filter(
           (row) =>
             row.channelId === channelId &&
             row.sourceType === TelegramSourceType.MTPROTO &&
             row.canPostMessages &&
             accountById.has(row.sourceId),
-        ) ??
+        )
+        .sort((left, right) => {
+          const leftChecked = accountById.get(left.sourceId)?.lastCheckedAt;
+          const rightChecked = accountById.get(right.sourceId)?.lastCheckedAt;
+          return (rightChecked?.getTime() ?? 0) - (leftChecked?.getTime() ?? 0);
+        })[0];
+      const preferredSource =
+        preferredMtprotoSource ??
         rows.find(
           (row) =>
             row.channelId === channelId &&
@@ -558,7 +583,8 @@ export class TelegramSourceAccessService {
     const dataAttribution = Object.values(TelegramChannelDataType).map(
       (dataType) => {
         const rows = latestByType.get(dataType) || [];
-        const latestStatus = rows[0]?.status || TelegramDataSourceStatus.SKIPPED;
+        const latestStatus =
+          rows[0]?.status || TelegramDataSourceStatus.SKIPPED;
         const rawErrorMessage =
           rows.find((row) => row.errorMessage)?.errorMessage ||
           (rows.length ? null : 'No connected source has required permission');
@@ -676,7 +702,10 @@ export class TelegramSourceAccessService {
     const runtime = bot.runtimeInstances[0];
     return runtime?.username
       ? `@${runtime.username}`
-      : runtime?.firstName || bot.label || runtime?.botTokenMasked || 'Telegram bot';
+      : runtime?.firstName ||
+          bot.label ||
+          runtime?.botTokenMasked ||
+          'Telegram bot';
   }
 
   private accountDisplayName(account?: {

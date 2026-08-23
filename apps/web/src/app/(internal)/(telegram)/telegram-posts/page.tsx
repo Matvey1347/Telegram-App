@@ -1,5 +1,4 @@
 "use client";
-
 import {
   useCallback,
   useEffect,
@@ -48,12 +47,20 @@ import { IconPicker } from "@/components/icons/icon-picker";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageTabHead } from "@/components/layout/page-tab-head";
 import { ManagedPostsImportModal } from "@/components/features/telegram/telegram/managed-posts-import-modal";
+import { PostGroupsImportModal } from "@/components/features/telegram/telegram/post-groups-import-modal";
 import {
   TelegramCardActionsMenu,
   TelegramCardMenuAction,
 } from "@/components/features/telegram/telegram/telegram-card-actions-menu";
 import { CalendarPostGroupSection } from "@/components/features/telegram/telegram/calendar-post-group-section";
 import { AutoCalendarPlannerPreview } from "@/components/features/telegram/telegram/auto-calendar-planner-preview";
+import { CalendarPlanImport } from "@/components/features/telegram/telegram/calendar-plan-import";
+import {
+  LongImageTextModePanel,
+  PostStatusIcon,
+  publishModeLabel,
+  type LongTextMode,
+} from "@/components/features/telegram/telegram/managed-post-presentation";
 import {
   AddTimePostButton,
   TimePostsControl,
@@ -155,12 +162,12 @@ import {
   isValidTimeInputValue,
 } from "@/components/ui/primitives";
 import { useAppToast } from "@/providers/toast-provider";
-
+import { Pagination } from "@/components/ui/pagination";
+import { usePagination } from "@/hooks/use-pagination";
 type PublishingMode = "draft" | "publish" | "schedule";
-type LongTextMode = "IMAGES_THEN_TEXT" | "CAPTION_THEN_TEXT";
 type PostStatusTab = "PUBLISHED" | "SCHEDULED" | "DRAFT";
-type PostViewMode = TelegramPostsRouteView;
-type InitialPostView = PostViewMode | null;
+type PostViewMode = Exclude<TelegramPostsRouteView, "groups">;
+type InitialPostView = TelegramPostsRouteView | null;
 type TelegramPostsPageProps = {
   routeChannelId?: string | null;
   routePostView?: TelegramPostsRouteView | null;
@@ -510,10 +517,14 @@ export function TelegramPostsPageClient({
   const { pushToast, setProgress, clearProgress } = useAppToast();
   const [newPostToken, setNewPostToken] = useState(0);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [groupImportModalOpen, setGroupImportModalOpen] = useState(false);
   const routeChannelIdValue = routeChannelId?.trim() || "";
   const channelId = routeChannelIdValue || searchParams.get("channelId") || "";
   const postId = searchParams.get("postId") || "";
   const groupId = searchParams.get("groupId") || "";
+  const [pageWorkspaceView, setPageWorkspaceView] = useState<"posts" | "groups">(
+    routePostView === "groups" || groupId ? "groups" : "posts",
+  );
   const noteId = searchParams.get("noteId") || "";
   const initialPostView = (() => {
     if (routePostView) return routePostView;
@@ -522,7 +533,8 @@ export function TelegramPostsPageClient({
     if (value === "editor") return "editor";
     return null;
   })();
-  const currentRoutePostView: PostViewMode = initialPostView || "editor";
+  const currentRoutePostView: PostViewMode =
+    initialPostView === "calendar" ? "calendar" : "editor";
   const legacyRedirectUrl = useMemo(
     () =>
       routeChannelIdValue
@@ -631,7 +643,8 @@ export function TelegramPostsPageClient({
     router.push(
       buildTelegramPostsUrl({
         channelId: nextChannelId,
-        postView: groupId ? null : currentRoutePostView,
+        postView:
+          pageWorkspaceView === "groups" ? "groups" : currentRoutePostView,
       }),
     );
   };
@@ -656,56 +669,50 @@ export function TelegramPostsPageClient({
                   }))}
                 />
               </div>
-              <Button
-                variant="secondary"
-                className="shrink-0"
-                onClick={() => setImportModalOpen(true)}
-              >
-                <span className="inline-flex items-center gap-2">
-                  <Upload size={15} />
-                  Import
-                </span>
-              </Button>
-              <TimePostsControl
-                channelId={channel.id}
-                timePosts={channel.timePosts || []}
-              />
-              <Button
-                variant="secondary"
-                className="shrink-0"
-                onClick={async () => {
-                  try {
-                    pushToast("Preparing GPT context…", "info");
-                    const blob = await telegramChannelsApi.gptContext(channel.id);
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement("a");
-                    link.href = url; link.download = buildTelegramGptContextFilename(channel.title);
-                    document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
-                    pushToast("GPT context downloaded.", "success");
-                  } catch (error) {
-                    pushToast(apiErrorMessage(error, "Could not download GPT context"), "error");
-                  }
-                }}
-              >
-                GPT Context
-              </Button>
-              <Button
-                className="shrink-0"
-                onClick={() => {
-                  router.replace(
-                    buildTelegramPostsUrl({
-                      channelId: channel.id,
-                      postView: "editor",
-                    }),
-                  );
-                  setNewPostToken((value) => value + 1);
-                }}
-              >
-                <span className="inline-flex items-center gap-2">
-                  <Plus size={15} />
-                  New post
-                </span>
-              </Button>
+              {pageWorkspaceView === "groups" ? (
+                <Button
+                  variant="secondary"
+                  className="shrink-0"
+                  onClick={() => setGroupImportModalOpen(true)}
+                >
+                  <Upload size={15} /> Import groups
+                </Button>
+              ) : (
+                <>
+                  <Button variant="secondary" className="shrink-0" onClick={() => setImportModalOpen(true)}>
+                    <span className="inline-flex items-center gap-2"><Upload size={15} /> Import</span>
+                  </Button>
+                  <TimePostsControl channelId={channel.id} timePosts={channel.timePosts || []} />
+                  <Button
+                    variant="secondary"
+                    className="shrink-0"
+                    onClick={async () => {
+                      try {
+                        pushToast("Preparing GPT context…", "info");
+                        const blob = await telegramChannelsApi.gptContext(channel.id);
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement("a");
+                        link.href = url; link.download = buildTelegramGptContextFilename(channel.title);
+                        document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+                        pushToast("GPT context downloaded.", "success");
+                      } catch (error) {
+                        pushToast(apiErrorMessage(error, "Could not download GPT context"), "error");
+                      }
+                    }}
+                  >
+                    GPT Context
+                  </Button>
+                  <Button
+                    className="shrink-0"
+                    onClick={() => {
+                      router.replace(buildTelegramPostsUrl({ channelId: channel.id, postView: "editor" }));
+                      setNewPostToken((value) => value + 1);
+                    }}
+                  >
+                    <span className="inline-flex items-center gap-2"><Plus size={15} /> New post</span>
+                  </Button>
+                </>
+              )}
             </div>
           ) : undefined
         }
@@ -720,6 +727,18 @@ export function TelegramPostsPageClient({
           channelTelegramChatId={channel.telegramChatId}
           captionLengthMax={channel.publishingCapabilities.captionLengthMax}
           messageLengthMax={channel.publishingCapabilities.messageLengthMax}
+        />
+      ) : null}
+      {channel ? (
+        <PostGroupsImportModal
+          open={groupImportModalOpen}
+          channelId={channel.id}
+          onClose={() => setGroupImportModalOpen(false)}
+          onImported={async () => {
+            await queryClient.invalidateQueries({
+              queryKey: telegramPostKeys.postGroups(channel.id),
+            });
+          }}
         />
       ) : null}
       {channels.isLoading ? <LoadingState /> : null}
@@ -743,6 +762,7 @@ export function TelegramPostsPageClient({
             initialNoteId={noteId}
             initialPostView={initialPostView}
             channels={availableChannels}
+            onWorkspaceViewChange={setPageWorkspaceView}
             onPostSelect={(selectedPostId) => {
               router.replace(
                 buildTelegramPostsUrl({
@@ -775,6 +795,7 @@ function TelegramPostWorkspace({
   initialNoteId,
   initialPostView,
   channels,
+  onWorkspaceViewChange,
   onPostSelect,
 }: {
   channelId: string;
@@ -795,15 +816,17 @@ function TelegramPostWorkspace({
   initialNoteId: string;
   initialPostView: InitialPostView;
   channels: TelegramChannel[];
+  onWorkspaceViewChange: (view: "posts" | "groups") => void;
   onPostSelect: (postId: string | null) => void;
 }) {
   const router = useRouter();
   const restoredPostIdRef = useRef("");
   const queryClient = useQueryClient();
-  const { pushToast, setProgress, clearProgress } = useAppToast();
+  const { pushToast, setProgress, clearProgress, startOperation } = useAppToast();
   const [customEmojiPacksOpen, setCustomEmojiPacksOpen] = useState(false);
   const [workspaceView, setWorkspaceView] = useState<"posts" | "groups">(() => {
     if (typeof window === "undefined") return "posts";
+    if (initialPostView === "groups") return "groups";
     if (initialGroupId) return "groups";
     return window.localStorage.getItem(
       workspaceViewPreferenceKey(channelId),
@@ -811,8 +834,9 @@ function TelegramPostWorkspace({
       ? "groups"
       : "posts";
   });
+  useEffect(() => onWorkspaceViewChange(workspaceView), [onWorkspaceViewChange, workspaceView]);
   const [postView, setPostView] = useState<PostViewMode>(() => {
-    return initialPostView || "editor";
+    return initialPostView === "calendar" ? "calendar" : "editor";
   });
   const [calendarMonth, setCalendarMonth] = useState(() =>
     startOfMonth(new Date()),
@@ -830,6 +854,8 @@ function TelegramPostWorkspace({
   const [calendarBatchBusy, setCalendarBatchBusy] = useState(false);
   const [showAdSalesOverlay, setShowAdSalesOverlay] = useState(true);
   const [autoPlannerOpen, setAutoPlannerOpen] = useState(false);
+  const [autoPlannerMode, setAutoPlannerMode] = useState<"system" | "import">("system");
+  const [autoPlannerPreviewSource, setAutoPlannerPreviewSource] = useState<"system" | "import">("system");
   const [autoPlannerBusy, setAutoPlannerBusy] = useState(false);
   const [autoPlannerDays, setAutoPlannerDays] = useState(7);
   const [autoPlannerFrom, setAutoPlannerFrom] = useState(() =>
@@ -870,6 +896,8 @@ function TelegramPostWorkspace({
   const [plannerFormatDraftsById, setPlannerFormatDraftsById] = useState<
     Record<string, PlannerFormatDraft>
   >({});
+  const [editingPlannerFormatIds, setEditingPlannerFormatIds] = useState<string[]>([]);
+  const [editingPlannerSlotGroupIds, setEditingPlannerSlotGroupIds] = useState<string[]>([]);
   const [autoPlannerPreview, setAutoPlannerPreview] =
     useState<TelegramPostPlannerPreviewResult | null>(null);
   const [autoPlannerRerollingDate, setAutoPlannerRerollingDate] = useState<
@@ -1005,6 +1033,7 @@ function TelegramPostWorkspace({
     queryKey: ["post-groups", channelId],
     queryFn: () =>
       telegramChannelsApi.postGroups({ telegramChannelId: channelId }),
+    enabled: workspaceView === "posts",
   });
   const plannerFormats = useQuery({
     queryKey: telegramPostKeys.plannerFormats(channelId),
@@ -1468,7 +1497,7 @@ function TelegramPostWorkspace({
     (item) => item.slots.length > 0,
   );
   const canUsePlannerFormatSlots =
-    !hasPlannerFormatSlots || hasEnabledPlannerFormatWeight;
+    hasPlannerFormatSlots && hasEnabledPlannerFormatWeight;
   const calendarSchedulablePosts = useMemo(() => {
     const managedPosts = posts.data || [];
     return getCalendarSchedulablePosts(managedPosts).filter((post) =>
@@ -1748,7 +1777,15 @@ function TelegramPostWorkspace({
 
   const changeWorkspaceView = (next: "posts" | "groups") => {
     setWorkspaceView(next);
+    onWorkspaceViewChange(next);
     window.localStorage.setItem(workspaceViewPreferenceKey(channelId), next);
+    router.replace(
+      buildTelegramPostsUrl({
+        channelId,
+        groupId: next === "groups" ? initialGroupId || null : null,
+        postView: next === "groups" ? "groups" : postView,
+      }),
+    );
   };
 
   const changePostView = (next: PostViewMode) => {
@@ -1848,17 +1885,41 @@ function TelegramPostWorkspace({
     setAutoPlannerBusy(true);
     try {
       const basePosition = plannerSlotsByFormatId.get(formatId)?.length ?? 0;
-      await Promise.all(
-        timePosts.map((timePost, index) =>
-          telegramChannelsApi.createPostPlannerSlot(channelId, {
+      const operation = startOperation({
+        id: `planner-slots-create:${channelId}:${formatId}`,
+        title: "Create auto posting slots",
+        message: "Starting…",
+        current: 0,
+        total: timePosts.length,
+      });
+      let successful = 0;
+      let failed = 0;
+      const result = await telegramChannelsApi.mutatePostPlannerSlotsWithProgress(
+        channelId,
+        timePosts.map((timePost, index) => ({
+          action: "CREATE" as const,
+          data: {
             formatId,
             postGroupIds: draft?.groupIds || [],
             weekday: 1,
             time: timePost.time,
             position: basePosition + index,
-          }),
-        ),
+          },
+        })),
+        (item, current, total) => {
+          if (item.success) successful += 1;
+          else failed += 1;
+          operation.update({
+            message: item.message || "Updating auto posting…",
+            current,
+            total,
+            progressSummary: { successful, failed },
+          });
+        },
       );
+      const completion = { message: `${result.successCount} successful, ${result.failedCount} failed.` };
+      if (result.failedCount) operation.fail(completion);
+      else operation.succeed(completion);
       setPlannerSlotDraftsByFormatId((current) => ({
         ...current,
         [formatId]: { timePostIds: [], groupIds: [] },
@@ -1868,7 +1929,7 @@ function TelegramPostWorkspace({
         timePosts.length === 1
           ? "Planner slot created."
           : `${timePosts.length} planner slots created.`,
-        "success",
+        result.failedCount ? "info" : "success",
       );
     } catch (error) {
       pushToast(
@@ -1938,19 +1999,18 @@ function TelegramPostWorkspace({
           : [];
         const basePosition = formatSlots.length;
 
-        await Promise.all([
-          ...slotsToUpdate.map((existingSlot, index) =>
-            telegramChannelsApi.updatePostPlannerSlot(
-              channelId,
-              existingSlot.id,
-              {
+        const mutations = [
+          ...slotsToUpdate.map((existingSlot, index) => ({
+            action: "UPDATE" as const,
+            slotId: existingSlot.id,
+            data: {
                 postGroupIds: draft.groupIds,
                 time: timePosts[index]?.time ?? existingSlot.time,
               },
-            ),
-          ),
-          ...timePostsToCreate.map((timePost, index) =>
-            telegramChannelsApi.createPostPlannerSlot(channelId, {
+          })),
+          ...timePostsToCreate.map((timePost, index) => ({
+            action: "CREATE" as const,
+            data: {
               formatId: templateSlot.formatId,
               postGroupIds: draft.groupIds,
               weekday: templateSlot.weekday,
@@ -1958,16 +2018,29 @@ function TelegramPostWorkspace({
               timezone: templateSlot.timezone,
               position: basePosition + index,
               isActive: templateSlot.isActive,
-            }),
-          ),
-          ...slotsToDelete.map((existingSlot) =>
-            telegramChannelsApi.deletePostPlannerSlot(
-              channelId,
-              existingSlot.id,
-            ),
-          ),
-        ]);
+            },
+          })),
+          ...slotsToDelete.map((existingSlot) => ({
+            action: "DELETE" as const,
+            slotId: existingSlot.id,
+          })),
+        ];
+        let successful = 0;
+        let failed = 0;
+        const operation = startOperation({ id: `planner-slots-save:${channelId}:${slotGroup.id}`, title: "Update auto posting slots", message: "Starting…", current: 0, total: mutations.length });
+        const result = await telegramChannelsApi.mutatePostPlannerSlotsWithProgress(channelId, mutations, (item, current, total) => {
+          if (item.success) successful += 1;
+          else failed += 1;
+          operation.update({ message: item.message || "Updating auto posting…", current, total, progressSummary: { successful, failed } });
+        });
+        const completion = { message: `${result.successCount} successful, ${result.failedCount} failed.` };
+        if (result.failedCount) operation.fail(completion);
+        else operation.succeed(completion);
+        if (result.failedCount) throw new Error(completion.message);
         resetPlannerSlotEditDraft(slotGroup.id);
+        setEditingPlannerSlotGroupIds((current) =>
+          current.filter((id) => id !== slotGroup.id),
+        );
       },
       timePosts.length === 1
         ? "Planner slot updated."
@@ -2011,6 +2084,9 @@ function TelegramPostWorkspace({
         const { [format.id]: _removed, ...rest } = current;
         return rest;
       });
+      setEditingPlannerFormatIds((current) =>
+        current.filter((id) => id !== format.id),
+      );
     }, "Planner format updated.");
   };
 
@@ -2053,10 +2129,15 @@ function TelegramPostWorkspace({
         autoPlannerPreviewPayload(),
       );
       setAutoPlannerPreview(result);
+      setAutoPlannerPreviewSource("system");
       setAutoPlannerRerollOffsetsByDate({});
       pushToast(
-        `Preview ready: ${result.summary.plannedPosts} posts selected. Nothing has been scheduled yet.`,
-        "success",
+        result.summary.plannedPosts
+          ? `Preview ready: ${result.summary.plannedPosts} posts selected.`
+          : result.summary.availableSlots
+            ? `No draft posts match the ${result.summary.availableSlots} available times.`
+            : "No active publishing slots are configured for this range.",
+        result.summary.plannedPosts ? "success" : "info",
       );
     } catch (error) {
       pushToast(
@@ -2142,8 +2223,12 @@ function TelegramPostWorkspace({
       total: assignments.length,
       message: `Scheduling ${assignments.length} previewed posts…`,
       iconUrl: channelPhotoUrl || undefined,
+      successCount: 0,
+      failedCount: 0,
     });
     try {
+      let successful = 0;
+      let failed = 0;
       const result = await telegramChannelsApi.scheduleManagedPostsBatch(
         channelId,
         {
@@ -2152,7 +2237,9 @@ function TelegramPostWorkspace({
             scheduledAt: assignment.scheduledAt,
           })),
         },
-        (item, current, total) =>
+        (item, current, total) => {
+          if (item.success) successful += 1;
+          else failed += 1;
           setProgress({
             id: progressId,
             title: "Schedule calendar plan",
@@ -2160,7 +2247,10 @@ function TelegramPostWorkspace({
             total,
             message: item.message || "Scheduling previewed posts…",
             iconUrl: channelPhotoUrl || undefined,
-          }),
+            successCount: successful,
+            failedCount: failed,
+          });
+        },
       );
       setProgress({
         id: progressId,
@@ -2215,6 +2305,51 @@ function TelegramPostWorkspace({
     } finally {
       setAutoPlannerBusy(false);
     }
+  };
+
+  const removeAutoPlannerAssignment = (postId: string, scheduledAt: string) => setAutoPlannerPreview((current) => {
+    if (!current) return current;
+    const assignments = current.assignments.filter(
+      (assignment) => assignment.postId !== postId || assignment.scheduledAt !== scheduledAt,
+    );
+    return {
+      ...current,
+      assignments,
+      summary: {
+        ...current.summary,
+        plannedPosts: assignments.length,
+        unfilledSlots: Math.max(0, current.summary.availableSlots - assignments.length),
+      },
+    };
+  });
+
+  const replaceAutoPlannerAssignmentPost = (
+    currentPostId: string,
+    scheduledAt: string,
+    nextPostId: string,
+  ) => {
+    const nextPost = calendarSchedulablePosts.find((post) => post.id === nextPostId);
+    if (!nextPost) return;
+    if (autoPlannerPreview?.assignments.some(
+      (assignment) => assignment.postId === nextPostId && assignment.postId !== currentPostId,
+    )) {
+      pushToast("This post is already used in the plan.", "error");
+      return;
+    }
+    setAutoPlannerPreview((current) => current ? {
+      ...current,
+      assignments: current.assignments.map((assignment) =>
+        assignment.postId === currentPostId && assignment.scheduledAt === scheduledAt
+          ? {
+              ...assignment,
+              postId: nextPost.id,
+              title: nextPost.title,
+              groupId: effectivePostGroupId(nextPost),
+              provenance: { ...assignment.provenance, groupId: effectivePostGroupId(nextPost) },
+            }
+          : assignment,
+      ),
+    } : current);
   };
 
   const toggleCalendarBatchPostSelection = (postId: string) => {
@@ -2540,6 +2675,10 @@ function TelegramPostWorkspace({
   }, [channelId, plannerFormatWeights]);
 
   useEffect(() => {
+    if (initialPostView === "groups") {
+      setWorkspaceView("groups");
+      return;
+    }
     const saved = window.localStorage.getItem(
       `telegram-posts-status:${channelId}`,
     );
@@ -2560,7 +2699,7 @@ function TelegramPostWorkspace({
   }, [channelId]);
 
   useEffect(() => {
-    setPostView(initialPostView || "editor");
+    setPostView(initialPostView === "calendar" ? "calendar" : "editor");
     setCalendarMonth(startOfMonth(new Date()));
     setSelectedCalendarDate(toLocalDateKey(new Date()));
   }, [channelId, initialPostView]);
@@ -3325,16 +3464,18 @@ function TelegramPostWorkspace({
             </button>
           </div>
         ) : null}
-        <div className="ml-auto">
-          <PromptNotesButton
-            channelId={channelId}
-            notes={promptNotes.data || []}
-            isLoading={promptNotes.isLoading}
-            channels={channels}
-            currentMemberId={currentMemberId}
-            initialNoteId={initialNoteId}
-          />
-        </div>
+        {workspaceView === "posts" ? (
+          <div className="ml-auto">
+            <PromptNotesButton
+              channelId={channelId}
+              notes={promptNotes.data || []}
+              isLoading={promptNotes.isLoading}
+              channels={channels}
+              currentMemberId={currentMemberId}
+              initialNoteId={initialNoteId}
+            />
+          </div>
+        ) : null}
       </div>
       <Modal
         open={autoPlannerOpen}
@@ -3344,7 +3485,54 @@ function TelegramPostWorkspace({
       >
         <div className="grid gap-4">
           <div className="space-y-4">
-            <Card className="p-4">
+            <div className="inline-flex rounded-lg border border-neutral-800 bg-neutral-950 p-1">
+              <button
+                type="button"
+                onClick={() => setAutoPlannerMode("system")}
+                className={`rounded-md px-4 py-2 text-sm ${autoPlannerMode === "system" ? "bg-blue-600 text-white" : "text-neutral-400 hover:text-white"}`}
+              >
+                System fill
+              </button>
+              <button
+                type="button"
+                onClick={() => setAutoPlannerMode("import")}
+                className={`rounded-md px-4 py-2 text-sm ${autoPlannerMode === "import" ? "bg-blue-600 text-white" : "text-neutral-400 hover:text-white"}`}
+              >
+                Import plan
+              </button>
+            </div>
+            {autoPlannerMode === "import" ? (
+              <Card className="p-4">
+                <CalendarPlanImport
+                  posts={calendarSchedulablePosts.map((post) => ({
+                    id: post.id,
+                    title: post.title,
+                    groupId: effectivePostGroupId(post),
+                  }))}
+                  timezone={Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"}
+                  disabled={autoPlannerBusy}
+                  onPreview={(preview) => {
+                    setAutoPlannerPreview(preview);
+                    setAutoPlannerPreviewSource("import");
+                  }}
+                />
+                {autoPlannerPreview && autoPlannerPreviewSource === "import" ? (
+                  <AutoCalendarPlannerPreview
+                    preview={autoPlannerPreview}
+                    busy={autoPlannerBusy}
+                    rerollingDate={null}
+                    onScheduleAll={scheduleAutoPlannerPreview}
+                    availablePosts={calendarSchedulablePosts.map((post) => ({
+                      id: post.id,
+                      title: post.title,
+                    }))}
+                    onRemoveAssignment={removeAutoPlannerAssignment}
+                    onReplaceAssignmentPost={replaceAutoPlannerAssignmentPost}
+                  />
+                ) : null}
+              </Card>
+            ) : null}
+            <Card className={autoPlannerMode === "system" ? "p-4" : "hidden"}>
               <div className="flex flex-wrap items-end gap-3">
                 <FormField label="Start date">
                   <DateInput
@@ -3414,6 +3602,11 @@ function TelegramPostWorkspace({
                   </span>
                 </Button>
               </div>
+              {!hasPlannerFormatSlots ? (
+                <p className="mt-3 rounded-lg border border-amber-800/60 bg-amber-950/20 px-3 py-2 text-sm text-amber-200">
+                  Add at least one publishing slot inside a format before generating a preview.
+                </p>
+              ) : null}
               {plannerFormatsWithWeights.length ? (
                 <div className="mt-4 rounded-lg border border-neutral-800 bg-neutral-950/50 p-3">
                   <div className="mb-3 flex items-center justify-between gap-3">
@@ -3459,18 +3652,24 @@ function TelegramPostWorkspace({
                   </div>
                 </div>
               ) : null}
-              {autoPlannerPreview ? (
+              {autoPlannerPreview && autoPlannerPreviewSource === "system" ? (
                 <AutoCalendarPlannerPreview
                   preview={autoPlannerPreview}
                   busy={autoPlannerBusy}
                   rerollingDate={autoPlannerRerollingDate}
                   onRerollDay={rerollAutoPlannerDay}
                   onScheduleAll={scheduleAutoPlannerPreview}
+                  availablePosts={calendarSchedulablePosts.map((post) => ({
+                    id: post.id,
+                    title: post.title,
+                  }))}
+                  onRemoveAssignment={removeAutoPlannerAssignment}
+                  onReplaceAssignmentPost={replaceAutoPlannerAssignmentPost}
                 />
               ) : null}
             </Card>
 
-            <Card className="p-4">
+            <Card className={autoPlannerMode === "system" ? "p-4" : "hidden"}>
               <div className="mb-3 flex items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold text-white">Formats</h3>
                 {plannerFormats.isLoading ? (
@@ -3529,88 +3728,88 @@ function TelegramPostWorkspace({
                     (formatDraft.name !== format.name ||
                       formatDraft.icon !== (format.icon ?? "")),
                   );
+                  const formatEditing = editingPlannerFormatIds.includes(format.id);
                   return (
                     <div
                       key={format.id}
                       className="rounded-lg border border-neutral-800 bg-neutral-950/70 p-3"
                     >
                       <div className="flex items-center gap-3">
-                        <PlannerFormatEmojiPicker
-                          value={editableFormat.icon}
-                          disabled={autoPlannerBusy}
-                          className="h-8 w-8"
-                          iconClassName="!h-4 !w-4 !bg-transparent"
-                          onChange={(nextIcon) =>
-                            updatePlannerFormatDraft(format, {
-                              icon: nextIcon ?? "",
-                            })
-                          }
-                          onError={(error) =>
-                            pushToast(
-                              error instanceof Error
-                                ? error.message
-                                : "Could not update format emoji",
-                              "error",
-                            )
-                          }
-                        />
-                        <Input
-                          value={editableFormat.name}
-                          disabled={autoPlannerBusy}
-                          onChange={(event) =>
-                            updatePlannerFormatDraft(format, {
-                              name: event.target.value,
-                            })
-                          }
-                          className="h-9 min-w-0 flex-1"
-                        />
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          disabled={
-                            autoPlannerBusy ||
-                            !formatDirty ||
-                            !editableFormat.name.trim()
-                          }
-                          onClick={() => savePlannerFormatDraft(format)}
-                          className="h-9 shrink-0 border-emerald-800/70 bg-emerald-950/35 px-3 text-emerald-100 hover:bg-emerald-900/45 disabled:border-neutral-800 disabled:bg-neutral-900 disabled:text-neutral-500"
-                        >
-                          <span className="inline-flex items-center gap-1.5">
-                            <Check size={14} />
-                            Save
-                          </span>
-                        </Button>
-                        {formatDirty ? (
+                        {formatEditing ? (
+                          <>
+                            <PlannerFormatEmojiPicker
+                              value={editableFormat.icon}
+                              disabled={autoPlannerBusy}
+                              className="h-8 w-8"
+                              iconClassName="!h-4 !w-4 !bg-transparent"
+                              onChange={(nextIcon) =>
+                                updatePlannerFormatDraft(format, { icon: nextIcon ?? "" })
+                              }
+                              onError={(error) =>
+                                pushToast(error instanceof Error ? error.message : "Could not update format emoji", "error")
+                              }
+                            />
+                            <Input
+                              value={editableFormat.name}
+                              disabled={autoPlannerBusy}
+                              onChange={(event) =>
+                                updatePlannerFormatDraft(format, { name: event.target.value })
+                              }
+                              className="h-9 min-w-0 flex-1"
+                            />
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              disabled={autoPlannerBusy || !formatDirty || !editableFormat.name.trim()}
+                              onClick={() => savePlannerFormatDraft(format)}
+                              className="h-9 shrink-0 border-emerald-800/70 bg-emerald-950/35 px-3 text-emerald-100 hover:bg-emerald-900/45 disabled:border-neutral-800 disabled:bg-neutral-900 disabled:text-neutral-500"
+                            >
+                              <Check size={14} /> Save
+                            </Button>
                           <Button
                             type="button"
                             variant="secondary"
                             disabled={autoPlannerBusy}
-                            onClick={() =>
+                            onClick={() => {
                               setPlannerFormatDraftsById((current) => {
                                 const next = { ...current };
                                 delete next[format.id];
                                 return next;
-                              })
-                            }
-                            className="h-9 shrink-0 border-amber-800/60 bg-amber-950/20 px-3 text-amber-100 hover:bg-amber-900/30 disabled:border-neutral-800 disabled:bg-neutral-900 disabled:text-neutral-500"
+                              });
+                              setEditingPlannerFormatIds((current) => current.filter((id) => id !== format.id));
+                            }}
+                            className="h-9 shrink-0 px-3"
                           >
-                            <span className="inline-flex items-center gap-1.5">
-                              <RotateCcw size={14} />
-                              Reset
-                            </span>
+                            Cancel
                           </Button>
-                        ) : null}
-                        <button
-                          type="button"
-                          disabled={autoPlannerBusy}
-                          onClick={() => setDeletingPlannerFormat(format)}
-                          className="rounded-md border border-red-800/70 p-1.5 text-red-300 hover:bg-red-950/40 disabled:opacity-50"
-                          aria-label={`Delete ${format.name}`}
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                            <button
+                              type="button"
+                              disabled={autoPlannerBusy}
+                              onClick={() => setDeletingPlannerFormat(format)}
+                              className="rounded-md border border-red-800/70 p-1.5 text-red-300 hover:bg-red-950/40 disabled:opacity-50"
+                              aria-label={`Delete ${format.name}`}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-lg">{format.icon || "◌"}</span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-semibold text-white">{format.name}</p>
+                              <p className="text-xs text-neutral-500">{slotGroups.length} configured slot{slotGroups.length === 1 ? "" : "s"}</p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              onClick={() => setEditingPlannerFormatIds((current) => [...current, format.id])}
+                            >
+                              <Pencil size={14} /> Edit
+                            </Button>
+                          </>
+                        )}
                       </div>
-                      <div className="mt-3 space-y-2">
+                      {formatEditing ? <div className="mt-3 space-y-2">
                         {slotGroups.map((slotGroup) => {
                           const primarySlot = slotGroup.slots[0];
                           const slotDraft = plannerSlotEditDraftsById[
@@ -3636,6 +3835,9 @@ function TelegramPostWorkspace({
                               slotDraft.groupIds,
                               slotGroup.groupIds,
                             );
+                          const slotEditing = editingPlannerSlotGroupIds.includes(
+                            slotGroup.id,
+                          );
                           const displayTimePosts = selectedTimePosts.length
                             ? selectedTimePosts
                             : slotGroup.slots
@@ -3718,7 +3920,7 @@ function TelegramPostWorkspace({
                                       </span>
                                     )}
                                   </div>
-                                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
+                                  {slotEditing ? <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
                                     <FormField label="Groups">
                                       <MultiSelect
                                         value={slotDraft.groupIds}
@@ -3773,29 +3975,37 @@ function TelegramPostWorkspace({
                                         </span>
                                       </Button>
                                     </div>
-                                    {slotDirty ? (
-                                      <div className="flex md:pt-[22px]">
+                                    <div className="flex md:pt-[22px]">
                                         <Button
                                           type="button"
                                           variant="secondary"
                                           disabled={autoPlannerBusy}
-                                          onClick={() =>
+                                          onClick={() => {
                                             resetPlannerSlotEditDraft(
                                               slotGroup.id,
-                                            )
-                                          }
+                                            );
+                                            setEditingPlannerSlotGroupIds((current) => current.filter((id) => id !== slotGroup.id));
+                                          }}
                                           className="h-10 shrink-0 border-amber-800/60 bg-amber-950/20 px-3 text-amber-100 hover:bg-amber-900/30 disabled:border-neutral-800 disabled:bg-neutral-900 disabled:text-neutral-500"
                                         >
                                           <span className="inline-flex items-center gap-1.5">
                                             <RotateCcw size={14} />
-                                            Reset
+                                            Cancel
                                           </span>
                                         </Button>
                                       </div>
-                                    ) : null}
-                                  </div>
+                                  </div> : (
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      className="h-8 px-2.5 text-xs"
+                                      onClick={() => setEditingPlannerSlotGroupIds((current) => [...current, slotGroup.id])}
+                                    >
+                                      <Pencil size={13} /> Edit slot
+                                    </Button>
+                                  )}
                                 </div>
-                                <button
+                                {slotEditing ? <button
                                   type="button"
                                   disabled={autoPlannerBusy}
                                   onClick={() =>
@@ -3805,7 +4015,7 @@ function TelegramPostWorkspace({
                                   aria-label="Delete slot"
                                 >
                                   <Trash2 size={14} />
-                                </button>
+                                </button> : null}
                               </div>
                             </div>
                           );
@@ -3815,8 +4025,8 @@ function TelegramPostWorkspace({
                             No slots in this format yet.
                           </div>
                         ) : null}
-                      </div>
-                      <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                      </div> : null}
+                      {formatEditing ? <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
                         <FormField label="Groups">
                           <MultiSelect
                             value={draft.groupIds}
@@ -3864,7 +4074,7 @@ function TelegramPostWorkspace({
                             Add slot{draft.timePostIds.length > 1 ? "s" : ""}
                           </Button>
                         </div>
-                      </div>
+                      </div> : null}
                     </div>
                   );
                 })}
@@ -3930,10 +4140,13 @@ function TelegramPostWorkspace({
           if (!deletingPlannerSlotGroup) return;
           await runPlannerMutation(
             () =>
-              Promise.all(
-                deletingPlannerSlotGroup.slots.map((slot) =>
-                  telegramChannelsApi.deletePostPlannerSlot(channelId, slot.id),
-                ),
+              telegramChannelsApi.mutatePostPlannerSlotsWithProgress(
+                channelId,
+                deletingPlannerSlotGroup.slots.map((slot) => ({
+                  action: "DELETE" as const,
+                  slotId: slot.id,
+                })),
+                () => undefined,
               ),
             deletingPlannerSlotGroup.slots.length === 1
               ? "Slot deleted."
@@ -6413,10 +6626,21 @@ function PostGroupsWorkspace({
   initialGroupId: string;
   onOpenPost: (post: TelegramManagedPost) => void;
 }) {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { pushToast, setProgress, clearProgress } = useAppToast();
   const openedFromSearchRef = useRef("");
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const selectGroup = (groupId: string | null) => {
+    setSelectedGroupId(groupId);
+    router.replace(
+      buildTelegramPostsUrl({
+        channelId,
+        groupId,
+        postView: "groups",
+      }),
+    );
+  };
   const [groupForm, setGroupForm] = useState<PostGroup | "new" | null>(null);
   const [addPostsOpen, setAddPostsOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
@@ -6433,10 +6657,19 @@ function PostGroupsWorkspace({
   const reorderTimerRef = useRef<number | null>(null);
   const reorderVersionRef = useRef(0);
   const reorderQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const groupsPagination = usePagination({ initialPageSize: 10 });
   const groups = useQuery({
-    queryKey: ["post-groups", channelId],
+    queryKey: [
+      "post-groups",
+      channelId,
+      { page: groupsPagination.page, pageSize: groupsPagination.pageSize },
+    ],
     queryFn: () =>
-      telegramChannelsApi.postGroups({ telegramChannelId: channelId }),
+      telegramChannelsApi.postGroupsPage({
+        telegramChannelId: channelId,
+        page: groupsPagination.page,
+        pageSize: groupsPagination.pageSize,
+      }),
   });
   const detail = useQuery({
     queryKey: ["post-group", selectedGroupId],
@@ -6462,14 +6695,13 @@ function PostGroupsWorkspace({
       .filter((post): post is TelegramManagedPost => Boolean(post));
   }, [detail.data?.posts, orderedPostIds]);
 
-  const groupsList = useMemo(() => groups.data || [], [groups.data]);
+  const groupsList = useMemo(() => groups.data?.items || [], [groups.data]);
   useEffect(() => {
     if (!initialGroupId) {
       openedFromSearchRef.current = "";
       return;
     }
     if (openedFromSearchRef.current === initialGroupId) return;
-    if (!groupsList.some((group) => group.id === initialGroupId)) return;
     setSelectedGroupId(initialGroupId);
     openedFromSearchRef.current = initialGroupId;
   }, [groupsList, initialGroupId]);
@@ -6651,9 +6883,15 @@ function PostGroupsWorkspace({
       message: progressMeta?.initialMessage || "Loading…",
       iconEmoji: progressMeta?.iconEmoji,
       iconUrl: progressMeta?.iconUrl,
+      successCount: 0,
+      failedCount: 0,
     });
     try {
+      let successful = 0;
+      let failed = 0;
       const result = await request((item, current, progressTotal) => {
+        if (item.success && !item.skipped) successful += 1;
+        else if (!item.success && !item.skipped) failed += 1;
         setProgress({
           id: progressId,
           title: progressMeta?.title || title,
@@ -6662,6 +6900,8 @@ function PostGroupsWorkspace({
           message: item.message,
           iconEmoji: progressMeta?.iconEmoji,
           iconUrl: progressMeta?.iconUrl,
+          successCount: successful,
+          failedCount: failed,
         });
       });
       setProgress({
@@ -6703,7 +6943,7 @@ function PostGroupsWorkspace({
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <button
             type="button"
-            onClick={() => setSelectedGroupId(null)}
+            onClick={() => selectGroup(null)}
             className={groupActionButtonClass}
           >
             ← Groups
@@ -6929,7 +7169,7 @@ function PostGroupsWorkspace({
             onClose={() => setGroupForm(null)}
             onSaved={async (saved) => {
               setGroupForm(null);
-              setSelectedGroupId(saved.id);
+              selectGroup(saved.id);
               await refresh();
             }}
           />
@@ -6968,7 +7208,7 @@ function PostGroupsWorkspace({
                   initialMessage: "Loading…",
                 },
               );
-              setSelectedGroupId(null);
+              selectGroup(null);
               await refresh([channelId, targetId]);
               await forceReloadGroupData([channelId, targetId]);
             }}
@@ -7067,7 +7307,7 @@ function PostGroupsWorkspace({
             if (!deletingGroup) return;
             await telegramChannelsApi.deletePostGroup(deletingGroup.id);
             setDeletingGroup(null);
-            setSelectedGroupId(null);
+            selectGroup(null);
             await groups.refetch();
           }}
         />
@@ -7102,7 +7342,7 @@ function PostGroupsWorkspace({
                 <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
                   <button
                     type="button"
-                    onClick={() => setSelectedGroupId(group.id)}
+                    onClick={() => selectGroup(group.id)}
                     className="flex min-w-0 flex-1 items-start gap-3 text-left"
                   >
                     <PostIcon
@@ -7132,7 +7372,7 @@ function PostGroupsWorkspace({
                     <TelegramCardMenuAction
                       label="Open group"
                       icon={<ChevronRight size={17} />}
-                      onClick={() => setSelectedGroupId(group.id)}
+                      onClick={() => selectGroup(group.id)}
                     />
                     <TelegramCardMenuAction
                       label="Move group"
@@ -7160,7 +7400,7 @@ function PostGroupsWorkspace({
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedGroupId(group.id)}
+                onClick={() => selectGroup(group.id)}
                 className="mt-4 block w-full text-left"
               >
                 <GroupSummary summary={group.statusSummary} />
@@ -7170,6 +7410,19 @@ function PostGroupsWorkspace({
         </div>
       ) : !groups.isLoading ? (
         <EmptyState text="No groups yet. Create the first named post series." />
+      ) : null}
+      {groups.data ? (
+        <Pagination
+          page={groups.data.pagination.page}
+          pageSize={groups.data.pagination.pageSize}
+          totalItems={groups.data.pagination.totalItems}
+          totalPages={groups.data.pagination.totalPages}
+          hasNextPage={groups.data.pagination.hasNextPage}
+          hasPreviousPage={groups.data.pagination.hasPreviousPage}
+          onPageChange={groupsPagination.setPage}
+          onPageSizeChange={groupsPagination.setPageSize}
+          loading={groups.isFetching}
+        />
       ) : null}
       {groupForm ? (
         <GroupFormModal
@@ -7181,7 +7434,7 @@ function PostGroupsWorkspace({
           onSaved={async (saved) => {
             setGroupForm(null);
             await groups.refetch();
-            setSelectedGroupId(saved.id);
+            selectGroup(saved.id);
           }}
         />
       ) : null}
@@ -8002,154 +8255,4 @@ function apiErrorMessage(error: unknown, fallback: string) {
   return Array.isArray(message)
     ? message.join(", ")
     : message || apiError.message || fallback;
-}
-
-function LongImageTextModePanel({
-  mode,
-  onChange,
-  readOnly = false,
-  textLength,
-}: {
-  mode: LongTextMode;
-  onChange?: (mode: LongTextMode) => void;
-  readOnly?: boolean;
-  textLength: number;
-}) {
-  return (
-    <div
-      className={`space-y-2 rounded-lg border p-3 ${
-        readOnly
-          ? "border-blue-700/60 bg-blue-950/20"
-          : "border-amber-700/60 bg-amber-950/20"
-      }`}
-    >
-      <p className={`text-sm ${readOnly ? "text-blue-200" : "text-amber-200"}`}>
-        {readOnly
-          ? `Publishing choice used for this post. Text length: ${textLength}.`
-          : `Text with images must be 1024 characters or fewer to stay in one Telegram message. Current length: ${textLength}. Choose how to publish the remaining text:`}
-      </p>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {(
-          [
-            {
-              value: "IMAGES_THEN_TEXT",
-              icon: "🖼️",
-              label: "Publish images first, then text as separate message",
-              description: "Images have no caption; the complete text follows.",
-            },
-            {
-              value: "CAPTION_THEN_TEXT",
-              icon: "✂️",
-              label: "Publish as image with short caption",
-              description:
-                "Use the maximum caption, then send the remaining text.",
-            },
-          ] as const
-        ).map((option) => {
-          const selected = mode === option.value;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => {
-                if (!readOnly) onChange?.(option.value);
-              }}
-              aria-pressed={selected}
-              aria-disabled={readOnly}
-              className={`flex min-h-16 items-start gap-2 rounded-lg border p-3 text-left transition ${
-                selected
-                  ? "border-blue-500 bg-blue-950/40 text-white"
-                  : "border-neutral-700 bg-neutral-900 text-neutral-300"
-              } ${readOnly ? "" : "hover:border-neutral-500"}`}
-            >
-              <span className="text-lg">{option.icon}</span>
-              <span>
-                <span className="block text-sm font-medium">
-                  {option.label}
-                </span>
-                <span className="mt-1 block text-xs text-neutral-400">
-                  {option.description}
-                </span>
-                {readOnly && selected ? (
-                  <span className="mt-2 block text-xs font-medium text-blue-300">
-                    Selected when published
-                  </span>
-                ) : null}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function PostStatusIcon({ status }: { status: TelegramManagedPost["status"] }) {
-  if (status === "PUBLISHED") {
-    return (
-      <CheckCircle2
-        size={18}
-        className="shrink-0 text-emerald-400"
-        aria-label="Published"
-      />
-    );
-  }
-  if (status === "SCHEDULED") {
-    return (
-      <Clock3
-        size={18}
-        className="shrink-0 text-blue-400"
-        aria-label="Scheduled"
-      />
-    );
-  }
-  if (status === "FAILED") {
-    return (
-      <AlertTriangle
-        size={18}
-        className="shrink-0 text-red-400"
-        aria-label="Failed"
-      />
-    );
-  }
-  if (status === "PUBLISHING") {
-    return (
-      <LoaderCircle
-        size={18}
-        className="shrink-0 animate-spin text-amber-300"
-        aria-label="Publishing"
-      />
-    );
-  }
-  return (
-    <FileText
-      size={18}
-      className="shrink-0 text-neutral-400"
-      aria-label="Draft"
-    />
-  );
-}
-
-function publishModeLabel(
-  mode?: string | null,
-  imageCount = 0,
-  textLength = 0,
-) {
-  if (mode === "IMAGES_THEN_TEXT") {
-    return "Published as images, then full text";
-  }
-  if (mode === "CAPTION_THEN_TEXT") {
-    return "Published with a short caption, then remaining text";
-  }
-  if (mode === "IMAGE_WITH_CAPTION") {
-    return "Published as image with caption";
-  }
-  if (mode === "TEXT_PARTS") {
-    return "Published as multiple text messages";
-  }
-  if (imageCount && textLength > 1024) {
-    return "Published as images, then full text";
-  }
-  if (imageCount) return "Published as image with caption";
-  return "Published as a text message";
 }

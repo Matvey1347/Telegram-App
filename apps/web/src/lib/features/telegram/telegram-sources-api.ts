@@ -5,6 +5,7 @@ import type {
   SwitchTelegramBotApplicationPayload,
   TelegramBotRuntimeEnvironment,
   UpdateTelegramBotRuntimePayload,
+  TelegramLoginStartResponse,
 } from "@telegram-system/shared";
 import type {
   PaginationParams,
@@ -99,9 +100,17 @@ export function createTelegramSourcesApi({
   };
   const telegramUserAccountsApi = {
     ...crud<TelegramUserAccount>("/telegram-user-accounts"),
-    startLogin: async (id: string, phone?: string) =>
-      (await api.post(`/telegram-user-accounts/${id}/login/start`, { phone }))
-        .data,
+    startLogin: async (
+      id: string,
+      phone?: string,
+      delivery: "APP" | "SMS" = "APP",
+    ) =>
+      (
+        await api.post<TelegramLoginStartResponse>(
+          `/telegram-user-accounts/${id}/login/start`,
+          { phone, delivery },
+        )
+      ).data,
     confirmCode: async (id: string, code: string) =>
       (await api.post(`/telegram-user-accounts/${id}/login/code`, { code }))
         .data,

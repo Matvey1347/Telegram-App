@@ -2,8 +2,6 @@
 
 import type { ReactNode } from "react";
 import {
-  BadgeDollarSign,
-  CircleMinus,
   Eye,
   Megaphone,
   Percent,
@@ -123,7 +121,7 @@ export function ChannelEconomicsSummary({
         </p>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:flex sm:items-start sm:justify-between">
             <SpendMetric
               purchasePrice={economics?.purchasePrice}
               adSpend={economics?.adSpend}
@@ -146,12 +144,7 @@ export function ChannelEconomicsSummary({
             />
           </div>
           {channel.adBaseCpm != null ? (
-            <div className="mt-3 inline-flex items-center gap-1 text-xs text-neutral-500">
-              <BadgeDollarSign
-                size={14}
-                className="text-emerald-300"
-                aria-hidden="true"
-              />
+            <div className="mt-3 text-xs text-neutral-500">
               CPM{" "}
               {money(channel.adBaseCpm, channel.adBaseCurrency || currency, 2)}
             </div>
@@ -294,10 +287,7 @@ function SpendMetric({
 
 function ExpenseLabel() {
   return (
-    <span className="flex h-5 items-center gap-1.5 text-xs text-neutral-500">
-      <CircleMinus size={14} className="text-rose-400" aria-hidden="true" />
-      Spend
-    </span>
+    <span className="flex h-5 items-center text-xs text-neutral-500">Spend</span>
   );
 }
 
@@ -317,12 +307,7 @@ function FormatPrice({
     <div className="rounded-md border border-neutral-800/80 bg-neutral-950/55 px-2.5 py-2">
       <div className="space-y-1">
         <p className="text-xs font-medium text-neutral-300">{label}</p>
-        <p className="flex items-center gap-1 text-xs font-semibold text-sky-200">
-          <BadgeDollarSign
-            size={13}
-            className="text-emerald-300"
-            aria-hidden="true"
-          />
+        <p className="text-xs font-semibold text-white">
           {moneyOrDash(pricing?.estimatedPrice, currency, 1)}
         </p>
       </div>

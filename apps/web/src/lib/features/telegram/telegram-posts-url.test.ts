@@ -29,8 +29,9 @@ describe("buildTelegramPostsUrl", () => {
       buildTelegramPostsUrl({
         channelId: "channel-1",
         groupId: "group-1",
+        postView: "groups",
       }),
-    ).toBe("/telegram-posts?channelId=channel-1&groupId=group-1");
+    ).toBe("/telegram-posts/channel-1/groups?groupId=group-1");
   });
 
   it("preserves unrelated query params on canonical urls", () => {
@@ -53,7 +54,9 @@ describe("buildTelegramPostsLegacyRedirectUrl", () => {
           "channelId=channel-1&postId=post-1&postView=editor&source=notification",
         ),
       ),
-    ).toBe("/telegram-posts/channel-1/editor?source=notification&postId=post-1");
+    ).toBe(
+      "/telegram-posts/channel-1/editor?source=notification&postId=post-1",
+    );
   });
 
   it("does not redirect grouped legacy urls", () => {

@@ -140,6 +140,7 @@ export type TelegramChannel = EntityAssignment & {
       | "activeSubscribersEstimate"
       | "paidActiveSubscribersEstimate"
       | "viewRate"
+      | "reactionRate"
       | "dataQuality"
       | "dataQualityReason"
       | "dataQualityWarning"

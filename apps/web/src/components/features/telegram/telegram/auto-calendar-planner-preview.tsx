@@ -1,8 +1,8 @@
 "use client";
 
 import type { TelegramPostPlannerPreviewResult } from "@telegram-system/shared";
-import { CalendarCheck2, LoaderCircle, RotateCcw } from "lucide-react";
-import { Button } from "@/components/ui/primitives";
+import { CalendarCheck2, LoaderCircle, RotateCcw, Trash2 } from "lucide-react";
+import { Button, CustomSelect } from "@/components/ui/primitives";
 
 export function AutoCalendarPlannerPreview({
   preview,
@@ -10,12 +10,22 @@ export function AutoCalendarPlannerPreview({
   rerollingDate,
   onRerollDay,
   onScheduleAll,
+  availablePosts,
+  onRemoveAssignment,
+  onReplaceAssignmentPost,
 }: {
   preview: TelegramPostPlannerPreviewResult;
   busy: boolean;
   rerollingDate: string | null;
-  onRerollDay: (date: string) => void;
+  onRerollDay?: (date: string) => void;
   onScheduleAll: () => void;
+  availablePosts?: Array<{ id: string; title: string }>;
+  onRemoveAssignment?: (postId: string, scheduledAt: string) => void;
+  onReplaceAssignmentPost?: (
+    currentPostId: string,
+    scheduledAt: string,
+    nextPostId: string,
+  ) => void;
 }) {
   const assignmentsByDate = new Map<string, typeof preview.assignments>();
   for (const assignment of preview.assignments) {
@@ -89,22 +99,24 @@ export function AutoCalendarPlannerPreview({
                 {assignments.length} post{assignments.length === 1 ? "" : "s"}
               </div>
             </div>
-            <Button
-              type="button"
-              variant="secondary"
-              className="h-8 px-2.5 text-xs"
-              disabled={busy}
-              onClick={() => onRerollDay(date)}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                {rerollingDate === date ? (
-                  <LoaderCircle size={13} className="animate-spin" />
-                ) : (
-                  <RotateCcw size={13} />
-                )}
-                Reroll day
-              </span>
-            </Button>
+            {onRerollDay ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-8 px-2.5 text-xs"
+                disabled={busy}
+                onClick={() => onRerollDay(date)}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  {rerollingDate === date ? (
+                    <LoaderCircle size={13} className="animate-spin" />
+                  ) : (
+                    <RotateCcw size={13} />
+                  )}
+                  Reroll day
+                </span>
+              </Button>
+            ) : null}
           </div>
           <div className="divide-y divide-neutral-800">
             {assignments.map((assignment) => (
@@ -112,15 +124,49 @@ export function AutoCalendarPlannerPreview({
                 key={`${assignment.postId}:${assignment.scheduledAt}`}
                 className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
               >
-                <span className="min-w-0 truncate text-neutral-200">
-                  {assignment.title}
-                </span>
+                {availablePosts && onReplaceAssignmentPost ? (
+                  <div className="min-w-0 flex-1">
+                    <CustomSelect
+                      value={assignment.postId}
+                      onChange={(nextPostId) =>
+                        onReplaceAssignmentPost(
+                          assignment.postId,
+                          assignment.scheduledAt,
+                          nextPostId,
+                        )
+                      }
+                      options={availablePosts.map((post) => ({
+                        value: post.id,
+                        label: post.title,
+                      }))}
+                    />
+                  </div>
+                ) : (
+                  <span className="min-w-0 truncate text-neutral-200">
+                    {assignment.title}
+                  </span>
+                )}
                 <span className="shrink-0 tabular-nums text-neutral-400">
                   {new Date(assignment.scheduledAt).toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
                 </span>
+                {onRemoveAssignment ? (
+                  <button
+                    type="button"
+                    aria-label={`Remove ${assignment.title} from plan`}
+                    onClick={() =>
+                      onRemoveAssignment(
+                        assignment.postId,
+                        assignment.scheduledAt,
+                      )
+                    }
+                    className="shrink-0 rounded-md p-1.5 text-rose-300 hover:bg-rose-950/50"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>

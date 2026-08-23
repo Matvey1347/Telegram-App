@@ -18,6 +18,7 @@ export type TelegramChannelAudience = {
   paidActiveSubscribersEstimate: number | null;
   rawViewRate?: number | null;
   viewRate: number | null;
+  reactionRate?: number | null;
   cappedViewRate?: number | null;
   avgViewsRaw: number | null;
   avgViewsAdjusted: number | null;

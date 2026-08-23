@@ -25,6 +25,7 @@ import {
   HistoricalSyncDto,
   ImportTelegramChannelDto,
   ImportTelegramManagedPostsDto,
+  ImportPostGroupsDto,
   ManagedPostLinkTargetsQueryDto,
   ManagedPostsCalendarQueryDto,
   TelegramChannelSelectQueryDto,
@@ -37,6 +38,7 @@ import {
   PostPlannerApplyDto,
   PostPlannerPreviewDto,
   PostPlannerRerollDayDto,
+  PostPlannerSlotBatchDto,
   PostIdsDto,
   PublishPostGroupDto,
   ReorderManagedPostSidebarDto,
@@ -73,7 +75,10 @@ export class TelegramChannelsController {
   ) {}
   private async streamBulkAction(
     res: Response,
-    action: (onProgress: (item: unknown, current: number, total: number) => void, signal: AbortSignal) => Promise<unknown>,
+    action: (
+      onProgress: (item: unknown, current: number, total: number) => void,
+      signal: AbortSignal,
+    ) => Promise<unknown>,
     eventPrefix: string,
   ) {
     return this.streamResponse.stream(res, { eventPrefix, action });
@@ -92,7 +97,10 @@ export class TelegramChannelsController {
     return this.service.selectOptions(user.sub, query);
   }
   @Post(':id/inline-buttons-access/check')
-  checkInlineButtonPublishingAccess(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+  checkInlineButtonPublishingAccess(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+  ) {
     return this.service.checkInlineButtonPublishingAccess(user.sub, id);
   }
   @Post() create(
@@ -128,6 +136,18 @@ export class TelegramChannelsController {
     @Body() dto: CreatePostGroupDto,
   ) {
     return this.service.createPostGroup(user.sub, dto);
+  }
+  @Post('post-groups/import-stream')
+  importPostGroupsStream(
+    @CurrentUser() user: JwtUser,
+    @Body() dto: ImportPostGroupsDto,
+    @Res() res: Response,
+  ) {
+    return this.streamBulkAction(
+      res,
+      (onProgress) => this.service.importPostGroups(user.sub, dto, onProgress),
+      'telegram_channel.post_groups_import_stream',
+    );
   }
   @Get('post-groups/:groupId')
   postGroup(@CurrentUser() user: JwtUser, @Param('groupId') groupId: string) {
@@ -272,10 +292,7 @@ export class TelegramChannelsController {
     return this.service.managedPostLinkTargets(user.sub, id, query);
   }
   @Get(':id/managed-posts')
-  managedPosts(
-    @CurrentUser() user: JwtUser,
-    @Param('id') id: string,
-  ) {
+  managedPosts(@CurrentUser() user: JwtUser, @Param('id') id: string) {
     return this.service.managedPosts(user.sub, id);
   }
   @Get(':id/managed-posts/calendar')
@@ -344,6 +361,25 @@ export class TelegramChannelsController {
   ) {
     return this.postCalendarPlanner.deleteSlot(user.sub, id, slotId);
   }
+  @Post(':id/managed-posts/calendar-planner/slots/batch-stream')
+  mutatePostPlannerSlotsBatch(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: PostPlannerSlotBatchDto,
+    @Res() res: Response,
+  ) {
+    return this.streamBulkAction(
+      res,
+      (onProgress) =>
+        this.postCalendarPlanner.mutateSlotsBatch(
+          user.sub,
+          id,
+          dto,
+          onProgress,
+        ),
+      'telegram_channel.post_planner_slots_batch_stream',
+    );
+  }
   @Post(':id/managed-posts/calendar-planner/preview')
   previewPostPlanner(
     @CurrentUser() user: JwtUser,
@@ -373,11 +409,18 @@ export class TelegramChannelsController {
     return this.service.syncManagedPosts(user.sub, id);
   }
   @Post(':id/managed-posts/verify-telegram-ids')
-  verifyManagedPostTelegramIds(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+  verifyManagedPostTelegramIds(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+  ) {
     return this.service.verifyManagedPostTelegramIds(user.sub, id);
   }
   @Post(':id/managed-posts/:postId/verify-telegram-id')
-  verifyManagedPostTelegramId(@CurrentUser() user: JwtUser, @Param('id') id: string, @Param('postId') postId: string) {
+  verifyManagedPostTelegramId(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Param('postId') postId: string,
+  ) {
     return this.service.verifyManagedPostTelegramId(user.sub, id, postId);
   }
   @Post(':id/managed-posts/sync-stream')
@@ -462,9 +505,14 @@ export class TelegramChannelsController {
   ) {
     return this.streamBulkAction(
       res,
-      (onProgress, signal) => this.service.importManagedPosts(
-        user.sub, id, dto, onProgress as never, signal,
-      ),
+      (onProgress, signal) =>
+        this.service.importManagedPosts(
+          user.sub,
+          id,
+          dto,
+          onProgress as never,
+          signal,
+        ),
       'telegram_channel.managed_posts_import_stream',
     );
   }
@@ -660,11 +708,19 @@ export class TelegramChannelsController {
     response.send(buffer);
   }
   @Get(':id/gpt-context') async gptContext(
-    @CurrentUser() user: JwtUser, @Param('id') id: string, @Res() response: Response,
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Res() response: Response,
   ) {
-    const { buffer, filename } = await this.gptContextExporter.export(user.sub, id);
+    const { buffer, filename } = await this.gptContextExporter.export(
+      user.sub,
+      id,
+    );
     response.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    response.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    response.setHeader(
+      'Content-Disposition',
+      `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    );
     response.send(buffer);
   }
   @Delete(':id') remove(@CurrentUser() user: JwtUser, @Param('id') id: string) {

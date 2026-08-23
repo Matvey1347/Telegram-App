@@ -1,6 +1,6 @@
 "use client";
 
-export type TelegramPostsRouteView = "editor" | "calendar";
+export type TelegramPostsRouteView = "editor" | "calendar" | "groups";
 
 type TelegramPostsUrlInput = {
   channelId?: string | null;
@@ -49,10 +49,12 @@ export function buildTelegramPostsUrl({
   if (normalizedPostId) params.set("postId", normalizedPostId);
   if (normalizedNoteId) params.set("noteId", normalizedNoteId);
 
-  if (normalizedChannelId && normalizedGroupId) {
-    params.set("channelId", normalizedChannelId);
-    params.set("groupId", normalizedGroupId);
-    return appendQuery("/telegram-posts", params);
+  if (normalizedChannelId && (postView === "groups" || normalizedGroupId)) {
+    if (normalizedGroupId) params.set("groupId", normalizedGroupId);
+    return appendQuery(
+      `/telegram-posts/${encodeURIComponent(normalizedChannelId)}/groups`,
+      params,
+    );
   }
 
   if (normalizedChannelId && postView) {
@@ -73,7 +75,11 @@ export function buildTelegramPostsLegacyRedirectUrl(
   const channelId = trimValue(searchParams.get("channelId"));
   const groupId = trimValue(searchParams.get("groupId"));
   const postView = searchParams.get("postView");
-  if (!channelId || groupId || (postView !== "editor" && postView !== "calendar")) {
+  if (
+    !channelId ||
+    groupId ||
+    (postView !== "editor" && postView !== "calendar")
+  ) {
     return null;
   }
 

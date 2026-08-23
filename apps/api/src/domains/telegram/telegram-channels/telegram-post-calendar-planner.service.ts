@@ -1,34 +1,35 @@
 import {
-BadRequestException,
-Injectable,
-NotFoundException,
+  BadRequestException,
+  Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import {
-Prisma,
-TelegramManagedPostStatus,
-type TelegramPostPlannerFormat,
-type TelegramPostPlannerSlot,
+  Prisma,
+  TelegramManagedPostStatus,
+  type TelegramPostPlannerFormat,
+  type TelegramPostPlannerSlot,
 } from '@prisma/client';
 import type {
-TelegramPostPlannerApplyResult,
-TelegramPostPlannerAssignment,
-TelegramPostPlannerPreviewResult,
+  TelegramPostPlannerApplyResult,
+  TelegramPostPlannerAssignment,
+  TelegramPostPlannerPreviewResult,
 } from '@telegram-system/shared';
 import { randomUUID } from 'crypto';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
-utcDateKey,
-zonedDateTimeToUtc,
+  utcDateKey,
+  zonedDateTimeToUtc,
 } from '../telegram-ad-sales/domain/timezone';
 import {
-CreatePostPlannerFormatDto,
-CreatePostPlannerSlotDto,
-PostPlannerApplyDto,
-PostPlannerPreviewDto,
-PostPlannerRerollDayDto,
-UpdatePostPlannerFormatDto,
-UpdatePostPlannerSlotDto,
+  CreatePostPlannerFormatDto,
+  CreatePostPlannerSlotDto,
+  PostPlannerApplyDto,
+  PostPlannerPreviewDto,
+  PostPlannerRerollDayDto,
+  UpdatePostPlannerFormatDto,
+  UpdatePostPlannerSlotDto,
+  PostPlannerSlotBatchDto,
 } from './dto';
 import { TelegramManagedPostBulkService } from './telegram-managed-post-bulk.service';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
@@ -46,7 +47,8 @@ export class TelegramPostCalendarPlannerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
-    private readonly telegramManagedPostBulkService: TelegramManagedPostBulkService, private readonly telegramManagedPostPublicationService: TelegramManagedPostPublicationService,
+    private readonly telegramManagedPostBulkService: TelegramManagedPostBulkService,
+    private readonly telegramManagedPostPublicationService: TelegramManagedPostPublicationService,
   ) {}
   private async workspace(userId: string) {
     return this.workspaceService.resolveWorkspaceIdForUser(userId);
@@ -271,6 +273,64 @@ export class TelegramPostCalendarPlannerService {
     return this.serializeSlot(deleted);
   }
 
+  async mutateSlotsBatch(
+    userId: string,
+    channelId: string,
+    dto: PostPlannerSlotBatchDto,
+    onProgress?: (item: unknown, current: number, total: number) => void,
+  ) {
+    const results: Array<Record<string, unknown>> = [];
+    for (const [index, mutation] of dto.items.entries()) {
+      try {
+        const slot =
+          mutation.action === 'CREATE'
+            ? await this.createSlot(
+                userId,
+                channelId,
+                mutation.data as CreatePostPlannerSlotDto,
+              )
+            : mutation.action === 'UPDATE'
+              ? await this.updateSlot(
+                  userId,
+                  channelId,
+                  mutation.slotId || '',
+                  mutation.data as UpdatePostPlannerSlotDto,
+                )
+              : await this.deleteSlot(userId, channelId, mutation.slotId || '');
+        const item = {
+          index,
+          slotId: slot.id,
+          success: true,
+          action: mutation.action,
+          message: `${mutation.action.toLowerCase()} slot ${index + 1}`,
+        };
+        results.push(item);
+        onProgress?.(item, index + 1, dto.items.length);
+      } catch (error) {
+        const item = {
+          index,
+          slotId: mutation.slotId,
+          success: false,
+          action: 'FAILED',
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Could not change planner slot',
+          message: `Failed slot ${index + 1}`,
+        };
+        results.push(item);
+        onProgress?.(item, index + 1, dto.items.length);
+      }
+    }
+    return {
+      total: results.length,
+      successCount: results.filter((item) => item.success).length,
+      failedCount: results.filter((item) => !item.success).length,
+      skippedCount: 0,
+      results,
+    };
+  }
+
   async preview(
     userId: string,
     channelId: string,
@@ -298,16 +358,17 @@ export class TelegramPostCalendarPlannerService {
       throw new BadRequestException('Planner produced no assignments');
     }
     const plannerRunId = randomUUID();
-    const schedule = await this.telegramManagedPostBulkService.scheduleManagedPostsBatch(
-      userId,
-      channelId,
-      {
-        items: preview.assignments.map((assignment) => ({
-          postId: assignment.postId,
-          scheduledAt: assignment.scheduledAt,
-        })),
-      },
-    );
+    const schedule =
+      await this.telegramManagedPostBulkService.scheduleManagedPostsBatch(
+        userId,
+        channelId,
+        {
+          items: preview.assignments.map((assignment) => ({
+            postId: assignment.postId,
+            scheduledAt: assignment.scheduledAt,
+          })),
+        },
+      );
     const successfulPostIds = new Set(
       schedule.results
         .filter((item) => item.success)
@@ -570,7 +631,9 @@ export class TelegramPostCalendarPlannerService {
     channelId: string,
     formatIds: string[],
   ) {
-    const unique = [...new Set(formatIds.map((id) => id.trim()).filter(Boolean))];
+    const unique = [
+      ...new Set(formatIds.map((id) => id.trim()).filter(Boolean)),
+    ];
     if (!unique.length) return [];
     const count = await this.prisma.telegramPostPlannerFormat.count({
       where: { id: { in: unique }, workspaceId, telegramChannelId: channelId },
@@ -644,11 +707,7 @@ export class TelegramPostCalendarPlannerService {
         groupPosition: true,
         createdAt: true,
       },
-      orderBy: [
-        { groupPosition: 'asc' },
-        { createdAt: 'asc' },
-        { id: 'asc' },
-      ],
+      orderBy: [{ groupPosition: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
       take: limit,
     });
   }
@@ -674,7 +733,10 @@ export class TelegramPostCalendarPlannerService {
     });
     return dateKeys.flatMap((date) =>
       slots
-        .filter((slot) => slot.formatId != null || slot.weekday === this.weekday(date))
+        .filter(
+          (slot) =>
+            slot.formatId != null || slot.weekday === this.weekday(date),
+        )
         .filter(
           (slot) =>
             !postGroupIds.length ||

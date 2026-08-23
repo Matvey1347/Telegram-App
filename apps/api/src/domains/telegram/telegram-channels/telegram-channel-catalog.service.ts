@@ -159,6 +159,8 @@ export class TelegramChannelCatalogService {
                 subscribersCount: true,
                 activeSubscribersEstimate: true,
                 viewRate: true,
+                avgViewsAdjusted: true,
+                avgReactionsAdjusted: true,
                 dataQuality: true,
                 dataQualityReason: true,
                 hasExternalTrafficAnomaly: true,
@@ -226,6 +228,11 @@ export class TelegramChannelCatalogService {
         ...channelData
       } = channel;
       const snapshot = audienceSnapshots[0];
+      const reactionRate =
+        snapshot?.avgViewsAdjusted != null && snapshot.avgViewsAdjusted > 0
+          ? ((snapshot.avgReactionsAdjusted ?? 0) / snapshot.avgViewsAdjusted) *
+            100
+          : null;
       const audience = {
         subscribersCount:
           snapshot?.subscribersCount ?? channel.currentSubscribersCount ?? null,
@@ -233,6 +240,7 @@ export class TelegramChannelCatalogService {
         paidActiveSubscribersEstimate:
           snapshot?.activeSubscribersEstimate ?? null,
         viewRate: snapshot?.viewRate ?? null,
+        reactionRate,
         dataQuality: snapshot?.dataQuality ?? null,
         dataQualityReason: snapshot?.dataQualityReason ?? null,
         dataQualityWarning: null,

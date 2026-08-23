@@ -30,13 +30,19 @@ import {
 } from "@/components/ui/primitives";
 import { useAppToast } from "@/providers/toast-provider";
 import { invalidateTelegramAccessQueries } from "@/lib/features/telegram/telegram-query-invalidation";
+import { telegramAccountKeys } from "@/lib/query-keys";
+import {
+  isTelegramSmsUnavailableError,
+  requiresTelegramSessionRefresh,
+  telegramLoginCodeDeliveryMessage,
+} from "./telegram-account-session-recovery";
+import { TelegramAccountCodeModal } from "./telegram-account-code-modal";
+import { TelegramAccountPasswordModal } from "./telegram-account-password-modal";
 
 function errorMessage(error: unknown, fallback: string) {
   const responseError = error as { response?: { data?: { message?: string } } };
   return responseError?.response?.data?.message || fallback;
 }
-
-type ToastTone = "success" | "error" | "info" | "loading";
 
 export function MtprotoAccountsPanel({
   createOpen,
@@ -52,35 +58,71 @@ export function MtprotoAccountsPanel({
   );
   const [passwordTarget, setPasswordTarget] =
     useState<TelegramUserAccount | null>(null);
+  const [lastCodeViaApp, setLastCodeViaApp] = useState<boolean | null>(null);
+  const [smsUnavailable, setSmsUnavailable] = useState(false);
   const [deleting, setDeleting] = useState<TelegramUserAccount | null>(null);
   const [syncReview, setSyncReview] = useState<{
     account: TelegramUserAccount;
     response: TelegramUserAccountSyncDialogsResponse;
   } | null>(null);
-  const { data = [], isLoading, error } = useQuery({
+  const {
+    data = [],
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["telegram-user-accounts"],
     queryFn: telegramUserAccountsApi.list,
   });
 
   const startLoginMutation = useMutation({
-    mutationFn: ({ id, phone }: { id: string; phone?: string }) =>
-      telegramUserAccountsApi.startLogin(id, phone),
-    onSuccess: (_response, variables) => {
-      void invalidateTelegramAccessQueries(qc);
-      setCodeTarget(
-        data.find((account) => account.id === variables.id) || null,
+    mutationFn: ({
+      account,
+      phone,
+      delivery = "APP",
+    }: {
+      account: TelegramUserAccount;
+      phone?: string;
+      delivery?: "APP" | "SMS";
+    }) => telegramUserAccountsApi.startLogin(account.id, phone, delivery),
+    onSuccess: (response, variables) => {
+      const pendingAccount = {
+        ...variables.account,
+        status: "needs_code" as const,
+        lastErrorMessage: undefined,
+      };
+      qc.setQueryData<TelegramUserAccount[]>(
+        telegramAccountKeys.accounts(),
+        (current = []) =>
+          current.map((account) =>
+            account.id === pendingAccount.id ? pendingAccount : account,
+          ),
       );
-      pushToast("Code sent. Enter login code.", "success");
+      setCodeTarget(pendingAccount);
+      setLastCodeViaApp(response.isCodeViaApp);
+      setSmsUnavailable(response.smsUnavailable === true);
+      pushToast(telegramLoginCodeDeliveryMessage(response), "success");
     },
-    onError: (error: unknown) =>
-      pushToast(errorMessage(error, "Failed to start login."), "error"),
+    onError: (error: unknown, variables) => {
+      if (
+        variables.delivery === "SMS" &&
+        isTelegramSmsUnavailableError(error)
+      ) {
+        setSmsUnavailable(true);
+        pushToast(
+          "Telegram does not allow SMS delivery for this account. Check the official Telegram service chat on an authorized device.",
+          "error",
+        );
+        return;
+      }
+      pushToast(errorMessage(error, "Failed to start login."), "error");
+    },
   });
   const createMutation = useMutation({
     mutationFn: telegramUserAccountsApi.create,
     onSuccess: (account: TelegramUserAccount) => {
       void invalidateTelegramAccessQueries(qc);
       onCreateClose();
-      startLoginMutation.mutate({ id: account.id });
+      startLoginMutation.mutate({ account });
     },
     onError: (error: unknown) =>
       pushToast(errorMessage(error, "Failed to create account."), "error"),
@@ -232,6 +274,11 @@ export function MtprotoAccountsPanel({
       <MasonryGrid>
         {data.map((account) => {
           const username = String(account.username || "").replace("@", "");
+          const sessionRefreshRequired =
+            requiresTelegramSessionRefresh(account);
+          const isStartingLogin =
+            startLoginMutation.isPending &&
+            startLoginMutation.variables?.account.id === account.id;
           const fullName = [account.firstName, account.lastName]
             .filter(Boolean)
             .join(" ")
@@ -277,17 +324,28 @@ export function MtprotoAccountsPanel({
                 ) : null}
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                {account.status !== "connected" ? (
+                {account.status === "pending" ||
+                (account.status === "error" && !sessionRefreshRequired) ? (
                   <Button
                     variant="secondary"
-                    onClick={() =>
-                      startLoginMutation.mutate({ id: account.id })
-                    }
+                    disabled={isStartingLogin}
+                    onClick={() => startLoginMutation.mutate({ account })}
                   >
-                    Start login
+                    {isStartingLogin ? "Sending…" : "Start login"}
                   </Button>
                 ) : null}
-                {account.status !== "connected" ? (
+                {sessionRefreshRequired ? (
+                  <Button
+                    variant="secondary"
+                    disabled={isStartingLogin}
+                    onClick={() => startLoginMutation.mutate({ account })}
+                  >
+                    {isStartingLogin
+                      ? "Refreshing…"
+                      : "Refresh Telegram session"}
+                  </Button>
+                ) : null}
+                {account.status === "needs_code" ? (
                   <Button
                     variant="secondary"
                     onClick={() => setCodeTarget(account)}
@@ -309,9 +367,9 @@ export function MtprotoAccountsPanel({
                 >
                   Check
                 </Button>
-                  <Button onClick={() => syncMutation.mutate(account)}>
-                    Sync channels
-                  </Button>
+                <Button onClick={() => syncMutation.mutate(account)}>
+                  Sync channels
+                </Button>
               </div>
               <SourceChannelsList
                 sourceId={account.id}
@@ -330,7 +388,7 @@ export function MtprotoAccountsPanel({
         onClose={onCreateClose}
         onSubmit={(values) => createMutation.mutate(values)}
       />
-      <CodeModal
+      <TelegramAccountCodeModal
         open={!!codeTarget}
         account={codeTarget}
         onClose={() => setCodeTarget(null)}
@@ -342,9 +400,21 @@ export function MtprotoAccountsPanel({
           void invalidateTelegramAccessQueries(qc);
           setCodeTarget(null);
         }}
+        onResend={() =>
+          codeTarget && startLoginMutation.mutate({ account: codeTarget })
+        }
+        onSendSms={() =>
+          codeTarget &&
+          startLoginMutation.mutate({
+            account: codeTarget,
+            delivery: "SMS",
+          })
+        }
+        showSmsFallback={lastCodeViaApp !== false && !smsUnavailable}
+        isResending={startLoginMutation.isPending}
         pushToast={pushToast}
       />
-      <PasswordModal
+      <TelegramAccountPasswordModal
         open={!!passwordTarget}
         account={passwordTarget}
         onClose={() => setPasswordTarget(null)}
@@ -359,7 +429,9 @@ export function MtprotoAccountsPanel({
         entityName={deleting?.label || ""}
         description="This will remove Telegram user session for this workspace."
         onClose={() => setDeleting(null)}
-        onConfirm={() => deleting ? deleteMutation.mutateAsync(deleting.id) : undefined}
+        onConfirm={() =>
+          deleting ? deleteMutation.mutateAsync(deleting.id) : undefined
+        }
         label="Delete"
       />
       <SyncChannelsReviewModal
@@ -388,7 +460,11 @@ export function BotAccountsPanel({
   const qc = useQueryClient();
   const [deleting, setDeleting] = useState<TelegramBot | null>(null);
   const { pushToast } = useAppToast();
-  const { data = [], isLoading, error } = useQuery({
+  const {
+    data = [],
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["telegram-bots"],
     queryFn: telegramBotsApi.list,
   });
@@ -431,52 +507,54 @@ export function BotAccountsPanel({
             bot.runtimes.find((item) => item.environment === "PRODUCTION") ??
             bot.runtimes[0];
           return (
-          <EntityCard key={bot.id} title="" actions={null}>
-            <div className="mb-4 flex items-center gap-3 rounded-lg border border-neutral-700 bg-slate-900/70 p-3">
-              <TelegramEntityAvatar
-                kind="bot"
-                alt={runtime?.firstName || bot.label}
-                size="lg"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-lg font-semibold leading-none text-white">
-                  {runtime?.firstName || bot.label}
-                </p>
-                <p className="mt-1 truncate text-sm text-slate-300">
-                  {runtime?.username
-                    ? `@${runtime.username}`
-                    : runtime?.botTokenMasked || "No runtime"}
+            <EntityCard key={bot.id} title="" actions={null}>
+              <div className="mb-4 flex items-center gap-3 rounded-lg border border-neutral-700 bg-slate-900/70 p-3">
+                <TelegramEntityAvatar
+                  kind="bot"
+                  alt={runtime?.firstName || bot.label}
+                  size="lg"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-lg font-semibold leading-none text-white">
+                    {runtime?.firstName || bot.label}
+                  </p>
+                  <p className="mt-1 truncate text-sm text-slate-300">
+                    {runtime?.username
+                      ? `@${runtime.username}`
+                      : runtime?.botTokenMasked || "No runtime"}
+                  </p>
+                </div>
+                <IconButton kind="delete" onClick={() => setDeleting(bot)} />
+              </div>
+              <div className="space-y-1 text-sm">
+                <p>Token: {runtime?.botTokenMasked || "-"}</p>
+                <p>
+                  Last Check:{" "}
+                  {runtime?.lastCheckedAt
+                    ? new Date(runtime.lastCheckedAt).toLocaleString()
+                    : "-"}
                 </p>
               </div>
-              <IconButton kind="delete" onClick={() => setDeleting(bot)} />
-            </div>
-            <div className="space-y-1 text-sm">
-              <p>Token: {runtime?.botTokenMasked || "-"}</p>
-              <p>
-                Last Check:{" "}
-                {runtime?.lastCheckedAt
-                  ? new Date(runtime.lastCheckedAt).toLocaleString()
-                  : "-"}
-              </p>
-            </div>
-            <div className="mt-3">
-              <Button
-                variant="secondary"
-                onClick={() => checkMutation.mutate(bot.id)}
-              >
-                Check
-              </Button>
-            </div>
-            <SourceChannelsList
-              sourceId={bot.id}
-              sourceType="BOT"
-              queryFn={() => telegramBotsApi.channels(bot.id)}
-            />
-          </EntityCard>
+              <div className="mt-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => checkMutation.mutate(bot.id)}
+                >
+                  Check
+                </Button>
+              </div>
+              <SourceChannelsList
+                sourceId={bot.id}
+                sourceType="BOT"
+                queryFn={() => telegramBotsApi.channels(bot.id)}
+              />
+            </EntityCard>
           );
         })}
       </MasonryGrid>
-      {!isLoading && !error && !data.length ? <EmptyState text="No bots" /> : null}
+      {!isLoading && !error && !data.length ? (
+        <EmptyState text="No bots" />
+      ) : null}
       <CreateBotModal
         open={createOpen}
         onClose={onCreateClose}
@@ -487,7 +565,9 @@ export function BotAccountsPanel({
         entityName={deleting?.label || ""}
         description="This removes the bot token from this workspace."
         onClose={() => setDeleting(null)}
-        onConfirm={() => deleting ? deleteMutation.mutateAsync(deleting.id) : undefined}
+        onConfirm={() =>
+          deleting ? deleteMutation.mutateAsync(deleting.id) : undefined
+        }
         label="Delete"
       />
     </>
@@ -528,7 +608,9 @@ function SyncChannelsReviewModal({
     );
   };
   const toggleAll = () => {
-    setSelectedIds(allSelected ? [] : availableChannels.map((c) => c.channelId));
+    setSelectedIds(
+      allSelected ? [] : availableChannels.map((c) => c.channelId),
+    );
   };
 
   return (
@@ -557,7 +639,10 @@ function SyncChannelsReviewModal({
           {syncedChannels.length ? (
             <div className="mt-3 space-y-2">
               {syncedChannels.map((channel) => (
-                <SyncedDialogChannelRow key={channel.channelId} channel={channel} />
+                <SyncedDialogChannelRow
+                  key={channel.channelId}
+                  channel={channel}
+                />
               ))}
             </div>
           ) : (
@@ -641,7 +726,9 @@ function SyncedDialogChannelRow({
       <div className="min-w-0">
         <p className="truncate font-medium text-slate-100">{channel.title}</p>
         <p className="truncate text-xs text-slate-400">
-          {channel.username ? `@${channel.username}` : channel.telegramChannelId}
+          {channel.username
+            ? `@${channel.username}`
+            : channel.telegramChannelId}
         </p>
       </div>
       <AccessBadge
@@ -674,7 +761,11 @@ function SourceChannelsList({
   const [selected, setSelected] = useState<TelegramSourceChannelAccess | null>(
     null,
   );
-  const { data = [], isLoading, error } = useQuery({
+  const {
+    data = [],
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["telegram-source-channels", sourceType, sourceId],
     queryFn,
   });
@@ -1058,125 +1149,6 @@ function CreateBotModal({
             Cancel
           </Button>
           <Button type="submit">Connect</Button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function CodeModal({
-  open,
-  account,
-  onClose,
-  onDone,
-  onNeedPassword,
-  pushToast,
-}: {
-  open: boolean;
-  account: TelegramUserAccount | null;
-  onClose: () => void;
-  onDone: () => void;
-  onNeedPassword: () => void;
-  pushToast: (message: string, tone?: ToastTone) => void;
-}) {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<{ code: string }>();
-  const mutation = useMutation({
-    mutationFn: (code: string) =>
-      telegramUserAccountsApi.confirmCode(String(account?.id), code),
-    onSuccess: (response: { status?: string }) => {
-      if (response.status === "needs_password") {
-        onNeedPassword();
-        return;
-      }
-      pushToast("Account connected.", "success");
-      onDone();
-    },
-    onError: (error: unknown) =>
-      pushToast(errorMessage(error, "Failed to confirm code."), "error"),
-  });
-  if (!account) return null;
-  return (
-    <Modal open={open} onClose={onClose} title={`Enter code: ${account.label}`}>
-      <form
-        className="space-y-3"
-        onSubmit={handleSubmit((values) => mutation.mutate(values.code))}
-      >
-        <FormField
-          label="Code"
-          required
-          error={errors.code ? "Required field" : undefined}
-        >
-          <Input {...register("code", { required: true })} />
-        </FormField>
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" type="button" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit">Confirm</Button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function PasswordModal({
-  open,
-  account,
-  onClose,
-  onDone,
-  pushToast,
-}: {
-  open: boolean;
-  account: TelegramUserAccount | null;
-  onClose: () => void;
-  onDone: () => void;
-  pushToast: (message: string, tone?: ToastTone) => void;
-}) {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<{ password: string }>();
-  const mutation = useMutation({
-    mutationFn: (password: string) =>
-      telegramUserAccountsApi.confirmPassword(String(account?.id), password),
-    onSuccess: () => {
-      pushToast("Account connected.", "success");
-      onDone();
-    },
-    onError: (error: unknown) =>
-      pushToast(errorMessage(error, "Failed to confirm password."), "error"),
-  });
-  if (!account) return null;
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={`2FA password: ${account.label}`}
-    >
-      <form
-        className="space-y-3"
-        onSubmit={handleSubmit((values) => mutation.mutate(values.password))}
-      >
-        <FormField
-          label="Password"
-          required
-          error={errors.password ? "Required field" : undefined}
-        >
-          <Input
-            type="password"
-            {...register("password", { required: true })}
-          />
-        </FormField>
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" type="button" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit">Confirm</Button>
         </div>
       </form>
     </Modal>

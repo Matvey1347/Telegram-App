@@ -45,7 +45,7 @@ describe("ChannelEconomicsSummary", () => {
   });
 
   it("shows combined spend with a detailed tooltip and format prices", async () => {
-    render(
+    const { container } = render(
       <ChannelEconomicsSummary
         channel={
           {
@@ -124,6 +124,7 @@ describe("ChannelEconomicsSummary", () => {
     expect(screen.queryByText("3/72")).not.toBeInTheDocument();
     expect(screen.getByText("124 views")).toBeInTheDocument();
     expect(screen.getByText("37.2 UAH")).toBeInTheDocument();
+    expect(screen.getByText("37.2 UAH")).toHaveClass("text-white");
     expect(screen.getByText("No delete")).toBeInTheDocument();
     expect(screen.getByText("244 views")).toBeInTheDocument();
     expect(screen.getByText("73.2 UAH")).toBeInTheDocument();
@@ -135,13 +136,13 @@ describe("ChannelEconomicsSummary", () => {
     expect(screen.getByText("Sub").parentElement).not.toHaveClass(
       "inline-flex",
     );
-    expect(
-      screen
-        .getByText("Spend")
-        .parentElement?.querySelector(".lucide-circle-minus"),
-    ).toHaveClass("text-rose-400");
+    expect(screen.getByText("Spend").closest("div")?.parentElement).toHaveClass(
+      "sm:justify-between",
+    );
+    expect(container.querySelector(".lucide-circle-minus")).toBeNull();
     expect(screen.queryByText("Audience")).not.toBeInTheDocument();
     expect(screen.getByText("CPM 300.00 UAH")).toBeInTheDocument();
+    expect(container.querySelector(".lucide-badge-dollar-sign")).toBeNull();
     expect(screen.getByText("13").tagName).toBe("STRONG");
     expect(screen.getByText("ads to break even")).toBeInTheDocument();
 

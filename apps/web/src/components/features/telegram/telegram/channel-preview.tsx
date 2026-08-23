@@ -1,4 +1,4 @@
-import { Eye, Users } from "lucide-react";
+import { Eye, Smile, Users } from "lucide-react";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 
 type ChannelPreviewProps = {
@@ -9,7 +9,10 @@ type ChannelPreviewProps = {
     telegramChatId?: unknown;
     photoUrl?: string | null;
     preview?: {
-      audience?: { viewRate?: number | null } | null;
+      audience?: {
+        viewRate?: number | null;
+        reactionRate?: number | null;
+      } | null;
     } | null;
   };
   rightAction?: React.ReactNode;
@@ -44,6 +47,10 @@ export function ChannelPreview({
   const viewRate = Number(rawViewRate);
   const showViewRate =
     !subtitle && rawViewRate != null && Number.isFinite(viewRate);
+  const rawReactionRate = channel.preview?.audience?.reactionRate;
+  const reactionRate = Number(rawReactionRate);
+  const showReactionRate =
+    !subtitle && rawReactionRate != null && Number.isFinite(reactionRate);
   return (
     <div
       className={`mb-4 flex items-start justify-between gap-3 rounded-lg border border-neutral-700 bg-slate-900/70 p-3 ${className}`}
@@ -80,6 +87,23 @@ export function ChannelPreview({
                   </span>
                   <Eye size={14} className="text-sky-300" aria-hidden="true" />
                   {viewRate.toLocaleString(undefined, {
+                    maximumFractionDigits: 1,
+                    minimumFractionDigits: 1,
+                  })}
+                  %
+                </span>
+              ) : null}
+              {showReactionRate ? (
+                <span className="inline-flex shrink-0 items-center gap-1 text-slate-400">
+                  <span className="text-neutral-600" aria-hidden="true">
+                    /
+                  </span>
+                  <Smile
+                    size={14}
+                    className="text-amber-300"
+                    aria-label="Reaction rate"
+                  />
+                  {reactionRate.toLocaleString(undefined, {
                     maximumFractionDigits: 1,
                     minimumFractionDigits: 1,
                   })}

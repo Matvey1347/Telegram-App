@@ -321,6 +321,13 @@ describe('TelegramChannelsService characterization seams', () => {
       telegramChannel: {
         findFirst: jest.fn().mockResolvedValue({ id: 'channel' }),
       },
+      workspaceMember: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'author-member' }),
+      },
+      icon: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'heart-icon' }),
+      },
       $transaction: jest.fn().mockImplementation(async (callback) => {
         events.push('begin');
         const result = await callback(tx);
@@ -354,7 +361,28 @@ describe('TelegramChannelsService characterization seams', () => {
     await service.createPostGroup('user', {
       telegramChannelId: 'channel',
       title: 'Group',
+      icon: '❤️',
+      createdByMemberId: 'author-member',
       postIds: ['post'],
+    });
+
+    expect(prisma.workspaceMember.findFirst).toHaveBeenCalledWith({
+      where: { id: 'author-member', workspaceId: 'workspace' },
+      select: { id: true },
+    });
+    expect(tx.postGroup.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        createdByMemberId: 'author-member',
+        icon: 'heart-icon',
+      }),
+    });
+    expect(prisma.icon.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        workspaceId: 'workspace',
+        type: 'emoji',
+        emoji: '❤️',
+      }),
+      select: { id: true },
     });
 
     expect(events).toEqual([

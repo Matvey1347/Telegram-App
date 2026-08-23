@@ -1641,13 +1641,10 @@ export class TelegramMtprotoClient {
     }
   }
 
-  async startLogin(apiId: string, apiHash: string, phone: string) {
+  async startLogin(apiId: string, apiHash: string, phone: string, forceSms = false) {
     const client = await this.createClient({ apiId, apiHash });
     try {
-      const sent = await client.sendCode(
-        { apiId: Number(apiId), apiHash },
-        phone,
-      );
+      const sent = await client.sendCode({ apiId: Number(apiId), apiHash }, phone, forceSms);
       return {
         phoneCodeHash: sent.phoneCodeHash,
         isCodeViaApp: sent.isCodeViaApp,

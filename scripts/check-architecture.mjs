@@ -29,8 +29,8 @@ const TRANSITION_BASELINE = new Map([
     "apps/web/src/app/(internal)/(telegram)/telegram/channels/[id]/page.tsx",
     3997,
   ],
-  ["apps/web/src/app/(internal)/(telegram)/telegram-channels/page.tsx", 3603],
-  ["apps/api/src/telegram/shared/telegram-mtproto.client.ts", 3543],
+  ["apps/web/src/app/(internal)/(telegram)/telegram-channels/page.tsx", 3590],
+  ["apps/api/src/telegram/shared/telegram-mtproto.client.ts", 3540],
   ["apps/web/src/components/features/growth/ad-sales/ad-sales-page.tsx", 2868],
   ["apps/web/src/lib/api.ts", 764],
   ["apps/web/src/app/(internal)/(growth)/ad-campaigns/page.tsx", 2500],
@@ -42,11 +42,11 @@ const TRANSITION_BASELINE = new Map([
   ],
   [
     "apps/api/src/domains/telegram/telegram-user-accounts/telegram-user-accounts.service.ts",
-    1179,
+    1175,
   ],
   [
     "apps/web/src/components/features/telegram/telegram/telegram-account-panels.tsx",
-    1185,
+    1132,
   ],
   ["apps/web/src/components/icons/icon-picker.tsx", 1165],
   ["apps/web/src/components/features/growth/ad-sales/ad-sale-modal.tsx", 1043],
@@ -65,7 +65,6 @@ const TRANSITION_BASELINE = new Map([
   ],
   ["packages/shared/src/types/telegram-ad-sales.ts", 836],
   ["apps/api/src/domains/finance/transactions/transactions.service.ts", 848],
-  ["apps/web/src/lib/features/telegram/telegram-channels-api.ts", 848],
   [
     "apps/api/src/domains/telegram/telegram-channels/telegram-channels.controller.ts",
     825,

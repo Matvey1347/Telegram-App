@@ -51,6 +51,7 @@ export class TelegramChannelsService {
   postGroups: TelegramPostGroupsService['postGroups'];
   postGroup: TelegramPostGroupsService['postGroup'];
   createPostGroup: TelegramPostGroupsService['createPostGroup'];
+  importPostGroups: TelegramPostGroupsService['importPostGroups'];
   updatePostGroup: TelegramPostGroupsService['updatePostGroup'];
   deletePostGroup: TelegramPostGroupsService['deletePostGroup'];
   addPostsToGroup: TelegramPostGroupsService['addPostsToGroup'];
@@ -167,6 +168,7 @@ export class TelegramChannelsService {
     this.postGroups = groups.postGroups.bind(groups);
     this.postGroup = groups.postGroup.bind(groups);
     this.createPostGroup = groups.createPostGroup.bind(groups);
+    this.importPostGroups = groups.importPostGroups.bind(groups);
     this.updatePostGroup = groups.updatePostGroup.bind(groups);
     this.deletePostGroup = groups.deletePostGroup.bind(groups);
     this.addPostsToGroup = groups.addPostsToGroup.bind(groups);

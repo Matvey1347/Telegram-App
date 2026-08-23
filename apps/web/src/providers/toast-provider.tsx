@@ -362,6 +362,13 @@ export function ToastProvider({ children }: PropsWithChildren) {
         message: progress.message || "Working…",
         current: progress.current,
         total: progress.total,
+        progressSummary:
+          progress.successCount != null || progress.failedCount != null
+            ? {
+                successful: progress.successCount || 0,
+                failed: progress.failedCount || 0,
+              }
+            : undefined,
         icon: {
           emoji: progress.iconEmoji,
           imageUrl: progress.iconUrl,

@@ -17,6 +17,12 @@ import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto
 import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
 import { normalizeTelegramChannelId } from '../../../telegram/shared/telegram-post-url';
 import {
+  isRevokedTelegramSessionError,
+  isTelegramSendCodeUnavailableError,
+  REVOKED_TELEGRAM_SESSION_MESSAGE,
+  withTelegramTimeout,
+} from '../../../telegram/shared/telegram-session-errors';
+import {
   Confirm2faPasswordDto,
   ConfirmLoginCodeDto,
   CreateTelegramUserAccountDto,
@@ -159,24 +165,6 @@ export class TelegramUserAccountsService {
     };
   }
 
-  private withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
-    return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error(`${label} timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-      promise.then(
-        (value) => {
-          clearTimeout(timer);
-          resolve(value);
-        },
-        (error) => {
-          clearTimeout(timer);
-          reject(error);
-        },
-      );
-    });
-  }
-
   private async refreshAccountCapabilities(
     account: {
       id: string;
@@ -202,7 +190,7 @@ export class TelegramUserAccountsService {
     if (!options?.force && !this.isCapabilityStale(account)) return null;
 
     try {
-      const profile = await this.withTimeout(
+      const profile = await withTelegramTimeout(
         this.mtprotoClient.getAccountProfile(this.accountCredentials(account)),
         this.capabilityCheckTimeoutMs(),
         `Telegram capability check for account ${account.id}`,
@@ -246,6 +234,19 @@ export class TelegramUserAccountsService {
         stack: error instanceof Error ? error.stack || null : null,
         metadata: { accountId: account.id, forced: Boolean(options?.force) },
       });
+      if (isRevokedTelegramSessionError(error))
+        return this.prisma.telegramUserAccountIntegration.update({
+          where: { id: account.id },
+          data: {
+            status: TelegramUserAccountStatus.error,
+            lastCheckedAt: new Date(),
+            lastErrorMessage: REVOKED_TELEGRAM_SESSION_MESSAGE,
+          },
+          include: {
+            assignedMember: WorkspaceService.assignedMemberInclude,
+            createdByUser: WorkspaceService.createdByUserInclude,
+          },
+        });
       return null;
     }
   }
@@ -416,7 +417,10 @@ export class TelegramUserAccountsService {
     const workspaceId = await this.getWorkspaceId(userId);
     const rows = await this.prisma.telegramUserAccountIntegration.findMany({
       where: { workspaceId },
-      include: { assignedMember: WorkspaceService.assignedMemberInclude, createdByUser: WorkspaceService.createdByUserInclude },
+      include: {
+        assignedMember: WorkspaceService.assignedMemberInclude,
+        createdByUser: WorkspaceService.createdByUserInclude,
+      },
       orderBy: { createdAt: 'desc' },
     });
     const refreshed = await this.refreshAccountsCapabilities(rows as never);
@@ -429,7 +433,10 @@ export class TelegramUserAccountsService {
     const workspaceId = await this.getWorkspaceId(userId);
     const row = await this.prisma.telegramUserAccountIntegration.findFirst({
       where: { id, workspaceId },
-      include: { assignedMember: WorkspaceService.assignedMemberInclude, createdByUser: WorkspaceService.createdByUserInclude },
+      include: {
+        assignedMember: WorkspaceService.assignedMemberInclude,
+        createdByUser: WorkspaceService.createdByUserInclude,
+      },
     });
     if (!row) throw new NotFoundException('Telegram user account not found');
     return this.safe(row);
@@ -450,7 +457,11 @@ export class TelegramUserAccountsService {
   }
 
   async create(userId: string, dto: CreateTelegramUserAccountDto) {
-    const { workspaceId, assignedMemberId } = await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId);
+    const { workspaceId, assignedMemberId } =
+      await this.workspaceService.resolveAssignedMemberId(
+        userId,
+        dto.assignedMemberId,
+      );
     const creds = this.resolveApiCredentials(dto);
     const apiHash = this.encryptionService.encrypt(creds.apiHash);
     const encryptedPhone = this.encryptionService.encrypt(dto.phone);
@@ -470,7 +481,10 @@ export class TelegramUserAccountsService {
         assignedMemberId,
         createdByUserId: userId,
       },
-      include: { assignedMember: WorkspaceService.assignedMemberInclude, createdByUser: WorkspaceService.createdByUserInclude },
+      include: {
+        assignedMember: WorkspaceService.assignedMemberInclude,
+        createdByUser: WorkspaceService.createdByUserInclude,
+      },
     });
     return this.safe(row);
   }
@@ -488,7 +502,12 @@ export class TelegramUserAccountsService {
       isActive: dto.isActive,
     };
     if (dto.assignedMemberId !== undefined) {
-      data.assignedMemberId = (await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId)).assignedMemberId;
+      data.assignedMemberId = (
+        await this.workspaceService.resolveAssignedMemberId(
+          userId,
+          dto.assignedMemberId,
+        )
+      ).assignedMemberId;
     }
     if (dto.apiHash) {
       const encrypted = this.encryptionService.encrypt(dto.apiHash);
@@ -499,7 +518,10 @@ export class TelegramUserAccountsService {
     const row = await this.prisma.telegramUserAccountIntegration.update({
       where: { id },
       data,
-      include: { assignedMember: WorkspaceService.assignedMemberInclude, createdByUser: WorkspaceService.createdByUserInclude },
+      include: {
+        assignedMember: WorkspaceService.assignedMemberInclude,
+        createdByUser: WorkspaceService.createdByUserInclude,
+      },
     });
     return this.safe(row);
   }
@@ -560,11 +582,27 @@ export class TelegramUserAccountsService {
         : null);
     if (!phone)
       throw new BadRequestException('Phone is required to start login.');
-    const started = await this.mtprotoClient.startLogin(
-      account.apiId,
-      apiHash,
-      phone,
-    );
+    let started: Awaited<ReturnType<TelegramMtprotoClient['startLogin']>>;
+    let smsUnavailable = false;
+    try {
+      started = await this.mtprotoClient.startLogin(
+        account.apiId,
+        apiHash,
+        phone,
+        dto.delivery === 'SMS',
+      );
+    } catch (error) {
+      if (isTelegramSendCodeUnavailableError(error)) {
+        smsUnavailable = true;
+        started = await this.mtprotoClient.startLogin(
+          account.apiId,
+          apiHash,
+          phone,
+        );
+      } else {
+        throw error;
+      }
+    }
     const loginTempSession = this.encryptLoginTempSession(started.tempSession);
 
     await this.prisma.telegramUserAccountIntegration.update({
@@ -581,7 +619,12 @@ export class TelegramUserAccountsService {
         loginTempSessionAuthTag: loginTempSession?.loginTempSessionAuthTag,
       },
     });
-    return { success: true, status: TelegramUserAccountStatus.needs_code };
+    return {
+      success: true,
+      status: TelegramUserAccountStatus.needs_code,
+      isCodeViaApp: started.isCodeViaApp,
+      ...(smsUnavailable ? { smsUnavailable: true } : {}),
+    };
   }
 
   async confirmCode(userId: string, id: string, dto: ConfirmLoginCodeDto) {
@@ -855,7 +898,9 @@ export class TelegramUserAccountsService {
         (row): row is { channel: (typeof channels)[number]; id: string } =>
           !!row.id,
       );
-    const matchedChannelIds = new Set(matchedChannels.map(({ channel }) => channel.id));
+    const matchedChannelIds = new Set(
+      matchedChannels.map(({ channel }) => channel.id),
+    );
     const formatSyncedChannel = ({
       channel,
       id: workspaceChannelId,
@@ -998,7 +1043,11 @@ export class TelegramUserAccountsService {
     const selectedIds = new Set(
       dto.channels.map((value) => String(value.telegramChannelId)),
     );
-    const requestedPolicies = new Map(dto.channels.map((value) => [String(value.telegramChannelId), value] as const));
+    const requestedPolicies = new Map(
+      dto.channels.map(
+        (value) => [String(value.telegramChannelId), value] as const,
+      ),
+    );
     const selectedChannels = dialogs.filter((channel) =>
       selectedIds.has(channel.id),
     );
@@ -1071,14 +1120,19 @@ export class TelegramUserAccountsService {
       );
       const { rawPermissions, normalized } = this.channelAccessPayload(channel);
       const existingId = findExistingId(channel);
-      const existingChannel = existingChannels.find((candidate) => candidate.id === existingId) ?? null;
-      const importPolicy = await this.telegramChannelImportPolicyService.resolveChannelImportPolicy({
-        workspaceId,
-        channelId: existingId ?? null,
-        input: requestedPolicies.get(channel.id),
-        existing: existingChannel,
-        defaultNow: defaultCutoff,
-      });
+      const existingChannel =
+        existingChannels.find((candidate) => candidate.id === existingId) ??
+        null;
+      const importPolicy =
+        await this.telegramChannelImportPolicyService.resolveChannelImportPolicy(
+          {
+            workspaceId,
+            channelId: existingId ?? null,
+            input: requestedPolicies.get(channel.id),
+            existing: existingChannel,
+            defaultNow: defaultCutoff,
+          },
+        );
       const workspaceChannel = existingId
         ? await (this.prisma.telegramChannel as any).update({
             where: { id: existingId },
@@ -1166,7 +1220,10 @@ export class TelegramUserAccountsService {
         totalSteps,
         `Importing data for ${workspaceChannel.title}`,
       );
-      await this.telegramChannelSyncOrchestrator.syncNow(userId, workspaceChannel.id);
+      await this.telegramChannelSyncOrchestrator.syncNow(
+        userId,
+        workspaceChannel.id,
+      );
     }
 
     return {

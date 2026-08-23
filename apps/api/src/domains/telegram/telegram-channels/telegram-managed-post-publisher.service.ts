@@ -9,6 +9,7 @@ import {
   TelegramManagedPostRemoteStatus,
   TelegramManagedPostStatus,
   TelegramSourceType,
+  TelegramUserAccountStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
@@ -24,6 +25,10 @@ import {
 } from '../../../telegram/shared/telegram-markup';
 import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
 import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
+import {
+  isRevokedTelegramSessionError,
+  REVOKED_TELEGRAM_SESSION_MESSAGE,
+} from '../../../telegram/shared/telegram-session-errors';
 import { notifyScheduledTaskDueWorkChanged } from '../../operations/scheduled-tasks/scheduled-task-wake-notifier';
 import { selectManagedPostPublishingSource } from './managed-post-publishing-source';
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
@@ -454,10 +459,27 @@ export class TelegramManagedPostPublisherService {
         error instanceof Error ? error.message : 'Telegram publish failed';
       const publicMessage = /MEDIA_INVALID/i.test(rawMessage)
         ? 'Telegram rejected one of the images. Remove it, upload it again, and retry.'
-        : /AUTH_KEY|SESSION|AUTH_KEY_UNREGISTERED/i.test(rawMessage)
-          ? 'The connected Telegram account session is no longer valid. Reconnect the account and retry.'
+        : isRevokedTelegramSessionError(error)
+          ? REVOKED_TELEGRAM_SESSION_MESSAGE
           : rawMessage;
       await this.prisma.$transaction(async (tx) => {
+        if (
+          source.sourceType === TelegramSourceType.MTPROTO &&
+          isRevokedTelegramSessionError(error)
+        ) {
+          await tx.telegramUserAccountIntegration.updateMany({
+            where: {
+              id: source.sourceId,
+              workspaceId,
+              status: TelegramUserAccountStatus.connected,
+            },
+            data: {
+              status: TelegramUserAccountStatus.error,
+              lastCheckedAt: new Date(),
+              lastErrorMessage: REVOKED_TELEGRAM_SESSION_MESSAGE,
+            },
+          });
+        }
         await tx.telegramManagedPost.update({
           where: { id: post.id },
           data: {

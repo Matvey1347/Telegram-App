@@ -60,4 +60,35 @@ describe("AutoCalendarPlannerPreview", () => {
     );
     expect(onScheduleAll).toHaveBeenCalledOnce();
   });
+
+  it("allows an imported assignment to be replaced or removed before scheduling", () => {
+    const onRemoveAssignment = vi.fn();
+    const onReplaceAssignmentPost = vi.fn();
+    render(
+      <AutoCalendarPlannerPreview
+        preview={preview}
+        busy={false}
+        rerollingDate={null}
+        onScheduleAll={vi.fn()}
+        availablePosts={[
+          { id: "post-1", title: "First post" },
+          { id: "post-2", title: "Second post" },
+        ]}
+        onRemoveAssignment={onRemoveAssignment}
+        onReplaceAssignmentPost={onReplaceAssignmentPost}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "First post" }));
+    fireEvent.click(screen.getByText("Second post"));
+    expect(onReplaceAssignmentPost).toHaveBeenCalledWith(
+      "post-1",
+      "2099-08-10T07:30:00.000Z",
+      "post-2",
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove First post from plan" }),
+    );
+    expect(onRemoveAssignment).toHaveBeenCalledOnce();
+  });
 });

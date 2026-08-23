@@ -13,6 +13,7 @@ export * from "./types/telegram-system-bot";
 export * from "./types/telegram-managed-posts";
 export * from "./types/telegram-post-buttons";
 export * from "./types/telegram-capabilities";
+export * from "./types/telegram-user-account-login";
 export * from "./types/telegram-ad-sales";
 export * from "./types/telegram-ad-sales-bulk";
 export * from "./types/resolved-emoji";

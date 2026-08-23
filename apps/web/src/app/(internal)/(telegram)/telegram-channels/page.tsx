@@ -25,10 +25,7 @@ import {
   ChannelMenuAction,
   ChannelMenuLink,
 } from "@/components/features/telegram/telegram/channel-card-actions";
-import {
-  ChannelAccessBadge,
-  telegramChannelAccessLabel,
-} from "@/components/features/telegram/telegram/channel-access-badge";
+import { telegramChannelAccessLabel } from "@/components/features/telegram/telegram/channel-access-badge";
 import { MtprotoAccountsPanel } from "@/components/features/telegram/telegram/telegram-account-panels";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import { TelegramSourceAvatar } from "@/components/features/telegram/telegram/telegram-source-avatar";
@@ -2275,21 +2272,11 @@ export default function TelegramChannelsPage() {
                 >
                   <ChannelPreview
                     channel={channel}
-                    badges={
-                      <div className="flex flex-wrap gap-1">
-                        {hasAdminLink && channel.archivedAt ? (
-                          <span className="inline-flex rounded border border-amber-700/70 bg-amber-950/25 px-2 py-0.5 text-xs text-amber-200">
-                            Archived
-                          </span>
-                        ) : null}
-                        {channel.acquisitionType === "PURCHASED" ? (
-                          <span className="inline-flex rounded border border-cyan-700/70 bg-cyan-950/25 px-2 py-0.5 text-xs text-cyan-200">
-                            Purchased
-                          </span>
-                        ) : null}
-                        <ChannelAccessBadge accessMode={channel.accessMode} />
-                      </div>
-                    }
+                    badges={hasAdminLink && channel.archivedAt ? (
+                      <span className="inline-flex rounded border border-amber-700/70 bg-amber-950/25 px-2 py-0.5 text-xs text-amber-200">
+                        Archived
+                      </span>
+                    ) : undefined}
                     rightAction={
                       <ChannelActionsMenu
                         channel={channel} currencySettings={currencySettings}

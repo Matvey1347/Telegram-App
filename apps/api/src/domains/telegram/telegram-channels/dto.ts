@@ -8,6 +8,7 @@ import type {
 import {
   Allow,
   IsArray,
+  ArrayMaxSize,
   IsBoolean,
   IsDateString,
   IsIn,
@@ -266,8 +267,17 @@ export class CreatePostGroupDto {
   @IsString() title!: string;
   @IsOptional() @IsString() description?: string | null;
   @IsOptional() @IsString() icon?: string | null;
+  @IsOptional() @IsString() createdByMemberId?: string | null;
   @IsOptional() @IsBoolean() statusNumberingEnabled?: boolean;
   @IsOptional() @IsArray() @IsString({ each: true }) postIds?: string[];
+}
+
+export class ImportPostGroupsDto {
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => CreatePostGroupDto)
+  groups!: CreatePostGroupDto[];
 }
 
 export class UpdatePostGroupDto {
@@ -405,6 +415,22 @@ export class UpdatePostPlannerSlotDto {
   @IsOptional() @IsString() timezone?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) position?: number;
   @IsOptional() @IsBoolean() isActive?: boolean;
+}
+
+export class PostPlannerSlotMutationDto {
+  @IsIn(['CREATE', 'UPDATE', 'DELETE']) action!: 'CREATE' | 'UPDATE' | 'DELETE';
+  @IsOptional() @IsString() slotId?: string;
+  @IsOptional() @Allow() data?:
+    | CreatePostPlannerSlotDto
+    | UpdatePostPlannerSlotDto;
+}
+
+export class PostPlannerSlotBatchDto {
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => PostPlannerSlotMutationDto)
+  items!: PostPlannerSlotMutationDto[];
 }
 
 export class PostPlannerPreviewDto implements TelegramPostPlannerPreviewPayload {

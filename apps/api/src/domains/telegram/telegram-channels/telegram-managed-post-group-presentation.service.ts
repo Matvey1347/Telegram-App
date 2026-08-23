@@ -25,6 +25,17 @@ export class TelegramManagedPostGroupPresentationService {
     imageUrl: true,
   } as const;
 
+  private legacyUnicodeIconPresentation(value?: string | null) {
+    if (!value || !/\p{Extended_Pictographic}/u.test(value)) return null;
+    return iconToResolvedEmoji({
+      id: value,
+      type: 'emoji',
+      name: value,
+      emoji: value,
+      imageUrl: null,
+    });
+  }
+
   public async resolveTelegramImportedSystemGroupIconId(): Promise<string> {
     if (this.telegramSystemGroupIconId !== undefined) {
       return this.telegramSystemGroupIconId;
@@ -249,6 +260,7 @@ export class TelegramManagedPostGroupPresentationService {
         : group.createdByMember,
       iconPresentation: group.icon
         ? (iconToResolvedEmoji(iconsById.get(group.icon)) ??
+          this.legacyUnicodeIconPresentation(group.icon) ??
           (this.isSystemGroupIconCandidate(
             group,
             Boolean(group.icon && iconsById.get(group.icon)),
