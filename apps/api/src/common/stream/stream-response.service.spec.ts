@@ -65,4 +65,51 @@ describe('StreamResponseService', () => {
     expect(writes.join('')).not.toContain('"type":"complete"');
     expect(response.end).not.toHaveBeenCalled();
   });
+
+  it('does not persist or stream a normal client-abort error', async () => {
+    const { response, writes } = responseHarness();
+    const applicationLogger = { writeStructured: jest.fn() };
+    const service = new StreamResponseService(
+      applicationLogger as never,
+      { get: jest.fn().mockReturnValue({ correlationId: 'corr-1' }) } as never,
+    );
+    const stream = service.stream(response, {
+      eventPrefix: 'test.abort',
+      action: async (_onProgress, signal) => {
+        await new Promise<void>((resolve) =>
+          signal.addEventListener('abort', () => resolve(), { once: true }),
+        );
+        const error = new Error('cancelled');
+        error.name = 'AbortError';
+        throw error;
+      },
+    });
+
+    (response as unknown as { destroyed: boolean }).destroyed = true;
+    (response as unknown as EventEmitter).emit('close');
+    await stream;
+
+    expect(writes.join('')).not.toContain('"type":"error"');
+    expect(applicationLogger.writeStructured).toHaveBeenCalledTimes(1);
+    expect(applicationLogger.writeStructured).not.toHaveBeenCalledWith(
+      expect.objectContaining({ level: 'error' }),
+    );
+  });
+
+  it('can disable persisted lifecycle logs for credential-bearing streams', async () => {
+    const { response } = responseHarness();
+    const applicationLogger = { writeStructured: jest.fn() };
+    const service = new StreamResponseService(
+      applicationLogger as never,
+      { get: jest.fn().mockReturnValue({ correlationId: 'corr-1' }) } as never,
+    );
+
+    await service.stream(response, {
+      eventPrefix: 'credential.stream',
+      persistLifecycleLogs: false,
+      action: async () => ({ ok: true }),
+    });
+
+    expect(applicationLogger.writeStructured).not.toHaveBeenCalled();
+  });
 });

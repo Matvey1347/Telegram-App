@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import type { TelegramQrLoginAccount } from "@telegram-system/shared";
 import {
   adCampaignKeys,
   telegramAccountKeys,
@@ -7,6 +8,56 @@ import {
 } from "../../query-keys";
 import { patchTelegramChannelCaches } from "./telegram-channel-cache";
 import type { TelegramChannel } from "@/lib/api-types/telegram/telegram-channels";
+import type { TelegramUserAccount } from "@/lib/api-types/telegram/telegram-sources";
+
+function serializedDate(value: string | null | undefined) {
+  return value ?? undefined;
+}
+
+/** Reuses the authoritative login result and refetches only sync-derived reads. */
+export async function reconcileTelegramQrLoginSuccess(
+  queryClient: QueryClient,
+  account: TelegramQrLoginAccount,
+) {
+  queryClient.setQueryData<TelegramUserAccount[]>(
+    telegramAccountKeys.accounts(),
+    (current = []) =>
+      current.map((existing) =>
+        existing.id === account.id
+          ? {
+              ...existing,
+              ...account,
+              phoneMasked: account.phoneMasked ?? undefined,
+              telegramUserId: account.telegramUserId ?? undefined,
+              username: account.username ?? undefined,
+              firstName: account.firstName ?? undefined,
+              lastName: account.lastName ?? undefined,
+              photoUrl: account.photoUrl ?? undefined,
+              nameColor: account.nameColor ?? undefined,
+              premiumCheckedAt: serializedDate(account.premiumCheckedAt),
+              lastErrorMessage: account.lastErrorMessage ?? undefined,
+              lastCheckedAt: serializedDate(account.lastCheckedAt),
+              lastSyncedAt: serializedDate(account.lastSyncedAt),
+            }
+          : existing,
+      ),
+  );
+
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: telegramAccountKeys.accounts() }),
+    queryClient.invalidateQueries({
+      queryKey: telegramChannelKeys.sourceChannels(),
+    }),
+    queryClient.invalidateQueries({ queryKey: telegramChannelKeys.sources() }),
+    queryClient.invalidateQueries({
+      queryKey: telegramChannelKeys.publishingCapabilities(),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: telegramChannelKeys.analyticsSources(),
+    }),
+    queryClient.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+  ]);
+}
 
 /** A settings PATCH returns the channel; only its derived read models need GETs. */
 export async function reconcileTelegramChannelSettings(

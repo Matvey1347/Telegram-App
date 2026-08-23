@@ -4,6 +4,8 @@ import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto
 import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
 import { TelegramUserAccountsController } from './telegram-user-accounts.controller';
 import { TelegramUserAccountsService } from './telegram-user-accounts.service';
+import { TelegramUserAccountLoginFinalizer } from './telegram-user-account-login-finalizer';
+import { TelegramUserAccountQrLoginService } from './telegram-user-account-qr-login.service';
 
 @Module({
   imports: [TelegramChannelsModule],
@@ -12,6 +14,8 @@ import { TelegramUserAccountsService } from './telegram-user-accounts.service';
     TelegramUserAccountsService,
     TelegramMtprotoClient,
     TelegramSourceAccessService,
+    TelegramUserAccountLoginFinalizer,
+    TelegramUserAccountQrLoginService,
   ],
   exports: [TelegramUserAccountsService],
 })

@@ -38,8 +38,20 @@ import { TelegramChannelImportPolicyService } from '../telegram-channels/telegra
 import { TelegramChannelSyncOrchestrator } from '../telegram-channels/telegram-channel-sync.orchestrator';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
 import type { TelegramAccountCapabilities } from '@telegram-system/shared';
-import type { TelegramAccountProfile } from '../../../telegram/shared/telegram-mtproto.client';
+import type { TelegramQrLoginProgress } from '@telegram-system/shared';
 import { TELEGRAM_ACCOUNT_CAPABILITY_CONFIG } from './telegram-capability.config';
+import {
+  telegramAccountCapabilityUpdate,
+  TelegramUserAccountLoginFinalizer,
+} from './telegram-user-account-login-finalizer';
+import { TelegramUserAccountQrLoginService } from './telegram-user-account-qr-login.service';
+import {
+  decryptTelegramLoginTempSession,
+  encryptTelegramLoginTempSession,
+  maskTelegramLoginPhone,
+  safeTelegramUserAccount,
+  updateTelegramLoginStateIfCurrent,
+} from './telegram-user-account-login-state';
 
 type ProgressCallback = (
   item: { message: string },
@@ -59,6 +71,8 @@ export class TelegramUserAccountsService {
     private readonly configService: ConfigService,
     private readonly telegramChannelImportPolicyService: TelegramChannelImportPolicyService,
     private readonly telegramChannelSyncOrchestrator: TelegramChannelSyncOrchestrator,
+    private readonly loginFinalizer: TelegramUserAccountLoginFinalizer,
+    private readonly qrLoginService: TelegramUserAccountQrLoginService,
     private readonly applicationLogger: ApplicationLoggerService = {
       info: () => undefined,
       writeStructured: () => undefined,
@@ -75,32 +89,6 @@ export class TelegramUserAccountsService {
     await onProgress({ message }, current, total);
   }
 
-  private maskPhone(phone: string) {
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length < 4) return '***';
-    return `+${digits.slice(0, 2)}***${digits.slice(-2)}`;
-  }
-
-  private safe<T extends Record<string, unknown>>(row: T) {
-    return {
-      ...row,
-      phoneEncrypted: undefined,
-      phoneIv: undefined,
-      phoneAuthTag: undefined,
-      apiHashEncrypted: undefined,
-      apiHashIv: undefined,
-      apiHashAuthTag: undefined,
-      sessionEncrypted: undefined,
-      sessionIv: undefined,
-      sessionAuthTag: undefined,
-      loginPhoneCodeHash: undefined,
-      loginTempSessionEncrypted: undefined,
-      loginTempSessionIv: undefined,
-      loginTempSessionAuthTag: undefined,
-      loginStartedAt: undefined,
-    };
-  }
-
   private capabilityTtlMs() {
     return TELEGRAM_ACCOUNT_CAPABILITY_CONFIG.ttlHours * 60 * 60 * 1000;
   }
@@ -111,20 +99,6 @@ export class TelegramUserAccountsService {
 
   private capabilityCheckTimeoutMs() {
     return TELEGRAM_ACCOUNT_CAPABILITY_CONFIG.checkTimeoutMs;
-  }
-
-  private accountCapabilityUpdate(profile: TelegramAccountProfile) {
-    return {
-      isPremium: profile.capabilities.isPremium,
-      premiumCheckedAt: new Date(profile.capabilities.checkedAt),
-      captionLengthMax: profile.capabilities.captionLengthMax,
-      messageLengthMax: profile.capabilities.messageLengthMax,
-      premiumCapabilities: {
-        maxUploadFileSizeMb: profile.capabilities.maxUploadFileSizeMb,
-        supportsCustomEmoji: profile.capabilities.supportsCustomEmoji,
-        limitsSource: profile.capabilities.limitsSource,
-      } as Prisma.InputJsonValue,
-    };
   }
 
   private isCapabilityStale(account: { premiumCheckedAt?: Date | null }) {
@@ -215,7 +189,7 @@ export class TelegramUserAccountsService {
           status: TelegramUserAccountStatus.connected,
           lastCheckedAt: new Date(),
           lastErrorMessage: null,
-          ...this.accountCapabilityUpdate(profile),
+          ...telegramAccountCapabilityUpdate(profile),
         },
         include: {
           assignedMember: WorkspaceService.assignedMemberInclude,
@@ -299,35 +273,6 @@ export class TelegramUserAccountsService {
       ),
     );
     return updated;
-  }
-
-  private encryptLoginTempSession(tempSession?: string | null) {
-    if (!tempSession) return null;
-    const encrypted = this.encryptionService.encrypt(tempSession);
-    return {
-      loginTempSessionEncrypted: encrypted.encrypted,
-      loginTempSessionIv: encrypted.iv,
-      loginTempSessionAuthTag: encrypted.authTag,
-    };
-  }
-
-  private decryptLoginTempSession(account: {
-    loginTempSessionEncrypted?: string | null;
-    loginTempSessionIv?: string | null;
-    loginTempSessionAuthTag?: string | null;
-  }) {
-    if (
-      !account.loginTempSessionEncrypted ||
-      !account.loginTempSessionIv ||
-      !account.loginTempSessionAuthTag
-    ) {
-      return null;
-    }
-    return this.encryptionService.decrypt({
-      encrypted: account.loginTempSessionEncrypted,
-      iv: account.loginTempSessionIv,
-      authTag: account.loginTempSessionAuthTag,
-    });
   }
 
   private decryptPhone(account: {
@@ -428,7 +373,9 @@ export class TelegramUserAccountsService {
     });
     const refreshed = await this.refreshAccountsCapabilities(rows as never);
     return rows.map((row) =>
-      this.safe((refreshed.get(row.id) as Record<string, unknown>) || row),
+      safeTelegramUserAccount(
+        (refreshed.get(row.id) as Record<string, unknown>) || row,
+      ),
     );
   }
 
@@ -442,7 +389,7 @@ export class TelegramUserAccountsService {
       },
     });
     if (!row) throw new NotFoundException('Telegram user account not found');
-    return this.safe(row);
+    return safeTelegramUserAccount(row);
   }
 
   async channels(userId: string, id: string) {
@@ -471,7 +418,7 @@ export class TelegramUserAccountsService {
     const row = await this.prisma.telegramUserAccountIntegration.create({
       data: {
         workspaceId,
-        label: dto.label?.trim() || `TG ${this.maskPhone(dto.phone)}`,
+        label: dto.label?.trim() || `TG ${maskTelegramLoginPhone(dto.phone)}`,
         apiId: creds.apiId,
         apiHashEncrypted: apiHash.encrypted,
         apiHashIv: apiHash.iv,
@@ -479,7 +426,7 @@ export class TelegramUserAccountsService {
         phoneEncrypted: encryptedPhone.encrypted,
         phoneIv: encryptedPhone.iv,
         phoneAuthTag: encryptedPhone.authTag,
-        phoneMasked: this.maskPhone(dto.phone),
+        phoneMasked: maskTelegramLoginPhone(dto.phone),
         status: TelegramUserAccountStatus.pending,
         assignedMemberId,
         createdByUserId: userId,
@@ -489,7 +436,7 @@ export class TelegramUserAccountsService {
         createdByUser: WorkspaceService.createdByUserInclude,
       },
     });
-    return this.safe(row);
+    return safeTelegramUserAccount(row);
   }
 
   async update(userId: string, id: string, dto: UpdateTelegramUserAccountDto) {
@@ -526,7 +473,7 @@ export class TelegramUserAccountsService {
         createdByUser: WorkspaceService.createdByUserInclude,
       },
     });
-    return this.safe(row);
+    return safeTelegramUserAccount(row);
   }
 
   async remove(userId: string, id: string) {
@@ -558,7 +505,7 @@ export class TelegramUserAccountsService {
       });
       return tx.telegramUserAccountIntegration.delete({ where: { id } });
     });
-    return this.safe(row);
+    return safeTelegramUserAccount(row);
   }
 
   async startLogin(userId: string, id: string, dto: StartLoginDto) {
@@ -619,21 +566,21 @@ export class TelegramUserAccountsService {
         throw error;
       }
     }
-    const loginTempSession = this.encryptLoginTempSession(started.tempSession);
+    const loginTempSession = encryptTelegramLoginTempSession(
+      this.encryptionService,
+      started.tempSession,
+    );
 
-    await this.prisma.telegramUserAccountIntegration.update({
-      where: { id: account.id },
-      data: {
-        status: TelegramUserAccountStatus.needs_code,
-        lastErrorMessage: null,
-        lastCheckedAt: new Date(),
-        phoneMasked: this.maskPhone(phone),
-        loginPhoneCodeHash: started.phoneCodeHash,
-        loginStartedAt: new Date(),
-        loginTempSessionEncrypted: loginTempSession?.loginTempSessionEncrypted,
-        loginTempSessionIv: loginTempSession?.loginTempSessionIv,
-        loginTempSessionAuthTag: loginTempSession?.loginTempSessionAuthTag,
-      },
+    await updateTelegramLoginStateIfCurrent(this.prisma, account, {
+      status: TelegramUserAccountStatus.needs_code,
+      lastErrorMessage: null,
+      lastCheckedAt: new Date(),
+      phoneMasked: maskTelegramLoginPhone(phone),
+      loginPhoneCodeHash: started.phoneCodeHash,
+      loginStartedAt: new Date(),
+      loginTempSessionEncrypted: loginTempSession?.loginTempSessionEncrypted,
+      loginTempSessionIv: loginTempSession?.loginTempSessionIv,
+      loginTempSessionAuthTag: loginTempSession?.loginTempSessionAuthTag,
     });
     return {
       success: true,
@@ -652,19 +599,19 @@ export class TelegramUserAccountsService {
       throw new NotFoundException('Telegram user account not found');
 
     const statePhoneCodeHash = account.loginPhoneCodeHash;
-    const stateTempSession = this.decryptLoginTempSession(account);
+    const stateTempSession = decryptTelegramLoginTempSession(
+      this.encryptionService,
+      account,
+    );
     if (!statePhoneCodeHash) {
-      await this.prisma.telegramUserAccountIntegration.update({
-        where: { id: account.id },
-        data: {
-          status: TelegramUserAccountStatus.error,
-          lastErrorMessage: 'Login session expired. Start login again.',
-          loginPhoneCodeHash: null,
-          loginTempSessionEncrypted: null,
-          loginTempSessionIv: null,
-          loginTempSessionAuthTag: null,
-          loginStartedAt: null,
-        },
+      await updateTelegramLoginStateIfCurrent(this.prisma, account, {
+        status: TelegramUserAccountStatus.error,
+        lastErrorMessage: 'Login session expired. Start login again.',
+        loginPhoneCodeHash: null,
+        loginTempSessionEncrypted: null,
+        loginTempSessionIv: null,
+        loginTempSessionAuthTag: null,
+        loginStartedAt: null,
       });
       return { success: false, status: TelegramUserAccountStatus.error };
     }
@@ -688,16 +635,16 @@ export class TelegramUserAccountsService {
     });
 
     if (result.needsPassword) {
-      await this.prisma.telegramUserAccountIntegration.update({
-        where: { id: account.id },
-        data: {
-          status: TelegramUserAccountStatus.needs_password,
-          lastErrorMessage: null,
-          loginPhoneCodeHash: statePhoneCodeHash,
-          ...(result.tempSession
-            ? this.encryptLoginTempSession(result.tempSession)
-            : {}),
-        },
+      await updateTelegramLoginStateIfCurrent(this.prisma, account, {
+        status: TelegramUserAccountStatus.needs_password,
+        lastErrorMessage: null,
+        loginPhoneCodeHash: statePhoneCodeHash,
+        ...(result.tempSession
+          ? encryptTelegramLoginTempSession(
+              this.encryptionService,
+              result.tempSession,
+            )
+          : {}),
       });
       return {
         success: true,
@@ -708,38 +655,14 @@ export class TelegramUserAccountsService {
       throw new BadRequestException('Telegram authorization failed');
     }
 
-    const encryptedSession = this.encryptionService.encrypt(result.session);
-    const row = await this.prisma.telegramUserAccountIntegration.update({
-      where: { id: account.id },
-      data: {
-        sessionEncrypted: encryptedSession.encrypted,
-        sessionIv: encryptedSession.iv,
-        sessionAuthTag: encryptedSession.authTag,
-        telegramUserId: result.me.id,
-        username: result.me.username,
-        firstName: result.me.firstName,
-        lastName: result.me.lastName,
-        photoUrl: result.me.photoUrl ?? null,
-        nameColor: result.me.nameColor ?? null,
-        label:
-          (result.me.username &&
-            `@${String(result.me.username).replace('@', '')}`) ||
-          result.me.firstName ||
-          account.label,
-        status: TelegramUserAccountStatus.connected,
-        lastSyncedAt: new Date(),
-        lastCheckedAt: new Date(),
-        lastErrorMessage: null,
-        loginPhoneCodeHash: null,
-        loginTempSessionEncrypted: null,
-        loginTempSessionIv: null,
-        loginTempSessionAuthTag: null,
-        loginStartedAt: null,
-        ...this.accountCapabilityUpdate(result.me),
-      },
+    const row = await this.loginFinalizer.finalize(account, {
+      session: result.session,
+      profile: result.me,
     });
     const channelSync = await this.syncDialogsAfterConnect(userId, account.id);
-    const safeRow = this.safe(row as unknown as Record<string, unknown>);
+    const safeRow = safeTelegramUserAccount(
+      row as unknown as Record<string, unknown>,
+    );
     return { ...safeRow, channelSync };
   }
 
@@ -755,20 +678,22 @@ export class TelegramUserAccountsService {
     if (!account)
       throw new NotFoundException('Telegram user account not found');
 
-    const statePhoneCodeHash = account.loginPhoneCodeHash;
-    const stateTempSession = this.decryptLoginTempSession(account);
-    if (!statePhoneCodeHash) {
-      await this.prisma.telegramUserAccountIntegration.update({
-        where: { id: account.id },
-        data: {
-          status: TelegramUserAccountStatus.error,
-          lastErrorMessage: 'Login session expired. Start login again.',
-          loginPhoneCodeHash: null,
-          loginTempSessionEncrypted: null,
-          loginTempSessionIv: null,
-          loginTempSessionAuthTag: null,
-          loginStartedAt: null,
-        },
+    const stateTempSession = decryptTelegramLoginTempSession(
+      this.encryptionService,
+      account,
+    );
+    if (
+      account.status !== TelegramUserAccountStatus.needs_password ||
+      !stateTempSession
+    ) {
+      await updateTelegramLoginStateIfCurrent(this.prisma, account, {
+        status: TelegramUserAccountStatus.error,
+        lastErrorMessage: 'Login session expired. Start login again.',
+        loginPhoneCodeHash: null,
+        loginTempSessionEncrypted: null,
+        loginTempSessionIv: null,
+        loginTempSessionAuthTag: null,
+        loginStartedAt: null,
       });
       return { success: false, status: TelegramUserAccountStatus.error };
     }
@@ -784,39 +709,26 @@ export class TelegramUserAccountsService {
       password: dto.password,
       tempSession: stateTempSession ?? undefined,
     });
-    const encryptedSession = this.encryptionService.encrypt(result.session);
-    const row = await this.prisma.telegramUserAccountIntegration.update({
-      where: { id: account.id },
-      data: {
-        sessionEncrypted: encryptedSession.encrypted,
-        sessionIv: encryptedSession.iv,
-        sessionAuthTag: encryptedSession.authTag,
-        telegramUserId: result.me.id,
-        username: result.me.username,
-        firstName: result.me.firstName,
-        lastName: result.me.lastName,
-        photoUrl: result.me.photoUrl ?? null,
-        nameColor: result.me.nameColor ?? null,
-        label:
-          (result.me.username &&
-            `@${String(result.me.username).replace('@', '')}`) ||
-          result.me.firstName ||
-          account.label,
-        status: TelegramUserAccountStatus.connected,
-        lastSyncedAt: new Date(),
-        lastCheckedAt: new Date(),
-        lastErrorMessage: null,
-        loginPhoneCodeHash: null,
-        loginTempSessionEncrypted: null,
-        loginTempSessionIv: null,
-        loginTempSessionAuthTag: null,
-        loginStartedAt: null,
-        ...this.accountCapabilityUpdate(result.me),
-      },
+    const row = await this.loginFinalizer.finalize(account, {
+      session: result.session,
+      profile: result.me,
     });
     const channelSync = await this.syncDialogsAfterConnect(userId, account.id);
-    const safeRow = this.safe(row as unknown as Record<string, unknown>);
+    const safeRow = safeTelegramUserAccount(
+      row as unknown as Record<string, unknown>,
+    );
     return { ...safeRow, channelSync };
+  }
+
+  async loginWithQr(
+    userId: string,
+    id: string,
+    onProgress: (progress: TelegramQrLoginProgress) => void | Promise<void>,
+    signal: AbortSignal,
+  ) {
+    return this.qrLoginService.login(userId, id, onProgress, signal, () =>
+      this.syncDialogsAfterConnect(userId, id),
+    );
   }
 
   async check(userId: string, id: string) {
@@ -840,7 +752,7 @@ export class TelegramUserAccountsService {
           lastErrorMessage: 'Account is not connected yet',
         },
       });
-      return this.safe(row);
+      return safeTelegramUserAccount(row);
     }
 
     const row =
@@ -854,7 +766,7 @@ export class TelegramUserAccountsService {
           createdByUser: WorkspaceService.createdByUserInclude,
         },
       }));
-    return this.safe(row);
+    return safeTelegramUserAccount(row);
   }
 
   async syncDialogs(userId: string, id: string, onProgress?: ProgressCallback) {
@@ -975,7 +887,7 @@ export class TelegramUserAccountsService {
           lastCheckedAt: new Date(),
           status: TelegramUserAccountStatus.connected,
           lastErrorMessage: null,
-          ...this.accountCapabilityUpdate(profile),
+          ...telegramAccountCapabilityUpdate(profile),
         },
       });
       await tx.telegramChannelAdminLink.deleteMany({

@@ -38,6 +38,7 @@ import {
 } from "./telegram-account-session-recovery";
 import { TelegramAccountCodeModal } from "./telegram-account-code-modal";
 import { TelegramAccountPasswordModal } from "./telegram-account-password-modal";
+import { useTelegramAccountQrRecovery } from "./use-telegram-account-qr-recovery";
 
 function errorMessage(error: unknown, fallback: string) {
   const responseError = error as { response?: { data?: { message?: string } } };
@@ -58,6 +59,10 @@ export function MtprotoAccountsPanel({
   );
   const [passwordTarget, setPasswordTarget] =
     useState<TelegramUserAccount | null>(null);
+  const qrRecovery = useTelegramAccountQrRecovery({
+    onNeedPassword: setPasswordTarget,
+    pushToast,
+  });
   const [lastCodeViaApp, setLastCodeViaApp] = useState<boolean | null>(null);
   const [smsUnavailable, setSmsUnavailable] = useState(false);
   const [deleting, setDeleting] = useState<TelegramUserAccount | null>(null);
@@ -70,7 +75,7 @@ export function MtprotoAccountsPanel({
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["telegram-user-accounts"],
+    queryKey: telegramAccountKeys.accounts(),
     queryFn: telegramUserAccountsApi.list,
   });
 
@@ -337,21 +342,26 @@ export function MtprotoAccountsPanel({
                 {sessionRefreshRequired ? (
                   <Button
                     variant="secondary"
-                    disabled={isStartingLogin}
-                    onClick={() => startLoginMutation.mutate({ account })}
+                    onClick={() => qrRecovery.openQr(account)}
                   >
-                    {isStartingLogin
-                      ? "Refreshing…"
-                      : "Refresh Telegram session"}
+                    Refresh via QR
                   </Button>
                 ) : null}
                 {account.status === "needs_code" ? (
-                  <Button
-                    variant="secondary"
-                    onClick={() => setCodeTarget(account)}
-                  >
-                    Enter code
-                  </Button>
+                  <>
+                    <Button
+                      variant="secondary"
+                      onClick={() => setCodeTarget(account)}
+                    >
+                      Enter code
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => qrRecovery.openQr(account)}
+                    >
+                      Login via QR
+                    </Button>
+                  </>
                 ) : null}
                 {account.status === "needs_password" ? (
                   <Button
@@ -424,6 +434,7 @@ export function MtprotoAccountsPanel({
         }}
         pushToast={pushToast}
       />
+      {qrRecovery.modal}
       <ConfirmDeleteModal
         open={!!deleting}
         entityName={deleting?.label || ""}

@@ -6,6 +6,8 @@ import type {
   TelegramBotRuntimeEnvironment,
   UpdateTelegramBotRuntimePayload,
   TelegramLoginStartResponse,
+  TelegramQrLoginProgress,
+  TelegramQrLoginResult,
 } from "@telegram-system/shared";
 import type {
   PaginationParams,
@@ -53,6 +55,7 @@ export function createTelegramSourcesApi({
     path: string,
     payload: unknown,
     onProgress: StreamProgressHandler<TItem>,
+    options?: { signal?: AbortSignal },
   ) => Promise<TResult>;
 }) {
   const telegramChannelNetworksApi = {
@@ -120,6 +123,17 @@ export function createTelegramSourcesApi({
           password,
         })
       ).data,
+    loginWithQr: async (
+      id: string,
+      onProgress: StreamProgressHandler<TelegramQrLoginProgress>,
+      signal: AbortSignal,
+    ) =>
+      streamProgressAction<TelegramQrLoginResult, TelegramQrLoginProgress>(
+        `/telegram-user-accounts/${id}/login/qr-stream`,
+        {},
+        onProgress,
+        { signal },
+      ),
     check: async (id: string) =>
       (await api.post(`/telegram-user-accounts/${id}/check`)).data,
     syncDialogs: async (id: string) =>

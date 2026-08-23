@@ -30,7 +30,7 @@ const TRANSITION_BASELINE = new Map([
     3997,
   ],
   ["apps/web/src/app/(internal)/(telegram)/telegram-channels/page.tsx", 3590],
-  ["apps/api/src/telegram/shared/telegram-mtproto.client.ts", 3540],
+  ["apps/api/src/telegram/shared/telegram-mtproto.client.ts", 3536],
   ["apps/web/src/components/features/growth/ad-sales/ad-sales-page.tsx", 2868],
   ["apps/web/src/lib/api.ts", 764],
   ["apps/web/src/app/(internal)/(growth)/ad-campaigns/page.tsx", 2500],
@@ -42,7 +42,7 @@ const TRANSITION_BASELINE = new Map([
   ],
   [
     "apps/api/src/domains/telegram/telegram-user-accounts/telegram-user-accounts.service.ts",
-    1175,
+    1164,
   ],
   [
     "apps/web/src/components/features/telegram/telegram/telegram-account-panels.tsx",

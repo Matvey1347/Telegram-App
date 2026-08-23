@@ -1,9 +1,94 @@
-import { HttpException, HttpStatus } from '@nestjs/common';
+import { ConflictException, HttpException, HttpStatus } from '@nestjs/common';
 import { TelegramUserAccountStatus } from '@prisma/client';
 import { TelegramUserAccountsService } from './telegram-user-accounts.service';
 import { REVOKED_TELEGRAM_SESSION_MESSAGE } from '../../../telegram/shared/telegram-session-errors';
 
 describe('TelegramUserAccountsService account checks', () => {
+  it('confirms QR 2FA from a valid temporary session without a phone-code hash', async () => {
+    const account = {
+      id: 'account-qr-2fa',
+      workspaceId: 'workspace-1',
+      label: '@owner',
+      status: TelegramUserAccountStatus.needs_password,
+      updatedAt: new Date(),
+      apiId: '123',
+      apiHashEncrypted: 'hash',
+      apiHashIv: 'hash-iv',
+      apiHashAuthTag: 'hash-tag',
+      loginPhoneCodeHash: null,
+      loginTempSessionEncrypted: 'temp',
+      loginTempSessionIv: 'temp-iv',
+      loginTempSessionAuthTag: 'temp-tag',
+    };
+    const prisma = {
+      telegramUserAccountIntegration: {
+        findFirst: jest.fn().mockResolvedValue(account),
+      },
+    };
+    const profile = {
+      id: '42',
+      username: 'owner',
+      firstName: 'Owner',
+      lastName: null,
+      photoUrl: null,
+      nameColor: null,
+      capabilities: {
+        isPremium: false,
+        captionLengthMax: 1024,
+        messageLengthMax: 4096,
+        maxUploadFileSizeMb: 2000,
+        supportsCustomEmoji: false,
+        checkedAt: new Date().toISOString(),
+        limitsSource: 'telegram_config',
+      },
+    };
+    const signInWithPassword = jest.fn().mockResolvedValue({
+      session: 'authorized-session',
+      me: profile,
+    });
+    const service = new TelegramUserAccountsService(
+      prisma as never,
+      {
+        resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
+      } as never,
+      { decrypt: jest.fn().mockReturnValue('decrypted') } as never,
+      { signInWithPassword } as never,
+      {} as never,
+      { get: jest.fn() } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { writeStructured: jest.fn() } as never,
+    );
+    const connected = {
+      ...account,
+      status: TelegramUserAccountStatus.connected,
+    };
+    (
+      service as unknown as { loginFinalizer: { finalize: jest.Mock } }
+    ).loginFinalizer = {
+      finalize: jest.fn().mockResolvedValue(connected),
+    };
+    jest
+      .spyOn(service as never, 'syncDialogsAfterConnect' as never)
+      .mockResolvedValue({ success: true } as never);
+
+    await expect(
+      service.confirmPassword('user-1', account.id, { password: 'secret' }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        status: TelegramUserAccountStatus.connected,
+      }),
+    );
+    expect(signInWithPassword).toHaveBeenCalledWith({
+      apiId: '123',
+      apiHash: 'decrypted',
+      password: 'secret',
+      tempSession: 'decrypted',
+    });
+  });
+
   it('returns the code delivery channel selected by Telegram', async () => {
     const account = {
       id: 'account-1',
@@ -15,11 +100,12 @@ describe('TelegramUserAccountsService account checks', () => {
       phoneEncrypted: 'phone',
       phoneIv: 'phone-iv',
       phoneAuthTag: 'phone-tag',
+      updatedAt: new Date('2026-08-23T10:00:00.000Z'),
     };
     const prisma = {
       telegramUserAccountIntegration: {
         findFirst: jest.fn().mockResolvedValue(account),
-        update: jest.fn().mockResolvedValue(account),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
     };
     const startLogin = jest.fn().mockResolvedValue({
@@ -45,6 +131,8 @@ describe('TelegramUserAccountsService account checks', () => {
       } as never,
       {} as never,
       { get: jest.fn() } as never,
+      {} as never,
+      {} as never,
       {} as never,
       {} as never,
       { writeStructured: jest.fn() } as never,
@@ -76,11 +164,12 @@ describe('TelegramUserAccountsService account checks', () => {
       phoneEncrypted: 'phone',
       phoneIv: 'phone-iv',
       phoneAuthTag: 'phone-tag',
+      updatedAt: new Date('2026-08-23T10:00:00.000Z'),
     };
     const prisma = {
       telegramUserAccountIntegration: {
         findFirst: jest.fn().mockResolvedValue(account),
-        update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
     };
     const rpcError = Object.assign(
@@ -113,6 +202,8 @@ describe('TelegramUserAccountsService account checks', () => {
       { get: jest.fn() } as never,
       {} as never,
       {} as never,
+      {} as never,
+      {} as never,
       { writeStructured: jest.fn() } as never,
     );
 
@@ -130,11 +221,79 @@ describe('TelegramUserAccountsService account checks', () => {
       'decrypted',
       'decrypted',
     );
-    expect(prisma.telegramUserAccountIntegration.update).toHaveBeenCalledWith(
+    expect(
+      prisma.telegramUserAccountIntegration.updateMany,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({
+          workspaceId: account.workspaceId,
+          updatedAt: account.updatedAt,
+        }),
         data: expect.objectContaining({
           loginPhoneCodeHash: 'fallback-code-hash',
         }),
+      }),
+    );
+  });
+
+  it('does not let a delayed phone login overwrite newer account state', async () => {
+    const account = {
+      id: 'account-1',
+      workspaceId: 'workspace-1',
+      apiId: '123',
+      apiHashEncrypted: 'hash',
+      apiHashIv: 'hash-iv',
+      apiHashAuthTag: 'hash-tag',
+      phoneEncrypted: 'phone',
+      phoneIv: 'phone-iv',
+      phoneAuthTag: 'phone-tag',
+      updatedAt: new Date('2026-08-23T10:00:00.000Z'),
+    };
+    const updateMany = jest.fn().mockResolvedValue({ count: 0 });
+    const service = new TelegramUserAccountsService(
+      {
+        telegramUserAccountIntegration: {
+          findFirst: jest.fn().mockResolvedValue(account),
+          updateMany,
+        },
+      } as never,
+      {
+        resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
+      } as never,
+      {
+        decrypt: jest.fn().mockReturnValue('decrypted'),
+        encrypt: jest.fn().mockReturnValue({
+          encrypted: 'temp-session',
+          iv: 'temp-iv',
+          authTag: 'temp-tag',
+        }),
+      } as never,
+      {
+        startLogin: jest.fn().mockResolvedValue({
+          phoneCodeHash: 'code-hash',
+          isCodeViaApp: true,
+          tempSession: 'session',
+        }),
+      } as never,
+      {} as never,
+      { get: jest.fn() } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { writeStructured: jest.fn() } as never,
+    );
+
+    await expect(
+      service.startLogin('user-1', account.id, { delivery: 'APP' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: account.id,
+          workspaceId: account.workspaceId,
+          updatedAt: account.updatedAt,
+        },
       }),
     );
   });
@@ -177,6 +336,8 @@ describe('TelegramUserAccountsService account checks', () => {
       { startLogin } as never,
       {} as never,
       { get: jest.fn() } as never,
+      {} as never,
+      {} as never,
       {} as never,
       {} as never,
       { writeStructured: jest.fn() } as never,
@@ -248,6 +409,8 @@ describe('TelegramUserAccountsService account checks', () => {
       } as never,
       {} as never,
       { get: jest.fn() } as never,
+      {} as never,
+      {} as never,
       {} as never,
       {} as never,
       { writeStructured: jest.fn() } as never,

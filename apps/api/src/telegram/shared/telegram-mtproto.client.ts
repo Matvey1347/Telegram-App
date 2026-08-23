@@ -41,6 +41,13 @@ import {
   maskTelegramReferenceForLog,
 } from './telegram-invite-log';
 import { getTelegramFloodWaitSeconds } from './telegram-session-errors';
+import { loginWithTelegramQr } from './telegram-qr-login.adapter';
+import type { TelegramQrLoginProgress } from '@telegram-system/shared';
+import {
+  signInTelegramWithCode,
+  signInTelegramWithPassword,
+  startTelegramPhoneLogin,
+} from './telegram-phone-login.adapter';
 
 type ApiCredentials = { apiId: string; apiHash: string };
 type SessionParams = ApiCredentials & { session?: string };
@@ -530,10 +537,13 @@ export class TelegramMtprotoClient {
     };
   }
 
-  private async createClient({ apiId, apiHash, session }: SessionParams) {
+  private async createClient(
+    { apiId, apiHash, session }: SessionParams,
+    signal?: AbortSignal,
+  ) {
     const startedAt = this.now();
     this.logger.log(
-      `Connecting MTProto client: apiId=${apiId} session=${this.sessionFingerprint(session)}`,
+      `Connecting MTProto client: apiId=${apiId} session=${session ? 'present' : 'empty'}`,
     );
     const client = new TelegramClient(
       new StringSession(session || ''),
@@ -546,7 +556,29 @@ export class TelegramMtprotoClient {
         reconnectRetries: 0,
       },
     );
-    await client.connect();
+    let closePromise: Promise<void> | undefined;
+    const closeOnce = () => {
+      closePromise ??= this.closeClient(client);
+      return closePromise;
+    };
+    const abortConnect = () => void closeOnce();
+    signal?.addEventListener('abort', abortConnect, { once: true });
+    try {
+      await client.connect();
+      if (signal?.aborted) {
+        const error = new Error('Telegram MTProto connection was cancelled');
+        error.name = 'AbortError';
+        throw error;
+      }
+    } catch (error) {
+      await closeOnce();
+      // `connect()` can finish after the abort-triggered destroy and revive
+      // its transport. Close once more after the connect promise settles.
+      if (signal?.aborted) await this.closeClient(client);
+      throw error;
+    } finally {
+      signal?.removeEventListener('abort', abortConnect);
+    }
     this.logger.log(
       `MTProto client connected in ${this.elapsed(startedAt)}: apiId=${apiId}`,
     );
@@ -593,13 +625,6 @@ export class TelegramMtprotoClient {
 
   private elapsed(startedAt: number) {
     return `${this.now() - startedAt}ms`;
-  }
-
-  private sessionFingerprint(session?: string | null) {
-    const raw = String(session || '').trim();
-    if (!raw) return 'empty';
-    if (raw.length <= 10) return `${raw.slice(0, 3)}***`;
-    return `${raw.slice(0, 5)}***${raw.slice(-4)}`;
   }
 
   private errorSummary(error: unknown) {
@@ -958,6 +983,15 @@ export class TelegramMtprotoClient {
   private saveSession(client: TelegramClient): string {
     const saved = client.session.save();
     return typeof saved === 'string' ? saved : '';
+  }
+
+  private loginAdapterDependencies() {
+    return {
+      closeClient: (client: TelegramClient) => this.closeClient(client),
+      saveSession: (client: TelegramClient) => this.saveSession(client),
+      getProfile: (client: TelegramClient, user?: Api.User | null) =>
+        this.getAccountProfileFromClient(client, user),
+    };
   }
 
   private entityIdToString(entity: { id?: unknown }) {
@@ -1640,18 +1674,32 @@ export class TelegramMtprotoClient {
     }
   }
 
-  async startLogin(apiId: string, apiHash: string, phone: string, forceSms = false) {
-    const client = await this.createClient({ apiId, apiHash });
-    try {
-      const sent = await client.sendCode({ apiId: Number(apiId), apiHash }, phone, forceSms);
-      return {
-        phoneCodeHash: sent.phoneCodeHash,
-        isCodeViaApp: sent.isCodeViaApp,
-        tempSession: this.saveSession(client),
-      };
-    } finally {
-      await this.closeClient(client);
-    }
+  async startLogin(
+    apiId: string,
+    apiHash: string,
+    phone: string,
+    forceSms = false,
+  ) {
+    return startTelegramPhoneLogin(apiId, apiHash, phone, forceSms, {
+      createClient: () => this.createClient({ apiId, apiHash }),
+      ...this.loginAdapterDependencies(),
+    });
+  }
+
+  async loginWithQr(
+    apiId: string,
+    apiHash: string,
+    signal: AbortSignal,
+    onProgress: (progress: TelegramQrLoginProgress) => void | Promise<void>,
+  ) {
+    return loginWithTelegramQr(apiId, apiHash, signal, onProgress, {
+      createClient: (operationSignal) =>
+        this.createClient({ apiId, apiHash }, operationSignal),
+      closeClient: (client) => this.closeClient(client),
+      saveSession: (client) => this.saveSession(client),
+      getProfile: (client, user) =>
+        this.getAccountProfileFromClient(client, user),
+    });
   }
 
   async signInWithCode(params: {
@@ -1662,51 +1710,15 @@ export class TelegramMtprotoClient {
     code: string;
     tempSession?: string;
   }) {
-    const client = await this.createClient({
-      apiId: params.apiId,
-      apiHash: params.apiHash,
-      session: params.tempSession,
+    return signInTelegramWithCode(params, {
+      createClient: (session) =>
+        this.createClient({
+          apiId: params.apiId,
+          apiHash: params.apiHash,
+          session,
+        }),
+      ...this.loginAdapterDependencies(),
     });
-    try {
-      try {
-        const result = await client.invoke(
-          new Api.auth.SignIn({
-            phoneNumber: params.phone,
-            phoneCodeHash: params.phoneCodeHash,
-            phoneCode: params.code,
-          }),
-        );
-
-        if (result instanceof Api.auth.AuthorizationSignUpRequired) {
-          throw new Error(
-            'This phone requires sign up and is not supported in this flow yet.',
-          );
-        }
-        const authUser = result.user as Api.User;
-        const profile = await this.getAccountProfileFromClient(
-          client,
-          authUser,
-        );
-        return {
-          session: this.saveSession(client),
-          me: profile,
-          needsPassword: false,
-          tempSession: this.saveSession(client),
-        };
-      } catch (error: any) {
-        if (error?.errorMessage === 'SESSION_PASSWORD_NEEDED') {
-          return {
-            session: '',
-            me: null,
-            needsPassword: true,
-            tempSession: this.saveSession(client),
-          };
-        }
-        throw error;
-      }
-    } finally {
-      await this.closeClient(client);
-    }
   }
 
   async signInWithPassword(params: {
@@ -1715,30 +1727,15 @@ export class TelegramMtprotoClient {
     password: string;
     tempSession?: string;
   }) {
-    const client = await this.createClient({
-      apiId: params.apiId,
-      apiHash: params.apiHash,
-      session: params.tempSession,
+    return signInTelegramWithPassword(params, {
+      createClient: (session) =>
+        this.createClient({
+          apiId: params.apiId,
+          apiHash: params.apiHash,
+          session,
+        }),
+      ...this.loginAdapterDependencies(),
     });
-    try {
-      const authUser = (await client.signInWithPassword(
-        { apiId: Number(params.apiId), apiHash: params.apiHash },
-        {
-          password: async () => params.password,
-          onError: (err) => {
-            throw err;
-          },
-        },
-      )) as Api.User;
-      const profile = await this.getAccountProfileFromClient(client, authUser);
-
-      return {
-        session: this.saveSession(client),
-        me: profile,
-      };
-    } finally {
-      await this.closeClient(client);
-    }
   }
 
   async getAccountProfile(params: {

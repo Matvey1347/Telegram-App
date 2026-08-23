@@ -14,6 +14,7 @@ export class StreamResponseService {
     res: Response,
     config: {
       eventPrefix: string;
+      persistLifecycleLogs?: boolean;
       action: (
         onProgress: (item: TItem, current: number, total: number) => void,
         signal: AbortSignal,
@@ -34,13 +35,15 @@ export class StreamResponseService {
     const abortOnClose = () => abortController.abort();
     res.once('close', abortOnClose);
 
-    this.applicationLogger.writeStructured({
-      level: 'info',
-      kind: 'application',
-      source: StreamResponseService.name,
-      event: `${config.eventPrefix}.started`,
-      message: `Stream started for ${config.eventPrefix}`,
-    });
+    if (config.persistLifecycleLogs !== false) {
+      this.applicationLogger.writeStructured({
+        level: 'info',
+        kind: 'application',
+        source: StreamResponseService.name,
+        event: `${config.eventPrefix}.started`,
+        message: `Stream started for ${config.eventPrefix}`,
+      });
+    }
 
     try {
       const result = await config.action((item, current, total) => {
@@ -54,15 +57,23 @@ export class StreamResponseService {
         res.write(`${JSON.stringify({ type: 'complete', result })}\n`);
       }
       (res as Response & { flush?: () => void }).flush?.();
-      this.applicationLogger.writeStructured({
-        level: 'info',
-        kind: 'application',
-        source: StreamResponseService.name,
-        event: `${config.eventPrefix}.completed`,
-        message: `Stream completed for ${config.eventPrefix}`,
-        durationMs: Date.now() - startedAt,
-      });
+      if (config.persistLifecycleLogs !== false) {
+        this.applicationLogger.writeStructured({
+          level: 'info',
+          kind: 'application',
+          source: StreamResponseService.name,
+          event: `${config.eventPrefix}.completed`,
+          message: `Stream completed for ${config.eventPrefix}`,
+          durationMs: Date.now() - startedAt,
+        });
+      }
     } catch (error) {
+      if (
+        abortController.signal.aborted ||
+        (error instanceof Error && error.name === 'AbortError')
+      ) {
+        return;
+      }
       const message =
         error instanceof Error ? error.message : 'Stream action failed';
       if (!res.destroyed && !res.writableEnded) {
@@ -75,16 +86,18 @@ export class StreamResponseService {
         );
       }
       (res as Response & { flush?: () => void }).flush?.();
-      this.applicationLogger.writeStructured({
-        level: 'error',
-        kind: 'application',
-        source: StreamResponseService.name,
-        event: `${config.eventPrefix}.failed`,
-        message,
-        durationMs: Date.now() - startedAt,
-        errorName: error instanceof Error ? error.name : 'Error',
-        stack: error instanceof Error ? error.stack || null : null,
-      });
+      if (config.persistLifecycleLogs !== false) {
+        this.applicationLogger.writeStructured({
+          level: 'error',
+          kind: 'application',
+          source: StreamResponseService.name,
+          event: `${config.eventPrefix}.failed`,
+          message,
+          durationMs: Date.now() - startedAt,
+          errorName: error instanceof Error ? error.name : 'Error',
+          stack: error instanceof Error ? error.stack || null : null,
+        });
+      }
     } finally {
       res.off('close', abortOnClose);
       if (!res.destroyed && !res.writableEnded) res.end();

@@ -32,20 +32,19 @@ export class TelegramUserAccountsController {
     private readonly streamResponse: StreamResponseService,
   ) {}
 
-  private async streamAction(
+  private async streamAction<TItem>(
     res: Response,
     action: (
-      onProgress: (
-        item: { message: string },
-        current: number,
-        total: number,
-      ) => void,
+      onProgress: (item: TItem, current: number, total: number) => void,
+      signal: AbortSignal,
     ) => Promise<unknown>,
     eventPrefix: string,
+    persistLifecycleLogs = true,
   ) {
     return this.streamResponse.stream(res, {
       eventPrefix,
       action,
+      persistLifecycleLogs,
     });
   }
 
@@ -99,6 +98,24 @@ export class TelegramUserAccountsController {
   ) {
     return this.service.confirmPassword(user.sub, id, dto);
   }
+  @Post(':id/login/qr-stream') qrLoginStream(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    return this.streamAction(
+      res,
+      (onProgress, signal) =>
+        this.service.loginWithQr(
+          user.sub,
+          id,
+          (item) => onProgress(item, 1, 1),
+          signal,
+        ),
+      'telegram_user_account.qr_login_stream',
+      false,
+    );
+  }
   @Post(':id/check') check(
     @CurrentUser() user: JwtUser,
     @Param('id') id: string,
@@ -137,7 +154,8 @@ export class TelegramUserAccountsController {
   ) {
     return this.streamAction(
       res,
-      (onProgress) => this.service.importChannels(user.sub, id, dto, onProgress),
+      (onProgress) =>
+        this.service.importChannels(user.sub, id, dto, onProgress),
       'telegram_user_account.import_channels_stream',
     );
   }
