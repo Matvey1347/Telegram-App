@@ -11,6 +11,10 @@ import {
   TelegramSourceType,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  B2ObjectStorageService,
+  isSupportedImmutableImageMimeType,
+} from '../../../common/object-storage/b2-object-storage.service';
 import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
 import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
@@ -29,6 +33,7 @@ export class TelegramPostMetricsService {
     private readonly telegramChannelsSupportService: TelegramChannelsSupportService,
     private readonly telegramChannelAccessService: TelegramChannelAccessService,
     private readonly telegramChannelCatalogService: TelegramChannelCatalogService,
+    private readonly objectStorage: B2ObjectStorageService,
   ) {}
   private readonly logger = new Logger('TelegramChannelsService');
 
@@ -91,7 +96,10 @@ export class TelegramPostMetricsService {
       const metrics = await this.mtprotoClient.getChannelPostsMetrics({
         ...this.telegramChannelAccessService.accountCredentials(account),
         channel: channelReference,
-        postLimit: dto.postLimit || this.defaultPostSyncLimit,
+        postLimit: Math.min(
+          100,
+          Math.max(1, dto.postLimit || this.defaultPostSyncLimit),
+        ),
       });
       await this.telegramChannelsSupportService.notifyDetailedTaskProgress(
         onProgress,
@@ -105,6 +113,11 @@ export class TelegramPostMetricsService {
         metrics,
         onProgress,
         progressStep,
+        {
+          credentials:
+            this.telegramChannelAccessService.accountCredentials(account),
+          channel: channelReference,
+        },
       );
       const changed =
         persistence.changedPosts > 0 || persistence.snapshotsCreated > 0;
@@ -172,6 +185,12 @@ export class TelegramPostMetricsService {
     metrics: any[],
     onProgress?: BulkProgressCallback,
     progressStep = { current: 3, total: 8 },
+    mediaContext?: {
+      credentials: { apiId: string; apiHash: string; session: string };
+      channel: Parameters<
+        TelegramMtprotoClient['downloadChannelMessagesMedia']
+      >[0]['channel'];
+    },
   ) {
     const affectedDays = new Set<string>();
     const incomingMessageIds = metrics.map((post) =>
@@ -195,6 +214,7 @@ export class TelegramPostMetricsService {
             formattedText: true,
             hasMedia: true,
             mediaKind: true,
+            imageUrls: true,
             viewsCount: true,
             forwardsCount: true,
             reactionsCount: true,
@@ -207,7 +227,52 @@ export class TelegramPostMetricsService {
     const existingByMessageId = new Map(
       persisted.map((post) => [String(post.telegramMessageId), post]),
     );
+    const imageUrlsByMessageId = new Map<string, string[]>();
+    const mediaCandidates = mediaContext
+      ? metrics.filter((post) => {
+          const existing = existingByMessageId.get(
+            String(post.telegramMessageId),
+          );
+          return (
+            post.hasMedia &&
+            this.isTelegramImageKind(post.mediaKind) &&
+            !this.hasPermanentImage(existing?.imageUrls)
+          );
+        })
+      : [];
+    let imageUrlsFailed = 0;
+    if (mediaContext && mediaCandidates.length) {
+      try {
+        const downloaded =
+          await this.mtprotoClient.downloadChannelMessagesMedia({
+            ...mediaContext.credentials,
+            channel: mediaContext.channel,
+            messageIds: mediaCandidates.map((post) =>
+              String(post.telegramMessageId),
+            ),
+          });
+        const images = downloaded.filter((item) =>
+          isSupportedImmutableImageMimeType(item.mimeType),
+        );
+        const stored = await this.objectStorage.persistImmutableImages(
+          images.map((item) => ({
+            bytes: item.buffer,
+            mimeType: item.mimeType,
+          })),
+        );
+        images.forEach((item, index) => {
+          imageUrlsByMessageId.set(item.messageId, [stored.urls[index]]);
+        });
+        imageUrlsFailed = mediaCandidates.length - images.length;
+      } catch (error) {
+        imageUrlsFailed = mediaCandidates.length;
+        this.logger.warn(
+          `Telegram post image persistence failed for channel=${channelId}: ${error instanceof Error ? error.message : 'unknown error'}`,
+        );
+      }
+    }
     let changedPosts = 0;
+    let imageUrlsUpdated = 0;
     let snapshotsCreated = 0;
     for (const [index, post] of metrics.entries()) {
       if (index > 0 && index % 100 === 0) {
@@ -219,8 +284,25 @@ export class TelegramPostMetricsService {
         );
       }
       const existing = existingByMessageId.get(String(post.telegramMessageId));
-      const changed = !existing || this.postMetricsChanged(existing, post);
-      if (!changed) continue;
+      const imageUrls =
+        (existing && this.hasPermanentImage(existing.imageUrls)
+          ? existing.imageUrls
+          : imageUrlsByMessageId.get(String(post.telegramMessageId))) ?? [];
+      const metricsChanged =
+        !existing || this.postMetricsChanged(existing, post);
+      const imageChanged =
+        Boolean(existing) &&
+        this.metricValue(existing?.imageUrls ?? []) !==
+          this.metricValue(imageUrls);
+      if (!metricsChanged && !imageChanged) continue;
+      if (existing && !metricsChanged && imageChanged) {
+        await this.prisma.telegramPost.update({
+          where: { id: existing.id },
+          data: { imageUrls },
+        });
+        imageUrlsUpdated += 1;
+        continue;
+      }
       const data = {
         postDate: post.postDate,
         text: post.text,
@@ -233,6 +315,7 @@ export class TelegramPostMetricsService {
         commentsCount: post.commentsCount,
         reactions: post.reactions,
         rawMessage: post.rawMessage,
+        imageUrls,
       };
       const upserted = existing
         ? await this.prisma.telegramPost.update({
@@ -272,7 +355,13 @@ export class TelegramPostMetricsService {
     if (affectedDays.size) {
       await this.recalculateDailyStatsFromPosts(channelId, [...affectedDays]);
     }
-    return { affectedDays: affectedDays.size, changedPosts, snapshotsCreated };
+    return {
+      affectedDays: affectedDays.size,
+      changedPosts,
+      imageUrlsUpdated,
+      imageUrlsFailed,
+      snapshotsCreated,
+    };
   }
 
   public postMetricsChanged(
@@ -298,6 +387,17 @@ export class TelegramPostMetricsService {
     );
   }
 
+  public hasPermanentImage(value: unknown): value is string[] {
+    return (
+      Array.isArray(value) &&
+      value.some((url) => /^https?:\/\//i.test(String(url)))
+    );
+  }
+
+  public isTelegramImageKind(value: unknown) {
+    return /photo|image/i.test(String(value || ''));
+  }
+
   public metricValue(value: unknown) {
     if (value instanceof Date) return value.toISOString();
     if (value == null) return '';
@@ -309,38 +409,6 @@ export class TelegramPostMetricsService {
       return value.toString();
     }
     return value ? 'true' : 'false';
-  }
-
-  async telegramPostMedia(userId: string, channelId: string, postId: string) {
-    const workspaceId =
-      await this.telegramChannelsSupportService.workspace(userId);
-    const [channel, post] = await Promise.all([
-      this.prisma.telegramChannel.findFirst({
-        where: { id: channelId, workspaceId, isActive: true },
-      }),
-      this.prisma.telegramPost.findFirst({
-        where: { id: postId, telegramChannelId: channelId, workspaceId },
-        select: { telegramMessageId: true, hasMedia: true },
-      }),
-    ]);
-    if (!channel || !post)
-      throw new NotFoundException('Telegram post not found');
-    if (!post.hasMedia) throw new NotFoundException('Post has no media');
-    const account = await this.telegramChannelAccessService.connectedAccount(
-      workspaceId,
-      channelId,
-    );
-    const channelReference =
-      this.telegramChannelAccessService.mtprotoChannelReference(channel);
-    if (!channelReference.telegramChatId && !channelReference.username)
-      throw new BadRequestException('Channel has no Telegram reference');
-    const media = await this.mtprotoClient.downloadChannelMessageMedia({
-      ...this.telegramChannelAccessService.accountCredentials(account),
-      channel: channelReference,
-      messageId: post.telegramMessageId,
-    });
-    if (!media) throw new NotFoundException('Telegram post media not found');
-    return media;
   }
 
   public oldestMessageId(metrics: Array<{ telegramMessageId: string }>) {

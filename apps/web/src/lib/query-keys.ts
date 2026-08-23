@@ -118,8 +118,6 @@ export const telegramPostKeys = {
     search: string,
   ) => ["telegram-channel-posts", channelId, page, pageSize, search] as const,
   postGroups: (channelId: string) => ["post-groups", channelId] as const,
-  media: (channelId: string, postId?: string) =>
-    ["telegram-post-media", channelId, postId] as const,
 };
 
 export const telegramAccountKeys = {

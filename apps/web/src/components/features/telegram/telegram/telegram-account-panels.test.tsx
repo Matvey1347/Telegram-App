@@ -3,7 +3,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MtprotoAccountsPanel } from "./telegram-account-panels";
 
-const { loginWithQr, startLogin, account } = vi.hoisted(() => ({
+const { listAccounts, loginWithQr, startLogin, account } = vi.hoisted(() => ({
+  listAccounts: vi.fn(),
   loginWithQr: vi.fn((..._args: unknown[]) => new Promise(() => undefined)),
   startLogin: vi.fn(),
   account: {
@@ -22,7 +23,7 @@ const { loginWithQr, startLogin, account } = vi.hoisted(() => ({
 
 vi.mock("@/lib/api", () => ({
   telegramUserAccountsApi: {
-    list: vi.fn().mockResolvedValue([account]),
+    list: listAccounts,
     channels: vi.fn().mockResolvedValue([]),
     loginWithQr,
     create: vi.fn(),
@@ -51,18 +52,16 @@ describe("MtprotoAccountsPanel QR recovery", () => {
     loginWithQr.mockReset();
     loginWithQr.mockImplementation(() => new Promise(() => undefined));
     startLogin.mockReset();
+    listAccounts.mockReset();
+    listAccounts.mockResolvedValue([account]);
   });
 
   it("offers QR login while the account is waiting for a phone code", async () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
-    client.setQueryData(["telegram-user-accounts"], [
-      {
-        ...account,
-        status: "needs_code",
-        lastErrorMessage: undefined,
-      },
+    listAccounts.mockResolvedValue([
+      { ...account, status: "needs_code", lastErrorMessage: undefined },
     ]);
 
     render(
@@ -70,6 +69,10 @@ describe("MtprotoAccountsPanel QR recovery", () => {
         <MtprotoAccountsPanel createOpen={false} onCreateClose={vi.fn()} />
       </QueryClientProvider>,
     );
+
+    expect(
+      await screen.findByRole("button", { name: "Actions for Owner account" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Login via QR" }),

@@ -33,12 +33,12 @@ import { invalidateTelegramAccessQueries } from "@/lib/features/telegram/telegra
 import { telegramAccountKeys } from "@/lib/query-keys";
 import {
   isTelegramSmsUnavailableError,
-  requiresTelegramSessionRefresh,
   telegramLoginCodeDeliveryMessage,
 } from "./telegram-account-session-recovery";
 import { TelegramAccountCodeModal } from "./telegram-account-code-modal";
 import { TelegramAccountPasswordModal } from "./telegram-account-password-modal";
 import { useTelegramAccountQrRecovery } from "./use-telegram-account-qr-recovery";
+import { TelegramMtprotoAccountCard } from "./telegram-mtproto-account-card";
 
 function errorMessage(error: unknown, fallback: string) {
   const responseError = error as { response?: { data?: { message?: string } } };
@@ -276,117 +276,33 @@ export function MtprotoAccountsPanel({
   return (
     <>
       {isLoading && !data.length ? <LoadingState /> : null}
-      <MasonryGrid>
+      <MasonryGrid
+        className="!columns-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
+        itemClassName="mb-0"
+      >
         {data.map((account) => {
-          const username = String(account.username || "").replace("@", "");
-          const sessionRefreshRequired =
-            requiresTelegramSessionRefresh(account);
           const isStartingLogin =
             startLoginMutation.isPending &&
             startLoginMutation.variables?.account.id === account.id;
-          const fullName = [account.firstName, account.lastName]
-            .filter(Boolean)
-            .join(" ")
-            .trim();
           return (
-            <EntityCard key={account.id} title="" actions={null}>
-              <ChannelPreview
-                channel={{
-                  title: username ? `@${username}` : account.label,
-                  photoUrl: account.photoUrl,
-                }}
-                avatarKind="mtproto"
-                subtitle={fullName || `Phone: ${account.phoneMasked || "-"}`}
-                badges={
-                  account.isPremium ? (
-                    <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.14em] text-amber-200">
-                      Premium
-                    </span>
-                  ) : null
-                }
-                rightAction={
-                  <IconButton
-                    kind="delete"
-                    onClick={() => setDeleting(account)}
-                  />
-                }
-              />
-              {account.status !== "connected" ? (
-                <div className="mb-1 mt-3 flex items-center gap-2 text-xs uppercase tracking-wide text-amber-300">
-                  Status: {account.status}
-                </div>
-              ) : null}
-              <div className="mt-3 space-y-1 text-sm">
-                <p>Phone: {account.phoneMasked || "-"}</p>
-                <p>
-                  Last Check:{" "}
-                  {account.lastCheckedAt
-                    ? new Date(account.lastCheckedAt).toLocaleString()
-                    : "-"}
-                </p>
-                {account.lastErrorMessage ? (
-                  <p className="text-rose-300">{account.lastErrorMessage}</p>
-                ) : null}
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                {account.status === "pending" ||
-                (account.status === "error" && !sessionRefreshRequired) ? (
-                  <Button
-                    variant="secondary"
-                    disabled={isStartingLogin}
-                    onClick={() => startLoginMutation.mutate({ account })}
-                  >
-                    {isStartingLogin ? "Sending…" : "Start login"}
-                  </Button>
-                ) : null}
-                {sessionRefreshRequired ? (
-                  <Button
-                    variant="secondary"
-                    onClick={() => qrRecovery.openQr(account)}
-                  >
-                    Refresh via QR
-                  </Button>
-                ) : null}
-                {account.status === "needs_code" ? (
-                  <>
-                    <Button
-                      variant="secondary"
-                      onClick={() => setCodeTarget(account)}
-                    >
-                      Enter code
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={() => qrRecovery.openQr(account)}
-                    >
-                      Login via QR
-                    </Button>
-                  </>
-                ) : null}
-                {account.status === "needs_password" ? (
-                  <Button
-                    variant="secondary"
-                    onClick={() => setPasswordTarget(account)}
-                  >
-                    2FA password
-                  </Button>
-                ) : null}
-                <Button
-                  variant="secondary"
-                  onClick={() => checkMutation.mutate(account.id)}
-                >
-                  Check
-                </Button>
-                <Button onClick={() => syncMutation.mutate(account)}>
-                  Sync channels
-                </Button>
-              </div>
+            <TelegramMtprotoAccountCard
+              key={account.id}
+              account={account}
+              isStartingLogin={isStartingLogin}
+              onStartLogin={() => startLoginMutation.mutate({ account })}
+              onRefreshQr={() => qrRecovery.openQr(account)}
+              onEnterCode={() => setCodeTarget(account)}
+              onPassword={() => setPasswordTarget(account)}
+              onCheck={() => checkMutation.mutate(account.id)}
+              onSync={() => syncMutation.mutate(account)}
+              onDelete={() => setDeleting(account)}
+            >
               <SourceChannelsList
                 sourceId={account.id}
                 sourceType="MTPROTO"
                 queryFn={() => telegramUserAccountsApi.channels(account.id)}
               />
-            </EntityCard>
+            </TelegramMtprotoAccountCard>
           );
         })}
       </MasonryGrid>

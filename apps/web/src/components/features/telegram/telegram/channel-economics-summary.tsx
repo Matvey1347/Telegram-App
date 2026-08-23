@@ -1,15 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import {
-  Eye,
-  Megaphone,
-  Percent,
-  UserCheck,
-  UserRound,
-} from "lucide-react";
+import { Eye, Megaphone, Percent, UserCheck, UserRound } from "lucide-react";
 import type { CurrencySettings, TelegramChannel } from "@/lib/api";
 import { Tooltip } from "@/components/ui/primitives";
+import { getChannelBookingIndicator } from "./channel-booking-indicator";
 
 function number(value: unknown, digits = 0) {
   const parsed = Number(value);
@@ -111,6 +106,7 @@ export function ChannelEconomicsSummary({
     invested > 0 && subscriberCostBase > 0 ? invested / subscriberCostBase : 0;
   const activeCpa =
     invested > 0 && activeSubscribers > 0 ? invested / activeSubscribers : 0;
+  const booking = getChannelBookingIndicator(channel.preview?.bookingSchedule);
 
   return (
     <section className="mt-2">
@@ -143,12 +139,25 @@ export function ChannelEconomicsSummary({
               tone="text-emerald-300"
             />
           </div>
-          {channel.adBaseCpm != null ? (
-            <div className="mt-3 text-xs text-neutral-500">
-              CPM{" "}
-              {money(channel.adBaseCpm, channel.adBaseCurrency || currency, 2)}
-            </div>
-          ) : null}
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
+            {channel.adBaseCpm != null ? (
+              <span className="text-neutral-500">
+                CPM{" "}
+                {money(
+                  channel.adBaseCpm,
+                  channel.adBaseCurrency || currency,
+                  2,
+                )}
+              </span>
+            ) : (
+              <span />
+            )}
+            <span
+              className={`inline-flex items-center gap-1.5 ${booking.tone}`}
+            >
+              {booking.label}
+            </span>
+          </div>
           <div className="mt-2 grid grid-cols-3 gap-1.5">
             <FormatPrice
               label="1/24"
@@ -287,7 +296,9 @@ function SpendMetric({
 
 function ExpenseLabel() {
   return (
-    <span className="flex h-5 items-center text-xs text-neutral-500">Spend</span>
+    <span className="flex h-5 items-center text-xs text-neutral-500">
+      Spend
+    </span>
   );
 }
 

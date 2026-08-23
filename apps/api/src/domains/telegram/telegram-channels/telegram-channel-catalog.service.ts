@@ -12,6 +12,7 @@ import {
   TelegramChannelListQueryDto,
   TelegramChannelSelectQueryDto,
 } from './dto';
+import { TelegramChannelBookingReadService } from './telegram-channel-booking-read.service';
 import { TelegramChannelFinancialReadService } from './telegram-channel-financial-read.service';
 
 type TelegramChannelImportPolicyRow = {
@@ -32,6 +33,7 @@ export class TelegramChannelCatalogService {
     private readonly telegramChannelsSupportService: TelegramChannelsSupportService,
     private readonly telegramChannelSchemaCompatibilityService: TelegramChannelSchemaCompatibilityService,
     private readonly telegramChannelFinancialReadService: TelegramChannelFinancialReadService,
+    private readonly telegramChannelBookingReadService: TelegramChannelBookingReadService,
   ) {}
 
   private readonly defaultPostSyncLimit = 50;
@@ -209,13 +211,21 @@ export class TelegramChannelCatalogService {
     }
 
     const channelIds = channels.map((channel) => channel.id);
-    const [timePostsByChannel, financialSummaryByChannel] = await Promise.all([
+    const [
+      timePostsByChannel,
+      financialSummaryByChannel,
+      bookingSummaryByChannel,
+    ] = await Promise.all([
       this.telegramChannelSchemaCompatibilityService.timePostsByChannelIds(
         channelIds,
       ),
       this.telegramChannelFinancialReadService.buildChannelFinancialSummaryPreview(
         workspaceId,
         channels,
+      ),
+      this.telegramChannelBookingReadService.summariesForChannels(
+        workspaceId,
+        channelIds,
       ),
     ]);
 
@@ -296,6 +306,12 @@ export class TelegramChannelCatalogService {
               : undefined,
           },
           financialSummary,
+          bookingSchedule: bookingSummaryByChannel.get(channel.id) ?? {
+            futureScheduledTotal: 0,
+            lastScheduledAt: null,
+            nextAvailableDate: null,
+            bookedThroughDate: null,
+          },
         },
       };
     });

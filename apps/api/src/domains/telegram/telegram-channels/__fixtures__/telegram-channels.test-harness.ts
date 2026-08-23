@@ -1,4 +1,5 @@
 import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
+import { B2ObjectStorageService } from '../../../../common/object-storage/b2-object-storage.service';
 import { ResponseCacheService } from '../../../../common/response-cache.service';
 import { TokenEncryptionService } from '../../../../common/security/token-encryption.service';
 import { WorkspaceService } from '../../../../common/workspace.service';
@@ -14,6 +15,7 @@ import { TelegramBroadcastStatsService } from '../telegram-broadcast-stats.servi
 import { TelegramChannelAdmissionSyncService } from '../telegram-channel-admission-sync.service';
 import { TelegramChannelAccessService } from '../telegram-channel-access.service';
 import { TelegramChannelAnalyticsService } from '../telegram-channel-analytics.service';
+import { TelegramChannelBookingReadService } from '../telegram-channel-booking-read.service';
 import { TelegramChannelCatalogService } from '../telegram-channel-catalog.service';
 import { TelegramChannelContentReadService } from '../telegram-channel-content-read.service';
 import { TelegramChannelDeepSyncService } from '../telegram-channel-deep-sync.service';
@@ -83,6 +85,7 @@ const narrowProviders: ProviderType[] = [
   TelegramInviteHistoryService,
   TelegramChannelAdPricingReadService,
   TelegramChannelFinancialReadService,
+  TelegramChannelBookingReadService,
   TelegramChannelCatalogService,
   TelegramChannelReadModelsService,
   TelegramInviteSyncService,
@@ -150,6 +153,13 @@ export function createTelegramChannelsTestHarness(
   botApiClient: TelegramBotApiClient = new TelegramBotApiClient(),
   systemBotConfig?: TelegramSystemBotConfigService,
   currencyConversionService?: CurrencyConversionService,
+  objectStorage: B2ObjectStorageService = {
+    persistImmutableImages: async () => ({
+      urls: [],
+      uploaded: 0,
+      reused: 0,
+    }),
+  } as unknown as B2ObjectStorageService,
 ): TelegramChannelsTestHarness {
   const instances = new Map<unknown, unknown>([
     [PrismaService, prisma],
@@ -166,6 +176,7 @@ export function createTelegramChannelsTestHarness(
     [TelegramBotApiClient, botApiClient],
     [TelegramSystemBotConfigService, systemBotConfig],
     [CurrencyConversionService, currencyConversionService],
+    [B2ObjectStorageService, objectStorage],
   ]);
 
   const pending = [...narrowProviders];

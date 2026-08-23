@@ -236,6 +236,13 @@ export function createTelegramChannelsApi({
           responseType: "blob",
         })
       ).data,
+    calendarPlanInstruction: async (id: string) =>
+      (
+        await api.get<Blob>(`/telegram-channels/${id}/gpt-context`, {
+          params: { purpose: "calendar-plan" },
+          responseType: "blob",
+        })
+      ).data,
     sources: async (id: string) =>
       (
         await api.get<TelegramChannelSourceAccess[]>(
@@ -928,13 +935,6 @@ export function createTelegramChannelsApi({
       (
         await api.delete<TelegramChannelAdAnalysis>(
           `/telegram-channels/${channelId}/ad-analyses/${analysisId}`,
-        )
-      ).data,
-    postMedia: async (channelId: string, postId: string) =>
-      (
-        await api.get<Blob>(
-          `/telegram-channels/${channelId}/posts/${postId}/media`,
-          { responseType: "blob" },
         )
       ).data,
     updatePostManualMetrics: async (

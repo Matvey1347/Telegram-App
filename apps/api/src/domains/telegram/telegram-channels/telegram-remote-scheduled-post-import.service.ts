@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import {
   TelegramManagedPostIdVerificationStatus,
   TelegramManagedPostLinkSource,
@@ -7,6 +7,10 @@ import {
   TelegramSourceType,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  B2ObjectStorageService,
+  isSupportedImmutableImageMimeType,
+} from '../../../common/object-storage/b2-object-storage.service';
 import { telegramHtmlToManagedMarkup } from '../../../telegram/shared/telegram-markup';
 import {
   TelegramMtprotoClient,
@@ -20,6 +24,9 @@ import { TelegramPostGroupsService } from './telegram-post-groups.service';
 
 @Injectable()
 export class TelegramRemoteScheduledPostImportService {
+  private readonly logger = new Logger(
+    TelegramRemoteScheduledPostImportService.name,
+  );
   constructor(
     private readonly prisma: PrismaService,
     private readonly mtprotoClient: TelegramMtprotoClient,
@@ -28,6 +35,7 @@ export class TelegramRemoteScheduledPostImportService {
     private readonly telegramChannelAccessService: TelegramChannelAccessService,
     private readonly telegramManagedPostPresentationService: TelegramManagedPostPresentationService,
     private readonly telegramPostGroupsService: TelegramPostGroupsService,
+    private readonly objectStorage: B2ObjectStorageService,
   ) {}
 
   public async syncRemoteScheduledManagedPosts(params: {
@@ -139,16 +147,21 @@ export class TelegramRemoteScheduledPostImportService {
       const canonicalText = item.html
         ? telegramHtmlToManagedMarkup(item.html)
         : item.text;
-      const importedImageUrls = item.hasMedia
-        ? await this.importRemoteScheduledImageUrls(
-            params.account,
-            params.channel,
-            item.messageIds,
-          )
-        : [];
       const existingImported = existingImportedPostsByRemoteImportKey.get(
         item.remoteImportKey,
       );
+      const existingImageUrls = existingImported
+        ? await this.persistLegacyImportedImageUrls(existingImported.imageUrls)
+        : [];
+      const importedImageUrls = existingImageUrls.length
+        ? existingImageUrls
+        : item.hasMedia
+          ? await this.importRemoteScheduledImageUrls(
+              params.account,
+              params.channel,
+              item.messageIds,
+            )
+          : [];
       if (existingImported) {
         const nextScheduledAt = item.scheduledAt
           ? new Date(item.scheduledAt)
@@ -386,23 +399,70 @@ export class TelegramRemoteScheduledPostImportService {
     if (!channelReference.telegramChatId && !channelReference.username) {
       return [];
     }
-    const results = await Promise.all(
-      messageIds.map(async (messageId) => {
-        try {
-          const media = await this.mtprotoClient.downloadChannelMessageMedia({
-            ...this.telegramChannelAccessService.accountCredentials(account),
-            channel: channelReference,
-            messageId,
-          });
-          if (!media?.buffer?.length) return null;
-          if (!String(media.mimeType || '').startsWith('image/')) return null;
-          return `data:${media.mimeType};base64,${media.buffer.toString('base64')}`;
-        } catch {
-          return null;
-        }
-      }),
-    );
-    return results.filter((value): value is string => Boolean(value));
+    try {
+      const media = await this.mtprotoClient.downloadChannelMessagesMedia({
+        ...this.telegramChannelAccessService.accountCredentials(account),
+        channel: channelReference,
+        messageIds,
+      });
+      const imagesByMessageId = new Map(
+        media
+          .filter(
+            (item) =>
+              item.buffer.length > 0 &&
+              isSupportedImmutableImageMimeType(item.mimeType),
+          )
+          .map((item) => [item.messageId, item] as const),
+      );
+      const ordered = messageIds.flatMap((messageId) => {
+        const image = imagesByMessageId.get(messageId);
+        return image ? [image] : [];
+      });
+      const stored = await this.objectStorage.persistImmutableImages(
+        ordered.map((item) => ({
+          bytes: item.buffer,
+          mimeType: item.mimeType,
+        })),
+      );
+      return stored.urls;
+    } catch (error) {
+      this.logger.warn(
+        `Scheduled Telegram image persistence failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+      );
+      return [];
+    }
+  }
+
+  private async persistLegacyImportedImageUrls(imageUrls: string[]) {
+    const legacy = imageUrls.flatMap((url, index) => {
+      const match =
+        /^data:(image\/(?:jpeg|png|webp|gif));base64,([a-z0-9+/=\s]+)$/i.exec(
+          url,
+        );
+      if (!match) return [];
+      const bytes = Buffer.from(match[2].replace(/\s/g, ''), 'base64');
+      return bytes.length
+        ? [{ index, bytes, mimeType: match[1].toLowerCase() }]
+        : [];
+    });
+    if (!legacy.length) {
+      return imageUrls.filter((url) => /^https?:\/\//i.test(url));
+    }
+    try {
+      const stored = await this.objectStorage.persistImmutableImages(legacy);
+      const next = imageUrls.map((url) =>
+        /^https?:\/\//i.test(url) ? url : '',
+      );
+      legacy.forEach((item, index) => {
+        next[item.index] = stored.urls[index];
+      });
+      return next.filter(Boolean);
+    } catch (error) {
+      this.logger.warn(
+        `Legacy scheduled Telegram image persistence failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+      );
+      return imageUrls;
+    }
   }
 
   public importedManagedPostTitle(text: string) {

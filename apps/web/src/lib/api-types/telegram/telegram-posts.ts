@@ -17,6 +17,7 @@ export type TelegramPost = {
   formattedText?: string | null;
   hasMedia?: boolean;
   mediaKind?: string | null;
+  imageUrls: string[];
   viewsCount?: number | null;
   forwardsCount?: number | null;
   reactionsCount?: number | null;

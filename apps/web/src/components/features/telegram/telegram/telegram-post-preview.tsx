@@ -32,6 +32,10 @@ import { useTelegramTableCellEditor } from "./telegram-table-cell-editor";
 import { TelegramPostEngagement } from "./telegram-post-engagement";
 import type { TelegramPostEngagementMetrics } from "@telegram-system/shared";
 import { normalizeTelegramFormattedHtml } from "./telegram-formatted-html";
+import {
+  escapeTelegramPreviewHtml as escapeHtml,
+  renderTelegramPreviewInlineMarkup,
+} from "./telegram-post-preview-markup";
 
 type TelegramPostPreviewProps = {
   channelTitle: string;
@@ -53,13 +57,6 @@ type TelegramPostPreviewProps = {
   buttonRows?: TelegramPostButtonRows;
   customEmojiPacks?: TelegramCustomEmojiPackSummary[];
 };
-
-const escapeHtml = (value: string) =>
-  value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 
 function renderFencedCodeBlock(info: string, lineBreak: string, code: string) {
   const normalizedInfo = info.replace(/\r/g, "");
@@ -134,7 +131,10 @@ function renderRichBlocks(
         `<ul class="tg-rich-list" style="list-style-type:disc">${items
           .trim()
           .split("\n")
-          .map((item) => `<li>${escapeHtml(item.replace(/^[-*]\s+/, ""))}</li>`)
+          .map(
+            (item) =>
+              `<li>${renderTelegramPreviewInlineMarkup(item.replace(/^[-*]\s+/, ""))}</li>`,
+          )
           .join("")}</ul>`,
         "block",
       ),
@@ -147,7 +147,8 @@ function renderRichBlocks(
           .trim()
           .split("\n")
           .map(
-            (item) => `<li>${escapeHtml(item.replace(/^\d+\.\s+/, ""))}</li>`,
+            (item) =>
+              `<li>${renderTelegramPreviewInlineMarkup(item.replace(/^\d+\.\s+/, ""))}</li>`,
           )
           .join("")}</ol>`,
         "block",
@@ -232,12 +233,7 @@ function previewHtml(
       return href;
     }
   });
-  value = escapeHtml(value)
-    .replace(/\*\*([^\n]+?)\*\*/g, "<b>$1</b>")
-    .replace(/__([^\n]+?)__/g, "<i>$1</i>")
-    .replace(/\+\+([^\n]+?)\+\+/g, "<u>$1</u>")
-    .replace(/~~([^\n]+?)~~/g, "<s>$1</s>")
-    .replace(/\|\|([^\n]+?)\|\|/g, '<span class="tg-spoiler">$1</span>');
+  value = renderTelegramPreviewInlineMarkup(value);
 
   const lines = value.split("\n");
   const rendered: string[] = [];

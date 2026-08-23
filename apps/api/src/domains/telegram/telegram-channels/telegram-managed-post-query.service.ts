@@ -288,7 +288,9 @@ export class TelegramManagedPostQueryService {
         formattedText: post.formattedText,
         hasMedia: post.hasMedia,
         mediaKind: post.mediaKind,
-        imageUrls: [] as string[],
+        imageUrls: (post.imageUrls ?? []).filter((url) =>
+          /^https?:\/\//i.test(url),
+        ),
         buttonRows: [],
         status: 'PUBLISHED' as const,
         scheduledAt: null,

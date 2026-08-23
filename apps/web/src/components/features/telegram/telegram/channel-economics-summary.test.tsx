@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { TelegramChannel } from "@/lib/api";
 import { ChannelEconomicsEditor } from "./channel-economics-editor";
+import { getChannelBookingIndicator } from "./channel-booking-indicator";
 import {
   ChannelEconomicsSummary,
   sortChannelsByScale,
@@ -20,6 +21,66 @@ vi.mock("@/providers/toast-provider", () => ({
 }));
 
 describe("ChannelEconomicsSummary", () => {
+  it.each([
+    [null, "⚠️ Free today", "text-rose-300"],
+    [
+      "2026-08-26T12:00:00.000Z",
+      "Booked to Aug 26 · write from Aug 27",
+      "text-rose-300",
+    ],
+    [
+      "2026-08-30T12:00:00.000Z",
+      "Booked to Aug 30 · write from Aug 31",
+      "text-amber-300",
+    ],
+    [
+      "2026-09-06T12:00:00.000Z",
+      "Booked to Sep 6 · write from Sep 7",
+      "text-neutral-500",
+    ],
+  ])("colors the booking horizon for %s", (lastScheduledAt, label, tone) => {
+    expect(
+      getChannelBookingIndicator(
+        { futureScheduledTotal: lastScheduledAt ? 1 : 0, lastScheduledAt },
+        new Date("2026-08-23T10:00:00"),
+      ),
+    ).toMatchObject({ label, tone });
+  });
+
+  it("shows the first free day even when later days are booked", () => {
+    expect(
+      getChannelBookingIndicator(
+        {
+          futureScheduledTotal: 20,
+          lastScheduledAt: "2026-11-30T12:00:00.000Z",
+          nextAvailableDate: "2026-08-27",
+          bookedThroughDate: "2026-08-26",
+        },
+        new Date("2026-08-23T10:00:00"),
+      ),
+    ).toMatchObject({
+      label: "Booked to Aug 26 · write for Aug 27",
+      tone: "text-amber-300",
+    });
+  });
+
+  it("marks tomorrow as urgent when it is the first free day", () => {
+    expect(
+      getChannelBookingIndicator(
+        {
+          futureScheduledTotal: 1,
+          lastScheduledAt: "2026-09-30T12:00:00.000Z",
+          nextAvailableDate: "2026-08-24",
+          bookedThroughDate: null,
+        },
+        new Date("2026-08-23T10:00:00"),
+      ),
+    ).toMatchObject({
+      label: "⚠️ Free Aug 24 · write now",
+      tone: "text-rose-300",
+    });
+  });
+
   it("sorts channel cards by audience scale", () => {
     const channels = [
       { id: "test", title: "Test", currentSubscribersCount: 3 },
@@ -109,6 +170,10 @@ describe("ChannelEconomicsSummary", () => {
                   },
                 },
               },
+              bookingSchedule: {
+                futureScheduledTotal: 4,
+                lastScheduledAt: "2026-08-30T12:00:00.000Z",
+              },
             },
           } as never
         }
@@ -142,6 +207,15 @@ describe("ChannelEconomicsSummary", () => {
     expect(container.querySelector(".lucide-circle-minus")).toBeNull();
     expect(screen.queryByText("Audience")).not.toBeInTheDocument();
     expect(screen.getByText("CPM 300.00 UAH")).toBeInTheDocument();
+    expect(
+      screen.getByText("Booked to Aug 30 · write from Aug 31"),
+    ).toHaveClass("text-amber-300");
+    expect(
+      screen
+        .getByText("Booked to Aug 30 · write from Aug 31")
+        .closest("span")
+        ?.querySelector("svg"),
+    ).toBeNull();
     expect(container.querySelector(".lucide-badge-dollar-sign")).toBeNull();
     expect(screen.getByText("13").tagName).toBe("STRONG");
     expect(screen.getByText("ads to break even")).toBeInTheDocument();

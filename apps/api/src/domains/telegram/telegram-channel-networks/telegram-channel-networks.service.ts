@@ -1,31 +1,64 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { createPaginatedResponse, normalizePagination } from '../../../common/pagination/pagination.utils';
+import {
+  createPaginatedResponse,
+  normalizePagination,
+} from '../../../common/pagination/pagination.utils';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramChannelAnalyticsService } from '../telegram-channels/telegram-channel-analytics.service';
+import { TelegramChannelFinancialReadService } from '../telegram-channels/telegram-channel-financial-read.service';
 import { CreateTelegramChannelNetworkDto } from './dto/create-telegram-channel-network.dto';
 import { UpdateTelegramChannelNetworkDto } from './dto/update-telegram-channel-network.dto';
+import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
+import { TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_IMAGE_URL } from '../telegram-channels/telegram-channels.internal';
+import { aggregateChannelNetworkSummary } from './telegram-channel-network-summary';
 
-type KpiStatus = 'good' | 'acceptable' | 'bad' | 'unknown';
+export const SYSTEM_ALL_NETWORK_ID = 'system-all';
+
+const SYSTEM_ALL_NETWORK_ICON = {
+  type: 'image' as const,
+  id: 'telegram-system-all-network',
+  url: TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_IMAGE_URL,
+  name: 'Telegram',
+};
 
 @Injectable()
 export class TelegramChannelNetworksService {
   constructor(
     private prisma: PrismaService,
     private workspaceService: WorkspaceService,
-    private analyticsService: TelegramChannelAnalyticsService,
+    private financialReadService: TelegramChannelFinancialReadService,
   ) {}
+
+  private readonly audienceSnapshotInclude = {
+    orderBy: { collectedAt: 'desc' as const },
+    take: 1,
+    select: {
+      subscribersCount: true,
+      activeSubscribersEstimate: true,
+      viewRate: true,
+      avgViewsAdjusted: true,
+      avgReactionsAdjusted: true,
+      dataQuality: true,
+      dataQualityReason: true,
+      hasExternalTrafficAnomaly: true,
+      hasSubscriberBasePollution: true,
+      postsWindow: true,
+    },
+  };
 
   private workspace(userId: string) {
     return this.workspaceService.resolveWorkspaceIdForUser(userId);
   }
 
   private dedupeChannelIds(channelIds: string[]) {
-    const cleanIds = channelIds.map((id) => String(id || '').trim()).filter(Boolean);
+    const cleanIds = channelIds
+      .map((id) => String(id || '').trim())
+      .filter(Boolean);
     const uniqueIds = [...new Set(cleanIds)];
     if (uniqueIds.length !== cleanIds.length) {
       throw new BadRequestException('Telegram channel ids must be unique');
@@ -55,31 +88,72 @@ export class TelegramChannelNetworksService {
     return { uniqueIds, channels };
   }
 
-  private kpiLabel(status: KpiStatus) {
-    if (status === 'good') return 'Good';
-    if (status === 'acceptable') return 'Acceptable';
-    if (status === 'bad') return 'Stop';
-    return '-';
+  private async resolveIconId(
+    workspaceId: string,
+    rawIconId: string | null | undefined,
+  ) {
+    const iconId = rawIconId?.trim() || null;
+    if (!iconId) return null;
+    const icon = await this.prisma.icon.findFirst({
+      where: {
+        id: iconId,
+        OR: [{ workspaceId }, { workspaceId: null }],
+      },
+      select: { id: true },
+    });
+    if (!icon) throw new NotFoundException('Icon not found');
+    return iconId;
   }
 
-  private aggregateKpiStatus(statuses: KpiStatus[]): KpiStatus {
-    if (statuses.includes('bad')) return 'bad';
-    if (statuses.includes('acceptable')) return 'acceptable';
-    if (statuses.includes('good')) return 'good';
-    return 'unknown';
+  private assertMutable(networkId: string) {
+    if (networkId === SYSTEM_ALL_NETWORK_ID) {
+      throw new ForbiddenException('System network cannot be modified');
+    }
   }
 
-  private async channelSummary(channel: {
-    id: string;
-    title: string;
-    username: string | null;
-    photoUrl: string | null;
-    currentSubscribersCount: number | null;
-  }) {
-    const [audience, finance] = await Promise.all([
-      this.analyticsService.getActiveAudienceEstimate(channel.id),
-      this.analyticsService.getChannelFinancialSummary(channel.id),
-    ]);
+  private assertNonSystemName(name?: string) {
+    if (name?.trim().toLowerCase() === 'all') {
+      throw new BadRequestException('All is reserved for the system network');
+    }
+  }
+
+  private audienceFromChannel(channel: any) {
+    const snapshot = channel.audienceSnapshots?.[0];
+    const avgViewsAdjusted = snapshot?.avgViewsAdjusted ?? null;
+    const avgReactionsAdjusted = snapshot?.avgReactionsAdjusted ?? null;
+    return {
+      subscribersCount:
+        snapshot?.subscribersCount ?? channel.currentSubscribersCount ?? null,
+      activeSubscribersEstimate: snapshot?.activeSubscribersEstimate ?? null,
+      paidActiveSubscribersEstimate:
+        snapshot?.activeSubscribersEstimate ?? null,
+      viewRate: snapshot?.viewRate ?? null,
+      avgViewsAdjusted,
+      avgReactionsAdjusted,
+      reactionRate:
+        avgViewsAdjusted != null && avgViewsAdjusted > 0
+          ? (Number(avgReactionsAdjusted || 0) / avgViewsAdjusted) * 100
+          : null,
+      dataQuality: snapshot?.dataQuality ?? null,
+      dataQualityReason: snapshot?.dataQualityReason ?? null,
+      hasExternalTrafficAnomaly: snapshot?.hasExternalTrafficAnomaly ?? false,
+      hasSubscriberBasePollution: snapshot?.hasSubscriberBasePollution ?? false,
+      postsWindow: snapshot?.postsWindow ?? channel.activeSubscribersWindow,
+      hasSnapshot: Boolean(snapshot),
+    };
+  }
+
+  private channelSummary(
+    channel: {
+      id: string;
+      title: string;
+      username: string | null;
+      photoUrl: string | null;
+      currentSubscribersCount: number | null;
+    },
+    audience: any,
+    finance: any,
+  ) {
     return {
       channelId: channel.id,
       id: channel.id,
@@ -92,83 +166,74 @@ export class TelegramChannelNetworksService {
       activeSubscribersEstimate: audience.activeSubscribersEstimate,
       paidActiveSubscribersEstimate: audience.paidActiveSubscribersEstimate,
       viewRate: audience.viewRate,
+      reactionRate: audience.reactionRate,
+      avgViewsAdjusted: audience.avgViewsAdjusted,
+      avgReactionsAdjusted: audience.avgReactionsAdjusted,
+      currency: finance.currency,
       totalAdSpend: finance.totalAdSpend,
       campaignsCount: finance.campaignsCount,
       totalJoinedSubscribers: finance.totalJoinedSubscribers,
+      totalPendingSubscribers: finance.totalPendingSubscribers,
+      totalAttributedSubscribers: finance.totalAttributedSubscribers,
       avgCpa: finance.avgCpa,
       activeCpa: finance.activeCpa,
       kpiStatus: finance.kpiStatus,
       kpiLabel: finance.kpiLabel,
+      assetEconomics: finance.assetEconomics,
     };
   }
 
-  private aggregateSummary(channelSummaries: Awaited<ReturnType<typeof this.channelSummary>>[]) {
-    const totalSubscribers = channelSummaries.reduce(
-      (sum, channel) => sum + Number(channel.subscribersCount || 0),
-      0,
+  private async enrichNetwork(
+    network: any,
+    prepared?: Map<string, { audience: any; finance: any }>,
+  ) {
+    const channels = network.channels.map(
+      (member: any) => member.telegramChannel,
     );
-    const activeSubscribersEstimate = channelSummaries.reduce(
-      (sum, channel) => sum + Number(channel.activeSubscribersEstimate || 0),
-      0,
+    const audiences = channels.map(
+      (channel: any) =>
+        prepared?.get(channel.id)?.audience ??
+        this.audienceFromChannel(channel),
     );
-    const paidActiveSubscribersEstimate = channelSummaries.reduce(
-      (sum, channel) => sum + Number(channel.paidActiveSubscribersEstimate || 0),
-      0,
+    const financialSummaries = prepared
+      ? new Map(
+          channels.map((channel: any) => [
+            channel.id,
+            prepared.get(channel.id)?.finance,
+          ]),
+        )
+      : await this.financialReadService.buildChannelFinancialSummaryPreview(
+          network.workspaceId,
+          channels.map((channel: any, index: number) => ({
+            ...channel,
+            audienceSnapshots: [audiences[index]],
+          })),
+        );
+    const channelSummaries = channels.map((channel: any, index: number) =>
+      this.channelSummary(
+        channel,
+        audiences[index],
+        financialSummaries.get(channel.id),
+      ),
     );
-    const totalAdSpend = channelSummaries.reduce(
-      (sum, channel) => sum + Number(channel.totalAdSpend || 0),
-      0,
-    );
-    const campaignsCount = channelSummaries.reduce(
-      (sum, channel) => sum + Number(channel.campaignsCount || 0),
-      0,
-    );
-    const totalJoinedSubscribers = channelSummaries.reduce(
-      (sum, channel) => sum + Number(channel.totalJoinedSubscribers || 0),
-      0,
-    );
-    const kpiStatus = this.aggregateKpiStatus(
-      channelSummaries.map((channel) => channel.kpiStatus as KpiStatus),
-    );
-    return {
-      channelsCount: channelSummaries.length,
-      totalSubscribers,
-      activeSubscribersEstimate,
-      paidActiveSubscribersEstimate,
-      viewRate:
-        totalSubscribers > 0
-          ? (activeSubscribersEstimate / totalSubscribers) * 100
-          : null,
-      totalAdSpend,
-      campaignsCount,
-      totalJoinedSubscribers,
-      avgCpa:
-        totalJoinedSubscribers > 0 ? totalAdSpend / totalJoinedSubscribers : null,
-      activeCpa:
-        paidActiveSubscribersEstimate > 0
-          ? totalAdSpend / paidActiveSubscribersEstimate
-          : null,
-      kpiStatus,
-      kpiLabel: this.kpiLabel(kpiStatus),
-    };
-  }
-
-  private async enrichNetwork(network: any) {
-    const channels = network.channels.map((member: any) => member.telegramChannel);
-    const channelSummaries = await Promise.all(
-      channels.map((channel: any) => this.channelSummary(channel)),
-    );
-    const summary = this.aggregateSummary(channelSummaries);
+    const summary = aggregateChannelNetworkSummary(channelSummaries);
     return {
       id: network.id,
       name: network.name,
       description: network.description,
+      iconId: network.iconId,
+      iconPresentation:
+        network.iconPresentation ?? iconToResolvedEmoji(network.icon),
       createdAt: network.createdAt,
       updatedAt: network.updatedAt,
       assignedMemberId: network.assignedMemberId,
       assignedMember: network.assignedMember,
       createdByUserId: network.createdByUserId,
       createdByUser: network.createdByUser,
+      isSystem: Boolean(network.isSystem),
+      systemKey: network.isSystem ? 'ALL' : null,
+      canEdit: !network.isSystem,
+      canDelete: !network.isSystem,
       channels: channelSummaries.map((channel) => ({
         id: channel.id,
         title: channel.title,
@@ -184,54 +249,161 @@ export class TelegramChannelNetworksService {
     };
   }
 
-  async list(
-    userId: string,
-    query: { page?: number; pageSize?: number } = {},
-  ) {
+  private hasMeaningfulData(channel: any, audience: any, finance: any) {
+    const economics = finance.assetEconomics;
+    return Boolean(
+      channel.currentSubscribersCount != null ||
+      audience.hasSnapshot ||
+      Number(finance.campaignsCount || 0) > 0 ||
+      Number(finance.totalAdSpend || 0) !== 0 ||
+      Number(economics?.invested || 0) !== 0 ||
+      Number(economics?.revenue || 0) !== 0 ||
+      economics?.formatPricing?.permanent?.expectedViews != null,
+    );
+  }
+
+  private async systemNetwork(workspaceId: string) {
+    const channels = await this.prisma.telegramChannel.findMany({
+      where: {
+        workspaceId,
+        isActive: true,
+        archivedAt: null,
+        adminLinks: { some: {} },
+      },
+      include: { audienceSnapshots: this.audienceSnapshotInclude },
+      orderBy: [{ title: 'asc' }, { id: 'asc' }],
+    });
+    const audiences = channels.map((channel) =>
+      this.audienceFromChannel(channel),
+    );
+    const financialSummaries =
+      await this.financialReadService.buildChannelFinancialSummaryPreview(
+        workspaceId,
+        channels.map((channel, index) => ({
+          ...channel,
+          audienceSnapshots: [audiences[index]],
+        })),
+      );
+    const eligibleChannels = channels.filter((channel, index) =>
+      this.hasMeaningfulData(
+        channel,
+        audiences[index],
+        financialSummaries.get(channel.id),
+      ),
+    );
+    const prepared = new Map(
+      eligibleChannels.map((channel) => {
+        const index = channels.findIndex(
+          (candidate) => candidate.id === channel.id,
+        );
+        return [
+          channel.id,
+          {
+            audience: audiences[index],
+            finance: financialSummaries.get(channel.id),
+          },
+        ];
+      }),
+    );
+    return this.enrichNetwork(
+      {
+        id: SYSTEM_ALL_NETWORK_ID,
+        workspaceId,
+        name: 'All',
+        description: 'All own channels with analytics or financial activity',
+        iconId: null,
+        icon: null,
+        iconPresentation: SYSTEM_ALL_NETWORK_ICON,
+        isSystem: true,
+        createdAt: new Date(0),
+        updatedAt: new Date(0),
+        assignedMemberId: null,
+        assignedMember: null,
+        createdByUserId: null,
+        createdByUser: null,
+        channels: eligibleChannels.map((telegramChannel) => ({
+          telegramChannel,
+        })),
+      },
+      prepared,
+    );
+  }
+
+  async list(userId: string, query: { page?: number; pageSize?: number } = {}) {
     const workspaceId = await this.workspace(userId);
     const pagination = normalizePagination(query);
-    const [networks, totalItems] = await this.prisma.$transaction([
+    const includeSystem = pagination.skip === 0;
+    const customSkip = Math.max(0, pagination.skip - 1);
+    const customTake = Math.max(0, pagination.take - (includeSystem ? 1 : 0));
+    const [networks, totalItems] = await Promise.all([
       this.prisma.telegramChannelNetwork.findMany({
         where: { workspaceId },
         include: {
+          icon: true,
           assignedMember: WorkspaceService.assignedMemberInclude,
           createdByUser: WorkspaceService.createdByUserInclude,
           channels: {
-            include: { telegramChannel: true },
+            include: {
+              telegramChannel: {
+                include: {
+                  audienceSnapshots: this.audienceSnapshotInclude,
+                },
+              },
+            },
             orderBy: { createdAt: 'asc' },
           },
         },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        skip: pagination.skip,
-        take: pagination.take,
+        skip: customSkip,
+        take: customTake,
       }),
       this.prisma.telegramChannelNetwork.count({ where: { workspaceId } }),
     ]);
-    const items = await Promise.all(
-      networks.map((network) => this.enrichNetwork(network)),
+    const [system, customItems] = await Promise.all([
+      includeSystem ? this.systemNetwork(workspaceId) : null,
+      Promise.all(networks.map((network) => this.enrichNetwork(network))),
+    ]);
+    return createPaginatedResponse(
+      system ? [system, ...customItems] : customItems,
+      totalItems + 1,
+      pagination,
     );
-    return createPaginatedResponse(items, totalItems, pagination);
   }
 
   async getById(userId: string, networkId: string) {
     const workspaceId = await this.workspace(userId);
+    if (networkId === SYSTEM_ALL_NETWORK_ID) {
+      return this.systemNetwork(workspaceId);
+    }
     const network = await this.prisma.telegramChannelNetwork.findFirst({
       where: { id: networkId, workspaceId },
       include: {
+        icon: true,
         assignedMember: WorkspaceService.assignedMemberInclude,
         createdByUser: WorkspaceService.createdByUserInclude,
         channels: {
-          include: { telegramChannel: true },
+          include: {
+            telegramChannel: {
+              include: { audienceSnapshots: this.audienceSnapshotInclude },
+            },
+          },
           orderBy: { createdAt: 'asc' },
         },
       },
     });
-    if (!network) throw new NotFoundException('Telegram channel network not found');
+    if (!network)
+      throw new NotFoundException('Telegram channel network not found');
     return this.enrichNetwork(network);
   }
 
   async create(userId: string, dto: CreateTelegramChannelNetworkDto) {
-    const { workspaceId, assignedMemberId } = await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId);
+    this.assertNonSystemName(dto.name);
+    const { workspaceId, assignedMemberId } =
+      await this.workspaceService.resolveAssignedMemberId(
+        userId,
+        dto.assignedMemberId,
+      );
+    const iconId = await this.resolveIconId(workspaceId, dto.iconId);
     const { uniqueIds } = await this.validateChannels(
       workspaceId,
       dto.telegramChannelIds,
@@ -241,6 +413,7 @@ export class TelegramChannelNetworksService {
         workspaceId,
         name: dto.name.trim(),
         description: dto.description?.trim() || null,
+        iconId,
         assignedMemberId,
         createdByUserId: userId,
         channels: {
@@ -259,6 +432,8 @@ export class TelegramChannelNetworksService {
     networkId: string,
     dto: UpdateTelegramChannelNetworkDto,
   ) {
+    this.assertMutable(networkId);
+    this.assertNonSystemName(dto.name);
     const workspaceId = await this.workspace(userId);
     const existing = await this.prisma.telegramChannelNetwork.findFirst({
       where: { id: networkId, workspaceId },
@@ -266,12 +441,23 @@ export class TelegramChannelNetworksService {
     });
     if (!existing)
       throw new NotFoundException('Telegram channel network not found');
-    const assignedMemberId = dto.assignedMemberId === undefined ? undefined : (
-      await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId)
-    ).assignedMemberId;
+    const assignedMemberId =
+      dto.assignedMemberId === undefined
+        ? undefined
+        : (
+            await this.workspaceService.resolveAssignedMemberId(
+              userId,
+              dto.assignedMemberId,
+            )
+          ).assignedMemberId;
+    const iconId =
+      dto.iconId === undefined
+        ? undefined
+        : await this.resolveIconId(workspaceId, dto.iconId);
 
     const uniqueIds = dto.telegramChannelIds
-      ? (await this.validateChannels(workspaceId, dto.telegramChannelIds)).uniqueIds
+      ? (await this.validateChannels(workspaceId, dto.telegramChannelIds))
+          .uniqueIds
       : null;
 
     await this.prisma.$transaction(async (tx) => {
@@ -283,6 +469,7 @@ export class TelegramChannelNetworksService {
             dto.description === undefined
               ? undefined
               : dto.description?.trim() || null,
+          iconId,
           assignedMemberId,
         },
       });
@@ -304,6 +491,7 @@ export class TelegramChannelNetworksService {
   }
 
   async remove(userId: string, networkId: string) {
+    this.assertMutable(networkId);
     const workspaceId = await this.workspace(userId);
     const existing = await this.prisma.telegramChannelNetwork.findFirst({
       where: { id: networkId, workspaceId },
@@ -311,7 +499,9 @@ export class TelegramChannelNetworksService {
     });
     if (!existing)
       throw new NotFoundException('Telegram channel network not found');
-    await this.prisma.telegramChannelNetwork.delete({ where: { id: networkId } });
+    await this.prisma.telegramChannelNetwork.delete({
+      where: { id: networkId },
+    });
     return { success: true };
   }
 

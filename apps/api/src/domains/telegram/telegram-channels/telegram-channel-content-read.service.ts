@@ -101,6 +101,7 @@ export class TelegramChannelContentReadService {
     return createPaginatedResponse(
       items.map((post) => ({
         ...post,
+        imageUrls: post.imageUrls.filter((url) => /^https?:\/\//i.test(url)),
         primaryTelegramMessageUrl:
           this.telegramChannelAccessService.telegramMessageUrl(
             channel,

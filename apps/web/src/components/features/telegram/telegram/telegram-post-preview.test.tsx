@@ -91,6 +91,28 @@ describe("TelegramPostPreview", () => {
     expect(unorderedList?.querySelectorAll("li")).toHaveLength(2);
   });
 
+  it("renders inline emphasis in lists and highlights Unicode hashtags", () => {
+    const { container } = render(
+      <TelegramPostPreview
+        channelTitle="Channel"
+        text={
+          "Порада #емоції\n\n1. **Зупинити дію** — зробити паузу #самодопомога\n2. __Назвати стан__"
+        }
+        imageUrls={[]}
+      />,
+    );
+
+    const orderedItems = container.querySelectorAll("ol.tg-rich-list li");
+    expect(orderedItems[0]?.querySelector("b")).toHaveTextContent(
+      "Зупинити дію",
+    );
+    expect(orderedItems[1]?.querySelector("i")).toHaveTextContent(
+      "Назвати стан",
+    );
+    expect(container.querySelectorAll(".tg-hashtag")).toHaveLength(2);
+    expect(container.querySelector(".tg-hashtag")).toHaveTextContent("#емоції");
+  });
+
   it("starts animated Premium emoji in the editable preview and keeps its ALT fallback", () => {
     const { container } = render(
       <TelegramPostPreview

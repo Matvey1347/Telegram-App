@@ -1,4 +1,6 @@
 import type { TelegramChannelAccessMode } from "../core";
+import type { ResolvedEmoji } from "../core";
+import type { TelegramChannelAdFormatPricing } from "./telegram-channel-analytics";
 
 export type TelegramChannelNetworkKpiStatus =
   | "good"
@@ -6,12 +8,14 @@ export type TelegramChannelNetworkKpiStatus =
   | "bad"
   | "unknown";
 export type TelegramChannelNetworkSummary = {
+  currency?: string | null;
   channelsCount: number;
   totalSubscribers: number;
   activeSubscribersEstimate: number;
   paidActiveSubscribersEstimate: number;
   viewRate: number | null;
-  totalAdSpend: number;
+  reactionRate: number | null;
+  totalAdSpend: number | null;
   campaignsCount: number;
   totalJoinedSubscribers: number;
   totalPendingSubscribers?: number;
@@ -20,6 +24,28 @@ export type TelegramChannelNetworkSummary = {
   activeCpa: number | null;
   kpiStatus: TelegramChannelNetworkKpiStatus;
   kpiLabel: string;
+  assetEconomics?: TelegramChannelNetworkAssetEconomics;
+};
+export type TelegramChannelNetworkAssetEconomics = {
+  currency: string | null;
+  invested: number | null;
+  purchasePrice: number | null;
+  revenue: number | null;
+  adSpend: number | null;
+  remainingToBreakEven: number | null;
+  paybackPercent: number | null;
+  adsSold: number;
+  estimatedAdPrice: number | null;
+  estimatedAdsRemaining: number | null;
+  conversionUnavailable: boolean;
+  formatPricing?: {
+    currency: string;
+    cpm: number | null;
+    h24: TelegramChannelAdFormatPricing;
+    h48: TelegramChannelAdFormatPricing;
+    h72: TelegramChannelAdFormatPricing;
+    permanent: TelegramChannelAdFormatPricing;
+  } | null;
 };
 export type TelegramChannelNetworkMember = {
   id: string;
@@ -33,6 +59,7 @@ export type TelegramChannelNetworkMember = {
   activeSubscribersEstimate?: number | null;
 };
 export type TelegramChannelNetworkChannelSummary = {
+  currency?: string | null;
   channelId: string;
   id: string;
   title: string;
@@ -44,7 +71,8 @@ export type TelegramChannelNetworkChannelSummary = {
   activeSubscribersEstimate?: number | null;
   paidActiveSubscribersEstimate?: number | null;
   viewRate?: number | null;
-  totalAdSpend: number;
+  reactionRate?: number | null;
+  totalAdSpend: number | null;
   campaignsCount: number;
   totalJoinedSubscribers: number;
   totalPendingSubscribers?: number;
@@ -53,11 +81,18 @@ export type TelegramChannelNetworkChannelSummary = {
   activeCpa: number | null;
   kpiStatus: TelegramChannelNetworkKpiStatus;
   kpiLabel?: string;
+  assetEconomics?: TelegramChannelNetworkAssetEconomics;
 };
 export type TelegramChannelNetwork = {
   id: string;
   name: string;
   description?: string | null;
+  iconId?: string | null;
+  iconPresentation?: ResolvedEmoji | null;
+  isSystem?: boolean;
+  systemKey?: "ALL" | null;
+  canEdit?: boolean;
+  canDelete?: boolean;
   createdAt: string;
   updatedAt: string;
   channels: TelegramChannelNetworkMember[];
@@ -69,10 +104,12 @@ export type TelegramChannelNetworkDetail = TelegramChannelNetwork & {
 export type CreateTelegramChannelNetworkPayload = {
   name: string;
   description?: string | null;
+  iconId?: string | null;
   telegramChannelIds: string[];
 };
 export type UpdateTelegramChannelNetworkPayload = {
   name?: string;
   description?: string | null;
+  iconId?: string | null;
   telegramChannelIds?: string[];
 };

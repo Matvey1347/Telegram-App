@@ -3491,43 +3491,43 @@ export class TelegramMtprotoClient {
       previousOldestId = oldestId;
       offsetId = oldestId;
     }
-
     return accepted;
   }
 
-  async downloadChannelMessageMedia(params: {
-    apiId: string;
-    apiHash: string;
-    session: string;
+  async downloadChannelMessagesMedia(params: {
+    apiId: string; apiHash: string; session: string;
     channelRef?: string;
     channel?: StoredTelegramChannelReference;
-    messageId: string;
+    messageIds: string[];
   }) {
+    const uniqueMessageIds = [...new Set(params.messageIds)];
+    if (uniqueMessageIds.length > 100) throw new BadRequestException('Telegram media batch limit is 100 messages.'); if (!uniqueMessageIds.length) return [];
     const client = await this.createClient(params);
     try {
-      const resolved = params.channel
-        ? await this.resolveStoredChannel(client, params.channel)
-        : null;
-      const entity = resolved
-        ? resolved.entity
-        : await client.getEntity(params.channelRef as string);
-      const messages = await client.getMessages(entity, {
-        ids: [Number(params.messageId)],
-      });
-      const message = (messages as any[]).find(
-        (item) => item?.id && item?.media,
-      );
-      if (!message) return null;
-      const downloaded = await client.downloadMedia(message, {});
-      if (!Buffer.isBuffer(downloaded)) return null;
-      const className = String(message.media?.className || '');
-      const mimeType = String(
-        message.media?.document?.mimeType ||
-          (className.includes('Photo')
-            ? 'image/jpeg'
-            : 'application/octet-stream'),
-      );
-      return { buffer: downloaded, mimeType };
+      const resolved = params.channel ? await this.resolveStoredChannel(client, params.channel) : null;
+      const entity = resolved ? resolved.entity : await client.getEntity(params.channelRef as string);
+      const media: Array<{ messageId: string; buffer: Buffer; mimeType: string }> = [];
+      for (let offset = 0; offset < uniqueMessageIds.length; offset += 25) {
+        const chunk = uniqueMessageIds.slice(offset, offset + 25);
+        let messages: any[] = [];
+        try { messages = (await client.getMessages(entity, { ids: chunk.map(Number) })) as any[];
+        } catch (error) {
+          this.logger.warn(`Telegram media message batch unavailable: count=${chunk.length} reason=${error instanceof Error ? error.message : 'unknown error'}`);
+          continue;
+        }
+        const byId = new Map(messages.filter((message) => message?.id && message?.media).map((message) => [String(message.id), message] as const));
+        for (const messageId of chunk) {
+          const message = byId.get(messageId); if (!message) continue;
+          let downloaded: unknown = null;
+          try { downloaded = await client.downloadMedia(message, {});
+          } catch (error) {
+            this.logger.warn(`Telegram media unavailable for message=${messageId}: ${error instanceof Error ? error.message : 'unknown error'}`);
+            continue;
+          }
+          if (!Buffer.isBuffer(downloaded)) continue; const mimeType = String(message.media?.document?.mimeType || (String(message.media?.className || '').includes('Photo') ? 'image/jpeg' : 'application/octet-stream'));
+          media.push({ messageId, buffer: downloaded, mimeType });
+        }
+      } return media;
     } finally {
       await this.closeClient(client);
     }

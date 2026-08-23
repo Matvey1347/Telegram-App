@@ -151,6 +151,12 @@ export type TelegramChannel = EntityAssignment & {
       | "postsWindow"
     >;
     financialSummary: TelegramChannelFinancialSummary;
+    bookingSchedule?: {
+      futureScheduledTotal: number;
+      lastScheduledAt: string | null;
+      nextAvailableDate?: string | null;
+      bookedThroughDate?: string | null;
+    };
     sourcesCount: number;
     canPostMessages?: boolean;
     adAnalysis?: {

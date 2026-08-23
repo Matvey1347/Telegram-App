@@ -488,6 +488,18 @@ Domain-layout validation on 2026-08-09:
 - Lowered the shrinking-only architecture ceilings for the affected ad-sales
   service and Telegram channels page.
 
+## 2026-08-23 Telegram post image persistence slice
+
+- Added a permanent `TelegramPost.imageUrls` read/storage contract and a
+  content-addressed Backblaze B2 adapter for Telegram-origin image bytes.
+- New synchronized photos and Telegram scheduled imports use bounded MTProto
+  batch downloads and exact-key B2 reuse; repeat metric sync skips stored media.
+- Added a manual, cursor-batched maintenance command for legacy managed-post
+  data URLs and historical synchronized posts. No cron, startup scan, polling,
+  or permanent worker was introduced.
+- GPT context and read models expose only permanent HTTP(S) image URLs; the old
+  request-time Telegram media endpoint was removed.
+
 ## Integration Review
 
 - `integration-reviewer` checked the dirty refactor diff after the frontend/backend/design-system slices.

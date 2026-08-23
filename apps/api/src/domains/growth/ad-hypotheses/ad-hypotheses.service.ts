@@ -296,11 +296,12 @@ export class AdHypothesesService {
   }
 
   private effectiveKpiStatus(storedStatus: unknown, calculatedStatus: KpiStatus) {
-    return storedStatus && storedStatus !== 'unknown'
-      ? (storedStatus as KpiStatus)
-      : calculatedStatus;
+    return calculatedStatus !== 'unknown'
+      ? calculatedStatus
+      : storedStatus && storedStatus !== 'unknown'
+        ? (storedStatus as KpiStatus)
+        : 'unknown';
   }
-
   private decision(status: KpiStatus) {
     if (status === 'good') {
       return 'Hypothesis performs well. Candidate for repeat and scaling.';
@@ -313,7 +314,6 @@ export class AdHypothesesService {
     }
     return 'Not enough data yet.';
   }
-
   private campaignSummary(campaign: any) {
     const spend = this.decimal(campaign.priceInPrimaryCurrency);
     const nativeSpend = this.decimal(campaign.price ?? campaign.costAmount);
@@ -322,11 +322,12 @@ export class AdHypothesesService {
     const attributedSubscribers = joinedSubscribers + pendingSubscribers;
     const leftSubscribers = this.campaignLeft(campaign);
     const cpa = attributedSubscribers > 0 ? spend / attributedSubscribers : null;
+    const nativeCpa = attributedSubscribers > 0 ? nativeSpend / attributedSubscribers : null;
     const views = this.nullableNumber(campaign.sourcePostViews);
     const reactions = null;
     const engagementRate =
       views && reactions ? (Number(reactions) / Number(views)) * 100 : null;
-    const kpiStatus = this.campaignKpiStatus(campaign, cpa);
+    const kpiStatus = this.campaignKpiStatus(campaign, nativeCpa);
     const effectiveKpiStatus = this.effectiveKpiStatus(
       campaign.overallStatus,
       kpiStatus,
@@ -436,9 +437,11 @@ export class AdHypothesesService {
       totalAttributedSubscribers > 0
         ? totalSpend / totalAttributedSubscribers
         : null;
+    const avgCpaDisplay = totalAttributedSubscribers > 0 && totalSpendDisplay != null
+      ? totalSpendDisplay / totalAttributedSubscribers : null;
     const kpiStatus = this.hypothesisKpiStatus(
       campaignSummaries,
-      avgCpa,
+      avgCpaDisplay ?? avgCpa,
       hypothesisChannel,
     );
     return {
@@ -450,10 +453,7 @@ export class AdHypothesesService {
       totalPendingSubscribers,
       totalAttributedSubscribers,
       avgCpa,
-      avgCpaDisplay:
-        totalAttributedSubscribers > 0 && totalSpendDisplay != null
-          ? totalSpendDisplay / totalAttributedSubscribers
-          : null,
+      avgCpaDisplay,
       activeSubscribersEstimate,
       activeCpa:
         activeSubscribersEstimate > 0 ? totalSpend / activeSubscribersEstimate : null,

@@ -46,8 +46,8 @@ import { ChannelAccessBadge, telegramChannelAccessLabel } from "@/components/fea
 import { InviteLinksTable } from "@/components/features/telegram/telegram/invite-links-table";
 import { TelegramPostPreviewModal } from "@/components/features/telegram/telegram/post-preview-modal";
 import { TelegramSourceAvatar } from "@/components/features/telegram/telegram/telegram-source-avatar";
-import { MoneyStack } from "@/components/ui/money-stack";
 import { Pagination } from "@/components/ui/pagination";
+import { NativeMoney } from "@/components/ui/native-money";
 import {
   Button,
   canonicalizeTimeInputValue,
@@ -920,9 +920,9 @@ export default function TelegramChannelAnalyticsPage() {
     },
     {
       key: "cpa",
-      show: hasNumericValue(computed.cpa),
+      show: hasNumericValue(financialSummary?.avgCpa ?? computed.cpa),
       title: "Campaign CPA",
-      value: formatNumber(computed.cpa, 2),
+      value: `${formatNumber(financialSummary?.avgCpa ?? computed.cpa, 2)} ${financialSummary?.currency || activeChannel?.kpiCurrency || "USD"}`,
       hint: "Spend / joined from links",
       tip: channelMetricTips.cpa,
     },
@@ -1114,8 +1114,6 @@ export default function TelegramChannelAnalyticsPage() {
           <FinancialOverview
             summary={financialSummary}
             channel={activeChannel}
-            currencySettings={currencySettings}
-            rates={rates}
             hasKpi={hasKpiSettings(activeChannel)}
             settings={settings}
           />
@@ -1716,19 +1714,15 @@ function AudienceOverview({ audience }: { audience: any }) {
 function FinancialOverview({
   summary,
   channel,
-  currencySettings,
-  rates,
   hasKpi,
   settings,
 }: {
   summary: any;
   channel: any;
-  currencySettings: any;
-  rates: any[] | undefined;
   hasKpi: boolean;
   settings: SettingsState;
 }) {
-  const primaryCurrency = currencySettings?.primaryCurrency || "USD";
+  const currency = summary?.currency || settings.kpiCurrency || "USD";
   const purchaseAmount = toNumber(
     summary?.acquisitionCost ??
       channel?.purchaseTransaction?.amountInPrimaryCurrency,
@@ -1740,23 +1734,12 @@ function FinancialOverview({
   const hasPurchaseExpense = purchaseAmount > 0;
   if (!hasKpi && !hasPaidLaunches && !hasPurchaseExpense) return null;
   const moneyValue = (value: unknown) =>
-    value == null ? (
-      "-"
-    ) : (
-      <MoneyStack
-        amount={value as number}
-        currency={primaryCurrency}
-        settings={currencySettings}
-        rates={rates}
-        mainClassName="font-semibold text-white"
-        subClassName="text-xs text-slate-400"
-      />
-    );
+    <NativeMoney amount={value as number | null} currency={currency} />;
   const metrics = [
     {
       key: "totalSpend",
       show: totalSpend > 0,
-      node: <SnapshotItem label="Total spend" value={moneyValue(-totalSpend)} />,
+      node: <SnapshotItem label="Total spend" value={moneyValue(totalSpend)} />,
     },
     {
       key: "purchase",
@@ -1766,7 +1749,7 @@ function FinancialOverview({
     {
       key: "spend",
       show: adSpend > 0,
-      node: <SnapshotItem label="Ad spend" value={moneyValue(-adSpend)} />,
+      node: <SnapshotItem label="Ad spend" value={moneyValue(adSpend)} />,
     },
     {
       key: "campaigns",
@@ -1885,6 +1868,7 @@ function buildChannelSettingsPayload(settings: SettingsState) {
     ownViewsPerPost: Math.max(0, toNumber(settings.ownViewsPerPost)),
     ownReactionsPerPost: Math.max(0, toNumber(settings.ownReactionsPerPost)),
     kpiCurrency: settings.kpiCurrency,
+    adBaseCurrency: settings.kpiCurrency,
     targetCpaFrom: null,
     targetCpa: settings.targetCpa === "" ? null : toNumber(settings.targetCpa),
     acceptableCpaFrom: null,
@@ -2338,27 +2322,30 @@ function TimePostsControl({
 }
 
 function KpiTargetsInline({ settings }: { settings: SettingsState }) {
+  const goodTo = settings.targetCpa;
+  const stopFrom = settings.stopCpaFrom;
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(min(150px,100%),1fr))] gap-2">
       <KpiTarget
         tone="good"
         label="Target CPA"
-        from={settings.targetCpaFrom}
-        to={settings.targetCpa}
+        display={goodTo ? `to ${formatNumber(goodTo, 2)} ${settings.kpiCurrency}` : "-"}
         compact
       />
       <KpiTarget
         tone="warn"
         label="Acceptable CPA"
-        from={settings.acceptableCpaFrom}
-        to={settings.acceptableCpa}
+        display={
+          goodTo && stopFrom
+            ? `${formatNumber(goodTo, 2)}–${formatNumber(stopFrom, 2)} ${settings.kpiCurrency}`
+            : "-"
+        }
         compact
       />
       <KpiTarget
         tone="bad"
         label="Stop CPA"
-        from={settings.stopCpaFrom}
-        openEnded
+        display={stopFrom ? `from ${formatNumber(stopFrom, 2)} ${settings.kpiCurrency}` : "-"}
         compact
       />
     </div>
@@ -2368,16 +2355,12 @@ function KpiTargetsInline({ settings }: { settings: SettingsState }) {
 function KpiTarget({
   tone,
   label,
-  from,
-  to,
-  openEnded = false,
+  display,
   compact = false,
 }: {
   tone: "good" | "warn" | "bad";
   label: string;
-  from?: string;
-  to?: string;
-  openEnded?: boolean;
+  display: string;
   compact?: boolean;
 }) {
   const toneClass = {
@@ -2385,7 +2368,6 @@ function KpiTarget({
     warn: "border-yellow-800/80 bg-yellow-950/30 text-yellow-200",
     bad: "border-rose-800/80 bg-rose-950/30 text-rose-200",
   }[tone];
-  const display = formatKpiRange(from, to, openEnded);
   return (
     <div className={`rounded-lg border ${compact ? "px-2.5 py-2" : "p-3"} ${toneClass}`}>
       <p className="text-xs opacity-80">{label}</p>
@@ -2394,16 +2376,6 @@ function KpiTarget({
       </p>
     </div>
   );
-}
-
-function formatKpiRange(from?: string, to?: string, openEnded = false) {
-  const fromValue = from ? `$ ${formatNumber(from, 2)}` : "";
-  const toValue = to ? `$ ${formatNumber(to, 2)}` : "";
-  if (openEnded) return fromValue ? `${fromValue}+` : "-";
-  if (fromValue && toValue) return `${fromValue} - ${toValue}`;
-  if (fromValue) return `from ${fromValue}`;
-  if (toValue) return `to ${toValue}`;
-  return "-";
 }
 
 function AudienceSnapshotsPanel({
@@ -3360,7 +3332,6 @@ function PostsTable({
       <TelegramPostPreviewModal
         open={Boolean(previewPost)}
         onClose={() => setPreviewPost(null)}
-        channelId={channelId}
         channelTitle={channelTitle}
         channelPhotoUrl={channelPhotoUrl}
         post={previewPost}

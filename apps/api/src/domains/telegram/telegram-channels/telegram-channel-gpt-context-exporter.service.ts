@@ -1,12 +1,20 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import {
+  Prisma,
+  TelegramManagedPostIdVerificationStatus,
+  TelegramManagedPostOrigin,
+  TelegramManagedPostRemoteStatus,
+  TelegramManagedPostStatus,
+} from '@prisma/client';
+import {
+  buildTelegramCalendarPlanInstructionFilename,
   buildTelegramGptContextFilename,
   type TelegramPostEngagementMetrics,
 } from '@telegram-system/shared';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TELEGRAM_RICH_FORMATTING_GUIDE } from '../../../telegram/shared/telegram-rich-markup';
+import { extractInternalPostLinkIds } from '../../../telegram/shared/internal-post-links';
 import { parseTelegramPostUrl } from '../../../telegram/shared/telegram-post-url';
 import {
   telegramPostEngagementMetrics,
@@ -62,6 +70,244 @@ export class TelegramChannelGptContextExporter {
       `comment_rate: ${percent(metric.commentRate)}`,
       `reactions: ${metric.reactions ? JSON.stringify(metric.reactions) : '[]'}`,
     ].join('\n');
+  }
+
+  private localDateTime(value: Date, timezone: string) {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    });
+    const parts = Object.fromEntries(
+      formatter
+        .formatToParts(value)
+        .filter((part) => part.type !== 'literal')
+        .map((part) => [part.type, part.value]),
+    );
+    return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+  }
+
+  private calendarPostBlock(
+    post: {
+      id: string;
+      title: string;
+      status: string;
+      group: { title: string } | null;
+      text: string | null;
+      createdAt: Date;
+    },
+    availability: 'AVAILABLE' | 'BLOCKED',
+    reasons: string[],
+  ) {
+    return [
+      'POST',
+      `postId: ${post.id}`,
+      `availability: ${availability}`,
+      `reasons: ${reasons.length ? reasons.join('; ') : 'none'}`,
+      `status: ${post.status}`,
+      `group: ${post.group?.title || 'Ungrouped'}`,
+      `created_at: ${post.createdAt.toISOString()}`,
+      'text:',
+      post.text || '',
+    ].join('\n');
+  }
+
+  async exportCalendarPlanInstruction(
+    userId: string,
+    channelId: string,
+    exportedAt = new Date(),
+  ) {
+    const workspaceId = await this.workspaces.resolveWorkspaceIdForUser(userId);
+    const historyFrom = new Date(exportedAt.getTime() - 30 * 24 * 60 * 60_000);
+    const horizonEnd = new Date(exportedAt.getTime() + 30 * 24 * 60 * 60_000);
+    const [channel, workspace, managedPosts, publishedHistory] =
+      await Promise.all([
+        this.prisma.telegramChannel.findFirst({
+          where: { id: channelId, workspaceId },
+          select: {
+            id: true,
+            title: true,
+            telegramChatId: true,
+            timePosts: {
+              select: { id: true, title: true, time: true, position: true },
+              orderBy: [{ position: 'asc' }, { time: 'asc' }],
+            },
+          },
+        }),
+        this.prisma.workspace.findUnique({
+          where: { id: workspaceId },
+          select: { timezone: true },
+        }),
+        this.prisma.telegramManagedPost.findMany({
+          where: { workspaceId, telegramChannelId: channelId },
+          select: {
+            id: true,
+            title: true,
+            text: true,
+            origin: true,
+            status: true,
+            scheduledAt: true,
+            createdAt: true,
+            telegramRemoteStatus: true,
+            telegramIdVerificationStatus: true,
+            telegramMessageIds: true,
+            lastError: true,
+            group: { select: { title: true } },
+          },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        }),
+        this.prisma.telegramPost.findMany({
+          where: {
+            workspaceId,
+            telegramChannelId: channelId,
+            postDate: { gte: historyFrom, lte: exportedAt },
+          },
+          select: {
+            id: true,
+            postDate: true,
+            text: true,
+            formattedText: true,
+            hasMedia: true,
+          },
+          orderBy: [{ postDate: 'desc' }, { id: 'desc' }],
+          take: 60,
+        }),
+      ]);
+    if (!channel) throw new NotFoundException('Telegram channel not found.');
+    const timezone = workspace?.timezone || 'Europe/Warsaw';
+    const managedPostById = new Map(
+      managedPosts.map((post) => [post.id, post] as const),
+    );
+    const available: string[] = [];
+    const blocked: string[] = [];
+    const excluded: string[] = [];
+    for (const post of managedPosts) {
+      if (
+        post.origin !== TelegramManagedPostOrigin.SYSTEM ||
+        (post.status !== TelegramManagedPostStatus.DRAFT &&
+          post.status !== TelegramManagedPostStatus.FAILED)
+      ) {
+        excluded.push(
+          `- ${post.id} — ${post.title} — ${post.origin}/${post.status}`,
+        );
+        continue;
+      }
+      const reasons: string[] = [];
+      if (!post.text?.trim()) reasons.push('post text is empty');
+      for (const targetId of extractInternalPostLinkIds(post.text || '')) {
+        const target = managedPostById.get(targetId);
+        if (targetId === post.id) {
+          reasons.push(`internal link ${targetId} points to the same post`);
+        } else if (!target) {
+          reasons.push(`internal link target ${targetId} was not found`);
+        } else if (target.status !== TelegramManagedPostStatus.PUBLISHED) {
+          reasons.push(
+            `internal link target "${target.title}" is not published`,
+          );
+        } else if (
+          target.telegramRemoteStatus !==
+          TelegramManagedPostRemoteStatus.PUBLISHED
+        ) {
+          reasons.push(
+            `internal link target "${target.title}" is not confirmed as published in Telegram`,
+          );
+        } else if (
+          target.telegramIdVerificationStatus !==
+          TelegramManagedPostIdVerificationStatus.VERIFIED
+        ) {
+          reasons.push(
+            `internal link target "${target.title}" has no verified Telegram ID`,
+          );
+        } else if (
+          !target.telegramMessageIds.length ||
+          !channel.telegramChatId
+        ) {
+          reasons.push(
+            `internal link target "${target.title}" has no stable Telegram URL`,
+          );
+        } else if (target.lastError) {
+          reasons.push(
+            `internal link target "${target.title}" has an error: ${target.lastError}`,
+          );
+        }
+      }
+      const block = this.calendarPostBlock(
+        post,
+        reasons.length ? 'BLOCKED' : 'AVAILABLE',
+        reasons,
+      );
+      (reasons.length ? blocked : available).push(block);
+    }
+    const occupied = managedPosts
+      .filter(
+        (post) =>
+          post.status === TelegramManagedPostStatus.SCHEDULED &&
+          post.scheduledAt &&
+          post.scheduledAt > exportedAt &&
+          post.scheduledAt <= horizonEnd,
+      )
+      .map(
+        (post) =>
+          `- ${post.scheduledAt!.toISOString()} — ${post.id} — ${post.title}`,
+      );
+    const history = [...publishedHistory].reverse().map((post) => {
+      const text = post.text || post.formattedText || '';
+      return `PUBLISHED\nlocal_time: ${this.localDateTime(post.postDate, timezone)}\nsource_id: ${post.id}\nhas_media: ${post.hasMedia}\ntext:\n${text}`;
+    });
+    const planningFrom = this.localDateTime(exportedAt, timezone).slice(0, 10);
+    const planningTo = this.localDateTime(horizonEnd, timezone).slice(0, 10);
+    const content = [
+      'TELEGRAM CALENDAR PLAN — GPT INSTRUCTION',
+      'FORMAT VERSION: 1',
+      `CHANNEL: ${channel.title}`,
+      `CHANNEL_ID: ${channel.id}`,
+      `TIMEZONE: ${timezone}`,
+      `EXPORTED_AT: ${exportedAt.toISOString()}`,
+      `PLANNING_WINDOW: ${planningFrom} through ${planningTo}`,
+      '',
+      'TASK',
+      'Build a Telegram publication plan using only AVAILABLE POSTS and only the stable publication times listed below. Choose post order and time by learning from RECENT PUBLISHED HISTORY. Avoid repeating similar topics consecutively. Never invent a post ID or publication time.',
+      '',
+      'MANDATORY OUTPUT',
+      'Return only valid JSON without markdown fences or commentary.',
+      'Schema: {"items":[{"postId":"exact available post ID","scheduledAt":"ISO 8601 timestamp with the correct explicit UTC offset"}]}',
+      'Use every post at most once. Use every timestamp at most once. Keep every timestamp inside PLANNING_WINDOW, in TIMEZONE, and at an exact STABLE PUBLICATION TIME. Do not use FUTURE OCCUPIED TIMES. If no valid assignment exists, return {"items":[]}.',
+      '',
+      'STABLE PUBLICATION TIMES',
+      ...(channel.timePosts.length
+        ? channel.timePosts.map(
+            (slot) => `- ${slot.time} — ${slot.title} — slot_id: ${slot.id}`,
+          )
+        : ['[] — no publication times are configured; return {"items":[]}']),
+      '',
+      'FUTURE OCCUPIED TIMES',
+      ...(occupied.length ? occupied : ['[]']),
+      '',
+      `AVAILABLE POSTS (${available.length})`,
+      ...(available.length ? available : ['[]']),
+      '',
+      `BLOCKED POSTS (${blocked.length})`,
+      'Blocked posts must never be included in the returned plan.',
+      ...(blocked.length ? blocked : ['[]']),
+      '',
+      `EXCLUDED POSTS (${excluded.length})`,
+      'These posts are already scheduled/published, read-only imports, or otherwise outside the candidate pool.',
+      ...(excluded.length ? excluded : ['[]']),
+      '',
+      `RECENT PUBLISHED HISTORY — LAST 30 DAYS, MAX 60 (${history.length})`,
+      ...(history.length ? history : ['[]']),
+    ].join('\n\n');
+    return {
+      buffer: Buffer.from(`${content}\n`, 'utf8'),
+      filename: buildTelegramCalendarPlanInstructionFilename(
+        channel.title,
+        exportedAt,
+      ),
+    };
   }
 
   private async subscriberCountsAtPublication(
@@ -212,6 +458,8 @@ export class TelegramChannelGptContextExporter {
         channel,
         subscriberCountByTelegramPostId.get(post.id) ?? null,
       );
+    const permanentImageUrls = (urls: string[] | undefined) =>
+      (urls ?? []).filter((url) => /^https?:\/\//i.test(url));
     const managedPostBlocks = managedPosts.map((post) => {
       const metrics = this.linkedTelegramMessageIds(post).flatMap(
         (messageId) => {
@@ -228,13 +476,22 @@ export class TelegramChannelGptContextExporter {
           ];
         },
       );
-      return `POST\nid: ${post.id}\nreference: tg-post:${post.id}\ntitle: ${post.title}\nstatus: ${post.status}\ngroup_id: ${post.groupId ?? 'null'}\ngroup_title: ${post.groupId ? (groupTitleById.get(post.groupId) ?? 'unknown') : 'Ungrouped'}\nimages:\n${post.imageUrls.length ? post.imageUrls.map((url) => `- ${url}`).join('\n') : '[]'}\nengagement:\n${metrics.length ? metrics.join('\n---\n') : 'unavailable'}\ntext:\n${post.text || ''}`;
+      const imageUrls = permanentImageUrls(post.imageUrls);
+      return `POST\nid: ${post.id}\nreference: tg-post:${post.id}\ntitle: ${post.title}\nstatus: ${post.status}\ngroup_id: ${post.groupId ?? 'null'}\ngroup_title: ${post.groupId ? (groupTitleById.get(post.groupId) ?? 'unknown') : 'Ungrouped'}\nimages:\n${imageUrls.length ? imageUrls.map((url) => `- ${url}`).join('\n') : '[]'}\nengagement:\n${metrics.length ? metrics.join('\n---\n') : 'unavailable'}\ntext:\n${post.text || ''}`;
     });
     const importedPostBlocks = typedTelegramPosts
       .filter((post) => !matchedTelegramPostIds.has(post.id))
       .map((post) => {
         const url = telegramPostUrl(channel, post.telegramMessageId);
-        return `POST\nid: telegram-post:${post.id}\nreference: telegram-source-post:${post.id}\ntitle: ${telegramPostTitle(post)}\nstatus: PUBLISHED\ngroup_id: null\ngroup_title: Ungrouped\nsource: synchronized_telegram\nimages:\n${post.hasMedia ? `media: ${post.mediaKind || 'present'}` : '[]'}\nengagement:\n${this.metricContext(engagementFor(post), url)}\ntext:\n${post.text || post.formattedText || ''}`;
+        const imageUrls = permanentImageUrls(post.imageUrls);
+        const imageContext = imageUrls.length
+          ? imageUrls.map((imageUrl) => `- ${imageUrl}`).join('\n')
+          : post.hasMedia &&
+              post.mediaKind &&
+              !/photo|image/i.test(post.mediaKind)
+            ? `[]\nmedia: ${post.mediaKind}`
+            : '[]';
+        return `POST\nid: telegram-post:${post.id}\nreference: telegram-source-post:${post.id}\ntitle: ${telegramPostTitle(post)}\nstatus: PUBLISHED\ngroup_id: null\ngroup_title: Ungrouped\nsource: synchronized_telegram\nimages:\n${imageContext}\nengagement:\n${this.metricContext(engagementFor(post), url)}\ntext:\n${post.text || post.formattedText || ''}`;
       });
 
     const exportedAt = new Date();

@@ -15,6 +15,7 @@ import { TelegramChannelAdmissionSyncService } from './telegram-channel-admissio
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
 import { TelegramChannelCatalogService } from './telegram-channel-catalog.service';
 import { TelegramChannelFinancialReadService } from './telegram-channel-financial-read.service';
+import { TelegramChannelBookingReadService } from './telegram-channel-booking-read.service';
 import { TelegramChannelAdPricingReadService } from './telegram-channel-ad-pricing-read.service';
 import { TelegramChannelHistoricalSyncService } from './telegram-channel-historical-sync.service';
 import { TelegramChannelImportPolicyService } from './telegram-channel-import-policy.service';
@@ -64,6 +65,7 @@ import { TelegramPostGroupsService } from './telegram-post-groups.service';
 import { TelegramPostGroupStore } from './telegram-post-group.store';
 import { TelegramPostMetricsService } from './telegram-post-metrics.service';
 import { TelegramRemoteScheduledPostImportService } from './telegram-remote-scheduled-post-import.service';
+import { TelegramPostMediaBackfillService } from './telegram-post-media-backfill.service';
 
 @Module({
   imports: [AdCampaignsModule],
@@ -92,6 +94,7 @@ import { TelegramRemoteScheduledPostImportService } from './telegram-remote-sche
     TelegramManagedPostRevisionStore,
     TelegramManagedPostEditTransportService,
     TelegramChannelFinancialReadService,
+    TelegramChannelBookingReadService,
     TelegramChannelAdPricingReadService,
     TelegramChannelCatalogService,
     TelegramChannelLifecycleService,
@@ -104,6 +107,7 @@ import { TelegramRemoteScheduledPostImportService } from './telegram-remote-sche
     TelegramManagedPostRemoteLoaderService,
     TelegramManagedPostAutoRepairService,
     TelegramRemoteScheduledPostImportService,
+    TelegramPostMediaBackfillService,
     TelegramManagedPostCommandService,
     TelegramManagedPostHistoryService,
     TelegramManagedPostPublicationService,
@@ -136,6 +140,7 @@ import { TelegramRemoteScheduledPostImportService } from './telegram-remote-sche
   exports: [
     TelegramChannelsService,
     TelegramChannelAnalyticsService,
+    TelegramChannelFinancialReadService,
     TelegramPostCalendarPlannerService,
     TelegramManagedPostIdentityService,
     TelegramMtprotoClient,
@@ -151,6 +156,7 @@ import { TelegramRemoteScheduledPostImportService } from './telegram-remote-sche
     TelegramManagedPostRemoteSyncService,
     TelegramChannelSyncOrchestrator,
     TelegramPostMetricsService,
+    TelegramPostMediaBackfillService,
     TelegramBroadcastStatsService,
   ],
 })

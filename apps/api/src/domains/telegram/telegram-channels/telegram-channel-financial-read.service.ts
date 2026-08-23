@@ -176,6 +176,26 @@ export class TelegramChannelFinancialReadService {
     }
     const primaryCurrency = workspace?.primaryCurrency ?? 'USD';
     const conversionCache = new Map<string, number | null>();
+    const pairConversionCache = new Map<string, Promise<number | null>>();
+    const convertAmount = async (
+      amount: number,
+      fromCurrency: string,
+      toCurrency: string,
+    ) => {
+      const from = fromCurrency.toUpperCase();
+      const to = toCurrency.toUpperCase();
+      if (from === to) return amount;
+      if (!this.currencyConversionService) return null;
+      const key = `${from}:${to}`;
+      if (!pairConversionCache.has(key)) {
+        pairConversionCache.set(
+          key,
+          this.currencyConversionService.getRate(from, to, workspaceId),
+        );
+      }
+      const rate = await pairConversionCache.get(key)!;
+      return rate == null ? null : amount * rate;
+    };
     const convertPrimary = async (amount: number, currency: string) => {
       if (amount === 0) return 0;
       const target = currency.toUpperCase();
@@ -193,6 +213,36 @@ export class TelegramChannelFinancialReadService {
       }
       const rate = conversionCache.get(target);
       return rate == null ? null : amount * rate;
+    };
+    const sumInCurrency = async (
+      rows: Array<{
+        amount: unknown;
+        currency: string;
+        amountInPrimaryCurrency?: unknown;
+      }>,
+      targetCurrency: string,
+    ) => {
+      const converted = await Promise.all(
+        rows.map(async (row) => {
+          const sourceCurrency = String(row.currency).toUpperCase();
+          if (sourceCurrency === targetCurrency) return Number(row.amount);
+          const nativeValue = await convertAmount(
+            Number(row.amount),
+            sourceCurrency,
+            targetCurrency,
+          );
+          if (nativeValue != null) return nativeValue;
+          return row.amountInPrimaryCurrency == null
+            ? null
+            : convertPrimary(Number(row.amountInPrimaryCurrency), targetCurrency);
+        }),
+      );
+      return converted.some((value) => value == null)
+        ? null
+        : converted.reduce<number>(
+            (sum, value) => sum + Number(value ?? 0),
+            0,
+          );
     };
 
     const summaries = new Map<string, Record<string, unknown>>();
@@ -228,17 +278,17 @@ export class TelegramChannelFinancialReadService {
             transaction.categoryRef?.name?.trim().toLowerCase() ===
               'advertising'),
       );
-      const acquisitionCost = purchaseTransactions.reduce(
-        (sum, transaction) =>
-          sum + Number(transaction.amountInPrimaryCurrency || 0),
-        0,
-      );
-      const totalAdSpend = advertisingExpenseTransactions.reduce(
-        (sum, transaction) =>
-          sum + Number(transaction.amountInPrimaryCurrency || 0),
-        0,
-      );
-      const totalSpend = totalAdSpend + acquisitionCost;
+      const kpiCurrency = String(
+        channel.kpiCurrency || primaryCurrency,
+      ).toUpperCase();
+      const [acquisitionCost, totalAdSpend] = await Promise.all([
+        sumInCurrency(purchaseTransactions, kpiCurrency),
+        sumInCurrency(advertisingExpenseTransactions, kpiCurrency),
+      ]);
+      const totalSpend =
+        acquisitionCost == null || totalAdSpend == null
+          ? null
+          : totalAdSpend + acquisitionCost;
       const normalizedCampaigns = channelCampaigns.map((campaign) => ({
         ...campaign,
         inviteLinks: inviteLinksByCampaignId.get(campaign.id) ?? [],
@@ -257,7 +307,7 @@ export class TelegramChannelFinancialReadService {
         0,
       );
       const avgCpa =
-        totalAttributedSubscribers > 0
+        totalAdSpend != null && totalAttributedSubscribers > 0
           ? totalAdSpend / totalAttributedSubscribers
           : null;
       const campaignActiveSubscribersEstimate = channelCampaigns.reduce(
@@ -275,7 +325,9 @@ export class TelegramChannelFinancialReadService {
           ? campaignActiveSubscribersEstimate
           : (audience?.activeSubscribersEstimate ?? null);
       const activeCpa =
-        paidActiveSubscribersEstimate && paidActiveSubscribersEstimate > 0
+        totalAdSpend != null &&
+        paidActiveSubscribersEstimate &&
+        paidActiveSubscribersEstimate > 0
           ? totalAdSpend / paidActiveSubscribersEstimate
           : null;
       const activeRates = channelCampaigns
@@ -284,13 +336,8 @@ export class TelegramChannelFinancialReadService {
       const retentionRates = channelCampaigns
         .map((campaign) => Number(campaign.retention7d))
         .filter((value) => Number.isFinite(value));
-      const kpiCurrency = String(
-        channel.kpiCurrency || primaryCurrency,
-      ).toUpperCase();
-      const avgCpaInKpiCurrency =
-        avgCpa == null ? null : await convertPrimary(avgCpa, kpiCurrency);
       const kpiStatus = resolveChannelKpiStatus({
-        avgCpa: avgCpaInKpiCurrency,
+        avgCpa,
         targetCpaFrom: channel.targetCpaFrom,
         targetCpa: channel.targetCpa,
         acceptableCpaFrom: channel.acceptableCpaFrom,
@@ -328,33 +375,6 @@ export class TelegramChannelFinancialReadService {
         ) ??
         tiedCurrencies[0] ??
         kpiCurrency;
-      const sumInCurrency = async (
-        rows: Array<{ amount: unknown; currency: string }>,
-        targetCurrency: string,
-      ) => {
-        const converted = await Promise.all(
-          rows.map((transaction) => {
-            const sourceCurrency = String(transaction.currency).toUpperCase();
-            if (sourceCurrency === targetCurrency) {
-              return Promise.resolve(Number(transaction.amount));
-            }
-            return this.currencyConversionService
-              ? this.currencyConversionService.convertCurrency(
-                  Number(transaction.amount),
-                  sourceCurrency,
-                  targetCurrency,
-                  workspaceId,
-                )
-              : Promise.resolve(null);
-          }),
-        );
-        return converted.some((value) => value == null)
-          ? null
-          : converted.reduce<number>(
-              (sum, value) => sum + Number(value ?? 0),
-              0,
-            );
-      };
       const [purchasePrice, revenue, adSpend, cpm] = await Promise.all([
         purchaseTransactions.length
           ? sumInCurrency(purchaseTransactions, dominantCurrency)
@@ -369,14 +389,11 @@ export class TelegramChannelFinancialReadService {
           : String(channel.adBaseCurrency || primaryCurrency).toUpperCase() ===
               dominantCurrency
             ? Promise.resolve(Number(channel.adBaseCpm))
-            : this.currencyConversionService
-              ? this.currencyConversionService.convertCurrency(
-                  Number(channel.adBaseCpm),
-                  String(channel.adBaseCurrency || primaryCurrency),
-                  dominantCurrency,
-                  workspaceId,
-                )
-              : Promise.resolve(null),
+            : convertAmount(
+                Number(channel.adBaseCpm),
+                String(channel.adBaseCurrency || primaryCurrency),
+                dominantCurrency,
+              ),
       ]);
       const invested =
         purchasePrice == null && purchaseTransactions.length
@@ -420,7 +437,7 @@ export class TelegramChannelFinancialReadService {
         totalJoinedSubscribers,
         totalPendingSubscribers,
         totalAttributedSubscribers,
-        avgCpa: avgCpaInKpiCurrency,
+        avgCpa,
         activeSubscribersEstimate: audience?.activeSubscribersEstimate ?? null,
         paidActiveSubscribersEstimate,
         activeCpa,

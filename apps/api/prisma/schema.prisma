@@ -1413,10 +1413,12 @@ model TelegramChannelNetwork {
   workspaceId      String
   name             String
   description      String?
+  iconId           String?
   assignedMemberId String?
   createdByUserId  String?
 
   workspace        Workspace                      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  icon             Icon?                          @relation(fields: [iconId], references: [id], onDelete: SetNull)
   channels         TelegramChannelNetworkMember[]
   assignedMember   WorkspaceMember?               @relation("TelegramChannelNetworkAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
   createdByUser    User?                          @relation("TelegramChannelNetworkCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
@@ -1427,6 +1429,7 @@ model TelegramChannelNetwork {
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
+  @@index([iconId])
   @@index([workspaceId, assignedMemberId])
 }
 
@@ -3859,6 +3862,7 @@ model TelegramPost {
   formattedText        String?
   hasMedia             Boolean  @default(false)
   mediaKind            String?
+  imageUrls            String[] @default([])
   postDate             DateTime
   viewsCount           Int?
   forwardsCount        Int?
@@ -4138,6 +4142,7 @@ model Icon {
   promos                       Promo[]
   adHypotheses                 AdHypothesis[]
   telegramChannelTimePosts     TelegramChannelTimePost[]
+  telegramChannelNetworks      TelegramChannelNetwork[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -710,12 +710,16 @@ export class TelegramChannelsController {
   @Get(':id/gpt-context') async gptContext(
     @CurrentUser() user: JwtUser,
     @Param('id') id: string,
+    @Query('purpose') purpose: string | undefined,
     @Res() response: Response,
   ) {
-    const { buffer, filename } = await this.gptContextExporter.export(
-      user.sub,
-      id,
-    );
+    const { buffer, filename } =
+      purpose === 'calendar-plan'
+        ? await this.gptContextExporter.exportCalendarPlanInstruction(
+            user.sub,
+            id,
+          )
+        : await this.gptContextExporter.export(user.sub, id);
     response.setHeader('Content-Type', 'text/plain; charset=utf-8');
     response.setHeader(
       'Content-Disposition',
@@ -767,18 +771,6 @@ export class TelegramChannelsController {
     @Body() dto: SyncPostsMetricsDto,
   ) {
     return this.service.syncPostsMetrics(user.sub, id, dto);
-  }
-  @Get(':id/posts/:postId/media')
-  async telegramPostMedia(
-    @CurrentUser() user: JwtUser,
-    @Param('id') id: string,
-    @Param('postId') postId: string,
-    @Res() response: Response,
-  ) {
-    const media = await this.service.telegramPostMedia(user.sub, id, postId);
-    response.setHeader('Content-Type', media.mimeType);
-    response.setHeader('Cache-Control', 'private, max-age=300');
-    response.send(media.buffer);
   }
   @Post(':id/sync-stats')
   syncStats(

@@ -14,6 +14,7 @@ const post = (
   formattedText: '<b>A useful post</b>',
   hasMedia: false,
   mediaKind: null,
+  imageUrls: [],
   postDate: new Date('2026-08-20T10:00:00.000Z'),
   viewsCount: 1_000,
   forwardsCount: 25,

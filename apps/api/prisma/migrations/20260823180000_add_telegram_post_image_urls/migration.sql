@@ -1,0 +1,2 @@
+ALTER TABLE "TelegramPost"
+ADD COLUMN "imageUrls" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

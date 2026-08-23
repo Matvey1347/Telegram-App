@@ -1042,3 +1042,57 @@ describe('TelegramMtprotoClient QR connection cancellation', () => {
     }
   });
 });
+
+describe('TelegramMtprotoClient media batches', () => {
+  it('uses bounded chunks and isolates an unavailable image', async () => {
+    const service = new TelegramMtprotoClient();
+    const ids = Array.from({ length: 26 }, (_, index) => String(index + 1));
+    const telegram = {
+      getEntity: jest.fn().mockResolvedValue({ id: 'channel' }),
+      getMessages: jest.fn(async (_entity: unknown, params: { ids: number[] }) =>
+        params.ids.map((id) => ({
+          id,
+          media: { className: 'MessageMediaPhoto' },
+        })),
+      ),
+      downloadMedia: jest.fn(async (message: { id: number }) => {
+        if (message.id === 2) throw new Error('media unavailable');
+        return Buffer.from(`image-${message.id}`);
+      }),
+    };
+    jest
+      .spyOn(service as any, 'createClient')
+      .mockResolvedValue(telegram as never);
+    const close = jest
+      .spyOn(service as any, 'closeClient')
+      .mockResolvedValue(undefined);
+
+    const result = await service.downloadChannelMessagesMedia({
+      apiId: '1',
+      apiHash: 'hash',
+      session: 'session',
+      channelRef: '@channel',
+      messageIds: ids,
+    });
+
+    expect(telegram.getMessages).toHaveBeenCalledTimes(2);
+    expect(result).toHaveLength(25);
+    expect(result.some((item) => item.messageId === '2')).toBe(false);
+    expect(result.some((item) => item.messageId === '26')).toBe(true);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a media batch above the validated memory bound', async () => {
+    const service = new TelegramMtprotoClient();
+
+    await expect(
+      service.downloadChannelMessagesMedia({
+        apiId: '1',
+        apiHash: 'hash',
+        session: 'session',
+        channelRef: '@channel',
+        messageIds: Array.from({ length: 101 }, (_, index) => String(index + 1)),
+      }),
+    ).rejects.toThrow('Telegram media batch limit is 100 messages.');
+  });
+});

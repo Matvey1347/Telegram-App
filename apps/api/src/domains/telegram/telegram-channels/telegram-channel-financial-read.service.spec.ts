@@ -21,7 +21,16 @@ describe('TelegramChannelFinancialReadService', () => {
           },
         ]),
       },
-      telegramInviteLink: { findMany: jest.fn().mockResolvedValue([]) },
+      telegramInviteLink: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            telegramChannelId: 'channel-1',
+            adCampaignId: 'campaign-1',
+            joinedCount: 0,
+            requestedCount: 281,
+          },
+        ]),
+      },
       telegramAdSalePaymentAllocation: {
         findMany: jest.fn().mockResolvedValue([]),
       },
@@ -85,6 +94,9 @@ describe('TelegramChannelFinancialReadService', () => {
           currentSubscribersCount: 1_000,
           ownViewsPerPost: 10_000,
           adBaseCpm: null,
+          kpiCurrency: 'UAH',
+          targetCpa: 9,
+          stopCpaFrom: 12,
           audienceSnapshots: [],
         },
       ],
@@ -107,9 +119,13 @@ describe('TelegramChannelFinancialReadService', () => {
       }),
     );
     expect(summaries.get('channel-1')).toMatchObject({
-      acquisitionCost: 468.72,
-      totalAdSpend: 255.29,
-      totalSpend: 724.01,
+      acquisitionCost: 21_000,
+      totalAdSpend: 11_400,
+      totalSpend: 32_400,
+      currency: 'UAH',
+      totalAttributedSubscribers: 281,
+      avgCpa: 11_400 / 281,
+      kpiStatus: 'bad',
       assetEconomics: {
         currency: 'UAH',
         purchasePrice: 21_000,

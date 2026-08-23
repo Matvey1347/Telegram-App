@@ -26,6 +26,16 @@ export function buildTelegramGptContextFilename(
   return `${prefix.toUpperCase()}_${time}.txt`;
 }
 
+export function buildTelegramCalendarPlanInstructionFilename(
+  channelTitle: string,
+  downloadedAt = new Date(),
+) {
+  return buildTelegramGptContextFilename(channelTitle, downloadedAt).replace(
+    /\.txt$/,
+    "_calendar-plan-instruction.txt",
+  );
+}
+
 export type TelegramPostEngagementMetrics = {
   telegramPostId: string;
   telegramMessageId: string;

@@ -1,7 +1,14 @@
-import { ArrayMinSize, IsArray, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 
 export class CreateTelegramChannelNetworkDto {
   @IsOptional() @IsString() assignedMemberId?: string | null;
+  @IsOptional() @IsString() iconId?: string | null;
   @IsString()
   @MinLength(2)
   name!: string;

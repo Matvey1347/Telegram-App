@@ -599,7 +599,7 @@ export function AdSalesPage() {
             saleableChannelIds.has(channel.id),
           ),
         }))
-        .filter((network) => network.channels.length > 0),
+        .filter((network) => !network.isSystem && network.channels.length > 0),
     [networks, saleableChannelIds],
   );
 

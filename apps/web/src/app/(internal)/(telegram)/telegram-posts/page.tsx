@@ -86,7 +86,6 @@ import { upsertManagedPostInCache } from "@/components/features/telegram/telegra
 import { ManagedPostHistoryModal } from "@/components/features/telegram/telegram/managed-post-history-modal";
 import { ManagedPostExportButton } from "@/components/features/telegram/telegram/managed-post-export-button";
 import { ManagedPostReadOnlyPanel } from "@/components/features/telegram/telegram/managed-post-read-only-panel";
-import { useManagedPostTelegramMedia } from "@/components/features/telegram/telegram/use-managed-post-telegram-media";
 import { MemberBadge } from "@/components/features/workspace/member-badge";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 import {
@@ -1140,11 +1139,6 @@ function TelegramPostWorkspace({
       : null;
   const editingMeta = liveEditingPost ?? editing;
   const isReadOnlyTelegramPost = Boolean(editingMeta?.readOnlyTelegramPost);
-  const syncedTelegramMediaUrl = useManagedPostTelegramMedia({
-    channelId,
-    telegramPostId: editingMeta?.telegramPostId,
-    enabled: isReadOnlyTelegramPost && Boolean(editingMeta?.hasMedia),
-  });
   const isPublished = editingMeta?.status === "PUBLISHED";
   const hasLockedTelegramMedia =
     editingMeta?.status === "PUBLISHED" || editingMeta?.status === "SCHEDULED";
@@ -1251,25 +1245,25 @@ function TelegramPostWorkspace({
     ? "Saving or publishing is already in progress."
     : isReadOnlyTelegramPost
       ? "Synced Telegram posts are read-only."
-    : creatingPostId
-      ? "This post is being saved."
-      : iconPending
-        ? "Wait until the selected icon is ready."
-        : uploadingImages
-          ? "Wait until image upload finishes."
-          : !title.trim()
-            ? "Internal title is required."
-            : effectivePublishingMode !== "draft" &&
-                !text.trim() &&
-                !imageUrls.length
-              ? "Add Telegram text or at least one image before publishing."
-              : effectivePublishingMode === "schedule" &&
-                  (!scheduleDate || !scheduleTime)
-                ? "Publish date and time are required."
+      : creatingPostId
+        ? "This post is being saved."
+        : iconPending
+          ? "Wait until the selected icon is ready."
+          : uploadingImages
+            ? "Wait until image upload finishes."
+            : !title.trim()
+              ? "Internal title is required."
+              : effectivePublishingMode !== "draft" &&
+                  !text.trim() &&
+                  !imageUrls.length
+                ? "Add Telegram text or at least one image before publishing."
                 : effectivePublishingMode === "schedule" &&
-                    !hasValidScheduleTime
-                  ? "Enter publish time in HH:MM format."
-                  : "";
+                    (!scheduleDate || !scheduleTime)
+                  ? "Publish date and time are required."
+                  : effectivePublishingMode === "schedule" &&
+                      !hasValidScheduleTime
+                    ? "Enter publish time in HH:MM format."
+                    : "";
   const visiblePosts = (posts.data || []).filter(
     (post) =>
       savingPostIds.includes(post.id) ||
@@ -1894,30 +1888,33 @@ function TelegramPostWorkspace({
       });
       let successful = 0;
       let failed = 0;
-      const result = await telegramChannelsApi.mutatePostPlannerSlotsWithProgress(
-        channelId,
-        timePosts.map((timePost, index) => ({
-          action: "CREATE" as const,
-          data: {
-            formatId,
-            postGroupIds: draft?.groupIds || [],
-            weekday: 1,
-            time: timePost.time,
-            position: basePosition + index,
+      const result =
+        await telegramChannelsApi.mutatePostPlannerSlotsWithProgress(
+          channelId,
+          timePosts.map((timePost, index) => ({
+            action: "CREATE" as const,
+            data: {
+              formatId,
+              postGroupIds: draft?.groupIds || [],
+              weekday: 1,
+              time: timePost.time,
+              position: basePosition + index,
+            },
+          })),
+          (item, current, total) => {
+            if (item.success) successful += 1;
+            else failed += 1;
+            operation.update({
+              message: item.message || "Updating auto posting…",
+              current,
+              total,
+              progressSummary: { successful, failed },
+            });
           },
-        })),
-        (item, current, total) => {
-          if (item.success) successful += 1;
-          else failed += 1;
-          operation.update({
-            message: item.message || "Updating auto posting…",
-            current,
-            total,
-            progressSummary: { successful, failed },
-          });
-        },
-      );
-      const completion = { message: `${result.successCount} successful, ${result.failedCount} failed.` };
+        );
+      const completion = {
+        message: `${result.successCount} successful, ${result.failedCount} failed.`,
+      };
       if (result.failedCount) operation.fail(completion);
       else operation.succeed(completion);
       setPlannerSlotDraftsByFormatId((current) => ({
@@ -2027,13 +2024,31 @@ function TelegramPostWorkspace({
         ];
         let successful = 0;
         let failed = 0;
-        const operation = startOperation({ id: `planner-slots-save:${channelId}:${slotGroup.id}`, title: "Update auto posting slots", message: "Starting…", current: 0, total: mutations.length });
-        const result = await telegramChannelsApi.mutatePostPlannerSlotsWithProgress(channelId, mutations, (item, current, total) => {
-          if (item.success) successful += 1;
-          else failed += 1;
-          operation.update({ message: item.message || "Updating auto posting…", current, total, progressSummary: { successful, failed } });
+        const operation = startOperation({
+          id: `planner-slots-save:${channelId}:${slotGroup.id}`,
+          title: "Update auto posting slots",
+          message: "Starting…",
+          current: 0,
+          total: mutations.length,
         });
-        const completion = { message: `${result.successCount} successful, ${result.failedCount} failed.` };
+        const result =
+          await telegramChannelsApi.mutatePostPlannerSlotsWithProgress(
+            channelId,
+            mutations,
+            (item, current, total) => {
+              if (item.success) successful += 1;
+              else failed += 1;
+              operation.update({
+                message: item.message || "Updating auto posting…",
+                current,
+                total,
+                progressSummary: { successful, failed },
+              });
+            },
+          );
+        const completion = {
+          message: `${result.successCount} successful, ${result.failedCount} failed.`,
+        };
         if (result.failedCount) operation.fail(completion);
         else operation.succeed(completion);
         if (result.failedCount) throw new Error(completion.message);
@@ -3091,8 +3106,14 @@ function TelegramPostWorkspace({
 
   useEffect(() => {
     if (!initialPostId) return;
-    changeWorkspaceView("posts");
-  }, [initialPostId]);
+    // The URL is the source of truth for a deep-linked post. Updating the
+    // workspace tab here must not navigate again, otherwise the postId that
+    // was just added by openPost() is immediately removed from the URL.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setWorkspaceView("posts");
+    onWorkspaceViewChange("posts");
+    window.localStorage.setItem(workspaceViewPreferenceKey(channelId), "posts");
+  }, [channelId, initialPostId, onWorkspaceViewChange]);
 
   useEffect(() => {
     if (!initialGroupId) return;
@@ -3504,6 +3525,8 @@ function TelegramPostWorkspace({
             {autoPlannerMode === "import" ? (
               <Card className="p-4">
                 <CalendarPlanImport
+                  channelId={channelId}
+                  channelTitle={channelTitle}
                   posts={calendarSchedulablePosts.map((post) => ({
                     id: post.id,
                     title: post.title,
@@ -3809,272 +3832,293 @@ function TelegramPostWorkspace({
                           </>
                         )}
                       </div>
-                      {formatEditing ? <div className="mt-3 space-y-2">
-                        {slotGroups.map((slotGroup) => {
-                          const primarySlot = slotGroup.slots[0];
-                          const slotDraft = plannerSlotEditDraftsById[
-                            slotGroup.id
-                          ] ?? {
-                            timePostIds: slotGroup.timePostIds,
-                            groupIds: slotGroup.groupIds,
-                          };
-                          const selectedTimePosts = slotDraft.timePostIds
-                            .map((timePostId) =>
-                              plannerTimePostsById.get(timePostId),
-                            )
-                            .filter(
-                              (timePost): timePost is TelegramChannelTimePost =>
-                                Boolean(timePost),
-                            );
-                          const slotDirty =
-                            !sameStringSet(
-                              slotDraft.timePostIds,
-                              slotGroup.timePostIds,
-                            ) ||
-                            !sameStringSet(
-                              slotDraft.groupIds,
-                              slotGroup.groupIds,
-                            );
-                          const slotEditing = editingPlannerSlotGroupIds.includes(
-                            slotGroup.id,
-                          );
-                          const displayTimePosts = selectedTimePosts.length
-                            ? selectedTimePosts
-                            : slotGroup.slots
-                                .map((slot) =>
-                                  plannerTimePostsByTime.get(slot.time),
-                                )
-                                .filter(
-                                  (
-                                    timePost,
-                                  ): timePost is TelegramChannelTimePost =>
-                                    Boolean(timePost),
-                                );
-                          const groups = slotDraft.groupIds
-                            .map((groupId) => postGroupsById.get(groupId))
-                            .filter((group): group is PostGroup =>
-                              Boolean(group),
-                            );
-                          return (
-                            <div
-                              key={slotGroup.id}
-                              className="rounded-lg border border-neutral-800 bg-neutral-950 p-3"
-                            >
-                              <div className="flex items-start gap-2">
-                                <div className="min-w-0 flex-1 space-y-2">
-                                  <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-neutral-100">
-                                    {displayTimePosts.length ? (
-                                      displayTimePosts.map((timePost) => (
-                                        <span
-                                          key={timePost.id}
-                                          className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1"
-                                        >
-                                          {timePost.iconPresentation ? (
-                                            <IconAvatar
-                                              icon={timePost.iconPresentation}
-                                              label={timePost.title}
-                                              size="xs"
-                                              bordered={false}
-                                              className="!bg-transparent"
-                                            />
-                                          ) : (
-                                            <Clock3
-                                              size={14}
-                                              className="shrink-0 text-neutral-500"
-                                            />
-                                          )}
-                                          <span className="shrink-0 font-semibold">
-                                            {timePost.time}
+                      {formatEditing ? (
+                        <div className="mt-3 space-y-2">
+                          {slotGroups.map((slotGroup) => {
+                            const primarySlot = slotGroup.slots[0];
+                            const slotDraft = plannerSlotEditDraftsById[
+                              slotGroup.id
+                            ] ?? {
+                              timePostIds: slotGroup.timePostIds,
+                              groupIds: slotGroup.groupIds,
+                            };
+                            const selectedTimePosts = slotDraft.timePostIds
+                              .map((timePostId) =>
+                                plannerTimePostsById.get(timePostId),
+                              )
+                              .filter(
+                                (
+                                  timePost,
+                                ): timePost is TelegramChannelTimePost =>
+                                  Boolean(timePost),
+                              );
+                            const slotDirty =
+                              !sameStringSet(
+                                slotDraft.timePostIds,
+                                slotGroup.timePostIds,
+                              ) ||
+                              !sameStringSet(
+                                slotDraft.groupIds,
+                                slotGroup.groupIds,
+                              );
+                            const slotEditing =
+                              editingPlannerSlotGroupIds.includes(slotGroup.id);
+                            const displayTimePosts = selectedTimePosts.length
+                              ? selectedTimePosts
+                              : slotGroup.slots
+                                  .map((slot) =>
+                                    plannerTimePostsByTime.get(slot.time),
+                                  )
+                                  .filter(
+                                    (
+                                      timePost,
+                                    ): timePost is TelegramChannelTimePost =>
+                                      Boolean(timePost),
+                                  );
+                            const groups = slotDraft.groupIds
+                              .map((groupId) => postGroupsById.get(groupId))
+                              .filter((group): group is PostGroup =>
+                                Boolean(group),
+                              );
+                            return (
+                              <div
+                                key={slotGroup.id}
+                                className="rounded-lg border border-neutral-800 bg-neutral-950 p-3"
+                              >
+                                <div className="flex items-start gap-2">
+                                  <div className="min-w-0 flex-1 space-y-2">
+                                    <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-neutral-100">
+                                      {displayTimePosts.length ? (
+                                        displayTimePosts.map((timePost) => (
+                                          <span
+                                            key={timePost.id}
+                                            className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1"
+                                          >
+                                            {timePost.iconPresentation ? (
+                                              <IconAvatar
+                                                icon={timePost.iconPresentation}
+                                                label={timePost.title}
+                                                size="xs"
+                                                bordered={false}
+                                                className="!bg-transparent"
+                                              />
+                                            ) : (
+                                              <Clock3
+                                                size={14}
+                                                className="shrink-0 text-neutral-500"
+                                              />
+                                            )}
+                                            <span className="shrink-0 font-semibold">
+                                              {timePost.time}
+                                            </span>
+                                            <span className="min-w-0 truncate text-neutral-300">
+                                              {timePost.title}
+                                            </span>
                                           </span>
-                                          <span className="min-w-0 truncate text-neutral-300">
-                                            {timePost.title}
-                                          </span>
+                                        ))
+                                      ) : (
+                                        <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1 text-neutral-400">
+                                          <Clock3 size={14} />
+                                          {primarySlot?.time ?? "No time"}
                                         </span>
-                                      ))
-                                    ) : (
-                                      <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1 text-neutral-400">
-                                        <Clock3 size={14} />
-                                        {primarySlot?.time ?? "No time"}
-                                      </span>
-                                    )}
-                                    {groups.length ? (
-                                      groups.map((group) => (
-                                        <span
-                                          key={group.id}
-                                          className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1"
-                                        >
-                                          <PostIcon
-                                            iconId={group.icon}
-                                            icon={group.iconPresentation}
-                                            label={group.title}
-                                            bare
+                                      )}
+                                      {groups.length ? (
+                                        groups.map((group) => (
+                                          <span
+                                            key={group.id}
+                                            className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1"
+                                          >
+                                            <PostIcon
+                                              iconId={group.icon}
+                                              icon={group.iconPresentation}
+                                              label={group.title}
+                                              bare
+                                            />
+                                            <span className="min-w-0 truncate text-neutral-300">
+                                              {group.title}
+                                            </span>
+                                          </span>
+                                        ))
+                                      ) : (
+                                        <span className="inline-flex items-center rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1 text-neutral-400">
+                                          Any group
+                                        </span>
+                                      )}
+                                    </div>
+                                    {slotEditing ? (
+                                      <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
+                                        <FormField label="Groups">
+                                          <MultiSelect
+                                            value={slotDraft.groupIds}
+                                            onChange={(groupIds) =>
+                                              updatePlannerSlotGroupEditDraft(
+                                                slotGroup,
+                                                {
+                                                  groupIds,
+                                                },
+                                              )
+                                            }
+                                            options={plannerGroupOptions}
+                                            placeholder="Any group"
+                                            allSelectedLabel="All groups"
                                           />
-                                          <span className="min-w-0 truncate text-neutral-300">
-                                            {group.title}
-                                          </span>
-                                        </span>
-                                      ))
+                                        </FormField>
+                                        <FormField label="Publishing time">
+                                          <MultiSelect
+                                            value={slotDraft.timePostIds}
+                                            onChange={(timePostIds) =>
+                                              updatePlannerSlotGroupEditDraft(
+                                                slotGroup,
+                                                {
+                                                  timePostIds,
+                                                },
+                                              )
+                                            }
+                                            options={plannerTimePostOptions}
+                                            placeholder="Select time"
+                                            allSelectedLabel="All times"
+                                          />
+                                        </FormField>
+                                        <div className="flex md:pt-[22px]">
+                                          <Button
+                                            type="button"
+                                            variant="secondary"
+                                            disabled={
+                                              autoPlannerBusy ||
+                                              !slotDirty ||
+                                              !slotDraft.timePostIds.length
+                                            }
+                                            onClick={() =>
+                                              savePlannerSlotGroupEditDraft(
+                                                slotGroup,
+                                              )
+                                            }
+                                            className="h-10 shrink-0 border-emerald-800/70 bg-emerald-950/35 px-3 text-emerald-100 hover:bg-emerald-900/45 disabled:border-neutral-800 disabled:bg-neutral-900 disabled:text-neutral-500"
+                                          >
+                                            <span className="inline-flex items-center gap-1.5">
+                                              <Check size={14} />
+                                              Save
+                                            </span>
+                                          </Button>
+                                        </div>
+                                        <div className="flex md:pt-[22px]">
+                                          <Button
+                                            type="button"
+                                            variant="secondary"
+                                            disabled={autoPlannerBusy}
+                                            onClick={() => {
+                                              resetPlannerSlotEditDraft(
+                                                slotGroup.id,
+                                              );
+                                              setEditingPlannerSlotGroupIds(
+                                                (current) =>
+                                                  current.filter(
+                                                    (id) => id !== slotGroup.id,
+                                                  ),
+                                              );
+                                            }}
+                                            className="h-10 shrink-0 border-amber-800/60 bg-amber-950/20 px-3 text-amber-100 hover:bg-amber-900/30 disabled:border-neutral-800 disabled:bg-neutral-900 disabled:text-neutral-500"
+                                          >
+                                            <span className="inline-flex items-center gap-1.5">
+                                              <RotateCcw size={14} />
+                                              Cancel
+                                            </span>
+                                          </Button>
+                                        </div>
+                                      </div>
                                     ) : (
-                                      <span className="inline-flex items-center rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1 text-neutral-400">
-                                        Any group
-                                      </span>
-                                    )}
-                                  </div>
-                                  {slotEditing ? <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
-                                    <FormField label="Groups">
-                                      <MultiSelect
-                                        value={slotDraft.groupIds}
-                                        onChange={(groupIds) =>
-                                          updatePlannerSlotGroupEditDraft(
-                                            slotGroup,
-                                            {
-                                              groupIds,
-                                            },
-                                          )
-                                        }
-                                        options={plannerGroupOptions}
-                                        placeholder="Any group"
-                                        allSelectedLabel="All groups"
-                                      />
-                                    </FormField>
-                                    <FormField label="Publishing time">
-                                      <MultiSelect
-                                        value={slotDraft.timePostIds}
-                                        onChange={(timePostIds) =>
-                                          updatePlannerSlotGroupEditDraft(
-                                            slotGroup,
-                                            {
-                                              timePostIds,
-                                            },
-                                          )
-                                        }
-                                        options={plannerTimePostOptions}
-                                        placeholder="Select time"
-                                        allSelectedLabel="All times"
-                                      />
-                                    </FormField>
-                                    <div className="flex md:pt-[22px]">
                                       <Button
                                         type="button"
                                         variant="secondary"
-                                        disabled={
-                                          autoPlannerBusy ||
-                                          !slotDirty ||
-                                          !slotDraft.timePostIds.length
-                                        }
+                                        className="h-8 px-2.5 text-xs"
                                         onClick={() =>
-                                          savePlannerSlotGroupEditDraft(
-                                            slotGroup,
+                                          setEditingPlannerSlotGroupIds(
+                                            (current) => [
+                                              ...current,
+                                              slotGroup.id,
+                                            ],
                                           )
                                         }
-                                        className="h-10 shrink-0 border-emerald-800/70 bg-emerald-950/35 px-3 text-emerald-100 hover:bg-emerald-900/45 disabled:border-neutral-800 disabled:bg-neutral-900 disabled:text-neutral-500"
                                       >
-                                        <span className="inline-flex items-center gap-1.5">
-                                          <Check size={14} />
-                                          Save
-                                        </span>
+                                        <Pencil size={13} /> Edit slot
                                       </Button>
-                                    </div>
-                                    <div className="flex md:pt-[22px]">
-                                        <Button
-                                          type="button"
-                                          variant="secondary"
-                                          disabled={autoPlannerBusy}
-                                          onClick={() => {
-                                            resetPlannerSlotEditDraft(
-                                              slotGroup.id,
-                                            );
-                                            setEditingPlannerSlotGroupIds((current) => current.filter((id) => id !== slotGroup.id));
-                                          }}
-                                          className="h-10 shrink-0 border-amber-800/60 bg-amber-950/20 px-3 text-amber-100 hover:bg-amber-900/30 disabled:border-neutral-800 disabled:bg-neutral-900 disabled:text-neutral-500"
-                                        >
-                                          <span className="inline-flex items-center gap-1.5">
-                                            <RotateCcw size={14} />
-                                            Cancel
-                                          </span>
-                                        </Button>
-                                      </div>
-                                  </div> : (
-                                    <Button
+                                    )}
+                                  </div>
+                                  {slotEditing ? (
+                                    <button
                                       type="button"
-                                      variant="secondary"
-                                      className="h-8 px-2.5 text-xs"
-                                      onClick={() => setEditingPlannerSlotGroupIds((current) => [...current, slotGroup.id])}
+                                      disabled={autoPlannerBusy}
+                                      onClick={() =>
+                                        setDeletingPlannerSlotGroup(slotGroup)
+                                      }
+                                      className="rounded-md border border-red-800/70 p-1.5 text-red-300 hover:bg-red-950/40 disabled:opacity-50"
+                                      aria-label="Delete slot"
                                     >
-                                      <Pencil size={13} /> Edit slot
-                                    </Button>
-                                  )}
+                                      <Trash2 size={14} />
+                                    </button>
+                                  ) : null}
                                 </div>
-                                {slotEditing ? <button
-                                  type="button"
-                                  disabled={autoPlannerBusy}
-                                  onClick={() =>
-                                    setDeletingPlannerSlotGroup(slotGroup)
-                                  }
-                                  className="rounded-md border border-red-800/70 p-1.5 text-red-300 hover:bg-red-950/40 disabled:opacity-50"
-                                  aria-label="Delete slot"
-                                >
-                                  <Trash2 size={14} />
-                                </button> : null}
                               </div>
+                            );
+                          })}
+                          {!slotGroups.length ? (
+                            <div className="rounded-lg border border-dashed border-neutral-800 px-3 py-3 text-sm text-neutral-500">
+                              No slots in this format yet.
                             </div>
-                          );
-                        })}
-                        {!slotGroups.length ? (
-                          <div className="rounded-lg border border-dashed border-neutral-800 px-3 py-3 text-sm text-neutral-500">
-                            No slots in this format yet.
-                          </div>
-                        ) : null}
-                      </div> : null}
-                      {formatEditing ? <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-                        <FormField label="Groups">
-                          <MultiSelect
-                            value={draft.groupIds}
-                            onChange={(groupIds) =>
-                              setPlannerSlotDraftsByFormatId((current) => ({
-                                ...current,
-                                [format.id]: {
-                                  timePostIds: draft.timePostIds,
-                                  groupIds,
-                                },
-                              }))
-                            }
-                            options={plannerGroupOptions}
-                            placeholder="Any group"
-                            allSelectedLabel="All groups"
-                          />
-                        </FormField>
-                        <FormField label="Publishing time">
-                          <MultiSelect
-                            value={draft.timePostIds}
-                            onChange={(timePostIds) =>
-                              setPlannerSlotDraftsByFormatId((current) => ({
-                                ...current,
-                                [format.id]: {
-                                  timePostIds,
-                                  groupIds: draft.groupIds,
-                                },
-                              }))
-                            }
-                            options={plannerTimePostOptions}
-                            placeholder="Select time"
-                            allSelectedLabel="All times"
-                          />
-                        </FormField>
-                        <div className="flex md:pt-[22px]">
-                          <Button
-                            variant="secondary"
-                            onClick={() => createPlannerSlot(format.id)}
-                            disabled={
-                              autoPlannerBusy || !draft.timePostIds.length
-                            }
-                            className="inline-flex h-10 min-w-[112px] shrink-0 items-center justify-center gap-2 whitespace-nowrap"
-                          >
-                            <Plus size={15} />
-                            Add slot{draft.timePostIds.length > 1 ? "s" : ""}
-                          </Button>
+                          ) : null}
                         </div>
-                      </div> : null}
+                      ) : null}
+                      {formatEditing ? (
+                        <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                          <FormField label="Groups">
+                            <MultiSelect
+                              value={draft.groupIds}
+                              onChange={(groupIds) =>
+                                setPlannerSlotDraftsByFormatId((current) => ({
+                                  ...current,
+                                  [format.id]: {
+                                    timePostIds: draft.timePostIds,
+                                    groupIds,
+                                  },
+                                }))
+                              }
+                              options={plannerGroupOptions}
+                              placeholder="Any group"
+                              allSelectedLabel="All groups"
+                            />
+                          </FormField>
+                          <FormField label="Publishing time">
+                            <MultiSelect
+                              value={draft.timePostIds}
+                              onChange={(timePostIds) =>
+                                setPlannerSlotDraftsByFormatId((current) => ({
+                                  ...current,
+                                  [format.id]: {
+                                    timePostIds,
+                                    groupIds: draft.groupIds,
+                                  },
+                                }))
+                              }
+                              options={plannerTimePostOptions}
+                              placeholder="Select time"
+                              allSelectedLabel="All times"
+                            />
+                          </FormField>
+                          <div className="flex md:pt-[22px]">
+                            <Button
+                              variant="secondary"
+                              onClick={() => createPlannerSlot(format.id)}
+                              disabled={
+                                autoPlannerBusy || !draft.timePostIds.length
+                              }
+                              className="inline-flex h-10 min-w-[112px] shrink-0 items-center justify-center gap-2 whitespace-nowrap"
+                            >
+                              <Plus size={15} />
+                              Add slot{draft.timePostIds.length > 1 ? "s" : ""}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -4995,7 +5039,9 @@ function TelegramPostWorkspace({
             text={text}
             formattedHtml={isReadOnlyTelegramPost ? editingMeta?.formattedText : null}
             customEmojiPacks={customEmojiPacks.data?.packs}
-            imageUrls={syncedTelegramMediaUrl ? [syncedTelegramMediaUrl] : imageUrls}
+            imageUrls={
+              isReadOnlyTelegramPost ? editingMeta?.imageUrls ?? [] : imageUrls
+            }
             hasMedia={editingMeta?.hasMedia}
             engagement={editingMeta?.engagementMetrics}
             buttonRows={buttonRows}

@@ -1,45 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 import { TelegramPostPreview } from "@/components/features/telegram/telegram/telegram-post-preview";
 import { Modal } from "@/components/ui/primitives";
-import { telegramChannelsApi, type TelegramPost } from "@/lib/api";
+import type { TelegramPost } from "@/lib/api";
 
 export function TelegramPostPreviewModal({
   open,
   onClose,
-  channelId,
   channelTitle,
   channelPhotoUrl,
   post,
 }: {
   open: boolean;
   onClose: () => void;
-  channelId: string;
   channelTitle: string;
   channelPhotoUrl?: string | null;
   post: TelegramPost | null;
 }) {
-  const media = useQuery({
-    queryKey: ["telegram-post-media", channelId, post?.id],
-    queryFn: () => telegramChannelsApi.postMedia(channelId, post!.id),
-    enabled: open && Boolean(post?.id && post?.hasMedia),
-    staleTime: 5 * 60_000,
-  });
-  const [mediaUrl, setMediaUrl] = useState("");
-
-  useEffect(() => {
-    if (!media.data || !media.data.type.startsWith("image/")) {
-      setMediaUrl("");
-      return;
-    }
-    const nextUrl = URL.createObjectURL(media.data);
-    setMediaUrl(nextUrl);
-    return () => URL.revokeObjectURL(nextUrl);
-  }, [media.data]);
-
   const telegramUrl = post?.primaryTelegramMessageUrl || null;
 
   return (
@@ -56,7 +34,8 @@ export function TelegramPostPreviewModal({
             channelPhotoUrl={channelPhotoUrl}
             text={post.text || ""}
             formattedHtml={post.formattedText || null}
-            imageUrls={mediaUrl ? [mediaUrl] : []}
+            imageUrls={post.imageUrls}
+            hasMedia={post.hasMedia}
           />
           <div className="space-y-4 rounded-lg border border-slate-800 bg-slate-900/25 p-4">
             <div>
@@ -107,13 +86,9 @@ export function TelegramPostPreviewModal({
               </div>
             </div>
 
-            {post.hasMedia ? (
+            {post.hasMedia && !post.imageUrls.length ? (
               <div className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm text-slate-400">
-                {media.isLoading
-                  ? "Loading Telegram media..."
-                  : mediaUrl
-                    ? "Telegram media loaded."
-                    : "Media preview is available only for image posts."}
+                Media preview is available only for image posts.
               </div>
             ) : null}
           </div>

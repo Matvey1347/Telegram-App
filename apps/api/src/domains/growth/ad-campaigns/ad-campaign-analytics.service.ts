@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { CurrencyConversionService } from '../../../common/currency-conversion.service';
 import {
   buildDataQualityWarning,
   calculateEffectiveSubscribers,
@@ -12,7 +13,10 @@ type KpiStatus = 'good' | 'acceptable' | 'bad' | 'unknown';
 
 @Injectable()
 export class AdCampaignAnalyticsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly currencyConversionService: CurrencyConversionService,
+  ) {}
 
   private numberOrNull(value: unknown) {
     if (value == null) return null;
@@ -200,8 +204,40 @@ export class AdCampaignAnalyticsService {
     const retention72h = this.ratio(after72h, after24h);
     const retention7d = this.ratio(after7d, after24h);
     const retention30d = this.ratio(after30d, after24h);
-    const cpaStatus = this.kpiStatus(cpa, campaign.telegramChannel);
-    const activeCpaStatus = this.kpiStatus(cappedActiveCpa, campaign.telegramChannel);
+    const campaignCurrency = String(campaign.currency || '').toUpperCase();
+    const kpiCurrency = String(
+      campaign.telegramChannel?.kpiCurrency || campaignCurrency,
+    ).toUpperCase();
+    const nativeCost = this.numberOrNull(campaign.price ?? campaign.costAmount);
+    const costInKpiCurrency =
+      nativeCost == null
+        ? null
+        : campaignCurrency === kpiCurrency
+          ? nativeCost
+          : await this.currencyConversionService.convertCurrency(
+              nativeCost,
+              campaignCurrency,
+              kpiCurrency,
+              workspaceId,
+            );
+    const cpaInKpiCurrency =
+      costInKpiCurrency != null && newSubscribers != null && newSubscribers > 0
+        ? costInKpiCurrency / newSubscribers
+        : null;
+    const activeCpaInKpiCurrency =
+      costInKpiCurrency != null &&
+      activeSubscribersFromAd != null &&
+      activeSubscribersFromAd > 0
+        ? costInKpiCurrency / activeSubscribersFromAd
+        : null;
+    const cpaStatus = this.kpiStatus(
+      cpaInKpiCurrency,
+      campaign.telegramChannel,
+    );
+    const activeCpaStatus = this.kpiStatus(
+      activeCpaInKpiCurrency,
+      campaign.telegramChannel,
+    );
     const retentionStatus = this.retentionStatus(retention7d);
     const classified = classifyViewRate(rawViewRateAfter);
     let adDataQuality: DataQuality = classified.dataQuality;

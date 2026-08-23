@@ -7,14 +7,7 @@ import {
   maxDataQuality,
   type DataQuality,
 } from '../../../common/analytics/data-quality';
-import {
-  effectiveCampaignActiveSubscribers,
-  effectiveCampaignAttributedSubscribers,
-  effectiveCampaignJoinedSubscribers,
-  effectiveCampaignPendingSubscribers,
-  resolveChannelKpiLabel,
-  resolveChannelKpiStatus,
-} from '../../../common/analytics/channel-financial-summary';
+import { TelegramChannelFinancialReadService } from './telegram-channel-financial-read.service';
 
 @Injectable()
 export class TelegramChannelAnalyticsService {
@@ -29,7 +22,10 @@ export class TelegramChannelAnalyticsService {
   private ensureTelegramChannelSyncScopeColumnsPromise: Promise<void> | null =
     null;
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly financialReadService: TelegramChannelFinancialReadService,
+  ) {}
 
   private average(values: number[]) {
     return values.length
@@ -423,109 +419,16 @@ export class TelegramChannelAnalyticsService {
   async getChannelFinancialSummary(channelId: string) {
     const channel = await this.findChannelById(channelId);
     if (!channel) throw new NotFoundException('Telegram channel not found');
-    const purchaseTransactionId = (
-      channel as { purchaseTransactionId?: string | null }
-    ).purchaseTransactionId;
-    const [campaignRows, audience, channelInviteLinks, purchaseTransaction] =
-      await Promise.all([
-      this.findCampaignsForFinancialSummary({
-        workspaceId: channel.workspaceId,
-        telegramChannelId: channel.id,
-      }),
-      this.getActiveAudienceEstimate(channelId),
-      this.findInviteLinksForFinancialSummary({
-        workspaceId: channel.workspaceId,
-        telegramChannelId: channel.id,
-      }),
-      purchaseTransactionId
-        ? this.prisma.transaction.findFirst({
-            where: {
-              id: purchaseTransactionId,
-              workspaceId: channel.workspaceId,
-            },
-            select: { amountInPrimaryCurrency: true },
-          })
-        : Promise.resolve(null),
-    ]);
-    const campaigns = campaignRows as any[];
-    const acquisitionCost = Number(
-      purchaseTransaction?.amountInPrimaryCurrency || 0,
-    );
-    const totalAdSpend = campaigns.reduce(
-      (sum, campaign) => sum + Number(campaign.priceInPrimaryCurrency || 0),
-      0,
-    );
-    const totalSpend = totalAdSpend + acquisitionCost;
-    const totalJoinedSubscribers = campaigns.reduce(
-      (sum, campaign) => sum + effectiveCampaignJoinedSubscribers(campaign),
-      0,
-    );
-    const totalPendingSubscribers = campaigns.reduce(
-      (sum, campaign) => sum + effectiveCampaignPendingSubscribers(campaign),
-      0,
-    );
-    const totalAttributedSubscribers = campaigns.reduce(
-      (sum, campaign) => sum + effectiveCampaignAttributedSubscribers(campaign),
-      0,
-    );
-    const avgCpa =
-      totalAttributedSubscribers > 0
-        ? totalAdSpend / totalAttributedSubscribers
-        : null;
-    const campaignActiveSubscribersEstimate = campaigns.reduce(
-      (sum, campaign) => sum + effectiveCampaignActiveSubscribers(campaign),
-      0,
-    );
-    const paidActiveSubscribersEstimate =
-      campaignActiveSubscribersEstimate > 0
-        ? campaignActiveSubscribersEstimate
-        : (audience.paidActiveSubscribersEstimate ?? 0);
-    const activeCpa =
-      paidActiveSubscribersEstimate > 0
-        ? totalAdSpend / paidActiveSubscribersEstimate
-        : null;
-    const avgActiveRate = this.average(
-      campaigns
-        .map((campaign) => this.numberOrNull(campaign.activeRate))
-        .filter((value): value is number => value != null),
-    );
-    const avgRetention7d = this.average(
-      campaigns
-        .map((campaign) => this.numberOrNull(campaign.retention7d))
-        .filter((value): value is number => value != null),
-    );
-    const kpiStatus = resolveChannelKpiStatus({
-      avgCpa,
-      targetCpaFrom: channel.targetCpaFrom,
-      targetCpa: channel.targetCpa,
-      acceptableCpaFrom: channel.acceptableCpaFrom,
-      acceptableCpa: channel.acceptableCpa,
-      stopCpaFrom: channel.stopCpaFrom,
-      stopCpa: channel.stopCpa,
-    });
-    const kpiLabel = resolveChannelKpiLabel(kpiStatus);
-
-    return {
-      acquisitionCost,
-      totalSpend,
-      totalAdSpend,
-      campaignsCount: campaigns.length,
-      totalJoinedSubscribers,
-      totalPendingSubscribers,
-      totalAttributedSubscribers,
-      avgCpa,
-      activeSubscribersEstimate: audience.activeSubscribersEstimate,
-      paidActiveSubscribersEstimate,
-      activeCpa,
-      avgActiveRate,
-      avgRetention7d,
-      dataQuality: audience.dataQuality,
-      dataQualityReason: audience.dataQualityReason,
-      dataQualityWarning: audience.dataQualityWarning,
-      hasExternalTrafficAnomaly: audience.hasExternalTrafficAnomaly,
-      hasSubscriberBasePollution: audience.hasSubscriberBasePollution,
-      kpiStatus,
-      kpiLabel,
-    };
+    const audience = await this.getActiveAudienceEstimate(channelId);
+    const summaries =
+      await this.financialReadService.buildChannelFinancialSummaryPreview(
+        channel.workspaceId,
+        [{ ...channel, audienceSnapshots: [audience] }],
+      );
+    const summary = summaries.get(channelId);
+    if (!summary) {
+      throw new NotFoundException('Telegram channel financial summary not found');
+    }
+    return summary;
   }
 }

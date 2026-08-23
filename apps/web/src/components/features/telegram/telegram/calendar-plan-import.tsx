@@ -1,24 +1,29 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ClipboardList } from "lucide-react";
-import type { TelegramPostPlannerPreviewResult } from "@telegram-system/shared";
+import { Download } from "lucide-react";
+import {
+  buildTelegramCalendarPlanInstructionFilename,
+  type TelegramPostPlannerPreviewResult,
+} from "@telegram-system/shared";
 import { Button } from "@/components/ui/primitives";
+import { telegramChannelsApi } from "@/lib/api";
 import { useAppToast } from "@/providers/toast-provider";
 import { ManagedPostsImportSource } from "./managed-posts-import-source";
-import {
-  calendarPlanGptPrompt,
-  parseCalendarPlanImport,
-} from "./calendar-plan-import-model";
+import { parseCalendarPlanImport } from "./calendar-plan-import-model";
 
 type PlanPost = { id: string; title: string; groupId?: string | null };
 
 export function CalendarPlanImport({
+  channelId,
+  channelTitle,
   posts,
   timezone,
   disabled,
   onPreview,
 }: {
+  channelId: string;
+  channelTitle: string;
   posts: PlanPost[];
   timezone: string;
   disabled: boolean;
@@ -28,6 +33,7 @@ export function CalendarPlanImport({
   const [content, setContent] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileError, setFileError] = useState("");
+  const [instructionLoading, setInstructionLoading] = useState(false);
   const parsed = useMemo(() => {
     if (!content.trim()) return { preview: null, error: "" };
     try {
@@ -52,18 +58,41 @@ export function CalendarPlanImport({
           <p className="mt-0.5 text-xs text-neutral-400">
             Upload or paste postId with scheduledAt, or date and time.
           </p>
+          <p className="mt-1 text-xs text-neutral-500">
+            The GPT instruction includes stable channel times, post texts,
+            publishing blockers, occupied slots, and recent history.
+          </p>
         </div>
         <Button
           type="button"
           variant="secondary"
+          disabled={disabled || instructionLoading}
           onClick={async () => {
-            await navigator.clipboard.writeText(
-              calendarPlanGptPrompt(posts, timezone),
-            );
-            pushToast("Calendar plan prompt copied.", "success");
+            setInstructionLoading(true);
+            try {
+              const blob =
+                await telegramChannelsApi.calendarPlanInstruction(channelId);
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download =
+                buildTelegramCalendarPlanInstructionFilename(channelTitle);
+              document.body.appendChild(link);
+              link.click();
+              link.remove();
+              URL.revokeObjectURL(url);
+              pushToast("GPT planner instruction downloaded.", "success");
+            } catch {
+              pushToast("Could not download GPT planner instruction.", "error");
+            } finally {
+              setInstructionLoading(false);
+            }
           }}
         >
-          <ClipboardList size={15} /> Copy GPT format
+          <Download size={15} />
+          {instructionLoading
+            ? "Preparing instruction…"
+            : "Download GPT instruction"}
         </Button>
       </div>
       <ManagedPostsImportSource

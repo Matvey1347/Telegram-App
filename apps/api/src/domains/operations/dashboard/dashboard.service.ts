@@ -141,6 +141,7 @@ export class DashboardService {
               title: true,
               username: true,
               photoUrl: true,
+              kpiCurrency: true,
               targetCpaFrom: true,
               targetCpa: true,
               acceptableCpaFrom: true,
@@ -276,7 +277,24 @@ export class DashboardService {
       const linkedJoined = sumInviteLinkJoinedSubscribers(campaign.inviteLinks);
       return Math.max(Number(campaign.joinedCount || 0), linkedJoined);
     };
-    const campaignsWithMtprotoMetrics = campaigns.map((campaign) => {
+    const kpiRateCache = new Map<string, Promise<number | null>>();
+    const convertCampaignCost = async (
+      amount: number,
+      fromCurrency: string,
+      toCurrency: string,
+    ) => {
+      if (fromCurrency === toCurrency) return amount;
+      const key = `${fromCurrency}:${toCurrency}`;
+      if (!kpiRateCache.has(key)) {
+        kpiRateCache.set(
+          key,
+          this.conversionService.getRate(fromCurrency, toCurrency, workspaceId),
+        );
+      }
+      const rate = await kpiRateCache.get(key)!;
+      return rate == null ? null : amount * rate;
+    };
+    const campaignsWithMtprotoMetrics = await Promise.all(campaigns.map(async (campaign) => {
       const joinedCount = campaignJoinedCount(campaign);
       const attributedCount = Math.max(
         joinedCount,
@@ -286,6 +304,23 @@ export class DashboardService {
         attributedCount > 0
           ? dec(campaign.priceInPrimaryCurrency) / attributedCount
           : null;
+      const campaignCurrency = String(campaign.currency || '').toUpperCase();
+      const kpiCurrency = String(
+        campaign.telegramChannel?.kpiCurrency || campaignCurrency,
+      ).toUpperCase();
+      const nativeCost = dec(campaign.price);
+      const costInKpiCurrency =
+        campaignCurrency === kpiCurrency
+          ? nativeCost
+          : await convertCampaignCost(
+              nativeCost,
+              campaignCurrency,
+              kpiCurrency,
+            );
+      const cpaInKpiCurrency =
+        costInKpiCurrency != null && attributedCount > 0
+          ? costInKpiCurrency / attributedCount
+          : null;
       return {
         ...campaign,
         joinedCount,
@@ -294,7 +329,7 @@ export class DashboardService {
         netGrowthCount: null,
         cpa,
         overallStatus: resolveChannelKpiStatus({
-          avgCpa: cpa,
+          avgCpa: cpaInKpiCurrency,
           targetCpaFrom: campaign.telegramChannel?.targetCpaFrom,
           targetCpa: campaign.telegramChannel?.targetCpa,
           acceptableCpaFrom: campaign.telegramChannel?.acceptableCpaFrom,
@@ -304,7 +339,7 @@ export class DashboardService {
         }),
         attributionSource: 'mtproto_invite_link_usage',
       };
-    });
+    }));
     const periodCampaigns = campaignsWithMtprotoMetrics.filter((campaign) =>
       inRange(campaignDate(campaign), from, to),
     );

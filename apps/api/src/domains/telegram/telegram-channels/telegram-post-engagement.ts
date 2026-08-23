@@ -9,6 +9,7 @@ export const telegramPostEngagementSelect = {
   formattedText: true,
   hasMedia: true,
   mediaKind: true,
+  imageUrls: true,
   postDate: true,
   viewsCount: true,
   forwardsCount: true,
@@ -28,6 +29,7 @@ export type TelegramPostEngagementRow = {
   formattedText: string | null;
   hasMedia: boolean;
   mediaKind: string | null;
+  imageUrls: string[];
   postDate: Date;
   viewsCount: number | null;
   forwardsCount: number | null;

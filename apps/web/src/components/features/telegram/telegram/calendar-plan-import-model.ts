@@ -122,15 +122,3 @@ function localDateKey(date: Date) {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
-
-export function calendarPlanGptPrompt(posts: PlanPost[], timezone: string) {
-  return [
-    "Return only a JSON array with a Telegram publishing plan.",
-    `Timezone: ${timezone}. Use ISO scheduledAt with an explicit UTC offset.`,
-    'Schema: [{"postId":"post id","scheduledAt":"2030-01-15T10:00:00+01:00"}]',
-    "Use each post no more than once and each publishing time no more than once.",
-    "Available posts:",
-    ...posts.map((post) => `- ${post.id}: ${post.title}`),
-    "Do not include markdown fences or commentary.",
-  ].join("\n");
-}

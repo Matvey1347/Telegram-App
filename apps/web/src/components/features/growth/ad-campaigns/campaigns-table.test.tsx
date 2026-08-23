@@ -34,6 +34,35 @@ function renderTable(campaigns: AdCampaign[]) {
 }
 
 describe("AdCampaignsTable admission view analytics", () => {
+  it("compares CPA with KPI in the channel currency and renders only that currency", () => {
+    renderTable([
+      campaign({
+        price: 11_400,
+        priceInPrimaryCurrency: 255.29,
+        currency: "UAH",
+        telegramChannel: {
+          id: "channel-1",
+          title: "Channel",
+          kpiCurrency: "UAH",
+          targetCpa: 9,
+          stopCpaFrom: 12,
+        } as AdCampaign["telegramChannel"],
+        inviteLinks: [
+          {
+            id: "link-1",
+            joinedCount: 0,
+            requestedCount: 281,
+          } as NonNullable<AdCampaign["inviteLinks"]>[number],
+        ],
+      }),
+    ]);
+
+    expect(screen.getByText("KPI missed")).toBeInTheDocument();
+    expect(screen.getByText(/11,400\.00 UAH/)).toBeInTheDocument();
+    expect(screen.getByText(/40\.57 UAH/)).toBeInTheDocument();
+    expect(screen.queryByText(/255\.29 USD/)).not.toBeInTheDocument();
+  });
+
   it("renders exact batch uplift, estimated active and activation", () => {
     renderTable([
       campaign({

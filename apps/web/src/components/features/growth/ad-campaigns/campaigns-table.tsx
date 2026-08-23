@@ -13,7 +13,7 @@ import {
   MetricPreviewLabel,
   resolveMetricPreviewIcon,
 } from "@/lib/metric-preview-icons";
-import { getMoneyPreview } from "@/lib/features/finance/money";
+import { convertMoney, formatMoney } from "@/lib/features/finance/money";
 import type {
   AdCampaign,
   AdCampaignKpiStatus,
@@ -73,21 +73,6 @@ function formatPercent(value: unknown, decimals = 1) {
   return `${formatMetric(value, decimals)}%`;
 }
 
-function moneyBreakdown(
-  amount: number | null,
-  currency: string,
-  moneySettings: any,
-  rates: any[] | undefined,
-) {
-  return getMoneyPreview({ amount, currency, settings: moneySettings, rates })
-    .map((item, index) => ({
-      currency: item.currency,
-      label: item.amount == null ? null : `${index === 0 ? "" : "≈ "}${item.label}`,
-      isMain: index === 0,
-    }))
-    .filter((item) => item.label != null);
-}
-
 function numberOrNull(value: unknown) {
   if (value == null) return null;
   const parsed = Number(value);
@@ -121,6 +106,11 @@ function calculatedKpiStatus(
   ) {
     return "unknown";
   }
+  if (target != null || stopFrom != null) {
+    if (target != null && value <= target) return "good";
+    if (stopFrom != null && value >= stopFrom) return "bad";
+    if (target != null && stopFrom != null) return "acceptable";
+  }
   if (isInRange(value, targetFrom, target)) return "good";
   if (isInRange(value, acceptableFrom, acceptable)) return "acceptable";
   if (isInRange(value, stopFrom, null)) return "bad";
@@ -129,11 +119,15 @@ function calculatedKpiStatus(
 
 function effectiveCampaignKpiStatus(
   campaign: AdCampaign,
-  primaryCostPerJoined: number | null,
   costPerJoined: number | null,
+  rates: any[] | undefined,
 ): AdCampaignKpiStatus {
+  const kpiCurrency = campaign.telegramChannel?.kpiCurrency;
+  const cpaInKpiCurrency = kpiCurrency
+    ? convertMoney(costPerJoined, campaign.currency, kpiCurrency, rates)
+    : costPerJoined;
   return calculatedKpiStatus(
-    primaryCostPerJoined ?? costPerJoined,
+    cpaInKpiCurrency,
     campaign.telegramChannel,
   );
 }
@@ -271,22 +265,6 @@ function kpiStatusTitle(status?: AdCampaignKpiStatus | null) {
   return "KPI range or enough CPA data is missing.";
 }
 
-function formatKpiRange(
-  from?: number | string | null,
-  to?: number | string | null,
-  openEnded = false,
-) {
-  const fromValue = numberOrNull(from);
-  const toValue = numberOrNull(to);
-  if (openEnded && fromValue != null) return `${formatMetric(fromValue, 2)}+`;
-  if (fromValue != null && toValue != null) {
-    return `${formatMetric(fromValue, 2)}-${formatMetric(toValue, 2)}`;
-  }
-  if (fromValue != null) return `${formatMetric(fromValue, 2)}+`;
-  if (toValue != null) return `≤${formatMetric(toValue, 2)}`;
-  return "-";
-}
-
 function hypothesisStatusClass(status?: string) {
   if (status === "winner") return "border-emerald-700 text-emerald-200";
   if (status === "loser") return "border-rose-700 text-rose-200";
@@ -412,28 +390,28 @@ function KpiTooltip({
   left: number;
   top: number;
 }) {
+  const currency = channel.kpiCurrency || channel.adBaseCurrency || "USD";
+  const goodTo = numberOrNull(channel.targetCpa);
+  const stopFrom =
+    numberOrNull(channel.stopCpaFrom) ?? numberOrNull(channel.stopCpa);
   return (
     <div
       className="fixed z-[80] rounded-lg border border-slate-700 bg-neutral-950 px-3 py-2 shadow-2xl"
       style={{ left, top, width: 430 }}
     >
       <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-        <span className="text-white">KPI $:</span>
+        <span className="text-white">KPI ({currency}):</span>
         <KpiRangeChip
           tone="target"
-          label={`target ${formatKpiRange(channel.targetCpaFrom, channel.targetCpa)}`}
+          label={`target ${goodTo == null ? "-" : `to ${formatMetric(goodTo, 2)} ${currency}`}`}
         />
         <KpiRangeChip
           tone="ok"
-          label={`ok ${formatKpiRange(channel.acceptableCpaFrom, channel.acceptableCpa)}`}
+          label={`ok ${goodTo != null && stopFrom != null ? `${formatMetric(goodTo, 2)}-${formatMetric(stopFrom, 2)} ${currency}` : "-"}`}
         />
         <KpiRangeChip
           tone="stop"
-          label={`stop ${formatKpiRange(
-            channel.stopCpaFrom ?? channel.stopCpa,
-            null,
-            true,
-          )}`}
+          label={`stop ${stopFrom == null ? "-" : `from ${formatMetric(stopFrom, 2)} ${currency}`}`}
         />
       </div>
     </div>
@@ -473,7 +451,6 @@ function PerformanceCell({
   attributed,
   left,
   moneySettings,
-  rates,
   kpiStatus,
   metrics,
   onShowKpiTooltip,
@@ -492,7 +469,6 @@ function PerformanceCell({
   attributed: number;
   left: number;
   moneySettings: any;
-  rates: any[] | undefined;
   kpiStatus: AdCampaignKpiStatus;
   metrics: Array<{ label: string; value: string }>;
   onShowKpiTooltip: (channel: TelegramChannel | undefined, element: HTMLElement) => void;
@@ -535,20 +511,7 @@ function PerformanceCell({
     peakPrimaryCostPerJoined != null &&
     primaryCostPerJoined != null &&
     Math.abs(peakPrimaryCostPerJoined - primaryCostPerJoined) >= 0.005;
-  const spendBreakdown = moneyBreakdown(cost, currency, moneySettings, rates);
-  const cpaBreakdown =
-    costPerJoined != null
-      ? moneyBreakdown(costPerJoined, currency, moneySettings, rates)
-      : [];
-  const peakCpaBreakdown =
-    peakCostPerJoined != null
-      ? moneyBreakdown(
-          peakCostPerJoined,
-          currency,
-          moneySettings,
-          rates,
-        )
-      : [];
+  const displayMode = moneySettings?.currencyDisplayMode ?? "code";
 
   return (
     <div className={`rounded-xl border p-3 ${cardClass}`}>
@@ -567,20 +530,12 @@ function PerformanceCell({
       </div>
       <div className="grid grid-cols-[minmax(90px,1fr)_minmax(70px,0.7fr)_minmax(80px,0.8fr)] gap-3">
         <div>
-          <MetricPreviewLabel
-            label="Spend"
-            className="mb-1 text-[10px] uppercase tracking-wide text-slate-500"
-          />
-          <div>
-            <p className="font-semibold leading-snug text-white">
-              {spendBreakdown[0]?.label ?? "-"}
-            </p>
-            <div className="text-xs leading-snug text-slate-500">
-              {spendBreakdown.slice(1).map((item) => (
-                <div key={item.currency}>{item.label}</div>
-              ))}
-            </div>
-          </div>
+          <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">
+            Spend
+          </p>
+          <p className="font-semibold leading-snug text-white">
+            {formatMoney(cost, currency, displayMode)}
+          </p>
         </div>
         <div>
           <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">
@@ -598,23 +553,16 @@ function PerformanceCell({
           <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">
             CPA
           </p>
-          {cpaBreakdown.length ? (
-            <div>
-              <p className={`font-semibold leading-snug ${kpiTextClass}`}>
-                {cpaBreakdown[0]?.label ?? "-"}
-              </p>
-              <div className="text-xs leading-snug text-slate-500">
-                {cpaBreakdown.slice(1).map((item) => (
-                  <div key={item.currency}>{item.label}</div>
-                ))}
-              </div>
-            </div>
+          {costPerJoined != null ? (
+            <p className={`font-semibold leading-snug ${kpiTextClass}`}>
+              {formatMoney(costPerJoined, currency, displayMode)}
+            </p>
           ) : (
             <p className="text-slate-500">-</p>
           )}
           {showPeakCost ? (
             <div className="mt-1 space-y-0.5 text-xs leading-snug text-slate-500">
-              <p>Peak {peakCpaBreakdown[0]?.label ?? "-"}</p>
+              <p>Peak {formatMoney(peakCostPerJoined, currency, displayMode)}</p>
             </div>
           ) : null}
         </div>
@@ -1103,8 +1051,8 @@ export function AdCampaignsTable({
         const metrics = campaignMetrics(campaign);
         const kpiStatus = effectiveCampaignKpiStatus(
           campaign,
-          primaryCostPerJoined,
           costPerJoined,
+          rates,
         );
         return {
           campaign,
@@ -1121,7 +1069,7 @@ export function AdCampaignsTable({
           kpiStatus,
         };
       }),
-    [campaigns],
+    [campaigns, rates],
   );
 
   const showKpiTooltip = (
@@ -1224,7 +1172,6 @@ export function AdCampaignsTable({
                     attributed={row.attributed}
                     left={row.left}
                     moneySettings={moneySettings}
-                    rates={rates}
                     kpiStatus={row.kpiStatus}
                     metrics={row.metrics}
                     onShowKpiTooltip={showKpiTooltip}

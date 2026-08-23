@@ -161,7 +161,7 @@ export class DeepSyncDto {
 
 export class SyncPostsMetricsDto {
   @IsOptional() @IsString() telegramUserAccountId?: string;
-  @IsOptional() @Type(() => Number) @IsInt() postLimit?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) postLimit?: number;
 }
 
 export class SyncChannelStatsDto {

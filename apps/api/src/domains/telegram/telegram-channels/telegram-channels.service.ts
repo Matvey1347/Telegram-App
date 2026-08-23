@@ -98,7 +98,6 @@ export class TelegramChannelsService {
   syncHistorical: TelegramChannelHistoricalSyncService['syncHistorical'];
   syncPostsMetrics: TelegramPostMetricsService['syncPostsMetrics'];
   syncPostsMetricsForWorkspace: TelegramPostMetricsService['syncPostsMetricsForWorkspace'];
-  telegramPostMedia: TelegramPostMetricsService['telegramPostMedia'];
   exportChannelWorkbook: TelegramChannelWorkbookExportService['exportChannelWorkbook'];
   syncBroadcastStats: TelegramBroadcastStatsService['syncBroadcastStats'];
   syncBroadcastStatsForWorkspace: TelegramBroadcastStatsService['syncBroadcastStatsForWorkspace'];
@@ -232,7 +231,6 @@ export class TelegramChannelsService {
     this.syncPostsMetrics = metrics.syncPostsMetrics.bind(metrics);
     this.syncPostsMetricsForWorkspace =
       metrics.syncPostsMetricsForWorkspace.bind(metrics);
-    this.telegramPostMedia = metrics.telegramPostMedia.bind(metrics);
     this.exportChannelWorkbook = workbook.exportChannelWorkbook.bind(workbook);
     this.syncBroadcastStats = stats.syncBroadcastStats.bind(stats);
     this.syncBroadcastStatsForWorkspace =

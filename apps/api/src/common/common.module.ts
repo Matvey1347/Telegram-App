@@ -6,6 +6,7 @@ import { WorkspaceService } from './workspace.service';
 import { ResponseCacheService } from './response-cache.service';
 import { RequestContextModule } from './request-context/request-context.module';
 import { MemoryMonitorService } from './observability/memory-monitor.service';
+import { B2ObjectStorageService } from './object-storage/b2-object-storage.service';
 
 @Global()
 @Module({
@@ -17,6 +18,7 @@ import { MemoryMonitorService } from './observability/memory-monitor.service';
     SchemaBootstrapService,
     ResponseCacheService,
     MemoryMonitorService,
+    B2ObjectStorageService,
   ],
   exports: [
     WorkspaceService,
@@ -24,6 +26,7 @@ import { MemoryMonitorService } from './observability/memory-monitor.service';
     TokenEncryptionService,
     ResponseCacheService,
     MemoryMonitorService,
+    B2ObjectStorageService,
   ],
 })
 export class CommonModule {}

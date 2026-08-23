@@ -147,7 +147,7 @@ describe('TelegramChannelsService syncManagedPosts', () => {
       getScheduledHistory: jest
         .fn()
         .mockResolvedValue(remote?.scheduledHistory ?? []),
-      downloadChannelMessageMedia: jest.fn().mockResolvedValue(null),
+      downloadChannelMessagesMedia: jest.fn().mockResolvedValue([]),
     };
     const service = createTelegramChannelsTestHarness(
       prisma as never,
@@ -463,12 +463,22 @@ describe('TelegramChannelsService syncManagedPosts', () => {
         ],
       },
     );
-    service['mtprotoClient'].downloadChannelMessageMedia = jest
+    service['mtprotoClient'].downloadChannelMessagesMedia = jest
       .fn()
-      .mockResolvedValue({
-        buffer: Buffer.from('image-bytes'),
-        mimeType: 'image/jpeg',
-      });
+      .mockResolvedValue([
+        {
+          messageId: '41',
+          buffer: Buffer.from('image-bytes'),
+          mimeType: 'image/jpeg',
+        },
+      ]);
+    service['objectStorage'] = {
+      persistImmutableImages: jest.fn().mockResolvedValue({
+        urls: ['https://cdn.test/image.jpg'],
+        uploaded: 1,
+        reused: 0,
+      }),
+    };
 
     const result = await service.syncManagedPosts('user', 'channel');
 
@@ -476,7 +486,7 @@ describe('TelegramChannelsService syncManagedPosts', () => {
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          imageUrls: ['data:image/jpeg;base64,aW1hZ2UtYnl0ZXM='],
+          imageUrls: ['https://cdn.test/image.jpg'],
         }),
       }),
     );
@@ -644,11 +654,9 @@ describe('TelegramChannelsService syncManagedPosts', () => {
         ]),
         create,
         count: jest.fn().mockResolvedValue(1),
-        findFirst: jest
-          .fn()
-          .mockResolvedValue({
-            scheduledAt: new Date('2026-07-26T10:09:00.000Z'),
-          }),
+        findFirst: jest.fn().mockResolvedValue({
+          scheduledAt: new Date('2026-07-26T10:09:00.000Z'),
+        }),
       },
       telegramChannel: {
         findFirst: jest
@@ -742,11 +750,9 @@ describe('TelegramChannelsService syncManagedPosts', () => {
           },
         ]),
         count: jest.fn().mockResolvedValue(1),
-        findFirst: jest
-          .fn()
-          .mockResolvedValue({
-            scheduledAt: new Date('2026-07-28T17:15:00.000Z'),
-          }),
+        findFirst: jest.fn().mockResolvedValue({
+          scheduledAt: new Date('2026-07-28T17:15:00.000Z'),
+        }),
       },
       telegramChannel: {
         findFirst: jest

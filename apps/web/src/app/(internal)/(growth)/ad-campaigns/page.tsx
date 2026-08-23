@@ -43,8 +43,9 @@ import { accountKeys, adCampaignKeys, dashboardKeys } from '@/lib/query-keys';
 import { MoneyStack } from '@/components/ui/money-stack';
 import { Button, Card, ConfirmDeleteModal, CustomSelect, DateInput, DateRangeInput, EmptyState, FormField, IconButton, Input, LoadingState, Modal, PageHeader, Select, Textarea, TooltipBubble } from '@/components/ui/primitives';
 import { useAppToast } from '@/providers/toast-provider';
-import { CircleHelp, CircleMinus, TrendingUp } from 'lucide-react';
+import { CircleHelp, TrendingUp } from 'lucide-react';
 import { accountDisplayName } from '@/lib/features/finance/account-display';
+import { NativeMoney } from '@/components/ui/native-money';
 
 type CampaignValues = {
   telegramChannelId: string;
@@ -662,6 +663,11 @@ function calculatedKpiStatus(value: number | null, channel?: AdCampaign['telegra
     acceptable == null &&
     stopFrom == null
   ) return 'unknown';
+  if (target != null || stopFrom != null) {
+    if (target != null && value <= target) return 'good';
+    if (stopFrom != null && value >= stopFrom) return 'bad';
+    if (target != null && stopFrom != null) return 'acceptable';
+  }
   if (isInRange(value, targetFrom, target)) return 'good';
   if (isInRange(value, acceptableFrom, acceptable)) return 'acceptable';
   if (isInRange(value, stopFrom, null)) return 'bad';
@@ -999,8 +1005,8 @@ function PerformanceCell({
       </div>
       <div className="grid grid-cols-[minmax(90px,1fr)_minmax(70px,0.7fr)_minmax(80px,0.8fr)] gap-3">
         <div>
-          <p className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-wide text-slate-500"><CircleMinus size={12} className="text-rose-400" aria-hidden="true" />Spend</p>
-          <MoneyStack amount={cost} currency={currency} settings={moneySettings} rates={rates} amountInPrimary={primaryCost} mainClassName="font-semibold leading-snug text-white" subClassName="text-xs leading-snug text-slate-500" />
+          <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">Spend</p>
+          <NativeMoney amount={cost} currency={currency} displayMode={moneySettings?.currencyDisplayMode} className="font-semibold leading-snug text-white" />
         </div>
         <div>
           <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">Joined</p>
@@ -1010,7 +1016,7 @@ function PerformanceCell({
         <div>
           <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">CPA</p>
           {costPerJoined !== null ? (
-            <MoneyStack amount={costPerJoined} currency={currency} settings={moneySettings} rates={rates} amountInPrimary={primaryCostPerJoined} mainClassName={`font-semibold leading-snug ${kpiTextClass}`} subClassName="text-xs leading-snug text-slate-500" />
+            <NativeMoney amount={costPerJoined} currency={currency} displayMode={moneySettings?.currencyDisplayMode} className={`font-semibold leading-snug ${kpiTextClass}`} />
           ) : <p className="text-slate-500">-</p>}
         </div>
       </div>
@@ -1502,16 +1508,8 @@ function HypothesesSection({
                       </div>
                       <div className="grid grid-cols-[minmax(90px,1fr)_minmax(80px,0.75fr)_minmax(80px,0.85fr)] gap-3">
                         <div>
-                          <p className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-wide text-slate-500"><CircleMinus size={12} className="text-rose-400" aria-hidden="true" />Spend</p>
-                          <MoneyStack
-                            amount={hypothesis.summary?.totalSpendDisplay ?? hypothesis.summary?.totalSpend}
-                            currency={hypothesis.summary?.displayCurrency ?? moneySettings.primaryCurrency}
-                            settings={moneySettings}
-                            rates={rates}
-                            amountInPrimary={hypothesis.summary?.totalSpend}
-                            mainClassName="font-semibold leading-snug text-white"
-                            subClassName="text-xs leading-snug text-slate-500"
-                          />
+                          <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">Spend</p>
+                          <NativeMoney amount={hypothesis.summary?.totalSpendDisplay ?? hypothesis.summary?.totalSpend} currency={hypothesis.summary?.displayCurrency ?? moneySettings.primaryCurrency} displayMode={moneySettings.currencyDisplayMode} className="font-semibold leading-snug text-white" />
                         </div>
                         <div>
                           <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">Attributed</p>
@@ -1525,15 +1523,7 @@ function HypothesesSection({
                         </div>
                         <div>
                           <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">CPA</p>
-                          <MoneyStack
-                            amount={hypothesis.summary?.avgCpaDisplay ?? hypothesis.summary?.avgCpa}
-                            currency={hypothesis.summary?.displayCurrency ?? moneySettings.primaryCurrency}
-                            settings={moneySettings}
-                            rates={rates}
-                            amountInPrimary={hypothesis.summary?.avgCpa}
-                            mainClassName={`font-semibold leading-snug ${kpiMetricTextClass(hypothesis.summary?.kpiStatus)}`}
-                            subClassName="text-xs leading-snug text-slate-500"
-                          />
+                          <NativeMoney amount={hypothesis.summary?.avgCpaDisplay ?? hypothesis.summary?.avgCpa} currency={hypothesis.summary?.displayCurrency ?? moneySettings.primaryCurrency} displayMode={moneySettings.currencyDisplayMode} className={`font-semibold leading-snug ${kpiMetricTextClass(hypothesis.summary?.kpiStatus)}`} />
                         </div>
                       </div>
                       <div className="mt-3">
