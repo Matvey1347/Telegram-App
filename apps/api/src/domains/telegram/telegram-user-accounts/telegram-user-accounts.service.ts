@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   NotFoundException,
@@ -17,6 +19,7 @@ import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto
 import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
 import { normalizeTelegramChannelId } from '../../../telegram/shared/telegram-post-url';
 import {
+  getTelegramFloodWaitSeconds,
   isRevokedTelegramSessionError,
   isTelegramSendCodeUnavailableError,
   REVOKED_TELEGRAM_SESSION_MESSAGE,
@@ -592,6 +595,19 @@ export class TelegramUserAccountsService {
         dto.delivery === 'SMS',
       );
     } catch (error) {
+      const retryAfterSeconds = getTelegramFloodWaitSeconds(error);
+      if (retryAfterSeconds != null) {
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.TOO_MANY_REQUESTS,
+            error: 'Too Many Requests',
+            message: `Telegram rate limit reached. Try again in ${retryAfterSeconds} seconds.`,
+            code: 'TELEGRAM_FLOOD_WAIT',
+            details: { retryAfterSeconds },
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
       if (isTelegramSendCodeUnavailableError(error)) {
         smsUnavailable = true;
         started = await this.mtprotoClient.startLogin(

@@ -40,6 +40,7 @@ import {
   maskTelegramInviteHash,
   maskTelegramReferenceForLog,
 } from './telegram-invite-log';
+import { getTelegramFloodWaitSeconds } from './telegram-session-errors';
 
 type ApiCredentials = { apiId: string; apiHash: string };
 type SessionParams = ApiCredentials & { session?: string };
@@ -894,9 +895,7 @@ export class TelegramMtprotoClient {
   private normalizeBroadcastStatsError(error: unknown) {
     const errorCode = this.getTelegramErrorCode(error);
     const migrationDc = this.getMigrationDc(error);
-    const floodWaitSeconds = this.toFiniteNumber(
-      this.getErrorProperty(error, 'seconds'),
-    );
+    const floodWaitSeconds = getTelegramFloodWaitSeconds(error);
     if (floodWaitSeconds != null || errorCode.includes('FLOOD_WAIT')) {
       return {
         status: 'flood_wait',

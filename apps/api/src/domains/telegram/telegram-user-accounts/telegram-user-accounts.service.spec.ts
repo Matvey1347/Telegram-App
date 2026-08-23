@@ -1,3 +1,4 @@
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { TelegramUserAccountStatus } from '@prisma/client';
 import { TelegramUserAccountsService } from './telegram-user-accounts.service';
 import { REVOKED_TELEGRAM_SESSION_MESSAGE } from '../../../telegram/shared/telegram-session-errors';
@@ -136,6 +137,68 @@ describe('TelegramUserAccountsService account checks', () => {
         }),
       }),
     );
+  });
+
+  it('returns a retryable client error when Telegram rate-limits login codes', async () => {
+    const account = {
+      id: 'account-1',
+      workspaceId: 'workspace-1',
+      apiId: '123',
+      apiHashEncrypted: 'hash',
+      apiHashIv: 'hash-iv',
+      apiHashAuthTag: 'hash-tag',
+      phoneEncrypted: 'phone',
+      phoneIv: 'phone-iv',
+      phoneAuthTag: 'phone-tag',
+    };
+    const update = jest.fn();
+    const prisma = {
+      telegramUserAccountIntegration: {
+        findFirst: jest.fn().mockResolvedValue(account),
+        update,
+      },
+    };
+    const startLogin = jest
+      .fn()
+      .mockRejectedValue(
+        Object.assign(
+          new Error(
+            'A wait of 117 seconds is required (caused by auth.SendCode)',
+          ),
+          { seconds: 117 },
+        ),
+      );
+    const service = new TelegramUserAccountsService(
+      prisma as never,
+      {
+        resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
+      } as never,
+      { decrypt: jest.fn().mockReturnValue('decrypted') } as never,
+      { startLogin } as never,
+      {} as never,
+      { get: jest.fn() } as never,
+      {} as never,
+      {} as never,
+      { writeStructured: jest.fn() } as never,
+    );
+
+    try {
+      await service.startLogin('user-1', account.id, { delivery: 'APP' });
+      throw new Error('Expected a rate-limit exception');
+    } catch (error) {
+      expect(error).toBeInstanceOf(HttpException);
+      const exception = error as HttpException;
+      expect(exception.getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS);
+      expect(exception.getResponse()).toEqual({
+        statusCode: HttpStatus.TOO_MANY_REQUESTS,
+        error: 'Too Many Requests',
+        message: 'Telegram rate limit reached. Try again in 117 seconds.',
+        code: 'TELEGRAM_FLOOD_WAIT',
+        details: { retryAfterSeconds: 117 },
+      });
+    }
+
+    expect(update).not.toHaveBeenCalled();
   });
 
   it('marks a revoked Telegram session as error instead of leaving it connected', async () => {
