@@ -1,10 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { TelegramAdSale } from "@telegram-system/shared";
 import type { Account } from "@/lib/api";
-import { Button, FormField, Input, Modal, Select, Textarea } from "@/components/ui/primitives";
-import { autoAllocatePayment, toNumber } from "@/lib/features/growth/telegram-ad-sales";
+import {
+  Button,
+  FormField,
+  Input,
+  Modal,
+  Select,
+  Textarea,
+} from "@/components/ui/primitives";
+import {
+  autoAllocatePayment,
+  toNumber,
+} from "@/lib/features/growth/telegram-ad-sales";
 
 type AllocationState = Record<string, string>;
 
@@ -19,7 +29,7 @@ export function RegisterPaymentModal({
 }: {
   open: boolean;
   onClose: () => void;
-  sale: TelegramAdSale | null;
+  sale: TelegramAdSale;
   accounts: Account[];
   defaultCurrency: string;
   onSubmit: (payload: {
@@ -32,36 +42,38 @@ export function RegisterPaymentModal({
   }) => Promise<void>;
   busy?: boolean;
 }) {
-  const [accountId, setAccountId] = useState("");
-  const [amount, setAmount] = useState("");
-  const [currency, setCurrency] = useState(defaultCurrency);
-  const [paidAt, setPaidAt] = useState("");
+  const preferredAccount = accounts.find((account) => account.isActive);
+  const initialAmount = toNumber(
+    sale.outstandingAmount || sale.totalAgreedAmount,
+  );
+  const initialAllocation = autoAllocatePayment({
+    amount: initialAmount,
+    placements: sale.placements.map((placement) => ({
+      id: placement.id,
+      agreedPrice: placement.agreedPrice,
+      paidAllocatedAmount: placement.paidAllocatedAmount,
+    })),
+  });
+  const [accountId, setAccountId] = useState(preferredAccount?.id ?? "");
+  const [amount, setAmount] = useState(
+    initialAmount ? String(initialAmount) : "",
+  );
+  const [currency, setCurrency] = useState(
+    preferredAccount?.currency ?? defaultCurrency,
+  );
+  const [paidAt, setPaidAt] = useState(() =>
+    new Date().toISOString().slice(0, 16),
+  );
   const [notes, setNotes] = useState("");
-  const [allocationState, setAllocationState] = useState<AllocationState>({});
-
-  useEffect(() => {
-    if (!open || !sale) return;
-    const preferredAccount = accounts.find((account) => account.isActive);
-    setAccountId(preferredAccount?.id ?? "");
-    setCurrency(preferredAccount?.currency ?? defaultCurrency);
-    setPaidAt(new Date().toISOString().slice(0, 16));
-    setNotes("");
-    const amountValue = toNumber(sale.outstandingAmount || sale.totalAgreedAmount);
-    setAmount(amountValue ? String(amountValue) : "");
-    const allocation = autoAllocatePayment({
-      amount: amountValue,
-      placements: sale.placements.map((placement) => ({
-        id: placement.id,
-        agreedPrice: placement.agreedPrice,
-        paidAllocatedAmount: placement.paidAllocatedAmount,
-      })),
-    });
-    setAllocationState(
-      Object.fromEntries(
-        allocation.allocations.map((item) => [item.placementId, String(item.amount)]),
-      ),
-    );
-  }, [accounts, defaultCurrency, open, sale]);
+  const [submitting, setSubmitting] = useState(false);
+  const [allocationState, setAllocationState] = useState<AllocationState>(() =>
+    Object.fromEntries(
+      initialAllocation.allocations.map((item) => [
+        item.placementId,
+        String(item.amount),
+      ]),
+    ),
+  );
 
   const allocations = useMemo(
     () =>
@@ -73,13 +85,17 @@ export function RegisterPaymentModal({
   );
 
   const allocatedTotal = useMemo(
-    () => Number(allocations.reduce((sum, item) => sum + item.amount, 0).toFixed(2)),
+    () =>
+      Number(
+        allocations.reduce((sum, item) => sum + item.amount, 0).toFixed(2),
+      ),
     [allocations],
   );
   const enteredAmount = toNumber(amount);
-  const unallocated = Number(Math.max(0, enteredAmount - allocatedTotal).toFixed(2));
-
-  if (!sale) return null;
+  const isBusy = busy || submitting;
+  const unallocated = Number(
+    Math.max(0, enteredAmount - allocatedTotal).toFixed(2),
+  );
 
   return (
     <Modal open={open} onClose={onClose} title="Register payment" size="xl">
@@ -92,7 +108,9 @@ export function RegisterPaymentModal({
                 onChange={(event) => {
                   const nextAccountId = event.target.value;
                   setAccountId(nextAccountId);
-                  const account = accounts.find((item) => item.id === nextAccountId);
+                  const account = accounts.find(
+                    (item) => item.id === nextAccountId,
+                  );
                   if (account) setCurrency(account.currency);
                 }}
               >
@@ -105,10 +123,19 @@ export function RegisterPaymentModal({
               </Select>
             </FormField>
             <FormField label="Amount">
-              <Input value={amount} onChange={(event) => setAmount(event.target.value)} />
+              <Input
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+              />
             </FormField>
             <FormField label="Currency">
-              <Input value={currency} onChange={(event) => setCurrency(event.target.value.toUpperCase())} maxLength={3} />
+              <Input
+                value={currency}
+                onChange={(event) =>
+                  setCurrency(event.target.value.toUpperCase())
+                }
+                maxLength={3}
+              />
             </FormField>
             <FormField label="Paid at">
               <Input
@@ -119,14 +146,19 @@ export function RegisterPaymentModal({
             </FormField>
           </div>
           <FormField label="Notes">
-            <Textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} />
+            <Textarea
+              rows={3}
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+            />
           </FormField>
 
           <div className="rounded-xl border border-neutral-800 bg-neutral-950/70">
             <div className="border-b border-neutral-800 px-4 py-3">
               <h4 className="font-medium text-white">Allocations</h4>
               <p className="mt-1 text-xs text-neutral-400">
-                Auto-filled from unpaid placements. You can adjust per placement.
+                Auto-filled from unpaid placements. You can adjust per
+                placement.
               </p>
             </div>
             <div className="divide-y divide-neutral-800">
@@ -136,16 +168,20 @@ export function RegisterPaymentModal({
                   className="grid gap-3 px-4 py-3 md:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr]"
                 >
                   <div>
-                    <p className="font-medium text-white">{placement.telegramChannelId}</p>
+                    <p className="font-medium text-white">
+                      {placement.telegramChannelId}
+                    </p>
                     <p className="text-xs text-neutral-500">
-                      {new Date(placement.scheduledAt).toLocaleString()} · {placement.status}
+                      {new Date(placement.scheduledAt).toLocaleString()} ·{" "}
+                      {placement.status}
                     </p>
                   </div>
                   <div className="text-sm text-neutral-300">
                     Agreed {placement.agreedPrice} {placement.currency}
                   </div>
                   <div className="text-sm text-neutral-300">
-                    Paid {placement.paidAllocatedAmount || "0"} {placement.currency}
+                    Paid {placement.paidAllocatedAmount || "0"}{" "}
+                    {placement.currency}
                   </div>
                   <Input
                     value={allocationState[placement.id] ?? ""}
@@ -169,15 +205,23 @@ export function RegisterPaymentModal({
             <dl className="mt-3 space-y-2 text-sm">
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-neutral-400">Payment amount</dt>
-                <dd className="text-white">{enteredAmount || 0} {currency}</dd>
+                <dd className="text-white">
+                  {enteredAmount || 0} {currency}
+                </dd>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-neutral-400">Allocated</dt>
-                <dd className="text-white">{allocatedTotal} {currency}</dd>
+                <dd className="text-white">
+                  {allocatedTotal} {currency}
+                </dd>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-neutral-400">Unallocated</dt>
-                <dd className={unallocated > 0 ? "text-amber-300" : "text-emerald-300"}>
+                <dd
+                  className={
+                    unallocated > 0 ? "text-amber-300" : "text-emerald-300"
+                  }
+                >
                   {unallocated} {currency}
                 </dd>
               </div>
@@ -191,35 +235,40 @@ export function RegisterPaymentModal({
           </div>
 
           <div className="rounded-xl border border-dashed border-neutral-700 bg-neutral-950/50 p-4 text-sm text-neutral-400">
-            Exchange rate preview uses backend settlement logic after save. The client only shows
-            amount split and unallocated remainder.
+            Exchange rate preview uses backend settlement logic after save. The
+            client only shows amount split and unallocated remainder.
           </div>
         </div>
       </div>
 
       <div className="mt-5 flex justify-end gap-2">
-        <Button variant="secondary" onClick={onClose} disabled={busy}>
+        <Button variant="secondary" onClick={onClose} disabled={isBusy}>
           Cancel
         </Button>
         <Button
           onClick={async () => {
-            await onSubmit({
-              accountId,
-              amount: enteredAmount,
-              currency,
-              paidAt: new Date(paidAt).toISOString(),
-              notes: notes.trim() || undefined,
-              allocations: allocations
-                .filter((item) => item.amount > 0)
-                .map((item) => ({
-                  placementId: item.placement.id,
-                  amount: item.amount,
-                })),
-            });
+            setSubmitting(true);
+            try {
+              await onSubmit({
+                accountId,
+                amount: enteredAmount,
+                currency,
+                paidAt: new Date(paidAt).toISOString(),
+                notes: notes.trim() || undefined,
+                allocations: allocations
+                  .filter((item) => item.amount > 0)
+                  .map((item) => ({
+                    placementId: item.placement.id,
+                    amount: item.amount,
+                  })),
+              });
+            } finally {
+              setSubmitting(false);
+            }
           }}
-          disabled={busy || !accountId || enteredAmount <= 0}
+          disabled={isBusy || !accountId || enteredAmount <= 0}
         >
-          Save payment
+          {isBusy ? "Saving..." : "Save payment"}
         </Button>
       </div>
     </Modal>

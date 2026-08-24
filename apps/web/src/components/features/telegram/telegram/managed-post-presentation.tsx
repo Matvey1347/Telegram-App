@@ -9,6 +9,43 @@ import type { TelegramManagedPost } from "@/lib/api";
 
 export type LongTextMode = "IMAGES_THEN_TEXT" | "CAPTION_THEN_TEXT";
 
+export function managedPostScheduleUnchanged(
+  post:
+    | Pick<TelegramManagedPost, "status" | "scheduledAt">
+    | null
+    | undefined,
+  nextScheduledAt: string,
+) {
+  if (post?.status !== "SCHEDULED" || !post.scheduledAt) return false;
+  const currentTimestamp = Date.parse(post.scheduledAt);
+  const nextTimestamp = Date.parse(nextScheduledAt);
+  return (
+    Number.isFinite(currentTimestamp) &&
+    Number.isFinite(nextTimestamp) &&
+    currentTimestamp === nextTimestamp
+  );
+}
+
+export function managedPostScheduleUi({
+  title = "Post",
+  scheduleMode,
+  hasInlineButtons = false,
+}: {
+  title?: string;
+  scheduleMode?: TelegramManagedPost["scheduleMode"];
+  hasInlineButtons?: boolean;
+}) {
+  return {
+    label: hasInlineButtons
+      ? "Schedule via Nexeloq"
+      : "Schedule in Telegram",
+    message:
+      scheduleMode === "LOCAL"
+        ? `"${title}" scheduled for automatic publishing by Telegram System. Inline buttons require system delivery, so the post will appear in Telegram at publication time, not in Telegram Scheduled Messages.`
+        : `"${title}" scheduled in Telegram.`,
+  };
+}
+
 export function LongImageTextModePanel({
   mode,
   onChange,

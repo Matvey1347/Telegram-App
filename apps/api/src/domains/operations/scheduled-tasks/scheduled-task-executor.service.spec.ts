@@ -45,6 +45,7 @@ describe('scheduled task registry executors', () => {
         checked: 3,
         verified: 2,
         missing: 1,
+        localDelivery: { considered: 2, published: 1, failed: 1 },
       }),
     };
     const services = new Map<unknown, unknown>([
@@ -97,6 +98,8 @@ describe('scheduled task registry executors', () => {
       await executor.executors['telegram.managed_posts.reconcile_due']();
     expect(managedPosts.reconcileAllDueManagedPosts).toHaveBeenCalledTimes(1);
     expect(result.summary).toContain('verified 2');
+    expect(result.summary).toContain('Published 1 locally scheduled');
+    expect(result.summary).toContain('1 failed');
   });
 
   it('processes a bounded greeter expiry batch', async () => {

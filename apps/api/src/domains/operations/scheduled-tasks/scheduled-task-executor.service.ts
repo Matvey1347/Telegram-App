@@ -27,7 +27,7 @@ export class ScheduledTaskExecutorService {
         await this.telegramManagedPostReconciliationService()
       ).reconcileAllDueManagedPosts();
       return {
-        summary: `Checked ${result.checked} due managed posts; verified ${result.verified}, missing ${result.missing}.`,
+        summary: `Published ${result.localDelivery.published} locally scheduled managed posts; ${result.localDelivery.failed} failed. Checked ${result.checked} identities; verified ${result.verified}, missing ${result.missing}.`,
       };
     },
     'telegram.channels.full_sync': (context: ScheduledTaskExecutionContext) =>

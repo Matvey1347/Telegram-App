@@ -70,7 +70,6 @@ import {
   type TelegramChannelNetwork,
 } from "@/lib/api";
 import {
-  autoAllocatePayment,
   buildAdCalendarSlots,
   buildUnderpricingSummary,
   channelLocalDateKey,
@@ -87,6 +86,7 @@ import { MetricPreviewLabel } from "@/lib/metric-preview-icons";
 import {
   invalidateTelegramAdSalesQueries,
   telegramAdSalesKeys,
+  upsertTelegramAdSaleInCache,
 } from "@/lib/features/growth/telegram-ad-sales-query";
 import { resolveAdSalesPreferenceSelection } from "@/lib/features/growth/ad-sales-preferences-hydration";
 import { useAppToast } from "@/providers/toast-provider";
@@ -381,7 +381,7 @@ export function AdSalesPage() {
   const [settingsChannelId, setSettingsChannelId] = useState("");
   const [adSaleSeedSlot, setAdSaleSeedSlot] =
     useState<TelegramAdAvailabilitySlot | null>(null);
-  const [paymentSaleId, setPaymentSaleId] = useState<string | null>(null);
+  const [paymentSale, setPaymentSale] = useState<TelegramAdSale | null>(null);
   const [postEditorPlacement, setPostEditorPlacement] = useState<{
     saleId: string;
     placementId: string;
@@ -927,7 +927,7 @@ export function AdSalesPage() {
     >[0],
   ) {
     const seedSlot = adSaleSeedSlot;
-    const sale = await telegramAdSalesApi.createSale(
+    const reserved = await telegramAdSalesApi.checkoutSale(
       {
         advertiserId: payload.advertiserId,
         createAdvertiser: payload.createAdvertiser,
@@ -937,94 +937,56 @@ export function AdSalesPage() {
         origin: payload.origin,
         settlementCurrency: payload.paymentCurrency,
         assignedMemberId: payload.assignedMemberId,
+        placements: payload.placements.map((placement) => ({
+          telegramChannelId: placement.channelId,
+          telegramAdProductId: placement.productId,
+          inventoryOpportunityKey: placement.inventoryOpportunityKey,
+          scheduledAt: placement.scheduledAt,
+          timezone: placement.timezone,
+          agreedPrice: placement.agreedPrice,
+          recommendedPrice: placement.recommendedPrice,
+          minimumPrice: placement.minimumPrice,
+          expectedViews: placement.expectedViews,
+          pricingMode: placement.pricingMode,
+          currency: payload.paymentCurrency,
+          manualPriceReason: placement.manualPriceReason,
+          telegramPostId: placement.telegramPostId,
+        })),
+        payment: {
+          accountId: payload.accountId,
+          amount: payload.paymentAmount,
+          currency: payload.paymentCurrency,
+          paidAt: new Date().toISOString(),
+          idempotencyKey: crypto.randomUUID(),
+        },
       },
       true,
     );
-
-    const createdPlacements = await Promise.all(
-      payload.placements.map(async (placement) => {
-        const created = await telegramAdSalesApi.addPlacement(
-          sale.id,
-          {
-            telegramChannelId: placement.channelId,
-            telegramAdProductId: placement.productId,
-            inventoryOpportunityKey: placement.inventoryOpportunityKey,
-            scheduledAt: placement.scheduledAt,
-            timezone: placement.timezone,
-            agreedPrice: placement.agreedPrice,
-            recommendedPrice: placement.recommendedPrice,
-            minimumPrice: placement.minimumPrice,
-            expectedViews: placement.expectedViews,
-            pricingMode: placement.pricingMode,
-            currency: payload.paymentCurrency,
-            manualPriceReason: placement.manualPriceReason,
-          },
-          true,
-        );
-        return { draft: placement, placement: created };
-      }),
-    );
-    const refreshed = await telegramAdSalesApi.getSale(sale.id);
     try {
       await Promise.all(
-        createdPlacements.flatMap(({ draft, placement }) => {
+        payload.placements.flatMap((draft, index) => {
+          const placement = reserved.placements[index];
+          if (!placement) return [];
           if (draft.managedPostDraft) {
             return [
               telegramAdSalesApi.createManagedPostFromPlacement(
-                sale.id,
+                reserved.id,
                 placement.id,
                 draft.managedPostDraft,
               ),
             ];
           }
-          return draft.telegramPostId
-            ? [
-                telegramAdSalesApi.attachManagedPost(
-                  sale.id,
-                  placement.id,
-                  { telegramPostId: draft.telegramPostId },
-                  true,
-                ),
-              ]
-            : [];
+          return [];
         }),
       );
-      const reserved = await telegramAdSalesApi.reserveSale(
-        sale.id,
-        {
-          placements: refreshed.placements.map((placement) => ({
-            placementId: placement.id,
-            scheduledAt: placement.scheduledAt,
-          })),
-        },
-        true,
-      );
       if (
-        createdPlacements.some(
-          ({ draft }) => draft.telegramPostId || draft.managedPostDraft,
+        payload.placements.some(
+          (draft) => draft.telegramPostId || draft.managedPostDraft,
         )
       ) {
         await telegramAdSalesApi.reconcileSale(reserved.id, true);
       }
-      const autoAllocation = autoAllocatePayment({
-        amount: payload.paymentAmount,
-        placements: reserved.placements.map((placement) => ({
-          id: placement.id,
-          agreedPrice: placement.agreedPrice,
-          paidAllocatedAmount: placement.paidAllocatedAmount,
-        })),
-      });
-      await telegramAdSalesApi.createPayment(
-        reserved.id,
-        {
-          accountId: payload.accountId,
-          amount: payload.paymentAmount,
-          currency: payload.paymentCurrency,
-          paidAt: new Date().toISOString(),
-          allocations: autoAllocation.allocations,
-        },
-        true,
-      );
+      upsertTelegramAdSaleInCache(queryClient, reserved);
       await invalidateTelegramAdSalesQueries(queryClient, {
         saleId: reserved.id,
         channelIds: reserved.placements.map(
@@ -1093,8 +1055,8 @@ export function AdSalesPage() {
       return { sale: reserved };
     } catch (error) {
       await invalidateTelegramAdSalesQueries(queryClient, {
-        saleId: refreshed.id,
-        channelIds: refreshed.placements.map(
+        saleId: reserved.id,
+        channelIds: reserved.placements.map(
           (placement) => placement.telegramChannelId,
         ),
       });
@@ -1142,14 +1104,6 @@ export function AdSalesPage() {
   }
 
   const selectedSale = selectedSaleQuery.data ?? null;
-  const selectedPaymentSale =
-    paymentSaleId != null
-      ? selectedSale?.id === paymentSaleId
-        ? selectedSale
-        : (salesQuery.data?.items.find((sale) => sale.id === paymentSaleId) ??
-          null)
-      : null;
-
   return (
     <AppShell>
       <PageTabHead title="Ad Sales" emoji="💼" color="#0f766e" />
@@ -1433,27 +1387,26 @@ export function AdSalesPage() {
         onSubmit={submitAdSale}
       />
 
-      <RegisterPaymentModal
-        open={Boolean(paymentSaleId)}
-        onClose={() => setPaymentSaleId(null)}
-        sale={selectedPaymentSale}
-        accounts={accounts as Account[]}
-        defaultCurrency={settings?.primaryCurrency || "USD"}
-        onSubmit={async (payload) => {
-          if (!selectedPaymentSale) return;
-          await telegramAdSalesApi.createPayment(
-            selectedPaymentSale.id,
-            payload,
-          );
-          await refreshSaleAfterMutation(
-            selectedPaymentSale.id,
-            selectedPaymentSale.placements.map(
-              (placement) => placement.telegramChannelId,
-            ),
-          );
-          setPaymentSaleId(null);
-        }}
-      />
+      {paymentSale ? (
+        <RegisterPaymentModal
+          key={paymentSale.id}
+          open
+          onClose={() => setPaymentSale(null)}
+          sale={paymentSale}
+          accounts={accounts as Account[]}
+          defaultCurrency={settings?.primaryCurrency || "USD"}
+          onSubmit={async (payload) => {
+            await telegramAdSalesApi.createPayment(paymentSale.id, payload);
+            await refreshSaleAfterMutation(
+              paymentSale.id,
+              paymentSale.placements.map(
+                (placement) => placement.telegramChannelId,
+              ),
+            );
+            setPaymentSale(null);
+          }}
+        />
+      ) : null}
 
       <SaleDetailsModal
         sale={selectedSale}
@@ -1512,15 +1465,14 @@ export function AdSalesPage() {
               })),
             });
           } else if (action === "cancel") {
-            placementId
-              ? await telegramAdSalesApi.cancelPlacement(
-                  sale.id,
-                  placementId,
-                  {},
-                )
-              : await telegramAdSalesApi.cancelSale(sale.id);
+            if (placementId) {
+              await telegramAdSalesApi.cancelPlacement(sale.id, placementId, {});
+            } else {
+              await telegramAdSalesApi.cancelSale(sale.id);
+            }
           } else if (action === "register-payment") {
-            setPaymentSaleId(sale.id);
+            setPaymentSale(sale);
+            setSelectedSaleId(null);
             return;
           } else if (action === "create-post" && placementId) {
             setPostEditorPlacement({ saleId: sale.id, placementId });

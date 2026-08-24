@@ -141,6 +141,61 @@ describe('Telegram managed post scheduled identity', () => {
     );
   });
 
+  it('does not report success when Telegram returns no scheduled message id', async () => {
+    const { service, update, mtproto } = setup(
+      TelegramManagedPostStatus.DRAFT,
+      [],
+    );
+    mtproto.publishPost.mockResolvedValue([]);
+
+    await expect(
+      service.scheduleManagedPost('user', 'channel', 'post', {
+        scheduledAt: '2026-08-10T12:00:00.000Z',
+      }),
+    ).rejects.toThrow(
+      'Telegram did not confirm the scheduled post. Nothing was added to Telegram Scheduled Messages.',
+    );
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: TelegramManagedPostStatus.FAILED,
+        }),
+      }),
+    );
+    expect(update).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: TelegramManagedPostStatus.SCHEDULED,
+        }),
+      }),
+    );
+  });
+
+  it('rejects local scheduling before persistence when this runtime has no bot token', async () => {
+    const { service, update } = setup(TelegramManagedPostStatus.DRAFT, []);
+    service['sourcesForChannel'] = jest.fn().mockResolvedValue([
+      {
+        sourceId: 'system-bot',
+        sourceType: TelegramSourceType.BOT,
+        permissions: { canPostMessages: true },
+      },
+    ]);
+    service['botTokenForSource'] = jest
+      .fn()
+      .mockRejectedValue(new Error('System bot is not configured'));
+
+    await expect(
+      service.scheduleManagedPost('user', 'channel', 'post', {
+        scheduledAt: '2026-08-10T12:00:00.000Z',
+      }),
+    ).rejects.toThrow('System bot is not configured');
+    expect(update).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ scheduleMode: 'LOCAL' }),
+      }),
+    );
+  });
+
   it('executes reversed batch input in chronological order', async () => {
     const posts = [
       {

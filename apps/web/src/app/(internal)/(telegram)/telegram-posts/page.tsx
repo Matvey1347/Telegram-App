@@ -61,6 +61,8 @@ import {
   LongImageTextModePanel,
   PostStatusIcon,
   publishModeLabel,
+  managedPostScheduleUi,
+  managedPostScheduleUnchanged,
   type LongTextMode,
 } from "@/components/features/telegram/telegram/managed-post-presentation";
 import {
@@ -85,6 +87,7 @@ import {
 import { TelegramPostPreview } from "@/components/features/telegram/telegram/telegram-post-preview";
 import { TelegramCustomEmojiPacksModal } from "@/components/features/telegram/telegram/telegram-custom-emoji-packs-modal";
 import { upsertManagedPostInCache } from "@/components/features/telegram/telegram/managed-post-cache";
+import { useManagedPostDueRefresh } from "@/components/features/telegram/telegram/use-managed-post-due-refresh";
 import { ManagedPostHistoryModal } from "@/components/features/telegram/telegram/managed-post-history-modal";
 import { ManagedPostExportButton } from "@/components/features/telegram/telegram/managed-post-export-button";
 import { ManagedPostReadOnlyPanel } from "@/components/features/telegram/telegram/managed-post-read-only-panel";
@@ -1121,11 +1124,9 @@ function TelegramPostWorkspace({
     () => extractAutoPrefilledPostTitle(text),
     [text],
   );
-  const liveEditingPost =
-    editing && posts.data
-      ? posts.data.find((post) => post.id === editing.id) || null
-      : null;
+  const liveEditingPost = editing && posts.data ? posts.data.find((post) => post.id === editing.id) || null : null;
   const editingMeta = liveEditingPost ?? editing;
+  useManagedPostDueRefresh({ channelId, post: editingMeta });
   const isReadOnlyTelegramPost = Boolean(editingMeta?.readOnlyTelegramPost);
   const isPublished = editingMeta?.status === "PUBLISHED";
   const hasLockedTelegramMedia =
@@ -3276,7 +3277,11 @@ function TelegramPostWorkspace({
             saveLongTextMode,
             true,
           );
-        } else if (saveMode === "schedule" && saveScheduledAt) {
+        } else if (
+          saveMode === "schedule" &&
+          saveScheduledAt &&
+          !managedPostScheduleUnchanged(editingPost, saveScheduledAt)
+        ) {
           post = await telegramChannelsApi.scheduleManagedPost(
             channelId,
             post.id,
@@ -3320,10 +3325,10 @@ function TelegramPostWorkspace({
               : saveMode === "publish"
                 ? `"${saveTitle}" published.`
                 : saveMode === "schedule"
-                  ? `"${saveTitle}" scheduled.`
+                  ? managedPostScheduleUi({ title: saveTitle, scheduleMode: post.scheduleMode }).message
                   : `"${saveTitle}" saved.`,
           "success",
-          3500,
+          post.scheduleMode === "LOCAL" ? 7000 : 3500,
           toastIcon,
         );
       } catch (runError) {
@@ -5297,7 +5302,7 @@ function TelegramPostWorkspace({
                     { value: "publish", label: "Publish now", iconEmoji: "🚀" },
                     {
                       value: "schedule",
-                      label: "Schedule in Telegram",
+                      label: managedPostScheduleUi({ hasInlineButtons: buttonRows.length > 0 }).label,
                       iconEmoji: "🕒",
                     },
                   ]}

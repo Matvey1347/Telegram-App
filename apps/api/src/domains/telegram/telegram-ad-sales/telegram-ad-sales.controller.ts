@@ -31,6 +31,7 @@ import {
   CreateTelegramAdvertiserContactDto,
   CreateTelegramAdvertiserDto,
   CreateTelegramAdSaleDto,
+  CreateTelegramAdSaleCheckoutDto,
   CreateTelegramAdSalePlacementDto,
   CreateTelegramAdSalePaymentDto,
   CreateTelegramAdvertiserTaskDto,
@@ -69,6 +70,7 @@ import {
   VoidTelegramAdSalePaymentDto,
 } from './dto';
 import { TelegramAdSalesBulkService } from './telegram-ad-sales-bulk.service';
+import { TelegramAdSalesCheckoutService } from './telegram-ad-sales-checkout.service';
 import { TelegramAdSalesCrmAdvertisersService } from './telegram-ad-sales-crm-advertisers.service';
 import { TelegramAdSalesCrmSettingsService } from './telegram-ad-sales-crm-settings.service';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
@@ -79,6 +81,7 @@ export class TelegramAdSalesController {
   constructor(
     private readonly service: TelegramAdSalesService,
     private readonly bulkService: TelegramAdSalesBulkService,
+    private readonly checkoutService: TelegramAdSalesCheckoutService,
     private readonly crmAdvertisersService: TelegramAdSalesCrmAdvertisersService,
     private readonly crmSettingsService: TelegramAdSalesCrmSettingsService,
   ) {}
@@ -535,6 +538,14 @@ export class TelegramAdSalesController {
     @Query() query: TelegramAdSalesQueryDto,
   ) {
     return this.service.listSales(user.sub, query);
+  }
+
+  @Post('checkout')
+  createPaidReservedSale(
+    @CurrentUser() user: JwtUser,
+    @Body() dto: CreateTelegramAdSaleCheckoutDto,
+  ) {
+    return this.checkoutService.create(user.sub, dto);
   }
 
   @Get(':id')

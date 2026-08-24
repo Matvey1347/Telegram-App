@@ -1,6 +1,8 @@
 "use client";
 
 import type { QueryClient } from "@tanstack/react-query";
+import type { TelegramAdSale } from "@telegram-system/shared";
+import type { PaginatedResponse } from "../../api-types";
 import {
   accountKeys,
   currencyKeys,
@@ -53,6 +55,37 @@ export const telegramAdSalesKeys = {
     ["telegram-ad-analytics", "alerts", params ?? {}] as const,
 } as const;
 
+export function upsertTelegramAdSaleInCache(
+  queryClient: QueryClient,
+  sale: TelegramAdSale,
+) {
+  queryClient.setQueryData(telegramAdSalesKeys.sale(sale.id), sale);
+  queryClient.setQueriesData<PaginatedResponse<TelegramAdSale>>(
+    { queryKey: ["telegram-ad-sales", "sales"] },
+    (current) => {
+      if (!current?.items) return current;
+      const existingIndex = current.items.findIndex(
+        (item) => item.id === sale.id,
+      );
+      const items =
+        existingIndex >= 0
+          ? current.items.map((item) => (item.id === sale.id ? sale : item))
+          : [sale, ...current.items].slice(0, current.pagination.pageSize);
+      return {
+        ...current,
+        items,
+        pagination: {
+          ...current.pagination,
+          totalItems:
+            existingIndex >= 0
+              ? current.pagination.totalItems
+              : current.pagination.totalItems + 1,
+        },
+      };
+    },
+  );
+}
+
 export async function invalidateTelegramAdSalesQueries(
   queryClient: QueryClient,
   params?: {
@@ -62,7 +95,9 @@ export async function invalidateTelegramAdSalesQueries(
 ) {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: telegramAdSalesKeys.root }),
-    queryClient.invalidateQueries({ queryKey: telegramAdSalesKeys.analyticsRoot() }),
+    queryClient.invalidateQueries({
+      queryKey: telegramAdSalesKeys.analyticsRoot(),
+    }),
     queryClient.invalidateQueries({ queryKey: ["telegram-ad-availability"] }),
     queryClient.invalidateQueries({ queryKey: dashboardKeys.summary() }),
     queryClient.invalidateQueries({ queryKey: accountKeys.transactions() }),

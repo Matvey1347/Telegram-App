@@ -61,10 +61,11 @@ export class TelegramManagedPostReconciliationService {
   }
 
   async reconcileAllDueManagedPosts() {
-    await this.publishDueLocallyScheduledManagedPosts();
-    return this.identityService.reconcilePendingWorkspaces((workspaceId) =>
+    const localDelivery = await this.publishDueLocallyScheduledManagedPosts();
+    const identity = await this.identityService.reconcilePendingWorkspaces((workspaceId) =>
       this.reconcileDueManagedPosts(workspaceId),
     );
+    return { ...identity, localDelivery };
   }
 
   public async publishDueLocallyScheduledManagedPosts() {
@@ -78,6 +79,8 @@ export class TelegramManagedPostReconciliationService {
       orderBy: { scheduledAt: 'asc' },
       take: 25,
     });
+    let published = 0;
+    let failed = 0;
     for (const due of duePosts) {
       const claim = await this.prisma.telegramManagedPost.updateMany({
         where: {
@@ -89,13 +92,21 @@ export class TelegramManagedPostReconciliationService {
         data: { status: TelegramManagedPostStatus.PUBLISHING },
       });
       if (claim.count) {
-        await this.telegramManagedPostPublicationService.publishManagedPost(
-          due.workspaceId,
-          due.telegramChannelId,
-          due.id,
-        );
+        try {
+          await this.telegramManagedPostPublicationService.publishManagedPost(
+            due.workspaceId,
+            due.telegramChannelId,
+            due.id,
+          );
+          published += 1;
+        } catch {
+          // The publisher persists the post-level FAILED state and message.
+          // Continue so one broken bot or post cannot block the remaining due queue.
+          failed += 1;
+        }
       }
     }
+    return { considered: duePosts.length, published, failed };
   }
 
   public async reconcileManagedPostIdentities(params: {

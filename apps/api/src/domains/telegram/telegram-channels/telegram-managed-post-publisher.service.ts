@@ -154,6 +154,12 @@ export class TelegramManagedPostPublisherService {
       );
     }
     if (scheduleAt && source.sourceType !== TelegramSourceType.MTPROTO) {
+      // Local delivery must be executable by this runtime. Otherwise a post
+      // would look scheduled until the due worker discovers the missing bot.
+      await this.telegramChannelAccessService.botTokenForSource(
+        workspaceId,
+        source.sourceId,
+      );
       const scheduled = await this.prisma.telegramManagedPost.update({
         where: { id: post.id },
         data: {
@@ -410,6 +416,13 @@ export class TelegramManagedPostPublisherService {
             reply_markup: toTelegramBotInlineKeyboard(buttonRows),
           });
         }
+      }
+      if (!ids.length) {
+        throw new BadRequestException(
+          scheduleAt
+            ? 'Telegram did not confirm the scheduled post. Nothing was added to Telegram Scheduled Messages.'
+            : 'Telegram did not confirm the published post.',
+        );
       }
       const publishedUrls = scheduleAt
         ? []

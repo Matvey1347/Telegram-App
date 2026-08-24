@@ -175,6 +175,25 @@ describe("managed post Telegram identity presentation", () => {
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
   });
 
+  it("identifies local Bot API delivery without claiming it is in Telegram", async () => {
+    renderLink(
+      scheduledPost({
+        scheduleMode: "LOCAL",
+        telegramScheduledMessageIds: [],
+        telegramRemoteStatus: "NONE",
+      }),
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Scheduled via Nexeloq" }),
+    );
+
+    expect(screen.getByText("Scheduled delivery status")).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/not currently in Telegram Scheduled Messages/i),
+    ).toHaveLength(2);
+  });
+
   it("does not resolve internal links until the published ID is verified", () => {
     const post = {
       status: "PUBLISHED",

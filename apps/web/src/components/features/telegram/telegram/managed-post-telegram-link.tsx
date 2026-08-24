@@ -123,6 +123,14 @@ export function ManagedPostTelegramLink({
   const tone = managedPostTelegramIdentityTone(post);
   const storedUrl = post.telegramMessageUrls[0] ?? "";
   const hasUnsavedUrl = telegramUrl.trim() !== storedUrl;
+  const isLocalSchedule =
+    post.status === "SCHEDULED" && post.scheduleMode === "LOCAL";
+  const scheduledStatusLabel = isLocalSchedule
+    ? "Scheduled via Nexeloq"
+    : "Scheduled in Telegram";
+  const scheduledStatusDescription = isLocalSchedule
+    ? "Telegram System will publish this post at the scheduled time. It is not currently in Telegram Scheduled Messages."
+    : "Telegram link will be available after publication and verification.";
 
   const openModal = () => {
     setTelegramUrl(storedUrl);
@@ -239,7 +247,7 @@ export function ManagedPostTelegramLink({
             ) : (
               <Clock3 size={13} />
             )}
-            Scheduled in Telegram
+            {scheduledStatusLabel}
           </button>
         ) : (
           <button
@@ -279,7 +287,7 @@ export function ManagedPostTelegramLink({
           className="max-w-72 px-2.5 py-1.5 text-neutral-200 opacity-0 transition-opacity group-hover:opacity-100"
         >
           {post.status === "SCHEDULED"
-            ? "Telegram link will be available after publication and verification."
+            ? scheduledStatusDescription
             : verificationDescription(post)}
         </TooltipBubble>
       </span>
@@ -289,7 +297,9 @@ export function ManagedPostTelegramLink({
         onClose={() => !saving && !verifying && setOpen(false)}
         title={
           post.status === "SCHEDULED"
-            ? "Scheduled Telegram status"
+            ? isLocalSchedule
+              ? "Scheduled delivery status"
+              : "Scheduled Telegram status"
             : storedUrl
               ? "Telegram post link"
               : "Set Telegram link"
@@ -304,11 +314,11 @@ export function ManagedPostTelegramLink({
                   : "border-neutral-700 bg-neutral-900 text-neutral-300"
               }`}
             >
-              <p className="font-medium text-white">Scheduled in Telegram</p>
+              <p className="font-medium text-white">{scheduledStatusLabel}</p>
               <p className="mt-0.5 text-xs">
                 {tone === "error"
                   ? "Telegram could not confirm this scheduled post. A scheduled ID is not a public post link; refresh or reconcile the channel before publication."
-                  : "Telegram link will be available after publication and verification."}
+                  : scheduledStatusDescription}
               </p>
             </div>
             <div className="flex justify-end">

@@ -30,6 +30,8 @@ import type {
   TelegramAdSalesWorkspaceSettings,
   TelegramAdSalesBulkCreateRequest,
   TelegramAdSalesBulkCreateResponse,
+  TelegramAdSaleCheckoutRequest,
+  TelegramAdSaleCheckoutResponse,
 } from "@telegram-system/shared";
 import type { PaginatedResponse, PaginationParams } from "../../api-types";
 
@@ -238,6 +240,17 @@ export function createTelegramAdSalesApi({
       (
         await api.post<TelegramAdSale>(
           "/telegram-ad-sales",
+          payload,
+          silent ? silentFeedbackConfig : undefined,
+        )
+      ).data,
+    checkoutSale: async (
+      payload: TelegramAdSaleCheckoutRequest,
+      silent = false,
+    ) =>
+      (
+        await api.post<TelegramAdSaleCheckoutResponse>(
+          "/telegram-ad-sales/checkout",
           payload,
           silent ? silentFeedbackConfig : undefined,
         )

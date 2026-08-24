@@ -4,6 +4,7 @@ import { FinanceCategoriesModule } from '../../finance/finance-categories/financ
 import { TelegramChannelsModule } from '../telegram-channels/telegram-channels.module';
 import { TelegramChannelNetworksModule } from '../telegram-channel-networks/telegram-channel-networks.module';
 import { TelegramAdSalesBulkService } from './telegram-ad-sales-bulk.service';
+import { TelegramAdSalesCheckoutService } from './telegram-ad-sales-checkout.service';
 import { TelegramAdSalesCrmAdvertisersService } from './telegram-ad-sales-crm-advertisers.service';
 import { TelegramAdSalesCrmSettingsService } from './telegram-ad-sales-crm-settings.service';
 import { TelegramAdSalesController } from './telegram-ad-sales.controller';
@@ -22,6 +23,7 @@ import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.
   providers: [
     TelegramAdSalesService,
     TelegramAdSalesBulkService,
+    TelegramAdSalesCheckoutService,
     TelegramAdSalesCrmAdvertisersService,
     TelegramAdSalesCrmSettingsService,
     TelegramAdPlacementLifecycleService,

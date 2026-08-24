@@ -499,6 +499,34 @@ export class CreateTelegramAdSalePaymentDto {
   allocations!: CreateTelegramAdSalePaymentAllocationDto[];
 }
 
+export class CreateTelegramAdSaleCheckoutPaymentDto {
+  @IsString() accountId!: string;
+  @Type(() => Number) @IsNumber() @Min(0.01) amount!: number;
+  @Transform(normalizeCurrency) @IsString() @Matches(/^[A-Z]{3}$/) currency!: string;
+  @IsDateString() paidAt!: string;
+  @IsOptional() @IsString() notes?: string | null;
+  @IsOptional() @IsString() idempotencyKey?: string | null;
+}
+
+export class CreateTelegramAdSaleCheckoutPlacementDto extends CreateTelegramAdSalePlacementDto {
+  @Type(() => Number) @IsNumber() @Min(0) declare agreedPrice: number;
+  @Transform(normalizeCurrency) @IsString() @Matches(/^[A-Z]{3}$/) declare currency: string;
+  @IsOptional() @IsString() telegramPostId?: string | null;
+}
+
+export class CreateTelegramAdSaleCheckoutDto extends CreateTelegramAdSaleDto {
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => CreateTelegramAdSaleCheckoutPlacementDto)
+  placements!: CreateTelegramAdSaleCheckoutPlacementDto[];
+
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => CreateTelegramAdSaleCheckoutPaymentDto)
+  payment!: CreateTelegramAdSaleCheckoutPaymentDto;
+}
+
 export class UpdateTelegramAdSalePaymentDto {
   @IsOptional() @IsString() accountId?: string;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) amount?: number;
