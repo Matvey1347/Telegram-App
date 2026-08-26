@@ -67,10 +67,16 @@ import { TelegramPostMetricsService } from './telegram-post-metrics.service';
 import { TelegramRemoteScheduledPostImportService } from './telegram-remote-scheduled-post-import.service';
 import { TelegramPostMediaBackfillService } from './telegram-post-media-backfill.service';
 import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-media-storage.service';
+import { TelegramSystemPostGroupsService } from './telegram-system-post-groups.service';
+import { TelegramManagedPostRecoveryController } from './telegram-managed-post-recovery.controller';
+import { TelegramManagedPostScheduledResetService } from './telegram-managed-post-scheduled-reset.service';
 
 @Module({
   imports: [AdCampaignsModule],
-  controllers: [TelegramChannelsController],
+  controllers: [
+    TelegramChannelsController,
+    TelegramManagedPostRecoveryController,
+  ],
   providers: [
     TelegramChannelsService,
     TelegramChannelAnalyticsService,
@@ -102,6 +108,7 @@ import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-
     TelegramManagedPostGroupPresentationService,
     TelegramPostGroupsService,
     TelegramPostGroupStore,
+    TelegramSystemPostGroupsService,
     TelegramManagedPostQueryService,
     TelegramManagedPostReconciliationService,
     TelegramManagedPostRemoteSyncService,
@@ -112,6 +119,7 @@ import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-
     TelegramManagedPostMediaStorageService,
     TelegramManagedPostCommandService,
     TelegramManagedPostHistoryService,
+    TelegramManagedPostScheduledResetService,
     TelegramManagedPostPublicationService,
     TelegramManagedPostPublisherService,
     TelegramManagedPostBulkService,
@@ -154,11 +162,14 @@ import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-
     TelegramManagedPostPublicationService,
     TelegramManagedPostBulkService,
     TelegramManagedPostCommandService,
+    TelegramPostGroupsService,
+    TelegramSystemPostGroupsService,
     TelegramManagedPostReconciliationService,
     TelegramManagedPostRemoteSyncService,
     TelegramChannelSyncOrchestrator,
     TelegramPostMetricsService,
     TelegramPostMediaBackfillService,
+    TelegramManagedPostMediaStorageService,
     TelegramBroadcastStatsService,
   ],
 })

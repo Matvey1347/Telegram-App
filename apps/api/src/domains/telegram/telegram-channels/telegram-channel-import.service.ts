@@ -22,6 +22,7 @@ import { TelegramChannelImportPreparationService } from './telegram-channel-impo
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 import { BulkProgressCallback } from './telegram-channels.internal';
 import { TelegramPostMetricsService } from './telegram-post-metrics.service';
+import { TelegramPostGroupStore } from './telegram-post-group.store';
 
 @Injectable()
 export class TelegramChannelImportService {
@@ -37,6 +38,7 @@ export class TelegramChannelImportService {
     private readonly telegramPostMetricsService: TelegramPostMetricsService,
     private readonly telegramBroadcastStatsService: TelegramBroadcastStatsService,
     private readonly telegramChannelImportPreparationService: TelegramChannelImportPreparationService,
+    private readonly telegramPostGroupStore: TelegramPostGroupStore,
   ) {}
   private readonly logger = new Logger('TelegramChannelsService');
 
@@ -163,27 +165,35 @@ export class TelegramChannelImportService {
       importInput.type === 'invite' ? 3 : 2,
     );
     const channel = await this.prisma.$transaction(async (tx) => {
+      let persisted;
       if (!existing) {
-        return tx.telegramChannel.create({
+        persisted = await tx.telegramChannel.create({
           data: {
             workspaceId,
             ...payload,
           },
         });
+      } else {
+        const duplicateIds = matchingChannels
+          .filter((candidate) => candidate.id !== existing.id)
+          .map((candidate) => candidate.id);
+        await this.telegramChannelImportPreparationService.mergeDuplicateChannels(
+          tx,
+          workspaceId,
+          existing.id,
+          duplicateIds,
+        );
+        persisted = await tx.telegramChannel.update({
+          where: { id: existing.id },
+          data: { ...payload, isActive: true },
+        });
       }
-      const duplicateIds = matchingChannels
-        .filter((candidate) => candidate.id !== existing.id)
-        .map((candidate) => candidate.id);
-      await this.telegramChannelImportPreparationService.mergeDuplicateChannels(
+      await this.telegramPostGroupStore.ensureRequiredChannelSystemGroups(
         tx,
         workspaceId,
-        existing.id,
-        duplicateIds,
+        persisted.id,
       );
-      return tx.telegramChannel.update({
-        where: { id: existing.id },
-        data: { ...payload, isActive: true },
-      });
+      return persisted;
     });
     await this.sourceAccessService.recordDataSource({
       workspaceId,

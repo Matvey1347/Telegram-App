@@ -144,7 +144,7 @@ export class TelegramManagedPostCommandService {
     });
   }
 
-  async createManagedPost(
+  public async prepareManagedPostCreate(
     userId: string,
     channelId: string,
     dto: CreateTelegramManagedPostDto,
@@ -167,7 +167,7 @@ export class TelegramManagedPostCommandService {
       await this.telegramManagedPostMediaStorageService.persistImageUrls(
         dto.imageUrls ?? [],
       );
-    const post = await this.createManagedPostRecord(this.prisma, {
+    return {
       workspaceId,
       channelId,
       title,
@@ -176,7 +176,49 @@ export class TelegramManagedPostCommandService {
       buttonRows: dto.buttonRows,
       assignedMemberId,
       icon: dto.icon?.trim() || null,
-    });
+    };
+  }
+
+  async createManagedPost(
+    userId: string,
+    channelId: string,
+    dto: CreateTelegramManagedPostDto,
+    options: { groupId?: string | null } = {},
+  ) {
+    const prepared = await this.prepareManagedPostCreate(
+      userId,
+      channelId,
+      dto,
+    );
+    const create = async (
+      client: Prisma.TransactionClient | PrismaService,
+      groupId?: string | null,
+      groupPosition?: number | null,
+    ) =>
+      this.createManagedPostRecord(client, {
+        ...prepared,
+        groupId,
+        groupPosition,
+      });
+    const requestedGroupId = options.groupId?.trim() || null;
+    const post = requestedGroupId
+      ? await this.prisma.$transaction(async (tx) => {
+          const group = await tx.postGroup.findFirst({
+            where: {
+              id: requestedGroupId,
+              workspaceId: prepared.workspaceId,
+              telegramChannelId: channelId,
+            },
+            select: { id: true },
+          });
+          if (!group)
+            throw new BadRequestException('Post group is unavailable');
+          const groupPosition = await tx.telegramManagedPost.count({
+            where: { groupId: group.id },
+          });
+          return create(tx, group.id, groupPosition);
+        })
+      : await create(this.prisma);
     const [hydrated] =
       await this.telegramManagedPostGroupPresentationService.attachManagedPostIcons(
         [post],

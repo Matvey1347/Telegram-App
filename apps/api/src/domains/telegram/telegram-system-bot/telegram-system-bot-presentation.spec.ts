@@ -36,4 +36,17 @@ describe('Telegram System Bot presentation', () => {
       }),
     ).toContain('🏦 Main: 125.5 USD');
   });
+
+  it('renders safe structured HTML for workspace statistics', () => {
+    const result = renderSystemBotStats('Sales <EU>', {
+      primaryCurrency: 'USD',
+      profitForPeriod: -12.5,
+      telegramChannelsCount: 1,
+    });
+
+    expect(result).toContain('📊 <b>Sales &lt;EU&gt;</b>');
+    expect(result).toContain('<b>Finance</b>');
+    expect(result).toContain('🔻 Profit: <b>-12.5 USD</b>');
+    expect(result).toContain('<b>Channels and audience</b>');
+  });
 });

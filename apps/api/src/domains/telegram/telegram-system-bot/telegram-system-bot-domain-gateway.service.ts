@@ -1,9 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ContextIdFactory, ModuleRef } from '@nestjs/core';
-import { WorkspaceRole } from '@prisma/client';
 import { DashboardService } from '../../operations/dashboard/dashboard.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { ScheduledTasksService } from '../../operations/scheduled-tasks/scheduled-tasks.service';
 import { TelegramWorkspaceFullSyncService } from '../telegram-sync/telegram-workspace-full-sync.service';
 import { TelegramChannelSyncOrchestrator } from '../telegram-channels/telegram-channel-sync.orchestrator';
 
@@ -94,23 +92,5 @@ export class TelegramSystemBotDomainGatewayService {
       strict: false,
     });
     return service.summaryForWorkspace(workspaceId);
-  }
-
-  async tasks(workspaceId: string, role: WorkspaceRole) {
-    const service = await this.moduleRef.resolve(
-      ScheduledTasksService,
-      undefined,
-      { strict: false },
-    );
-    return service.listForMembership({ workspaceId, role });
-  }
-
-  async runTask(workspaceId: string, role: WorkspaceRole, taskKey: string) {
-    const service = await this.moduleRef.resolve(
-      ScheduledTasksService,
-      undefined,
-      { strict: false },
-    );
-    return service.runNowForMembership({ workspaceId, role }, taskKey);
   }
 }

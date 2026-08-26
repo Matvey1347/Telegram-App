@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
@@ -32,6 +32,29 @@ type PersonCard = {
 const cardClass =
   "rounded-xl border border-neutral-800/80 bg-neutral-900/55 p-4 text-sm text-neutral-300";
 
+export function sortNetworksByEstimatedAdPrice(
+  networks: TelegramChannelNetwork[],
+) {
+  return networks
+    .map((network, index) => ({
+      network,
+      index,
+      price: network.summary.assetEconomics?.estimatedAdPrice,
+    }))
+    .sort((left, right) => {
+      const leftHasPrice =
+        left.price != null && Number.isFinite(Number(left.price));
+      const rightHasPrice =
+        right.price != null && Number.isFinite(Number(right.price));
+
+      if (leftHasPrice !== rightHasPrice) return leftHasPrice ? -1 : 1;
+      if (!leftHasPrice || !rightHasPrice) return left.index - right.index;
+
+      return Number(right.price) - Number(left.price) || left.index - right.index;
+    })
+    .map(({ network }) => network);
+}
+
 export function TelegramNetworkCards({
   networks,
   moneySettings,
@@ -46,6 +69,10 @@ export function TelegramNetworkCards({
 }) {
   const queryClient = useQueryClient();
   const { pushToast } = useAppToast();
+  const sortedNetworks = useMemo(
+    () => sortNetworksByEstimatedAdPrice(networks),
+    [networks],
+  );
   const [pickerGeneration, setPickerGeneration] = useState<
     Record<string, number>
   >({});
@@ -79,7 +106,7 @@ export function TelegramNetworkCards({
 
   return (
     <MasonryGrid>
-      {networks.map((network) => {
+      {sortedNetworks.map((network) => {
         return (
           <TelegramNetworkCard
             key={network.id}

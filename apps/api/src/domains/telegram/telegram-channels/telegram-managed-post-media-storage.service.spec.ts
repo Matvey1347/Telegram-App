@@ -111,6 +111,41 @@ describe('TelegramManagedPostMediaStorageService', () => {
     expect(persistImmutableImages).not.toHaveBeenCalled();
   });
 
+  it('persists Telegram-downloaded image bytes without exposing a token URL', async () => {
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0x01]);
+    const persistImmutableImages = jest.fn().mockResolvedValue({
+      urls: ['https://s3.example.test/telegram/post-images/image.jpg'],
+      uploaded: 1,
+      reused: 0,
+    });
+    const service = new TelegramManagedPostMediaStorageService({
+      persistImmutableImages,
+    } as unknown as B2ObjectStorageService);
+
+    await expect(
+      service.persistImageBytes([
+        { bytes: jpeg, contentType: 'application/octet-stream' },
+      ]),
+    ).resolves.toEqual([
+      'https://s3.example.test/telegram/post-images/image.jpg',
+    ]);
+    expect(persistImmutableImages).toHaveBeenCalledWith([
+      { bytes: jpeg, mimeType: 'image/jpeg' },
+    ]);
+  });
+
+  it('rejects invalid Telegram-downloaded image bytes', async () => {
+    const service = new TelegramManagedPostMediaStorageService({
+      persistImmutableImages: jest.fn(),
+    } as unknown as B2ObjectStorageService);
+
+    await expect(
+      service.persistImageBytes([
+        { bytes: Buffer.from('not-an-image'), contentType: 'text/plain' },
+      ]),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('normalizes formats such as AVIF to a B2-supported WebP image', async () => {
     const avif = await sharp({
       create: {

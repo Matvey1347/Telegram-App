@@ -101,6 +101,8 @@ export const telegramPostKeys = {
     ["telegram-managed-posts", channelId] as const,
   managedCalendar: (channelId: string) =>
     ["telegram-managed-posts-calendar", channelId] as const,
+  managedHistories: (channelId: string) =>
+    ["telegram-managed-post-history", channelId] as const,
   managedHistory: (channelId: string, postId: string) =>
     ["telegram-managed-post-history", channelId, postId] as const,
   plannerFormats: (channelId: string) =>

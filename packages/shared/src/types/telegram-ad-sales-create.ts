@@ -31,6 +31,10 @@ export type TelegramAdSaleCheckoutRequest = {
   settlementCurrency: string;
   assignedMemberId?: string | null;
   placements: TelegramAdSaleCheckoutPlacement[];
+  priceAllocation?: {
+    mode: "PROPORTIONAL_BY_AUDIENCE";
+    totalAmount: number;
+  };
   payment: {
     accountId: string;
     amount: number;

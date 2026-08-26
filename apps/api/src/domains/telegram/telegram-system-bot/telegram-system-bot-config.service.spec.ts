@@ -68,6 +68,28 @@ describe('TelegramSystemBotConfigService', () => {
     expect(production.environment).toBe('PRODUCTION');
     expect(production.token).toBe('production-token');
     expect(production.username).toBe('production_bot');
+    expect(local.auditCredentials()).toEqual([
+      {
+        environment: 'LOCAL',
+        token: 'local-token',
+        username: 'local_bot',
+        selected: true,
+      },
+      {
+        environment: 'PRODUCTION',
+        token: 'production-token',
+        username: 'production_bot',
+        selected: false,
+      },
+    ]);
+    expect(production.auditCredentials()).toEqual([
+      {
+        environment: 'PRODUCTION',
+        token: 'production-token',
+        username: 'production_bot',
+        selected: true,
+      },
+    ]);
   });
 
   it('stays disabled without an exact environment and ignores legacy credentials', () => {

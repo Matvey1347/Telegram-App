@@ -46,7 +46,7 @@ describe('TelegramAdPlacementLifecycleService', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           status: TelegramAdPlacementStatus.PUBLISHED,
-          plannedDeleteAt: new Date('2026-08-20T08:10:00.000Z'),
+          plannedDeleteAt: new Date('2026-08-20T08:00:00.000Z'),
         }),
       }),
     );

@@ -13,6 +13,13 @@ Internal system for managing Telegram channels, ad campaigns, finance, currencie
 
 ### Local Telegram development
 
+Use `pnpm dev:system-bot` to run only the LOCAL System Bot together with the API, web app and a Cloudflare Quick Tunnel. It sets `TELEGRAM_SYSTEM_BOT_ENVIRONMENT=LOCAL` while leaving workspace-bot runtimes disabled.
+
+In the connected System Bot, `/post` starts the forwarded-post workflow and
+`/adsale` starts the fast advertising-sale workflow. The latter records the
+sale, Finance payment and optional editable/scheduled post in one resumable
+flow.
+
 Use `pnpm dev:bots` only when developing Telegram behavior. It starts the API, web app and a free Cloudflare Quick Tunnel, selects the `LOCAL` runtime for workspace bots and the System Bot, and configures only those LOCAL BotFather bots. Install its one local dependency with `brew install cloudflared`; no Cloudflare account or domain is required. The public gateway sends `/api` to Nest and every other path to Next, allowing the local Finance Mini App to open on a phone. When Cloudflare assigns a new `trycloudflare.com` URL, the LOCAL Finance menu button and saved users' reply keyboards are refreshed automatically. On Ctrl+C, the command removes the LOCAL webhook and menu link, removes the reply keyboard, and tells saved LOCAL users that Finance is not running before it stops the processes. It never reads, changes, or rebinds a PRODUCTION token or webhook. Do not run it alongside `pnpm dev`: it owns ports 4000, 3000 and 4100.
 
 ### Production

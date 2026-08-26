@@ -165,6 +165,8 @@ Pre-existing results before implementation:
 
 ## Progress By Milestone
 
+- Ad Sales network placement slice: added authoritative exact-sum audience-weighted pricing for paid checkout and System Bot sales, exposed the system "all channels" network in the creation flow, added one shared creative cloned to channel-owned managed posts, automatic future scheduling, and workspace-timezone-safe per-channel overrides. No polling or recurring runtime work was introduced.
+
 - Milestone 1 - Baseline: completed. Inventory JSON, baseline checks and risk map created.
 - Milestone 2 - Agent and architecture guidance: completed for AGENTS, `.codex/agents`, design-system docs and architecture check.
 - Milestone 3 - Frontend primitives: started. Query key factories added and adopted in central invalidation/auth/member select/ad-sales invalidation/channel detail.

@@ -6,12 +6,12 @@ type AccountChoice = {
   emoji?: string;
 };
 
-export type TelegramSystemBotFinanceResult =
+export type TelegramSystemBotFinanceResult = (
   | { kind: 'ACCOUNT'; text: string; buttons: Choice[] }
   | { kind: 'CATEGORY'; text: string; buttons: Choice[] }
   | { kind: 'TRANSFER_FROM'; text: string; buttons: Choice[] }
   | { kind: 'TRANSFER_TO'; text: string; buttons: Choice[] }
-  | { kind: 'INPUT'; text: string }
+  | { kind: 'INPUT'; text: string; draftId: string }
   | { kind: 'CONFIRM'; text: string; callbackData: string }
   | {
       kind: 'COMPLETED';
@@ -20,7 +20,8 @@ export type TelegramSystemBotFinanceResult =
     }
   | { kind: 'DUPLICATE' }
   | { kind: 'CANCELLED' }
-  | { kind: 'UNAVAILABLE' };
+  | { kind: 'UNAVAILABLE' }
+) & { controlMessageId?: number | null };
 
 export function financeAccountChoice(
   draftId: string,

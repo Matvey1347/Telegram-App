@@ -1,5 +1,4 @@
 import { BadRequestException } from '@nestjs/common';
-import { TelegramChannelsService } from './telegram-channels.service';
 import {
   createTelegramChannelsTestHarness,
   type TelegramChannelsTestHarness,
@@ -71,6 +70,12 @@ describe('TelegramChannelsService importChannel', () => {
     jest
       .spyOn(service as never, 'runInitialImportBackfill' as never)
       .mockResolvedValue({ success: true } as never);
+    jest
+      .spyOn(service as never, 'ensureRequiredChannelSystemGroups' as never)
+      .mockResolvedValue({
+        advertise: { id: 'advertise-group-1' },
+        systemBotPosts: { id: 'system-bot-posts-group-1' },
+      } as never);
   });
 
   it('imports an invite-resolved channel, stores inviteLink and backfill metadata', async () => {
@@ -109,6 +114,11 @@ describe('TelegramChannelsService importChannel', () => {
           pendingJoinRequestsCount: 302,
         }),
       }),
+    );
+    expect(service.ensureRequiredChannelSystemGroups).toHaveBeenCalledWith(
+      tx,
+      'ws-1',
+      'channel-1',
     );
     expect(sourceAccessService.recordDataSource).toHaveBeenCalledWith(
       expect.objectContaining({

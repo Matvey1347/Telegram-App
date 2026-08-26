@@ -8,6 +8,16 @@ const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export class TelegramManagedPostMediaStorageService {
   constructor(private readonly storage: B2ObjectStorageService) {}
 
+  async persistImageBytes(
+    images: Array<{ bytes: Buffer; contentType?: string | null }>,
+  ) {
+    if (!images.length) return [];
+    const normalized = await Promise.all(
+      images.map((image, index) => this.normalizeImage(image.bytes, index)),
+    );
+    return (await this.storage.persistImmutableImages(normalized)).urls;
+  }
+
   async persistImageUrls(imageUrls: string[]) {
     if (!imageUrls.length) return [];
     const pending = imageUrls.flatMap((url, index) =>
@@ -55,6 +65,10 @@ export class TelegramManagedPostMediaStorageService {
       throw new BadRequestException(`Image ${index + 1} is larger than 10 MB.`);
     }
     const bytes = Buffer.from(await response.arrayBuffer());
+    return this.normalizeImage(bytes, index);
+  }
+
+  private async normalizeImage(bytes: Buffer, index: number) {
     if (!bytes.length) {
       throw new BadRequestException(`Image ${index + 1} is empty.`);
     }

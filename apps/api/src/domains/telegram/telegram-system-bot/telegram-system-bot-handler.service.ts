@@ -1,6 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
-import { createCollapsibleReplyKeyboard } from '../../../telegram/shared/telegram-reply-keyboard';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import { TelegramSystemBotConnectionsService } from './telegram-system-bot-connections.service';
 import { TelegramSystemBotDomainGatewayService } from './telegram-system-bot-domain-gateway.service';
@@ -9,12 +8,22 @@ import { sanitizeOperationalError } from '../../../common/security/operational-e
 import {
   renderSystemBotStats,
   systemBotEmoji,
-  systemBotTaskEmoji,
 } from './telegram-system-bot-presentation';
+import { TelegramSystemBotPostFlowService } from './telegram-system-bot-post-flow.service';
+import { TelegramSystemBotAdSaleFlowService } from './telegram-system-bot-ad-sale-flow.service';
+import { TelegramSystemBotPostsService } from './telegram-system-bot-posts.service';
+import type { TelegramSystemBotIncomingMessage } from './telegram-system-bot-forwarded-content.parser';
+import {
+  SYSTEM_BOT_HELP_TEXT,
+  systemBotCommandFor,
+  systemBotMenuPayload,
+} from './telegram-system-bot-menu';
+import { compactSystemBotInlineKeyboard } from './telegram-system-bot-inline-keyboard';
+import { TelegramSystemBotChannelAccessService } from './telegram-system-bot-channel-access.service';
 
 export type TelegramSystemBotUpdate = {
   update_id?: number | string;
-  message?: {
+  message?: TelegramSystemBotIncomingMessage & {
     chat?: { id?: number | string; type?: string };
     from?: {
       id?: number | string;
@@ -33,6 +42,24 @@ export type TelegramSystemBotUpdate = {
       message_id?: number;
     };
   };
+  my_chat_member?: {
+    chat?: {
+      id?: number | string;
+      type?: string;
+      title?: string;
+      username?: string;
+    };
+    old_chat_member?: {
+      status?: string;
+      user?: { id?: number | string };
+      [key: string]: unknown;
+    };
+    new_chat_member?: {
+      status?: string;
+      user?: { id?: number | string };
+      [key: string]: unknown;
+    };
+  };
 };
 
 @Injectable()
@@ -44,9 +71,19 @@ export class TelegramSystemBotHandlerService {
     private readonly connections: TelegramSystemBotConnectionsService,
     private readonly domain: TelegramSystemBotDomainGatewayService,
     private readonly finance: TelegramSystemBotFinanceHandlerService,
+    @Optional()
+    private readonly postFlow?: TelegramSystemBotPostFlowService,
+    @Optional()
+    private readonly adSaleFlow?: TelegramSystemBotAdSaleFlowService,
+    @Optional()
+    private readonly posts?: TelegramSystemBotPostsService,
+    @Optional()
+    private readonly channelAccess?: TelegramSystemBotChannelAccessService,
   ) {}
 
   async handle(update: TelegramSystemBotUpdate) {
+    if (update.my_chat_member)
+      return this.channelAccess?.handleMyChatMember(update.my_chat_member);
     const actor = update.message?.from ?? update.callback_query?.from;
     const chatId =
       update.message?.chat?.id ?? update.callback_query?.message?.chat?.id;
@@ -58,7 +95,7 @@ export class TelegramSystemBotHandlerService {
     // Link tokens and workspace data must never be emitted into groups. Telegram
     // private bot chats are bound to the actor's own user id.
     if (chatType !== 'private' || safeChatId !== telegramUserId) return;
-    const command = this.commandFor(update.message?.text?.trim());
+    const command = systemBotCommandFor(update.message?.text?.trim());
     const callback = update.callback_query?.data;
     if (update.callback_query?.id) {
       await this.api.answerCallbackQuery(this.config.token, {
@@ -66,7 +103,7 @@ export class TelegramSystemBotHandlerService {
       });
     }
     if (command?.startsWith('/start'))
-      return this.start(telegramUserId, safeChatId, actor);
+      return this.start(telegramUserId, safeChatId, actor, command);
     let loadingMessageId: number | null = null;
     try {
       try {
@@ -90,6 +127,14 @@ export class TelegramSystemBotHandlerService {
       const workspace = await this.connections.requireCurrentWorkspace(
         connection.id,
       );
+      const workflowScope = {
+        chatId: safeChatId,
+        connectionId: connection.id,
+        userId: connection.userId,
+        telegramUserId: connection.telegramUserId,
+        workspaceId: workspace.workspaceId,
+        timezone: workspace.workspace.timezone,
+      };
       if (command === '/help') return this.help(safeChatId);
       if (command === '/workspace' || callback === 'workspace')
         return this.workspaceMenu(safeChatId, connection.id);
@@ -103,28 +148,43 @@ export class TelegramSystemBotHandlerService {
           connection.telegramUserId,
           callback.slice('channel:sync:'.length),
         );
+      if (callback?.startsWith('channel:view:'))
+        return this.channelAccess?.detail(
+          safeChatId,
+          workspace.workspaceId,
+          callback.slice('channel:view:'.length),
+          workspace.workspace.timezone,
+        );
+      if (callback?.startsWith('channel:access:'))
+        return this.channelAccess?.auditAndSend(
+          safeChatId,
+          workspace.workspaceId,
+          callback.slice('channel:access:'.length),
+        );
       if (command === '/stats' || callback === 'stats')
         return this.stats(
           safeChatId,
           workspace.workspaceId,
           workspace.workspace.name,
         );
-      if (command === '/tasks' || callback === 'tasks')
-        return this.tasks(
-          safeChatId,
-          workspace.workspaceId,
-          workspace.role,
-          workspace.workspace.timezone,
-        );
-      if (callback?.startsWith('task:run:'))
-        return this.runTask(
-          safeChatId,
-          workspace.workspaceId,
-          workspace.role,
-          callback.slice('task:run:'.length),
-        );
       if (command === '/finance' || callback === 'finance')
         return this.finance.menu(safeChatId);
+      if (command === '/posts') return this.posts?.open(workflowScope);
+      if (command === '/post' || callback === 'post')
+        return this.postFlow?.begin(workflowScope);
+      if (command === '/adsale' || callback === 'adsale')
+        return this.adSaleFlow?.begin(workflowScope);
+      if (callback && this.postFlow?.isCallback(callback))
+        return this.postFlow.callback(workflowScope, callback);
+      if (callback && this.adSaleFlow?.isCallback(callback))
+        return this.adSaleFlow.callback(workflowScope, callback);
+      if (callback === 'posts:new') return this.postFlow?.begin(workflowScope);
+      if (callback && this.posts?.isCallback(callback))
+        return this.posts.callback(
+          workflowScope,
+          callback,
+          update.callback_query?.message?.message_id,
+        );
       if (callback?.startsWith('finance:'))
         return this.finance.callback({
           chatId: safeChatId,
@@ -132,14 +192,17 @@ export class TelegramSystemBotHandlerService {
           userId: connection.userId,
           workspaceId: workspace.workspaceId,
           callback,
+          messageId: update.callback_query?.message?.message_id,
         });
       if (command === '/channels' || callback === 'channels')
-        return this.channels(
-          safeChatId,
-          workspace.workspaceId,
-          connection.telegramUserId,
-          workspace.workspace.timezone,
+        return this.channelAccess?.list(safeChatId, workspace.workspaceId);
+      if (update.message) {
+        const adSaleResult = await this.adSaleFlow?.input(
+          workflowScope,
+          update.message,
         );
+        if (adSaleResult) return adSaleResult;
+      }
       if (update.message?.text) {
         const financeResult = await this.finance.pendingInput({
           chatId: safeChatId,
@@ -147,8 +210,16 @@ export class TelegramSystemBotHandlerService {
           userId: connection.userId,
           workspaceId: workspace.workspaceId,
           text: update.message.text,
+          inputMessageId: update.message.message_id,
         });
         if (financeResult) return financeResult;
+      }
+      if (update.message) {
+        const postResult = await this.postFlow?.input(
+          workflowScope,
+          update.message,
+        );
+        if (postResult) return postResult;
       }
       return this.menu(safeChatId, connection.id);
     } catch (error) {
@@ -217,11 +288,25 @@ export class TelegramSystemBotHandlerService {
     telegramUserId: string,
     chatId: string,
     actor: NonNullable<TelegramSystemBotUpdate['message']>['from'],
+    command: string,
   ) {
     const connection = await this.connections
       .requireEnabledConnection(telegramUserId)
       .catch(() => null);
     if (connection) {
+      if (command === '/start ad_sale' && this.adSaleFlow) {
+        const workspace = await this.connections.requireCurrentWorkspace(
+          connection.id,
+        );
+        return this.adSaleFlow.begin({
+          chatId,
+          connectionId: connection.id,
+          userId: connection.userId,
+          telegramUserId: connection.telegramUserId,
+          workspaceId: workspace.workspaceId,
+          timezone: workspace.workspace.timezone,
+        });
+      }
       const workspaces = await this.connections.workspacesForConnection(
         connection.id,
       );
@@ -270,42 +355,13 @@ export class TelegramSystemBotHandlerService {
   private async menuPayload(connectionId: string) {
     const workspace =
       await this.connections.requireCurrentWorkspace(connectionId);
-    const workspaceEmoji = systemBotEmoji(
-      workspace.workspace.avatarPresentation,
-      '🏢',
-    );
-    return {
-      text: `${workspaceEmoji} Workspace: ${workspace.workspace.name}`,
-      reply_markup: createCollapsibleReplyKeyboard([
-          [{ text: '📢 Channels' }, { text: '📊 Statistics' }],
-          [{ text: '💰 Finance' }, { text: '⏱ Scheduled Tasks' }],
-          [{ text: '🏢 Switch Workspace' }],
-        ], {
-          inputFieldPlaceholder: 'Choose an action or send a message',
-        }),
-    };
-  }
-
-  private commandFor(text: string | undefined) {
-    const actions: Record<string, string> = {
-      Channels: '/channels',
-      Statistics: '/stats',
-      Finance: '/finance',
-      'Scheduled Tasks': '/tasks',
-      'Switch Workspace': '/workspace',
-      '📢 Channels': '/channels',
-      '📊 Statistics': '/stats',
-      '💰 Finance': '/finance',
-      '⏱ Scheduled Tasks': '/tasks',
-      '🏢 Switch Workspace': '/workspace',
-    };
-    return text ? (actions[text] ?? text) : undefined;
+    return systemBotMenuPayload(workspace.workspace);
   }
 
   private async help(chatId: string) {
     return this.api.sendMessage(this.config.token!, {
       chat_id: chatId,
-      text: '🤖 Use the menu button or these commands:\n📢 /channels — your managed channels\n📊 /stats — workspace statistics\n💰 /finance — record income or expense\n⏱ /tasks — scheduled tasks\n🏢 /workspace — switch workspace',
+      text: SYSTEM_BOT_HELP_TEXT,
     });
   }
 
@@ -316,43 +372,12 @@ export class TelegramSystemBotHandlerService {
       chat_id: chatId,
       text: '🏢 Choose workspace:',
       reply_markup: {
-        inline_keyboard: workspaces.map((workspace) => [
-          {
+        inline_keyboard: compactSystemBotInlineKeyboard(
+          workspaces.map((workspace) => ({
             text: `${workspace.selected ? '✓ ' : ''}${systemBotEmoji(workspace.avatarPresentation, '🏢')} ${workspace.name}`,
             callback_data: `workspace:${workspace.id}`,
-          },
-        ]),
-      },
-    });
-  }
-
-  private async channels(
-    chatId: string,
-    workspaceId: string,
-    telegramUserId: string,
-    timezone: string,
-  ) {
-    const channels = await this.domain.channels(workspaceId, telegramUserId);
-    const lines = channels.length
-      ? channels
-          .map(
-            (channel) =>
-              `${channel.isActive ? '🟢' : '⚪'} ${channel.photoUrl ? '🖼️' : '📢'} ${channel.title}${channel.currentSubscribersCount ? `\n👥 ${channel.currentSubscribersCount.toLocaleString()} subscribers` : ''}\n🕒 Last sync: ${this.formatDate(channel.lastPublicSyncedAt, timezone)}`,
-          )
-          .join('\n')
-      : '📢 No channels in this workspace.';
-    return this.api.sendMessage(this.config.token!, {
-      chat_id: chatId,
-      text: lines,
-      reply_markup: {
-        inline_keyboard: [
-          ...channels.slice(0, 8).map((channel) => [
-            {
-              text: `🔄 ${channel.title}`,
-              callback_data: `channel:sync:${channel.id}`,
-            },
-          ]),
-        ],
+          })),
+        ),
       },
     });
   }
@@ -408,81 +433,7 @@ export class TelegramSystemBotHandlerService {
     return this.api.sendMessage(this.config.token!, {
       chat_id: chatId,
       text: renderSystemBotStats(workspaceName, summary),
+      parse_mode: 'HTML',
     });
-  }
-
-  private async tasks(
-    chatId: string,
-    workspaceId: string,
-    role: Parameters<TelegramSystemBotDomainGatewayService['tasks']>[1],
-    timezone = 'UTC',
-  ) {
-    const result = await this.domain.tasks(workspaceId, role);
-    const buttons = result.items
-      .filter((task) => task.canRunNow)
-      .slice(0, 8)
-      .map((task) => [
-        {
-          text: `▶️ ${systemBotTaskEmoji(task.key)} ${task.name}`,
-          callback_data: `task:run:${task.key}`,
-        },
-      ]);
-    return this.api.sendMessage(this.config.token!, {
-      chat_id: chatId,
-      text: result.items.length
-        ? result.items
-            .map((task) =>
-              [
-                `${task.enabled ? '🟢' : '⚪'} ${systemBotTaskEmoji(task.key)} ${task.name}`,
-                `🕒 Last run: ${this.formatDate(task.lastRun?.finishedAt ?? task.lastRun?.startedAt, timezone)}`,
-                task.nextRunAt
-                  ? `⏭ Next: ${this.formatDate(task.nextRunAt, timezone)}`
-                  : null,
-              ]
-                .filter(Boolean)
-                .join('\n'),
-            )
-            .join('\n')
-        : '⏱ No scheduled tasks.',
-      reply_markup: buttons.length ? { inline_keyboard: buttons } : undefined,
-    });
-  }
-
-  private async runTask(
-    chatId: string,
-    workspaceId: string,
-    role: Parameters<TelegramSystemBotDomainGatewayService['tasks']>[1],
-    taskKey: string,
-  ) {
-    const run = await this.domain.runTask(workspaceId, role, taskKey);
-    return this.api.sendMessage(this.config.token!, {
-      chat_id: chatId,
-      text: `${run?.status === 'SUCCESS' ? '✅ Completed' : '⚠️ Finished'}: ${run?.resultSummary ?? taskKey}`,
-    });
-  }
-
-  private formatDate(
-    value: string | Date | null | undefined,
-    timezone: string,
-  ) {
-    if (!value) return 'Never';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return 'Unknown';
-    try {
-      return new Intl.DateTimeFormat('en-GB', {
-        timeZone: timezone,
-        day: '2-digit',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-      }).format(date);
-    } catch {
-      return new Intl.DateTimeFormat('en-GB', {
-        day: '2-digit',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-      }).format(date);
-    }
   }
 }

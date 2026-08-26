@@ -37,7 +37,7 @@ export class TelegramSystemBotRuntimeService implements OnModuleInit {
       return;
     }
     try {
-      await this.configureCommands(token);
+      await this.configureMenu(token);
       const webhookInfo = await this.api.getWebhookInfo(token);
       if (this.webhookUrl(webhookInfo) !== url) {
         await this.api.setWebhook(token, url, secret);
@@ -49,18 +49,13 @@ export class TelegramSystemBotRuntimeService implements OnModuleInit {
     }
   }
 
-  private async configureCommands(token: string) {
+  private async configureMenu(token: string) {
     try {
-      await this.api.setMyCommands(token, [
-        { command: 'start', description: 'Open the main menu' },
-        { command: 'help', description: 'Show available commands' },
-        { command: 'channels', description: 'Show my channels' },
-        { command: 'stats', description: 'Show workspace statistics' },
-        { command: 'finance', description: 'Record a transaction' },
-        { command: 'tasks', description: 'Show scheduled tasks' },
-        { command: 'workspace', description: 'Switch workspace' },
-      ]);
-      await this.api.setChatMenuButton(token);
+      // The System Bot uses a collapsible ReplyKeyboardMarkup. Clearing the
+      // slash-command menu lets Telegram expose that keyboard through its
+      // native square grid icon next to the input field.
+      await this.api.deleteMyCommands(token);
+      await this.api.setChatMenuButton(token, { type: 'default' });
     } catch (error) {
       this.logger.warn(
         `Telegram System Bot command setup failed: ${sanitizeOperationalError(error)}`,
@@ -86,7 +81,9 @@ export class TelegramSystemBotRuntimeService implements OnModuleInit {
       ? 'message'
       : update.callback_query
         ? 'callback_query'
-        : 'other';
+        : update.my_chat_member
+          ? 'my_chat_member'
+          : 'other';
     let log: { id: string; status: string };
     try {
       log = await this.prisma.telegramSystemBotUpdateLog.create({

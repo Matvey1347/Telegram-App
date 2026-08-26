@@ -91,6 +91,7 @@ import { useManagedPostDueRefresh } from "@/components/features/telegram/telegra
 import { ManagedPostHistoryModal } from "@/components/features/telegram/telegram/managed-post-history-modal";
 import { ManagedPostExportButton } from "@/components/features/telegram/telegram/managed-post-export-button";
 import { ManagedPostReadOnlyPanel } from "@/components/features/telegram/telegram/managed-post-read-only-panel";
+import { ResetChannelScheduledPostsButton } from "@/components/features/telegram/telegram/reset-channel-scheduled-posts-button";
 import { MemberBadge } from "@/components/features/workspace/member-badge";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 import {
@@ -686,6 +687,14 @@ export function TelegramPostsPageClient({
                     <span className="inline-flex items-center gap-2"><Upload size={15} /> Import</span>
                   </Button>
                   <TimePostsControl channelId={channel.id} timePosts={channel.timePosts || []} />
+                  <ResetChannelScheduledPostsButton
+                    channelId={channel.id}
+                    channelTitle={channel.title}
+                    onCompleted={() => {
+                      router.replace(buildTelegramPostsUrl({ channelId: channel.id, postView: "editor" }));
+                      setNewPostToken((value) => value + 1);
+                    }}
+                  />
                   <GptContextDownloadButton
                     channelId={channel.id}
                     channelTitle={channel.title}

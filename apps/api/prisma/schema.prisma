@@ -479,6 +479,20 @@ enum TelegramSystemBotFinanceDraftKind {
   TRANSFER
 }
 
+enum TelegramSystemBotWorkflowKind {
+  POST_IMPORT
+  AD_SALE
+}
+
+enum TelegramSystemBotWorkflowStatus {
+  ACTIVE
+  COMMITTING
+  COMPLETED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
 enum GreeterSequenceTrigger {
   AFTER_START
   AFTER_CAPTCHA_SUCCESS
@@ -697,6 +711,7 @@ model Workspace {
   telegramSystemBotConnections           TelegramSystemBotConnection[]
   telegramSystemBotTaskSubscriptions     TelegramSystemBotTaskSubscription[]
   telegramSystemBotFinanceDrafts         TelegramSystemBotFinanceDraft[]
+  telegramSystemBotWorkflows             TelegramSystemBotWorkflow[]
   telegramUserAccountIntegrations        TelegramUserAccountIntegration[]
   telegramChannelAdminLinks              TelegramChannelAdminLink[]
   telegramChannelSourceAccesses          TelegramChannelSourceAccess[]
@@ -1633,6 +1648,8 @@ model TelegramAdSale {
   nextActionAt               DateTime?
   settlementCurrency         String                 @db.VarChar(3)
   reservedUntil              DateTime?
+  idempotencyKey             String?
+  financeSkipped             Boolean                @default(false)
   sourceTaskId               String?
   sourceAdvertiserActivityId String?
   createdByUserId            String?
@@ -1653,6 +1670,7 @@ model TelegramAdSale {
   automationExecutions     TelegramAdvertiserAutomationExecution[]
 
   @@index([workspaceId])
+  @@unique([workspaceId, idempotencyKey])
   @@index([workspaceId, status, createdAt])
   @@index([workspaceId, assignedMemberId])
   @@index([workspaceId, advertiserId, createdAt])
@@ -1686,6 +1704,7 @@ model TelegramAdSalePlacement {
   isPermanentSnapshot        Boolean                   @default(false)
   manualPriceReason          String?
   managedPostId              String?
+  attachmentIdempotencyKey   String?
   telegramPostId             String?
   publishedAt                DateTime?
   plannedDeleteAt            DateTime?
@@ -1716,6 +1735,7 @@ model TelegramAdSalePlacement {
   automationExecutions TelegramAdvertiserAutomationExecution[]
 
   @@unique([workspaceId, telegramChannelId, inventoryOpportunityKey], map: "TelegramAdSalePlacement_workspaceId_telegramChannelId_inventory")
+  @@unique([workspaceId, attachmentIdempotencyKey], map: "TelegramAdSalePlacement_workspaceId_attachmentIdempotencyKey_ke")
   @@index([workspaceId])
   @@index([telegramChannelId, scheduledAt])
   @@index([telegramAdSaleId])
@@ -3793,6 +3813,7 @@ model TelegramSystemBotConnection {
   currentWorkspace  Workspace?                          @relation(fields: [currentWorkspaceId], references: [id], onDelete: SetNull)
   taskSubscriptions TelegramSystemBotTaskSubscription[]
   financeDrafts     TelegramSystemBotFinanceDraft[]
+  workflows         TelegramSystemBotWorkflow[]
 
   @@index([currentWorkspaceId])
   @@index([enabled])
@@ -3830,6 +3851,7 @@ model TelegramSystemBotFinanceDraft {
   toAccountId   String?
   fromAmount    Decimal?
   toAmount      Decimal?
+  controlMessageId Int?
   status        TelegramSystemBotFinanceDraftStatus @default(PENDING)
   transactionId String?
   transferId    String?
@@ -3845,6 +3867,33 @@ model TelegramSystemBotFinanceDraft {
   @@index([connectionId, status, expiresAt])
   @@index([workspaceId, status])
   @@index([status, expiresAt])
+}
+
+model TelegramSystemBotWorkflow {
+  id                      String                           @id @default(cuid())
+  connectionId            String
+  workspaceId             String
+  kind                    TelegramSystemBotWorkflowKind
+  step                    String
+  status                  TelegramSystemBotWorkflowStatus @default(ACTIVE)
+  version                 Int                              @default(1)
+  controlMessageId        Int?
+  payload                 Json
+  resultManagedPostId     String?
+  resultAdSaleId          String?
+  resultAdSalePlacementId String?
+  lastError               String?
+  expiresAt               DateTime
+  completedAt             DateTime?
+  createdAt               DateTime                         @default(now())
+  updatedAt               DateTime                         @updatedAt
+
+  connection TelegramSystemBotConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  workspace  Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId, workspaceId, status, expiresAt], map: "TelegramSystemBotWorkflow_active_idx")
+  @@index([status, expiresAt], map: "TelegramSystemBotWorkflow_expiry_idx")
+  @@index([workspaceId, kind, status, updatedAt], map: "TelegramSystemBotWorkflow_workspace_kind_idx")
 }
 
 model TelegramSystemBotUpdateLog {

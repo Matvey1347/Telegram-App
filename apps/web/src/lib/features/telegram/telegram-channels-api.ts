@@ -4,6 +4,7 @@ import type {
   BulkActionResultItem,
   ManagedPostsSyncResult,
   PaginatedResponse,
+  ResetChannelScheduledPostsResult,
   ScheduleManagedPostsBatchPayload,
   TelegramChannelSyncProgressItem,
   TelegramManagedPostCalendarResult,
@@ -861,6 +862,12 @@ export function createTelegramChannelsApi({
       (
         await api.post<TelegramManagedPost>(
           `/telegram-channels/${channelId}/managed-posts/${postId}/return-to-draft`,
+        )
+      ).data,
+    resetChannelScheduledPostsToDrafts: async (channelId: string) =>
+      (
+        await api.post<ResetChannelScheduledPostsResult>(
+          `/telegram-channels/${channelId}/managed-posts/reset-scheduled-to-drafts`,
         )
       ).data,
     scheduleManagedPostsBatch: async (

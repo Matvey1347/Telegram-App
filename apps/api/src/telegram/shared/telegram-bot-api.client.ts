@@ -27,6 +27,7 @@ export type TelegramBotCommand = {
 };
 
 export type TelegramChatMenuButton =
+  | { type: 'default' }
   | { type: 'commands' }
   | { type: 'web_app'; text: string; webAppUrl: string };
 
@@ -57,7 +58,9 @@ export class TelegramBotApiClient {
   async getUserProfilePhotos(token: string, userId: string) {
     return this.call<{
       total_count?: number;
-      photos?: Array<Array<{ file_id: string; width?: number; height?: number }>>;
+      photos?: Array<
+        Array<{ file_id: string; width?: number; height?: number }>
+      >;
     }>(
       token,
       'getUserProfilePhotos',
@@ -108,6 +111,12 @@ export class TelegramBotApiClient {
   ) {
     return this.call<boolean>(token, 'setMyCommands', {
       commands,
+      ...(languageCode ? { language_code: languageCode } : {}),
+    });
+  }
+
+  async deleteMyCommands(token: string, languageCode?: string) {
+    return this.call<boolean>(token, 'deleteMyCommands', {
       ...(languageCode ? { language_code: languageCode } : {}),
     });
   }
@@ -390,7 +399,11 @@ export class TelegramBotApiClient {
     return payload.result as TResult;
   }
 
-  private async callForm<TResult>(token: string, method: string, body: FormData) {
+  private async callForm<TResult>(
+    token: string,
+    method: string,
+    body: FormData,
+  ) {
     const response = await fetch(
       `https://api.telegram.org/bot${token}/${method}`,
       {

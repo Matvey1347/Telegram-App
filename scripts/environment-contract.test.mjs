@@ -67,3 +67,19 @@ test("script-only flags stay out of the permanent environment profile", () => {
     assert.equal(profile.includes(`${key}=`), false, key);
   }
 });
+
+test("local System Bot has an explicit opt-in development command", () => {
+  const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts;
+  assert.match(scripts.dev, /TELEGRAM_SYSTEM_BOT_ENVIRONMENT=\s/u);
+  assert.match(scripts["dev:system-bot"], /--system-bot(?:\s|$)/u);
+
+  const runner = readFileSync("scripts/dev-tunnel.mjs", "utf8");
+  assert.match(
+    runner,
+    /TELEGRAM_SYSTEM_BOT_ENVIRONMENT:\s*withSystemBot\s*\?\s*"LOCAL"\s*:\s*""/u,
+  );
+  assert.match(
+    runner,
+    /TELEGRAM_BOT_RUNTIME_ENVIRONMENT:\s*withWorkspaceBots\s*\?\s*"LOCAL"\s*:\s*""/u,
+  );
+});

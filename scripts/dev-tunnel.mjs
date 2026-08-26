@@ -9,7 +9,10 @@ import { randomBytes } from "node:crypto";
 import { localBotPublicEnvironment } from "./public-origin-environment.mjs";
 
 const withCloudflare = process.argv.includes("--cloudflare");
-const withBots = process.argv.includes("--bots");
+const withWorkspaceBots = process.argv.includes("--bots");
+const withSystemBot =
+  withWorkspaceBots || process.argv.includes("--system-bot");
+const withBotRuntime = withWorkspaceBots || withSystemBot;
 const tunnelTargetPort = Number(process.env.TUNNEL_TARGET_PORT || 3000);
 const botGatewayPort = 4100;
 const children = new Set();
@@ -28,7 +31,7 @@ function failure(name, error) {
 async function stop(exitCode = 0) {
   if (stopping) return;
   stopping = true;
-  if (withBots && backendReady) {
+  if (withWorkspaceBots && backendReady) {
     try {
       const response = await fetch(
         "http://127.0.0.1:4000/api/telegram/bots/runtime/local-development/stop",
@@ -192,7 +195,7 @@ async function assertCloudflaredAvailable() {
 
 async function startCloudflareTunnel() {
   await assertCloudflaredAvailable();
-  const targetPort = withBots ? botGatewayPort : tunnelTargetPort;
+  const targetPort = withBotRuntime ? botGatewayPort : tunnelTargetPort;
   let resolveUrl;
   let urlTimeout;
   const publicUrl = new Promise((resolve, reject) => {
@@ -220,10 +223,10 @@ async function startCloudflareTunnel() {
   const url = await publicUrl;
   status("Cloudflare Tunnel", url);
   console.log(
-    `  Tunnel target: http://localhost:${targetPort}${withBots ? " (API + Mini App gateway)" : tunnelTargetPort === 4000 ? "/api" : ""}`,
+    `  Tunnel target: http://localhost:${targetPort}${withBotRuntime ? " (API + web gateway)" : tunnelTargetPort === 4000 ? "/api" : ""}`,
   );
   console.log(
-    `  ${withBots ? "Telegram Mini Apps call this HTTPS URL; the browser app calls" : "The local web app continues to call"} ${withBots ? `${url}/api` : "http://localhost:4000/api"}.`,
+    `  ${withBotRuntime ? "Telegram calls this HTTPS URL; the browser app calls" : "The local web app continues to call"} ${withBotRuntime ? `${url}/api` : "http://localhost:4000/api"}.`,
   );
   return url;
 }
@@ -299,22 +302,22 @@ try {
   await Promise.all([
     assertPortAvailable(4000, "Backend"),
     assertPortAvailable(3000, "Frontend"),
-    ...(withBots
-      ? [assertPortAvailable(botGatewayPort, "Mini App gateway")]
+    ...(withBotRuntime
+      ? [assertPortAvailable(botGatewayPort, "Bot gateway")]
       : []),
   ]);
 } catch (error) {
   failure("Local development", error);
   process.exit(1);
 }
-if (withBots) startBotGateway();
+if (withBotRuntime) startBotGateway();
 let publicApiUrl = null;
 try {
   publicApiUrl = withCloudflare ? await startCloudflareTunnel() : null;
 } catch (error) {
   failure("Cloudflare Tunnel", error);
 }
-if (withBots && !publicApiUrl) {
+if (withBotRuntime && !publicApiUrl) {
   failure(
     "Bot development",
     "requires an HTTPS Cloudflare Tunnel so Telegram can deliver webhook updates.",
@@ -326,11 +329,11 @@ start("Backend", "pnpm", ["--filter", "api", "dev"], {
   // Telegram Login Widget callback. Dashboard CORS still explicitly permits
   // localhost, so internal development remains available there.
   FRONTEND_URL:
-    withBots && publicApiUrl ? publicApiUrl : "http://localhost:3000",
-  TELEGRAM_SYSTEM_BOT_ENVIRONMENT: withBots ? "LOCAL" : "",
-  TELEGRAM_BOT_RUNTIME_ENVIRONMENT: withBots ? "LOCAL" : "",
-  LOCAL_DEV_BOTS_CONTROL_SECRET: withBots ? localDevControlSecret : "",
-  ...(withBots && publicApiUrl
+    withBotRuntime && publicApiUrl ? publicApiUrl : "http://localhost:3000",
+  TELEGRAM_SYSTEM_BOT_ENVIRONMENT: withSystemBot ? "LOCAL" : "",
+  TELEGRAM_BOT_RUNTIME_ENVIRONMENT: withWorkspaceBots ? "LOCAL" : "",
+  LOCAL_DEV_BOTS_CONTROL_SECRET: withWorkspaceBots ? localDevControlSecret : "",
+  ...(withBotRuntime && publicApiUrl
     ? {
         ...localBotPublicEnvironment(publicApiUrl),
       }
@@ -350,7 +353,7 @@ try {
     "http://127.0.0.1:4000/api/health",
   ).then(() => {
     backendReady = true;
-    return withBots ? activateLocalBots() : undefined;
+    return withWorkspaceBots ? activateLocalBots() : undefined;
   });
   await Promise.all([
     backendStartup,
@@ -358,9 +361,13 @@ try {
   ]);
   status("Backend", "http://localhost:4000/api");
   status("Frontend", "http://localhost:3000");
-  if (withBots)
+  if (withWorkspaceBots)
     console.log(
       "✓ Bot webhooks: LOCAL workspace runtimes and the LOCAL System Bot use this Cloudflare URL; PRODUCTION credentials are never selected. Changed Finance Mini App links are refreshed automatically.",
+    );
+  else if (withSystemBot)
+    console.log(
+      "✓ System Bot webhook: the LOCAL System Bot uses this Cloudflare URL; workspace bot runtimes and PRODUCTION credentials are not selected.",
     );
   if (!withCloudflare) console.log("○ Cloudflare Tunnel: disabled");
 } catch (error) {

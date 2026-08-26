@@ -41,6 +41,10 @@ import { TelegramManagedPostPresentationService } from './telegram-managed-post-
 import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-media-storage.service';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
+import {
+  deliverTelegramManagedPostViaBot,
+  type TelegramBotDeliveryOperation,
+} from './telegram-managed-post-bot-delivery';
 
 @Injectable()
 export class TelegramManagedPostPublisherService {
@@ -147,6 +151,23 @@ export class TelegramManagedPostPublisherService {
           ? 'Native Telegram rich content (including pull quotes) requires an active workspace bot with posting permission for this channel.'
           : 'Publishing inline buttons requires an active workspace bot with posting permission for this channel.',
       );
+    }
+    if (
+      post.status === TelegramManagedPostStatus.FAILED &&
+      post.telegramMessageIds.length
+    ) {
+      const journaledSource = sources.find(
+        (candidate) =>
+          candidate.sourceType === TelegramSourceType.BOT &&
+          candidate.sourceId === post.sourceId &&
+          candidate.permissions.canPostMessages,
+      );
+      if (!journaledSource) {
+        throw new BadRequestException(
+          'The bot that started this delivery is no longer available. Restore its channel access before retrying.',
+        );
+      }
+      source = journaledSource;
     }
     if (!source) {
       throw new BadRequestException(
@@ -340,11 +361,12 @@ export class TelegramManagedPostPublisherService {
               .filter((entity): entity is BotMessageEntity => Boolean(entity)),
           };
         };
+        const operations: TelegramBotDeliveryOperation[] = [];
         if (post.imageUrls.length > 1) {
           const caption = toBotFormattedText(captionHtml);
-          const result = await call<Array<{ message_id: number }>>(
-            'sendMediaGroup',
-            {
+          operations.push({
+            method: 'sendMediaGroup',
+            body: {
               media: post.imageUrls.map((media, index) => ({
                 type: 'photo',
                 media,
@@ -356,66 +378,111 @@ export class TelegramManagedPostPublisherService {
                   : {}),
               })),
             },
-          );
-          ids = result.map((message) => String(message.message_id));
+            expectedMessageCount: post.imageUrls.length,
+            messageIds: (result) =>
+              (result as Array<{ message_id: number }>).map((message) =>
+                String(message.message_id),
+              ),
+          });
           for (const followupHtml of followupHtmlParts) {
             const followup = toBotFormattedText(followupHtml);
-            const textResult = await call<{ message_id: number }>(
-              'sendMessage',
-              {
+            operations.push({
+              method: 'sendMessage',
+              body: {
                 text: followup.text,
                 entities: followup.entities,
               },
-            );
-            ids.push(String(textResult.message_id));
+              expectedMessageCount: 1,
+              messageIds: (result) => [
+                String((result as { message_id: number }).message_id),
+              ],
+            });
           }
         } else if (post.imageUrls.length === 1) {
           const caption = toBotFormattedText(captionHtml);
-          const result = await call<{ message_id: number }>('sendPhoto', {
-            photo: post.imageUrls[0],
-            caption: caption.text,
-            caption_entities: caption.entities,
+          operations.push({
+            method: 'sendPhoto',
+            body: {
+              photo: post.imageUrls[0],
+              caption: caption.text,
+              caption_entities: caption.entities,
+            },
+            expectedMessageCount: 1,
+            messageIds: (result) => [
+              String((result as { message_id: number }).message_id),
+            ],
           });
-          ids = [String(result.message_id)];
           for (const followupHtml of followupHtmlParts) {
             const followup = toBotFormattedText(followupHtml);
-            const textResult = await call<{ message_id: number }>(
-              'sendMessage',
-              {
+            operations.push({
+              method: 'sendMessage',
+              body: {
                 text: followup.text,
                 entities: followup.entities,
               },
-            );
-            ids.push(String(textResult.message_id));
+              expectedMessageCount: 1,
+              messageIds: (result) => [
+                String((result as { message_id: number }).message_id),
+              ],
+            });
           }
         } else {
-          ids = [];
           if (richHtml && textHtmlParts.length === 1) {
-            const result = await call<{ message_id: number }>(
-              'sendRichMessage',
-              {
+            operations.push({
+              method: 'sendRichMessage',
+              body: {
                 rich_message: { html: richHtml },
               },
-            );
-            ids.push(String(result.message_id));
+              expectedMessageCount: 1,
+              messageIds: (result) => [
+                String((result as { message_id: number }).message_id),
+              ],
+            });
           } else {
             for (const textHtml of textHtmlParts) {
               const message = toBotFormattedText(textHtml);
-              const result = await call<{ message_id: number }>('sendMessage', {
-                text: message.text,
-                entities: message.entities,
+              operations.push({
+                method: 'sendMessage',
+                body: { text: message.text, entities: message.entities },
+                expectedMessageCount: 1,
+                messageIds: (result) => [
+                  String((result as { message_id: number }).message_id),
+                ],
               });
-              ids.push(String(result.message_id));
             }
           }
         }
-        if (buttonRows.length && ids.length) {
-          await this.botApiClient.editMessageReplyMarkup(token, {
-            chat_id: chatId,
-            message_id: Number(ids.at(-1)),
-            reply_markup: toTelegramBotInlineKeyboard(buttonRows),
-          });
-        }
+        const journaledMessageIds =
+          post.status === TelegramManagedPostStatus.FAILED
+            ? post.telegramMessageIds
+            : [];
+        ids = await deliverTelegramManagedPostViaBot({
+          operations,
+          journaledMessageIds,
+          call,
+          persist: async (messageIds) => {
+            await this.prisma.telegramManagedPost.update({
+              where: { id: post.id },
+              data: {
+                telegramMessageIds: messageIds,
+                telegramRemoteStatus: TelegramManagedPostRemoteStatus.UNKNOWN,
+                sourceType: source.sourceType,
+                sourceId: source.sourceId,
+              },
+            });
+          },
+          ...(buttonRows.length
+            ? {
+                applyReplyMarkup: async (lastMessageId: string) => {
+                  await this.botApiClient.editMessageReplyMarkup(token, {
+                    chat_id: chatId,
+                    message_id: Number(lastMessageId),
+                    reply_markup: toTelegramBotInlineKeyboard(buttonRows),
+                  });
+                },
+              }
+            : {}),
+        });
       }
       if (!ids.length) {
         throw new BadRequestException(

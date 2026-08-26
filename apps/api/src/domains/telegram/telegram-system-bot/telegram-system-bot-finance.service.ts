@@ -50,6 +50,7 @@ export class TelegramSystemBotFinanceService {
     userId: string;
     workspaceId: string;
     type: TransactionType;
+    controlMessageId?: number;
   }): Promise<TelegramSystemBotFinanceResult> {
     await this.requireMembership(input.userId, input.workspaceId);
     const [accounts, categories] = await Promise.all([
@@ -64,16 +65,21 @@ export class TelegramSystemBotFinanceService {
         workspaceId: input.workspaceId,
         kind: TelegramSystemBotFinanceDraftKind.TRANSACTION,
         type: input.type,
+        controlMessageId: input.controlMessageId,
         expiresAt: this.expiresAt(),
       },
     });
-    return financeAccountChoice(draft.id, accounts);
+    return this.withControl(
+      financeAccountChoice(draft.id, accounts),
+      draft.controlMessageId,
+    );
   }
 
   async beginTransfer(input: {
     connectionId: string;
     userId: string;
     workspaceId: string;
+    controlMessageId?: number;
   }): Promise<TelegramSystemBotFinanceResult> {
     await this.requireMembership(input.userId, input.workspaceId);
     const accounts = await this.accounts(input.workspaceId);
@@ -84,10 +90,14 @@ export class TelegramSystemBotFinanceService {
         connectionId: input.connectionId,
         workspaceId: input.workspaceId,
         kind: TelegramSystemBotFinanceDraftKind.TRANSFER,
+        controlMessageId: input.controlMessageId,
         expiresAt: this.expiresAt(),
       },
     });
-    return financeTransferAccountChoice(draft.id, accounts, 'from');
+    return this.withControl(
+      financeTransferAccountChoice(draft.id, accounts, 'from'),
+      draft.controlMessageId,
+    );
   }
 
   async choose(input: {
@@ -113,17 +123,24 @@ export class TelegramSystemBotFinanceService {
         if (!account)
           throw new NotFoundException('Account is no longer available');
         await this.updatePending(draft.id, { accountId: account.id });
-        return financeCategoryChoice(draft.id, categories);
+        return this.withControl(
+          financeCategoryChoice(draft.id, categories),
+          draft.controlMessageId,
+        );
       }
       if (input.kind === 'category') {
         const category = categories[input.index];
         if (!category)
           throw new NotFoundException('Category is no longer available');
         await this.updatePending(draft.id, { categoryId: category.id });
-        return {
-          kind: 'INPUT',
-          text: `${draft.type === TransactionType.income ? 'Income' : 'Expense'}: send the amount and optional description.\nExample: 125.50 client payment`,
-        };
+        return this.withControl(
+          {
+            kind: 'INPUT',
+            draftId: draft.id,
+            text: `${draft.type === TransactionType.income ? 'Income' : 'Expense'}: send the amount and optional description.\nExample: 125.50 client payment`,
+          },
+          draft.controlMessageId,
+        );
       }
       throw new NotFoundException('Finance action is no longer available');
     }
@@ -133,7 +150,10 @@ export class TelegramSystemBotFinanceService {
       if (!account)
         throw new NotFoundException('Account is no longer available');
       await this.updatePending(draft.id, { fromAccountId: account.id });
-      return financeTransferAccountChoice(draft.id, accounts, 'to', account.id);
+      return this.withControl(
+        financeTransferAccountChoice(draft.id, accounts, 'to', account.id),
+        draft.controlMessageId,
+      );
     }
     if (input.kind === 'to') {
       const available = accounts.filter(
@@ -146,13 +166,17 @@ export class TelegramSystemBotFinanceService {
       const from = accounts.find((item) => item.id === draft.fromAccountId);
       if (!from)
         throw new NotFoundException('Source account is no longer available');
-      return {
-        kind: 'INPUT',
-        text:
-          from.currency === account.currency
-            ? `Transfer ${from.name} → ${account.name}. Send the amount and optional description.\nExample: 125.50 reserve`
-            : `Transfer ${from.name} (${from.currency}) → ${account.name} (${account.currency}). Send the outgoing and received amounts, then an optional description.\nExample: 100 USD 92 EUR exchange`,
-      };
+      return this.withControl(
+        {
+          kind: 'INPUT',
+          draftId: draft.id,
+          text:
+            from.currency === account.currency
+              ? `Transfer ${from.name} → ${account.name}. Send the amount and optional description.\nExample: 125.50 reserve`
+              : `Transfer ${from.name} (${from.currency}) → ${account.name} (${account.currency}). Send the outgoing and received amounts, then an optional description.\nExample: 100 USD 92 EUR exchange`,
+        },
+        draft.controlMessageId,
+      );
     }
     throw new NotFoundException('Finance action is no longer available');
   }
@@ -192,15 +216,22 @@ export class TelegramSystemBotFinanceService {
     if (draft.kind === TelegramSystemBotFinanceDraftKind.TRANSACTION) {
       const parsed = parseFinanceTransactionInput(input.text);
       if (!parsed)
-        return {
-          kind: 'INPUT',
-          text: 'Enter a positive amount, for example: 125.50 client payment',
-        };
+        return this.withControl(
+          {
+            kind: 'INPUT',
+            draftId: draft.id,
+            text: 'Enter a positive amount, for example: 125.50 client payment',
+          },
+          draft.controlMessageId,
+        );
       const updated = await this.updatePending(draft.id, {
         amount: parsed.amount,
         description: parsed.description,
       });
-      return this.confirmation(updated);
+      return this.withControl(
+        await this.confirmation(updated),
+        draft.controlMessageId,
+      );
     }
 
     const accounts = await this.accounts(draft.workspaceId);
@@ -213,20 +244,27 @@ export class TelegramSystemBotFinanceService {
       from.currency === to.currency,
     );
     if (!parsed) {
-      return {
-        kind: 'INPUT',
-        text:
-          from.currency === to.currency
-            ? 'Enter a positive amount, for example: 125.50 reserve'
-            : `Enter outgoing and received amounts, for example: 100 ${from.currency} 92 ${to.currency} exchange`,
-      };
+      return this.withControl(
+        {
+          kind: 'INPUT',
+          draftId: draft.id,
+          text:
+            from.currency === to.currency
+              ? 'Enter a positive amount, for example: 125.50 reserve'
+              : `Enter outgoing and received amounts, for example: 100 ${from.currency} 92 ${to.currency} exchange`,
+        },
+        draft.controlMessageId,
+      );
     }
     const updated = await this.updatePending(draft.id, {
       fromAmount: parsed.fromAmount,
       toAmount: parsed.toAmount,
       description: parsed.description,
     });
-    return this.confirmation(updated);
+    return this.withControl(
+      await this.confirmation(updated),
+      draft.controlMessageId,
+    );
   }
 
   async confirm(input: {
@@ -240,18 +278,24 @@ export class TelegramSystemBotFinanceService {
     if (!draft)
       throw new NotFoundException('Finance action is no longer available');
     if (draft.transactionId)
-      return {
-        kind: 'COMPLETED',
-        operation: 'transaction',
-        id: draft.transactionId,
-      };
+      return this.withControl(
+        {
+          kind: 'COMPLETED',
+          operation: 'transaction',
+          id: draft.transactionId,
+        },
+        draft.controlMessageId,
+      );
     if (draft.transferId)
-      return { kind: 'COMPLETED', operation: 'transfer', id: draft.transferId };
+      return this.withControl(
+        { kind: 'COMPLETED', operation: 'transfer', id: draft.transferId },
+        draft.controlMessageId,
+      );
     if (
       draft.status !== TelegramSystemBotFinanceDraftStatus.PENDING ||
       draft.expiresAt <= new Date()
     ) {
-      return { kind: 'DUPLICATE' };
+      return this.withControl({ kind: 'DUPLICATE' }, draft.controlMessageId);
     }
     await this.requireMembership(input.userId, draft.workspaceId);
     const claim = await this.prisma.telegramSystemBotFinanceDraft.updateMany({
@@ -262,7 +306,8 @@ export class TelegramSystemBotFinanceService {
       },
       data: { status: TelegramSystemBotFinanceDraftStatus.PROCESSING },
     });
-    if (claim.count !== 1) return { kind: 'DUPLICATE' };
+    if (claim.count !== 1)
+      return this.withControl({ kind: 'DUPLICATE' }, draft.controlMessageId);
 
     let operationId: string | null = null;
     try {
@@ -288,11 +333,14 @@ export class TelegramSystemBotFinanceService {
         });
         operationId = transaction.id;
         await this.completeDraft(draft.id, { transactionId: transaction.id });
-        return {
-          kind: 'COMPLETED',
-          operation: 'transaction',
-          id: transaction.id,
-        };
+        return this.withControl(
+          {
+            kind: 'COMPLETED',
+            operation: 'transaction',
+            id: transaction.id,
+          },
+          draft.controlMessageId,
+        );
       }
       if (
         !draft.fromAccountId ||
@@ -315,7 +363,10 @@ export class TelegramSystemBotFinanceService {
       });
       operationId = transfer.id;
       await this.completeDraft(draft.id, { transferId: transfer.id });
-      return { kind: 'COMPLETED', operation: 'transfer', id: transfer.id };
+      return this.withControl(
+        { kind: 'COMPLETED', operation: 'transfer', id: transfer.id },
+        draft.controlMessageId,
+      );
     } catch (error) {
       await this.prisma.telegramSystemBotFinanceDraft.update({
         where: { id: draft.id },
@@ -335,6 +386,10 @@ export class TelegramSystemBotFinanceService {
     connectionId: string,
     draftId: string,
   ): Promise<TelegramSystemBotFinanceResult> {
+    const draft = await this.prisma.telegramSystemBotFinanceDraft.findFirst({
+      where: { id: draftId, connectionId },
+      select: { controlMessageId: true },
+    });
     await this.prisma.telegramSystemBotFinanceDraft.updateMany({
       where: {
         id: draftId,
@@ -343,7 +398,7 @@ export class TelegramSystemBotFinanceService {
       },
       data: { status: TelegramSystemBotFinanceDraftStatus.EXPIRED },
     });
-    return { kind: 'CANCELLED' };
+    return this.withControl({ kind: 'CANCELLED' }, draft?.controlMessageId);
   }
 
   private async confirmation(draft: {
@@ -442,6 +497,13 @@ export class TelegramSystemBotFinanceService {
       },
       data: { status: TelegramSystemBotFinanceDraftStatus.EXPIRED },
     });
+  }
+
+  private withControl<T extends TelegramSystemBotFinanceResult>(
+    result: T,
+    controlMessageId: number | null | undefined,
+  ): T {
+    return { ...result, controlMessageId };
   }
 
   private accounts(workspaceId: string) {

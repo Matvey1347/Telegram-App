@@ -83,6 +83,14 @@ export type ManagedPostsSyncResult = {
   missing: number;
 };
 
+export type ResetChannelScheduledPostsResult = {
+  action: "RESET_CHANNEL_SCHEDULED_TO_DRAFT";
+  channelId: string;
+  remoteScheduledDeletedCount: number;
+  postsReturnedToDraftCount: number;
+  postIds: string[];
+};
+
 export type TelegramManagedPostCalendarItem = {
   id: string;
   telegramChannelId: string;

@@ -480,6 +480,7 @@ export type TelegramAdSale = {
   nextActionAt: string | null;
   settlementCurrency: string;
   reservedUntil: string | null;
+  financeSkipped: boolean;
   sourceTaskId?: string | null;
   sourceAdvertiserActivityId?: string | null;
   createdByUserId: string | null;

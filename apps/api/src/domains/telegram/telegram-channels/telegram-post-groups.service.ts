@@ -83,6 +83,19 @@ export class TelegramPostGroupsService {
     );
   }
 
+  ensureAdvertiseSystemGroup(
+    workspaceId: string,
+    channelId: string,
+    preferredMemberId?: string | null,
+  ) {
+    return this.telegramPostGroupStore.ensureAdvertiseSystemGroup(
+      this.prisma,
+      workspaceId,
+      channelId,
+      preferredMemberId,
+    );
+  }
+
   postGroupForWorkspace(
     ...args: Parameters<TelegramPostGroupStore['postGroupForWorkspace']>
   ) {

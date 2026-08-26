@@ -6,6 +6,14 @@ import {
   publicWebOrigin,
 } from '../../../config/deployment-config';
 
+type SystemBotEnvironment = 'LOCAL' | 'PRODUCTION';
+type SystemBotAuditCredential = {
+  environment: SystemBotEnvironment;
+  token: string | null;
+  username: string | null;
+  selected: boolean;
+};
+
 @Injectable()
 export class TelegramSystemBotConfigService {
   private generatedWebhookSecret: string | null = null;
@@ -31,10 +39,26 @@ export class TelegramSystemBotConfigService {
     return this.environmentValue('USERNAME');
   }
 
+  auditCredentials(): SystemBotAuditCredential[] {
+    const environments: readonly SystemBotEnvironment[] =
+      this.environment === 'LOCAL'
+        ? ['LOCAL', 'PRODUCTION']
+        : this.environment === 'PRODUCTION'
+          ? ['PRODUCTION']
+          : [];
+    return environments.map((environment) => ({
+      environment,
+      token: this.valueForEnvironment(environment, 'TOKEN'),
+      username: this.valueForEnvironment(environment, 'USERNAME'),
+      selected: environment === this.environment,
+    }));
+  }
+
   get frontendUrl() {
     return (
-      publicWebOrigin({ FRONTEND_URL: this.config.get<string>('FRONTEND_URL') }) ||
-      null
+      publicWebOrigin({
+        FRONTEND_URL: this.config.get<string>('FRONTEND_URL'),
+      }) || null
     );
   }
 
@@ -75,6 +99,13 @@ export class TelegramSystemBotConfigService {
   private environmentValue(suffix: 'TOKEN' | 'USERNAME' | 'WEBHOOK_SECRET') {
     const environment = this.environment;
     if (!environment) return null;
+    return this.valueForEnvironment(environment, suffix);
+  }
+
+  private valueForEnvironment(
+    environment: 'LOCAL' | 'PRODUCTION',
+    suffix: 'TOKEN' | 'USERNAME' | 'WEBHOOK_SECRET',
+  ) {
     return (
       this.config
         .get<string>(`TELEGRAM_SYSTEM_BOT_${environment}_${suffix}`)

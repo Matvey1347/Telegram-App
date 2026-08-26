@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { networkKeys } from "@/lib/query-keys";
 import type { TelegramChannelNetwork } from "@/lib/api";
 import {
+  sortNetworksByEstimatedAdPrice,
   TelegramNetworkCards,
   TelegramPeopleCards,
 } from "./telegram-overview-cards";
@@ -114,6 +115,55 @@ describe("telegram overview cards", () => {
   beforeEach(() => {
     updateNetwork.mockReset();
     pushToast.mockReset();
+  });
+
+  it("sorts networks from the highest estimated ad price to the lowest", () => {
+    const expensive = {
+      ...network,
+      id: "network-expensive",
+      name: "Expensive",
+      summary: {
+        ...network.summary,
+        assetEconomics: {
+          ...network.summary.assetEconomics,
+          estimatedAdPrice: 800,
+        },
+      },
+    };
+    const cheap = {
+      ...network,
+      id: "network-cheap",
+      name: "Cheap",
+      summary: {
+        ...network.summary,
+        assetEconomics: {
+          ...network.summary.assetEconomics,
+          estimatedAdPrice: 120,
+        },
+      },
+    };
+    const withoutPrice = {
+      ...network,
+      id: "network-without-price",
+      name: "Without price",
+      summary: {
+        ...network.summary,
+        assetEconomics: {
+          ...network.summary.assetEconomics,
+          estimatedAdPrice: null,
+        },
+      },
+    };
+    const networks = [cheap, withoutPrice, expensive];
+
+    expect(
+      sortNetworksByEstimatedAdPrice(networks).map((item) => item.name),
+    ).toEqual(["Expensive", "Cheap", "Without price"]);
+    expect(networks.map((item) => item.name)).toEqual([
+      "Cheap",
+      "Without price",
+      "Expensive",
+    ]);
   });
 
   it("renders a network as a metric card and selects emoji through the shared picker", async () => {

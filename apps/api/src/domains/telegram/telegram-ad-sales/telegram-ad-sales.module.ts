@@ -10,7 +10,14 @@ import { TelegramAdSalesCrmSettingsService } from './telegram-ad-sales-crm-setti
 import { TelegramAdSalesController } from './telegram-ad-sales.controller';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
 import { TelegramAdPlacementLifecycleService } from './telegram-ad-placement-lifecycle.service';
+import { TelegramAdSalesBotCommandService } from './telegram-ad-sales-bot-command.service';
+import { TelegramAdSalesBotCommandExecutorService } from './telegram-ad-sales-bot-command-executor.service';
+import { TelegramAdSalesBotDeletionPreflightService } from './telegram-ad-sales-bot-deletion-preflight.service';
+import { TelegramAdSalesBotExistingPlacementService } from './telegram-ad-sales-bot-existing-placement.service';
+import { TelegramAdSalesBotReservationService } from './telegram-ad-sales-bot-reservation.service';
+import { TelegramAdSalesBotTargetsService } from './telegram-ad-sales-bot-targets.service';
 import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
+import { TelegramAdSalesPlacementOptionsService } from './telegram-ad-sales-placement-options.service';
 
 @Module({
   imports: [
@@ -27,8 +34,21 @@ import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.
     TelegramAdSalesCrmAdvertisersService,
     TelegramAdSalesCrmSettingsService,
     TelegramAdPlacementLifecycleService,
+    TelegramAdSalesBotCommandService,
+    TelegramAdSalesBotCommandExecutorService,
+    TelegramAdSalesBotDeletionPreflightService,
+    TelegramAdSalesBotExistingPlacementService,
+    TelegramAdSalesBotReservationService,
+    TelegramAdSalesBotTargetsService,
+    TelegramAdSalesPlacementOptionsService,
     TelegramBotApiClient,
   ],
-  exports: [TelegramAdSalesService, TelegramAdPlacementLifecycleService],
+  exports: [
+    TelegramAdSalesService,
+    TelegramAdPlacementLifecycleService,
+    TelegramAdSalesBotCommandService,
+    TelegramAdSalesBotTargetsService,
+    TelegramAdSalesPlacementOptionsService,
+  ],
 })
 export class TelegramAdSalesModule {}

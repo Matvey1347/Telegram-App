@@ -75,12 +75,17 @@ function setup(overrides?: { account?: unknown }) {
         ),
     },
     telegramChannel: {
-      findMany: jest.fn().mockResolvedValue([{ id: 'channel-1' }]),
+      findMany: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 'channel-1', currentSubscribersCount: 10_000 },
+        ]),
     },
     telegramAdProduct: { findMany: jest.fn() },
     telegramPost: { findMany: jest.fn() },
     telegramChannelNetwork: { findMany: jest.fn() },
     telegramAdvertiser: { findFirst: jest.fn() },
+    telegramAdSale: { findFirst: jest.fn().mockResolvedValue(null) },
     telegramAdSalePayment: { findFirst: jest.fn().mockResolvedValue(null) },
     transactionCategory: {
       findFirst: jest.fn().mockResolvedValue({
@@ -120,6 +125,58 @@ function setup(overrides?: { account?: unknown }) {
 }
 
 describe('TelegramAdSalesCheckoutService', () => {
+  it('returns the existing paymentless reservation for the same workspace key', async () => {
+    const { service, prisma, expectedSale } = setup();
+    const { payment: _payment, ...reservation } = checkoutDto();
+    void _payment;
+    prisma.telegramAdSale.findFirst.mockResolvedValue({ id: 'sale-1' });
+
+    await expect(
+      service.reserveWithoutPayment('user-1', {
+        ...reservation,
+        idempotencyKey: 'system-bot-ad-sale:workflow-1',
+        financeSkipped: true,
+      }),
+    ).resolves.toEqual(expectedSale);
+
+    expect(prisma.telegramAdSale.findFirst).toHaveBeenCalledWith({
+      where: {
+        workspaceId: 'workspace-1',
+        idempotencyKey: 'system-bot-ad-sale:workflow-1',
+      },
+      select: { id: true },
+    });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('atomically reserves a sale without Finance side effects', async () => {
+    const { service, prisma, tx, expectedSale } = setup();
+    const { payment: _payment, ...reservation } = checkoutDto();
+    void _payment;
+
+    await expect(
+      service.reserveWithoutPayment('user-1', {
+        ...reservation,
+        idempotencyKey: 'system-bot-ad-sale:workflow-1',
+        financeSkipped: true,
+      }),
+    ).resolves.toEqual(expectedSale);
+
+    expect(tx.telegramAdSale.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          idempotencyKey: 'system-bot-ad-sale:workflow-1',
+          financeSkipped: true,
+          status: 'RESERVED',
+        }),
+      }),
+    );
+    expect(prisma.account.findFirst).not.toHaveBeenCalled();
+    expect(prisma.transactionCategory.findFirst).not.toHaveBeenCalled();
+    expect(tx.transaction.create).not.toHaveBeenCalled();
+    expect(tx.telegramAdSalePayment.create).not.toHaveBeenCalled();
+  });
+
   it('atomically creates the reserved sale, finance transaction and payment', async () => {
     const { service, prisma, tx, expectedSale } = setup();
 
@@ -130,7 +187,10 @@ describe('TelegramAdSalesCheckoutService', () => {
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(tx.telegramAdSale.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: 'RESERVED' }),
+        data: expect.objectContaining({
+          financeSkipped: false,
+          status: 'RESERVED',
+        }),
       }),
     );
     expect(tx.transaction.create).toHaveBeenCalledWith({
@@ -154,6 +214,75 @@ describe('TelegramAdSalesCheckoutService', () => {
         },
       }),
     });
+  });
+
+  it('splits one total price by channel audience with an exact payment balance', async () => {
+    const { service, prisma, tx } = setup();
+    prisma.telegramChannel.findMany.mockResolvedValue([
+      { id: 'channel-1', currentSubscribersCount: 30_000 },
+      { id: 'channel-2', currentSubscribersCount: 70_000 },
+    ]);
+    tx.telegramAdSalePlacement.create
+      .mockResolvedValueOnce({
+        id: 'placement-1',
+        telegramChannelId: 'channel-1',
+        agreedPrice: new Prisma.Decimal(220.5),
+      })
+      .mockResolvedValueOnce({
+        id: 'placement-2',
+        telegramChannelId: 'channel-2',
+        agreedPrice: new Prisma.Decimal(514.5),
+      });
+    const dto = checkoutDto();
+
+    await service.create('user-1', {
+      ...dto,
+      placements: [
+        dto.placements[0],
+        { ...dto.placements[0], telegramChannelId: 'channel-2' },
+      ],
+      priceAllocation: {
+        mode: 'PROPORTIONAL_BY_AUDIENCE',
+        totalAmount: 735,
+      },
+      payment: { ...dto.payment, amount: 735 },
+    });
+
+    expect(tx.telegramAdSalePlacement.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          agreedPrice: new Prisma.Decimal(220.5),
+        }),
+      }),
+    );
+    expect(tx.telegramAdSalePlacement.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          agreedPrice: new Prisma.Decimal(514.5),
+        }),
+      }),
+    );
+    expect(tx.transaction.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ amount: new Prisma.Decimal(735) }),
+    });
+  });
+
+  it('rejects a payment that does not match the requested total price', async () => {
+    const { service, prisma } = setup();
+    const dto = checkoutDto();
+
+    await expect(
+      service.create('user-1', {
+        ...dto,
+        priceAllocation: {
+          mode: 'PROPORTIONAL_BY_AUDIENCE',
+          totalAmount: 735,
+        },
+      }),
+    ).rejects.toThrow('Payment amount must equal the total placement price');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('does not create a partial sale when the finance account is unavailable', async () => {

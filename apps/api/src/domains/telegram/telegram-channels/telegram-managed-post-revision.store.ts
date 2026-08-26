@@ -101,6 +101,9 @@ export class TelegramManagedPostRevisionStore {
           create: (args: {
             data: ReturnType<typeof this.managedPostRevisionData>;
           }) => Promise<unknown>;
+          createMany: (args: {
+            data: ReturnType<typeof this.managedPostRevisionData>[];
+          }) => Promise<unknown>;
           deleteMany: (args: {
             where: Record<string, unknown>;
           }) => Promise<unknown>;
@@ -406,5 +409,38 @@ export class TelegramManagedPostRevisionStore {
       if (!inserted) return;
     }
     await this.deleteExpiredManagedPostRevisions(client, post.id);
+  }
+
+  public async createManagedPostRevisions(
+    client: Prisma.TransactionClient | PrismaService,
+    posts: ManagedPostRevisionSource[],
+    reason: string,
+  ) {
+    if (!posts.length || !(await this.hasManagedPostRevisionStorage())) return;
+    const delegate = this.managedPostRevisionDelegate(client);
+    if (!delegate?.createMany) {
+      for (const post of posts) {
+        await this.createManagedPostRevision(client, post, reason);
+      }
+      return;
+    }
+    try {
+      await delegate.createMany({
+        data: posts.map((post) => this.managedPostRevisionData(post, reason)),
+      });
+      const cutoff = new Date(Date.now() - this.managedPostRevisionRetentionMs);
+      await delegate.deleteMany({
+        where: {
+          telegramManagedPostId: { in: posts.map((post) => post.id) },
+          createdAt: { lt: cutoff },
+        },
+      });
+    } catch (error) {
+      if (this.isManagedPostRevisionTableMissing(error)) {
+        this.managedPostRevisionStorageState = 'missing';
+        return;
+      }
+      throw error;
+    }
   }
 }

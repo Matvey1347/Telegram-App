@@ -26,7 +26,10 @@ import {
   TransactionType,
   WorkspaceRole,
 } from '@prisma/client';
-import { createPaginatedResponse, normalizePagination } from '../../../common/pagination/pagination.utils';
+import {
+  createPaginatedResponse,
+  normalizePagination,
+} from '../../../common/pagination/pagination.utils';
 import { ResponseCacheService } from '../../../common/response-cache.service';
 import { CurrencyConversionService } from '../../../common/currency-conversion.service';
 import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
@@ -109,6 +112,7 @@ import {
 } from './telegram-ad-sales-reservation';
 import { reconcileTelegramAdPlacementMetrics } from './telegram-ad-placement-metrics';
 import { calculateAdPlacementDeleteAt } from './domain/sales-text';
+import { selectAdPlacementDeletionSource } from './domain/deletion-source';
 
 @Injectable()
 export class TelegramAdSalesService {
@@ -150,7 +154,9 @@ export class TelegramAdSalesService {
   }
 
   private invalidateAvailabilityCache(workspaceId: string) {
-    this.responseCache.clearByPrefix(`telegram-ad-sales:availability:${workspaceId}:`);
+    this.responseCache.clearByPrefix(
+      `telegram-ad-sales:availability:${workspaceId}:`,
+    );
   }
 
   private async workspace(userId: string) {
@@ -173,7 +179,8 @@ export class TelegramAdSalesService {
       where: { id: networkId, workspaceId },
       include: { channels: true },
     });
-    if (!network) throw new NotFoundException('Telegram channel network not found');
+    if (!network)
+      throw new NotFoundException('Telegram channel network not found');
     return network;
   }
 
@@ -203,7 +210,9 @@ export class TelegramAdSalesService {
   private mapPolicy(policy: any) {
     return {
       ...policy,
-      expectedOrganicPostsPerDay: decimalToString(policy.expectedOrganicPostsPerDay),
+      expectedOrganicPostsPerDay: decimalToString(
+        policy.expectedOrganicPostsPerDay,
+      ),
       createdAt: policy.createdAt.toISOString(),
       updatedAt: policy.updatedAt.toISOString(),
     };
@@ -237,7 +246,8 @@ export class TelegramAdSalesService {
       publishedAt: placement.publishedAt?.toISOString() ?? null,
       plannedDeleteAt: placement.plannedDeleteAt?.toISOString() ?? null,
       deletedAt: placement.deletedAt?.toISOString() ?? null,
-      lastDeletionAttemptAt: placement.lastDeletionAttemptAt?.toISOString() ?? null,
+      lastDeletionAttemptAt:
+        placement.lastDeletionAttemptAt?.toISOString() ?? null,
       completedAt: placement.completedAt?.toISOString() ?? null,
       createdAt: placement.createdAt.toISOString(),
       updatedAt: placement.updatedAt.toISOString(),
@@ -281,7 +291,9 @@ export class TelegramAdSalesService {
       placements: detailed.placements.map((placement: any) =>
         this.mapPlacement(placement),
       ),
-      payments: detailed.payments.map((payment: any) => this.mapPayment(payment)),
+      payments: detailed.payments.map((payment: any) =>
+        this.mapPayment(payment),
+      ),
       advertiser: sale.advertiser ? this.mapAdvertiser(sale.advertiser) : null,
       ...detailed.summary,
     };
@@ -307,7 +319,10 @@ export class TelegramAdSalesService {
     return normalized || null;
   }
 
-  private normalizeContactValue(type: TelegramAdvertiserContactType, value?: string | null) {
+  private normalizeContactValue(
+    type: TelegramAdvertiserContactType,
+    value?: string | null,
+  ) {
     if (type === TelegramAdvertiserContactType.TELEGRAM_USERNAME) {
       return this.normalizeTelegramUsername(value);
     }
@@ -355,8 +370,12 @@ export class TelegramAdSalesService {
   private mapAdvertiser(settings: any) {
     return {
       ...settings,
-      totalRevenueInPrimaryCurrency: decimalToString(settings.totalRevenueInPrimaryCurrency),
-      averageOrderValueInPrimaryCurrency: decimalToString(settings.averageOrderValueInPrimaryCurrency),
+      totalRevenueInPrimaryCurrency: decimalToString(
+        settings.totalRevenueInPrimaryCurrency,
+      ),
+      averageOrderValueInPrimaryCurrency: decimalToString(
+        settings.averageOrderValueInPrimaryCurrency,
+      ),
       lastContactAt: settings.lastContactAt?.toISOString() ?? null,
       lastPurchaseAt: settings.lastPurchaseAt?.toISOString() ?? null,
       nextContactAt: settings.nextContactAt?.toISOString() ?? null,
@@ -366,15 +385,21 @@ export class TelegramAdSalesService {
       createdAt: settings.createdAt.toISOString(),
       updatedAt: settings.updatedAt.toISOString(),
       contacts: Array.isArray(settings.contacts)
-        ? settings.contacts.map((contact: any) => this.mapAdvertiserContact(contact))
+        ? settings.contacts.map((contact: any) =>
+            this.mapAdvertiserContact(contact),
+          )
         : undefined,
       recentActivities: Array.isArray(settings.activities)
-        ? settings.activities.map((activity: any) => this.mapAdvertiserActivity(activity))
+        ? settings.activities.map((activity: any) =>
+            this.mapAdvertiserActivity(activity),
+          )
         : undefined,
       openTasks: Array.isArray(settings.tasks)
         ? settings.tasks.map((task: any) => this.mapAdvertiserTask(task))
         : undefined,
-      sales: Array.isArray(settings.sales) ? settings.sales.map((sale: any) => this.mapSale(sale)) : undefined,
+      sales: Array.isArray(settings.sales)
+        ? settings.sales.map((sale: any) => this.mapSale(sale))
+        : undefined,
     };
   }
 
@@ -459,7 +484,8 @@ export class TelegramAdSalesService {
         .filter((name): name is string => Boolean(name)),
     );
     const missing = this.defaultProductTemplates().filter(
-      (template) => !existingNames.has(this.normalizeDefaultProductName(template.name)),
+      (template) =>
+        !existingNames.has(this.normalizeDefaultProductName(template.name)),
     );
     if (!missing.length) return;
 
@@ -564,16 +590,22 @@ export class TelegramAdSalesService {
     return workspace.timezone || 'Europe/Warsaw';
   }
 
-  private async resolvePolicy(workspaceId: string, channelId: string, timezone = 'UTC') {
+  private async resolvePolicy(
+    workspaceId: string,
+    channelId: string,
+    timezone = 'UTC',
+  ) {
     const policy = await this.prisma.telegramAdSchedulePolicy.findFirst({
       where: { workspaceId, telegramChannelId: channelId },
     });
-    const workspaceSettings = await this.resolveAdSalesWorkspaceSettings(workspaceId);
+    const workspaceSettings =
+      await this.resolveAdSalesWorkspaceSettings(workspaceId);
     if (policy) {
       return policy.useWorkspaceDefault
         ? {
             ...policy,
-            organicPostsPerAdSlot: workspaceSettings.defaultOrganicPostsPerAdSlot,
+            organicPostsPerAdSlot:
+              workspaceSettings.defaultOrganicPostsPerAdSlot,
           }
         : policy;
     }
@@ -637,7 +669,11 @@ export class TelegramAdSalesService {
     });
   }
 
-  private async loadPricingPosts(workspaceId: string, channelId: string, asOf?: Date) {
+  private async loadPricingPosts(
+    workspaceId: string,
+    channelId: string,
+    asOf?: Date,
+  ) {
     return this.prisma.telegramPost.findMany({
       where: {
         workspaceId,
@@ -665,10 +701,12 @@ export class TelegramAdSalesService {
     });
   }
 
-  private resolvePricingWindow(product?: {
-    deleteAfterHours?: number | null;
-    isPermanent?: boolean;
-  } | null) {
+  private resolvePricingWindow(
+    product?: {
+      deleteAfterHours?: number | null;
+      isPermanent?: boolean;
+    } | null,
+  ) {
     if (!product) {
       return { hours: null as number | null, label: 'Post' };
     }
@@ -676,7 +714,10 @@ export class TelegramAdSalesService {
       return { hours: 168, label: '7d placement' };
     }
     if (product.deleteAfterHours != null) {
-      return { hours: product.deleteAfterHours, label: `${product.deleteAfterHours}h placement` };
+      return {
+        hours: product.deleteAfterHours,
+        label: `${product.deleteAfterHours}h placement`,
+      };
     }
     return { hours: null as number | null, label: 'Post' };
   }
@@ -740,7 +781,12 @@ export class TelegramAdSalesService {
     asOf?: Date,
   ) {
     const window = this.resolvePricingWindow(product);
-    const result = await this.computeExpectedViewsForWindow(workspaceId, channelId, window.hours, asOf);
+    const result = await this.computeExpectedViewsForWindow(
+      workspaceId,
+      channelId,
+      window.hours,
+      asOf,
+    );
     return {
       ...result,
       pricingWindowHours: window.hours,
@@ -762,7 +808,9 @@ export class TelegramAdSalesService {
     };
   }
 
-  private buildWindowSummary(result: Awaited<ReturnType<typeof this.computeExpectedViewsForWindow>>) {
+  private buildWindowSummary(
+    result: Awaited<ReturnType<typeof this.computeExpectedViewsForWindow>>,
+  ) {
     return {
       expectedViews: result.expectedViews,
       averageViews: result.averageViews,
@@ -807,11 +855,23 @@ export class TelegramAdSalesService {
         currency: channel.adBaseCurrency || 'USD',
         recommendedPrice: '0.00',
         minimumPrice: '0.00',
-        targetCpm: decimalToString(decimal(overrides?.targetCpm ?? channel.adBaseCpm ?? product?.defaultCpm ?? 0)) || '0.00',
+        targetCpm:
+          decimalToString(
+            decimal(
+              overrides?.targetCpm ??
+                channel.adBaseCpm ??
+                product?.defaultCpm ??
+                0,
+            ),
+          ) || '0.00',
       };
     }
-    const pricingMode = overrides?.pricingMode ?? product?.defaultPricingMode ?? TelegramAdPricingMode.CPM;
-    const targetCpm = overrides?.targetCpm ?? channel.adBaseCpm ?? product?.defaultCpm ?? 0;
+    const pricingMode =
+      overrides?.pricingMode ??
+      product?.defaultPricingMode ??
+      TelegramAdPricingMode.CPM;
+    const targetCpm =
+      overrides?.targetCpm ?? channel.adBaseCpm ?? product?.defaultCpm ?? 0;
     const minimumCpm = overrides?.minimumCpm ?? targetCpm ?? 0;
     const pricing = calculatePricing({
       expectedViews: expectedViews.expectedViews,
@@ -884,7 +944,9 @@ export class TelegramAdSalesService {
     const channel = await this.prisma.telegramChannel.update({
       where: { id: channelId },
       data: {
-        ...(dto.baseCpm === undefined ? {} : { adBaseCpm: decimalOrNull(dto.baseCpm) }),
+        ...(dto.baseCpm === undefined
+          ? {}
+          : { adBaseCpm: decimalOrNull(dto.baseCpm) }),
         ...(dto.currency === undefined ? {} : { adBaseCurrency: dto.currency }),
       },
       select: {
@@ -910,7 +972,8 @@ export class TelegramAdSalesService {
         telegramAdSaleId: saleId,
       },
     });
-    if (!placement) throw new NotFoundException('Telegram ad sale placement not found');
+    if (!placement)
+      throw new NotFoundException('Telegram ad sale placement not found');
     return placement;
   }
 
@@ -960,7 +1023,10 @@ export class TelegramAdSalesService {
       advertiser: {
         include: {
           contacts: {
-            orderBy: [{ isPrimary: 'desc' as const }, { createdAt: 'asc' as const }],
+            orderBy: [
+              { isPrimary: 'desc' as const },
+              { createdAt: 'asc' as const },
+            ],
           },
         },
       },
@@ -1040,14 +1106,24 @@ export class TelegramAdSalesService {
   private advertiserInclude() {
     return {
       contacts: {
-        orderBy: [{ isPrimary: 'desc' as const }, { createdAt: 'asc' as const }],
+        orderBy: [
+          { isPrimary: 'desc' as const },
+          { createdAt: 'asc' as const },
+        ],
       },
       activities: {
         orderBy: [{ occurredAt: 'desc' as const }, { id: 'desc' as const }],
         take: 10,
       },
       tasks: {
-        where: { status: { in: [TelegramAdvertiserTaskStatus.OPEN, TelegramAdvertiserTaskStatus.IN_PROGRESS] } },
+        where: {
+          status: {
+            in: [
+              TelegramAdvertiserTaskStatus.OPEN,
+              TelegramAdvertiserTaskStatus.IN_PROGRESS,
+            ],
+          },
+        },
         orderBy: [{ dueAt: 'asc' as const }, { id: 'asc' as const }],
         take: 10,
       },
@@ -1064,7 +1140,8 @@ export class TelegramAdSalesService {
       where: { id: advertiserId, workspaceId },
       include: this.advertiserInclude(),
     });
-    if (!advertiser) throw new NotFoundException('Telegram advertiser not found');
+    if (!advertiser)
+      throw new NotFoundException('Telegram advertiser not found');
     return advertiser;
   }
 
@@ -1108,7 +1185,11 @@ export class TelegramAdSalesService {
     tx: Prisma.TransactionClient | PrismaService = this.prisma,
   ) {
     const sales = await tx.telegramAdSale.findMany({
-      where: { workspaceId, advertiserId, status: { not: TelegramAdSaleStatus.CANCELLED } },
+      where: {
+        workspaceId,
+        advertiserId,
+        status: { not: TelegramAdSaleStatus.CANCELLED },
+      },
       include: {
         placements: true,
         payments: {
@@ -1118,25 +1199,34 @@ export class TelegramAdSalesService {
       orderBy: { createdAt: 'asc' },
     });
     const totalSalesCount = sales.length;
-    const completedSales = sales.filter((sale) =>
-      sale.status === TelegramAdSaleStatus.CONFIRMED ||
-      sale.status === TelegramAdSaleStatus.IN_PROGRESS ||
-      sale.status === TelegramAdSaleStatus.COMPLETED,
+    const completedSales = sales.filter(
+      (sale) =>
+        sale.status === TelegramAdSaleStatus.CONFIRMED ||
+        sale.status === TelegramAdSaleStatus.IN_PROGRESS ||
+        sale.status === TelegramAdSaleStatus.COMPLETED,
     );
     const completedSalesCount = completedSales.length;
-    const totalPlacementsCount = sales.reduce((sum, sale) => sum + sale.placements.length, 0);
+    const totalPlacementsCount = sales.reduce(
+      (sum, sale) => sum + sale.placements.length,
+      0,
+    );
     const totalRevenue = sales.reduce(
       (sum, sale) =>
         sum.add(
           sale.payments.reduce(
-            (paymentSum, payment) => paymentSum.add(payment.amountInPrimaryCurrency),
+            (paymentSum, payment) =>
+              paymentSum.add(payment.amountInPrimaryCurrency),
             decimal(0),
           ),
         ),
       decimal(0),
     );
-    const averageOrderValue = totalSalesCount ? totalRevenue.div(totalSalesCount) : decimal(0);
-    const purchaseDates = completedSales.map((sale) => sale.createdAt).sort((a, b) => a.getTime() - b.getTime());
+    const averageOrderValue = totalSalesCount
+      ? totalRevenue.div(totalSalesCount)
+      : decimal(0);
+    const purchaseDates = completedSales
+      .map((sale) => sale.createdAt)
+      .sort((a, b) => a.getTime() - b.getTime());
     const firstPurchaseAt = purchaseDates[0] ?? null;
     const lastPurchaseAt = purchaseDates[purchaseDates.length - 1] ?? null;
     const repeatCustomerAt = purchaseDates[1] ?? null;
@@ -1177,14 +1267,17 @@ export class TelegramAdSalesService {
     if (dto.advertiserId) {
       return this.getAdvertiser(workspaceId, dto.advertiserId);
     }
-    const shouldCreate = 'createAdvertiser' in dto ? dto.createAdvertiser : false;
+    const shouldCreate =
+      'createAdvertiser' in dto ? dto.createAdvertiser : false;
     if (!shouldCreate) return null;
     const created = await this.prisma.telegramAdvertiser.create({
       data: {
         workspaceId,
         displayName: (dto.advertiserName ?? 'Advertiser').trim(),
         companyName: dto.advertiserCompanyName?.trim() || null,
-        telegramUsername: this.normalizeTelegramUsername(dto.advertiserTelegram),
+        telegramUsername: this.normalizeTelegramUsername(
+          dto.advertiserTelegram,
+        ),
         phone: this.normalizePhone(dto.advertiserContact),
         email: this.normalizeEmail(dto.advertiserContact),
         ownerMemberId: assignedMemberId ?? null,
@@ -1200,7 +1293,9 @@ export class TelegramAdSalesService {
           advertiserId: created.id,
           type: TelegramAdvertiserContactType.TELEGRAM_USERNAME,
           value: dto.advertiserTelegram.trim(),
-          normalizedValue: this.normalizeTelegramUsername(dto.advertiserTelegram)!,
+          normalizedValue: this.normalizeTelegramUsername(
+            dto.advertiserTelegram,
+          )!,
           isPrimary: true,
         },
       });
@@ -1218,8 +1313,9 @@ export class TelegramAdSalesService {
           type,
           value: dto.advertiserContact.trim(),
           normalizedValue:
-            (type === TelegramAdvertiserContactType.EMAIL ? normalizedEmail : normalizedPhone) ??
-            dto.advertiserContact.trim(),
+            (type === TelegramAdvertiserContactType.EMAIL
+              ? normalizedEmail
+              : normalizedPhone) ?? dto.advertiserContact.trim(),
           isPrimary: !dto.advertiserTelegram?.trim(),
         },
       });
@@ -1234,14 +1330,21 @@ export class TelegramAdSalesService {
 
   private appendPlacementFinancials(placement: any) {
     const paidAllocatedAmount = (placement.paymentAllocations ?? [])
-      .filter((allocation: any) => allocation.payment?.status !== TelegramAdSalePaymentStatus.VOIDED)
+      .filter(
+        (allocation: any) =>
+          allocation.payment?.status !== TelegramAdSalePaymentStatus.VOIDED,
+      )
       .reduce(
         (sum: Prisma.Decimal, allocation: any) =>
           sum.add(decimal(allocation.amount)),
         decimal(0),
       );
-    const unpaidAmount = decimal(placement.agreedPrice).sub(paidAllocatedAmount);
-    const underpricingAmount = decimal(placement.minimumPrice).gt(decimal(placement.agreedPrice))
+    const unpaidAmount = decimal(placement.agreedPrice).sub(
+      paidAllocatedAmount,
+    );
+    const underpricingAmount = decimal(placement.minimumPrice).gt(
+      decimal(placement.agreedPrice),
+    )
       ? decimal(placement.minimumPrice).sub(decimal(placement.agreedPrice))
       : decimal(0);
     const underpricingPercent =
@@ -1265,7 +1368,8 @@ export class TelegramAdSalesService {
       (payment: any) => payment.status !== TelegramAdSalePaymentStatus.VOIDED,
     );
     const totalAgreedAmount = placements.reduce(
-      (sum: Prisma.Decimal, placement: any) => sum.add(decimal(placement.agreedPrice)),
+      (sum: Prisma.Decimal, placement: any) =>
+        sum.add(decimal(placement.agreedPrice)),
       decimal(0),
     );
     const totalRecommendedAmount = placements.reduce(
@@ -1274,7 +1378,8 @@ export class TelegramAdSalesService {
       decimal(0),
     );
     const totalMinimumAmount = placements.reduce(
-      (sum: Prisma.Decimal, placement: any) => sum.add(decimal(placement.minimumPrice)),
+      (sum: Prisma.Decimal, placement: any) =>
+        sum.add(decimal(placement.minimumPrice)),
       decimal(0),
     );
     const totalPaidAmount = payments.reduce(
@@ -1286,14 +1391,12 @@ export class TelegramAdSalesService {
         sum.add(decimal(payment.amountInPrimaryCurrency)),
       decimal(0),
     );
-    const outstandingAmount =
-      totalPaidAmount.gte(totalAgreedAmount)
-        ? decimal(0)
-        : totalAgreedAmount.sub(totalPaidAmount);
-    const overpaidAmount =
-      totalPaidAmount.gt(totalAgreedAmount)
-        ? totalPaidAmount.sub(totalAgreedAmount)
-        : decimal(0);
+    const outstandingAmount = totalPaidAmount.gte(totalAgreedAmount)
+      ? decimal(0)
+      : totalAgreedAmount.sub(totalPaidAmount);
+    const overpaidAmount = totalPaidAmount.gt(totalAgreedAmount)
+      ? totalPaidAmount.sub(totalAgreedAmount)
+      : decimal(0);
 
     const channelBreakdown = placements.map((placement: any) => ({
       placementId: placement.id,
@@ -1319,8 +1422,13 @@ export class TelegramAdSalesService {
         totalPaidAmount: decimalToString(totalPaidAmount),
         outstandingAmount: decimalToString(outstandingAmount),
         overpaidAmount: decimalToString(overpaidAmount),
-        paymentStatus: this.paymentStatusFromTotals(totalPaidAmount, totalAgreedAmount),
-        totalAmountInPrimaryCurrency: decimalToString(totalAmountInPrimaryCurrency),
+        paymentStatus: this.paymentStatusFromTotals(
+          totalPaidAmount,
+          totalAgreedAmount,
+        ),
+        totalAmountInPrimaryCurrency: decimalToString(
+          totalAmountInPrimaryCurrency,
+        ),
         channelBreakdown,
       },
     };
@@ -1339,13 +1447,23 @@ export class TelegramAdSalesService {
     const timezone = query?.timezone?.trim() || 'UTC';
     const now = new Date();
     const fallbackDays = Math.max(1, Math.min(366, query?.rangeDays ?? 30));
-    const fallbackFrom = new Date(now.getTime() - (fallbackDays - 1) * 24 * 60 * 60 * 1000);
-    const rawFrom = query?.dateFrom || query?.from ? new Date(query.dateFrom ?? query.from!) : fallbackFrom;
-    const rawTo = query?.dateTo || query?.to ? new Date(query.dateTo ?? query.to!) : now;
+    const fallbackFrom = new Date(
+      now.getTime() - (fallbackDays - 1) * 24 * 60 * 60 * 1000,
+    );
+    const rawFrom =
+      query?.dateFrom || query?.from
+        ? new Date(query.dateFrom ?? query.from!)
+        : fallbackFrom;
+    const rawTo =
+      query?.dateTo || query?.to ? new Date(query.dateTo ?? query.to!) : now;
     const from = Number.isNaN(rawFrom.getTime()) ? fallbackFrom : rawFrom;
     const to = Number.isNaN(rawTo.getTime()) ? now : rawTo;
     const normalized = from <= to ? { from, to } : { from: to, to: from };
-    const days = Math.floor((normalized.to.getTime() - normalized.from.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+    const days =
+      Math.floor(
+        (normalized.to.getTime() - normalized.from.getTime()) /
+          (24 * 60 * 60 * 1000),
+      ) + 1;
     if (days > 366) {
       throw new BadRequestException('Analytics range cannot exceed 366 days');
     }
@@ -1357,7 +1475,8 @@ export class TelegramAdSalesService {
       {
         metric: 'revenue.totalAgreedRevenue',
         dateField: 'placementScheduledAt',
-        description: 'Agreed placement revenue is attributed by placement scheduledAt.',
+        description:
+          'Agreed placement revenue is attributed by placement scheduledAt.',
       },
       {
         metric: 'revenue.totalPaidRevenue',
@@ -1367,26 +1486,27 @@ export class TelegramAdSalesService {
       {
         metric: 'placements.*',
         dateField: 'placementScheduledAt',
-        description: 'Placement and inventory metrics are attributed by placement scheduledAt.',
+        description:
+          'Placement and inventory metrics are attributed by placement scheduledAt.',
       },
       {
         metric: 'performance.actualViews*',
         dateField: 'placementPublishedAt',
-        description: 'Actual performance metrics are attributed by placement publishedAt when present.',
+        description:
+          'Actual performance metrics are attributed by placement publishedAt when present.',
       },
       {
         metric: 'operations.overdueUnpaidSales',
         dateField: 'saleCreatedAt',
-        description: 'Overdue unpaid sales use sale createdAt for aging and current outstanding state.',
+        description:
+          'Overdue unpaid sales use sale createdAt for aging and current outstanding state.',
       },
     ] as const;
   }
 
   private medianDecimal(values: Prisma.Decimal[]) {
     if (!values.length) return decimal(0);
-    const sorted = [...values].sort((left, right) =>
-      left.comparedTo(right),
-    );
+    const sorted = [...values].sort((left, right) => left.comparedTo(right));
     const middle = Math.floor(sorted.length / 2);
     if (sorted.length % 2 === 1) return sorted[middle];
     return sorted[middle - 1].add(sorted[middle]).div(2);
@@ -1467,7 +1587,8 @@ export class TelegramAdSalesService {
       const policy =
         policies.find((item) => item.telegramChannelId === channel.id) ??
         (await this.resolvePolicy(params.workspaceId, channel.id, 'UTC'));
-      const product = products.find((item) => item.telegramChannelId === channel.id) ?? null;
+      const product =
+        products.find((item) => item.telegramChannelId === channel.id) ?? null;
       const pricingPreview = await this.buildProductPricingPreview(
         params.workspaceId,
         channel,
@@ -1535,9 +1656,12 @@ export class TelegramAdSalesService {
   private summarizeInventory(slots: Array<any>) {
     const eligibleSlots = slots.filter((slot) => slot.state !== 'MANUAL_ONLY');
     const soldSlots = eligibleSlots.filter((slot) => slot.state === 'SOLD');
-    const reservedSlots = eligibleSlots.filter((slot) => slot.state === 'RESERVED');
+    const reservedSlots = eligibleSlots.filter(
+      (slot) => slot.state === 'RESERVED',
+    );
     const publishedSlots = soldSlots.filter(
-      (slot) => slot.existingPlacement?.status === TelegramAdPlacementStatus.PUBLISHED,
+      (slot) =>
+        slot.existingPlacement?.status === TelegramAdPlacementStatus.PUBLISHED,
     );
     const blockedSlots = slots.filter(
       (slot) =>
@@ -1546,10 +1670,13 @@ export class TelegramAdSalesService {
         slot.state === 'CONFLICT_WITH_ORGANIC_POST' ||
         slot.state === 'MANUAL_ONLY',
     );
-    const pastUnusedSlots = eligibleSlots.filter((slot) => slot.state === 'PAST');
+    const pastUnusedSlots = eligibleSlots.filter(
+      (slot) => slot.state === 'PAST',
+    );
     return {
       eligibleSlots: eligibleSlots.length,
-      availableSlots: eligibleSlots.filter((slot) => slot.state === 'AVAILABLE').length,
+      availableSlots: eligibleSlots.filter((slot) => slot.state === 'AVAILABLE')
+        .length,
       reservedSlots: reservedSlots.length,
       soldSlots: soldSlots.length,
       publishedSlots: publishedSlots.length,
@@ -1650,7 +1777,8 @@ export class TelegramAdSalesService {
             sale: {
               placements: {
                 some: {
-                  ...(params.networkId && params.networkMode !== 'CURRENT_CHANNELS'
+                  ...(params.networkId &&
+                  params.networkMode !== 'CURRENT_CHANNELS'
                     ? { telegramChannelNetworkId: params.networkId }
                     : {}),
                   ...(params.channelIds?.length
@@ -1757,10 +1885,17 @@ export class TelegramAdSalesService {
     return dates;
   }
 
-  private comparisonPeriods(query: TelegramAdAnalyticsQueryDto, from: Date, to: Date) {
+  private comparisonPeriods(
+    query: TelegramAdAnalyticsQueryDto,
+    from: Date,
+    to: Date,
+  ) {
     const mode = query.compareMode ?? 'PREVIOUS_PERIOD';
     const daysCount =
-      Math.floor((this.endOfUtcDay(to).getTime() - this.startOfUtcDay(from).getTime()) / (24 * 60 * 60 * 1000)) + 1;
+      Math.floor(
+        (this.endOfUtcDay(to).getTime() - this.startOfUtcDay(from).getTime()) /
+          (24 * 60 * 60 * 1000),
+      ) + 1;
     if (mode === 'NONE') return null;
     if (mode === 'CUSTOM' && query.compareDateFrom && query.compareDateTo) {
       const compareFrom = this.startOfUtcDay(new Date(query.compareDateFrom));
@@ -1769,23 +1904,52 @@ export class TelegramAdSalesService {
     }
     if (mode === 'PREVIOUS_30_DAYS') {
       const compareTo = new Date(this.startOfUtcDay(from).getTime() - 1);
-      const compareFrom = new Date(compareTo.getTime() - 29 * 24 * 60 * 60 * 1000);
-      return { mode, from: this.startOfUtcDay(compareFrom), to: this.endOfUtcDay(compareTo), daysCount: 30 };
+      const compareFrom = new Date(
+        compareTo.getTime() - 29 * 24 * 60 * 60 * 1000,
+      );
+      return {
+        mode,
+        from: this.startOfUtcDay(compareFrom),
+        to: this.endOfUtcDay(compareTo),
+        daysCount: 30,
+      };
     }
     if (mode === 'PREVIOUS_MONTH') {
-      const compareTo = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), 0, 23, 59, 59, 999));
-      const compareFrom = new Date(Date.UTC(compareTo.getUTCFullYear(), compareTo.getUTCMonth(), 1, 0, 0, 0, 0));
+      const compareTo = new Date(
+        Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), 0, 23, 59, 59, 999),
+      );
+      const compareFrom = new Date(
+        Date.UTC(
+          compareTo.getUTCFullYear(),
+          compareTo.getUTCMonth(),
+          1,
+          0,
+          0,
+          0,
+          0,
+        ),
+      );
       return {
         mode,
         from: compareFrom,
         to: compareTo,
         daysCount:
-          Math.floor((compareTo.getTime() - compareFrom.getTime()) / (24 * 60 * 60 * 1000)) + 1,
+          Math.floor(
+            (compareTo.getTime() - compareFrom.getTime()) /
+              (24 * 60 * 60 * 1000),
+          ) + 1,
       };
     }
     const compareTo = new Date(this.startOfUtcDay(from).getTime() - 1);
-    const compareFrom = new Date(compareTo.getTime() - (daysCount - 1) * 24 * 60 * 60 * 1000);
-    return { mode, from: this.startOfUtcDay(compareFrom), to: this.endOfUtcDay(compareTo), daysCount };
+    const compareFrom = new Date(
+      compareTo.getTime() - (daysCount - 1) * 24 * 60 * 60 * 1000,
+    );
+    return {
+      mode,
+      from: this.startOfUtcDay(compareFrom),
+      to: this.endOfUtcDay(compareTo),
+      daysCount,
+    };
   }
 
   private async resolveAnalyticsChannelIds(params: {
@@ -1796,7 +1960,10 @@ export class TelegramAdSalesService {
   }) {
     if (params.channelId) return [params.channelId];
     if (params.networkId) {
-      const network = await this.findWorkspaceNetwork(params.workspaceId, params.networkId);
+      const network = await this.findWorkspaceNetwork(
+        params.workspaceId,
+        params.networkId,
+      );
       return network.channels.map((item) => item.telegramChannelId);
     }
     return (
@@ -1818,8 +1985,12 @@ export class TelegramAdSalesService {
     await this.findWorkspaceChannel(params.workspaceId, params.channelId);
     const policy =
       (await this.prisma.telegramAdSchedulePolicy.findFirst({
-        where: { workspaceId: params.workspaceId, telegramChannelId: params.channelId },
-      })) ?? (await this.resolvePolicy(params.workspaceId, params.channelId, 'UTC'));
+        where: {
+          workspaceId: params.workspaceId,
+          telegramChannelId: params.channelId,
+        },
+      })) ??
+      (await this.resolvePolicy(params.workspaceId, params.channelId, 'UTC'));
     const products = await this.prisma.telegramAdProduct.findMany({
       where: {
         workspaceId: params.workspaceId,
@@ -1840,7 +2011,9 @@ export class TelegramAdSalesService {
       from: dayStart,
       to: dayEnd,
     });
-    const channelSlots = slots.filter((slot) => slot.channelId === params.channelId);
+    const channelSlots = slots.filter(
+      (slot) => slot.channelId === params.channelId,
+    );
     const placements = await this.prisma.telegramAdSalePlacement.findMany({
       where: {
         workspaceId: params.workspaceId,
@@ -1868,9 +2041,10 @@ export class TelegramAdSalesService {
     const bookedPlacements = placements.filter((placement) =>
       ACTIVE_TELEGRAM_AD_PLACEMENT_STATUSES.includes(placement.status),
     );
-    const publishedPlacements = placements.filter((placement) =>
-      placement.status === TelegramAdPlacementStatus.PUBLISHED ||
-      placement.status === TelegramAdPlacementStatus.COMPLETED,
+    const publishedPlacements = placements.filter(
+      (placement) =>
+        placement.status === TelegramAdPlacementStatus.PUBLISHED ||
+        placement.status === TelegramAdPlacementStatus.COMPLETED,
     );
     const cancelledPlacements = placements.filter(
       (placement) => placement.status === TelegramAdPlacementStatus.CANCELLED,
@@ -1895,16 +2069,22 @@ export class TelegramAdSalesService {
     const underpricingLoss = bookedPlacements.reduce((sum, placement) => {
       const recommended = decimal(placement.recommendedPrice);
       const agreed = decimal(placement.agreedPrice);
-      return sum.add(recommended.gt(agreed) ? recommended.sub(agreed) : decimal(0));
+      return sum.add(
+        recommended.gt(agreed) ? recommended.sub(agreed) : decimal(0),
+      );
     }, decimal(0));
     const recommendedInventoryRevenue = channelSlots.reduce(
       (sum, slot) =>
-        slot.state === 'MANUAL_ONLY' ? sum : sum.add(decimal(slot.recommendedPrice)),
+        slot.state === 'MANUAL_ONLY'
+          ? sum
+          : sum.add(decimal(slot.recommendedPrice)),
       decimal(0),
     );
     const minimumInventoryRevenue = channelSlots.reduce(
       (sum, slot) =>
-        slot.state === 'MANUAL_ONLY' ? sum : sum.add(decimal(slot.minimumPrice)),
+        slot.state === 'MANUAL_ONLY'
+          ? sum
+          : sum.add(decimal(slot.minimumPrice)),
       decimal(0),
     );
     const unsoldInventoryOpportunity = channelSlots.reduce((sum, slot) => {
@@ -1968,18 +2148,24 @@ export class TelegramAdSalesService {
     };
   }
 
-  private async saveInventorySnapshot(snapshot: Awaited<ReturnType<TelegramAdSalesService['buildInventorySnapshotForDate']>>, options?: { force?: boolean }) {
+  private async saveInventorySnapshot(
+    snapshot: Awaited<
+      ReturnType<TelegramAdSalesService['buildInventorySnapshotForDate']>
+    >,
+    options?: { force?: boolean },
+  ) {
     const recalculationCutoff = this.startOfUtcDay(new Date());
     recalculationCutoff.setUTCDate(recalculationCutoff.getUTCDate() - 7);
     const canOverwrite = options?.force || snapshot.date >= recalculationCutoff;
-    const existing = await this.prisma.telegramAdInventoryDailySnapshot.findFirst({
-      where: {
-        workspaceId: snapshot.workspaceId,
-        telegramChannelId: snapshot.telegramChannelId,
-        date: snapshot.date,
-      },
-      select: { id: true },
-    });
+    const existing =
+      await this.prisma.telegramAdInventoryDailySnapshot.findFirst({
+        where: {
+          workspaceId: snapshot.workspaceId,
+          telegramChannelId: snapshot.telegramChannelId,
+          date: snapshot.date,
+        },
+        select: { id: true },
+      });
     if (existing && !canOverwrite) {
       return { status: 'skipped' as const, snapshotId: existing.id };
     }
@@ -1991,7 +2177,10 @@ export class TelegramAdSalesService {
       : await this.prisma.telegramAdInventoryDailySnapshot.create({
           data: snapshot,
         });
-    return { status: existing ? ('updated' as const) : ('created' as const), snapshotId: saved.id };
+    return {
+      status: existing ? ('updated' as const) : ('created' as const),
+      snapshotId: saved.id,
+    };
   }
 
   private async loadInventorySnapshots(params: {
@@ -2004,7 +2193,10 @@ export class TelegramAdSalesService {
       where: {
         workspaceId: params.workspaceId,
         telegramChannelId: { in: params.channelIds },
-        date: { gte: this.startOfUtcDay(params.from), lte: this.startOfUtcDay(params.to) },
+        date: {
+          gte: this.startOfUtcDay(params.from),
+          lte: this.startOfUtcDay(params.to),
+        },
       },
       orderBy: [{ date: 'asc' }, { telegramChannelId: 'asc' }],
     });
@@ -2020,13 +2212,19 @@ export class TelegramAdSalesService {
         cancelledSlots: acc.cancelledSlots + item.cancelledSlots,
         missedSlots: acc.missedSlots + item.missedSlots,
         blockedSlots: acc.blockedSlots + item.blockedSlots,
-        recommendedInventoryRevenue: acc.recommendedInventoryRevenue.add(item.recommendedInventoryRevenue),
-        minimumInventoryRevenue: acc.minimumInventoryRevenue.add(item.minimumInventoryRevenue),
+        recommendedInventoryRevenue: acc.recommendedInventoryRevenue.add(
+          item.recommendedInventoryRevenue,
+        ),
+        minimumInventoryRevenue: acc.minimumInventoryRevenue.add(
+          item.minimumInventoryRevenue,
+        ),
         agreedRevenue: acc.agreedRevenue.add(item.agreedRevenue),
         paidRevenue: acc.paidRevenue.add(item.paidRevenue),
         outstandingRevenue: acc.outstandingRevenue.add(item.outstandingRevenue),
         underpricingLoss: acc.underpricingLoss.add(item.underpricingLoss),
-        unsoldInventoryOpportunity: acc.unsoldInventoryOpportunity.add(item.unsoldInventoryOpportunity),
+        unsoldInventoryOpportunity: acc.unsoldInventoryOpportunity.add(
+          item.unsoldInventoryOpportunity,
+        ),
         expectedViews: acc.expectedViews + item.expectedViews,
         actualViews: acc.actualViews + item.actualViews,
       }),
@@ -2055,29 +2253,51 @@ export class TelegramAdSalesService {
         ? total.recommendedInventoryRevenue.div(total.eligibleSlots)
         : zero;
     const averageMinimumPrice =
-      total.eligibleSlots > 0 ? total.minimumInventoryRevenue.div(total.eligibleSlots) : zero;
+      total.eligibleSlots > 0
+        ? total.minimumInventoryRevenue.div(total.eligibleSlots)
+        : zero;
     return {
       ...total,
-      bookingFillRate: total.eligibleSlots ? (total.bookedSlots / total.eligibleSlots) * 100 : 0,
-      publishedFillRate: total.eligibleSlots ? (total.publishedSlots / total.eligibleSlots) * 100 : 0,
-      cancellationRate: total.bookedSlots ? (total.cancelledSlots / total.bookedSlots) * 100 : 0,
+      bookingFillRate: total.eligibleSlots
+        ? (total.bookedSlots / total.eligibleSlots) * 100
+        : 0,
+      publishedFillRate: total.eligibleSlots
+        ? (total.publishedSlots / total.eligibleSlots) * 100
+        : 0,
+      cancellationRate: total.bookedSlots
+        ? (total.cancelledSlots / total.bookedSlots) * 100
+        : 0,
       averageAgreedPrice,
       medianAgreedPrice: averageAgreedPrice,
       averageRecommendedPrice,
       averageMinimumPrice,
       revenuePerEligibleSlot:
-        total.eligibleSlots > 0 ? total.agreedRevenue.div(total.eligibleSlots) : zero,
+        total.eligibleSlots > 0
+          ? total.agreedRevenue.div(total.eligibleSlots)
+          : zero,
       revenuePerPublishedSlot:
-        total.publishedSlots > 0 ? total.agreedRevenue.div(total.publishedSlots) : zero,
-      inventoryRevenueEfficiency:
-        total.recommendedInventoryRevenue.gt(0)
-          ? Number(total.agreedRevenue.div(total.recommendedInventoryRevenue).mul(100).toFixed(2))
-          : 0,
-      totalMonetizationGap: total.unsoldInventoryOpportunity.add(total.underpricingLoss),
+        total.publishedSlots > 0
+          ? total.agreedRevenue.div(total.publishedSlots)
+          : zero,
+      inventoryRevenueEfficiency: total.recommendedInventoryRevenue.gt(0)
+        ? Number(
+            total.agreedRevenue
+              .div(total.recommendedInventoryRevenue)
+              .mul(100)
+              .toFixed(2),
+          )
+        : 0,
+      totalMonetizationGap: total.unsoldInventoryOpportunity.add(
+        total.underpricingLoss,
+      ),
       expectedCpm:
-        total.expectedViews > 0 ? total.agreedRevenue.div(total.expectedViews).mul(1000) : zero,
+        total.expectedViews > 0
+          ? total.agreedRevenue.div(total.expectedViews).mul(1000)
+          : zero,
       effectiveCpm:
-        total.actualViews > 0 ? total.agreedRevenue.div(total.actualViews).mul(1000) : zero,
+        total.actualViews > 0
+          ? total.agreedRevenue.div(total.actualViews).mul(1000)
+          : zero,
     };
   }
 
@@ -2086,19 +2306,29 @@ export class TelegramAdSalesService {
     const pagination = normalizePagination(query);
     const where: Prisma.TelegramAdProductWhereInput = {
       workspaceId,
-      ...(query.telegramChannelId ? { telegramChannelId: query.telegramChannelId } : {}),
+      ...(query.telegramChannelId
+        ? { telegramChannelId: query.telegramChannelId }
+        : {}),
       ...(query.isActive === undefined ? {} : { isActive: query.isActive }),
     };
     const [items, totalItems] = await this.prisma.$transaction([
       this.prisma.telegramAdProduct.findMany({
         where,
-        orderBy: [{ telegramChannelId: 'asc' }, { position: 'asc' }, { createdAt: 'asc' }],
+        orderBy: [
+          { telegramChannelId: 'asc' },
+          { position: 'asc' },
+          { createdAt: 'asc' },
+        ],
         skip: pagination.skip,
         take: pagination.take,
       }),
       this.prisma.telegramAdProduct.count({ where }),
     ]);
-    return createPaginatedResponse(items.map((item) => this.mapProduct(item)), totalItems, pagination);
+    return createPaginatedResponse(
+      items.map((item) => this.mapProduct(item)),
+      totalItems,
+      pagination,
+    );
   }
 
   async listChannelProducts(userId: string, channelId: string) {
@@ -2111,11 +2341,19 @@ export class TelegramAdSalesService {
     });
     const products = await this.prisma.telegramAdProduct.findMany({
       where: { workspaceId, telegramChannelId: channelId },
-      orderBy: [{ isActive: 'desc' }, { position: 'asc' }, { createdAt: 'asc' }],
+      orderBy: [
+        { isActive: 'desc' },
+        { position: 'asc' },
+        { createdAt: 'asc' },
+      ],
     });
     return Promise.all(
       products.map(async (product) => {
-        const preview = await this.buildProductPricingPreview(workspaceId, channel, product);
+        const preview = await this.buildProductPricingPreview(
+          workspaceId,
+          channel,
+          product,
+        );
         return this.mapProduct({
           ...product,
           pricingWindowHours: preview.pricingWindowHours,
@@ -2127,7 +2365,11 @@ export class TelegramAdSalesService {
     );
   }
 
-  async createProduct(userId: string, channelId: string, dto: CreateTelegramAdProductDto) {
+  async createProduct(
+    userId: string,
+    channelId: string,
+    dto: CreateTelegramAdProductDto,
+  ) {
     const workspaceId = await this.workspace(userId);
     await this.findWorkspaceChannel(workspaceId, channelId);
     const product = await this.prisma.telegramAdProduct.create({
@@ -2153,7 +2395,11 @@ export class TelegramAdSalesService {
     return this.mapProduct(product);
   }
 
-  async updateProduct(userId: string, id: string, dto: UpdateTelegramAdProductDto) {
+  async updateProduct(
+    userId: string,
+    id: string,
+    dto: UpdateTelegramAdProductDto,
+  ) {
     const workspaceId = await this.workspace(userId);
     const existing = await this.prisma.telegramAdProduct.findFirst({
       where: { id, workspaceId },
@@ -2163,15 +2409,33 @@ export class TelegramAdSalesService {
       where: { id },
       data: {
         ...(dto.name === undefined ? {} : { name: dto.name.trim() }),
-        ...(dto.description === undefined ? {} : { description: dto.description?.trim() || null }),
-        ...(dto.topDurationMinutes === undefined ? {} : { topDurationMinutes: dto.topDurationMinutes }),
-        ...(dto.feedDurationHours === undefined ? {} : { feedDurationHours: dto.feedDurationHours }),
-        ...(dto.deleteAfterHours === undefined ? {} : { deleteAfterHours: dto.deleteAfterHours }),
-        ...(dto.isPermanent === undefined ? {} : { isPermanent: dto.isPermanent }),
-        ...(dto.defaultPricingMode === undefined ? {} : { defaultPricingMode: dto.defaultPricingMode }),
-        ...(dto.defaultCpm === undefined ? {} : { defaultCpm: decimalOrNull(dto.defaultCpm) }),
-        ...(dto.defaultFixedPrice === undefined ? {} : { defaultFixedPrice: decimalOrNull(dto.defaultFixedPrice) }),
-        ...(dto.minimumPrice === undefined ? {} : { minimumPrice: decimalOrNull(dto.minimumPrice) }),
+        ...(dto.description === undefined
+          ? {}
+          : { description: dto.description?.trim() || null }),
+        ...(dto.topDurationMinutes === undefined
+          ? {}
+          : { topDurationMinutes: dto.topDurationMinutes }),
+        ...(dto.feedDurationHours === undefined
+          ? {}
+          : { feedDurationHours: dto.feedDurationHours }),
+        ...(dto.deleteAfterHours === undefined
+          ? {}
+          : { deleteAfterHours: dto.deleteAfterHours }),
+        ...(dto.isPermanent === undefined
+          ? {}
+          : { isPermanent: dto.isPermanent }),
+        ...(dto.defaultPricingMode === undefined
+          ? {}
+          : { defaultPricingMode: dto.defaultPricingMode }),
+        ...(dto.defaultCpm === undefined
+          ? {}
+          : { defaultCpm: decimalOrNull(dto.defaultCpm) }),
+        ...(dto.defaultFixedPrice === undefined
+          ? {}
+          : { defaultFixedPrice: decimalOrNull(dto.defaultFixedPrice) }),
+        ...(dto.minimumPrice === undefined
+          ? {}
+          : { minimumPrice: decimalOrNull(dto.minimumPrice) }),
         ...(dto.currency === undefined ? {} : { currency: dto.currency }),
         ...(dto.isActive === undefined ? {} : { isActive: dto.isActive }),
         ...(dto.position === undefined ? {} : { position: dto.position }),
@@ -2189,10 +2453,13 @@ export class TelegramAdSalesService {
     if (!existing) throw new NotFoundException('Telegram ad product not found');
     const normalizedName = this.normalizeDefaultProductName(existing.name);
     const isDefaultFormat = this.defaultProductTemplates().some(
-      (template) => this.normalizeDefaultProductName(template.name) === normalizedName,
+      (template) =>
+        this.normalizeDefaultProductName(template.name) === normalizedName,
     );
     if (isDefaultFormat) {
-      throw new BadRequestException('Default placement formats cannot be removed');
+      throw new BadRequestException(
+        'Default placement formats cannot be removed',
+      );
     }
     await this.prisma.telegramAdProduct.delete({
       where: { id },
@@ -2230,21 +2497,24 @@ export class TelegramAdSalesService {
   }
 
   async getAdSalesMemberPreferences(userId: string) {
-    const membership = await this.workspaceService.resolveWorkspaceMembershipForUser(userId);
-    const existing = await this.prisma.telegramAdSalesMemberPreferences.findUnique({
-      where: { workspaceMemberId: membership.id },
-    });
+    const membership =
+      await this.workspaceService.resolveWorkspaceMembershipForUser(userId);
+    const existing =
+      await this.prisma.telegramAdSalesMemberPreferences.findUnique({
+        where: { workspaceMemberId: membership.id },
+      });
     if (existing) return this.mapAdSalesMemberPreferences(existing);
-    const preferences = await this.prisma.telegramAdSalesMemberPreferences.create({
-      data: {
-        workspaceId: membership.workspaceId,
-        workspaceMemberId: membership.id,
-        selectedChannelIds: [],
-        selectedNetworkId: null,
-        calendarView: 'week',
-        initialized: false,
-      },
-    });
+    const preferences =
+      await this.prisma.telegramAdSalesMemberPreferences.create({
+        data: {
+          workspaceId: membership.workspaceId,
+          workspaceMemberId: membership.id,
+          selectedChannelIds: [],
+          selectedNetworkId: null,
+          calendarView: 'week',
+          initialized: false,
+        },
+      });
     return this.mapAdSalesMemberPreferences(preferences);
   }
 
@@ -2252,7 +2522,8 @@ export class TelegramAdSalesService {
     userId: string,
     dto: UpdateTelegramAdSalesMemberPreferencesDto,
   ) {
-    const membership = await this.workspaceService.resolveWorkspaceMembershipForUser(userId);
+    const membership =
+      await this.workspaceService.resolveWorkspaceMembershipForUser(userId);
     const update: Prisma.TelegramAdSalesMemberPreferencesUpdateInput = {};
     const create: Prisma.TelegramAdSalesMemberPreferencesCreateInput = {
       workspace: { connect: { id: membership.workspaceId } },
@@ -2269,7 +2540,9 @@ export class TelegramAdSalesService {
           where: { workspaceId: membership.workspaceId, id: { in: uniqueIds } },
         });
         if (count !== uniqueIds.length) {
-          throw new BadRequestException('Some selected channels do not belong to workspace');
+          throw new BadRequestException(
+            'Some selected channels do not belong to workspace',
+          );
         }
       }
       update.selectedChannelIds = uniqueIds;
@@ -2277,7 +2550,10 @@ export class TelegramAdSalesService {
     }
     if (dto.selectedNetworkId !== undefined) {
       if (dto.selectedNetworkId) {
-        await this.findWorkspaceNetwork(membership.workspaceId, dto.selectedNetworkId);
+        await this.findWorkspaceNetwork(
+          membership.workspaceId,
+          dto.selectedNetworkId,
+        );
       }
       update.selectedNetworkId = dto.selectedNetworkId;
       create.selectedNetworkId = dto.selectedNetworkId;
@@ -2290,11 +2566,12 @@ export class TelegramAdSalesService {
       update.initialized = dto.initialized;
       create.initialized = dto.initialized;
     }
-    const preferences = await this.prisma.telegramAdSalesMemberPreferences.upsert({
-      where: { workspaceMemberId: membership.id },
-      create,
-      update,
-    });
+    const preferences =
+      await this.prisma.telegramAdSalesMemberPreferences.upsert({
+        where: { workspaceMemberId: membership.id },
+        create,
+        update,
+      });
     return this.mapAdSalesMemberPreferences(preferences);
   }
 
@@ -2302,16 +2579,23 @@ export class TelegramAdSalesService {
     const workspaceId = await this.workspace(userId);
     await this.findWorkspaceChannel(workspaceId, channelId);
     const workspaceTimezone = await this.resolveWorkspaceTimezone(workspaceId);
-    return this.mapPolicy(await this.resolvePolicy(workspaceId, channelId, workspaceTimezone));
+    return this.mapPolicy(
+      await this.resolvePolicy(workspaceId, channelId, workspaceTimezone),
+    );
   }
 
-  async upsertPolicy(userId: string, channelId: string, dto: UpdateTelegramAdPolicyDto) {
+  async upsertPolicy(
+    userId: string,
+    channelId: string,
+    dto: UpdateTelegramAdPolicyDto,
+  ) {
     const workspaceId = await this.workspace(userId);
     await this.findWorkspaceChannel(workspaceId, channelId);
     const workspaceTimezone = await this.resolveWorkspaceTimezone(workspaceId);
     const defaults = this.policyDefaults(workspaceTimezone);
     const useWorkspaceDefault = dto.useWorkspaceDefault ?? false;
-    const organicPostsPerAdSlot = dto.organicPostsPerAdSlot ?? defaults.organicPostsPerAdSlot;
+    const organicPostsPerAdSlot =
+      dto.organicPostsPerAdSlot ?? defaults.organicPostsPerAdSlot;
     const policy = await this.prisma.telegramAdSchedulePolicy.upsert({
       where: { telegramChannelId: channelId },
       create: {
@@ -2319,11 +2603,14 @@ export class TelegramAdSalesService {
         telegramChannelId: channelId,
         timezone: dto.timezone ?? workspaceTimezone,
         autoFrequencyEnabled: dto.autoFrequencyEnabled ?? true,
-        expectedOrganicPostsPerDay: decimalOrNull(dto.expectedOrganicPostsPerDay),
+        expectedOrganicPostsPerDay: decimalOrNull(
+          dto.expectedOrganicPostsPerDay,
+        ),
         useWorkspaceDefault,
         organicPostsPerAdSlot,
         maxAdsPerDay: dto.maxAdsPerDay ?? defaults.maxAdsPerDay,
-        minHoursBetweenAds: dto.minHoursBetweenAds ?? defaults.minHoursBetweenAds,
+        minHoursBetweenAds:
+          dto.minHoursBetweenAds ?? defaults.minHoursBetweenAds,
         minDaysBetweenAds: dto.minDaysBetweenAds ?? defaults.minDaysBetweenAds,
         slotStrategy: dto.slotStrategy ?? defaults.slotStrategy,
         fallbackSlotTimes: dto.fallbackSlotTimes ?? [],
@@ -2331,29 +2618,59 @@ export class TelegramAdSalesService {
       },
       update: {
         timezone: dto.timezone ?? workspaceTimezone,
-        ...(dto.autoFrequencyEnabled === undefined ? {} : { autoFrequencyEnabled: dto.autoFrequencyEnabled }),
+        ...(dto.autoFrequencyEnabled === undefined
+          ? {}
+          : { autoFrequencyEnabled: dto.autoFrequencyEnabled }),
         ...(dto.expectedOrganicPostsPerDay === undefined
           ? {}
-          : { expectedOrganicPostsPerDay: decimalOrNull(dto.expectedOrganicPostsPerDay) }),
-        ...(dto.useWorkspaceDefault === undefined ? {} : { useWorkspaceDefault }),
-        ...(dto.organicPostsPerAdSlot === undefined ? {} : { organicPostsPerAdSlot }),
-        ...(dto.maxAdsPerDay === undefined ? {} : { maxAdsPerDay: dto.maxAdsPerDay }),
-        ...(dto.minHoursBetweenAds === undefined ? {} : { minHoursBetweenAds: dto.minHoursBetweenAds }),
-        ...(dto.minDaysBetweenAds === undefined ? {} : { minDaysBetweenAds: dto.minDaysBetweenAds }),
-        ...(dto.slotStrategy === undefined ? {} : { slotStrategy: dto.slotStrategy }),
-        ...(dto.fallbackSlotTimes === undefined ? {} : { fallbackSlotTimes: dto.fallbackSlotTimes }),
-        ...(dto.allowManualSlots === undefined ? {} : { allowManualSlots: dto.allowManualSlots }),
+          : {
+              expectedOrganicPostsPerDay: decimalOrNull(
+                dto.expectedOrganicPostsPerDay,
+              ),
+            }),
+        ...(dto.useWorkspaceDefault === undefined
+          ? {}
+          : { useWorkspaceDefault }),
+        ...(dto.organicPostsPerAdSlot === undefined
+          ? {}
+          : { organicPostsPerAdSlot }),
+        ...(dto.maxAdsPerDay === undefined
+          ? {}
+          : { maxAdsPerDay: dto.maxAdsPerDay }),
+        ...(dto.minHoursBetweenAds === undefined
+          ? {}
+          : { minHoursBetweenAds: dto.minHoursBetweenAds }),
+        ...(dto.minDaysBetweenAds === undefined
+          ? {}
+          : { minDaysBetweenAds: dto.minDaysBetweenAds }),
+        ...(dto.slotStrategy === undefined
+          ? {}
+          : { slotStrategy: dto.slotStrategy }),
+        ...(dto.fallbackSlotTimes === undefined
+          ? {}
+          : { fallbackSlotTimes: dto.fallbackSlotTimes }),
+        ...(dto.allowManualSlots === undefined
+          ? {}
+          : { allowManualSlots: dto.allowManualSlots }),
       },
     });
     this.invalidateAvailabilityCache(workspaceId);
-    return this.mapPolicy(await this.resolvePolicy(workspaceId, channelId, workspaceTimezone));
+    return this.mapPolicy(
+      await this.resolvePolicy(workspaceId, channelId, workspaceTimezone),
+    );
   }
 
-  async recommendPolicy(userId: string, channelId: string, dto: RecommendTelegramAdPolicyDto) {
+  async recommendPolicy(
+    userId: string,
+    channelId: string,
+    dto: RecommendTelegramAdPolicyDto,
+  ) {
     const workspaceId = await this.workspace(userId);
     await this.findWorkspaceChannel(workspaceId, channelId);
     const statisticsWindowDays = dto.statisticsWindowDays ?? 30;
-    const from = new Date(Date.now() - statisticsWindowDays * 24 * 60 * 60 * 1000);
+    const from = new Date(
+      Date.now() - statisticsWindowDays * 24 * 60 * 60 * 1000,
+    );
     const organicPosts = await this.prisma.telegramPost.count({
       where: {
         workspaceId,
@@ -2367,7 +2684,10 @@ export class TelegramAdSalesService {
 
   async createQuote(userId: string, dto: CreateTelegramAdQuoteDto) {
     const workspaceId = await this.workspace(userId);
-    const channel = await this.findWorkspaceChannel(workspaceId, dto.telegramChannelId);
+    const channel = await this.findWorkspaceChannel(
+      workspaceId,
+      dto.telegramChannelId,
+    );
     const scheduledAt = dto.scheduledAt ? new Date(dto.scheduledAt) : null;
     const product = dto.telegramAdProductId
       ? await this.prisma.telegramAdProduct.findFirst({
@@ -2382,20 +2702,42 @@ export class TelegramAdSalesService {
       throw new NotFoundException('Telegram ad product not found');
     }
 
-    const pricingMode = dto.pricingMode ?? product?.defaultPricingMode ?? TelegramAdPricingMode.CPM;
+    const pricingMode =
+      dto.pricingMode ??
+      product?.defaultPricingMode ??
+      TelegramAdPricingMode.CPM;
     const quoteOverrides = {
       pricingMode,
       targetCpm: dto.targetCpm ?? channel.adBaseCpm ?? product?.defaultCpm ?? 0,
-      minimumCpm: dto.minimumCpm ?? dto.targetCpm ?? channel.adBaseCpm ?? product?.defaultCpm ?? 0,
+      minimumCpm:
+        dto.minimumCpm ??
+        dto.targetCpm ??
+        channel.adBaseCpm ??
+        product?.defaultCpm ??
+        0,
       fixedPrice: dto.fixedPrice ?? product?.defaultFixedPrice ?? 0,
       asOf: scheduledAt,
     };
-    let preview = await this.buildProductPricingPreview(workspaceId, channel, product, quoteOverrides);
-    if (scheduledAt && scheduledAt > new Date() && preview.expectedViews == null) {
-      preview = await this.buildProductPricingPreview(workspaceId, channel, product, {
-        ...quoteOverrides,
-        asOf: null,
-      });
+    let preview = await this.buildProductPricingPreview(
+      workspaceId,
+      channel,
+      product,
+      quoteOverrides,
+    );
+    if (
+      scheduledAt &&
+      scheduledAt > new Date() &&
+      preview.expectedViews == null
+    ) {
+      preview = await this.buildProductPricingPreview(
+        workspaceId,
+        channel,
+        product,
+        {
+          ...quoteOverrides,
+          asOf: null,
+        },
+      );
     }
     if (preview.expectedViews == null) {
       return {
@@ -2472,14 +2814,20 @@ export class TelegramAdSalesService {
     };
   }
 
-  async priceHistory(userId: string, channelId: string, query: TelegramAdPriceHistoryQueryDto) {
+  async priceHistory(
+    userId: string,
+    channelId: string,
+    query: TelegramAdPriceHistoryQueryDto,
+  ) {
     const workspaceId = await this.workspace(userId);
     await this.findWorkspaceChannel(workspaceId, channelId);
     const history = await this.prisma.telegramAdPriceSnapshot.findMany({
       where: {
         workspaceId,
         telegramChannelId: channelId,
-        ...(query.telegramAdProductId ? { telegramAdProductId: query.telegramAdProductId } : {}),
+        ...(query.telegramAdProductId
+          ? { telegramAdProductId: query.telegramAdProductId }
+          : {}),
       },
       orderBy: { calculatedAt: 'desc' },
       take: query.limit ?? 50,
@@ -2491,18 +2839,25 @@ export class TelegramAdSalesService {
     const workspaceId = await this.workspace(userId);
     const from = new Date(dto.from);
     const to = new Date(dto.to);
-    const days = Math.ceil((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)) + 1;
-    if (days > 93) throw new BadRequestException('Availability range cannot exceed 93 days');
+    const days =
+      Math.ceil((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+    if (days > 93)
+      throw new BadRequestException('Availability range cannot exceed 93 days');
     if (!dto.channelIds?.length && !dto.networkId) {
       throw new BadRequestException('Provide channelIds or networkId');
     }
     let channelIds = dto.channelIds ?? [];
     if (dto.networkId) {
-      const network = await this.findWorkspaceNetwork(workspaceId, dto.networkId);
+      const network = await this.findWorkspaceNetwork(
+        workspaceId,
+        dto.networkId,
+      );
       channelIds = network.channels.map((item) => item.telegramChannelId);
     }
     if (channelIds.length > 50) {
-      throw new BadRequestException('Availability request cannot exceed 50 channels');
+      throw new BadRequestException(
+        'Availability request cannot exceed 50 channels',
+      );
     }
 
     const cacheKey = this.availabilityCacheKey({
@@ -2516,295 +2871,349 @@ export class TelegramAdSalesService {
     });
 
     return this.responseCache.getOrSet(cacheKey, 30_000, async () => {
-
-    const channels = await this.prisma.telegramChannel.findMany({
-      where: { workspaceId, id: { in: channelIds } },
-      include: { timePosts: { orderBy: [{ position: 'asc' }, { time: 'asc' }] } },
-    });
-    if (channels.length !== channelIds.length) {
-      throw new BadRequestException('Some channels do not belong to selected workspace');
-    }
-    await Promise.all(
-      channels.map((channel) =>
-        this.ensureDefaultProductsForChannel({
-          workspaceId,
-          channelId: channel.id,
-          currency: channel.adBaseCurrency || 'USD',
-        }),
-      ),
-    );
-
-    const historyWindowDays = 30;
-    const historyFrom = new Date(
-      from.getTime() - historyWindowDays * 24 * 60 * 60 * 1000,
-    );
-    const [products, placements, telegramPosts, managedOrganicPosts] = await Promise.all([
-      this.prisma.telegramAdProduct.findMany({
-        where: {
-          workspaceId,
-          telegramChannelId: { in: channelIds },
-          isActive: true,
-          ...(dto.productIds?.length ? { id: { in: dto.productIds } } : {}),
+      const channels = await this.prisma.telegramChannel.findMany({
+        where: { workspaceId, id: { in: channelIds } },
+        include: {
+          timePosts: { orderBy: [{ position: 'asc' }, { time: 'asc' }] },
         },
-        orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
-      }),
-      this.prisma.telegramAdSalePlacement.findMany({
-        where: {
-          workspaceId,
-          telegramChannelId: { in: channelIds },
-          status: { in: ACTIVE_TELEGRAM_AD_PLACEMENT_STATUSES },
-          OR: [
-            {
-              scheduledAt: {
-                gte: new Date(from.getTime() - 7 * 24 * 60 * 60 * 1000),
-                lte: new Date(to.getTime() + 24 * 60 * 60 * 1000),
-              },
-            },
-            { inventoryOpportunityKey: { not: null } },
-          ],
-        },
-        include: { sale: { select: { id: true, title: true, status: true, settlementCurrency: true } } },
-      }),
-      this.prisma.telegramPost.findMany({
-        where: {
-          workspaceId,
-          telegramChannelId: { in: channelIds },
-          postDate: {
-            gte: historyFrom,
-            lte: new Date(to.getTime() + 24 * 60 * 60 * 1000),
-          },
-          excludeFromAnalytics: false,
-          adSalePlacements: { none: {} },
-        },
-        select: {
-          id: true,
-          telegramChannelId: true,
-          telegramMessageId: true,
-          postDate: true,
-        },
-      }),
-      this.prisma.telegramManagedPost.findMany({
-        where: {
-          workspaceId,
-          telegramChannelId: { in: channelIds },
-          status: {
-            in: [
-              TelegramManagedPostStatus.SCHEDULED,
-              TelegramManagedPostStatus.PUBLISHED,
-            ],
-          },
-          adSalePlacements: { none: {} },
-          OR: [
-            {
-              scheduledAt: {
-                gte: historyFrom,
-                lte: new Date(to.getTime() + 24 * 60 * 60 * 1000),
-              },
-            },
-            {
-              publishedAt: {
-                gte: historyFrom,
-                lte: new Date(to.getTime() + 24 * 60 * 60 * 1000),
-              },
-            },
-          ],
-        },
-        select: {
-          id: true,
-          telegramChannelId: true,
-          scheduledAt: true,
-          publishedAt: true,
-          telegramMessageIds: true,
-        },
-      }),
-    ]);
-
-    const slots: any[] = [];
-    const summaries: Array<{
-      channelId: string;
-      date: string;
-      timezone: string;
-      organicPostsCountForDay: number;
-      adsCountForDay: number;
-    }> = [];
-    const workspaceTimezone = await this.resolveWorkspaceTimezone(workspaceId);
-    const now = new Date();
-    for (const channel of channels) {
-      const channelPolicy = await this.resolvePolicy(workspaceId, channel.id, workspaceTimezone);
-      const channelProducts = products.filter((product) => product.telegramChannelId === channel.id);
-      const defaultProductPreview = await this.buildProductPricingPreview(
-        workspaceId,
-        channel,
-        channelProducts[0] ?? null,
-      );
-      const product =
-        channelProducts[0] ??
-        ({
-          id: null,
-          topDurationMinutes: null,
-          currency: channel.adBaseCurrency || 'USD',
-          expectedViews: defaultProductPreview.expectedViews ?? 0,
-          recommendedPrice: defaultProductPreview.recommendedPrice,
-          minimumPrice: defaultProductPreview.minimumPrice,
-        } as const);
-      const recommendedPrice = defaultProductPreview.recommendedPrice;
-      const minimumPrice = defaultProductPreview.minimumPrice;
-      const publishedMessageIds = new Set(
-        telegramPosts
-          .filter((post) => post.telegramChannelId === channel.id)
-          .map((post) => post.telegramMessageId),
-      );
-      const timeline = [
-        ...telegramPosts
-          .filter((post) => post.telegramChannelId === channel.id)
-          .map((post) => ({
-            id: `post:${post.id}`,
-            at: post.postDate,
-          })),
-        ...managedOrganicPosts
-          .filter((post) => post.telegramChannelId === channel.id)
-          .filter((post) => !post.telegramMessageIds.some((messageId) => publishedMessageIds.has(messageId)))
-          .map((post) => ({
-            id: `managed:${post.id}`,
-            at: post.publishedAt ?? post.scheduledAt,
-          })),
-      ]
-        .filter((item): item is { id: string; at: Date } => item.at instanceof Date)
-        .sort((left, right) => left.at.getTime() - right.at.getTime());
-      const cadence = Math.max(1, channelPolicy.organicPostsPerAdSlot);
-      const timelineByDate = new Map<string, Array<{ id: string; at: Date }>>();
-      for (const item of timeline) {
-        const dateKey = utcDateKey(item.at, channelPolicy.timezone);
-        const current = timelineByDate.get(dateKey) ?? [];
-        current.push(item);
-        timelineByDate.set(dateKey, current);
-      }
-      const historicalOrganicPosts = timeline.filter(
-        (item) => item.at >= historyFrom && item.at <= now,
-      ).length;
-      const projectedPostsPerDay = this.projectedOrganicPostsPerDay({
-        channel,
-        policy: channelPolicy,
-        historicalOrganicPosts,
-        historyWindowDays,
       });
-      const typicalSlotsPerDay = Math.max(
-        1,
-        Math.round(projectedPostsPerDay / cadence),
+      if (channels.length !== channelIds.length) {
+        throw new BadRequestException(
+          'Some channels do not belong to selected workspace',
+        );
+      }
+      await Promise.all(
+        channels.map((channel) =>
+          this.ensureDefaultProductsForChannel({
+            workspaceId,
+            channelId: channel.id,
+            currency: channel.adBaseCurrency || 'USD',
+          }),
+        ),
       );
-      let carryoverOrganicPosts = timeline.filter((item) => item.at < from).length % cadence;
-      let opportunityCounter = 0;
-      for (
-        let cursor = new Date(from);
-        cursor <= to;
-        cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000)
-      ) {
-        const dateKey = utcDateKey(cursor, channelPolicy.timezone);
-        const actualDayTimeline = (timelineByDate.get(dateKey) ?? []).sort(
-          (left, right) => left.at.getTime() - right.at.getTime(),
+
+      const historyWindowDays = 30;
+      const historyFrom = new Date(
+        from.getTime() - historyWindowDays * 24 * 60 * 60 * 1000,
+      );
+      const [products, placements, telegramPosts, managedOrganicPosts] =
+        await Promise.all([
+          this.prisma.telegramAdProduct.findMany({
+            where: {
+              workspaceId,
+              telegramChannelId: { in: channelIds },
+              isActive: true,
+              ...(dto.productIds?.length ? { id: { in: dto.productIds } } : {}),
+            },
+            orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+          }),
+          this.prisma.telegramAdSalePlacement.findMany({
+            where: {
+              workspaceId,
+              telegramChannelId: { in: channelIds },
+              status: { in: ACTIVE_TELEGRAM_AD_PLACEMENT_STATUSES },
+              OR: [
+                {
+                  scheduledAt: {
+                    gte: new Date(from.getTime() - 7 * 24 * 60 * 60 * 1000),
+                    lte: new Date(to.getTime() + 24 * 60 * 60 * 1000),
+                  },
+                },
+                { inventoryOpportunityKey: { not: null } },
+              ],
+            },
+            include: {
+              sale: {
+                select: {
+                  id: true,
+                  title: true,
+                  status: true,
+                  settlementCurrency: true,
+                },
+              },
+            },
+          }),
+          this.prisma.telegramPost.findMany({
+            where: {
+              workspaceId,
+              telegramChannelId: { in: channelIds },
+              postDate: {
+                gte: historyFrom,
+                lte: new Date(to.getTime() + 24 * 60 * 60 * 1000),
+              },
+              excludeFromAnalytics: false,
+              adSalePlacements: { none: {} },
+            },
+            select: {
+              id: true,
+              telegramChannelId: true,
+              telegramMessageId: true,
+              postDate: true,
+            },
+          }),
+          this.prisma.telegramManagedPost.findMany({
+            where: {
+              workspaceId,
+              telegramChannelId: { in: channelIds },
+              status: {
+                in: [
+                  TelegramManagedPostStatus.SCHEDULED,
+                  TelegramManagedPostStatus.PUBLISHED,
+                ],
+              },
+              adSalePlacements: { none: {} },
+              OR: [
+                {
+                  scheduledAt: {
+                    gte: historyFrom,
+                    lte: new Date(to.getTime() + 24 * 60 * 60 * 1000),
+                  },
+                },
+                {
+                  publishedAt: {
+                    gte: historyFrom,
+                    lte: new Date(to.getTime() + 24 * 60 * 60 * 1000),
+                  },
+                },
+              ],
+            },
+            select: {
+              id: true,
+              telegramChannelId: true,
+              scheduledAt: true,
+              publishedAt: true,
+              telegramMessageIds: true,
+            },
+          }),
+        ]);
+
+      const slots: any[] = [];
+      const summaries: Array<{
+        channelId: string;
+        date: string;
+        timezone: string;
+        organicPostsCountForDay: number;
+        adsCountForDay: number;
+      }> = [];
+      const workspaceTimezone =
+        await this.resolveWorkspaceTimezone(workspaceId);
+      const now = new Date();
+      for (const channel of channels) {
+        const channelPolicy = await this.resolvePolicy(
+          workspaceId,
+          channel.id,
+          workspaceTimezone,
         );
-        const useProjection =
-          actualDayTimeline.length === 0 && cursor.getTime() > now.getTime();
-        const dayTimeline = useProjection
-          ? this.projectedOrganicTimeline({
-              dateKey,
-              timezone: channelPolicy.timezone,
-              projectedCount: projectedPostsPerDay,
-              scheduledTimes: channel.timePosts,
-            })
-          : actualDayTimeline;
-        const totalOrganicForDay = dayTimeline.length;
-        const carryIn = carryoverOrganicPosts;
-        const rawSlotsForDay = Math.floor((carryIn + totalOrganicForDay) / cadence);
-        const totalSlotsForDay =
-          channelPolicy.maxAdsPerDay >= 0
-            ? Math.min(rawSlotsForDay, channelPolicy.maxAdsPerDay, typicalSlotsPerDay)
-            : Math.min(rawSlotsForDay, typicalSlotsPerDay);
-        carryoverOrganicPosts = (carryIn + totalOrganicForDay) % cadence;
-        const placementsForDate = placements
+        const channelProducts = products.filter(
+          (product) => product.telegramChannelId === channel.id,
+        );
+        const defaultProductPreview = await this.buildProductPricingPreview(
+          workspaceId,
+          channel,
+          channelProducts[0] ?? null,
+        );
+        const product =
+          channelProducts[0] ??
+          ({
+            id: null,
+            topDurationMinutes: null,
+            currency: channel.adBaseCurrency || 'USD',
+            expectedViews: defaultProductPreview.expectedViews ?? 0,
+            recommendedPrice: defaultProductPreview.recommendedPrice,
+            minimumPrice: defaultProductPreview.minimumPrice,
+          } as const);
+        const recommendedPrice = defaultProductPreview.recommendedPrice;
+        const minimumPrice = defaultProductPreview.minimumPrice;
+        const publishedMessageIds = new Set(
+          telegramPosts
+            .filter((post) => post.telegramChannelId === channel.id)
+            .map((post) => post.telegramMessageId),
+        );
+        const timeline = [
+          ...telegramPosts
+            .filter((post) => post.telegramChannelId === channel.id)
+            .map((post) => ({
+              id: `post:${post.id}`,
+              at: post.postDate,
+            })),
+          ...managedOrganicPosts
+            .filter((post) => post.telegramChannelId === channel.id)
+            .filter(
+              (post) =>
+                !post.telegramMessageIds.some((messageId) =>
+                  publishedMessageIds.has(messageId),
+                ),
+            )
+            .map((post) => ({
+              id: `managed:${post.id}`,
+              at: post.publishedAt ?? post.scheduledAt,
+            })),
+        ]
           .filter(
-            (placement) =>
-              placement.telegramChannelId === channel.id &&
-              placement.status !== TelegramAdPlacementStatus.CANCELLED &&
-              utcDateKey(placement.scheduledAt, channelPolicy.timezone) === dateKey,
+            (item): item is { id: string; at: Date } => item.at instanceof Date,
           )
-          .sort((left, right) => left.scheduledAt.getTime() - right.scheduledAt.getTime());
-        const isPastCalendarDay =
-          dateKey < utcDateKey(now, channelPolicy.timezone);
-        const shouldOfferExtraSlot = !isPastCalendarDay || placementsForDate.length === 0;
-        const displaySlotsForDay = Math.max(
-          totalSlotsForDay,
-          placementsForDate.length + (shouldOfferExtraSlot ? 1 : 0),
-        );
-        summaries.push({
-          channelId: channel.id,
-          date: dateKey,
-          timezone: channelPolicy.timezone,
-          organicPostsCountForDay: totalOrganicForDay,
-          adsCountForDay: Math.max(totalSlotsForDay, placementsForDate.length),
+          .sort((left, right) => left.at.getTime() - right.at.getTime());
+        const cadence = Math.max(1, channelPolicy.organicPostsPerAdSlot);
+        const timelineByDate = new Map<
+          string,
+          Array<{ id: string; at: Date }>
+        >();
+        for (const item of timeline) {
+          const dateKey = utcDateKey(item.at, channelPolicy.timezone);
+          const current = timelineByDate.get(dateKey) ?? [];
+          current.push(item);
+          timelineByDate.set(dateKey, current);
+        }
+        const historicalOrganicPosts = timeline.filter(
+          (item) => item.at >= historyFrom && item.at <= now,
+        ).length;
+        const projectedPostsPerDay = this.projectedOrganicPostsPerDay({
+          channel,
+          policy: channelPolicy,
+          historicalOrganicPosts,
+          historyWindowDays,
         });
-        for (let slotIndex = 0; slotIndex < displaySlotsForDay; slotIndex += 1) {
-          opportunityCounter += 1;
-          const triggerPostIndex = Math.min(
-            dayTimeline.length - 1,
-            Math.max(0, (slotIndex + 1) * cadence - carryIn - 1),
+        const typicalSlotsPerDay = Math.max(
+          1,
+          Math.round(projectedPostsPerDay / cadence),
+        );
+        let carryoverOrganicPosts =
+          timeline.filter((item) => item.at < from).length % cadence;
+        let opportunityCounter = 0;
+        for (
+          let cursor = new Date(from);
+          cursor <= to;
+          cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000)
+        ) {
+          const dateKey = utcDateKey(cursor, channelPolicy.timezone);
+          const actualDayTimeline = (timelineByDate.get(dateKey) ?? []).sort(
+            (left, right) => left.at.getTime() - right.at.getTime(),
           );
-          const nextOrganicPostAt =
-            dayTimeline[triggerPostIndex]?.at ?? dayTimeline.at(-1)?.at ?? null;
-          const defaultScheduledAt = nextOrganicPostAt
-            ? nextOrganicPostAt
-            : zonedDateTimeToUtc(dateKey, '12:00', channelPolicy.timezone);
-          const opportunityKey = `cadence:${channel.id}:${opportunityCounter}:${dateKey}`;
-          const existingPlacement =
-            placements.find(
+          const useProjection =
+            actualDayTimeline.length === 0 && cursor.getTime() > now.getTime();
+          const dayTimeline = useProjection
+            ? this.projectedOrganicTimeline({
+                dateKey,
+                timezone: channelPolicy.timezone,
+                projectedCount: projectedPostsPerDay,
+                scheduledTimes: channel.timePosts,
+              })
+            : actualDayTimeline;
+          const totalOrganicForDay = dayTimeline.length;
+          const carryIn = carryoverOrganicPosts;
+          const rawSlotsForDay = Math.floor(
+            (carryIn + totalOrganicForDay) / cadence,
+          );
+          const totalSlotsForDay =
+            channelPolicy.maxAdsPerDay >= 0
+              ? Math.min(
+                  rawSlotsForDay,
+                  channelPolicy.maxAdsPerDay,
+                  typicalSlotsPerDay,
+                )
+              : Math.min(rawSlotsForDay, typicalSlotsPerDay);
+          carryoverOrganicPosts = (carryIn + totalOrganicForDay) % cadence;
+          const placementsForDate = placements
+            .filter(
               (placement) =>
                 placement.telegramChannelId === channel.id &&
                 placement.status !== TelegramAdPlacementStatus.CANCELLED &&
-                placement.inventoryOpportunityKey === opportunityKey,
-            ) ?? placementsForDate[slotIndex] ?? null;
-          const scheduledAt = existingPlacement?.scheduledAt ?? defaultScheduledAt;
-          if (scheduledAt < from) continue;
-          const state = existingPlacement
-            ? existingPlacement.status === TelegramAdPlacementStatus.RESERVED
-              ? 'RESERVED'
-              : 'SOLD'
-            : isPastCalendarDay
-              ? 'PAST'
-              : 'AVAILABLE';
-          slots.push({
+                utcDateKey(placement.scheduledAt, channelPolicy.timezone) ===
+                  dateKey,
+            )
+            .sort(
+              (left, right) =>
+                left.scheduledAt.getTime() - right.scheduledAt.getTime(),
+            );
+          const isPastCalendarDay =
+            dateKey < utcDateKey(now, channelPolicy.timezone);
+          const shouldOfferExtraSlot =
+            !isPastCalendarDay || placementsForDate.length === 0;
+          const displaySlotsForDay = Math.max(
+            totalSlotsForDay,
+            placementsForDate.length + (shouldOfferExtraSlot ? 1 : 0),
+          );
+          summaries.push({
             channelId: channel.id,
             date: dateKey,
-            inventoryOpportunityKey: opportunityKey,
-            scheduledAt: scheduledAt.toISOString(),
             timezone: channelPolicy.timezone,
-            source: 'cadence',
-            state,
-            blockingReason: null,
-            nextOrganicPostAt: nextOrganicPostAt?.toISOString() ?? null,
-            productId: product.id,
-            expectedViews: defaultProductPreview.expectedViews ?? 0,
-            recommendedPrice,
-            minimumPrice,
-            currency: defaultProductPreview.currency,
-            existingPlacement: existingPlacement
-              ? {
-                  id: existingPlacement.id,
-                  saleId: existingPlacement.telegramAdSaleId,
-                  status: existingPlacement.status,
-                  scheduledAt: existingPlacement.scheduledAt.toISOString(),
-                  title: existingPlacement.sale?.title ?? null,
-                  saleStatus: existingPlacement.sale?.status ?? null,
-                  paymentStatus: null,
-                  agreedPrice: decimalToString(existingPlacement.agreedPrice),
-                  currency: existingPlacement.currency,
-                }
-              : null,
             organicPostsCountForDay: totalOrganicForDay,
-            adsCountForDay: placementsForDate.length,
+            adsCountForDay: Math.max(
+              totalSlotsForDay,
+              placementsForDate.length,
+            ),
           });
+          for (
+            let slotIndex = 0;
+            slotIndex < displaySlotsForDay;
+            slotIndex += 1
+          ) {
+            opportunityCounter += 1;
+            const triggerPostIndex = Math.min(
+              dayTimeline.length - 1,
+              Math.max(0, (slotIndex + 1) * cadence - carryIn - 1),
+            );
+            const nextOrganicPostAt =
+              dayTimeline[triggerPostIndex]?.at ??
+              dayTimeline.at(-1)?.at ??
+              null;
+            const defaultScheduledAt = nextOrganicPostAt
+              ? nextOrganicPostAt
+              : zonedDateTimeToUtc(dateKey, '12:00', channelPolicy.timezone);
+            const opportunityKey = `cadence:${channel.id}:${opportunityCounter}:${dateKey}`;
+            const existingPlacement =
+              placements.find(
+                (placement) =>
+                  placement.telegramChannelId === channel.id &&
+                  placement.status !== TelegramAdPlacementStatus.CANCELLED &&
+                  placement.inventoryOpportunityKey === opportunityKey,
+              ) ??
+              placementsForDate[slotIndex] ??
+              null;
+            const scheduledAt =
+              existingPlacement?.scheduledAt ?? defaultScheduledAt;
+            if (scheduledAt < from) continue;
+            const state = existingPlacement
+              ? existingPlacement.status === TelegramAdPlacementStatus.RESERVED
+                ? 'RESERVED'
+                : 'SOLD'
+              : isPastCalendarDay
+                ? 'PAST'
+                : 'AVAILABLE';
+            slots.push({
+              channelId: channel.id,
+              date: dateKey,
+              inventoryOpportunityKey: opportunityKey,
+              scheduledAt: scheduledAt.toISOString(),
+              timezone: channelPolicy.timezone,
+              source: 'cadence',
+              state,
+              blockingReason: null,
+              nextOrganicPostAt: nextOrganicPostAt?.toISOString() ?? null,
+              productId: product.id,
+              expectedViews: defaultProductPreview.expectedViews ?? 0,
+              recommendedPrice,
+              minimumPrice,
+              currency: defaultProductPreview.currency,
+              existingPlacement: existingPlacement
+                ? {
+                    id: existingPlacement.id,
+                    saleId: existingPlacement.telegramAdSaleId,
+                    status: existingPlacement.status,
+                    scheduledAt: existingPlacement.scheduledAt.toISOString(),
+                    title: existingPlacement.sale?.title ?? null,
+                    saleStatus: existingPlacement.sale?.status ?? null,
+                    paymentStatus: null,
+                    agreedPrice: decimalToString(existingPlacement.agreedPrice),
+                    currency: existingPlacement.currency,
+                  }
+                : null,
+              organicPostsCountForDay: totalOrganicForDay,
+              adsCountForDay: placementsForDate.length,
+            });
+          }
         }
       }
-    }
 
       return {
         from: dto.from,
@@ -2848,9 +3257,7 @@ export class TelegramAdSalesService {
         0,
       );
       const actualCpm =
-        actualViews > 0
-          ? revenue.div(actualViews).mul(1000)
-          : decimal(0);
+        actualViews > 0 ? revenue.div(actualViews).mul(1000) : decimal(0);
       return {
         channel,
         revenue,
@@ -2867,7 +3274,10 @@ export class TelegramAdSalesService {
     );
     const outstanding = dataset.placements.reduce((sum, placement) => {
       const allocated = placement.paymentAllocations
-        .filter((allocation) => allocation.payment?.status !== TelegramAdSalePaymentStatus.VOIDED)
+        .filter(
+          (allocation) =>
+            allocation.payment?.status !== TelegramAdSalePaymentStatus.VOIDED,
+        )
         .reduce(
           (inner, allocation) => inner.add(decimal(allocation.amount)),
           decimal(0),
@@ -2905,8 +3315,10 @@ export class TelegramAdSalesService {
 
     const previousPeriodStart = new Date(from.getTime() - periodMs);
     const previousPeriodEnd = new Date(from.getTime() - 1);
-    const currentMonthRevenue = dataset.placements
-      .reduce((sum, placement) => sum.add(decimal(placement.agreedPrice)), decimal(0));
+    const currentMonthRevenue = dataset.placements.reduce(
+      (sum, placement) => sum.add(decimal(placement.agreedPrice)),
+      decimal(0),
+    );
     const previousMonthRevenue = (
       await this.adAnalyticsDataset({
         workspaceId,
@@ -3034,7 +3446,9 @@ export class TelegramAdSalesService {
       (sum, placement) =>
         sum.add(
           placement.paymentAllocations.reduce((inner, allocation) => {
-            if (allocation.payment?.status === TelegramAdSalePaymentStatus.VOIDED) {
+            if (
+              allocation.payment?.status === TelegramAdSalePaymentStatus.VOIDED
+            ) {
               return inner;
             }
             return inner.add(decimal(allocation.amount));
@@ -3046,7 +3460,9 @@ export class TelegramAdSalesService {
       (sum, placement) =>
         sum.add(
           placement.paymentAllocations.reduce((inner, allocation) => {
-            if (allocation.payment?.status === TelegramAdSalePaymentStatus.VOIDED) {
+            if (
+              allocation.payment?.status === TelegramAdSalePaymentStatus.VOIDED
+            ) {
               return inner;
             }
             return inner.add(decimal(allocation.amountInPrimaryCurrency));
@@ -3057,9 +3473,13 @@ export class TelegramAdSalesService {
     const underpricingAmount = placements.reduce((sum, placement) => {
       const recommended = decimal(placement.recommendedPrice);
       const agreed = decimal(placement.agreedPrice);
-      return sum.add(recommended.gt(agreed) ? recommended.sub(agreed) : decimal(0));
+      return sum.add(
+        recommended.gt(agreed) ? recommended.sub(agreed) : decimal(0),
+      );
     }, decimal(0));
-    const agreedPrices = placements.map((placement) => decimal(placement.agreedPrice));
+    const agreedPrices = placements.map((placement) =>
+      decimal(placement.agreedPrice),
+    );
     const expectedViews = placements.reduce(
       (sum, placement) => sum + placement.expectedViews,
       0,
@@ -3079,7 +3499,9 @@ export class TelegramAdSalesService {
     const expectedCpm =
       expectedViews > 0 ? totalAgreed.div(expectedViews).mul(1000) : decimal(0);
     const actualCpm =
-      actualViewsFinal > 0 ? totalAgreed.div(actualViewsFinal).mul(1000) : decimal(0);
+      actualViewsFinal > 0
+        ? totalAgreed.div(actualViewsFinal).mul(1000)
+        : decimal(0);
     const activePlacementStatuses = new Set<TelegramAdPlacementStatus>([
       TelegramAdPlacementStatus.RESERVED,
       TelegramAdPlacementStatus.SCHEDULED,
@@ -3149,20 +3571,25 @@ export class TelegramAdSalesService {
           activePlacementStatuses.has(placement.status),
         ).length,
         published: placements.filter(
-          (placement) => placement.status === TelegramAdPlacementStatus.PUBLISHED,
+          (placement) =>
+            placement.status === TelegramAdPlacementStatus.PUBLISHED,
         ).length,
         completed: placements.filter(
-          (placement) => placement.status === TelegramAdPlacementStatus.COMPLETED,
+          (placement) =>
+            placement.status === TelegramAdPlacementStatus.COMPLETED,
         ).length,
         cancelled: placements.filter(
-          (placement) => placement.status === TelegramAdPlacementStatus.CANCELLED,
+          (placement) =>
+            placement.status === TelegramAdPlacementStatus.CANCELLED,
         ).length,
         slotsEligible: inventory.eligibleSlots,
         slotsAvailable: inventory.availableSlots,
         slotsReserved: inventory.reservedSlots,
         slotFillRate: Number((inventory.bookingFillRate * 100).toFixed(2)),
         bookingFillRate: Number((inventory.bookingFillRate * 100).toFixed(2)),
-        publishedFillRate: Number((inventory.publishedFillRate * 100).toFixed(2)),
+        publishedFillRate: Number(
+          (inventory.publishedFillRate * 100).toFixed(2),
+        ),
         cancellationRate: placements.length
           ? Number(
               (
@@ -3178,8 +3605,12 @@ export class TelegramAdSalesService {
       },
       pricing: {
         currentExpectedViews: latestPrice?.expectedViews ?? 0,
-        currentRecommendedPrice: decimalToString(latestPrice?.recommendedPrice ?? decimal(0)),
-        currentMinimumPrice: decimalToString(latestPrice?.minimumPrice ?? decimal(0)),
+        currentRecommendedPrice: decimalToString(
+          latestPrice?.recommendedPrice ?? decimal(0),
+        ),
+        currentMinimumPrice: decimalToString(
+          latestPrice?.minimumPrice ?? decimal(0),
+        ),
         averageAgreedPrice: decimalToString(
           placements.length ? totalAgreed.div(placements.length) : decimal(0),
         ),
@@ -3188,10 +3619,9 @@ export class TelegramAdSalesService {
             ? Number(underpricingAmount.div(totalAgreed).mul(100).toFixed(2))
             : 0,
         underpricingAmount: decimalToString(underpricingAmount),
-        underpricingPercent:
-          totalAgreed.gt(0)
-            ? Number(underpricingAmount.div(totalAgreed).mul(100).toFixed(2))
-            : 0,
+        underpricingPercent: totalAgreed.gt(0)
+          ? Number(underpricingAmount.div(totalAgreed).mul(100).toFixed(2))
+          : 0,
         lostPotentialRevenue: decimalToString(underpricingAmount),
       },
       performance: {
@@ -3203,7 +3633,12 @@ export class TelegramAdSalesService {
         actualCpm: decimalToString(actualCpm),
         varianceExpectedVsActualPercent:
           expectedViews > 0
-            ? Number((((actualViewsFinal - expectedViews) / expectedViews) * 100).toFixed(2))
+            ? Number(
+                (
+                  ((actualViewsFinal - expectedViews) / expectedViews) *
+                  100
+                ).toFixed(2),
+              )
             : 0,
       },
       operations: {
@@ -3222,7 +3657,8 @@ export class TelegramAdSalesService {
               .filter((placement) => {
                 const allocated = placement.paymentAllocations.reduce(
                   (sum, allocation) =>
-                    allocation.payment?.status === TelegramAdSalePaymentStatus.VOIDED
+                    allocation.payment?.status ===
+                    TelegramAdSalePaymentStatus.VOIDED
                       ? sum
                       : sum.add(decimal(allocation.amount)),
                   decimal(0),
@@ -3238,7 +3674,9 @@ export class TelegramAdSalesService {
         missedPlacements: placements.filter(
           (placement) => placement.status === TelegramAdPlacementStatus.MISSED,
         ).length,
-        deletionFailures: placements.filter((placement) => placement.lastDeletionError).length,
+        deletionFailures: placements.filter(
+          (placement) => placement.lastDeletionError,
+        ).length,
       },
       recentSales: placements
         .slice(-5)
@@ -3252,7 +3690,8 @@ export class TelegramAdSalesService {
           paidAllocatedAmount: decimalToString(
             placement.paymentAllocations.reduce(
               (sum, allocation) =>
-                allocation.payment?.status === TelegramAdSalePaymentStatus.VOIDED
+                allocation.payment?.status ===
+                TelegramAdSalePaymentStatus.VOIDED
                   ? sum
                   : sum.add(decimal(allocation.amount)),
               decimal(0),
@@ -3335,26 +3774,34 @@ export class TelegramAdSalesService {
           decimal(0),
         );
         const nextAvailable = inventorySlots
-          .filter((slot) => slot.channelId === channel.id && slot.state === 'AVAILABLE')
-          .sort((left, right) => left.scheduledAt.getTime() - right.scheduledAt.getTime())[0];
+          .filter(
+            (slot) =>
+              slot.channelId === channel.id && slot.state === 'AVAILABLE',
+          )
+          .sort(
+            (left, right) =>
+              left.scheduledAt.getTime() - right.scheduledAt.getTime(),
+          )[0];
         return {
           channelId: channel.id,
           title: channel.title,
           revenue: decimalToString(channelRevenue),
-          revenueSharePercent:
-            totalRevenue.gt(0)
-              ? Number(channelRevenue.div(totalRevenue).mul(100).toFixed(2))
-              : 0,
+          revenueSharePercent: totalRevenue.gt(0)
+            ? Number(channelRevenue.div(totalRevenue).mul(100).toFixed(2))
+            : 0,
           placementsCount: channelPlacements.length,
           fillRate: inventory.eligibleSlots
             ? Number(
                 (
                   (inventorySlots.filter(
-                    (slot) => slot.channelId === channel.id && slot.state === 'SOLD',
+                    (slot) =>
+                      slot.channelId === channel.id && slot.state === 'SOLD',
                   ).length /
                     Math.max(
                       1,
-                      inventorySlots.filter((slot) => slot.channelId === channel.id).length,
+                      inventorySlots.filter(
+                        (slot) => slot.channelId === channel.id,
+                      ).length,
                     )) *
                   100
                 ).toFixed(2),
@@ -3380,21 +3827,30 @@ export class TelegramAdSalesService {
       expectedViews,
       actualViews,
       blendedExpectedCpm:
-        expectedViews > 0 ? decimalToString(totalRevenue.div(expectedViews).mul(1000)) : '0',
+        expectedViews > 0
+          ? decimalToString(totalRevenue.div(expectedViews).mul(1000))
+          : '0',
       blendedActualCpm:
-        actualViews > 0 ? decimalToString(totalRevenue.div(actualViews).mul(1000)) : '0',
+        actualViews > 0
+          ? decimalToString(totalRevenue.div(actualViews).mul(1000))
+          : '0',
       underpricingLoss: decimalToString(
         dataset.placements.reduce((sum, placement) => {
           const recommended = decimal(placement.recommendedPrice);
           const agreed = decimal(placement.agreedPrice);
-          return sum.add(recommended.gt(agreed) ? recommended.sub(agreed) : decimal(0));
+          return sum.add(
+            recommended.gt(agreed) ? recommended.sub(agreed) : decimal(0),
+          );
         }, decimal(0)),
       ),
       channels,
     };
   }
 
-  async revenueSeries(userId: string, query: TelegramAdAnalyticsSeriesQueryDto) {
+  async revenueSeries(
+    userId: string,
+    query: TelegramAdAnalyticsSeriesQueryDto,
+  ) {
     const workspaceId = await this.workspace(userId);
     const { from, to, timezone } = this.analyticsRange(query);
     const overdueCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -3412,17 +3868,15 @@ export class TelegramAdSalesService {
     const points = new Map<string, any>();
     for (const placement of dataset.placements) {
       const key = this.bucketDate(placement.scheduledAt, granularity);
-      const current =
-        points.get(key) ??
-        {
-          date: key,
-          agreedRevenue: decimal(0),
-          paidRevenue: decimal(0),
-          outstandingRevenue: decimal(0),
-          placements: 0,
-          expectedViews: 0,
-          actualViews: 0,
-        };
+      const current = points.get(key) ?? {
+        date: key,
+        agreedRevenue: decimal(0),
+        paidRevenue: decimal(0),
+        outstandingRevenue: decimal(0),
+        placements: 0,
+        expectedViews: 0,
+        actualViews: 0,
+      };
       const allocated = placement.paymentAllocations.reduce(
         (sum, allocation) =>
           allocation.payment?.status === TelegramAdSalePaymentStatus.VOIDED
@@ -3430,7 +3884,9 @@ export class TelegramAdSalesService {
             : sum.add(decimal(allocation.amount)),
         decimal(0),
       );
-      current.agreedRevenue = current.agreedRevenue.add(decimal(placement.agreedPrice));
+      current.agreedRevenue = current.agreedRevenue.add(
+        decimal(placement.agreedPrice),
+      );
       current.paidRevenue = current.paidRevenue.add(allocated);
       current.outstandingRevenue = current.outstandingRevenue.add(
         decimal(placement.agreedPrice).sub(allocated),
@@ -3456,7 +3912,10 @@ export class TelegramAdSalesService {
     };
   }
 
-  async pricingSeries(userId: string, query: TelegramAdAnalyticsSeriesQueryDto) {
+  async pricingSeries(
+    userId: string,
+    query: TelegramAdAnalyticsSeriesQueryDto,
+  ) {
     const workspaceId = await this.workspace(userId);
     const { from, to, timezone } = this.analyticsRange(query);
     const granularity = query.granularity ?? 'day';
@@ -3509,7 +3968,10 @@ export class TelegramAdSalesService {
     };
   }
 
-  async inventoryAnalytics(userId: string, query: TelegramAdAnalyticsSeriesQueryDto) {
+  async inventoryAnalytics(
+    userId: string,
+    query: TelegramAdAnalyticsSeriesQueryDto,
+  ) {
     const workspaceId = await this.workspace(userId);
     const { from, to, timezone } = this.analyticsRange(query);
     const channelIds = query.channelIds?.length
@@ -3533,17 +3995,32 @@ export class TelegramAdSalesService {
         date: snapshot.date.toISOString().slice(0, 10),
         channelId: snapshot.telegramChannelId,
         eligibleSlots: snapshot.eligibleSlots,
-        availableSlots: Math.max(0, snapshot.eligibleSlots - snapshot.bookedSlots),
-        reservedSlots: Math.max(0, snapshot.bookedSlots - snapshot.publishedSlots),
+        availableSlots: Math.max(
+          0,
+          snapshot.eligibleSlots - snapshot.bookedSlots,
+        ),
+        reservedSlots: Math.max(
+          0,
+          snapshot.bookedSlots - snapshot.publishedSlots,
+        ),
         soldSlots: snapshot.bookedSlots,
         publishedSlots: snapshot.publishedSlots,
         blockedSlots: snapshot.blockedSlots,
         pastUnusedSlots: snapshot.missedSlots,
         bookingFillRate: snapshot.eligibleSlots
-          ? Number(((snapshot.bookedSlots / snapshot.eligibleSlots) * 100).toFixed(2))
+          ? Number(
+              ((snapshot.bookedSlots / snapshot.eligibleSlots) * 100).toFixed(
+                2,
+              ),
+            )
           : 0,
         publishedFillRate: snapshot.eligibleSlots
-          ? Number(((snapshot.publishedSlots / snapshot.eligibleSlots) * 100).toFixed(2))
+          ? Number(
+              (
+                (snapshot.publishedSlots / snapshot.eligibleSlots) *
+                100
+              ).toFixed(2),
+            )
           : 0,
       })),
       dataQuality: {
@@ -3556,7 +4033,9 @@ export class TelegramAdSalesService {
         missingSnapshotDays:
           this.listDatesInRange(from, to).length -
           new Set(
-            snapshots.map((snapshot) => snapshot.date.toISOString().slice(0, 10)),
+            snapshots.map((snapshot) =>
+              snapshot.date.toISOString().slice(0, 10),
+            ),
           ).size,
         missingPriceDays: 0,
         missingActualViewsPlacements: 0,
@@ -3565,7 +4044,9 @@ export class TelegramAdSalesService {
           ? Number(
               (
                 (new Set(
-                  snapshots.map((snapshot) => snapshot.date.toISOString().slice(0, 10)),
+                  snapshots.map((snapshot) =>
+                    snapshot.date.toISOString().slice(0, 10),
+                  ),
                 ).size /
                   this.listDatesInRange(from, to).length) *
                 100
@@ -3575,7 +4056,9 @@ export class TelegramAdSalesService {
         warnings:
           snapshots.length >= this.listDatesInRange(from, to).length
             ? []
-            : ['Some daily inventory snapshots are missing for the selected period.'],
+            : [
+                'Some daily inventory snapshots are missing for the selected period.',
+              ],
       },
     };
   }
@@ -3620,7 +4103,9 @@ export class TelegramAdSalesService {
           currency: placement.currency,
         })),
       ...dataset.placements
-        .filter((placement) => placement.status === TelegramAdPlacementStatus.MISSED)
+        .filter(
+          (placement) => placement.status === TelegramAdPlacementStatus.MISSED,
+        )
         .map((placement) => ({
           kind: 'MISSED_PLACEMENT' as const,
           severity: 'error' as const,
@@ -3648,7 +4133,9 @@ export class TelegramAdSalesService {
           currency: placement.currency,
         })),
       ...dataset.placements
-        .filter((placement) => decimal(placement.agreedPrice).lt(decimal(placement.minimumPrice)))
+        .filter((placement) =>
+          decimal(placement.agreedPrice).lt(decimal(placement.minimumPrice)),
+        )
         .map((placement) => ({
           kind: 'UNDERPRICED_PLACEMENT' as const,
           severity: 'warn' as const,
@@ -3658,7 +4145,9 @@ export class TelegramAdSalesService {
           title: 'Placement sold below minimum',
           details: `${placement.sale.advertiserName} booked below minimum price`,
           scheduledAt: placement.scheduledAt.toISOString(),
-          amount: decimalToString(decimal(placement.minimumPrice).sub(decimal(placement.agreedPrice))),
+          amount: decimalToString(
+            decimal(placement.minimumPrice).sub(decimal(placement.agreedPrice)),
+          ),
           currency: placement.currency,
         })),
       ...inventory.points
@@ -3675,7 +4164,9 @@ export class TelegramAdSalesService {
           amount: null,
           currency: null,
         })),
-    ].filter((item) => (query.kinds?.length ? query.kinds.includes(item.kind) : true));
+    ].filter((item) =>
+      query.kinds?.length ? query.kinds.includes(item.kind) : true,
+    );
     return {
       dateFrom: from.toISOString(),
       dateTo: to.toISOString(),
@@ -3699,12 +4190,32 @@ export class TelegramAdSalesService {
             OR: [
               { displayName: { contains: search, mode: 'insensitive' } },
               { companyName: { contains: search, mode: 'insensitive' } },
-              { telegramUsername: { contains: this.normalizeTelegramUsername(search) ?? search, mode: 'insensitive' } },
-              { phone: { contains: this.normalizePhone(search) ?? search, mode: 'insensitive' } },
-              { email: { contains: this.normalizeEmail(search) ?? search, mode: 'insensitive' } },
+              {
+                telegramUsername: {
+                  contains: this.normalizeTelegramUsername(search) ?? search,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                phone: {
+                  contains: this.normalizePhone(search) ?? search,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                email: {
+                  contains: this.normalizeEmail(search) ?? search,
+                  mode: 'insensitive',
+                },
+              },
               {
                 contacts: {
-                  some: { normalizedValue: { contains: search.toLowerCase(), mode: 'insensitive' } },
+                  some: {
+                    normalizedValue: {
+                      contains: search.toLowerCase(),
+                      mode: 'insensitive',
+                    },
+                  },
                 },
               },
             ],
@@ -3721,7 +4232,11 @@ export class TelegramAdSalesService {
       }),
       this.prisma.telegramAdvertiser.count({ where }),
     ]);
-    return createPaginatedResponse(items.map((item) => this.mapAdvertiser(item)), totalItems, pagination);
+    return createPaginatedResponse(
+      items.map((item) => this.mapAdvertiser(item)),
+      totalItems,
+      pagination,
+    );
   }
 
   async advertiserSearch(userId: string, query: TelegramAdvertiserSearchDto) {
@@ -3740,16 +4255,34 @@ export class TelegramAdSalesService {
         OR: [
           { displayName: { contains: search, mode: 'insensitive' } },
           { companyName: { contains: search, mode: 'insensitive' } },
-          ...normalizedVariants.map((value) => ({ telegramUsername: { contains: value, mode: 'insensitive' as const } })),
-          ...normalizedVariants.map((value) => ({ phone: { contains: value, mode: 'insensitive' as const } })),
-          ...normalizedVariants.map((value) => ({ email: { contains: value, mode: 'insensitive' as const } })),
           ...normalizedVariants.map((value) => ({
-            contacts: { some: { normalizedValue: { contains: value, mode: 'insensitive' as const } } },
+            telegramUsername: { contains: value, mode: 'insensitive' as const },
+          })),
+          ...normalizedVariants.map((value) => ({
+            phone: { contains: value, mode: 'insensitive' as const },
+          })),
+          ...normalizedVariants.map((value) => ({
+            email: { contains: value, mode: 'insensitive' as const },
+          })),
+          ...normalizedVariants.map((value) => ({
+            contacts: {
+              some: {
+                normalizedValue: {
+                  contains: value,
+                  mode: 'insensitive' as const,
+                },
+              },
+            },
           })),
         ],
       },
-      include: { contacts: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] } },
-      orderBy: [{ totalRevenueInPrimaryCurrency: 'desc' }, { updatedAt: 'desc' }],
+      include: {
+        contacts: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] },
+      },
+      orderBy: [
+        { totalRevenueInPrimaryCurrency: 'desc' },
+        { updatedAt: 'desc' },
+      ],
       take: Math.max(1, Math.min(20, query.limit ?? 10)),
     });
     return items.map((item) => this.mapAdvertiser(item));
@@ -3757,7 +4290,9 @@ export class TelegramAdSalesService {
 
   async getAdvertiserDetails(userId: string, advertiserId: string) {
     const workspaceId = await this.workspace(userId);
-    return this.mapAdvertiser(await this.getAdvertiser(workspaceId, advertiserId));
+    return this.mapAdvertiser(
+      await this.getAdvertiser(workspaceId, advertiserId),
+    );
   }
 
   async createAdvertiser(userId: string, dto: CreateTelegramAdvertiserDto) {
@@ -3775,7 +4310,8 @@ export class TelegramAdSalesService {
         description: dto.description?.trim() || null,
         source: dto.source?.trim() || null,
         status: dto.status ?? TelegramAdvertiserStatus.LEAD,
-        lifecycleStage: dto.lifecycleStage ?? TelegramAdvertiserLifecycleStage.NEW,
+        lifecycleStage:
+          dto.lifecycleStage ?? TelegramAdvertiserLifecycleStage.NEW,
         ownerMemberId: dto.ownerMemberId ?? null,
         createdByUserId: userId,
         nextContactAt: dto.nextContactAt ? new Date(dto.nextContactAt) : null,
@@ -3793,28 +4329,70 @@ export class TelegramAdSalesService {
     return this.mapAdvertiser(advertiser);
   }
 
-  async updateAdvertiser(userId: string, advertiserId: string, dto: UpdateTelegramAdvertiserDto) {
+  async updateAdvertiser(
+    userId: string,
+    advertiserId: string,
+    dto: UpdateTelegramAdvertiserDto,
+  ) {
     const workspaceId = await this.workspace(userId);
     await this.getAdvertiser(workspaceId, advertiserId);
     const advertiser = await this.prisma.telegramAdvertiser.update({
       where: { id: advertiserId },
       data: {
-        ...(dto.displayName === undefined ? {} : { displayName: dto.displayName.trim() }),
-        ...(dto.companyName === undefined ? {} : { companyName: dto.companyName?.trim() || null }),
-        ...(dto.telegramUsername === undefined ? {} : { telegramUsername: this.normalizeTelegramUsername(dto.telegramUsername) }),
-        ...(dto.telegramUserId === undefined ? {} : { telegramUserId: dto.telegramUserId?.trim() || null }),
-        ...(dto.phone === undefined ? {} : { phone: this.normalizePhone(dto.phone) }),
-        ...(dto.email === undefined ? {} : { email: this.normalizeEmail(dto.email) }),
-        ...(dto.website === undefined ? {} : { website: this.normalizeWebsite(dto.website) }),
-        ...(dto.description === undefined ? {} : { description: dto.description?.trim() || null }),
-        ...(dto.source === undefined ? {} : { source: dto.source?.trim() || null }),
+        ...(dto.displayName === undefined
+          ? {}
+          : { displayName: dto.displayName.trim() }),
+        ...(dto.companyName === undefined
+          ? {}
+          : { companyName: dto.companyName?.trim() || null }),
+        ...(dto.telegramUsername === undefined
+          ? {}
+          : {
+              telegramUsername: this.normalizeTelegramUsername(
+                dto.telegramUsername,
+              ),
+            }),
+        ...(dto.telegramUserId === undefined
+          ? {}
+          : { telegramUserId: dto.telegramUserId?.trim() || null }),
+        ...(dto.phone === undefined
+          ? {}
+          : { phone: this.normalizePhone(dto.phone) }),
+        ...(dto.email === undefined
+          ? {}
+          : { email: this.normalizeEmail(dto.email) }),
+        ...(dto.website === undefined
+          ? {}
+          : { website: this.normalizeWebsite(dto.website) }),
+        ...(dto.description === undefined
+          ? {}
+          : { description: dto.description?.trim() || null }),
+        ...(dto.source === undefined
+          ? {}
+          : { source: dto.source?.trim() || null }),
         ...(dto.status === undefined ? {} : { status: dto.status }),
-        ...(dto.lifecycleStage === undefined ? {} : { lifecycleStage: dto.lifecycleStage }),
-        ...(dto.ownerMemberId === undefined ? {} : { ownerMemberId: dto.ownerMemberId }),
-        ...(dto.nextContactAt === undefined ? {} : { nextContactAt: dto.nextContactAt ? new Date(dto.nextContactAt) : null }),
-        ...(dto.defaultFollowUpDays === undefined ? {} : { defaultFollowUpDays: dto.defaultFollowUpDays }),
-        ...(dto.preferredCurrency === undefined ? {} : { preferredCurrency: dto.preferredCurrency }),
-        ...(dto.preferredContactMethod === undefined ? {} : { preferredContactMethod: dto.preferredContactMethod }),
+        ...(dto.lifecycleStage === undefined
+          ? {}
+          : { lifecycleStage: dto.lifecycleStage }),
+        ...(dto.ownerMemberId === undefined
+          ? {}
+          : { ownerMemberId: dto.ownerMemberId }),
+        ...(dto.nextContactAt === undefined
+          ? {}
+          : {
+              nextContactAt: dto.nextContactAt
+                ? new Date(dto.nextContactAt)
+                : null,
+            }),
+        ...(dto.defaultFollowUpDays === undefined
+          ? {}
+          : { defaultFollowUpDays: dto.defaultFollowUpDays }),
+        ...(dto.preferredCurrency === undefined
+          ? {}
+          : { preferredCurrency: dto.preferredCurrency }),
+        ...(dto.preferredContactMethod === undefined
+          ? {}
+          : { preferredContactMethod: dto.preferredContactMethod }),
       },
       include: this.advertiserInclude(),
     });
@@ -3826,7 +4404,10 @@ export class TelegramAdSalesService {
     await this.getAdvertiser(workspaceId, advertiserId);
     const advertiser = await this.prisma.telegramAdvertiser.update({
       where: { id: advertiserId },
-      data: { archivedAt: new Date(), status: TelegramAdvertiserStatus.ARCHIVED },
+      data: {
+        archivedAt: new Date(),
+        status: TelegramAdvertiserStatus.ARCHIVED,
+      },
       include: this.advertiserInclude(),
     });
     return this.mapAdvertiser(advertiser);
@@ -3843,11 +4424,16 @@ export class TelegramAdSalesService {
     return this.mapAdvertiser(advertiser);
   }
 
-  async addAdvertiserContact(userId: string, advertiserId: string, dto: CreateTelegramAdvertiserContactDto) {
+  async addAdvertiserContact(
+    userId: string,
+    advertiserId: string,
+    dto: CreateTelegramAdvertiserContactDto,
+  ) {
     const workspaceId = await this.workspace(userId);
     await this.getAdvertiser(workspaceId, advertiserId);
     const normalizedValue = this.normalizeContactValue(dto.type, dto.value);
-    if (!normalizedValue) throw new BadRequestException('Contact value is required');
+    if (!normalizedValue)
+      throw new BadRequestException('Contact value is required');
     const contact = await this.prisma.$transaction(async (tx) => {
       if (dto.isPrimary) {
         await tx.telegramAdvertiserContact.updateMany({
@@ -3872,22 +4458,32 @@ export class TelegramAdSalesService {
       type: TelegramAdvertiserActivityType.CONTACT_ADDED,
       title: `Contact added: ${dto.type}`,
       actorUserId: userId,
-      metadata: { contactId: contact.id, type: dto.type } as Prisma.InputJsonValue,
+      metadata: {
+        contactId: contact.id,
+        type: dto.type,
+      } as Prisma.InputJsonValue,
     });
     return this.mapAdvertiserContact(contact);
   }
 
-  async updateAdvertiserContact(userId: string, advertiserId: string, contactId: string, dto: UpdateTelegramAdvertiserContactDto) {
+  async updateAdvertiserContact(
+    userId: string,
+    advertiserId: string,
+    contactId: string,
+    dto: UpdateTelegramAdvertiserContactDto,
+  ) {
     const workspaceId = await this.workspace(userId);
     await this.getAdvertiser(workspaceId, advertiserId);
     const existing = await this.prisma.telegramAdvertiserContact.findFirst({
       where: { id: contactId, workspaceId, advertiserId },
     });
-    if (!existing) throw new NotFoundException('Telegram advertiser contact not found');
+    if (!existing)
+      throw new NotFoundException('Telegram advertiser contact not found');
     const nextType = dto.type ?? existing.type;
     const nextValue = dto.value ?? existing.value;
     const normalizedValue = this.normalizeContactValue(nextType, nextValue);
-    if (!normalizedValue) throw new BadRequestException('Contact value is required');
+    if (!normalizedValue)
+      throw new BadRequestException('Contact value is required');
     const contact = await this.prisma.$transaction(async (tx) => {
       if (dto.isPrimary) {
         await tx.telegramAdvertiserContact.updateMany({
@@ -3901,23 +4497,37 @@ export class TelegramAdSalesService {
           type: nextType,
           value: nextValue.trim(),
           normalizedValue,
-          ...(dto.label === undefined ? {} : { label: dto.label?.trim() || null }),
+          ...(dto.label === undefined
+            ? {}
+            : { label: dto.label?.trim() || null }),
           ...(dto.isPrimary === undefined ? {} : { isPrimary: dto.isPrimary }),
-          ...(dto.isVerified === undefined ? {} : { isVerified: dto.isVerified }),
+          ...(dto.isVerified === undefined
+            ? {}
+            : { isVerified: dto.isVerified }),
         },
       });
     });
     return this.mapAdvertiserContact(contact);
   }
 
-  async deleteAdvertiserContact(userId: string, advertiserId: string, contactId: string) {
+  async deleteAdvertiserContact(
+    userId: string,
+    advertiserId: string,
+    contactId: string,
+  ) {
     const workspaceId = await this.workspace(userId);
     await this.getAdvertiser(workspaceId, advertiserId);
-    await this.prisma.telegramAdvertiserContact.deleteMany({ where: { id: contactId, workspaceId, advertiserId } });
+    await this.prisma.telegramAdvertiserContact.deleteMany({
+      where: { id: contactId, workspaceId, advertiserId },
+    });
     return { success: true };
   }
 
-  async setPrimaryAdvertiserContact(userId: string, advertiserId: string, contactId: string) {
+  async setPrimaryAdvertiserContact(
+    userId: string,
+    advertiserId: string,
+    contactId: string,
+  ) {
     const workspaceId = await this.workspace(userId);
     await this.getAdvertiser(workspaceId, advertiserId);
     const [_, contact] = await this.prisma.$transaction([
@@ -3925,12 +4535,19 @@ export class TelegramAdSalesService {
         where: { workspaceId, advertiserId },
         data: { isPrimary: false },
       }),
-      this.prisma.telegramAdvertiserContact.update({ where: { id: contactId }, data: { isPrimary: true } }),
+      this.prisma.telegramAdvertiserContact.update({
+        where: { id: contactId },
+        data: { isPrimary: true },
+      }),
     ]);
     return this.mapAdvertiserContact(contact);
   }
 
-  async listAdvertiserActivities(userId: string, advertiserId: string, query: TelegramAdvertiserActivitiesQueryDto) {
+  async listAdvertiserActivities(
+    userId: string,
+    advertiserId: string,
+    query: TelegramAdvertiserActivitiesQueryDto,
+  ) {
     const workspaceId = await this.workspace(userId);
     await this.getAdvertiser(workspaceId, advertiserId);
     const pagination = normalizePagination(query);
@@ -3941,26 +4558,44 @@ export class TelegramAdSalesService {
         skip: pagination.skip,
         take: pagination.take,
       }),
-      this.prisma.telegramAdvertiserActivity.count({ where: { workspaceId, advertiserId } }),
+      this.prisma.telegramAdvertiserActivity.count({
+        where: { workspaceId, advertiserId },
+      }),
     ]);
-    return createPaginatedResponse(items.map((item) => this.mapAdvertiserActivity(item)), totalItems, pagination);
+    return createPaginatedResponse(
+      items.map((item) => this.mapAdvertiserActivity(item)),
+      totalItems,
+      pagination,
+    );
   }
 
-  async createAdvertiserActivityEntry(userId: string, advertiserId: string, dto: CreateTelegramAdvertiserActivityDto) {
+  async createAdvertiserActivityEntry(
+    userId: string,
+    advertiserId: string,
+    dto: CreateTelegramAdvertiserActivityDto,
+  ) {
     const workspaceId = await this.workspace(userId);
     await this.getAdvertiser(workspaceId, advertiserId);
-    const activity = await this.createAdvertiserActivity(workspaceId, advertiserId, {
-      type: dto.type,
-      title: dto.title.trim(),
-      description: dto.description?.trim() || null,
-      actorUserId: userId,
-      metadata: (dto.metadata as Prisma.InputJsonValue | undefined) ?? null,
-      occurredAt: dto.occurredAt ? new Date(dto.occurredAt) : new Date(),
-    });
+    const activity = await this.createAdvertiserActivity(
+      workspaceId,
+      advertiserId,
+      {
+        type: dto.type,
+        title: dto.title.trim(),
+        description: dto.description?.trim() || null,
+        actorUserId: userId,
+        metadata: (dto.metadata as Prisma.InputJsonValue | undefined) ?? null,
+        occurredAt: dto.occurredAt ? new Date(dto.occurredAt) : new Date(),
+      },
+    );
     return this.mapAdvertiserActivity(activity);
   }
 
-  async createAdvertiserNote(userId: string, advertiserId: string, dto: CreateTelegramAdvertiserActivityDto) {
+  async createAdvertiserNote(
+    userId: string,
+    advertiserId: string,
+    dto: CreateTelegramAdvertiserActivityDto,
+  ) {
     return this.createAdvertiserActivityEntry(userId, advertiserId, {
       ...dto,
       type: TelegramAdvertiserActivityType.NOTE_ADDED,
@@ -3973,7 +4608,9 @@ export class TelegramAdSalesService {
     const where: Prisma.TelegramAdvertiserTaskWhereInput = {
       workspaceId,
       ...(query.advertiserId ? { advertiserId: query.advertiserId } : {}),
-      ...(query.assignedMemberId ? { assignedMemberId: query.assignedMemberId } : {}),
+      ...(query.assignedMemberId
+        ? { assignedMemberId: query.assignedMemberId }
+        : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.type ? { type: query.type } : {}),
     };
@@ -3986,10 +4623,18 @@ export class TelegramAdSalesService {
       }),
       this.prisma.telegramAdvertiserTask.count({ where }),
     ]);
-    return createPaginatedResponse(items.map((item) => this.mapAdvertiserTask(item)), totalItems, pagination);
+    return createPaginatedResponse(
+      items.map((item) => this.mapAdvertiserTask(item)),
+      totalItems,
+      pagination,
+    );
   }
 
-  async createAdvertiserTask(userId: string, advertiserId: string, dto: CreateTelegramAdvertiserTaskDto) {
+  async createAdvertiserTask(
+    userId: string,
+    advertiserId: string,
+    dto: CreateTelegramAdvertiserTaskDto,
+  ) {
     const workspaceId = await this.workspace(userId);
     await this.getAdvertiser(workspaceId, advertiserId);
     const task = await this.prisma.telegramAdvertiserTask.create({
@@ -4006,7 +4651,9 @@ export class TelegramAdSalesService {
         description: dto.description?.trim() || null,
         dueAt: new Date(dto.dueAt),
         remindAt: dto.remindAt ? new Date(dto.remindAt) : null,
-        metadata: (dto.metadata as Prisma.InputJsonValue | undefined) ?? Prisma.JsonNull,
+        metadata:
+          (dto.metadata as Prisma.InputJsonValue | undefined) ??
+          Prisma.JsonNull,
       },
     });
     await this.createAdvertiserActivity(workspaceId, advertiserId, {
@@ -4020,30 +4667,58 @@ export class TelegramAdSalesService {
     return this.mapAdvertiserTask(task);
   }
 
-  async updateCrmTask(userId: string, taskId: string, dto: UpdateTelegramAdvertiserTaskDto) {
+  async updateCrmTask(
+    userId: string,
+    taskId: string,
+    dto: UpdateTelegramAdvertiserTaskDto,
+  ) {
     const workspaceId = await this.workspace(userId);
-    const existing = await this.prisma.telegramAdvertiserTask.findFirst({ where: { id: taskId, workspaceId } });
-    if (!existing) throw new NotFoundException('Telegram advertiser task not found');
+    const existing = await this.prisma.telegramAdvertiserTask.findFirst({
+      where: { id: taskId, workspaceId },
+    });
+    if (!existing)
+      throw new NotFoundException('Telegram advertiser task not found');
     const task = await this.prisma.telegramAdvertiserTask.update({
       where: { id: taskId },
       data: {
-        ...(dto.assignedMemberId === undefined ? {} : { assignedMemberId: dto.assignedMemberId }),
+        ...(dto.assignedMemberId === undefined
+          ? {}
+          : { assignedMemberId: dto.assignedMemberId }),
         ...(dto.status === undefined ? {} : { status: dto.status }),
         ...(dto.priority === undefined ? {} : { priority: dto.priority }),
         ...(dto.title === undefined ? {} : { title: dto.title.trim() }),
-        ...(dto.description === undefined ? {} : { description: dto.description?.trim() || null }),
-        ...(dto.dueAt === undefined ? {} : { dueAt: dto.dueAt ? new Date(dto.dueAt) : existing.dueAt }),
-        ...(dto.remindAt === undefined ? {} : { remindAt: dto.remindAt ? new Date(dto.remindAt) : null }),
-        ...(dto.snoozedUntil === undefined ? {} : { snoozedUntil: dto.snoozedUntil ? new Date(dto.snoozedUntil) : null }),
+        ...(dto.description === undefined
+          ? {}
+          : { description: dto.description?.trim() || null }),
+        ...(dto.dueAt === undefined
+          ? {}
+          : { dueAt: dto.dueAt ? new Date(dto.dueAt) : existing.dueAt }),
+        ...(dto.remindAt === undefined
+          ? {}
+          : { remindAt: dto.remindAt ? new Date(dto.remindAt) : null }),
+        ...(dto.snoozedUntil === undefined
+          ? {}
+          : {
+              snoozedUntil: dto.snoozedUntil
+                ? new Date(dto.snoozedUntil)
+                : null,
+            }),
       },
     });
     return this.mapAdvertiserTask(task);
   }
 
-  async completeCrmTask(userId: string, taskId: string, dto: CompleteTelegramAdvertiserTaskDto) {
+  async completeCrmTask(
+    userId: string,
+    taskId: string,
+    dto: CompleteTelegramAdvertiserTaskDto,
+  ) {
     const workspaceId = await this.workspace(userId);
-    const existing = await this.prisma.telegramAdvertiserTask.findFirst({ where: { id: taskId, workspaceId } });
-    if (!existing) throw new NotFoundException('Telegram advertiser task not found');
+    const existing = await this.prisma.telegramAdvertiserTask.findFirst({
+      where: { id: taskId, workspaceId },
+    });
+    if (!existing)
+      throw new NotFoundException('Telegram advertiser task not found');
     const task = await this.prisma.telegramAdvertiserTask.update({
       where: { id: taskId },
       data: {
@@ -4052,14 +4727,15 @@ export class TelegramAdSalesService {
         completionNote: dto.completionNote?.trim() || null,
       },
     });
-    const activityExists = await this.prisma.telegramAdvertiserActivity.findFirst({
-      where: {
-        workspaceId,
-        advertiserId: task.advertiserId,
-        taskId,
-        type: TelegramAdvertiserActivityType.FOLLOW_UP_COMPLETED,
-      },
-    });
+    const activityExists =
+      await this.prisma.telegramAdvertiserActivity.findFirst({
+        where: {
+          workspaceId,
+          advertiserId: task.advertiserId,
+          taskId,
+          type: TelegramAdvertiserActivityType.FOLLOW_UP_COMPLETED,
+        },
+      });
     if (!activityExists) {
       await this.createAdvertiserActivity(workspaceId, task.advertiserId, {
         type: TelegramAdvertiserActivityType.FOLLOW_UP_COMPLETED,
@@ -4074,17 +4750,32 @@ export class TelegramAdSalesService {
     return this.mapAdvertiserTask(task);
   }
 
-  async snoozeCrmTask(userId: string, taskId: string, dto: UpdateTelegramAdvertiserTaskDto) {
+  async snoozeCrmTask(
+    userId: string,
+    taskId: string,
+    dto: UpdateTelegramAdvertiserTaskDto,
+  ) {
     return this.updateCrmTask(userId, taskId, dto);
   }
 
-  async skipCrmTask(userId: string, taskId: string, dto: SkipTelegramAdvertiserTaskDto) {
+  async skipCrmTask(
+    userId: string,
+    taskId: string,
+    dto: SkipTelegramAdvertiserTaskDto,
+  ) {
     const workspaceId = await this.workspace(userId);
-    const existing = await this.prisma.telegramAdvertiserTask.findFirst({ where: { id: taskId, workspaceId } });
-    if (!existing) throw new NotFoundException('Telegram advertiser task not found');
+    const existing = await this.prisma.telegramAdvertiserTask.findFirst({
+      where: { id: taskId, workspaceId },
+    });
+    if (!existing)
+      throw new NotFoundException('Telegram advertiser task not found');
     const task = await this.prisma.telegramAdvertiserTask.update({
       where: { id: taskId },
-      data: { status: TelegramAdvertiserTaskStatus.SKIPPED, skippedAt: new Date(), completionNote: dto.reason?.trim() || null },
+      data: {
+        status: TelegramAdvertiserTaskStatus.SKIPPED,
+        skippedAt: new Date(),
+        completionNote: dto.reason?.trim() || null,
+      },
     });
     await this.createAdvertiserActivity(workspaceId, task.advertiserId, {
       type: TelegramAdvertiserActivityType.FOLLOW_UP_SKIPPED,
@@ -4096,11 +4787,14 @@ export class TelegramAdSalesService {
     return this.mapAdvertiserTask(task);
   }
 
-  async rebuildInventorySnapshots(userId: string, dto: TelegramAdInventoryRebuildDto) {
-    const membership = await this.workspaceService.requireWorkspaceRole(userId, [
-      WorkspaceRole.owner,
-      WorkspaceRole.admin,
-    ]);
+  async rebuildInventorySnapshots(
+    userId: string,
+    dto: TelegramAdInventoryRebuildDto,
+  ) {
+    const membership = await this.workspaceService.requireWorkspaceRole(
+      userId,
+      [WorkspaceRole.owner, WorkspaceRole.admin],
+    );
     const workspaceId = membership.workspaceId;
     const from = this.startOfUtcDay(new Date(dto.dateFrom));
     const to = this.endOfUtcDay(new Date(dto.dateTo));
@@ -4111,9 +4805,9 @@ export class TelegramAdSalesService {
     const channelIds = dto.channelIds?.length
       ? dto.channelIds
       : dto.networkId
-        ? (await this.findWorkspaceNetwork(workspaceId, dto.networkId)).channels.map(
-            (item) => item.telegramChannelId,
-          )
+        ? (
+            await this.findWorkspaceNetwork(workspaceId, dto.networkId)
+          ).channels.map((item) => item.telegramChannelId)
         : [];
     if (channelIds.length > 50) {
       throw new BadRequestException('Rebuild cannot exceed 50 channels');
@@ -4121,13 +4815,15 @@ export class TelegramAdSalesService {
     const uniqueChannelIds = [...new Set(channelIds)];
     const jobRunId = `inventory-rebuild:${Date.now()}`;
     if (dto.dryRun) {
-      const existing = await this.prisma.telegramAdInventoryDailySnapshot.count({
-        where: {
-          workspaceId,
-          telegramChannelId: { in: uniqueChannelIds },
-          date: { gte: from, lte: this.startOfUtcDay(to) },
+      const existing = await this.prisma.telegramAdInventoryDailySnapshot.count(
+        {
+          where: {
+            workspaceId,
+            telegramChannelId: { in: uniqueChannelIds },
+            date: { gte: from, lte: this.startOfUtcDay(to) },
+          },
         },
-      });
+      );
       return {
         dryRun: true,
         force: dto.force,
@@ -4139,7 +4835,9 @@ export class TelegramAdSalesService {
       };
     }
     if (dto.force !== true) {
-      throw new BadRequestException('force must be explicitly true for a rebuild run');
+      throw new BadRequestException(
+        'force must be explicitly true for a rebuild run',
+      );
     }
     let processed = 0;
     let success = 0;
@@ -4155,7 +4853,9 @@ export class TelegramAdSalesService {
             date,
             force: dto.force,
           });
-          const result = await this.saveInventorySnapshot(snapshot, { force: dto.force });
+          const result = await this.saveInventorySnapshot(snapshot, {
+            force: dto.force,
+          });
           if (result.status === 'skipped') skipped += 1;
           else success += 1;
         } catch (error) {
@@ -4178,10 +4878,21 @@ export class TelegramAdSalesService {
         dateTo: to.toISOString(),
       },
     });
-    return { dryRun: false, force: dto.force, jobRunId, processed, success, failed, skipped };
+    return {
+      dryRun: false,
+      force: dto.force,
+      jobRunId,
+      processed,
+      success,
+      failed,
+      skipped,
+    };
   }
 
-  async priceFillCorrelation(userId: string, query: TelegramAdPriceFillCorrelationQueryDto) {
+  async priceFillCorrelation(
+    userId: string,
+    query: TelegramAdPriceFillCorrelationQueryDto,
+  ) {
     const workspaceId = await this.workspace(userId);
     const { from, to, timezone } = this.analyticsRange(query);
     const bucketMap = { DAY: 'day', WEEK: 'week', MONTH: 'month' } as const;
@@ -4192,7 +4903,12 @@ export class TelegramAdSalesService {
       networkId: query.networkId,
       networkMode: query.networkMode,
     });
-    const snapshots = await this.loadInventorySnapshots({ workspaceId, channelIds, from, to });
+    const snapshots = await this.loadInventorySnapshots({
+      workspaceId,
+      channelIds,
+      from,
+      to,
+    });
     const grouped = new Map<string, any[]>();
     for (const snapshot of snapshots) {
       const key = this.bucketDate(snapshot.date, granularity);
@@ -4211,12 +4927,20 @@ export class TelegramAdSalesService {
           fillRate: Number(metrics.bookingFillRate.toFixed(2)),
           averageAgreedPrice: decimalToString(metrics.averageAgreedPrice),
           medianAgreedPrice: decimalToString(metrics.medianAgreedPrice),
-          averageRecommendedPrice: decimalToString(metrics.averageRecommendedPrice),
+          averageRecommendedPrice: decimalToString(
+            metrics.averageRecommendedPrice,
+          ),
           agreedRevenue: decimalToString(metrics.agreedRevenue),
           paidRevenue: decimalToString(metrics.paidRevenue),
-          revenuePerEligibleSlot: decimalToString(metrics.revenuePerEligibleSlot),
-          revenuePerPublishedSlot: decimalToString(metrics.revenuePerPublishedSlot),
-          unsoldInventoryOpportunity: decimalToString(metrics.unsoldInventoryOpportunity),
+          revenuePerEligibleSlot: decimalToString(
+            metrics.revenuePerEligibleSlot,
+          ),
+          revenuePerPublishedSlot: decimalToString(
+            metrics.revenuePerPublishedSlot,
+          ),
+          unsoldInventoryOpportunity: decimalToString(
+            metrics.unsoldInventoryOpportunity,
+          ),
           underpricingLoss: decimalToString(metrics.underpricingLoss),
         };
       });
@@ -4224,7 +4948,10 @@ export class TelegramAdSalesService {
       if (pairs.length < 2) return null;
       const xMean = pairs.reduce((sum, pair) => sum + pair.x, 0) / pairs.length;
       const yMean = pairs.reduce((sum, pair) => sum + pair.y, 0) / pairs.length;
-      const numerator = pairs.reduce((sum, pair) => sum + (pair.x - xMean) * (pair.y - yMean), 0);
+      const numerator = pairs.reduce(
+        (sum, pair) => sum + (pair.x - xMean) * (pair.y - yMean),
+        0,
+      );
       const xDenominator = Math.sqrt(
         pairs.reduce((sum, pair) => sum + (pair.x - xMean) ** 2, 0),
       );
@@ -4253,12 +4980,20 @@ export class TelegramAdSalesService {
       timezone,
       sampleSize,
       confidence:
-        sampleSize < 6 ? 'INSUFFICIENT_DATA' : sampleSize < 12 ? 'LOW' : 'NORMAL',
+        sampleSize < 6
+          ? 'INSUFFICIENT_DATA'
+          : sampleSize < 12
+            ? 'LOW'
+            : 'NORMAL',
       warnings:
         sampleSize < 6
-          ? ['Observed correlation is unavailable because fewer than 6 buckets were found.']
+          ? [
+              'Observed correlation is unavailable because fewer than 6 buckets were found.',
+            ]
           : sampleSize < 12
-            ? ['Observed correlation is based on a small sample and has low confidence.']
+            ? [
+                'Observed correlation is based on a small sample and has low confidence.',
+              ]
             : ['Observed correlation does not prove causation.'],
       priceFillCorrelation: correlation(priceFillPairs),
       priceRevenueCorrelation: correlation(priceRevenuePairs),
@@ -4277,9 +5012,16 @@ export class TelegramAdSalesService {
       networkId: dto.networkId,
       networkMode: dto.networkMode,
     });
-    const snapshots = await this.loadInventorySnapshots({ workspaceId, channelIds, from, to });
+    const snapshots = await this.loadInventorySnapshots({
+      workspaceId,
+      channelIds,
+      from,
+      to,
+    });
     const metrics = this.aggregateInventorySnapshots(snapshots);
-    const currentAveragePrice = Number(decimalToString(metrics.averageAgreedPrice) ?? 0);
+    const currentAveragePrice = Number(
+      decimalToString(metrics.averageAgreedPrice) ?? 0,
+    );
     const currentFillRate = metrics.bookingFillRate;
     const proposedAveragePrice =
       dto.proposedFixedPrice ??
@@ -4297,7 +5039,8 @@ export class TelegramAdSalesService {
     const projectedBookedSlots = Math.round(
       metrics.eligibleSlots * (assumedFillRate / 100),
     );
-    const projectedRevenue = decimal(proposedAveragePrice).mul(projectedBookedSlots);
+    const projectedRevenue =
+      decimal(proposedAveragePrice).mul(projectedBookedSlots);
     return {
       currentAveragePrice: currentAveragePrice.toFixed(2),
       currentFillRate: Number(currentFillRate.toFixed(2)),
@@ -4312,31 +5055,40 @@ export class TelegramAdSalesService {
           ? decimalToString(projectedRevenue.div(metrics.eligibleSlots))
           : '0',
       difference: decimalToString(projectedRevenue.sub(metrics.agreedRevenue)),
-      differencePercent:
-        metrics.agreedRevenue.gt(0)
-          ? Number(
-              projectedRevenue
-                .sub(metrics.agreedRevenue)
-                .div(metrics.agreedRevenue)
-                .mul(100)
-                .toFixed(2),
-            )
-          : null,
+      differencePercent: metrics.agreedRevenue.gt(0)
+        ? Number(
+            projectedRevenue
+              .sub(metrics.agreedRevenue)
+              .div(metrics.agreedRevenue)
+              .mul(100)
+              .toFixed(2),
+          )
+        : null,
       warnings:
         dto.useHistoricalElasticity && snapshots.length < 12
-          ? ['Historical elasticity was not applied because the sample is too small.']
+          ? [
+              'Historical elasticity was not applied because the sample is too small.',
+            ]
           : ['Scenario analysis is a projection, not a forecast.'],
-      methodology: dto.useHistoricalElasticity && snapshots.length >= 12
-        ? 'Historical fill rate was used as an observed reference. Correlation does not imply causation.'
-        : 'Projection uses the provided or current fill rate assumption with transparent arithmetic.',
+      methodology:
+        dto.useHistoricalElasticity && snapshots.length >= 12
+          ? 'Historical fill rate was used as an observed reference. Correlation does not imply causation.'
+          : 'Projection uses the provided or current fill rate assumption with transparent arithmetic.',
     };
   }
 
-  async inventoryDetails(userId: string, query: TelegramAdInventoryDetailsQueryDto) {
+  async inventoryDetails(
+    userId: string,
+    query: TelegramAdInventoryDetailsQueryDto,
+  ) {
     const workspaceId = await this.workspace(userId);
     const pagination = normalizePagination(query);
-    const from = query.dateFrom ? this.startOfUtcDay(new Date(query.dateFrom)) : undefined;
-    const to = query.dateTo ? this.endOfUtcDay(new Date(query.dateTo)) : undefined;
+    const from = query.dateFrom
+      ? this.startOfUtcDay(new Date(query.dateFrom))
+      : undefined;
+    const to = query.dateTo
+      ? this.endOfUtcDay(new Date(query.dateTo))
+      : undefined;
     const channelIds = await this.resolveAnalyticsChannelIds({
       workspaceId,
       channelId: query.channelId,
@@ -4434,7 +5186,11 @@ export class TelegramAdSalesService {
       }),
       this.prisma.telegramAdSale.count({ where }),
     ]);
-    return createPaginatedResponse(items.map((sale) => this.mapSale(sale)), totalItems, pagination);
+    return createPaginatedResponse(
+      items.map((sale) => this.mapSale(sale)),
+      totalItems,
+      pagination,
+    );
   }
 
   async getSale(userId: string, id: string) {
@@ -4443,11 +5199,17 @@ export class TelegramAdSalesService {
   }
 
   async createSale(userId: string, dto: CreateTelegramAdSaleDto) {
-    const { workspaceId, assignedMemberId } = await this.workspaceService.resolveAssignedMemberId(
+    const { workspaceId, assignedMemberId } =
+      await this.workspaceService.resolveAssignedMemberId(
+        userId,
+        dto.assignedMemberId,
+      );
+    const advertiser = await this.resolveAdvertiserForSale(
+      workspaceId,
       userId,
-      dto.assignedMemberId,
+      dto,
+      assignedMemberId,
     );
-    const advertiser = await this.resolveAdvertiserForSale(workspaceId, userId, dto, assignedMemberId);
     const sale = await this.prisma.telegramAdSale.create({
       data: {
         workspaceId,
@@ -4455,15 +5217,21 @@ export class TelegramAdSalesService {
         advertiserName: dto.advertiserName.trim(),
         advertiserTelegram: dto.advertiserTelegram?.trim() || null,
         advertiserContact: dto.advertiserContact?.trim() || null,
-        advertiserNameSnapshot: advertiser?.displayName ?? dto.advertiserName.trim(),
+        advertiserNameSnapshot:
+          advertiser?.displayName ?? dto.advertiserName.trim(),
         advertiserTelegramSnapshot:
-          advertiser?.telegramUsername ?? this.normalizeTelegramUsername(dto.advertiserTelegram),
-        advertiserCompanySnapshot: advertiser?.companyName ?? (dto.advertiserCompanyName?.trim() || null),
+          advertiser?.telegramUsername ??
+          this.normalizeTelegramUsername(dto.advertiserTelegram),
+        advertiserCompanySnapshot:
+          advertiser?.companyName ??
+          (dto.advertiserCompanyName?.trim() || null),
         title: dto.title?.trim() || null,
         notes: dto.notes?.trim() || null,
         origin: dto.origin ?? TelegramAdSaleOrigin.DIRECT,
         crmDealStage: dto.crmDealStage ?? TelegramAdCrmDealStage.NEW_LEAD,
-        expectedCloseAt: dto.expectedCloseAt ? new Date(dto.expectedCloseAt) : null,
+        expectedCloseAt: dto.expectedCloseAt
+          ? new Date(dto.expectedCloseAt)
+          : null,
         lostReason: dto.lostReason?.trim() || null,
         nextActionAt: dto.nextActionAt ? new Date(dto.nextActionAt) : null,
         settlementCurrency: dto.settlementCurrency,
@@ -4493,18 +5261,29 @@ export class TelegramAdSalesService {
     const assignedMemberId =
       dto.assignedMemberId === undefined
         ? undefined
-        : (await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId)).assignedMemberId;
+        : (
+            await this.workspaceService.resolveAssignedMemberId(
+              userId,
+              dto.assignedMemberId,
+            )
+          ).assignedMemberId;
     if (dto.status) {
       this.assertSaleTransition(existing.status, dto.status);
-      if (dto.status === TelegramAdSaleStatus.CONFIRMED && !existing.placements.length) {
+      if (
+        dto.status === TelegramAdSaleStatus.CONFIRMED &&
+        !existing.placements.length
+      ) {
         throw new BadRequestException('Cannot confirm sale without placements');
       }
       if (dto.status === TelegramAdSaleStatus.CANCELLED) {
         const activePaidPayments = (existing.payments ?? []).some(
-          (payment: any) => payment.status !== TelegramAdSalePaymentStatus.VOIDED,
+          (payment: any) =>
+            payment.status !== TelegramAdSalePaymentStatus.VOIDED,
         );
         if (activePaidPayments) {
-          throw new BadRequestException('Cannot cancel paid sale without voiding payments');
+          throw new BadRequestException(
+            'Cannot cancel paid sale without voiding payments',
+          );
         }
       }
     }
@@ -4514,37 +5293,78 @@ export class TelegramAdSalesService {
         : dto.advertiserId
           ? await this.getAdvertiser(workspaceId, dto.advertiserId)
           : null;
-    if (dto.crmDealStage === TelegramAdCrmDealStage.LOST && !dto.lostReason && !existing.lostReason) {
-      throw new BadRequestException('lostReason is required when crmDealStage is LOST');
+    if (
+      dto.crmDealStage === TelegramAdCrmDealStage.LOST &&
+      !dto.lostReason &&
+      !existing.lostReason
+    ) {
+      throw new BadRequestException(
+        'lostReason is required when crmDealStage is LOST',
+      );
     }
     const sale = await this.prisma.telegramAdSale.update({
       where: { id },
       data: {
-        ...(dto.advertiserId === undefined ? {} : { advertiserId: dto.advertiserId }),
-        ...(dto.advertiserName === undefined ? {} : { advertiserName: dto.advertiserName.trim() }),
-        ...(dto.advertiserTelegram === undefined ? {} : { advertiserTelegram: dto.advertiserTelegram?.trim() || null }),
-        ...(dto.advertiserContact === undefined ? {} : { advertiserContact: dto.advertiserContact?.trim() || null }),
+        ...(dto.advertiserId === undefined
+          ? {}
+          : { advertiserId: dto.advertiserId }),
+        ...(dto.advertiserName === undefined
+          ? {}
+          : { advertiserName: dto.advertiserName.trim() }),
+        ...(dto.advertiserTelegram === undefined
+          ? {}
+          : { advertiserTelegram: dto.advertiserTelegram?.trim() || null }),
+        ...(dto.advertiserContact === undefined
+          ? {}
+          : { advertiserContact: dto.advertiserContact?.trim() || null }),
         ...(dto.advertiserCompanyName === undefined
           ? {}
-          : { advertiserCompanySnapshot: dto.advertiserCompanyName?.trim() || null }),
-        ...(dto.title === undefined ? {} : { title: dto.title?.trim() || null }),
-        ...(dto.notes === undefined ? {} : { notes: dto.notes?.trim() || null }),
+          : {
+              advertiserCompanySnapshot:
+                dto.advertiserCompanyName?.trim() || null,
+            }),
+        ...(dto.title === undefined
+          ? {}
+          : { title: dto.title?.trim() || null }),
+        ...(dto.notes === undefined
+          ? {}
+          : { notes: dto.notes?.trim() || null }),
         ...(dto.origin === undefined ? {} : { origin: dto.origin }),
-        ...(dto.settlementCurrency === undefined ? {} : { settlementCurrency: dto.settlementCurrency }),
+        ...(dto.settlementCurrency === undefined
+          ? {}
+          : { settlementCurrency: dto.settlementCurrency }),
         ...(dto.reservedUntil === undefined
           ? {}
-          : { reservedUntil: dto.reservedUntil ? new Date(dto.reservedUntil) : null }),
+          : {
+              reservedUntil: dto.reservedUntil
+                ? new Date(dto.reservedUntil)
+                : null,
+            }),
         ...(assignedMemberId === undefined ? {} : { assignedMemberId }),
         ...(dto.status === undefined ? {} : { status: dto.status }),
-        ...(dto.crmDealStage === undefined ? {} : { crmDealStage: dto.crmDealStage }),
+        ...(dto.crmDealStage === undefined
+          ? {}
+          : { crmDealStage: dto.crmDealStage }),
         ...(dto.expectedCloseAt === undefined
           ? {}
-          : { expectedCloseAt: dto.expectedCloseAt ? new Date(dto.expectedCloseAt) : null }),
-        ...(dto.lostReason === undefined ? {} : { lostReason: dto.lostReason?.trim() || null }),
+          : {
+              expectedCloseAt: dto.expectedCloseAt
+                ? new Date(dto.expectedCloseAt)
+                : null,
+            }),
+        ...(dto.lostReason === undefined
+          ? {}
+          : { lostReason: dto.lostReason?.trim() || null }),
         ...(dto.nextActionAt === undefined
           ? {}
-          : { nextActionAt: dto.nextActionAt ? new Date(dto.nextActionAt) : null }),
-        ...(dto.sourceTaskId === undefined ? {} : { sourceTaskId: dto.sourceTaskId }),
+          : {
+              nextActionAt: dto.nextActionAt
+                ? new Date(dto.nextActionAt)
+                : null,
+            }),
+        ...(dto.sourceTaskId === undefined
+          ? {}
+          : { sourceTaskId: dto.sourceTaskId }),
         ...(dto.sourceAdvertiserActivityId === undefined
           ? {}
           : { sourceAdvertiserActivityId: dto.sourceAdvertiserActivityId }),
@@ -4552,13 +5372,17 @@ export class TelegramAdSalesService {
           ? {}
           : {
               advertiserNameSnapshot:
-                existing.advertiserNameSnapshot ?? linkedAdvertiser?.displayName ?? existing.advertiserName,
+                existing.advertiserNameSnapshot ??
+                linkedAdvertiser?.displayName ??
+                existing.advertiserName,
               advertiserTelegramSnapshot:
                 existing.advertiserTelegramSnapshot ??
                 linkedAdvertiser?.telegramUsername ??
                 existing.advertiserTelegram,
               advertiserCompanySnapshot:
-                existing.advertiserCompanySnapshot ?? linkedAdvertiser?.companyName ?? null,
+                existing.advertiserCompanySnapshot ??
+                linkedAdvertiser?.companyName ??
+                null,
             }),
       },
       include: this.includeSaleRelations(),
@@ -4578,19 +5402,37 @@ export class TelegramAdSalesService {
     return this.mapSale(sale);
   }
 
-  async addPlacement(userId: string, saleId: string, dto: CreateTelegramAdSalePlacementDto) {
+  async addPlacement(
+    userId: string,
+    saleId: string,
+    dto: CreateTelegramAdSalePlacementDto,
+  ) {
     const workspaceId = await this.workspace(userId);
     const sale = await this.getSaleDetails(workspaceId, saleId);
-    const channel = await this.findWorkspaceChannel(workspaceId, dto.telegramChannelId);
+    const channel = await this.findWorkspaceChannel(
+      workspaceId,
+      dto.telegramChannelId,
+    );
     if (dto.telegramChannelNetworkId) {
-      const network = await this.findWorkspaceNetwork(workspaceId, dto.telegramChannelNetworkId);
-      if (!network.channels.some((item) => item.telegramChannelId === channel.id)) {
-        throw new BadRequestException('Selected network does not contain chosen channel');
+      const network = await this.findWorkspaceNetwork(
+        workspaceId,
+        dto.telegramChannelNetworkId,
+      );
+      if (
+        !network.channels.some((item) => item.telegramChannelId === channel.id)
+      ) {
+        throw new BadRequestException(
+          'Selected network does not contain chosen channel',
+        );
       }
     }
     const product = dto.telegramAdProductId
       ? await this.prisma.telegramAdProduct.findFirst({
-          where: { id: dto.telegramAdProductId, workspaceId, telegramChannelId: channel.id },
+          where: {
+            id: dto.telegramAdProductId,
+            workspaceId,
+            telegramChannelId: channel.id,
+          },
         })
       : null;
     if (dto.telegramAdProductId && !product) {
@@ -4631,17 +5473,31 @@ export class TelegramAdSalesService {
           status: TelegramAdPlacementStatus.DRAFT,
           scheduledAt: new Date(dto.scheduledAt),
           timezone: dto.timezone,
-          pricingMode: dto.pricingMode ?? product?.defaultPricingMode ?? TelegramAdPricingMode.CPM,
-          expectedViews: dto.expectedViews ?? expectedViewsResult?.expectedViews ?? 0,
+          pricingMode:
+            dto.pricingMode ??
+            product?.defaultPricingMode ??
+            TelegramAdPricingMode.CPM,
+          expectedViews:
+            dto.expectedViews ?? expectedViewsResult?.expectedViews ?? 0,
           quotedCpm: decimalOrNull(dto.quotedCpm),
-          recommendedPrice: decimalOrNull(dto.recommendedPrice) ?? expectedViewsResult?.recommendedPrice ?? decimal(0),
-          minimumPrice: decimalOrNull(dto.minimumPrice) ?? expectedViewsResult?.minimumPrice ?? decimal(0),
+          recommendedPrice:
+            decimalOrNull(dto.recommendedPrice) ??
+            expectedViewsResult?.recommendedPrice ??
+            decimal(0),
+          minimumPrice:
+            decimalOrNull(dto.minimumPrice) ??
+            expectedViewsResult?.minimumPrice ??
+            decimal(0),
           agreedPrice:
             decimalOrNull(dto.agreedPrice) ??
             expectedViewsResult?.recommendedPrice ??
             decimalOrNull(product?.defaultFixedPrice) ??
             decimal(0),
-          currency: dto.currency ?? snapshot?.currency ?? product?.currency ?? sale.settlementCurrency,
+          currency:
+            dto.currency ??
+            snapshot?.currency ??
+            product?.currency ??
+            sale.settlementCurrency,
           topDurationMinutesSnapshot: product?.topDurationMinutes ?? null,
           feedDurationHoursSnapshot: product?.feedDurationHours ?? null,
           deleteAfterHoursSnapshot: product?.deleteAfterHours ?? null,
@@ -4669,12 +5525,23 @@ export class TelegramAdSalesService {
     dto: UpdateTelegramAdSalePlacementDto,
   ) {
     const workspaceId = await this.workspace(userId);
-    const placement = await this.ensurePlacementBelongsToSale(workspaceId, saleId, placementId);
+    const placement = await this.ensurePlacementBelongsToSale(
+      workspaceId,
+      saleId,
+      placementId,
+    );
     const agreedPrice =
-      dto.agreedPrice === undefined ? placement.agreedPrice : decimal(dto.agreedPrice);
+      dto.agreedPrice === undefined
+        ? placement.agreedPrice
+        : decimal(dto.agreedPrice);
     const minimumPrice =
-      dto.minimumPrice === undefined ? placement.minimumPrice : decimal(dto.minimumPrice);
-    if (agreedPrice.lt(minimumPrice) && !(dto.manualPriceReason ?? placement.manualPriceReason)) {
+      dto.minimumPrice === undefined
+        ? placement.minimumPrice
+        : decimal(dto.minimumPrice);
+    if (
+      agreedPrice.lt(minimumPrice) &&
+      !(dto.manualPriceReason ?? placement.manualPriceReason)
+    ) {
       this.logger.info({
         level: 'warn',
         event: 'telegram_ad_sales.price_below_minimum',
@@ -4686,35 +5553,58 @@ export class TelegramAdSalesService {
       });
       throw new BadRequestException({
         code: 'UNDER_MINIMUM_PRICE',
-        message: 'manualPriceReason is required when agreedPrice is below minimumPrice',
+        message:
+          'manualPriceReason is required when agreedPrice is below minimumPrice',
       });
     }
     const updated = await this.prisma.telegramAdSalePlacement.update({
       where: { id: placementId },
       data: {
-        ...(dto.scheduledAt === undefined ? {} : { scheduledAt: new Date(dto.scheduledAt) }),
+        ...(dto.scheduledAt === undefined
+          ? {}
+          : { scheduledAt: new Date(dto.scheduledAt) }),
         ...(dto.timezone === undefined ? {} : { timezone: dto.timezone }),
-        ...(dto.pricingMode === undefined ? {} : { pricingMode: dto.pricingMode }),
-        ...(dto.expectedViews === undefined ? {} : { expectedViews: dto.expectedViews }),
-        ...(dto.recommendedPrice === undefined ? {} : { recommendedPrice: decimal(dto.recommendedPrice) }),
-        ...(dto.minimumPrice === undefined ? {} : { minimumPrice: decimal(dto.minimumPrice) }),
-        ...(dto.agreedPrice === undefined ? {} : { agreedPrice: decimal(dto.agreedPrice) }),
-        ...(dto.quotedCpm === undefined ? {} : { quotedCpm: decimalOrNull(dto.quotedCpm) }),
+        ...(dto.pricingMode === undefined
+          ? {}
+          : { pricingMode: dto.pricingMode }),
+        ...(dto.expectedViews === undefined
+          ? {}
+          : { expectedViews: dto.expectedViews }),
+        ...(dto.recommendedPrice === undefined
+          ? {}
+          : { recommendedPrice: decimal(dto.recommendedPrice) }),
+        ...(dto.minimumPrice === undefined
+          ? {}
+          : { minimumPrice: decimal(dto.minimumPrice) }),
+        ...(dto.agreedPrice === undefined
+          ? {}
+          : { agreedPrice: decimal(dto.agreedPrice) }),
+        ...(dto.quotedCpm === undefined
+          ? {}
+          : { quotedCpm: decimalOrNull(dto.quotedCpm) }),
         ...(dto.currency === undefined ? {} : { currency: dto.currency }),
         ...(dto.manualPriceReason === undefined
           ? {}
           : { manualPriceReason: dto.manualPriceReason?.trim() || null }),
-        ...(dto.managedPostId === undefined ? {} : { managedPostId: dto.managedPostId || null }),
-        ...(dto.telegramPostId === undefined ? {} : { telegramPostId: dto.telegramPostId || null }),
+        ...(dto.managedPostId === undefined
+          ? {}
+          : { managedPostId: dto.managedPostId || null }),
+        ...(dto.telegramPostId === undefined
+          ? {}
+          : { telegramPostId: dto.telegramPostId || null }),
       },
     });
     this.invalidateAvailabilityCache(workspaceId);
     return {
       ...this.mapPlacement(updated),
-      warnings:
-        updated.agreedPrice.lt(updated.minimumPrice)
-          ? [{ code: 'UNDER_MINIMUM_PRICE', message: 'Placement price is below minimum' }]
-          : [],
+      warnings: updated.agreedPrice.lt(updated.minimumPrice)
+        ? [
+            {
+              code: 'UNDER_MINIMUM_PRICE',
+              message: 'Placement price is below minimum',
+            },
+          ]
+        : [],
     };
   }
 
@@ -4735,32 +5625,64 @@ export class TelegramAdSalesService {
       dto.currency,
       paidAt,
     );
-    const category = await this.resolveSystemCategory(workspaceId, 'channel_advertising_revenue');
-    const allocationPlacementIds = dto.allocations.map((item) => item.placementId);
+    const category = await this.resolveSystemCategory(
+      workspaceId,
+      'channel_advertising_revenue',
+    );
+    const allocationPlacementIds = dto.allocations.map(
+      (item) => item.placementId,
+    );
     const placements = sale.placements.filter((placement: any) =>
       allocationPlacementIds.includes(placement.id),
     );
     if (placements.length !== dto.allocations.length) {
-      throw new BadRequestException('One or more allocations refer to invalid placements');
+      throw new BadRequestException(
+        'One or more allocations refer to invalid placements',
+      );
     }
-    const allocationTotal = dto.allocations.reduce((sum, item) => sum + item.amount, 0);
+    const allocationTotal = dto.allocations.reduce(
+      (sum, item) => sum + item.amount,
+      0,
+    );
     if (allocationTotal - dto.amount > 0.000001) {
-      throw new BadRequestException('Allocation total cannot exceed payment amount');
+      throw new BadRequestException(
+        'Allocation total cannot exceed payment amount',
+      );
     }
     for (const placement of placements) {
-      const requestedAllocation = dto.allocations.find((item) => item.placementId === placement.id)!;
+      const requestedAllocation = dto.allocations.find(
+        (item) => item.placementId === placement.id,
+      )!;
       const paidAlready = (placement.paymentAllocations ?? [])
-        .filter((allocation: any) => allocation.payment?.status !== TelegramAdSalePaymentStatus.VOIDED)
-        .reduce((sum: number, allocation: any) => sum + Number(allocation.amount), 0);
-      if (paidAlready + requestedAllocation.amount - Number(placement.agreedPrice) > 0.000001) {
-        throw new BadRequestException('Allocation exceeds placement agreedPrice');
+        .filter(
+          (allocation: any) =>
+            allocation.payment?.status !== TelegramAdSalePaymentStatus.VOIDED,
+        )
+        .reduce(
+          (sum: number, allocation: any) => sum + Number(allocation.amount),
+          0,
+        );
+      if (
+        paidAlready +
+          requestedAllocation.amount -
+          Number(placement.agreedPrice) >
+        0.000001
+      ) {
+        throw new BadRequestException(
+          'Allocation exceeds placement agreedPrice',
+        );
       }
     }
 
     if (dto.idempotencyKey) {
       const existing = await this.prisma.telegramAdSalePayment.findFirst({
         where: { workspaceId, idempotencyKey: dto.idempotencyKey },
-        include: { allocations: true, account: true, transaction: true, reversalTransaction: true },
+        include: {
+          allocations: true,
+          account: true,
+          transaction: true,
+          reversalTransaction: true,
+        },
       });
       if (existing) return this.mapPayment(existing);
     }
@@ -4770,7 +5692,8 @@ export class TelegramAdSalesService {
         data: {
           workspaceId,
           accountId: account.id,
-          telegramChannelId: placements.length === 1 ? placements[0].telegramChannelId : null,
+          telegramChannelId:
+            placements.length === 1 ? placements[0].telegramChannelId : null,
           type: TransactionType.income,
           amount: decimal(dto.amount),
           currency: account.currency,
@@ -4778,7 +5701,8 @@ export class TelegramAdSalesService {
           exchangeRateToPrimary: decimal(rate),
           category: category.name,
           categoryId: category.id,
-          description: dto.notes?.trim() || `Telegram ad sale payment ${sale.id}`,
+          description:
+            dto.notes?.trim() || `Telegram ad sale payment ${sale.id}`,
           date: paidAt,
           assignedMemberId: sale.assignedMemberId ?? null,
           createdByUserId: userId,
@@ -4856,7 +5780,8 @@ export class TelegramAdSalesService {
         reversalTransaction: true,
       },
     });
-    if (!payment) throw new NotFoundException('Telegram ad sale payment not found');
+    if (!payment)
+      throw new NotFoundException('Telegram ad sale payment not found');
     if (payment.status === TelegramAdSalePaymentStatus.VOIDED) {
       throw new BadRequestException('Cannot update a voided payment');
     }
@@ -4869,43 +5794,69 @@ export class TelegramAdSalesService {
     const amount = dto.amount ?? Number(payment.amount);
     const currency = dto.currency ?? payment.currency;
     const paidAt = dto.paidAt ? new Date(dto.paidAt) : payment.paidAt;
-    const allocations = dto.allocations ?? payment.allocations.map((allocation: any) => ({
-      placementId: allocation.telegramAdSalePlacementId,
-      amount: Number(allocation.amount),
-    }));
+    const allocations =
+      dto.allocations ??
+      payment.allocations.map((allocation: any) => ({
+        placementId: allocation.telegramAdSalePlacementId,
+        amount: Number(allocation.amount),
+      }));
     const allocationPlacementIds = allocations.map((item) => item.placementId);
     const placements = sale.placements.filter((placement: any) =>
       allocationPlacementIds.includes(placement.id),
     );
     if (placements.length !== allocations.length) {
-      throw new BadRequestException('One or more allocations refer to invalid placements');
+      throw new BadRequestException(
+        'One or more allocations refer to invalid placements',
+      );
     }
-    const allocationTotal = allocations.reduce((sum, item) => sum + item.amount, 0);
+    const allocationTotal = allocations.reduce(
+      (sum, item) => sum + item.amount,
+      0,
+    );
     if (allocationTotal - amount > 0.000001) {
-      throw new BadRequestException('Allocation total cannot exceed payment amount');
+      throw new BadRequestException(
+        'Allocation total cannot exceed payment amount',
+      );
     }
     for (const placement of placements) {
-      const requestedAllocation = allocations.find((item) => item.placementId === placement.id)!;
+      const requestedAllocation = allocations.find(
+        (item) => item.placementId === placement.id,
+      )!;
       const paidAlready = (placement.paymentAllocations ?? [])
         .filter(
           (allocation: any) =>
             allocation.telegramAdSalePaymentId !== paymentId &&
             allocation.payment?.status !== TelegramAdSalePaymentStatus.VOIDED,
         )
-        .reduce((sum: number, allocation: any) => sum + Number(allocation.amount), 0);
-      if (paidAlready + requestedAllocation.amount - Number(placement.agreedPrice) > 0.000001) {
-        throw new BadRequestException('Allocation exceeds placement agreedPrice');
+        .reduce(
+          (sum: number, allocation: any) => sum + Number(allocation.amount),
+          0,
+        );
+      if (
+        paidAlready +
+          requestedAllocation.amount -
+          Number(placement.agreedPrice) >
+        0.000001
+      ) {
+        throw new BadRequestException(
+          'Allocation exceeds placement agreedPrice',
+        );
       }
     }
 
-    const { rate } = await this.resolveRateToPrimary(workspaceId, currency, paidAt);
+    const { rate } = await this.resolveRateToPrimary(
+      workspaceId,
+      currency,
+      paidAt,
+    );
     const updated = await this.prisma.$transaction(async (tx) => {
       if (payment.transactionId) {
         await tx.transaction.update({
           where: { id: payment.transactionId },
           data: {
             accountId: account.id,
-            telegramChannelId: placements.length === 1 ? placements[0].telegramChannelId : null,
+            telegramChannelId:
+              placements.length === 1 ? placements[0].telegramChannelId : null,
             amount: decimal(amount),
             currency: account.currency,
             amountInPrimaryCurrency: decimal(amount * rate),
@@ -4913,7 +5864,10 @@ export class TelegramAdSalesService {
             date: paidAt,
             ...(dto.notes === undefined
               ? {}
-              : { description: dto.notes?.trim() || `Telegram ad sale payment ${sale.id}` }),
+              : {
+                  description:
+                    dto.notes?.trim() || `Telegram ad sale payment ${sale.id}`,
+                }),
             assignedMemberId: sale.assignedMemberId ?? null,
           },
         });
@@ -4930,7 +5884,9 @@ export class TelegramAdSalesService {
           amountInPrimaryCurrency: decimal(amount * rate),
           exchangeRateToPrimary: decimal(rate),
           paidAt,
-          ...(dto.notes === undefined ? {} : { notes: dto.notes?.trim() || null }),
+          ...(dto.notes === undefined
+            ? {}
+            : { notes: dto.notes?.trim() || null }),
           allocations: {
             create: allocations.map((allocation) => ({
               workspaceId,
@@ -4970,7 +5926,8 @@ export class TelegramAdSalesService {
         transaction: true,
       },
     });
-    if (!payment) throw new NotFoundException('Telegram ad sale payment not found');
+    if (!payment)
+      throw new NotFoundException('Telegram ad sale payment not found');
     if (payment.status === TelegramAdSalePaymentStatus.VOIDED) {
       return this.mapPayment(payment);
     }
@@ -5030,23 +5987,27 @@ export class TelegramAdSalesService {
   ) {
     const workspaceId = await this.workspace(userId);
     const sale = await this.getSaleDetails(workspaceId, saleId);
-    const placement = sale.placements.find((item: any) => item.id === placementId);
-    if (!placement) throw new NotFoundException('Telegram ad sale placement not found');
-    const managedPost = await this.telegramManagedPostCommandService.createManagedPost(
-      userId,
-      placement.telegramChannelId,
-      {
-        title:
-          dto.title?.trim() ||
-          `[AD] ${sale.title?.trim() || sale.advertiserName} / ${sale.id}`,
-        text: dto.text ?? undefined,
-        imageUrls: dto.imageUrls ?? [],
-        assignedMemberId:
-          dto.assignedMemberId ?? sale.assignedMemberId ?? undefined,
-        icon: dto.icon ?? null,
-        buttonRows: (dto.buttonRows ?? []).map((row) => row.buttons),
-      },
+    const placement = sale.placements.find(
+      (item: any) => item.id === placementId,
     );
+    if (!placement)
+      throw new NotFoundException('Telegram ad sale placement not found');
+    const managedPost =
+      await this.telegramManagedPostCommandService.createManagedPost(
+        userId,
+        placement.telegramChannelId,
+        {
+          title:
+            dto.title?.trim() ||
+            `[AD] ${sale.title?.trim() || sale.advertiserName} / ${sale.id}`,
+          text: dto.text ?? undefined,
+          imageUrls: dto.imageUrls ?? [],
+          assignedMemberId:
+            dto.assignedMemberId ?? sale.assignedMemberId ?? undefined,
+          icon: dto.icon ?? null,
+          buttonRows: (dto.buttonRows ?? []).map((row) => row.buttons),
+        },
+      );
     await this.prisma.telegramAdSalePlacement.update({
       where: { id: placementId },
       data: { managedPostId: managedPost.id },
@@ -5061,15 +6022,23 @@ export class TelegramAdSalesService {
     dto: AttachPlacementManagedPostDto,
   ) {
     const workspaceId = await this.workspace(userId);
-    const placement = await this.ensurePlacementBelongsToSale(workspaceId, saleId, placementId);
+    const placement = await this.ensurePlacementBelongsToSale(
+      workspaceId,
+      saleId,
+      placementId,
+    );
     if (
       placement.status === TelegramAdPlacementStatus.CANCELLED ||
       placement.status === TelegramAdPlacementStatus.COMPLETED
     ) {
-      throw new BadRequestException('Placement cannot accept a managed post in its current status');
+      throw new BadRequestException(
+        'Placement cannot accept a managed post in its current status',
+      );
     }
     if (!dto.managedPostId && !dto.telegramPostId) {
-      throw new BadRequestException('managedPostId or telegramPostId is required');
+      throw new BadRequestException(
+        'managedPostId or telegramPostId is required',
+      );
     }
     if (dto.telegramPostId) {
       const telegramPost = await this.prisma.telegramPost.findFirst({
@@ -5099,12 +6068,11 @@ export class TelegramAdSalesService {
     });
     if (!managedPost) throw new NotFoundException('Managed post not found');
     let telegramPostId: string | null = null;
-    if (
+    const isPublishedManagedPost =
       managedPost.status === TelegramManagedPostStatus.PUBLISHED &&
       managedPost.telegramIdVerificationStatus ===
-        TelegramManagedPostIdVerificationStatus.VERIFIED &&
-      managedPost.telegramMessageIds.length
-    ) {
+        TelegramManagedPostIdVerificationStatus.VERIFIED;
+    if (isPublishedManagedPost && managedPost.telegramMessageIds.length) {
       const telegramPost = await this.prisma.telegramPost.findFirst({
         where: {
           workspaceId,
@@ -5115,21 +6083,26 @@ export class TelegramAdSalesService {
       });
       telegramPostId = telegramPost?.id ?? null;
     }
+    const publishedAt = managedPost.publishedAt ?? placement.scheduledAt;
     const updated = await this.prisma.telegramAdSalePlacement.update({
       where: { id: placementId },
       data: {
         managedPostId: managedPost.id,
-        ...(managedPost.status === TelegramManagedPostStatus.PUBLISHED &&
-        managedPost.telegramIdVerificationStatus ===
-          TelegramManagedPostIdVerificationStatus.VERIFIED
+        ...(isPublishedManagedPost
           ? {
               status: TelegramAdPlacementStatus.PUBLISHED,
-              publishedAt: managedPost.publishedAt ?? placement.scheduledAt,
+              publishedAt,
+              plannedDeleteAt: calculateAdPlacementDeleteAt({
+                publishedAt,
+                deleteAfterHoursSnapshot: placement.deleteAfterHoursSnapshot,
+                isPermanentSnapshot: placement.isPermanentSnapshot,
+              }),
               telegramPostId,
             }
           : {}),
       },
     });
+    if (isPublishedManagedPost) this.notifyAdDeletionDueWorkChanged();
     return this.mapPlacement(this.appendPlacementFinancials(updated));
   }
 
@@ -5137,14 +6110,20 @@ export class TelegramAdSalesService {
     const workspaceId = await this.workspace(userId);
     const placement = await this.prisma.telegramAdSalePlacement.findFirst({
       where: { id: placementId, workspaceId, telegramAdSaleId: saleId },
-      include: { managedPost: true, paymentAllocations: { include: { payment: true } } },
+      include: {
+        managedPost: true,
+        paymentAllocations: { include: { payment: true } },
+      },
     });
-    if (!placement) throw new NotFoundException('Telegram ad sale placement not found');
+    if (!placement)
+      throw new NotFoundException('Telegram ad sale placement not found');
     if (
       placement.managedPost &&
       placement.managedPost.status === TelegramManagedPostStatus.PUBLISHED
     ) {
-      throw new BadRequestException('Published managed post cannot be detached');
+      throw new BadRequestException(
+        'Published managed post cannot be detached',
+      );
     }
     const updated = await this.prisma.telegramAdSalePlacement.update({
       where: { id: placementId },
@@ -5153,12 +6132,24 @@ export class TelegramAdSalesService {
     return this.mapPlacement(this.appendPlacementFinancials(updated));
   }
 
-  private assertSaleTransition(from: TelegramAdSaleStatus, to: TelegramAdSaleStatus) {
+  private assertSaleTransition(
+    from: TelegramAdSaleStatus,
+    to: TelegramAdSaleStatus,
+  ) {
     const transitions: Record<TelegramAdSaleStatus, TelegramAdSaleStatus[]> = {
       DRAFT: [TelegramAdSaleStatus.RESERVED, TelegramAdSaleStatus.CANCELLED],
-      RESERVED: [TelegramAdSaleStatus.CONFIRMED, TelegramAdSaleStatus.CANCELLED],
-      CONFIRMED: [TelegramAdSaleStatus.IN_PROGRESS, TelegramAdSaleStatus.CANCELLED],
-      IN_PROGRESS: [TelegramAdSaleStatus.COMPLETED, TelegramAdSaleStatus.CANCELLED],
+      RESERVED: [
+        TelegramAdSaleStatus.CONFIRMED,
+        TelegramAdSaleStatus.CANCELLED,
+      ],
+      CONFIRMED: [
+        TelegramAdSaleStatus.IN_PROGRESS,
+        TelegramAdSaleStatus.CANCELLED,
+      ],
+      IN_PROGRESS: [
+        TelegramAdSaleStatus.COMPLETED,
+        TelegramAdSaleStatus.CANCELLED,
+      ],
       COMPLETED: [],
       CANCELLED: [],
     };
@@ -5174,10 +6165,24 @@ export class TelegramAdSalesService {
     from: TelegramAdPlacementStatus,
     to: TelegramAdPlacementStatus,
   ) {
-    const transitions: Record<TelegramAdPlacementStatus, TelegramAdPlacementStatus[]> = {
-      DRAFT: [TelegramAdPlacementStatus.RESERVED, TelegramAdPlacementStatus.CANCELLED],
-      RESERVED: [TelegramAdPlacementStatus.SCHEDULED, TelegramAdPlacementStatus.CANCELLED, TelegramAdPlacementStatus.MISSED],
-      SCHEDULED: [TelegramAdPlacementStatus.PUBLISHED, TelegramAdPlacementStatus.CANCELLED, TelegramAdPlacementStatus.MISSED],
+    const transitions: Record<
+      TelegramAdPlacementStatus,
+      TelegramAdPlacementStatus[]
+    > = {
+      DRAFT: [
+        TelegramAdPlacementStatus.RESERVED,
+        TelegramAdPlacementStatus.CANCELLED,
+      ],
+      RESERVED: [
+        TelegramAdPlacementStatus.SCHEDULED,
+        TelegramAdPlacementStatus.CANCELLED,
+        TelegramAdPlacementStatus.MISSED,
+      ],
+      SCHEDULED: [
+        TelegramAdPlacementStatus.PUBLISHED,
+        TelegramAdPlacementStatus.CANCELLED,
+        TelegramAdPlacementStatus.MISSED,
+      ],
       PUBLISHED: [TelegramAdPlacementStatus.COMPLETED],
       COMPLETED: [],
       CANCELLED: [],
@@ -5191,18 +6196,6 @@ export class TelegramAdSalesService {
     }
   }
 
-  private plannedDeleteAtForPlacement(placement: any) {
-    if (placement.isPermanentSnapshot || !placement.deleteAfterHoursSnapshot) {
-      return null;
-    }
-    const publishedAt = placement.scheduledAt instanceof Date
-      ? placement.scheduledAt
-      : new Date(placement.scheduledAt);
-    return new Date(
-      publishedAt.getTime() + placement.deleteAfterHoursSnapshot * 60 * 60 * 1000,
-    );
-  }
-
   async schedulePlacement(
     userId: string,
     saleId: string,
@@ -5211,16 +6204,26 @@ export class TelegramAdSalesService {
   ) {
     const workspaceId = await this.workspace(userId);
     const sale = await this.getSaleDetails(workspaceId, saleId);
-    const placement = sale.placements.find((item: any) => item.id === placementId);
-    if (!placement) throw new NotFoundException('Telegram ad sale placement not found');
+    const placement = sale.placements.find(
+      (item: any) => item.id === placementId,
+    );
+    if (!placement)
+      throw new NotFoundException('Telegram ad sale placement not found');
     if (!placement.managedPostId) {
-      throw new BadRequestException('Managed post is required before scheduling');
+      throw new BadRequestException(
+        'Managed post is required before scheduling',
+      );
     }
     if (sale.status === TelegramAdSaleStatus.DRAFT) {
       throw new BadRequestException('Confirm sale before scheduling');
     }
-    this.assertPlacementTransition(placement.status, TelegramAdPlacementStatus.SCHEDULED);
-    const scheduledAt = dto.scheduledAt ? new Date(dto.scheduledAt) : placement.scheduledAt;
+    this.assertPlacementTransition(
+      placement.status,
+      TelegramAdPlacementStatus.SCHEDULED,
+    );
+    const scheduledAt = dto.scheduledAt
+      ? new Date(dto.scheduledAt)
+      : placement.scheduledAt;
     await this.assertPlacementConflictFree(
       this.prisma,
       workspaceId,
@@ -5263,15 +6266,24 @@ export class TelegramAdSalesService {
       ? sale.placements.filter((placement: any) =>
           dto.placements?.some((item) => item.placementId === placement.id),
         )
-      : sale.placements.filter((placement: any) => Boolean(placement.managedPostId));
+      : sale.placements.filter((placement: any) =>
+          Boolean(placement.managedPostId),
+        );
     const results: Array<Record<string, unknown>> = [];
     for (const placement of targets) {
       try {
-        const override = dto.placements?.find((item) => item.placementId === placement.id);
-        const scheduled = await this.schedulePlacement(userId, saleId, placement.id, {
-          scheduledAt: override?.scheduledAt,
-          longTextMode: override?.longTextMode,
-        });
+        const override = dto.placements?.find(
+          (item) => item.placementId === placement.id,
+        );
+        const scheduled = await this.schedulePlacement(
+          userId,
+          saleId,
+          placement.id,
+          {
+            scheduledAt: override?.scheduledAt,
+            longTextMode: override?.longTextMode,
+          },
+        );
         results.push({
           placementId: placement.id,
           success: true,
@@ -5282,7 +6294,10 @@ export class TelegramAdSalesService {
         results.push({
           placementId: placement.id,
           success: false,
-          error: error instanceof Error ? error.message : 'Could not schedule placement',
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Could not schedule placement',
         });
       }
     }
@@ -5298,16 +6313,22 @@ export class TelegramAdSalesService {
     const workspaceId = await this.workspace(userId);
     const placement = await this.prisma.telegramAdSalePlacement.findFirst({
       where: { id: placementId, workspaceId, telegramAdSaleId: saleId },
-      include: { managedPost: true, paymentAllocations: { include: { payment: true } } },
+      include: {
+        managedPost: true,
+        paymentAllocations: { include: { payment: true } },
+      },
     });
-    if (!placement) throw new NotFoundException('Telegram ad sale placement not found');
-    if (!placement.managedPostId) throw new BadRequestException('Managed post is required');
-    const publishedManagedPost = await this.telegramManagedPostPublicationService.publishManagedPostNow(
-      userId,
-      placement.telegramChannelId,
-      placement.managedPostId,
-      { longTextMode: dto.longTextMode },
-    );
+    if (!placement)
+      throw new NotFoundException('Telegram ad sale placement not found');
+    if (!placement.managedPostId)
+      throw new BadRequestException('Managed post is required');
+    const publishedManagedPost =
+      await this.telegramManagedPostPublicationService.publishManagedPostNow(
+        userId,
+        placement.telegramChannelId,
+        placement.managedPostId,
+        { longTextMode: dto.longTextMode },
+      );
     const updated = await this.prisma.telegramAdSalePlacement.update({
       where: { id: placementId },
       data: {
@@ -5343,17 +6364,26 @@ export class TelegramAdSalesService {
     const workspaceId = await this.workspace(userId);
     const placement = await this.prisma.telegramAdSalePlacement.findFirst({
       where: { id: placementId, workspaceId, telegramAdSaleId: saleId },
-      include: { paymentAllocations: { include: { payment: true } }, managedPost: true },
+      include: {
+        paymentAllocations: { include: { payment: true } },
+        managedPost: true,
+      },
     });
-    if (!placement) throw new NotFoundException('Telegram ad sale placement not found');
+    if (!placement)
+      throw new NotFoundException('Telegram ad sale placement not found');
     if (placement.status === TelegramAdPlacementStatus.PUBLISHED) {
-      throw new BadRequestException('Published placement requires a separate completion/deletion flow');
+      throw new BadRequestException(
+        'Published placement requires a separate completion/deletion flow',
+      );
     }
     const hasPaidAllocation = (placement.paymentAllocations ?? []).some(
-      (allocation: any) => allocation.payment?.status !== TelegramAdSalePaymentStatus.VOIDED,
+      (allocation: any) =>
+        allocation.payment?.status !== TelegramAdSalePaymentStatus.VOIDED,
     );
     if (hasPaidAllocation) {
-      throw new BadRequestException('Paid placement cannot be cancelled without payment reversal');
+      throw new BadRequestException(
+        'Paid placement cannot be cancelled without payment reversal',
+      );
     }
     const updated = await this.prisma.telegramAdSalePlacement.update({
       where: { id: placementId },
@@ -5370,21 +6400,34 @@ export class TelegramAdSalesService {
     _dto: CompletePermanentPlacementDto,
   ) {
     const workspaceId = await this.workspace(userId);
-    const placement = await this.ensurePlacementBelongsToSale(workspaceId, saleId, placementId);
+    const placement = await this.ensurePlacementBelongsToSale(
+      workspaceId,
+      saleId,
+      placementId,
+    );
     if (!placement.isPermanentSnapshot) {
-      throw new BadRequestException('Only permanent placements can be completed manually');
+      throw new BadRequestException(
+        'Only permanent placements can be completed manually',
+      );
     }
     if (placement.status !== TelegramAdPlacementStatus.PUBLISHED) {
-      throw new BadRequestException('Only published permanent placements can be completed');
+      throw new BadRequestException(
+        'Only published permanent placements can be completed',
+      );
     }
-    const metrics = await this.reconcilePlacementMetrics(workspaceId, placement.id);
+    const metrics = await this.reconcilePlacementMetrics(
+      workspaceId,
+      placement.id,
+    );
     const updated = await this.prisma.telegramAdSalePlacement.update({
       where: { id: placement.id },
       data: {
         status: TelegramAdPlacementStatus.COMPLETED,
         completedAt: new Date(),
-        actualViewsFinal: metrics.actualViewsFinal ?? placement.actualViewsFinal,
-        actualReactionsFinal: metrics.actualReactionsFinal ?? placement.actualReactionsFinal,
+        actualViewsFinal:
+          metrics.actualViewsFinal ?? placement.actualViewsFinal,
+        actualReactionsFinal:
+          metrics.actualReactionsFinal ?? placement.actualReactionsFinal,
         actualCpm: metrics.actualCpm ?? placement.actualCpm,
       },
       include: { paymentAllocations: { include: { payment: true } } },
@@ -5392,7 +6435,10 @@ export class TelegramAdSalesService {
     return this.mapPlacement(this.appendPlacementFinancials(updated));
   }
 
-  private async reconcilePlacementMetrics(workspaceId: string, placementId: string) {
+  private async reconcilePlacementMetrics(
+    workspaceId: string,
+    placementId: string,
+  ) {
     return reconcileTelegramAdPlacementMetrics(
       this.prisma,
       workspaceId,
@@ -5412,7 +6458,8 @@ export class TelegramAdSalesService {
         telegramChannel: true,
       },
     });
-    if (!placement) throw new NotFoundException('Telegram ad sale placement not found');
+    if (!placement)
+      throw new NotFoundException('Telegram ad sale placement not found');
     if (!placement.managedPost) {
       throw new BadRequestException('Managed post is required for deletion');
     }
@@ -5421,30 +6468,33 @@ export class TelegramAdSalesService {
         TelegramManagedPostIdVerificationStatus.VERIFIED ||
       !placement.managedPost.telegramMessageIds.length
     ) {
-      throw new BadRequestException('Managed post has no published telegram messages');
+      throw new BadRequestException(
+        'Managed post has no published telegram messages',
+      );
     }
     const sources = await this.sourceAccessService.sourcesForChannel(
       workspaceId,
       placement.telegramChannelId,
     );
-    const selectedSource = sources.find(
-      (source) =>
-        source.sourceType === placement.managedPost?.sourceType &&
-        source.sourceId === placement.managedPost?.sourceId &&
-        source.permissions.canDeleteMessages,
+    const selectedSource = selectAdPlacementDeletionSource(
+      sources,
+      placement.managedPost,
     );
     if (!selectedSource) {
-      throw new BadRequestException('No connected source can delete this placement');
+      throw new BadRequestException(
+        'No connected source can delete this placement',
+      );
     }
 
     if (selectedSource.sourceType === TelegramSourceType.MTPROTO) {
-      const account = await this.prisma.telegramUserAccountIntegration.findFirst({
-        where: {
-          id: selectedSource.sourceId,
-          workspaceId,
-          isActive: true,
-        },
-      });
+      const account =
+        await this.prisma.telegramUserAccountIntegration.findFirst({
+          where: {
+            id: selectedSource.sourceId,
+            workspaceId,
+            isActive: true,
+          },
+        });
       if (!account?.sessionEncrypted) {
         throw new BadRequestException('MTProto source is not connected');
       }
@@ -5512,7 +6562,10 @@ export class TelegramAdSalesService {
       }
     }
 
-    const metrics = await this.reconcilePlacementMetrics(workspaceId, placement.id);
+    const metrics = await this.reconcilePlacementMetrics(
+      workspaceId,
+      placement.id,
+    );
     await this.prisma.$transaction([
       this.prisma.telegramManagedPost.update({
         where: { id: placement.managedPost.id },
@@ -5551,9 +6604,15 @@ export class TelegramAdSalesService {
     _dto: RetryPlacementDeletionDto,
   ) {
     const workspaceId = await this.workspace(userId);
-    const placement = await this.ensurePlacementBelongsToSale(workspaceId, saleId, placementId);
+    const placement = await this.ensurePlacementBelongsToSale(
+      workspaceId,
+      saleId,
+      placementId,
+    );
     if (placement.isPermanentSnapshot) {
-      throw new BadRequestException('Permanent placement cannot use automatic deletion retry');
+      throw new BadRequestException(
+        'Permanent placement cannot use automatic deletion retry',
+      );
     }
     try {
       await this.deletePublishedPlacement(workspaceId, placement.id);
@@ -5562,7 +6621,8 @@ export class TelegramAdSalesService {
         where: { id: placement.id },
         data: {
           lastDeletionAttemptAt: new Date(),
-          lastDeletionError: error instanceof Error ? error.message : 'Deletion failed',
+          lastDeletionError:
+            error instanceof Error ? error.message : 'Deletion failed',
         },
       });
       this.notifyAdDeletionDueWorkChanged();
@@ -5574,15 +6634,25 @@ export class TelegramAdSalesService {
   async reconcileSale(userId: string, saleId: string) {
     const workspaceId = await this.workspace(userId);
     const sale = await this.getSaleDetails(workspaceId, saleId);
-    const channelIds = [...new Set(sale.placements.map((placement: any) => placement.telegramChannelId))];
+    const channelIds = [
+      ...new Set(
+        sale.placements.map((placement: any) => placement.telegramChannelId),
+      ),
+    ];
     for (const channelId of channelIds) {
-      await this.telegramManagedPostRemoteSyncService.syncManagedPosts(userId, channelId);
+      await this.telegramManagedPostRemoteSyncService.syncManagedPosts(
+        userId,
+        channelId,
+      );
     }
 
     const refreshed = await this.getSaleDetails(workspaceId, saleId);
     let dueWorkChanged = false;
     for (const placement of refreshed.placements) {
-      const metrics = await this.reconcilePlacementMetrics(workspaceId, placement.id);
+      const metrics = await this.reconcilePlacementMetrics(
+        workspaceId,
+        placement.id,
+      );
       const managedPost = await this.prisma.telegramManagedPost.findFirst({
         where: { id: placement.managedPostId ?? undefined, workspaceId },
       });
@@ -5646,7 +6716,10 @@ export class TelegramAdSalesService {
     const sale = await this.getSaleDetails(workspaceId, saleId);
     const updated: Array<Record<string, unknown>> = [];
     for (const placement of sale.placements) {
-      const metrics = await this.reconcilePlacementMetrics(workspaceId, placement.id);
+      const metrics = await this.reconcilePlacementMetrics(
+        workspaceId,
+        placement.id,
+      );
       updated.push({
         placementId: placement.id,
         ...metrics,
@@ -5657,8 +6730,8 @@ export class TelegramAdSalesService {
         data: {
           actualViews24h: metrics.actualViews24h,
           actualViews48h: metrics.actualViews48h,
-        actualViewsFinal: metrics.actualViewsFinal,
-        actualReactionsFinal: metrics.actualReactionsFinal,
+          actualViewsFinal: metrics.actualViewsFinal,
+          actualReactionsFinal: metrics.actualReactionsFinal,
           actualCpm: metrics.actualCpm,
         },
       });
@@ -5691,7 +6764,8 @@ export class TelegramAdSalesService {
           where: { id: item.id },
           data: {
             lastDeletionAttemptAt: new Date(),
-            lastDeletionError: error instanceof Error ? error.message : 'Deletion failed',
+            lastDeletionError:
+              error instanceof Error ? error.message : 'Deletion failed',
           },
         });
       }
@@ -5724,7 +6798,11 @@ export class TelegramAdSalesService {
     });
   }
 
-  async reserveSale(userId: string, saleId: string, dto: ReserveTelegramAdSaleDto) {
+  async reserveSale(
+    userId: string,
+    saleId: string,
+    dto: ReserveTelegramAdSaleDto,
+  ) {
     const workspaceId = await this.workspace(userId);
     const sale = await this.getSaleDetails(workspaceId, saleId);
     const targetPlacements = dto.placements?.length
@@ -5739,7 +6817,9 @@ export class TelegramAdSalesService {
     const reserved = await this.prisma.$transaction(async (tx) => {
       this.assertSaleTransition(sale.status, TelegramAdSaleStatus.RESERVED);
       for (const placement of targetPlacements) {
-        const override = dto.placements?.find((item) => item.placementId === placement.id);
+        const override = dto.placements?.find(
+          (item) => item.placementId === placement.id,
+        );
         const scheduledAt = override?.scheduledAt
           ? new Date(override.scheduledAt)
           : placement.scheduledAt;
@@ -5824,7 +6904,9 @@ export class TelegramAdSalesService {
       (payment: any) => payment.status !== TelegramAdSalePaymentStatus.VOIDED,
     );
     if (activePaidPayments) {
-      throw new BadRequestException('Cannot cancel paid sale without voiding payments');
+      throw new BadRequestException(
+        'Cannot cancel paid sale without voiding payments',
+      );
     }
     const cancelledSale = await this.prisma.$transaction(async (tx) => {
       await tx.telegramAdSalePlacement.updateMany({

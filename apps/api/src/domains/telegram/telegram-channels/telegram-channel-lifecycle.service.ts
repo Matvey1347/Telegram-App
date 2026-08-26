@@ -13,6 +13,7 @@ import { TelegramChannelCatalogService } from './telegram-channel-catalog.servic
 import { TelegramChannelImportPolicyService } from './telegram-channel-import-policy.service';
 import { TelegramChannelSchemaCompatibilityService } from './telegram-channel-schema-compatibility.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
+import { TelegramPostGroupStore } from './telegram-post-group.store';
 
 @Injectable()
 export class TelegramChannelLifecycleService {
@@ -23,28 +24,38 @@ export class TelegramChannelLifecycleService {
     private readonly telegramChannelImportPolicyService: TelegramChannelImportPolicyService,
     private readonly telegramChannelSchemaCompatibilityService: TelegramChannelSchemaCompatibilityService,
     private readonly telegramChannelCatalogService: TelegramChannelCatalogService,
+    private readonly telegramPostGroupStore: TelegramPostGroupStore,
   ) {}
 
   async create(userId: string, dto: CreateTelegramChannelDto) {
-    const { workspaceId, assignedMemberId } =
+    const { workspaceId, assignedMemberId, currentMembership } =
       await this.workspaceService.resolveAssignedMemberId(
         userId,
         dto.assignedMemberId,
       );
-    const channel = await (this.prisma.telegramChannel as any).create({
-      data: {
+    const channel = await this.prisma.$transaction(async (tx) => {
+      const created = await (tx.telegramChannel as any).create({
+        data: {
+          workspaceId,
+          ...dto,
+          username: this.telegramChannelsSupportService.normalizeUsername(
+            dto.username,
+          ),
+          assignedMemberId,
+          createdByUserId: userId,
+        },
+        include: {
+          assignedMember: WorkspaceService.assignedMemberInclude,
+          createdByUser: WorkspaceService.createdByUserInclude,
+        },
+      });
+      await this.telegramPostGroupStore.ensureRequiredChannelSystemGroups(
+        tx,
         workspaceId,
-        ...dto,
-        username: this.telegramChannelsSupportService.normalizeUsername(
-          dto.username,
-        ),
-        assignedMemberId,
-        createdByUserId: userId,
-      },
-      include: {
-        assignedMember: WorkspaceService.assignedMemberInclude,
-        createdByUser: WorkspaceService.createdByUserInclude,
-      },
+        created.id,
+        assignedMemberId ?? currentMembership.id,
+      );
+      return created;
     });
     notifyScheduledTaskDueWorkChanged(`workspace-auto-sync:${workspaceId}`);
     return channel;

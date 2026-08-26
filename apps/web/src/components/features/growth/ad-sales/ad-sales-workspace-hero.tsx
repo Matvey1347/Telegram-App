@@ -18,10 +18,13 @@ import type {
 } from "@/lib/features/growth/telegram-ad-sales";
 import { channelLocalDateKey } from "@/lib/features/growth/telegram-ad-sales";
 import {
+  AdSaleScopeModeToggle,
+  type AdSaleScopeMode,
+} from "./ad-sale-placement-scope";
+import {
+  CustomSelect,
   DateRangeInput,
-  FormField,
   MultiSelect,
-  Select,
   Tooltip,
 } from "@/components/ui/primitives";
 
@@ -67,6 +70,7 @@ export function AdSalesWorkspaceHero({
   rangeMode,
   rangeSelection,
   activeTab,
+  selectionMode,
   selectedNetworkId,
   selectedChannelIds,
   networks,
@@ -75,6 +79,7 @@ export function AdSalesWorkspaceHero({
   onRangeChange,
   onShiftRange,
   onToday,
+  onSelectionModeChange,
   onNetworkChange,
   onChannelsChange,
   onTabChange,
@@ -84,6 +89,7 @@ export function AdSalesWorkspaceHero({
   rangeMode: TelegramAdSalesCalendarRangeMode;
   rangeSelection: { from: string; to: string } | null;
   activeTab: TelegramAdSalesTab;
+  selectionMode: AdSaleScopeMode;
   selectedNetworkId: string;
   selectedChannelIds: string[];
   networks: TelegramChannelNetwork[];
@@ -92,10 +98,26 @@ export function AdSalesWorkspaceHero({
   onRangeChange: (range: { from: string; to: string }) => void;
   onShiftRange: (direction: -1 | 1) => void;
   onToday: () => void;
+  onSelectionModeChange: (mode: AdSaleScopeMode) => void;
   onNetworkChange: (networkId: string) => void;
   onChannelsChange: (channelIds: string[]) => void;
   onTabChange: (tab: TelegramAdSalesTab) => void;
 }) {
+  const allNetwork = networks.find((network) => network.systemKey === "ALL");
+  const networkOptions = [
+    ...(allNetwork
+      ? [allNetwork]
+      : [
+          {
+            id: "",
+            name: "All",
+            systemKey: "ALL" as const,
+            iconPresentation: { type: "unicode" as const, value: "🌐" },
+          },
+        ]),
+    ...networks.filter((network) => network.systemKey !== "ALL"),
+  ];
+
   return (
     <section className="mb-5 overflow-hidden rounded-[22px] border border-slate-800/80 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.16),transparent_36%),#111827]">
       <div className="grid gap-5 p-5 xl:grid-cols-[minmax(280px,0.85fr)_minmax(0,1.35fr)] xl:p-6">
@@ -129,32 +151,52 @@ export function AdSalesWorkspaceHero({
           </div>
         </div>
 
-        <div className="grid gap-4 rounded-2xl border border-slate-800/80 bg-[#0b1220]/80 p-4 md:grid-cols-2">
-          <FormField label="Network">
-            <Select value={selectedNetworkId} onChange={(event) => onNetworkChange(event.target.value)}>
-              <option value="">All networks</option>
-              {networks.map((network) => (
-                <option key={network.id} value={network.id}>
-                  {network.name}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          <FormField label="Channels">
-            <MultiSelect
-              value={selectedChannelIds}
-              onChange={onChannelsChange}
-              placeholder="Choose channels"
-              allSelectedLabel="All channels"
-              options={channels.map((channel) => ({
-                value: channel.id,
-                label: channel.title,
-                selectedLabel: channel.title,
-                iconUrl: channel.photoUrl,
-                iconFallback: channel.title,
-              }))}
+        <div className="space-y-3 rounded-2xl border border-slate-800/80 bg-[#0b1220]/80 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-medium text-neutral-200">
+              Inventory
+            </span>
+            <AdSaleScopeModeToggle
+              mode={selectionMode}
+              onChange={onSelectionModeChange}
             />
-          </FormField>
+          </div>
+          <div className="min-w-0">
+            {selectionMode === "network" ? (
+              <CustomSelect
+                value={selectedNetworkId || allNetwork?.id || ""}
+                onChange={onNetworkChange}
+                placeholder="All"
+                options={networkOptions.map((network) => ({
+                  value: network.id,
+                  label: network.systemKey === "ALL" ? "All" : network.name,
+                  iconUrl:
+                    network.iconPresentation?.type === "image"
+                      ? network.iconPresentation.url
+                      : undefined,
+                  iconEmoji:
+                    network.iconPresentation?.type === "unicode"
+                      ? network.iconPresentation.value
+                      : undefined,
+                  iconFallback: network.name,
+                }))}
+              />
+            ) : (
+              <MultiSelect
+                value={selectedChannelIds}
+                onChange={onChannelsChange}
+                placeholder="Choose channels"
+                allSelectedLabel="All"
+                options={channels.map((channel) => ({
+                  value: channel.id,
+                  label: channel.title,
+                  selectedLabel: channel.title,
+                  iconUrl: channel.photoUrl,
+                  iconFallback: channel.title,
+                }))}
+              />
+            )}
+          </div>
         </div>
       </div>
 

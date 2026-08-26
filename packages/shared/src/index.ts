@@ -17,6 +17,7 @@ export * from "./types/telegram-user-account-login";
 export * from "./types/telegram-ad-sales";
 export * from "./types/telegram-ad-sales-create";
 export * from "./types/telegram-ad-sales-bulk";
+export * from "./telegram-ad-sales-price-allocation";
 export * from "./types/resolved-emoji";
 export * from "./types/telegram-custom-emoji";
 export * from "./types/editor-shortcuts";

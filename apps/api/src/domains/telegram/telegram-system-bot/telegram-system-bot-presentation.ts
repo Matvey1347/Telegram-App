@@ -49,28 +49,39 @@ function formatNumber(value: number) {
   return value.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
 export function renderSystemBotStats(
   workspaceName: string,
   summary: SystemBotStatsSummary,
 ) {
+  const primaryCurrency = escapeHtml(summary.primaryCurrency ?? '');
   const lines = [
-    `📊 Statistics: ${workspaceName}`,
+    `📊 <b>${escapeHtml(workspaceName)}</b>`,
+    '<b>Finance</b>',
     typeof summary.totalBalancePrimary === 'number'
-      ? `💰 Balance: ${formatNumber(summary.totalBalancePrimary)} ${summary.primaryCurrency ?? ''}`.trim()
+      ? `💰 Balance: <b>${formatNumber(summary.totalBalancePrimary)} ${primaryCurrency}</b>`.trim()
       : null,
     typeof summary.totalBalanceSecondary === 'number' &&
     summary.secondaryCurrency
-      ? `💱 Secondary balance: ${formatNumber(summary.totalBalanceSecondary)} ${summary.secondaryCurrency}`
+      ? `💱 Secondary: <b>${formatNumber(summary.totalBalanceSecondary)} ${escapeHtml(summary.secondaryCurrency)}</b>`
       : null,
     typeof summary.incomeForPeriod === 'number'
-      ? `📈 Income: ${formatNumber(summary.incomeForPeriod)} ${summary.primaryCurrency ?? ''}`.trim()
+      ? `📈 Income: ${formatNumber(summary.incomeForPeriod)} ${primaryCurrency}`.trim()
       : null,
     typeof summary.expensesForPeriod === 'number'
-      ? `📉 Expenses: ${formatNumber(summary.expensesForPeriod)} ${summary.primaryCurrency ?? ''}`.trim()
+      ? `📉 Expenses: ${formatNumber(summary.expensesForPeriod)} ${primaryCurrency}`.trim()
       : null,
     typeof summary.profitForPeriod === 'number'
-      ? `🧾 Profit: ${formatNumber(summary.profitForPeriod)} ${summary.primaryCurrency ?? ''}`.trim()
+      ? `${summary.profitForPeriod >= 0 ? '✅' : '🔻'} Profit: <b>${formatNumber(summary.profitForPeriod)} ${primaryCurrency}</b>`.trim()
       : null,
+    '',
+    '<b>Channels and audience</b>',
     typeof summary.telegramChannelsCount === 'number'
       ? `📢 Channels: ${summary.telegramChannelsCount} (own ${summary.ownChannelsCount ?? 0}, external ${summary.externalChannelsCount ?? 0})`
       : null,
@@ -91,24 +102,24 @@ export function renderSystemBotStats(
   if (summary.accountBalances?.length) {
     lines.push(
       '',
-      '🏦 Accounts:',
+      '<b>Accounts</b>',
       ...summary.accountBalances
         .slice(0, 5)
         .map(
           (account) =>
-            `${systemBotEmoji(account.iconPresentation, '💳')} ${account.name}: ${formatNumber(account.balance)} ${account.currency}`,
+            `${systemBotEmoji(account.iconPresentation, '💳')} ${escapeHtml(account.name)}: ${formatNumber(account.balance)} ${escapeHtml(account.currency)}`,
         ),
     );
   }
   if (summary.topOwnChannels?.length) {
     lines.push(
       '',
-      '🏆 Top channels:',
+      '<b>Top channels</b>',
       ...summary.topOwnChannels
         .slice(0, 5)
         .map(
           (channel) =>
-            `${channel.photoUrl ? '🖼️' : '📢'} ${channel.title}: ${formatNumber(channel.subscribers)} subscribers`,
+            `${channel.photoUrl ? '🖼️' : '📢'} ${escapeHtml(channel.title)}: ${formatNumber(channel.subscribers)} subscribers`,
         ),
     );
   }

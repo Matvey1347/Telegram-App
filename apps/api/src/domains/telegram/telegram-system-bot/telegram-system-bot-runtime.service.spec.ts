@@ -20,6 +20,7 @@ describe('TelegramSystemBotRuntimeService', () => {
   const api = {
     setWebhook: jest.fn(),
     setMyCommands: jest.fn(),
+    deleteMyCommands: jest.fn(),
     setChatMenuButton: jest.fn(),
     deleteWebhook: jest.fn(),
     getWebhookInfo: jest.fn(),
@@ -47,10 +48,11 @@ describe('TelegramSystemBotRuntimeService', () => {
       'https://local.example/api/telegram/system-bot/webhook',
       'local-secret',
     );
-    expect(api.setMyCommands).toHaveBeenCalledWith(
-      'local-token',
-      expect.any(Array),
-    );
+    expect(api.deleteMyCommands).toHaveBeenCalledWith('local-token');
+    expect(api.setChatMenuButton).toHaveBeenCalledWith('local-token', {
+      type: 'default',
+    });
+    expect(api.setMyCommands).not.toHaveBeenCalled();
     expect(api.deleteWebhook).not.toHaveBeenCalled();
     expect(api.getUpdates).not.toHaveBeenCalled();
   });
@@ -96,6 +98,7 @@ describe('TelegramSystemBotRuntimeService', () => {
 
     expect(api.setWebhook).not.toHaveBeenCalled();
     expect(api.setMyCommands).not.toHaveBeenCalled();
+    expect(api.deleteMyCommands).not.toHaveBeenCalled();
     expect(api.setChatMenuButton).not.toHaveBeenCalled();
     expect(api.deleteWebhook).not.toHaveBeenCalled();
     expect(api.getUpdates).not.toHaveBeenCalled();
@@ -168,6 +171,30 @@ describe('TelegramSystemBotRuntimeService', () => {
         },
       },
     );
+  });
+
+  it('records and dispatches channel membership updates', async () => {
+    config.validatesWebhookSecret.mockReturnValue(true);
+    prisma.telegramSystemBotUpdateLog.create.mockResolvedValue({ id: 'log' });
+    const update = {
+      update_id: 2,
+      my_chat_member: {
+        chat: { id: -1001, type: 'channel' },
+        old_chat_member: { status: 'member', user: { id: 7 } },
+        new_chat_member: { status: 'administrator', user: { id: 7 } },
+      },
+    };
+
+    await service.handleWebhook('secret', update);
+
+    expect(prisma.telegramSystemBotUpdateLog.create).toHaveBeenCalledWith({
+      data: {
+        environment: 'LOCAL',
+        updateId: '2',
+        updateType: 'my_chat_member',
+      },
+    });
+    expect(handler.handle).toHaveBeenCalledWith(update);
   });
 
   it('contains a Telegram webhook configuration failure without falling back to polling', async () => {

@@ -332,7 +332,9 @@ describe('TelegramAdSalesService', () => {
 
     expect(prisma.telegramAdSale.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ origin: TelegramAdSaleOrigin.ADSELL_IO }),
+        data: expect.objectContaining({
+          origin: TelegramAdSaleOrigin.ADSELL_IO,
+        }),
       }),
     );
     expect(sale.origin).toBe(TelegramAdSaleOrigin.ADSELL_IO);
@@ -348,9 +350,7 @@ describe('TelegramAdSalesService', () => {
     const errors = await validate(dto);
 
     expect(errors).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ property: 'origin' }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ property: 'origin' })]),
     );
   });
 
@@ -408,7 +408,7 @@ describe('TelegramAdSalesService', () => {
     expect(prisma.telegramAdSalePlacement.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          plannedDeleteAt: new Date('2026-08-20T08:10:00.000Z'),
+          plannedDeleteAt: new Date('2026-08-20T08:00:00.000Z'),
         }),
       }),
     );
@@ -416,9 +416,7 @@ describe('TelegramAdSalesService', () => {
   });
 
   it('persists deletion failure backoff before rearming the due scheduler', async () => {
-    jest.useFakeTimers().setSystemTime(
-      new Date('2026-08-19T10:00:00.000Z'),
-    );
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-19T10:00:00.000Z'));
     const { service, prisma } = createService();
     prisma.telegramAdSalePlacement.findMany.mockResolvedValue([
       { id: 'placement-1', workspaceId: 'ws-1' },
@@ -509,11 +507,17 @@ describe('TelegramAdSalesService', () => {
     const baseline = { channelId: 'channel-1', pricing: {} };
     const policy = { telegramChannelId: 'channel-1' };
     const products = [{ id: 'product-1', telegramChannelId: 'channel-1' }];
-    jest.spyOn(service, 'getChannelBaseline').mockResolvedValue(baseline as any);
+    jest
+      .spyOn(service, 'getChannelBaseline')
+      .mockResolvedValue(baseline as any);
     jest.spyOn(service, 'getPolicy').mockResolvedValue(policy as any);
-    jest.spyOn(service, 'listChannelProducts').mockResolvedValue(products as any);
+    jest
+      .spyOn(service, 'listChannelProducts')
+      .mockResolvedValue(products as any);
 
-    await expect(service.getChannelSetup('user-1', 'channel-1')).resolves.toEqual({
+    await expect(
+      service.getChannelSetup('user-1', 'channel-1'),
+    ).resolves.toEqual({
       baseline,
       policy,
       products,
@@ -570,9 +574,15 @@ describe('TelegramAdSalesService', () => {
       }),
     );
 
-    await service.attachManagedPost('user-1', 'sale-1', 'placement-1', {
-      managedPostId: 'managed-post-1',
-    });
+    const wake = jest.fn();
+    scheduledTaskWakeNotifier.on('changed', wake);
+    try {
+      await service.attachManagedPost('user-1', 'sale-1', 'placement-1', {
+        managedPostId: 'managed-post-1',
+      });
+    } finally {
+      scheduledTaskWakeNotifier.off('changed', wake);
+    }
 
     expect(prisma.telegramAdSalePlacement.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -581,9 +591,12 @@ describe('TelegramAdSalesService', () => {
           managedPostId: 'managed-post-1',
           status: TelegramAdPlacementStatus.PUBLISHED,
           telegramPostId: 'post-1',
+          publishedAt: new Date('2026-08-01T18:00:00.000Z'),
+          plannedDeleteAt: new Date('2026-08-02T18:00:00.000Z'),
         }),
       }),
     );
+    expect(wake).toHaveBeenCalledWith('telegram_ad_sales.due_deletions');
   });
 
   it('creates immutable price snapshots', async () => {

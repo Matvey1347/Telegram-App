@@ -15,6 +15,15 @@ import { TelegramSystemBotNotificationsService } from './telegram-system-bot-not
 import { TelegramSystemBotRuntimeService } from './telegram-system-bot-runtime.service';
 import { TelegramSystemBotFinanceService } from './telegram-system-bot-finance.service';
 import { TelegramSystemBotFinanceHandlerService } from './telegram-system-bot-finance-handler.service';
+import { TelegramChannelsModule } from '../telegram-channels/telegram-channels.module';
+import { TelegramAdSalesModule } from '../telegram-ad-sales/telegram-ad-sales.module';
+import { TelegramSystemBotWorkflowStore } from './telegram-system-bot-workflow.store';
+import { TelegramSystemBotPostFlowService } from './telegram-system-bot-post-flow.service';
+import { TelegramSystemBotAdSaleFlowService } from './telegram-system-bot-ad-sale-flow.service';
+import { TelegramSystemBotChannelAccessService } from './telegram-system-bot-channel-access.service';
+import { TelegramSystemBotPostsService } from './telegram-system-bot-posts.service';
+import { TelegramSystemBotPostContentService } from './telegram-system-bot-post-content.service';
+import { TelegramSystemBotPostFlowOptions } from './telegram-system-bot-post-flow.options';
 
 @Module({
   imports: [
@@ -24,6 +33,8 @@ import { TelegramSystemBotFinanceHandlerService } from './telegram-system-bot-fi
     AccountsModule,
     TransfersModule,
     ScheduledTasksModule,
+    TelegramChannelsModule,
+    TelegramAdSalesModule,
   ],
   controllers: [TelegramSystemBotController],
   providers: [
@@ -36,6 +47,13 @@ import { TelegramSystemBotFinanceHandlerService } from './telegram-system-bot-fi
     TelegramSystemBotNotificationsService,
     TelegramSystemBotFinanceService,
     TelegramSystemBotFinanceHandlerService,
+    TelegramSystemBotWorkflowStore,
+    TelegramSystemBotPostFlowService,
+    TelegramSystemBotAdSaleFlowService,
+    TelegramSystemBotChannelAccessService,
+    TelegramSystemBotPostsService,
+    TelegramSystemBotPostContentService,
+    TelegramSystemBotPostFlowOptions,
   ],
   exports: [TelegramSystemBotNotificationsService],
 })
