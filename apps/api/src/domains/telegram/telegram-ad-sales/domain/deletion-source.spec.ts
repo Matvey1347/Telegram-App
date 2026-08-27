@@ -1,4 +1,7 @@
-import { selectAdPlacementDeletionSource } from './deletion-source';
+import {
+  isTelegramMessageAlreadyAbsent,
+  selectAdPlacementDeletionSource,
+} from './deletion-source';
 
 const bot = {
   sourceType: 'BOT',
@@ -41,7 +44,7 @@ describe('selectAdPlacementDeletionSource', () => {
     },
   );
 
-  it('returns no source after 48 hours when no MTProto admin is connected', () => {
+  it('uses the original bot to confirm absence when no MTProto admin is connected', () => {
     const publishedAt = new Date('2026-01-01T00:00:00Z');
     expect(
       selectAdPlacementDeletionSource(
@@ -49,6 +52,22 @@ describe('selectAdPlacementDeletionSource', () => {
         { sourceType: 'BOT', sourceId: 'bot', publishedAt },
         new Date(publishedAt.getTime() + 48 * 60 * 60 * 1000),
       ),
-    ).toBeUndefined();
+    ).toBe(bot);
+  });
+});
+
+describe('isTelegramMessageAlreadyAbsent', () => {
+  it.each([
+    'Bad Request: message to delete not found',
+    "Message doesn't exist",
+    'MESSAGE_ID_INVALID',
+  ])('recognizes Telegram already-missing responses: %s', (message) => {
+    expect(isTelegramMessageAlreadyAbsent(new Error(message))).toBe(true);
+  });
+
+  it('does not hide real deletion failures', () => {
+    expect(
+      isTelegramMessageAlreadyAbsent(new Error('CHAT_ADMIN_REQUIRED')),
+    ).toBe(false);
   });
 });

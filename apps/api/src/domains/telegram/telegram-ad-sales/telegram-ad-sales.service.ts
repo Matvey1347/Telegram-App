@@ -44,7 +44,10 @@ import { FinanceCategoriesService } from '../../finance/finance-categories/finan
 import { TelegramManagedPostCommandService } from '../telegram-channels/telegram-managed-post-command.service';
 import { TelegramManagedPostPublicationService } from '../telegram-channels/telegram-managed-post-publication.service';
 import { TelegramManagedPostRemoteSyncService } from '../telegram-channels/telegram-managed-post-remote-sync.service';
+import { TelegramPostGroupsService } from '../telegram-channels/telegram-post-groups.service';
+import { TelegramChannelAccessService } from '../telegram-channels/telegram-channel-access.service';
 import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
+import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
 import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
 import {
   buildStableTelegramPostUrl,
@@ -132,7 +135,10 @@ import { utcDateKey, utcTimeKey, zonedDateTimeToUtc } from './domain/timezone';
 import { ACTIVE_TELEGRAM_AD_PLACEMENT_STATUSES } from './telegram-ad-sales-reservation';
 import { reconcileTelegramAdPlacementMetrics } from './telegram-ad-placement-metrics';
 import { calculateAdPlacementDeleteAt } from './domain/sales-text';
-import { selectAdPlacementDeletionSource } from './domain/deletion-source';
+import {
+  isTelegramMessageAlreadyAbsent,
+  selectAdPlacementDeletionSource,
+} from './domain/deletion-source';
 
 @Injectable()
 export class TelegramAdSalesService {
@@ -144,11 +150,14 @@ export class TelegramAdSalesService {
     private readonly currencyConversionService: CurrencyConversionService,
     private readonly financeCategoriesService: FinanceCategoriesService,
     private readonly telegramManagedPostCommandService: TelegramManagedPostCommandService,
+    private readonly telegramPostGroupsService: TelegramPostGroupsService,
     private readonly telegramManagedPostPublicationService: TelegramManagedPostPublicationService,
     private readonly telegramManagedPostRemoteSyncService: TelegramManagedPostRemoteSyncService,
     private readonly mtprotoClient: TelegramMtprotoClient,
     private readonly sourceAccessService: TelegramSourceAccessService,
     private readonly encryptionService: TokenEncryptionService,
+    private readonly telegramChannelAccessService: TelegramChannelAccessService,
+    private readonly telegramBotApiClient: TelegramBotApiClient,
   ) {}
 
   private availabilityCacheKey(params: {
@@ -1085,7 +1094,7 @@ export class TelegramAdSalesService {
         orderBy: { scheduledAt: 'asc' as const },
         include: {
           telegramChannel: {
-            select: { telegramChatId: true },
+            select: { telegramChatId: true, username: true },
           },
           paymentAllocations: {
             include: { payment: true },
@@ -1097,9 +1106,12 @@ export class TelegramAdSalesService {
               text: true,
               imageUrls: true,
               buttonRows: true,
+              telegramChannelId: true,
               sourceType: true,
+              sourceId: true,
               status: true,
               telegramRemoteStatus: true,
+              telegramScheduledMessageIds: true,
               telegramMessageIds: true,
               telegramMessageUrls: true,
               publishedAt: true,
@@ -5468,10 +5480,46 @@ export class TelegramAdSalesService {
   async listSales(userId: string, query: TelegramAdSalesQueryDto) {
     const workspaceId = await this.workspace(userId);
     const pagination = normalizePagination(query);
+    const advertiser = query.advertiserId
+      ? await this.prisma.telegramAdvertiser.findFirst({
+          where: { id: query.advertiserId, workspaceId },
+          select: { telegramUsername: true },
+        })
+      : null;
+    const telegramUsername = this.normalizeTelegramUsername(
+      advertiser?.telegramUsername,
+    );
+    const telegramUsernameVariants = telegramUsername
+      ? [telegramUsername, `@${telegramUsername}`]
+      : [];
     const where: Prisma.TelegramAdSaleWhereInput = {
       workspaceId,
       ...(query.status ? { status: query.status } : {}),
-      ...(query.advertiserId ? { advertiserId: query.advertiserId } : {}),
+      ...(query.advertiserId
+        ? {
+            OR: [
+              { advertiserId: query.advertiserId },
+              ...(telegramUsernameVariants.length
+                ? [
+                    {
+                      advertiserId: null,
+                      advertiserTelegram: {
+                        in: telegramUsernameVariants,
+                        mode: 'insensitive' as const,
+                      },
+                    },
+                    {
+                      advertiserId: null,
+                      advertiserTelegramSnapshot: {
+                        in: telegramUsernameVariants,
+                        mode: 'insensitive' as const,
+                      },
+                    },
+                  ]
+                : []),
+            ],
+          }
+        : {}),
     };
     const [items, totalItems] = await this.prisma.$transaction([
       this.prisma.telegramAdSale.findMany({
@@ -5719,9 +5767,72 @@ export class TelegramAdSalesService {
         ),
       ),
     ];
-    await this.prisma.telegramAdSale.delete({
-      where: { id, workspaceId },
+    const publishedPlacements = existing.placements.filter(
+      (placement) =>
+        placement.publishedAt &&
+        !placement.deletedAt &&
+        (placement.managedPost?.telegramMessageIds.length ||
+          placement.telegramPost?.telegramMessageId),
+    );
+    const scheduledManagedPosts = new Map(
+      existing.placements.flatMap((placement) =>
+        placement.managedPost?.telegramScheduledMessageIds?.length
+          ? [
+              [
+                placement.managedPost.id,
+                {
+                  ...placement.managedPost,
+                  telegramChannel: placement.telegramChannel,
+                },
+              ] as const,
+            ]
+          : [],
+      ),
+    );
+    for (const managedPost of scheduledManagedPosts.values()) {
+      await this.telegramManagedPostPublicationService.cancelScheduledManagedPost(
+        workspaceId,
+        managedPost,
+      );
+    }
+    for (const placement of publishedPlacements) {
+      await this.deletePublishedPlacement(workspaceId, placement.id, {
+        notifyScheduler: false,
+      });
+    }
+
+    const transactionIds = existing.payments.flatMap((payment) =>
+      [payment.transaction?.id, payment.reversalTransaction?.id].filter(
+        (transactionId): transactionId is string => Boolean(transactionId),
+      ),
+    );
+    const managedPostIds = existing.placements.flatMap((placement) =>
+      placement.managedPost?.id ? [placement.managedPost.id] : [],
+    );
+    const telegramPostIds = existing.placements.flatMap((placement) =>
+      placement.telegramPost?.id ? [placement.telegramPost.id] : [],
+    );
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.telegramAdSale.delete({ where: { id, workspaceId } });
+      if (transactionIds.length) {
+        await tx.transaction.deleteMany({
+          where: { workspaceId, id: { in: [...new Set(transactionIds)] } },
+        });
+      }
+      if (managedPostIds.length) {
+        await tx.telegramManagedPost.deleteMany({
+          where: { workspaceId, id: { in: [...new Set(managedPostIds)] } },
+        });
+      }
+      if (telegramPostIds.length) {
+        await tx.telegramPost.deleteMany({
+          where: { workspaceId, id: { in: [...new Set(telegramPostIds)] } },
+        });
+      }
     });
+    this.invalidateAvailabilityCache(workspaceId);
+    this.notifyAdDeletionDueWorkChanged();
     if (existing.advertiserId)
       await this.recalculateAdvertiserStats(workspaceId, existing.advertiserId);
     return { id, channelIds };
@@ -6367,6 +6478,12 @@ export class TelegramAdSalesService {
     );
     if (!placement)
       throw new NotFoundException('Telegram ad sale placement not found');
+    const advertiseGroup =
+      await this.telegramPostGroupsService.ensureAdvertiseSystemGroup(
+        workspaceId,
+        placement.telegramChannelId,
+        dto.assignedMemberId ?? sale.assignedMemberId ?? undefined,
+      );
     const managedPost =
       await this.telegramManagedPostCommandService.createManagedPost(
         userId,
@@ -6382,6 +6499,7 @@ export class TelegramAdSalesService {
           icon: dto.icon ?? null,
           buttonRows: dto.buttonRows ?? [],
         },
+        { groupId: advertiseGroup.id },
       );
     await this.prisma.telegramAdSalePlacement.update({
       where: { id: placementId },
@@ -6483,6 +6601,17 @@ export class TelegramAdSalesService {
       },
     });
     if (!managedPost) throw new NotFoundException('Managed post not found');
+    const advertiseGroup =
+      await this.telegramPostGroupsService.ensureAdvertiseSystemGroup(
+        workspaceId,
+        placement.telegramChannelId,
+        managedPost.assignedMemberId,
+      );
+    await this.telegramPostGroupsService.addPostsToGroup(
+      userId,
+      advertiseGroup.id,
+      { postIds: [managedPost.id] },
+    );
     let telegramPostId: string | null = null;
     let telegramPublishedAt: Date | null = null;
     const isPublishedManagedPost =
@@ -6670,6 +6799,44 @@ export class TelegramAdSalesService {
       });
     }
     return this.mapPlacement(this.appendPlacementFinancials(updated));
+  }
+
+  async recreateScheduledPostsViaBot(userId: string, saleId: string) {
+    const workspaceId = await this.workspace(userId);
+    const sale = await this.getSaleDetails(workspaceId, saleId);
+    const placements = sale.placements.filter(
+      (placement) =>
+        placement.status === TelegramAdPlacementStatus.SCHEDULED &&
+        placement.managedPost?.sourceType === TelegramSourceType.MTPROTO &&
+        placement.managedPost.telegramScheduledMessageIds?.length,
+    );
+    if (!placements.length) {
+      throw new BadRequestException(
+        'This deal has no MTProto scheduled advertising posts to recreate',
+      );
+    }
+
+    for (const placement of placements) {
+      await this.telegramChannelAccessService.checkProductionBotPublishingAccess(
+        userId,
+        placement.telegramChannelId,
+      );
+    }
+
+    for (const placement of placements) {
+      await this.telegramManagedPostPublicationService.returnManagedPostToDraft(
+        userId,
+        placement.telegramChannelId,
+        placement.managedPost!.id,
+      );
+      await this.telegramManagedPostPublicationService.scheduleManagedPost(
+        userId,
+        placement.telegramChannelId,
+        placement.managedPost!.id,
+        { scheduledAt: placement.scheduledAt.toISOString() },
+      );
+    }
+    return this.getSale(userId, saleId);
   }
 
   async scheduleSale(userId: string, saleId: string, dto: ScheduleSaleDto) {
@@ -6921,76 +7088,44 @@ export class TelegramAdSalesService {
     }
 
     if (selectedSource.sourceType === TelegramSourceType.MTPROTO) {
-      const account =
-        await this.prisma.telegramUserAccountIntegration.findFirst({
-          where: {
-            id: selectedSource.sourceId,
-            workspaceId,
-            isActive: true,
-          },
-        });
-      if (!account?.sessionEncrypted) {
-        throw new BadRequestException('MTProto source is not connected');
-      }
-      const apiHash = this.encryptionService.decrypt({
-        encrypted: account.apiHashEncrypted,
-        iv: account.apiHashIv,
-        authTag: account.apiHashAuthTag,
-      });
-      const session = this.encryptionService.decrypt({
-        encrypted: account.sessionEncrypted,
-        iv: account.sessionIv ?? '',
-        authTag: account.sessionAuthTag ?? '',
-      });
-      await this.mtprotoClient.deletePublishedMessages({
-        apiId: account.apiId,
-        apiHash,
-        session,
-        channel: {
-          telegramChatId: placement.telegramChannel.telegramChatId,
-          username: placement.telegramChannel.username,
-          telegramAccessHash: placement.telegramChannel.telegramAccessHash,
-        },
+      await this.deletePlacementMessagesWithMtproto(
+        workspaceId,
+        placement.telegramChannel,
+        selectedSource.sourceId,
         messageIds,
-      });
+      );
     } else {
-      const bot = await this.prisma.telegramBotRuntimeInstance.findFirst({
-        where: {
-          botIntegrationId: selectedSource.sourceId,
-          workspaceId,
-          environment: 'PRODUCTION',
-          runtimeStatus: 'ACTIVE',
-          botIntegration: { isActive: true },
-        },
-      });
-      if (!bot) throw new BadRequestException('Telegram bot is not connected');
-      const token = this.encryptionService.decrypt({
-        encrypted: bot.botTokenEncrypted,
-        iv: bot.botTokenIv,
-        authTag: bot.botTokenAuthTag,
-      });
+      const token = await this.telegramChannelAccessService.botTokenForSource(
+        workspaceId,
+        selectedSource.sourceId,
+      );
       if (!placement.telegramChannel.telegramChatId) {
         throw new BadRequestException('Channel has no Telegram chat id');
       }
-      for (const messageId of messageIds) {
-        const response = await fetch(
-          `https://api.telegram.org/bot${token}/deleteMessage`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: placement.telegramChannel.telegramChatId,
-              message_id: Number(messageId),
-            }),
-          },
-        );
-        const payload = (await response.json()) as {
-          ok?: boolean;
-          description?: string;
-        };
-        if (!response.ok || !payload.ok) {
-          throw new BadRequestException(
-            payload.description || 'Telegram Bot API deletion failed',
+      try {
+        for (const messageId of messageIds) {
+          await this.telegramBotApiClient.deleteMessage(token, {
+            chat_id: placement.telegramChannel.telegramChatId,
+            message_id: Number(messageId),
+          });
+        }
+      } catch (botError) {
+        if (!isTelegramMessageAlreadyAbsent(botError)) {
+          const mtprotoFallback = sources.find(
+            (source) =>
+              source.sourceType === TelegramSourceType.MTPROTO &&
+              source.permissions.canDeleteMessages,
+          );
+          if (!mtprotoFallback) {
+            throw new BadRequestException(
+              `Telegram could not delete the post: ${botError instanceof Error ? botError.message : 'Bot API request failed'}`,
+            );
+          }
+          await this.deletePlacementMessagesWithMtproto(
+            workspaceId,
+            placement.telegramChannel,
+            mtprotoFallback.sourceId,
+            messageIds,
           );
         }
       }
@@ -7030,6 +7165,45 @@ export class TelegramAdSalesService {
       this.notifyAdDeletionDueWorkChanged();
     }
     return this.getSaleDetails(workspaceId, placement.telegramAdSaleId);
+  }
+
+  private async deletePlacementMessagesWithMtproto(
+    workspaceId: string,
+    channel: {
+      telegramChatId: string | null;
+      username: string | null;
+      telegramAccessHash: string | null;
+    },
+    sourceId: string,
+    messageIds: string[],
+  ) {
+    const account = await this.prisma.telegramUserAccountIntegration.findFirst({
+      where: { id: sourceId, workspaceId, isActive: true },
+    });
+    if (!account?.sessionEncrypted) {
+      throw new BadRequestException('MTProto source is not connected');
+    }
+    const apiHash = this.encryptionService.decrypt({
+      encrypted: account.apiHashEncrypted,
+      iv: account.apiHashIv,
+      authTag: account.apiHashAuthTag,
+    });
+    const session = this.encryptionService.decrypt({
+      encrypted: account.sessionEncrypted,
+      iv: account.sessionIv ?? '',
+      authTag: account.sessionAuthTag ?? '',
+    });
+    try {
+      await this.mtprotoClient.deletePublishedMessages({
+        apiId: account.apiId,
+        apiHash,
+        session,
+        channel,
+        messageIds,
+      });
+    } catch (error) {
+      if (!isTelegramMessageAlreadyAbsent(error)) throw error;
+    }
   }
 
   async retryDeletion(

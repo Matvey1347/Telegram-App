@@ -36,12 +36,15 @@ export function selectManagedPostPublishingSource<T extends PublishSource>(
   options: {
     existingScheduledSourceId?: string | null;
     requiresBotApi: boolean;
+    preferredBotSourceId?: string;
   },
 ) {
   const bot = sources.find(
     (source) =>
       source.sourceType === TelegramSourceType.BOT &&
-      source.permissions.canPostMessages,
+      source.permissions.canPostMessages &&
+      (!options.preferredBotSourceId ||
+        source.sourceId === options.preferredBotSourceId),
   );
   if (options.requiresBotApi) return bot;
 

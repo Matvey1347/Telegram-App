@@ -24,7 +24,10 @@ import {
   telegramMarkupToHtml,
 } from '../../../telegram/shared/telegram-markup';
 import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
-import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
+import {
+  TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID,
+  TelegramSourceAccessService,
+} from '../../../telegram/shared/telegram-source-access.service';
 import {
   isRevokedTelegramSessionError,
   REVOKED_TELEGRAM_SESSION_MESSAGE,
@@ -139,16 +142,26 @@ export class TelegramManagedPostPublisherService {
         post.publishedAt || post.telegramMessageIds.length,
       ),
     });
+    const preferredBotSourceId =
+      (_count?.adSalePlacements ?? 0) > 0
+        ? TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID
+        : undefined;
     let source = selectManagedPostPublishingSource(sources, {
       existingScheduledSourceId:
         scheduleAt && post.status === 'SCHEDULED' ? post.sourceId : null,
       requiresBotApi,
+      preferredBotSourceId,
     });
     if (requiresBotApi && !source) {
-      await this.telegramChannelAccessService.refreshSystemBotPublishingAccess(
-        workspaceId,
-        channel,
-      );
+      await (preferredBotSourceId
+        ? this.telegramChannelAccessService.refreshProductionBotPublishingAccess(
+            workspaceId,
+            channel,
+          )
+        : this.telegramChannelAccessService.refreshSystemBotPublishingAccess(
+            workspaceId,
+            channel,
+          ));
       sources = await this.sourceAccessService.sourcesForChannel(
         workspaceId,
         channelId,
@@ -157,6 +170,7 @@ export class TelegramManagedPostPublisherService {
         existingScheduledSourceId:
           scheduleAt && post.status === 'SCHEDULED' ? post.sourceId : null,
         requiresBotApi: true,
+        preferredBotSourceId,
       });
     }
     if (requiresBotApi && !source) {

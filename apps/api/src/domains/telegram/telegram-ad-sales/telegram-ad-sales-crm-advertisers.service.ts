@@ -452,12 +452,67 @@ export class TelegramAdSalesCrmAdvertisersService {
         primaryContact: advertiser.contacts?.[0] ?? null,
       }),
     )?.id;
+    const advertiserIdByTelegram = new Map<string, string>();
+    const ambiguousTelegramUsernames = new Set<string>();
+    for (const advertiser of advertisers) {
+      const username = this.normalizeTelegramUsername(
+        advertiser.telegramUsername,
+      );
+      if (!username) continue;
+      if (advertiserIdByTelegram.has(username)) {
+        ambiguousTelegramUsernames.add(username);
+      } else {
+        advertiserIdByTelegram.set(username, advertiser.id);
+      }
+    }
+    for (const username of ambiguousTelegramUsernames) {
+      advertiserIdByTelegram.delete(username);
+    }
+    const telegramUsernames = [...advertiserIdByTelegram.keys()];
+    const telegramUsernameVariants = telegramUsernames.flatMap((username) => [
+      username,
+      `@${username}`,
+    ]);
     const sales = await this.prisma.telegramAdSale.findMany({
       where: {
         workspaceId,
         OR: [
           { advertiserId: { in: advertiserIds } },
-          ...(unassignedAdvertiserId ? [{ advertiserId: null }] : []),
+          ...(unassignedAdvertiserId || telegramUsernames.length
+            ? [
+                {
+                  advertiserId: null,
+                  ...(telegramUsernames.length
+                    ? {
+                        OR: [
+                          {
+                            advertiserTelegram: {
+                              in: telegramUsernameVariants,
+                              mode: 'insensitive' as const,
+                            },
+                          },
+                          {
+                            advertiserTelegramSnapshot: {
+                              in: telegramUsernameVariants,
+                              mode: 'insensitive' as const,
+                            },
+                          },
+                          ...(unassignedAdvertiserId
+                            ? [
+                                {
+                                  AND: [
+                                    { advertiserTelegram: null },
+                                    { advertiserTelegramSnapshot: null },
+                                  ],
+                                },
+                              ]
+                            : []),
+                        ],
+                      }
+                    : {}),
+                },
+              ]
+            : []),
         ],
         status: { not: TelegramAdSaleStatus.CANCELLED },
       },
@@ -523,8 +578,14 @@ export class TelegramAdSalesCrmAdvertisersService {
       }
     >();
     for (const sale of sales) {
+      const snapshotTelegram = this.normalizeTelegramUsername(
+        sale.advertiserTelegramSnapshot ?? sale.advertiserTelegram,
+      );
       const advertiserId =
         sale.advertiserId ??
+        (snapshotTelegram
+          ? advertiserIdByTelegram.get(snapshotTelegram)
+          : null) ??
         (this.isAnonymousSaleSnapshot(sale) ? unassignedAdvertiserId : null);
       if (!advertiserId) continue;
       const current = stats.get(advertiserId) ?? {

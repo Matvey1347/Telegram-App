@@ -185,7 +185,7 @@ function DetailField({
   );
 }
 
-function LogTableSkeleton() {
+function LogTableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-neutral-800 bg-neutral-950/70">
       <table className="min-w-full text-left text-sm">
@@ -211,7 +211,7 @@ function LogTableSkeleton() {
           </tr>
         </thead>
         <tbody>
-          {Array.from({ length: 8 }, (_, index) => (
+          {Array.from({ length: rows }, (_, index) => (
             <tr key={index} className="border-b border-neutral-800/80">
               <td className="px-3 py-4">
                 <Skeleton className="h-4 w-32" />
@@ -563,12 +563,12 @@ export default function SystemLogsPage() {
         )}
 
         {showSkeleton ? (
-          <LogTableSkeleton />
+          <LogTableSkeleton rows={items.length || pageLimit} />
         ) : (
           <div className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/70">
             {isPageTransitionLoading ? (
               <div className="absolute inset-0 z-10 bg-neutral-950/60 backdrop-blur-[1px]">
-                <LogTableSkeleton />
+                <LogTableSkeleton rows={items.length || pageLimit} />
               </div>
             ) : null}
             <div className="overflow-x-auto">

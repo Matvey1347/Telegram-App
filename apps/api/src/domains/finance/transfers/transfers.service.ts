@@ -1,9 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { createPaginatedResponse, normalizePagination } from '../../../common/pagination/pagination.utils';
+import {
+  createPaginatedResponse,
+  normalizePagination,
+} from '../../../common/pagination/pagination.utils';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { CreateTransferDto, TransferQueryDto, UpdateTransferDto } from './dto';
+import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
+import {
+  withWorkspaceMemberAvatar,
+  type WorkspaceMemberAvatarSource,
+} from '../../../common/workspace-member-presentation';
 
 const dec = (value: unknown) => Number(value ?? 0);
 
@@ -21,7 +29,7 @@ export class TransfersService {
   private async bestTransferRates(workspaceId: string) {
     const rows = await this.prisma.transfer.groupBy({
       by: ['fromCurrency', 'toCurrency'],
-      where: { workspaceId, exchangeRate: { not: null } },
+      where: { workspaceId, deletedAt: null, exchangeRate: { not: null } },
       _max: { exchangeRate: true },
     });
 
@@ -43,22 +51,54 @@ export class TransfersService {
     const exchangeRate = fromAmount > 0 ? toAmount / fromAmount : null;
     const knownBestRate = bestRates.get(this.rateKey(fromCurrency, toCurrency));
     const expectedRate = Math.max(knownBestRate ?? 0, exchangeRate ?? 0);
-    const expectedToAmount = expectedRate > 0 ? fromAmount * expectedRate : null;
-    const transferLossAmount = expectedToAmount !== null
-      ? Math.max(expectedToAmount - toAmount, 0)
-      : null;
+    const expectedToAmount =
+      expectedRate > 0 ? fromAmount * expectedRate : null;
+    const transferLossAmount =
+      expectedToAmount !== null
+        ? Math.max(expectedToAmount - toAmount, 0)
+        : null;
     return { exchangeRate, expectedToAmount, transferLossAmount };
   }
 
-  private async withLosses<T extends {
-    fromAmount: unknown;
-    toAmount: unknown;
-    fromCurrency: string;
-    toCurrency: string;
-  }>(workspaceId: string, transfers: T[]) {
+  private async withLosses<
+    T extends {
+      fromAmount: unknown;
+      toAmount: unknown;
+      fromCurrency: string;
+      toCurrency: string;
+      fromAccount?: {
+        icon?: Parameters<typeof iconToResolvedEmoji>[0];
+        assignedMember?: WorkspaceMemberAvatarSource | null;
+      } | null;
+      toAccount?: {
+        icon?: Parameters<typeof iconToResolvedEmoji>[0];
+        assignedMember?: WorkspaceMemberAvatarSource | null;
+      } | null;
+      assignedMember?: WorkspaceMemberAvatarSource | null;
+    },
+  >(workspaceId: string, transfers: T[]) {
     const bestRates = await this.bestTransferRates(workspaceId);
     return transfers.map((transfer) => ({
       ...transfer,
+      fromAccount: transfer.fromAccount
+        ? {
+            ...transfer.fromAccount,
+            iconPresentation: iconToResolvedEmoji(transfer.fromAccount.icon),
+            assignedMember: withWorkspaceMemberAvatar(
+              transfer.fromAccount.assignedMember,
+            ),
+          }
+        : undefined,
+      toAccount: transfer.toAccount
+        ? {
+            ...transfer.toAccount,
+            iconPresentation: iconToResolvedEmoji(transfer.toAccount.icon),
+            assignedMember: withWorkspaceMemberAvatar(
+              transfer.toAccount.assignedMember,
+            ),
+          }
+        : undefined,
+      assignedMember: withWorkspaceMemberAvatar(transfer.assignedMember),
       ...this.calc(
         dec(transfer.fromAmount),
         dec(transfer.toAmount),
@@ -72,9 +112,8 @@ export class TransfersService {
   async findAll(userId: string, query: TransferQueryDto = {}) {
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
-    const where: Prisma.TransferWhereInput = { workspaceId };
-    if (query.assignedMemberId)
-      where.assignedMemberId = query.assignedMemberId;
+    const where: Prisma.TransferWhereInput = { workspaceId, deletedAt: null };
+    if (query.assignedMemberId) where.assignedMemberId = query.assignedMemberId;
     if (query.dateFrom || query.dateTo) {
       where.date = {};
       if (query.dateFrom) where.date.gte = new Date(query.dateFrom);
@@ -100,10 +139,16 @@ export class TransfersService {
         take: pagination.take,
         include: {
           fromAccount: {
-            include: { assignedMember: WorkspaceService.assignedMemberInclude },
+            include: {
+              assignedMember: WorkspaceService.assignedMemberInclude,
+              icon: true,
+            },
           },
           toAccount: {
-            include: { assignedMember: WorkspaceService.assignedMemberInclude },
+            include: {
+              assignedMember: WorkspaceService.assignedMemberInclude,
+              icon: true,
+            },
           },
           assignedMember: WorkspaceService.assignedMemberInclude,
           createdByUser: WorkspaceService.createdByUserInclude,
@@ -118,8 +163,17 @@ export class TransfersService {
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
     const row = await this.prisma.transfer.findFirst({
-      where: { id, workspaceId },
-      include: { fromAccount: { include: { assignedMember: WorkspaceService.assignedMemberInclude } }, toAccount: { include: { assignedMember: WorkspaceService.assignedMemberInclude } }, assignedMember: WorkspaceService.assignedMemberInclude, createdByUser: WorkspaceService.createdByUserInclude },
+      where: { id, workspaceId, deletedAt: null },
+      include: {
+        fromAccount: {
+          include: { assignedMember: WorkspaceService.assignedMemberInclude },
+        },
+        toAccount: {
+          include: { assignedMember: WorkspaceService.assignedMemberInclude },
+        },
+        assignedMember: WorkspaceService.assignedMemberInclude,
+        createdByUser: WorkspaceService.createdByUserInclude,
+      },
     });
     if (!row) throw new NotFoundException('Transfer not found');
     const [transfer] = await this.withLosses(workspaceId, [row]);
@@ -127,7 +181,10 @@ export class TransfersService {
   }
   async create(userId: string, dto: CreateTransferDto) {
     const { workspaceId, assignedMemberId } =
-      await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId);
+      await this.workspaceService.resolveAssignedMemberId(
+        userId,
+        dto.assignedMemberId,
+      );
     const [from, to] = await Promise.all([
       this.prisma.account.findFirst({
         where: { id: dto.fromAccountId, workspaceId },
@@ -158,19 +215,34 @@ export class TransfersService {
         assignedMemberId,
         createdByUserId: userId,
       },
-      include: { fromAccount: { include: { assignedMember: WorkspaceService.assignedMemberInclude } }, toAccount: { include: { assignedMember: WorkspaceService.assignedMemberInclude } }, assignedMember: WorkspaceService.assignedMemberInclude, createdByUser: WorkspaceService.createdByUserInclude },
+      include: {
+        fromAccount: {
+          include: { assignedMember: WorkspaceService.assignedMemberInclude },
+        },
+        toAccount: {
+          include: { assignedMember: WorkspaceService.assignedMemberInclude },
+        },
+        assignedMember: WorkspaceService.assignedMemberInclude,
+        createdByUser: WorkspaceService.createdByUserInclude,
+      },
     });
   }
   async update(userId: string, id: string, dto: UpdateTransferDto) {
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
     const existing = await this.prisma.transfer.findFirst({
-      where: { id, workspaceId },
+      where: { id, workspaceId, deletedAt: null },
     });
     if (!existing) throw new NotFoundException('Transfer not found');
-    const assignedMemberId = dto.assignedMemberId === undefined ? undefined : (
-      await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId)
-    ).assignedMemberId;
+    const assignedMemberId =
+      dto.assignedMemberId === undefined
+        ? undefined
+        : (
+            await this.workspaceService.resolveAssignedMemberId(
+              userId,
+              dto.assignedMemberId,
+            )
+          ).assignedMemberId;
     const fromAccountId = dto.fromAccountId ?? existing.fromAccountId;
     const toAccountId = dto.toAccountId ?? existing.toAccountId;
     const [from, to] = await Promise.all([
@@ -204,16 +276,28 @@ export class TransfersService {
         ...calc,
         assignedMemberId,
       },
-      include: { fromAccount: { include: { assignedMember: WorkspaceService.assignedMemberInclude } }, toAccount: { include: { assignedMember: WorkspaceService.assignedMemberInclude } }, assignedMember: WorkspaceService.assignedMemberInclude, createdByUser: WorkspaceService.createdByUserInclude },
+      include: {
+        fromAccount: {
+          include: { assignedMember: WorkspaceService.assignedMemberInclude },
+        },
+        toAccount: {
+          include: { assignedMember: WorkspaceService.assignedMemberInclude },
+        },
+        assignedMember: WorkspaceService.assignedMemberInclude,
+        createdByUser: WorkspaceService.createdByUserInclude,
+      },
     });
   }
   async remove(userId: string, id: string) {
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
     const existing = await this.prisma.transfer.findFirst({
-      where: { id, workspaceId },
+      where: { id, workspaceId, deletedAt: null },
     });
     if (!existing) throw new NotFoundException('Transfer not found');
-    return this.prisma.transfer.delete({ where: { id } });
+    return this.prisma.transfer.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 }

@@ -47,6 +47,7 @@ import {
   Settings,
   Clock3,
   Target,
+  Trash2,
   X,
 } from "lucide-react";
 
@@ -566,6 +567,16 @@ export function AppShell({ children }: PropsWithChildren) {
             <Clock3 size={16} />
             Scheduled Tasks
           </Link>
+
+          {canViewSystemLogs ? (
+            <Link
+              href="/trash"
+              className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm ${pathname === "/trash" ? "bg-neutral-800 text-white" : "text-neutral-300 hover:bg-neutral-900 hover:text-white"}`}
+            >
+              <Trash2 size={16} />
+              Trash
+            </Link>
+          ) : null}
 
           {canViewSystemLogs ? (
             <Link

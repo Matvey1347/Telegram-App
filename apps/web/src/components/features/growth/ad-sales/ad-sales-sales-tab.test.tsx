@@ -125,6 +125,12 @@ describe("SalesTab", () => {
     fireEvent.click(screen.getByRole("button", { name: "Actions for @buyer" }));
     expect(screen.getByRole("menuitem", { name: "Edit deal" })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: "Delete deal" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete deal" }));
+    expect(
+      screen.getByText(
+        "The deal, its placements, finance transactions, and linked posts will be deleted from the system. Published posts will also be deleted from Telegram.",
+      ),
+    ).toBeTruthy();
   });
 
   it("collapses multiple placements for one channel into a scheduled range", () => {
@@ -183,7 +189,9 @@ describe("SalesTab", () => {
 
     expect(screen.getAllByText("Mentor Self-development")).toHaveLength(1);
     expect(screen.getByText("5 placements")).toBeTruthy();
-    expect(screen.getByText(/Scheduled .*02\/08\/2026.*→.*06\/08\/2026/)).toBeTruthy();
+    expect(
+      screen.getByText(/Scheduled .*02\/08\/2026.*→.*06\/08\/2026/),
+    ).toBeTruthy();
     expect(screen.getByText(/· 1\/24$/)).toBeTruthy();
     expect(screen.queryByText("Publication pending")).toBeNull();
   });

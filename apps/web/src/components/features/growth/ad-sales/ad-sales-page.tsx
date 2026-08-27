@@ -359,6 +359,39 @@ export function AdSalesPage() {
     enabled: tab === "sales",
     ...adSalesDataCacheOptions,
   });
+  const refreshedDeletionDeadlinesRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (tab !== "sales") return;
+    const pendingDeadlines = (salesQuery.data?.items ?? [])
+      .flatMap((sale) => sale.placements)
+      .filter(
+        (placement) =>
+          placement.publishedAt &&
+          placement.plannedDeleteAt &&
+          !placement.deletedAt &&
+          placement.managedPost?.telegramRemoteStatus !== "MISSING",
+      )
+      .map((placement) => ({
+        key: `${placement.id}:${placement.plannedDeleteAt}`,
+        dueAt: new Date(placement.plannedDeleteAt!).getTime(),
+      }))
+      .filter(
+        ({ key, dueAt }) =>
+          Number.isFinite(dueAt) &&
+          !refreshedDeletionDeadlinesRef.current.has(key),
+      )
+      .sort((left, right) => left.dueAt - right.dueAt);
+    const next = pendingDeadlines[0];
+    if (!next) return;
+    const timeout = window.setTimeout(
+      () => {
+        refreshedDeletionDeadlinesRef.current.add(next.key);
+        void salesQuery.refetch();
+      },
+      Math.min(Math.max(0, next.dueAt - Date.now()) + 3_000, 2_147_483_647),
+    );
+    return () => window.clearTimeout(timeout);
+  }, [salesQuery.data?.items, salesQuery.refetch, tab]);
   const calendarSalesQuery = useQuery({
     queryKey: telegramAdSalesKeys.sales({
       page: 1,
@@ -1000,7 +1033,7 @@ export function AdSalesPage() {
       {tab === "sales" ? (
         <SalesTab
           sales={filteredSales}
-          loading={salesQuery.isLoading}
+          loading={salesQuery.isLoading || salesQuery.isPlaceholderData}
           error={salesQuery.error}
           page={salesQuery.data?.pagination.page ?? salesPage}
           pageSize={salesQuery.data?.pagination.pageSize ?? salesPageSize}
@@ -1327,9 +1360,21 @@ export function AdSalesPage() {
             ),
             ...linkedPlacements.map((placement) =>
               queryClient.invalidateQueries({
-                queryKey: telegramPostKeys.managed(
-                  placement.telegramChannelId,
-                ),
+                queryKey: telegramPostKeys.managed(placement.telegramChannelId),
+              }),
+            ),
+          ]);
+        }}
+        onRecreateSharedPostViaBot={async (sale) => {
+          await telegramAdSalesApi.recreateScheduledPostsViaBot(sale.id);
+          await Promise.all([
+            refreshSaleAfterMutation(
+              sale.id,
+              sale.placements.map((placement) => placement.telegramChannelId),
+            ),
+            ...sale.placements.map((placement) =>
+              queryClient.invalidateQueries({
+                queryKey: telegramPostKeys.managed(placement.telegramChannelId),
               }),
             ),
           ]);

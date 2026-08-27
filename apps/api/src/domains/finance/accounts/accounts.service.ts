@@ -1,11 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CurrencyConversionService } from '../../../common/currency-conversion.service';
-import { createPaginatedResponse, normalizePagination } from '../../../common/pagination/pagination.utils';
+import {
+  createPaginatedResponse,
+  normalizePagination,
+} from '../../../common/pagination/pagination.utils';
 import { CurrenciesService } from '../currencies/currencies.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { AccountQueryDto, CreateAccountDto, UpdateAccountDto } from './dto';
+import {
+  withWorkspaceMemberAvatar,
+  type WorkspaceMemberAvatarSource,
+} from '../../../common/workspace-member-presentation';
 
 const dec = (value: unknown) => Number(value ?? 0);
 
@@ -46,7 +53,11 @@ export class AccountsService {
       await Promise.all([
         this.prisma.transaction.groupBy({
           by: ['accountId', 'type'],
-          where: { workspaceId, accountId: { in: accounts.map((a) => a.id) } },
+          where: {
+            workspaceId,
+            deletedAt: null,
+            accountId: { in: accounts.map((a) => a.id) },
+          },
           _sum: { amount: true },
           _count: { _all: true },
         }),
@@ -54,6 +65,7 @@ export class AccountsService {
           by: ['fromAccountId'],
           where: {
             workspaceId,
+            deletedAt: null,
             fromAccountId: { in: accounts.map((a) => a.id) },
           },
           _sum: { fromAmount: true },
@@ -62,6 +74,7 @@ export class AccountsService {
           by: ['toAccountId'],
           where: {
             workspaceId,
+            deletedAt: null,
             toAccountId: { in: accounts.map((a) => a.id) },
           },
           _sum: { toAmount: true },
@@ -108,6 +121,13 @@ export class AccountsService {
 
         return {
           ...account,
+          assignedMember: withWorkspaceMemberAvatar(
+            (
+              account as typeof account & {
+                assignedMember?: WorkspaceMemberAvatarSource | null;
+              }
+            ).assignedMember,
+          ),
           iconPresentation: iconToResolvedEmoji(account.icon),
           initialBalance: dec(account.initialBalance),
           balance,
@@ -134,6 +154,7 @@ export class AccountsService {
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
     const where = {
       workspaceId,
+      deletedAt: null,
       assignedMemberId: query.assignedMemberId || undefined,
       OR: [{ assignedMemberId: null }, { assignedMember: { isHidden: false } }],
     };
@@ -168,7 +189,7 @@ export class AccountsService {
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
     const account = await this.prisma.account.findFirst({
-      where: { id, workspaceId },
+      where: { id, workspaceId, deletedAt: null },
       include: {
         assignedMember: WorkspaceService.assignedMemberInclude,
         createdByUser: WorkspaceService.createdByUserInclude,
@@ -232,7 +253,7 @@ export class AccountsService {
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
     const account = await this.prisma.account.findFirst({
-      where: { id, workspaceId },
+      where: { id, workspaceId, deletedAt: null },
     });
     if (!account) throw new NotFoundException('Account not found');
     const assignedMemberId =
@@ -290,7 +311,7 @@ export class AccountsService {
 
     return this.prisma.account.update({
       where: { id },
-      data: { isActive: false },
+      data: { isActive: false, deletedAt: new Date() },
     });
   }
 }

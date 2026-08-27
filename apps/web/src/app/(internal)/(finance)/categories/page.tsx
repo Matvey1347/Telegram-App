@@ -8,11 +8,12 @@ import { InlineIconPicker } from '@/components/icons/inline-icon-picker';
 import { currenciesApi, transactionCategoriesApi, transactionsApi, type ResolvedEmoji, type TransactionCategory, type TransactionType } from '@/lib/api';
 import { MoneyStack } from '@/components/ui/money-stack';
 import { getDominantMoneyAmount } from '@/lib/features/finance/money';
-import { Button, ConfirmDeleteModal, EmptyState, EntityCard, FormField, IconButton, Input, LoadingState, MasonryGrid, Modal, PageHeader, Select } from '@/components/ui/primitives';
+import { Button, ConfirmDeleteModal, EmptyState, EntityCard, FormField, Input, LoadingState, MasonryGrid, Modal, PageHeader, Select } from '@/components/ui/primitives';
 import { IconPicker } from '@/components/icons/icon-picker';
 import { CircleMinus, CirclePlus } from 'lucide-react';
 import { useAppToast } from '@/providers/toast-provider';
 import { pushFinanceMutationToast } from '@/lib/features/finance/finance-mutation-toast';
+import { FinanceActionMenu } from '@/components/features/finance/internal/finance-action-menu';
 
 type CategoryFormValues = { name: string; type: TransactionType; iconId?: string | null };
 type CategoryStats = {
@@ -168,7 +169,7 @@ export default function CategoriesPage() {
           <EntityCard
             key={c.id}
             title={<div className="flex items-center gap-2"><InlineIconPicker iconId={c.iconId ?? null} icon={c.iconPresentation} onChange={(iconId) => updateIconMutation.mutate({ id: c.id, iconId })} /><span>{c.name}</span></div>}
-            actions={<div className="flex gap-2"><IconButton onClick={() => setEditing(c)} />{!c.isSystem ? <IconButton kind="delete" onClick={() => setDeleting(c)} /> : null}</div>}
+            actions={<FinanceActionMenu label={c.name} onEdit={() => setEditing(c)} onDelete={c.isSystem ? undefined : () => setDeleting(c)} />}
           >
             <div className="space-y-3">
               <div>

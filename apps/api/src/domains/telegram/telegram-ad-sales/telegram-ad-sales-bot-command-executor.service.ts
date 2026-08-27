@@ -12,7 +12,6 @@ import {
 } from '@prisma/client';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramPostGroupsService } from '../telegram-channels/telegram-post-groups.service';
 import { splitTelegramAdSalesBotTotalPrice } from './domain/bot-total-price-split';
 import { TelegramAdSalesBotDeletionPreflightService } from './telegram-ad-sales-bot-deletion-preflight.service';
 import { TelegramAdSalesBotExistingPlacementService } from './telegram-ad-sales-bot-existing-placement.service';
@@ -32,7 +31,6 @@ export class TelegramAdSalesBotCommandExecutorService {
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
     private readonly sales: TelegramAdSalesService,
-    private readonly postGroups: TelegramPostGroupsService,
     private readonly targets: TelegramAdSalesBotTargetsService,
     private readonly existingPlacements: TelegramAdSalesBotExistingPlacementService,
     private readonly deletionPreflight: TelegramAdSalesBotDeletionPreflightService,
@@ -318,14 +316,6 @@ export class TelegramAdSalesBotCommandExecutorService {
         createdNow = true;
       }
     }
-    const group = await this.postGroups.ensureAdvertiseSystemGroup(
-      params.workspaceId,
-      placement.telegramChannelId,
-      params.assignedMemberId,
-    );
-    await this.postGroups.addPostsToGroup(params.userId, group.id, {
-      postIds: [placement.managedPostId!],
-    });
     if (
       params.input.deliveryAction === 'SCHEDULE' &&
       placement.status !== TelegramAdPlacementStatus.SCHEDULED &&

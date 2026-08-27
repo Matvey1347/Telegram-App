@@ -979,6 +979,7 @@ model Account {
   iconId           String?
   assignedMemberId String?
   createdByUserId  String?
+  deletedAt        DateTime?
 
   workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   icon           Icon?            @relation(fields: [iconId], references: [id], onDelete: SetNull)
@@ -996,6 +997,7 @@ model Account {
   updatedAt DateTime @updatedAt
 
   @@index([workspaceId, assignedMemberId])
+  @@index([workspaceId, deletedAt])
 }
 
 model Transaction {
@@ -1017,6 +1019,7 @@ model Transaction {
   createdByUserId         String?
   iconId                  String?
   assignedMemberId        String?
+  deletedAt               DateTime?
 
   workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   account         Account          @relation(fields: [accountId], references: [id], onDelete: Restrict)
@@ -1040,6 +1043,7 @@ model Transaction {
   @@index([workspaceId, memberId])
   @@index([workspaceId, assignedMemberId])
   @@index([workspaceId, telegramChannelId])
+  @@index([workspaceId, deletedAt])
 }
 
 model TransactionCategory {
@@ -1050,6 +1054,7 @@ model TransactionCategory {
   isSystem    Boolean         @default(false)
   key         String?
   iconId      String?
+  deletedAt   DateTime?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
@@ -1059,6 +1064,7 @@ model TransactionCategory {
 
   @@unique([workspaceId, type, key])
   @@index([workspaceId, type])
+  @@index([workspaceId, deletedAt])
 }
 
 model Investment {
@@ -1106,6 +1112,7 @@ model Transfer {
   description          String?
   createdByUserId      String?
   assignedMemberId     String?
+  deletedAt            DateTime?
 
   workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   fromAccount    Account          @relation("OutgoingTransfers", fields: [fromAccountId], references: [id], onDelete: Restrict)
@@ -1117,6 +1124,7 @@ model Transfer {
   updatedAt DateTime @updatedAt
 
   @@index([workspaceId, assignedMemberId])
+  @@index([workspaceId, deletedAt])
 }
 
 model TelegramChannel {

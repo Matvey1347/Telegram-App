@@ -38,6 +38,7 @@ import { ScheduledTasksModule } from './domains/operations/scheduled-tasks/sched
 import { TelegramSystemBotModule } from './domains/telegram/telegram-system-bot/telegram-system-bot.module';
 import { BotBillingModule } from './domains/telegram/bot-billing/bot-billing.module';
 import { TelegramCustomEmojiModule } from './domains/telegram/telegram-custom-emoji/telegram-custom-emoji.module';
+import { TrashModule } from './domains/operations/trash/trash.module';
 
 @Module({
   imports: [
@@ -79,6 +80,7 @@ import { TelegramCustomEmojiModule } from './domains/telegram/telegram-custom-em
     TelegramSystemBotModule,
     BotBillingModule,
     TelegramCustomEmojiModule,
+    TrashModule,
   ],
   controllers: [AppController],
   providers: [{ provide: APP_INTERCEPTOR, useClass: ResponseCacheInterceptor }],

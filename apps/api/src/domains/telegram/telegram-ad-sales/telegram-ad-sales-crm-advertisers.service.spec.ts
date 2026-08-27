@@ -363,6 +363,79 @@ describe('TelegramAdSalesCrmAdvertisersService', () => {
     );
   });
 
+  it('attributes an unlinked legacy sale to the unique client with the same Telegram username', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-27T12:00:00.000Z'));
+    const { service, prisma } = createService();
+    prisma.telegramAdCrmWorkspaceSettings.findUnique.mockResolvedValue(null);
+    prisma.telegramAdvertiser.findMany.mockReturnValue('advertisers-query');
+    prisma.telegramAdvertiser.count.mockReturnValue('count-query');
+    prisma.$transaction.mockResolvedValue([
+      [
+        makeCrmAdvertiser({
+          displayName: '@Artur_Pikhulia',
+          telegramUsername: 'Artur_Pikhulia',
+          completedSalesCount: 0,
+          totalSalesCount: 0,
+          totalRevenueInPrimaryCurrency: decimal(0),
+          averageOrderValueInPrimaryCurrency: decimal(0),
+          firstPurchaseAt: null,
+          lastPurchaseAt: null,
+        }),
+      ],
+      1,
+    ]);
+    prisma.telegramAdSale.findMany.mockResolvedValue([
+      {
+        advertiserId: null,
+        advertiserName: '@Artur_Pikhulia',
+        advertiserNameSnapshot: '@Artur_Pikhulia',
+        advertiserTelegram: '@Artur_Pikhulia',
+        advertiserTelegramSnapshot: 'artur_pikhulia',
+        advertiserContact: null,
+        advertiserCompanySnapshot: null,
+        status: TelegramAdSaleStatus.CONFIRMED,
+        createdAt: new Date('2026-08-20T00:00:00.000Z'),
+        placements: [
+          {
+            id: 'placement-1',
+            status: TelegramAdPlacementStatus.SCHEDULED,
+            publishedAt: null,
+            plannedDeleteAt: null,
+            deletedAt: null,
+            agreedPrice: decimal(735),
+            telegramChannel: {
+              id: 'channel-1',
+              title: 'Channel 1',
+              photoUrl: null,
+            },
+          },
+        ],
+        payments: [
+          {
+            amount: decimal(735),
+            currency: 'UAH',
+            amountInPrimaryCurrency: decimal(735),
+          },
+        ],
+      },
+    ]);
+
+    const result = await service.listCrmAdvertisers('user-1', {
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        activityStatus: 'WAITING',
+        totalSalesCount: 1,
+        paidSalesCount: 1,
+        totalPlacementsCount: 1,
+        revenueByCurrency: [{ currency: 'UAH', amount: '735' }],
+      }),
+    );
+  });
+
   it('rolls unassigned sales into the No client fallback advertiser', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-08-08T12:00:00.000Z'));
     const { service, prisma } = createService();

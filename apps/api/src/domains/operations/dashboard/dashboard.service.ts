@@ -43,7 +43,9 @@ function dateRange(input?: { dateFrom?: string; dateTo?: string }) {
   const fallbackFrom = new Date(fallbackTo.getTime() - 29 * DAY);
   const from = startOfDay(parseDate(input?.dateFrom) ?? fallbackFrom);
   const to = endOfDay(parseDate(input?.dateTo) ?? fallbackTo);
-  return from <= to ? { from, to } : { from: startOfDay(to), to: endOfDay(from) };
+  return from <= to
+    ? { from, to }
+    : { from: startOfDay(to), to: endOfDay(from) };
 }
 
 function inRange(date: Date | null | undefined, from: Date, to: Date) {
@@ -73,8 +75,12 @@ export class DashboardService {
     private conversionService: CurrencyConversionService,
   ) {}
 
-  async summary(userId: string, input?: { dateFrom?: string; dateTo?: string }) {
-    const workspaceId = await this.workspaceService.resolveWorkspaceIdForUser(userId);
+  async summary(
+    userId: string,
+    input?: { dateFrom?: string; dateTo?: string },
+  ) {
+    const workspaceId =
+      await this.workspaceService.resolveWorkspaceIdForUser(userId);
     const { from, to } = dateRange(input);
     return this.buildSummary(workspaceId, from, to);
   }
@@ -85,8 +91,16 @@ export class DashboardService {
   }
 
   private async buildSummary(workspaceId: string, from: Date, to: Date) {
-    const [workspace, accounts, tx, campaigns, channels, hypotheses, members, investments] =
-      await Promise.all([
+    const [
+      workspace,
+      accounts,
+      tx,
+      campaigns,
+      channels,
+      hypotheses,
+      members,
+      investments,
+    ] = await Promise.all([
       this.prisma.workspace.findUniqueOrThrow({
         where: { id: workspaceId },
         select: { primaryCurrency: true, secondaryCurrency: true },
@@ -114,7 +128,7 @@ export class DashboardService {
         },
       }),
       this.prisma.transaction.findMany({
-        where: { workspaceId },
+        where: { workspaceId, deletedAt: null },
         include: {
           categoryRef: {
             include: {
@@ -183,7 +197,10 @@ export class DashboardService {
           },
         },
       }),
-      this.prisma.adHypothesis.findMany({ where: { workspaceId }, select: { id: true, status: true } }),
+      this.prisma.adHypothesis.findMany({
+        where: { workspaceId },
+        select: { id: true, status: true },
+      }),
       this.prisma.workspaceMember.count({ where: { workspaceId } }),
       this.prisma.investment.findMany({
         where: { workspaceId },
@@ -197,14 +214,17 @@ export class DashboardService {
 
     const periodTx = tx.filter((t) => inRange(t.date, from, to));
     const revenueTransactions = tx.filter(
-      (transaction) => categoryKey(transaction) === 'channel_advertising_revenue',
+      (transaction) =>
+        categoryKey(transaction) === 'channel_advertising_revenue',
     );
-    const periodRevenueTransactions = revenueTransactions.filter((transaction) =>
-      inRange(transaction.date, from, to),
+    const periodRevenueTransactions = revenueTransactions.filter(
+      (transaction) => inRange(transaction.date, from, to),
     );
-    const expenseTransactions = tx.filter((transaction) => transaction.type === 'expense');
-    const periodExpenseTransactions = expenseTransactions.filter((transaction) =>
-      inRange(transaction.date, from, to),
+    const expenseTransactions = tx.filter(
+      (transaction) => transaction.type === 'expense',
+    );
+    const periodExpenseTransactions = expenseTransactions.filter(
+      (transaction) => inRange(transaction.date, from, to),
     );
     const periodInvestments = investments.filter((investment) =>
       inRange(investment.date, from, to),
@@ -215,10 +235,14 @@ export class DashboardService {
       inRange(campaignDate(campaign), from, to),
     );
 
-    const income = periodRevenueTransactions
-      .reduce((a, t) => a + dec(t.amountInPrimaryCurrency), 0);
-    const expenses = periodExpenseTransactions
-      .reduce((a, t) => a + dec(t.amountInPrimaryCurrency), 0);
+    const income = periodRevenueTransactions.reduce(
+      (a, t) => a + dec(t.amountInPrimaryCurrency),
+      0,
+    );
+    const expenses = periodExpenseTransactions.reduce(
+      (a, t) => a + dec(t.amountInPrimaryCurrency),
+      0,
+    );
     const totalInvestedPrimary = investments.reduce(
       (sum, investment) => sum + dec(investment.amountInPrimaryCurrency),
       0,
@@ -242,7 +266,9 @@ export class DashboardService {
     );
     const periodDays = Math.max(
       1,
-      Math.round((startOfDay(to).getTime() - startOfDay(from).getTime()) / DAY) + 1,
+      Math.round(
+        (startOfDay(to).getTime() - startOfDay(from).getTime()) / DAY,
+      ) + 1,
     );
     const projectedMonthlyProfit = ((income - expenses) / periodDays) * 30;
     const projectedPaybackMonths =
@@ -294,52 +320,54 @@ export class DashboardService {
       const rate = await kpiRateCache.get(key)!;
       return rate == null ? null : amount * rate;
     };
-    const campaignsWithMtprotoMetrics = await Promise.all(campaigns.map(async (campaign) => {
-      const joinedCount = campaignJoinedCount(campaign);
-      const attributedCount = Math.max(
-        joinedCount,
-        sumInviteLinkAttributedSubscribers(campaign.inviteLinks),
-      );
-      const cpa =
-        attributedCount > 0
-          ? dec(campaign.priceInPrimaryCurrency) / attributedCount
-          : null;
-      const campaignCurrency = String(campaign.currency || '').toUpperCase();
-      const kpiCurrency = String(
-        campaign.telegramChannel?.kpiCurrency || campaignCurrency,
-      ).toUpperCase();
-      const nativeCost = dec(campaign.price);
-      const costInKpiCurrency =
-        campaignCurrency === kpiCurrency
-          ? nativeCost
-          : await convertCampaignCost(
-              nativeCost,
-              campaignCurrency,
-              kpiCurrency,
-            );
-      const cpaInKpiCurrency =
-        costInKpiCurrency != null && attributedCount > 0
-          ? costInKpiCurrency / attributedCount
-          : null;
-      return {
-        ...campaign,
-        joinedCount,
-        attributedCount,
-        leftCount: null,
-        netGrowthCount: null,
-        cpa,
-        overallStatus: resolveChannelKpiStatus({
-          avgCpa: cpaInKpiCurrency,
-          targetCpaFrom: campaign.telegramChannel?.targetCpaFrom,
-          targetCpa: campaign.telegramChannel?.targetCpa,
-          acceptableCpaFrom: campaign.telegramChannel?.acceptableCpaFrom,
-          acceptableCpa: campaign.telegramChannel?.acceptableCpa,
-          stopCpaFrom: campaign.telegramChannel?.stopCpaFrom,
-          stopCpa: campaign.telegramChannel?.stopCpa,
-        }),
-        attributionSource: 'mtproto_invite_link_usage',
-      };
-    }));
+    const campaignsWithMtprotoMetrics = await Promise.all(
+      campaigns.map(async (campaign) => {
+        const joinedCount = campaignJoinedCount(campaign);
+        const attributedCount = Math.max(
+          joinedCount,
+          sumInviteLinkAttributedSubscribers(campaign.inviteLinks),
+        );
+        const cpa =
+          attributedCount > 0
+            ? dec(campaign.priceInPrimaryCurrency) / attributedCount
+            : null;
+        const campaignCurrency = String(campaign.currency || '').toUpperCase();
+        const kpiCurrency = String(
+          campaign.telegramChannel?.kpiCurrency || campaignCurrency,
+        ).toUpperCase();
+        const nativeCost = dec(campaign.price);
+        const costInKpiCurrency =
+          campaignCurrency === kpiCurrency
+            ? nativeCost
+            : await convertCampaignCost(
+                nativeCost,
+                campaignCurrency,
+                kpiCurrency,
+              );
+        const cpaInKpiCurrency =
+          costInKpiCurrency != null && attributedCount > 0
+            ? costInKpiCurrency / attributedCount
+            : null;
+        return {
+          ...campaign,
+          joinedCount,
+          attributedCount,
+          leftCount: null,
+          netGrowthCount: null,
+          cpa,
+          overallStatus: resolveChannelKpiStatus({
+            avgCpa: cpaInKpiCurrency,
+            targetCpaFrom: campaign.telegramChannel?.targetCpaFrom,
+            targetCpa: campaign.telegramChannel?.targetCpa,
+            acceptableCpaFrom: campaign.telegramChannel?.acceptableCpaFrom,
+            acceptableCpa: campaign.telegramChannel?.acceptableCpa,
+            stopCpaFrom: campaign.telegramChannel?.stopCpaFrom,
+            stopCpa: campaign.telegramChannel?.stopCpa,
+          }),
+          attributionSource: 'mtproto_invite_link_usage',
+        };
+      }),
+    );
     const periodCampaigns = campaignsWithMtprotoMetrics.filter((campaign) =>
       inRange(campaignDate(campaign), from, to),
     );
@@ -347,9 +375,7 @@ export class DashboardService {
       (sum, campaign) => sum + campaign.joinedCount,
       0,
     );
-    const cpas = periodCampaigns
-      .map((c) => dec(c.cpa))
-      .filter((x) => x > 0);
+    const cpas = periodCampaigns.map((c) => dec(c.cpa)).filter((x) => x > 0);
     const rankedCampaigns = periodCampaigns.filter(
       (campaign) =>
         campaign.joinedCount > 0 &&
@@ -366,11 +392,11 @@ export class DashboardService {
           .filter((t) => t.accountId === account.id && t.type === 'expense')
           .reduce((a, t) => a + dec(t.amount), 0);
         const outgoing = await this.prisma.transfer.aggregate({
-          where: { workspaceId, fromAccountId: account.id },
+          where: { workspaceId, deletedAt: null, fromAccountId: account.id },
           _sum: { fromAmount: true },
         });
         const incoming = await this.prisma.transfer.aggregate({
-          where: { workspaceId, toAccountId: account.id },
+          where: { workspaceId, deletedAt: null, toAccountId: account.id },
           _sum: { toAmount: true },
         });
         const balance =
@@ -407,25 +433,41 @@ export class DashboardService {
     const cumulativeBeforePeriod =
       revenueTransactions
         .filter((transaction) => transaction.date < from)
-        .reduce((sum, transaction) => sum + dec(transaction.amountInPrimaryCurrency), 0) -
+        .reduce(
+          (sum, transaction) => sum + dec(transaction.amountInPrimaryCurrency),
+          0,
+        ) -
       expenseTransactions
         .filter((transaction) => transaction.date < from)
-        .reduce((sum, transaction) => sum + dec(transaction.amountInPrimaryCurrency), 0) -
+        .reduce(
+          (sum, transaction) => sum + dec(transaction.amountInPrimaryCurrency),
+          0,
+        ) -
       investments
         .filter((investment) => investment.date < from)
-        .reduce((sum, investment) => sum + dec(investment.amountInPrimaryCurrency), 0);
+        .reduce(
+          (sum, investment) => sum + dec(investment.amountInPrimaryCurrency),
+          0,
+        );
 
-    const dailyMap = new Map<string, {
-      date: string;
-      income: number;
-      expenses: number;
-      profit: number;
-      investments: number;
-      cumulativeProfitAfterInvestments: number;
-      adSpend: number;
-      joined: number;
-    }>();
-    for (let time = startOfDay(from).getTime(); time <= startOfDay(to).getTime(); time += DAY) {
+    const dailyMap = new Map<
+      string,
+      {
+        date: string;
+        income: number;
+        expenses: number;
+        profit: number;
+        investments: number;
+        cumulativeProfitAfterInvestments: number;
+        adSpend: number;
+        joined: number;
+      }
+    >();
+    for (
+      let time = startOfDay(from).getTime();
+      time <= startOfDay(to).getTime();
+      time += DAY
+    ) {
       const date = isoDay(new Date(time));
       dailyMap.set(date, {
         date,
@@ -467,8 +509,22 @@ export class DashboardService {
       row.cumulativeProfitAfterInvestments = cumulativeProfitAfterInvestments;
     }
 
-    const categoryMap = new Map<string, { id?: string | null; name: string; type: string; amount: number; count: number; iconId?: string | null; icon?: Parameters<typeof iconToResolvedEmoji>[0] | null }>();
-    for (const transaction of [...periodRevenueTransactions, ...periodExpenseTransactions]) {
+    const categoryMap = new Map<
+      string,
+      {
+        id?: string | null;
+        name: string;
+        type: string;
+        amount: number;
+        count: number;
+        iconId?: string | null;
+        icon?: Parameters<typeof iconToResolvedEmoji>[0] | null;
+      }
+    >();
+    for (const transaction of [
+      ...periodRevenueTransactions,
+      ...periodExpenseTransactions,
+    ]) {
       const category = transaction.categoryRef;
       const key = `${transaction.type}:${transaction.categoryId ?? transaction.category}`;
       const current = categoryMap.get(key) ?? {
@@ -485,7 +541,18 @@ export class DashboardService {
       categoryMap.set(key, current);
     }
 
-    const channelAdMap = new Map<string, { id: string; title: string; username?: string | null; photoUrl?: string | null; spend: number; joined: number; campaigns: number }>();
+    const channelAdMap = new Map<
+      string,
+      {
+        id: string;
+        title: string;
+        username?: string | null;
+        photoUrl?: string | null;
+        spend: number;
+        joined: number;
+        campaigns: number;
+      }
+    >();
     for (const campaign of periodCampaigns) {
       const channel = campaign.telegramChannel;
       const current = channelAdMap.get(channel.id) ?? {
@@ -522,30 +589,48 @@ export class DashboardService {
       revenueByChannelId.set(channelId, current);
     }
 
-    const ownChannels = channels.filter((channel) => channel.adminLinks.length > 0);
-    const externalChannels = channels.filter((channel) => channel.adminLinks.length === 0);
+    const ownChannels = channels.filter(
+      (channel) => channel.adminLinks.length > 0,
+    );
+    const externalChannels = channels.filter(
+      (channel) => channel.adminLinks.length === 0,
+    );
     const totalSubscribers = ownChannels.reduce((sum, channel) => {
       const latest = channel.audienceSnapshots[0];
-      return sum + Number(latest?.subscribersCount ?? channel.currentSubscribersCount ?? 0);
+      return (
+        sum +
+        Number(latest?.subscribersCount ?? channel.currentSubscribersCount ?? 0)
+      );
     }, 0);
     const activeSubscribersEstimate = ownChannels.reduce((sum, channel) => {
       const latest = channel.audienceSnapshots[0];
       return sum + Number(latest?.activeSubscribersEstimate ?? 0);
     }, 0);
-    const anomalousChannelsCount = ownChannels.filter((channel) => channel.audienceSnapshots[0]?.hasExternalTrafficAnomaly).length;
-    const campaignStatusCounts = campaigns.reduce<Record<string, number>>((acc, campaign) => {
-      acc[campaign.status] = (acc[campaign.status] ?? 0) + 1;
-      return acc;
-    }, {});
-    const adQualityCounts = periodCampaigns.reduce<Record<string, number>>((acc, campaign) => {
-      const key = campaign.overallStatus || 'unknown';
-      acc[key] = (acc[key] ?? 0) + 1;
-      return acc;
-    }, {});
-    const hypothesisStatusCounts = hypotheses.reduce<Record<string, number>>((acc, hypothesis) => {
-      acc[hypothesis.status] = (acc[hypothesis.status] ?? 0) + 1;
-      return acc;
-    }, {});
+    const anomalousChannelsCount = ownChannels.filter(
+      (channel) => channel.audienceSnapshots[0]?.hasExternalTrafficAnomaly,
+    ).length;
+    const campaignStatusCounts = campaigns.reduce<Record<string, number>>(
+      (acc, campaign) => {
+        acc[campaign.status] = (acc[campaign.status] ?? 0) + 1;
+        return acc;
+      },
+      {},
+    );
+    const adQualityCounts = periodCampaigns.reduce<Record<string, number>>(
+      (acc, campaign) => {
+        const key = campaign.overallStatus || 'unknown';
+        acc[key] = (acc[key] ?? 0) + 1;
+        return acc;
+      },
+      {},
+    );
+    const hypothesisStatusCounts = hypotheses.reduce<Record<string, number>>(
+      (acc, hypothesis) => {
+        acc[hypothesis.status] = (acc[hypothesis.status] ?? 0) + 1;
+        return acc;
+      },
+      {},
+    );
 
     return {
       period: { dateFrom: isoDay(from), dateTo: isoDay(to) },
@@ -642,7 +727,9 @@ export class DashboardService {
             title: channel.title,
             username: channel.username,
             photoUrl: channel.photoUrl,
-            subscribers: Number(latest?.subscribersCount ?? channel.currentSubscribersCount ?? 0),
+            subscribers: Number(
+              latest?.subscribersCount ?? channel.currentSubscribersCount ?? 0,
+            ),
             activeSubscribers: Number(latest?.activeSubscribersEstimate ?? 0),
             viewRate: latest?.viewRate ?? null,
             dataQuality: latest?.dataQuality ?? 'unknown',

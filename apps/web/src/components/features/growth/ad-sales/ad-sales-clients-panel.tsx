@@ -163,6 +163,8 @@ export function AdSalesClientsPanel() {
   });
 
   const clients = clientsQuery.data?.items ?? [];
+  const clientsLoading =
+    clientsQuery.isLoading || clientsQuery.isPlaceholderData;
   const nowMs = clientsQuery.dataUpdatedAt;
   const overdueTaskCount = clients.filter((client) =>
     client.nextOpenTask?.dueAt
@@ -327,13 +329,13 @@ export function AdSalesClientsPanel() {
         ) : null}
       </Card>
 
-      {clientsQuery.isLoading ? (
-        <ClientsCardSkeleton />
+      {clientsLoading ? (
+        <ClientsCardSkeleton count={clients.length || pageSize} />
       ) : null}
       {clientsQuery.error ? (
         <ErrorState text="Could not load ad-sales clients." />
       ) : null}
-      {!clientsQuery.isLoading && !clientsQuery.error ? (
+      {!clientsLoading && !clientsQuery.error ? (
         <AdSalesClientsTable
           clients={clients}
           overdueTaskCount={overdueTaskCount}
@@ -362,17 +364,18 @@ export function AdSalesClientsPanel() {
             setPageSize(value);
             setPage(1);
           }}
+          loading={clientsLoading}
         />
       ) : null}
     </div>
   );
 }
 
-function ClientsCardSkeleton() {
+function ClientsCardSkeleton({ count }: { count: number }) {
   return (
     <div aria-label="Loading clients">
       <div className="columns-1 gap-4 md:columns-2 xl:columns-3">
-        {Array.from({ length: 6 }, (_, index) => (
+        {Array.from({ length: count }, (_, index) => (
           <div
             key={index}
             className="mb-4 break-inside-avoid rounded-lg border border-neutral-800 bg-neutral-950 p-3"

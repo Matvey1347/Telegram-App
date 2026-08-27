@@ -4,15 +4,14 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { AppShell } from '@/components/layout/app-shell';
-import { Account, accountsApi, currenciesApi, type CurrencySettings, type ExchangeRate } from '@/lib/api';
-import { InlineIconPicker } from '@/components/icons/inline-icon-picker';
-import { MoneyStack } from '@/components/ui/money-stack';
-import { Button, ConfirmDeleteModal, CurrencySelect, EmptyState, EntityCard, FormField, Input, LoadingState, MasonryGrid, Modal, PageHeader, IconButton } from '@/components/ui/primitives';
+import { Account, accountsApi, currenciesApi } from '@/lib/api';
+import { Button, ConfirmDeleteModal, CurrencySelect, EmptyState, EntityCard, FormField, Input, LoadingState, MasonryGrid, Modal, PageHeader } from '@/components/ui/primitives';
 import { IconPicker } from '@/components/icons/icon-picker';
 import { MemberSelect } from '@/components/features/workspace/member-select';
-import { AccountName } from '@/components/features/finance/accounts/account-name';
 import { useAppToast } from '@/providers/toast-provider';
 import { pushFinanceMutationToast } from '@/lib/features/finance/finance-mutation-toast';
+import { FinanceActionMenu } from '@/components/features/finance/internal/finance-action-menu';
+import { AccountPreview, CurrencyAmount } from '@/components/features/finance/internal/finance-format';
 
 type Values = { name: string; currency: string; initialBalance: number; iconId?: string | null; assignedMemberId?: string | null };
 
@@ -24,7 +23,6 @@ export default function AccountsPage() {
   const [deleting, setDeleting] = useState<Account | null>(null);
   const { data, isLoading, error } = useQuery({ queryKey: ['accounts'], queryFn: accountsApi.list });
   const { data: settings } = useQuery({ queryKey: ['currency-settings'], queryFn: currenciesApi.getSettings });
-  const { data: rates } = useQuery({ queryKey: ['currency-rates'], queryFn: currenciesApi.listRates });
   const showInitialLoading = isLoading && !data;
 
   const createMutation = useMutation({
@@ -53,7 +51,6 @@ export default function AccountsPage() {
       });
     },
   });
-  const updateIconMutation = useMutation({ mutationFn: ({ id, iconId }: { id: string; iconId: string | null }) => accountsApi.update(id, { iconId }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['accounts'] }); } });
   const deleteMutation = useMutation({ mutationFn: (id: string) => accountsApi.remove(id), onSuccess: () => { qc.invalidateQueries({ queryKey: ['accounts'] }); setDeleting(null); } });
 
   return <AppShell>
@@ -61,12 +58,12 @@ export default function AccountsPage() {
     {showInitialLoading ? <LoadingState /> : null}
     {error ? <div className="text-red-300">Failed to load accounts</div> : null}
     <MasonryGrid>
-      {data?.map((a) => <EntityCard key={a.id} title={<div className="flex items-center gap-2"><InlineIconPicker iconId={a.iconId ?? null} icon={a.iconPresentation} onChange={(iconId) => updateIconMutation.mutate({ id: a.id, iconId })} /><AccountName account={a} /></div>} actions={<div className="flex gap-2"><IconButton onClick={() => setEditing(a)} /><IconButton kind="delete" onClick={() => setDeleting(a)} /></div>}>
+      {data?.map((a) => <EntityCard key={a.id} title={<AccountPreview account={a} />} actions={<FinanceActionMenu label={a.name} onEdit={() => setEditing(a)} onDelete={() => setDeleting(a)} />}>
         <div className="mb-2 flex items-center justify-between gap-2">
-          <MoneyStack amount={a.balance ?? a.calculatedBalance} currency={a.currency} settings={settings} rates={rates} amountInPrimary={a.convertedCurrency === settings?.primaryCurrency ? a.convertedBalance : null} />
+          <CurrencyAmount amount={a.balance ?? a.calculatedBalance} currency={a.currency} className="text-2xl font-semibold text-white" />
           <span className="rounded-full border border-neutral-700 px-2 py-1 text-xs">{a.currency}</span>
         </div>
-        <AccountStatsSummary account={a} settings={settings} rates={rates} />
+        <div className="text-xs text-neutral-500">{a.transactionStats?.count ?? 0} transactions</div>
       </EntityCard>)}
     </MasonryGrid>
     {!isLoading && !error && !data?.length ? <EmptyState text="No accounts yet" /> : null}
@@ -75,42 +72,6 @@ export default function AccountsPage() {
     <AccountModal open={!!editing} title="Edit Account" currencies={settings?.supportedCurrencies ?? []} initial={editing ?? undefined} onClose={() => setEditing(null)} onSubmit={(v) => { if (!editing) return; setEditing(null); updateMutation.mutate({ id: editing.id, payload: { ...v, currency: v.currency.toUpperCase(), initialBalance: Number(v.initialBalance) } }); }} />
     <ConfirmDeleteModal open={!!deleting} entityName={deleting?.name ?? ''} onClose={() => setDeleting(null)} onConfirm={() => deleting ? deleteMutation.mutateAsync(deleting.id) : undefined} label="Archive" />
   </AppShell>;
-}
-
-function AccountStatsSummary({ account, settings, rates }: { account: Account; settings?: CurrencySettings; rates?: ExchangeRate[] }) {
-  const stats = account.transactionStats;
-  const count = stats?.count ?? 0;
-  const received = Number(stats?.received ?? 0);
-  const spent = Number(stats?.spent ?? 0);
-  const transferredIn = Number(stats?.transferredIn ?? 0);
-  const transferredOut = Number(stats?.transferredOut ?? 0);
-  const delta = Number(stats?.delta ?? 0);
-
-  return (
-    <div className="mt-3 space-y-1.5 text-xs leading-snug text-neutral-500">
-      <div>{count} {count === 1 ? 'transaction' : 'transactions'}</div>
-      <div className="grid gap-1">
-        <AccountStatLine label="Received" value={received} currency={account.currency} settings={settings} rates={rates} tone="positive" />
-        <AccountStatLine label="Spent" value={spent} currency={account.currency} settings={settings} rates={rates} tone="negative" />
-        <AccountStatLine label="Transferred in" value={transferredIn} currency={account.currency} settings={settings} rates={rates} tone="positive" />
-        <AccountStatLine label="Transferred out" value={transferredOut} currency={account.currency} settings={settings} rates={rates} tone="negative" />
-        {delta !== 0 ? (
-          <AccountStatLine label="Delta" value={delta} currency={account.currency} settings={settings} rates={rates} tone={delta > 0 ? 'positive' : 'negative'} />
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function AccountStatLine({ label, value, currency, settings, rates, tone }: { label: string; value: number; currency: string; settings?: CurrencySettings; rates?: ExchangeRate[]; tone: 'positive' | 'negative' }) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <span>{label}</span>
-      <span className={`font-medium ${tone === 'positive' ? 'text-emerald-300' : 'text-rose-300'}`}>
-        <MoneyStack amount={value} currency={currency} settings={settings} rates={rates} mainClassName="text-xs font-medium" subClassName="text-[11px] text-neutral-500" />
-      </span>
-    </div>
-  );
 }
 
 function AccountModal({ open, onClose, onSubmit, title, initial, currencies }: { open: boolean; onClose: () => void; onSubmit: (v: Values) => void; title: string; initial?: Account; currencies: string[] }) {

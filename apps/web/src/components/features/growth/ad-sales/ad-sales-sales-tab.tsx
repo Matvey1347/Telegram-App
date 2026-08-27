@@ -260,7 +260,12 @@ export function SalesTab(props: {
         </div>
       ) : null}
 
-      {props.loading ? <TableLoadingState columns={4} rows={6} /> : null}
+      {props.loading ? (
+        <TableLoadingState
+          columns={props.embedded ? 4 : 5}
+          rows={props.sales.length || props.pageSize}
+        />
+      ) : null}
       {props.error ? <ErrorState text="Could not load ad sales." /> : null}
       {!props.loading && !props.error ? (
         <div className={`${panelClass} overflow-hidden`}>
@@ -508,13 +513,14 @@ export function SalesTab(props: {
           hasPreviousPage={props.pagination.hasPreviousPage}
           onPageChange={props.onPageChange}
           onPageSizeChange={props.onPageSizeChange}
+          loading={props.loading}
         />
       ) : null}
       <ConfirmDeleteModal
         open={Boolean(deleteSale)}
         onClose={() => setDeleteSale(null)}
         entityName={deleteSale ? clientLabel(deleteSale) : "deal"}
-        description="The deal and its placements will be deleted. Existing finance transactions will remain in the ledger."
+        description="The deal, its placements, finance transactions, and linked posts will be deleted from the system. Published posts will also be deleted from Telegram."
         onConfirm={async () => {
           if (!deleteSale) return;
           await props.onDeleteSale(deleteSale);

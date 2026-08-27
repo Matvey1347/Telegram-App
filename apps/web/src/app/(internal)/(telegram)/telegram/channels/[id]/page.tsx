@@ -13,7 +13,12 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useParams } from "next/navigation";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   Clock3,
   ChevronDown,
@@ -44,7 +49,10 @@ import { AppShell } from "@/components/layout/app-shell";
 import { PageTabHead } from "@/components/layout/page-tab-head";
 import { IconPicker } from "@/components/icons/icon-picker";
 import { ChannelPreview } from "@/components/features/telegram/telegram/channel-preview";
-import { ChannelAccessBadge, telegramChannelAccessLabel } from "@/components/features/telegram/telegram/channel-access-badge";
+import {
+  ChannelAccessBadge,
+  telegramChannelAccessLabel,
+} from "@/components/features/telegram/telegram/channel-access-badge";
 import { InviteLinksTable } from "@/components/features/telegram/telegram/invite-links-table";
 import { TelegramPostPreviewModal } from "@/components/features/telegram/telegram/post-preview-modal";
 import { TelegramSourceAvatar } from "@/components/features/telegram/telegram/telegram-source-avatar";
@@ -62,6 +70,7 @@ import {
   PageHeader,
   Select,
   Skeleton,
+  TableLoadingState,
   TimeInput,
   TooltipBubble,
 } from "@/components/ui/primitives";
@@ -84,8 +93,15 @@ import {
 } from "@/lib/api";
 import { usePagination } from "@/hooks/use-pagination";
 import { scheduleProgressDismiss, syncProgressToToast } from "@/lib/progress";
-import { currencyKeys, telegramChannelKeys, telegramPostKeys } from "@/lib/query-keys";
-import { invalidateTelegramChannelQueries, reconcileTelegramChannelSettings } from "@/lib/features/telegram/telegram-query-invalidation";
+import {
+  currencyKeys,
+  telegramChannelKeys,
+  telegramPostKeys,
+} from "@/lib/query-keys";
+import {
+  invalidateTelegramChannelQueries,
+  reconcileTelegramChannelSettings,
+} from "@/lib/features/telegram/telegram-query-invalidation";
 import { useAppToast } from "@/providers/toast-provider";
 
 function formatLocalDate(value?: string | Date | null) {
@@ -180,8 +196,8 @@ function hasPositiveValue(value: unknown) {
 function hasKpiSettings(channel?: TelegramChannel) {
   return Boolean(
     channel?.targetCpa != null ||
-      channel?.acceptableCpa != null ||
-      channel?.stopCpa != null,
+    channel?.acceptableCpa != null ||
+    channel?.stopCpa != null,
   );
 }
 
@@ -247,20 +263,26 @@ function syncSelectionFromChannel(
 ): TelegramChannelSyncSelection {
   return {
     syncIncludePublicInfo:
-      channel?.syncIncludePublicInfo ?? DEFAULT_SYNC_SELECTION.syncIncludePublicInfo,
+      channel?.syncIncludePublicInfo ??
+      DEFAULT_SYNC_SELECTION.syncIncludePublicInfo,
     syncIncludeInviteLinks:
-      channel?.syncIncludeInviteLinks ?? DEFAULT_SYNC_SELECTION.syncIncludeInviteLinks,
+      channel?.syncIncludeInviteLinks ??
+      DEFAULT_SYNC_SELECTION.syncIncludeInviteLinks,
     syncIncludeHistoricalPosts:
       channel?.syncIncludeHistoricalPosts ??
       DEFAULT_SYNC_SELECTION.syncIncludeHistoricalPosts,
     syncIncludePostMetrics:
-      channel?.syncIncludePostMetrics ?? DEFAULT_SYNC_SELECTION.syncIncludePostMetrics,
+      channel?.syncIncludePostMetrics ??
+      DEFAULT_SYNC_SELECTION.syncIncludePostMetrics,
     syncIncludeOlderPosts:
-      channel?.syncIncludeOlderPosts ?? DEFAULT_SYNC_SELECTION.syncIncludeOlderPosts,
+      channel?.syncIncludeOlderPosts ??
+      DEFAULT_SYNC_SELECTION.syncIncludeOlderPosts,
     syncIncludeChannelStats:
-      channel?.syncIncludeChannelStats ?? DEFAULT_SYNC_SELECTION.syncIncludeChannelStats,
+      channel?.syncIncludeChannelStats ??
+      DEFAULT_SYNC_SELECTION.syncIncludeChannelStats,
     syncIncludeManagedPosts:
-      channel?.syncIncludeManagedPosts ?? DEFAULT_SYNC_SELECTION.syncIncludeManagedPosts,
+      channel?.syncIncludeManagedPosts ??
+      DEFAULT_SYNC_SELECTION.syncIncludeManagedPosts,
     syncIncludeAudienceSnapshot:
       channel?.syncIncludeAudienceSnapshot ??
       DEFAULT_SYNC_SELECTION.syncIncludeAudienceSnapshot,
@@ -274,7 +296,9 @@ function channelSectionsStorageKey(channelId: string) {
 function readStoredChannelSections(channelId: string): ChannelSectionState {
   if (typeof window === "undefined") return closedChannelSections;
   try {
-    const raw = window.localStorage.getItem(channelSectionsStorageKey(channelId));
+    const raw = window.localStorage.getItem(
+      channelSectionsStorageKey(channelId),
+    );
     if (!raw) return closedChannelSections;
     const parsed = JSON.parse(raw) as Partial<ChannelSectionState>;
     return {
@@ -299,9 +323,8 @@ export default function TelegramChannelAnalyticsPage() {
   );
   const [syncScopeOpen, setSyncScopeOpen] = useState(false);
   const [syncStatusOpen, setSyncStatusOpen] = useState(false);
-  const [syncSelection, setSyncSelection] = useState<TelegramChannelSyncSelection>(
-    DEFAULT_SYNC_SELECTION,
-  );
+  const [syncSelection, setSyncSelection] =
+    useState<TelegramChannelSyncSelection>(DEFAULT_SYNC_SELECTION);
   const [rangeMode, setRangeMode] = useState<"30d" | "all" | "custom">("30d");
   const [customFrom, setCustomFrom] = useState(thirtyDaysAgoIso);
   const [customTo, setCustomTo] = useState(todayIso);
@@ -355,13 +378,11 @@ export default function TelegramChannelAnalyticsPage() {
     queryKey: telegramChannelKeys.audience(id),
     queryFn: () => telegramChannelsApi.audience(id),
   });
-  const {
-    data: financialSummary,
-    isLoading: isFinancialSummaryLoading,
-  } = useQuery({
-    queryKey: telegramChannelKeys.financialSummary(id),
-    queryFn: () => telegramChannelsApi.financialSummary(id),
-  });
+  const { data: financialSummary, isLoading: isFinancialSummaryLoading } =
+    useQuery({
+      queryKey: telegramChannelKeys.financialSummary(id),
+      queryFn: () => telegramChannelsApi.financialSummary(id),
+    });
   const {
     data: audienceSnapshots = [],
     isLoading: isAudienceSnapshotsLoading,
@@ -372,6 +393,7 @@ export default function TelegramChannelAnalyticsPage() {
   const {
     data: postsData,
     isLoading: isPostsLoading,
+    isPlaceholderData: isPostsPlaceholderData,
     isFetching: isPostsFetching,
     error: postsError,
   } = useQuery({
@@ -388,10 +410,12 @@ export default function TelegramChannelAnalyticsPage() {
         search: postsSearch.trim() || undefined,
       }),
     enabled: openSections.posts,
+    placeholderData: keepPreviousData,
   });
   const {
     data: inviteLinksData,
     isLoading: isInviteLinksLoading,
+    isPlaceholderData: isInviteLinksPlaceholderData,
     isFetching: isInviteLinksFetching,
   } = useQuery({
     queryKey: telegramChannelKeys.inviteLinksPage(
@@ -407,10 +431,12 @@ export default function TelegramChannelAnalyticsPage() {
         search: inviteLinksSearch.trim() || undefined,
       }),
     enabled: openSections.inviteLinks,
+    placeholderData: keepPreviousData,
   });
   const {
     data: campaignsData,
     isLoading: isCampaignsLoading,
+    isPlaceholderData: isCampaignsPlaceholderData,
     isFetching: isCampaignsFetching,
   } = useQuery({
     queryKey: telegramChannelKeys.campaignsPage(
@@ -427,7 +453,12 @@ export default function TelegramChannelAnalyticsPage() {
         search: campaignsSearch.trim() || undefined,
       }),
     enabled: openSections.campaigns,
+    placeholderData: keepPreviousData,
   });
+  const showPostsLoading = isPostsLoading || isPostsPlaceholderData;
+  const showInviteLinksLoading =
+    isInviteLinksLoading || isInviteLinksPlaceholderData;
+  const showCampaignsLoading = isCampaignsLoading || isCampaignsPlaceholderData;
   const { data: currencySettings } = useQuery({
     queryKey: currencyKeys.settings(),
     queryFn: currenciesApi.getSettings,
@@ -466,12 +497,15 @@ export default function TelegramChannelAnalyticsPage() {
       knownFakeSubscribersCount: String(source.knownFakeSubscribersCount ?? 0),
       ownViewsPerPost: String(source.ownViewsPerPost ?? 0),
       ownReactionsPerPost: String(source.ownReactionsPerPost ?? 0),
-      kpiCurrency: source.kpiCurrency || currencySettings?.primaryCurrency || "USD",
+      kpiCurrency:
+        source.kpiCurrency || currencySettings?.primaryCurrency || "USD",
       targetCpaFrom:
         source.targetCpaFrom == null ? "" : String(source.targetCpaFrom),
       targetCpa: source.targetCpa == null ? "" : String(source.targetCpa),
       acceptableCpaFrom:
-        source.acceptableCpaFrom == null ? "" : String(source.acceptableCpaFrom),
+        source.acceptableCpaFrom == null
+          ? ""
+          : String(source.acceptableCpaFrom),
       acceptableCpa:
         source.acceptableCpa == null ? "" : String(source.acceptableCpa),
       stopCpaFrom:
@@ -481,19 +515,21 @@ export default function TelegramChannelAnalyticsPage() {
             : String(source.stopCpa)
           : String(source.stopCpaFrom),
       stopCpa: "",
-      timePosts: (source.timePosts || []).map((item: {
-        id: string;
-        title: string;
-        time: string;
-        iconId?: string | null;
-        iconPresentation?: ResolvedEmoji | null;
-      }) => ({
-        id: item.id,
-        title: item.title,
-        time: item.time,
-        iconId: item.iconId || null,
-        iconPresentation: item.iconPresentation || null,
-      })),
+      timePosts: (source.timePosts || []).map(
+        (item: {
+          id: string;
+          title: string;
+          time: string;
+          iconId?: string | null;
+          iconPresentation?: ResolvedEmoji | null;
+        }) => ({
+          id: item.id,
+          title: item.title,
+          time: item.time,
+          iconId: item.iconId || null,
+          iconPresentation: item.iconPresentation || null,
+        }),
+      ),
     });
   }, [channel, data?.channel]);
 
@@ -503,20 +539,26 @@ export default function TelegramChannelAnalyticsPage() {
       const progressTitle = `Sync ${channel?.title || "channel"}`;
       const syncSelection: TelegramChannelSyncSelection = {
         syncIncludePublicInfo:
-          payload.syncIncludePublicInfo ?? DEFAULT_SYNC_SELECTION.syncIncludePublicInfo,
+          payload.syncIncludePublicInfo ??
+          DEFAULT_SYNC_SELECTION.syncIncludePublicInfo,
         syncIncludeInviteLinks:
-          payload.syncIncludeInviteLinks ?? DEFAULT_SYNC_SELECTION.syncIncludeInviteLinks,
+          payload.syncIncludeInviteLinks ??
+          DEFAULT_SYNC_SELECTION.syncIncludeInviteLinks,
         syncIncludeHistoricalPosts:
           payload.syncIncludeHistoricalPosts ??
           DEFAULT_SYNC_SELECTION.syncIncludeHistoricalPosts,
         syncIncludePostMetrics:
-          payload.syncIncludePostMetrics ?? DEFAULT_SYNC_SELECTION.syncIncludePostMetrics,
+          payload.syncIncludePostMetrics ??
+          DEFAULT_SYNC_SELECTION.syncIncludePostMetrics,
         syncIncludeOlderPosts:
-          payload.syncIncludeOlderPosts ?? DEFAULT_SYNC_SELECTION.syncIncludeOlderPosts,
+          payload.syncIncludeOlderPosts ??
+          DEFAULT_SYNC_SELECTION.syncIncludeOlderPosts,
         syncIncludeChannelStats:
-          payload.syncIncludeChannelStats ?? DEFAULT_SYNC_SELECTION.syncIncludeChannelStats,
+          payload.syncIncludeChannelStats ??
+          DEFAULT_SYNC_SELECTION.syncIncludeChannelStats,
         syncIncludeManagedPosts:
-          payload.syncIncludeManagedPosts ?? DEFAULT_SYNC_SELECTION.syncIncludeManagedPosts,
+          payload.syncIncludeManagedPosts ??
+          DEFAULT_SYNC_SELECTION.syncIncludeManagedPosts,
         syncIncludeAudienceSnapshot:
           payload.syncIncludeAudienceSnapshot ??
           DEFAULT_SYNC_SELECTION.syncIncludeAudienceSnapshot,
@@ -591,13 +633,19 @@ export default function TelegramChannelAnalyticsPage() {
 
   const settingsMutation = useMutation({
     mutationFn: (nextSettings: SettingsState) =>
-      telegramChannelsApi.updateQuiet(id, buildChannelSettingsPayload(nextSettings)),
+      telegramChannelsApi.updateQuiet(
+        id,
+        buildChannelSettingsPayload(nextSettings),
+      ),
     onSuccess: (updatedChannel) => {
       void reconcileTelegramChannelSettings(queryClient, updatedChannel);
       pushToast("Settings saved.", "success");
     },
     onError: (error: any) =>
-      pushToast(error?.response?.data?.message || "Failed to save settings.", "error"),
+      pushToast(
+        error?.response?.data?.message || "Failed to save settings.",
+        "error",
+      ),
   });
 
   const manualMetricsMutation = useMutation({
@@ -613,7 +661,9 @@ export default function TelegramChannelAnalyticsPage() {
       };
     }) => telegramChannelsApi.updatePostManualMetrics(id, postId, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: telegramPostKeys.channelPosts(id) });
+      queryClient.invalidateQueries({
+        queryKey: telegramPostKeys.channelPosts(id),
+      });
       queryClient.invalidateQueries({
         queryKey: telegramChannelKeys.audience(id),
       });
@@ -632,10 +682,7 @@ export default function TelegramChannelAnalyticsPage() {
       ),
   });
 
-  const posts = useMemo(
-    () => postsData?.items || [],
-    [postsData?.items],
-  );
+  const posts = useMemo(() => postsData?.items || [], [postsData?.items]);
   const visiblePosts = useMemo(
     () =>
       posts.filter(
@@ -667,8 +714,10 @@ export default function TelegramChannelAnalyticsPage() {
       mtprotoGraphConfigs
         .map((config) => {
           const chart =
-          normalizeStoredTelegramGraph(data?.channelStatsPoints, config.key) ||
-          normalizeTelegramGraph(mtprotoStats?.graphs?.[config.key]);
+            normalizeStoredTelegramGraph(
+              data?.channelStatsPoints,
+              config.key,
+            ) || normalizeTelegramGraph(mtprotoStats?.graphs?.[config.key]);
           return {
             ...config,
             chart,
@@ -677,7 +726,9 @@ export default function TelegramChannelAnalyticsPage() {
         .filter(hasRenderableTelegramGraphItem),
     [data?.channelStatsPoints, mtprotoStats],
   );
-  const activeChannel = (channel || data?.channel) as TelegramChannel | undefined;
+  const activeChannel = (channel || data?.channel) as
+    | TelegramChannel
+    | undefined;
   const isInitialPageLoading =
     (!data && isLoading) || (!activeChannel && isChannelLoading);
   const showAudiencePanelSkeleton = !audience && isAudienceLoading;
@@ -685,9 +736,7 @@ export default function TelegramChannelAnalyticsPage() {
     !financialSummary && isFinancialSummaryLoading;
   const ownViewsPerPost = Math.max(
     0,
-    toNumber(
-      activeChannel?.ownViewsPerPost ?? settings.ownViewsPerPost,
-    ),
+    toNumber(activeChannel?.ownViewsPerPost ?? settings.ownViewsPerPost),
   );
   const ownReactionsPerPost = Math.max(
     0,
@@ -697,11 +746,11 @@ export default function TelegramChannelAnalyticsPage() {
   );
   const hasKpi = Boolean(
     settings.targetCpaFrom ||
-      settings.targetCpa ||
-      settings.acceptableCpaFrom ||
-      settings.acceptableCpa ||
-      settings.stopCpaFrom ||
-      settings.stopCpa,
+    settings.targetCpa ||
+    settings.acceptableCpaFrom ||
+    settings.acceptableCpa ||
+    settings.stopCpaFrom ||
+    settings.stopCpa,
   );
 
   const computed = useMemo(() => {
@@ -782,7 +831,7 @@ export default function TelegramChannelAnalyticsPage() {
       ? adjustedViewsTotal / viewedPosts.length
       : effectivePostsCount > 0
         ? adjustedViewsTotal / effectivePostsCount
-      : null;
+        : null;
     const averageEligibleViews = eligiblePosts.length
       ? eligiblePosts.reduce(
           (sum: number, post: any) =>
@@ -1017,7 +1066,11 @@ export default function TelegramChannelAnalyticsPage() {
             <KpiSettingsControl
               settings={settings}
               setSettings={setSettings}
-              currencies={currencySettings?.supportedCurrencies || [currencySettings?.primaryCurrency || "USD"]}
+              currencies={
+                currencySettings?.supportedCurrencies || [
+                  currencySettings?.primaryCurrency || "USD",
+                ]
+              }
               isSaving={settingsMutation.isPending}
               onSave={(nextSettings) => settingsMutation.mutate(nextSettings)}
             />
@@ -1127,7 +1180,9 @@ export default function TelegramChannelAnalyticsPage() {
         <TelegramChannelAdSalesSection channelId={id} />
       </section>
 
-      {hasAudienceChart || mtprotoGraphs.length || isAudienceSnapshotsLoading ? (
+      {hasAudienceChart ||
+      mtprotoGraphs.length ||
+      isAudienceSnapshotsLoading ? (
         <section className="mt-6">
           <SectionToggle
             title="Charts"
@@ -1169,7 +1224,10 @@ export default function TelegramChannelAnalyticsPage() {
             title="Campaign Attribution"
             open={openSections.campaigns}
             onToggle={() =>
-              setOpenSections((prev) => ({ ...prev, campaigns: !prev.campaigns }))
+              setOpenSections((prev) => ({
+                ...prev,
+                campaigns: !prev.campaigns,
+              }))
             }
           />
           {openSections.campaigns ? (
@@ -1189,15 +1247,23 @@ export default function TelegramChannelAnalyticsPage() {
                   </div>
                 ) : null}
               </div>
-              {isCampaignsLoading ? <LoadingState /> : null}
-              {!isCampaignsLoading && campaignRows.length ? (
+              {showCampaignsLoading ? (
+                <TableLoadingState
+                  text="Loading campaigns"
+                  columns={6}
+                  rows={
+                    campaignsData?.items.length || campaignsPagination.pageSize
+                  }
+                />
+              ) : null}
+              {!showCampaignsLoading && campaignRows.length ? (
                 <CampaignsTable
                   campaigns={campaignRows}
                   currencySettings={currencySettings}
                   rates={rates}
                 />
               ) : null}
-              {!isCampaignsLoading && !campaignRows.length ? (
+              {!showCampaignsLoading && !campaignRows.length ? (
                 <div className="rounded-lg border border-slate-800 bg-slate-950/30 p-3 text-sm text-slate-300">
                   {campaignsSearch.trim()
                     ? "No campaigns found for this search."
@@ -1213,7 +1279,7 @@ export default function TelegramChannelAnalyticsPage() {
                   totalPages={campaignsData.pagination.totalPages}
                   hasNextPage={campaignsData.pagination.hasNextPage}
                   hasPreviousPage={campaignsData.pagination.hasPreviousPage}
-                  loading={isCampaignsLoading}
+                  loading={showCampaignsLoading}
                   onPageChange={campaignsPagination.setPage}
                   onPageSizeChange={campaignsPagination.setPageSize}
                 />
@@ -1249,13 +1315,19 @@ export default function TelegramChannelAnalyticsPage() {
                   </div>
                 ) : null}
               </div>
-              {isPostsLoading ? <LoadingState /> : null}
+              {showPostsLoading ? (
+                <TableLoadingState
+                  text="Loading posts"
+                  columns={8}
+                  rows={postsData?.items.length || postsPagination.pageSize}
+                />
+              ) : null}
               {postsError ? (
                 <div className="rounded-lg border border-rose-700 p-3 text-sm text-rose-200">
                   Failed to load posts.
                 </div>
               ) : null}
-              {!isPostsLoading && !postsError && visiblePosts.length ? (
+              {!showPostsLoading && !postsError && visiblePosts.length ? (
                 <>
                   <PostsTable
                     channelId={params.id}
@@ -1283,14 +1355,14 @@ export default function TelegramChannelAnalyticsPage() {
                       totalPages={postsData.pagination.totalPages}
                       hasNextPage={postsData.pagination.hasNextPage}
                       hasPreviousPage={postsData.pagination.hasPreviousPage}
-                      loading={isPostsLoading}
+                      loading={showPostsLoading}
                       onPageChange={postsPagination.setPage}
                       onPageSizeChange={postsPagination.setPageSize}
                     />
                   ) : null}
                 </>
               ) : null}
-              {!isPostsLoading && !postsError && !visiblePosts.length ? (
+              {!showPostsLoading && !postsError && !visiblePosts.length ? (
                 <div className="rounded-lg border border-slate-800 bg-slate-950/30 p-3 text-sm text-slate-300">
                   {postsSearch.trim()
                     ? "No posts found for this search."
@@ -1302,7 +1374,8 @@ export default function TelegramChannelAnalyticsPage() {
         </section>
       ) : null}
 
-      {openSections.inviteLinks || toNumber(data?.summary?.inviteLinksCount) > 0 ? (
+      {openSections.inviteLinks ||
+      toNumber(data?.summary?.inviteLinksCount) > 0 ? (
         <section className="mt-6">
           <SectionToggle
             title="Raw Invite Links"
@@ -1333,8 +1406,15 @@ export default function TelegramChannelAnalyticsPage() {
                   </div>
                 ) : null}
               </div>
-              {isInviteLinksLoading ? (
-                <LoadingState />
+              {showInviteLinksLoading ? (
+                <TableLoadingState
+                  text="Loading invite links"
+                  columns={3}
+                  rows={
+                    inviteLinksData?.items.length ||
+                    inviteLinksPagination.pageSize
+                  }
+                />
               ) : topInviteLinks.length ? (
                 <InviteLinksTable links={topInviteLinks} />
               ) : (
@@ -1353,7 +1433,7 @@ export default function TelegramChannelAnalyticsPage() {
                   totalPages={inviteLinksData.pagination.totalPages}
                   hasNextPage={inviteLinksData.pagination.hasNextPage}
                   hasPreviousPage={inviteLinksData.pagination.hasPreviousPage}
-                  loading={isInviteLinksLoading}
+                  loading={showInviteLinksLoading}
                   onPageChange={inviteLinksPagination.setPage}
                   onPageSizeChange={inviteLinksPagination.setPageSize}
                 />
@@ -1380,14 +1460,14 @@ export default function TelegramChannelAnalyticsPage() {
           setSyncScopeOpen(false);
           syncMutation.mutate({
             ...DEFAULT_SYNC_SELECTION,
-          })
+          });
         }}
         onSyncSelected={() => {
           setSyncScopeOpen(false);
           syncMutation.mutate({
             ...syncSelection,
             saveSelection: true,
-          })
+          });
         }}
       />
     </AppShell>
@@ -1463,9 +1543,15 @@ function ChannelMetricsDeck({
 }) {
   if (!metrics.length) return null;
   const primaryKeys = new Set(["subscribers", "err", "avgViews", "cpa"]);
-  const primaryMetrics = metrics.filter((metric) => primaryKeys.has(metric.key));
-  const secondaryMetrics = metrics.filter((metric) => !primaryKeys.has(metric.key));
-  const visiblePrimary = primaryMetrics.length ? primaryMetrics : metrics.slice(0, 4);
+  const primaryMetrics = metrics.filter((metric) =>
+    primaryKeys.has(metric.key),
+  );
+  const secondaryMetrics = metrics.filter(
+    (metric) => !primaryKeys.has(metric.key),
+  );
+  const visiblePrimary = primaryMetrics.length
+    ? primaryMetrics
+    : metrics.slice(0, 4);
   const visibleSecondary = primaryMetrics.length
     ? secondaryMetrics
     : metrics.slice(4);
@@ -1497,7 +1583,9 @@ function ChannelMetricsDeck({
               {metric.value}
             </p>
             {metric.hint ? (
-              <p className="mt-1 truncate text-xs text-slate-500">{metric.hint}</p>
+              <p className="mt-1 truncate text-xs text-slate-500">
+                {metric.hint}
+              </p>
             ) : null}
           </div>
         ))}
@@ -1516,7 +1604,13 @@ function ChannelMetricsDeck({
 function CompactMetric({
   metric,
 }: {
-  metric: { key?: string; title: string; value: string; hint?: string; tip?: string };
+  metric: {
+    key?: string;
+    title: string;
+    value: string;
+    hint?: string;
+    tip?: string;
+  };
 }) {
   return (
     <div className="rounded-lg border border-slate-800 bg-slate-900/25 px-2.5 py-1.5">
@@ -1669,13 +1763,18 @@ function AudienceOverview({ audience }: { audience: any }) {
         />
         <SnapshotItem
           label="Capped active estimate"
-          value={formatNullableNumber(audience?.cappedActiveSubscribersEstimate)}
+          value={formatNullableNumber(
+            audience?.cappedActiveSubscribersEstimate,
+          )}
         />
         <SnapshotItem
           label="Paid active estimate"
           value={formatNullableNumber(audience?.paidActiveSubscribersEstimate)}
         />
-        <SnapshotItem label="View rate" value={formatPercent(audience?.viewRate)} />
+        <SnapshotItem
+          label="View rate"
+          value={formatPercent(audience?.viewRate)}
+        />
         <SnapshotItem
           label="Raw view rate"
           value={formatPercent(audience?.rawViewRate)}
@@ -1732,12 +1831,12 @@ function FinancialOverview({
   );
   const adSpend = toNumber(summary?.totalAdSpend);
   const totalSpend = toNumber(summary?.totalSpend ?? adSpend + purchaseAmount);
-  const hasPaidLaunches =
-    toNumber(summary?.campaignsCount) > 0 || adSpend > 0;
+  const hasPaidLaunches = toNumber(summary?.campaignsCount) > 0 || adSpend > 0;
   const hasPurchaseExpense = purchaseAmount > 0;
   if (!hasKpi && !hasPaidLaunches && !hasPurchaseExpense) return null;
-  const moneyValue = (value: unknown) =>
-    <NativeMoney amount={value as number | null} currency={currency} />;
+  const moneyValue = (value: unknown) => (
+    <NativeMoney amount={value as number | null} currency={currency} />
+  );
   const metrics = [
     {
       key: "totalSpend",
@@ -1747,7 +1846,12 @@ function FinancialOverview({
     {
       key: "purchase",
       show: hasPurchaseExpense,
-      node: <SnapshotItem label="Channel purchase" value={moneyValue(purchaseAmount)} />,
+      node: (
+        <SnapshotItem
+          label="Channel purchase"
+          value={moneyValue(purchaseAmount)}
+        />
+      ),
     },
     {
       key: "spend",
@@ -1757,17 +1861,32 @@ function FinancialOverview({
     {
       key: "campaigns",
       show: hasPositiveValue(summary?.campaignsCount),
-      node: <SnapshotItem label="Campaigns count" value={formatNumber(summary?.campaignsCount)} />,
+      node: (
+        <SnapshotItem
+          label="Campaigns count"
+          value={formatNumber(summary?.campaignsCount)}
+        />
+      ),
     },
     {
       key: "joined",
       show: hasPositiveValue(summary?.totalJoinedSubscribers),
-      node: <SnapshotItem label="Total joined subscribers" value={formatNumber(summary?.totalJoinedSubscribers)} />,
+      node: (
+        <SnapshotItem
+          label="Total joined subscribers"
+          value={formatNumber(summary?.totalJoinedSubscribers)}
+        />
+      ),
     },
     {
       key: "pending",
       show: hasPositiveValue(summary?.totalPendingSubscribers),
-      node: <SnapshotItem label="Total pending requests" value={formatNumber(summary?.totalPendingSubscribers)} />,
+      node: (
+        <SnapshotItem
+          label="Total pending requests"
+          value={formatNumber(summary?.totalPendingSubscribers)}
+        />
+      ),
     },
     {
       key: "attributed",
@@ -1775,35 +1894,63 @@ function FinancialOverview({
         hasPositiveValue(summary?.totalAttributedSubscribers) &&
         toNumber(summary?.totalAttributedSubscribers) !==
           toNumber(summary?.totalJoinedSubscribers),
-      node: <SnapshotItem label="Total attributed subscribers" value={formatNumber(summary?.totalAttributedSubscribers)} />,
+      node: (
+        <SnapshotItem
+          label="Total attributed subscribers"
+          value={formatNumber(summary?.totalAttributedSubscribers)}
+        />
+      ),
     },
     {
       key: "active",
       show: hasPositiveValue(summary?.paidActiveSubscribersEstimate),
-      node: <SnapshotItem label="Active subscribers from ads" value={formatNullableNumber(summary?.paidActiveSubscribersEstimate)} />,
+      node: (
+        <SnapshotItem
+          label="Active subscribers from ads"
+          value={formatNullableNumber(summary?.paidActiveSubscribersEstimate)}
+        />
+      ),
     },
     {
       key: "avgCpa",
       show: hasNumericValue(summary?.avgCpa),
-      node: <SnapshotItem label="Avg CPA" value={moneyValue(summary?.avgCpa)} />,
+      node: (
+        <SnapshotItem label="Avg CPA" value={moneyValue(summary?.avgCpa)} />
+      ),
     },
     {
       key: "activeCpa",
       show: hasNumericValue(summary?.activeCpa),
-      node: <SnapshotItem label="Active CPA" value={moneyValue(summary?.activeCpa)} />,
+      node: (
+        <SnapshotItem
+          label="Active CPA"
+          value={moneyValue(summary?.activeCpa)}
+        />
+      ),
     },
     {
       key: "activeRate",
       show: hasNumericValue(summary?.avgActiveRate),
-      node: <SnapshotItem label="Avg active rate" value={formatPercent(summary?.avgActiveRate)} />,
+      node: (
+        <SnapshotItem
+          label="Avg active rate"
+          value={formatPercent(summary?.avgActiveRate)}
+        />
+      ),
     },
     {
       key: "retention",
       show: hasNumericValue(summary?.avgRetention7d),
-      node: <SnapshotItem label="Avg retention 7d" value={formatPercent(summary?.avgRetention7d)} />,
+      node: (
+        <SnapshotItem
+          label="Avg retention 7d"
+          value={formatPercent(summary?.avgRetention7d)}
+        />
+      ),
     },
   ].filter((metric) => metric.show);
-  const showKpiStatus = hasKpi && summary?.kpiStatus && summary.kpiStatus !== "unknown";
+  const showKpiStatus =
+    hasKpi && summary?.kpiStatus && summary.kpiStatus !== "unknown";
   return (
     <SimplePanel title="KPI / Financial overview">
       {hasKpi && !hasPaidLaunches && !hasPurchaseExpense ? (
@@ -1905,11 +2052,11 @@ function KpiSettingsControl({
     setSettings({ ...settings, [key]: value });
   const hasKpi = Boolean(
     settings.targetCpaFrom ||
-      settings.targetCpa ||
-      settings.acceptableCpaFrom ||
-      settings.acceptableCpa ||
-      settings.stopCpaFrom ||
-      settings.stopCpa,
+    settings.targetCpa ||
+    settings.acceptableCpaFrom ||
+    settings.acceptableCpa ||
+    settings.stopCpaFrom ||
+    settings.stopCpa,
   );
   const save = () => {
     onSave(settings);
@@ -1954,7 +2101,9 @@ function KpiSettingsControl({
               onFromChange={(value) => setValue("stopCpaFrom", value)}
               openEnded
             />
-            <p className="text-xs text-slate-400">Values between Good and Stop are Normal.</p>
+            <p className="text-xs text-slate-400">
+              Values between Good and Stop are Normal.
+            </p>
           </div>
           <div className="flex justify-end gap-2">
             <Button
@@ -1995,7 +2144,11 @@ function KpiRangeFields({
     <div className="rounded-lg border border-slate-800 bg-slate-900/20 p-3">
       <p className="mb-2 text-sm font-semibold text-slate-200">{label} ($)</p>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <FormField label={upperBound ? "Up to" : openEnded ? "From, no upper limit" : "From"}>
+        <FormField
+          label={
+            upperBound ? "Up to" : openEnded ? "From, no upper limit" : "From"
+          }
+        >
           <Input
             type="number"
             min={0}
@@ -2042,9 +2195,9 @@ function SeedSettingsControl({
     setSettings({ ...settings, [key]: value });
   const hasSeed = Boolean(
     toNumber(settings.seedSubscribersCount) ||
-      toNumber(settings.ownViewsPerPost) ||
-      toNumber(settings.ownReactionsPerPost) ||
-      toNumber(settings.knownFakeSubscribersCount),
+    toNumber(settings.ownViewsPerPost) ||
+    toNumber(settings.ownReactionsPerPost) ||
+    toNumber(settings.knownFakeSubscribersCount),
   );
   const save = () => {
     onSave(settings);
@@ -2331,7 +2484,9 @@ function KpiTargetsInline({ settings }: { settings: SettingsState }) {
       <KpiTarget
         tone="good"
         label="Target CPA"
-        display={goodTo ? `to ${formatNumber(goodTo, 2)} ${settings.kpiCurrency}` : "-"}
+        display={
+          goodTo ? `to ${formatNumber(goodTo, 2)} ${settings.kpiCurrency}` : "-"
+        }
         compact
       />
       <KpiTarget
@@ -2347,7 +2502,11 @@ function KpiTargetsInline({ settings }: { settings: SettingsState }) {
       <KpiTarget
         tone="bad"
         label="Stop CPA"
-        display={stopFrom ? `from ${formatNumber(stopFrom, 2)} ${settings.kpiCurrency}` : "-"}
+        display={
+          stopFrom
+            ? `from ${formatNumber(stopFrom, 2)} ${settings.kpiCurrency}`
+            : "-"
+        }
         compact
       />
     </div>
@@ -2371,9 +2530,15 @@ function KpiTarget({
     bad: "border-rose-800/80 bg-rose-950/30 text-rose-200",
   }[tone];
   return (
-    <div className={`rounded-lg border ${compact ? "px-2.5 py-2" : "p-3"} ${toneClass}`}>
+    <div
+      className={`rounded-lg border ${compact ? "px-2.5 py-2" : "p-3"} ${toneClass}`}
+    >
       <p className="text-xs opacity-80">{label}</p>
-      <p className={compact ? "mt-1 text-sm font-semibold" : "mt-1 text-lg font-semibold"}>
+      <p
+        className={
+          compact ? "mt-1 text-sm font-semibold" : "mt-1 text-lg font-semibold"
+        }
+      >
         {display}
       </p>
     </div>
@@ -2557,18 +2722,27 @@ function SyncStatusModal({
             label="Latest snapshot"
             value={formatDateTime(latestSnapshot.syncedAt)}
           />
-          <SnapshotItem label="Status" value={mtprotoStats?.status || "unknown"} />
+          <SnapshotItem
+            label="Status"
+            value={mtprotoStats?.status || "unknown"}
+          />
           <SnapshotItem
             label="Followers"
             value={formatNullableNumber(mtprotoStats?.followers?.current)}
           />
           <SnapshotItem
             label="Views / Post"
-            value={formatNullableNumber(mtprotoStats?.views_per_post?.current, 1)}
+            value={formatNullableNumber(
+              mtprotoStats?.views_per_post?.current,
+              1,
+            )}
           />
           <SnapshotItem
             label="Shares / Post"
-            value={formatNullableNumber(mtprotoStats?.shares_per_post?.current, 1)}
+            value={formatNullableNumber(
+              mtprotoStats?.shares_per_post?.current,
+              1,
+            )}
           />
           <SnapshotItem
             label="Reactions / Post"
@@ -2583,7 +2757,10 @@ function SyncStatusModal({
           />
           <SnapshotItem
             label="Telegram window"
-            value={formatStatsPeriod(mtprotoStats?.period, mtprotoStats?.graphs)}
+            value={formatStatsPeriod(
+              mtprotoStats?.period,
+              mtprotoStats?.graphs,
+            )}
           />
         </div>
       ) : (
@@ -2658,7 +2835,9 @@ function SyncScopeModal({
       description: "Save the latest audience estimate after sync.",
     },
   ];
-  const selectedCount = syncOptions.filter((option) => selection[option.key]).length;
+  const selectedCount = syncOptions.filter(
+    (option) => selection[option.key],
+  ).length;
 
   return (
     <Modal open={open} onClose={onClose} title="Sync sources and scope">
@@ -2688,7 +2867,9 @@ function SyncScopeModal({
                   }
                 />
                 <div>
-                  <p className="text-sm font-medium text-white">{option.title}</p>
+                  <p className="text-sm font-medium text-white">
+                    {option.title}
+                  </p>
                   <p className="mt-1 text-xs text-slate-400">
                     {option.description}
                   </p>
@@ -2721,11 +2902,7 @@ function SyncScopeModal({
           <Button variant="secondary" onClick={onClose} disabled={isSyncing}>
             Close
           </Button>
-          <Button
-            variant="secondary"
-            onClick={onSyncAll}
-            disabled={isSyncing}
-          >
+          <Button variant="secondary" onClick={onSyncAll} disabled={isSyncing}>
             Sync all
           </Button>
           <Button
@@ -3063,9 +3240,21 @@ function PostsTable({
     { label: "Date", className: "text-left", sortKey: "postDate" as const },
     { label: "Text", className: "text-left" },
     { label: "Views", className: "text-right", sortKey: "viewsCount" as const },
-    { label: "Forwards", className: "text-right", sortKey: "forwardsCount" as const },
-    { label: "Reactions", className: "text-right", sortKey: "reactionsCount" as const },
-    { label: "Comments", className: "text-right", sortKey: "commentsCount" as const },
+    {
+      label: "Forwards",
+      className: "text-right",
+      sortKey: "forwardsCount" as const,
+    },
+    {
+      label: "Reactions",
+      className: "text-right",
+      sortKey: "reactionsCount" as const,
+    },
+    {
+      label: "Comments",
+      className: "text-right",
+      sortKey: "commentsCount" as const,
+    },
     {
       label: "ERR",
       className: "text-right",
@@ -3099,13 +3288,10 @@ function PostsTable({
       floatingHeaderScrollRef.current.scrollLeft = scrollLeft;
     }
   };
-  const toggleSort = (
-    key: NonNullable<typeof sortState.key>,
-  ) => {
+  const toggleSort = (key: NonNullable<typeof sortState.key>) => {
     setSortState((prev) => ({
       key,
-      direction:
-        prev.key === key && prev.direction === "asc" ? "desc" : "asc",
+      direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc",
     }));
   };
   const sortedPosts = useMemo(() => {
@@ -3198,34 +3384,36 @@ function PostsTable({
           key={column.label}
           className={`whitespace-nowrap px-3 py-2 ${column.className}`}
         >
-          {column.sortKey ? (() => {
-            const sortKey = column.sortKey;
-            return (
-            <span
-              className={`inline-flex items-center gap-1 ${
-                column.className.includes("text-right") ? "ml-auto" : ""
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => toggleSort(sortKey)}
-                className="inline-flex items-center gap-1"
-              >
-                <span>{column.label}</span>
-                {sortState.key === sortKey ? (
-                  sortState.direction === "asc" ? (
-                    <ChevronUp size={14} />
-                  ) : (
-                    <ChevronDown size={14} />
-                  )
-                ) : (
-                  <ChevronDown size={14} className="opacity-35" />
-                )}
-              </button>
-              {column.tip ? <InfoTooltip tip={column.tip} /> : null}
-            </span>
-            );
-          })() : (
+          {column.sortKey ? (
+            (() => {
+              const sortKey = column.sortKey;
+              return (
+                <span
+                  className={`inline-flex items-center gap-1 ${
+                    column.className.includes("text-right") ? "ml-auto" : ""
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleSort(sortKey)}
+                    className="inline-flex items-center gap-1"
+                  >
+                    <span>{column.label}</span>
+                    {sortState.key === sortKey ? (
+                      sortState.direction === "asc" ? (
+                        <ChevronUp size={14} />
+                      ) : (
+                        <ChevronDown size={14} />
+                      )
+                    ) : (
+                      <ChevronDown size={14} className="opacity-35" />
+                    )}
+                  </button>
+                  {column.tip ? <InfoTooltip tip={column.tip} /> : null}
+                </span>
+              );
+            })()
+          ) : (
             <span className="inline-flex items-center gap-1">
               <span>{column.label}</span>
               {column.tip ? <InfoTooltip tip={column.tip} /> : null}
@@ -3290,7 +3478,10 @@ function PostsTable({
                   {formatLocalDate(post.postDate)}
                 </div>
                 <div className="min-w-0 px-3 py-2">
-                  <PostPreviewTrigger post={post} onOpen={() => setPreviewPost(post)} />
+                  <PostPreviewTrigger
+                    post={post}
+                    onOpen={() => setPreviewPost(post)}
+                  />
                 </div>
                 <div className="whitespace-nowrap px-3 py-2 text-right">
                   {formatNumber(views)}
@@ -3321,9 +3512,7 @@ function PostsTable({
                   <PostManualMetricsEditor
                     post={post}
                     isSaving={savingPostId === post.id}
-                    onSave={(payload) =>
-                      onSaveManualMetrics(post.id, payload)
-                    }
+                    onSave={(payload) => onSaveManualMetrics(post.id, payload)}
                   />
                 </div>
               </div>
@@ -3412,15 +3601,14 @@ function PostManualMetricsEditor({
   const ownViews = toNumber(post.manualOwnViews);
   const ownReactions = toNumber(post.manualOwnReactions);
   const hasCorrection = ownViews > 0 || ownReactions > 0;
-  const save = () =>
-    {
-      onSave({
+  const save = () => {
+    onSave({
       manualOwnViews: Math.max(0, toNumber(manualOwnViews)),
       manualOwnReactions: Math.max(0, toNumber(manualOwnReactions)),
       excludeFromAnalytics: true,
-      });
-      setOpen(false);
-    };
+    });
+    setOpen(false);
+  };
 
   return (
     <>
@@ -3513,7 +3701,10 @@ function CampaignsTable({
 function SnapshotItem({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-h-[58px] rounded-lg border border-slate-800 bg-slate-900/25 px-2.5 py-2">
-      <MetricPreviewLabel label={label} className="truncate text-xs text-slate-400" />
+      <MetricPreviewLabel
+        label={label}
+        className="truncate text-xs text-slate-400"
+      />
       <div className="mt-1 truncate text-sm font-semibold text-slate-100">
         {value || "-"}
       </div>
@@ -3791,7 +3982,10 @@ function normalizeStoredTelegramGraph(
     (point) => point.metric === metric,
   );
   if (!metricPoints.length) return null;
-  const rowsByDate = new Map<number, Record<string, string | number> & { timestamp: number }>();
+  const rowsByDate = new Map<
+    number,
+    Record<string, string | number> & { timestamp: number }
+  >();
   const seriesByKey = new Map<
     string,
     TelegramGraphChartData["series"][number]
@@ -3855,18 +4049,24 @@ function normalizeTelegramGraph(graph: any): TelegramGraphChartData | null {
       type: String(payload.types?.[key] || "line"),
     };
   });
-  const rows = xColumn.slice(1).map((xValue, index) => {
-    const timestamp = toChartTimestamp(xValue);
-    if (timestamp == null) return null;
-    const row: Record<string, string | number> & { timestamp: number } = {
-      timestamp,
-    };
-    for (const column of valueColumns) {
-      const value = Number(column[index + 1]);
-      if (Number.isFinite(value)) row[String(column[0])] = value;
-    }
-    return row;
-  }).filter((row): row is Record<string, string | number> & { timestamp: number } => row != null);
+  const rows = xColumn
+    .slice(1)
+    .map((xValue, index) => {
+      const timestamp = toChartTimestamp(xValue);
+      if (timestamp == null) return null;
+      const row: Record<string, string | number> & { timestamp: number } = {
+        timestamp,
+      };
+      for (const column of valueColumns) {
+        const value = Number(column[index + 1]);
+        if (Number.isFinite(value)) row[String(column[0])] = value;
+      }
+      return row;
+    })
+    .filter(
+      (row): row is Record<string, string | number> & { timestamp: number } =>
+        row != null,
+    );
 
   return rows.length ? { rows, series } : null;
 }
@@ -3880,9 +4080,9 @@ function hasRenderableTelegramChart(
   );
 }
 
-function hasRenderableTelegramGraphItem<T extends { chart: TelegramGraphChartData | null }>(
-  item: T,
-): item is T & { chart: TelegramGraphChartData } {
+function hasRenderableTelegramGraphItem<
+  T extends { chart: TelegramGraphChartData | null },
+>(item: T): item is T & { chart: TelegramGraphChartData } {
   return hasRenderableTelegramChart(item.chart);
 }
 

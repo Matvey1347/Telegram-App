@@ -757,6 +757,22 @@ export const telegramAdSalesApi = createTelegramAdSalesApi({
 
 export const scheduledTasksApi = createScheduledTasksApi(api);
 
+export type TrashItem = {
+  id: string;
+  kind: string;
+  name: string;
+  product: string;
+  deletedAt: string;
+  expiresAt: string;
+  daysRemaining: number;
+};
+export const trashApi = {
+  list: async (params: PaginationParams) =>
+    (await api.get<PaginatedResponse<TrashItem>>("/trash", { params })).data,
+  restore: async (kind: string, id: string) =>
+    (await api.patch(`/trash/${kind}/${id}/restore`)).data,
+};
+
 export async function getDashboardSummary(params?: {
   dateFrom?: string;
   dateTo?: string;

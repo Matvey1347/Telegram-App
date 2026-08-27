@@ -5,7 +5,10 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { createPaginatedResponse, normalizePagination } from '../../../common/pagination/pagination.utils';
+import {
+  createPaginatedResponse,
+  normalizePagination,
+} from '../../../common/pagination/pagination.utils';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { CurrencyConversionService } from '../../../common/currency-conversion.service';
@@ -15,6 +18,10 @@ import {
   UpdateTransactionDto,
 } from './dto';
 import { FinanceCategoriesService } from '../finance-categories/finance-categories.service';
+import {
+  withWorkspaceMemberAvatar,
+  type WorkspaceMemberAvatarSource,
+} from '../../../common/workspace-member-presentation';
 
 @Injectable()
 export class TransactionsService {
@@ -29,11 +36,18 @@ export class TransactionsService {
     private financeCategoriesService: FinanceCategoriesService,
   ) {}
 
-  private withIconPresentation<T extends {
-    icon?: Parameters<typeof iconToResolvedEmoji>[0];
-    account?: { icon?: Parameters<typeof iconToResolvedEmoji>[0] } | null;
-    categoryRef?: { icon?: Parameters<typeof iconToResolvedEmoji>[0] } | null;
-  }>(transaction: T) {
+  private withIconPresentation<
+    T extends {
+      icon?: Parameters<typeof iconToResolvedEmoji>[0];
+      account?: {
+        icon?: Parameters<typeof iconToResolvedEmoji>[0];
+        assignedMember?: WorkspaceMemberAvatarSource | null;
+      } | null;
+      categoryRef?: { icon?: Parameters<typeof iconToResolvedEmoji>[0] } | null;
+      member?: WorkspaceMemberAvatarSource | null;
+      assignedMember?: WorkspaceMemberAvatarSource | null;
+    },
+  >(transaction: T) {
     return {
       ...transaction,
       iconPresentation: iconToResolvedEmoji(transaction.icon),
@@ -41,6 +55,9 @@ export class TransactionsService {
         ? {
             ...transaction.account,
             iconPresentation: iconToResolvedEmoji(transaction.account.icon),
+            assignedMember: withWorkspaceMemberAvatar(
+              transaction.account.assignedMember,
+            ),
           }
         : transaction.account,
       categoryRef: transaction.categoryRef
@@ -49,6 +66,8 @@ export class TransactionsService {
             iconPresentation: iconToResolvedEmoji(transaction.categoryRef.icon),
           }
         : transaction.categoryRef,
+      member: withWorkspaceMemberAvatar(transaction.member),
+      assignedMember: withWorkspaceMemberAvatar(transaction.assignedMember),
     };
   }
 
@@ -204,7 +223,10 @@ export class TransactionsService {
     return rows[0] ?? null;
   }
 
-  private async findPurchaseChannelById(workspaceId: string, channelId: string) {
+  private async findPurchaseChannelById(
+    workspaceId: string,
+    channelId: string,
+  ) {
     await this.ensureTelegramChannelPurchaseColumnsAvailable();
     const rows = await this.prisma.$queryRaw<
       Array<{
@@ -241,7 +263,11 @@ export class TransactionsService {
 
   private async resolvePurchaseChannelLink(params: {
     workspaceId: string;
-    category: { key?: string | null; name?: string | null; type: 'income' | 'expense' };
+    category: {
+      key?: string | null;
+      name?: string | null;
+      type: 'income' | 'expense';
+    };
     telegramChannelId?: string | null;
     transactionId?: string;
   }) {
@@ -279,7 +305,11 @@ export class TransactionsService {
 
   private async resolveRevenueChannelLink(params: {
     workspaceId: string;
-    category: { key?: string | null; name?: string | null; type: 'income' | 'expense' };
+    category: {
+      key?: string | null;
+      name?: string | null;
+      type: 'income' | 'expense';
+    };
     telegramChannelId?: string | null;
   }) {
     const isChannelAdvertisingRevenueCategory =
@@ -351,9 +381,10 @@ export class TransactionsService {
     );
   }
 
-  private async attachPurchasedTelegramChannels<
-    T extends { id: string },
-  >(workspaceId: string, transactions: T[]) {
+  private async attachPurchasedTelegramChannels<T extends { id: string }>(
+    workspaceId: string,
+    transactions: T[],
+  ) {
     if (!transactions.length) return transactions;
     const ids = transactions.map((transaction) => transaction.id);
     const rows = await this.prisma.$queryRaw<
@@ -396,7 +427,10 @@ export class TransactionsService {
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
     await this.financeCategoriesService.ensureSystemCategories(workspaceId);
-    const where: Prisma.TransactionWhereInput = { workspaceId };
+    const where: Prisma.TransactionWhereInput = {
+      workspaceId,
+      deletedAt: null,
+    };
     if (query.dateFrom || query.dateTo) {
       where.date = {};
       if (query.dateFrom) where.date.gte = new Date(query.dateFrom);
@@ -409,8 +443,7 @@ export class TransactionsService {
     if (query.categoryId) where.categoryId = query.categoryId;
     if (query.type && query.type !== 'all') where.type = query.type;
     if (query.accountId) where.accountId = query.accountId;
-    if (query.assignedMemberId)
-      where.assignedMemberId = query.assignedMemberId;
+    if (query.assignedMemberId) where.assignedMemberId = query.assignedMemberId;
     if (query.search?.trim()) {
       where.OR = [
         { description: { contains: query.search.trim(), mode: 'insensitive' } },
@@ -462,7 +495,7 @@ export class TransactionsService {
               photoUrl: true,
             },
           },
-          member: { include: { user: true } },
+          member: WorkspaceService.assignedMemberInclude,
           assignedMember: WorkspaceService.assignedMemberInclude,
           createdByUser: WorkspaceService.createdByUserInclude,
           adCampaign: true,
@@ -495,7 +528,7 @@ export class TransactionsService {
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
     const row = await this.prisma.transaction.findFirst({
-      where: { id, workspaceId },
+      where: { id, workspaceId, deletedAt: null },
       include: {
         account: {
           include: {
@@ -532,7 +565,7 @@ export class TransactionsService {
             photoUrl: true,
           },
         },
-        member: { include: { user: true } },
+        member: WorkspaceService.assignedMemberInclude,
         assignedMember: WorkspaceService.assignedMemberInclude,
         createdByUser: WorkspaceService.createdByUserInclude,
         icon: {
@@ -555,7 +588,10 @@ export class TransactionsService {
 
   async create(userId: string, dto: CreateTransactionDto) {
     const { workspaceId, assignedMemberId } =
-      await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId);
+      await this.workspaceService.resolveAssignedMemberId(
+        userId,
+        dto.assignedMemberId,
+      );
     await this.financeCategoriesService.ensureSystemCategories(workspaceId);
 
     const account = await this.prisma.account.findFirst({
@@ -649,7 +685,7 @@ export class TransactionsService {
               photoUrl: true,
             },
           },
-          member: { include: { user: true } },
+          member: WorkspaceService.assignedMemberInclude,
           assignedMember: WorkspaceService.assignedMemberInclude,
           createdByUser: WorkspaceService.createdByUserInclude,
           icon: {
@@ -685,12 +721,18 @@ export class TransactionsService {
     await this.financeCategoriesService.ensureSystemCategories(workspaceId);
 
     const existing = await this.prisma.transaction.findFirst({
-      where: { id, workspaceId },
+      where: { id, workspaceId, deletedAt: null },
     });
     if (!existing) throw new NotFoundException('Transaction not found');
-    const assignedMemberId = dto.assignedMemberId === undefined ? undefined : (
-      await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId)
-    ).assignedMemberId;
+    const assignedMemberId =
+      dto.assignedMemberId === undefined
+        ? undefined
+        : (
+            await this.workspaceService.resolveAssignedMemberId(
+              userId,
+              dto.assignedMemberId,
+            )
+          ).assignedMemberId;
 
     const type = dto.type ?? existing.type;
     const categoryId = dto.categoryId ?? existing.categoryId;
@@ -726,13 +768,14 @@ export class TransactionsService {
       workspaceId,
       category,
       telegramChannelId:
-        this.isBuyChannelsCategory(category) && dto.telegramChannelId === undefined
-          ? (
+        this.isBuyChannelsCategory(category) &&
+        dto.telegramChannelId === undefined
+          ? ((
               await this.findLinkedPurchaseChannelByTransaction(
                 workspaceId,
                 existing.id,
               )
-            )?.id ?? null
+            )?.id ?? null)
           : this.isBuyChannelsCategory(category)
             ? dto.telegramChannelId
             : undefined,
@@ -804,7 +847,7 @@ export class TransactionsService {
               photoUrl: true,
             },
           },
-          member: { include: { user: true } },
+          member: WorkspaceService.assignedMemberInclude,
           assignedMember: WorkspaceService.assignedMemberInclude,
           createdByUser: WorkspaceService.createdByUserInclude,
           icon: {
@@ -836,12 +879,12 @@ export class TransactionsService {
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
     const existing = await this.prisma.transaction.findFirst({
-      where: { id, workspaceId },
+      where: { id, workspaceId, deletedAt: null },
     });
     if (!existing) throw new NotFoundException('Transaction not found');
-    return this.prisma.$transaction(async (tx) => {
-      await this.syncPurchaseChannelLink(tx, workspaceId, id, null);
-      return tx.transaction.delete({ where: { id } });
+    return this.prisma.transaction.update({
+      where: { id },
+      data: { deletedAt: new Date() },
     });
   }
 }

@@ -124,15 +124,10 @@ export class TelegramManagedPostImportParserService {
       where: { workspaceId, type: 'emoji', emoji: icon },
       select: { id: true },
     });
-    if (existingByEmoji) {
-      return (
-        await this.prisma.icon.update({
-          where: { id: existingByEmoji.id },
-          data: { name: title, createdByUserId: userId },
-          select: { id: true },
-        })
-      ).id;
-    }
+    // Emoji icons are shared workspace entities. Renaming a reused emoji to
+    // every imported post title both mutates existing posts and can collide
+    // with the unique (workspaceId, type, name) key.
+    if (existingByEmoji) return existingByEmoji.id;
 
     return (
       await this.prisma.icon.upsert({

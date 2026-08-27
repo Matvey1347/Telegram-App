@@ -177,6 +177,7 @@ export function SaleDetailsModal(props: {
     sale: TelegramAdSale,
     draft: PlacementManagedPostDraft,
   ) => Promise<void>;
+  onRecreateSharedPostViaBot?: (sale: TelegramAdSale) => Promise<void>;
 }) {
   const [placements, setPlacements] = useState<PlacementDraft[]>([]);
   const [payments, setPayments] = useState<PaymentDraft[]>([]);
@@ -363,6 +364,11 @@ export function SaleDetailsModal(props: {
             props.onUpdateSharedPost
               ? (props.onClose(), props.onUpdateSharedPost(sale, nextDraft))
               : Promise.reject(new Error("Shared post editing is unavailable."))
+          }
+          onRecreateViaBot={() =>
+            props.onRecreateSharedPostViaBot
+              ? props.onRecreateSharedPostViaBot(sale)
+              : Promise.reject(new Error("Bot recreation is unavailable."))
           }
         />
       ) : placement && draft ? (

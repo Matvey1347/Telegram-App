@@ -17,6 +17,9 @@ export function placementTimer(
   if (placement.deletedAt) {
     return { phase: "complete", label: "Automatically deleted" };
   }
+  if (placement.managedPost?.telegramRemoteStatus === "MISSING") {
+    return { phase: "complete", label: "Post deleted" };
+  }
   if (!placement.publishedAt) {
     const remaining = new Date(placement.scheduledAt).getTime() - now;
     return {

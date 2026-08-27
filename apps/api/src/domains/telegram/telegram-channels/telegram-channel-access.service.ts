@@ -22,6 +22,7 @@ import { type ResolvedTelegramEntity } from '../../../telegram/shared/telegram-i
 import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
 import { buildStableTelegramPostUrl } from '../../../telegram/shared/telegram-post-url';
 import {
+  TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID,
   TELEGRAM_SYSTEM_BOT_SOURCE_ID,
   TelegramSourceAccessService,
 } from '../../../telegram/shared/telegram-source-access.service';
@@ -59,6 +60,35 @@ export class TelegramChannelAccessService {
     );
   }
 
+  async checkProductionBotPublishingAccess(userId: string, channelId: string) {
+    const workspaceId =
+      await this.telegramChannelsSupportService.workspace(userId);
+    const channel = await this.prisma.telegramChannel.findFirst({
+      where: { id: channelId, workspaceId, isActive: true },
+      select: { id: true, title: true, username: true, telegramChatId: true },
+    });
+    if (!channel) throw new NotFoundException('Telegram channel not found');
+    await this.refreshProductionBotPublishingAccess(workspaceId, channel);
+  }
+
+  public refreshProductionBotPublishingAccess(
+    workspaceId: string,
+    channel: {
+      id: string;
+      title?: string | null;
+      username: string | null;
+      telegramChatId: string | null;
+    },
+  ) {
+    return this.refreshBotPublishingAccess(
+      workspaceId,
+      channel,
+      this.systemBotConfig.productionToken,
+      TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID,
+      'production bot',
+    );
+  }
+
   public async refreshSystemBotPublishingAccess(
     workspaceId: string,
     channel: {
@@ -68,8 +98,30 @@ export class TelegramChannelAccessService {
       telegramChatId: string | null;
     },
   ) {
-    const token = this.systemBotConfig?.token;
-    if (!token) throw new BadRequestException('System bot is not configured');
+    return this.refreshBotPublishingAccess(
+      workspaceId,
+      channel,
+      this.systemBotConfig.token,
+      TELEGRAM_SYSTEM_BOT_SOURCE_ID,
+      'system bot',
+    );
+  }
+
+  private async refreshBotPublishingAccess(
+    workspaceId: string,
+    channel: {
+      id: string;
+      title?: string | null;
+      username: string | null;
+      telegramChatId: string | null;
+    },
+    token: string | null,
+    sourceId: string,
+    botLabel: string,
+  ) {
+    const channelLabel =
+      channel.title?.trim() || channel.username || channel.id;
+    if (!token) throw new BadRequestException(`${botLabel} is not configured`);
     const bot = await this.botApiClient.getMe(token);
     if (!bot.id) throw new BadRequestException('System bot is unavailable');
     const chatId = this.botChatId(channel);
@@ -85,7 +137,7 @@ export class TelegramChannelAccessService {
     } catch (error) {
       if (error instanceof TelegramBotApiError) {
         throw new BadRequestException(
-          'The system bot is not an administrator of this channel yet. Add it in Telegram and grant permission to post messages, then check again.',
+          `The ${botLabel} is not an administrator of channel “${channelLabel}”. Add it in Telegram and grant permission to post messages, then check again.`,
         );
       }
       throw error;
@@ -93,13 +145,13 @@ export class TelegramChannelAccessService {
     const normalized = this.sourceAccessService.normalizeBotPermissions(member);
     if (!normalized.permissions.canPostMessages) {
       throw new BadRequestException(
-        'The system bot is an administrator but cannot post messages. Grant it permission to post messages in Telegram, then check again.',
+        `The ${botLabel} cannot post messages in channel “${channelLabel}”. Grant it permission to post messages in Telegram, then check again.`,
       );
     }
     await this.sourceAccessService.upsertAccess({
       workspaceId,
       channelId: channel.id,
-      sourceId: TELEGRAM_SYSTEM_BOT_SOURCE_ID,
+      sourceId,
       sourceType: TelegramSourceType.BOT,
       role: normalized.role,
       permissions: normalized.permissions,
@@ -108,6 +160,12 @@ export class TelegramChannelAccessService {
   }
 
   public async botTokenForSource(workspaceId: string, sourceId: string) {
+    if (sourceId === TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID) {
+      const token = this.systemBotConfig.productionToken;
+      if (!token)
+        throw new BadRequestException('Production bot is not configured');
+      return token;
+    }
     if (sourceId === TELEGRAM_SYSTEM_BOT_SOURCE_ID) {
       const token = this.systemBotConfig?.token;
       if (!token) throw new BadRequestException('System bot is not configured');

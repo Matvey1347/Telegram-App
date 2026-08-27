@@ -3,7 +3,7 @@
 import { formatDateTime } from "@/lib/date-format";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   CartesianGrid,
   Legend,
@@ -26,6 +26,7 @@ import {
   DateRangeInput,
   Input,
   Table,
+  TableLoadingState,
 } from "@/components/ui/primitives";
 import { Pagination } from "@/components/ui/pagination";
 import { QueryContentState } from "@/components/ui/query-content-state";
@@ -46,7 +47,9 @@ export function GreeterUsersSection({
   const users = useQuery({
     queryKey: greeterKeys.users(botId, query),
     queryFn: () => greeterApi.users(botId, query),
+    placeholderData: keepPreviousData,
   });
+  const usersLoading = users.isLoading || users.isPlaceholderData;
   const setFilter = (next: Partial<GreeterUsersQuery>) =>
     setQuery((value) => ({ ...value, ...next, page: 1 }));
   return (
@@ -111,10 +114,17 @@ export function GreeterUsersSection({
         </div>
       </Card>
       <QueryContentState
-        isLoading={users.isLoading}
+        isLoading={usersLoading}
         isError={users.isError}
         isEmpty={!users.data?.items.length}
         loadingText="Loading users"
+        loadingContent={
+          <TableLoadingState
+            text="Loading users"
+            columns={8}
+            rows={users.data?.items.length || query.pageSize || 25}
+          />
+        }
         errorText="Failed to load Greeter users."
         emptyText="No users match these filters"
         onRetry={() => void users.refetch()}
@@ -153,9 +163,7 @@ export function GreeterUsersSection({
                   <Td>{formatDateTime(user.firstSeenAt)}</Td>
                   <Td>{formatDateTime(user.joinRequestedAt)}</Td>
                   <Td>
-                    {user.approvedAt
-                      ? formatDateTime(user.approvedAt)
-                      : "—"}
+                    {user.approvedAt ? formatDateTime(user.approvedAt) : "—"}
                   </Td>
                   <Td>{formatDateTime(user.lastInteractionAt)}</Td>
                 </tr>
@@ -171,7 +179,7 @@ export function GreeterUsersSection({
           onPageSizeChange={(pageSize) =>
             setQuery((value) => ({ ...value, page: 1, pageSize }))
           }
-          loading={users.isFetching}
+          loading={usersLoading}
         />
       ) : null}
     </div>

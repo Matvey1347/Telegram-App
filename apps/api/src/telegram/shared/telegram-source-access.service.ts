@@ -55,6 +55,7 @@ const TELEGRAM_BROADCAST_STATS_MIN_SUBSCRIBERS = 50;
 const BOT_API_CAPTION_LIMIT = 1024;
 const BOT_API_MESSAGE_LIMIT = 4096;
 export const TELEGRAM_SYSTEM_BOT_SOURCE_ID = 'system-bot';
+export const TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID = 'system-bot-production';
 
 @Injectable()
 export class TelegramSourceAccessService {

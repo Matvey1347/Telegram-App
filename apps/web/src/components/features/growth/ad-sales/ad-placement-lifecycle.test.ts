@@ -37,6 +37,21 @@ describe("placementTimer", () => {
     ).toBe("Auto-delete in 1d 00:31:00");
   });
 
+  it("does not show deletion pending after Telegram confirms the post is missing", () => {
+    expect(
+      placementTimer(
+        {
+          scheduledAt: "2026-08-25T17:00:00.000Z",
+          publishedAt: "2026-08-25T17:00:00.000Z",
+          plannedDeleteAt: "2026-08-27T18:00:00.000Z",
+          deletedAt: null,
+          managedPost: { telegramRemoteStatus: "MISSING" },
+        } as never,
+        new Date("2026-08-27T18:05:00.000Z").getTime(),
+      ),
+    ).toEqual({ phase: "complete", label: "Post deleted" });
+  });
+
   it("shows the actual deletion time when a post stayed longer than planned", () => {
     expect(
       placementRunWindow({

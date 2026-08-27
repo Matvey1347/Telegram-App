@@ -30,11 +30,19 @@ export class GlobalSearchService {
   }
 
   private queryVariants(query: string) {
-    return Array.from(new Set([query, query.toLocaleLowerCase(), query.toLocaleUpperCase()].filter(Boolean)));
+    return Array.from(
+      new Set(
+        [query, query.toLocaleLowerCase(), query.toLocaleUpperCase()].filter(
+          Boolean,
+        ),
+      ),
+    );
   }
 
   private textMatches(field: string, query: string) {
-    return this.queryVariants(query).map((variant) => ({ [field]: this.contains(variant) }));
+    return this.queryVariants(query).map((variant) => ({
+      [field]: this.contains(variant),
+    }));
   }
 
   private relationTextMatches(relation: string, field: string, query: string) {
@@ -63,7 +71,8 @@ export class GlobalSearchService {
     const query = this.text(rawQuery);
     if (query.length < 2) return [];
 
-    const workspaceId = await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const workspaceId =
+      await this.workspaceService.resolveWorkspaceIdForUser(userId);
     const numeric = Number(query.replace(',', '.'));
     const hasNumber = Number.isFinite(numeric);
 
@@ -84,13 +93,20 @@ export class GlobalSearchService {
       this.prisma.transaction.findMany({
         where: {
           workspaceId,
+          deletedAt: null,
           OR: [
             ...this.textMatches('description', query),
             ...this.textMatches('category', query),
-            ...(hasNumber ? [{ amount: numeric }, { amountInPrimaryCurrency: numeric }] : []),
+            ...(hasNumber
+              ? [{ amount: numeric }, { amountInPrimaryCurrency: numeric }]
+              : []),
           ],
         },
-        include: { account: { select: { name: true, currency: true } }, categoryRef: { select: { name: true, icon: true } }, icon: true },
+        include: {
+          account: { select: { name: true, currency: true } },
+          categoryRef: { select: { name: true, icon: true } },
+          icon: true,
+        },
         take: 8,
         orderBy: { date: 'desc' },
       }),
@@ -98,7 +114,10 @@ export class GlobalSearchService {
         where: {
           workspaceId,
           user: {
-            OR: [...this.textMatches('name', query), ...this.textMatches('email', query)],
+            OR: [
+              ...this.textMatches('name', query),
+              ...this.textMatches('email', query),
+            ],
           },
         },
         include: { user: true, avatarIcon: true },
@@ -116,7 +135,13 @@ export class GlobalSearchService {
             ...this.textMatches('language', query),
           ],
         },
-        select: { id: true, title: true, username: true, photoUrl: true, adminLinks: { select: { id: true }, take: 1 } },
+        select: {
+          id: true,
+          title: true,
+          username: true,
+          photoUrl: true,
+          adminLinks: { select: { id: true }, take: 1 },
+        },
         take: 8,
         orderBy: { updatedAt: 'desc' },
       }),
@@ -131,7 +156,15 @@ export class GlobalSearchService {
             ...this.textMatches('phoneMasked', query),
           ],
         },
-        select: { id: true, label: true, username: true, firstName: true, phoneMasked: true, photoUrl: true, status: true },
+        select: {
+          id: true,
+          label: true,
+          username: true,
+          firstName: true,
+          phoneMasked: true,
+          photoUrl: true,
+          status: true,
+        },
         take: 6,
         orderBy: { updatedAt: 'desc' },
       }),
@@ -175,7 +208,9 @@ export class GlobalSearchService {
             ...this.textMatches('angle', query),
           ],
         },
-        include: { telegramChannel: { select: { title: true, photoUrl: true } } },
+        include: {
+          telegramChannel: { select: { title: true, photoUrl: true } },
+        },
         take: 8,
         orderBy: { updatedAt: 'desc' },
       }),
@@ -204,7 +239,10 @@ export class GlobalSearchService {
             ...this.textMatches('sourcePostUrl', query),
           ],
         },
-        include: { telegramChannel: { select: { title: true, photoUrl: true } }, promo: { select: { title: true } } },
+        include: {
+          telegramChannel: { select: { title: true, photoUrl: true } },
+          promo: { select: { title: true } },
+        },
         take: 8,
         orderBy: { updatedAt: 'desc' },
       }),
@@ -234,7 +272,9 @@ export class GlobalSearchService {
           ],
         },
         include: {
-          telegramChannel: { select: { id: true, title: true, photoUrl: true } },
+          telegramChannel: {
+            select: { id: true, title: true, photoUrl: true },
+          },
           group: { select: { id: true, title: true } },
         },
         take: 10,
@@ -249,7 +289,9 @@ export class GlobalSearchService {
           ],
         },
         include: {
-          telegramChannel: { select: { id: true, title: true, photoUrl: true } },
+          telegramChannel: {
+            select: { id: true, title: true, photoUrl: true },
+          },
           _count: { select: { posts: true, promptNotes: true } },
         },
         take: 8,
@@ -267,9 +309,21 @@ export class GlobalSearchService {
           ],
         },
         include: {
-          icon: { select: { id: true, type: true, name: true, imageUrl: true, emoji: true } },
-          telegramChannel: { select: { id: true, title: true, photoUrl: true } },
-          postGroup: { select: { id: true, title: true, telegramChannelId: true } },
+          icon: {
+            select: {
+              id: true,
+              type: true,
+              name: true,
+              imageUrl: true,
+              emoji: true,
+            },
+          },
+          telegramChannel: {
+            select: { id: true, title: true, photoUrl: true },
+          },
+          postGroup: {
+            select: { id: true, title: true, telegramChannelId: true },
+          },
         },
         take: 10,
         orderBy: { updatedAt: 'desc' },
@@ -278,7 +332,10 @@ export class GlobalSearchService {
 
     const iconIds = [
       ...new Set(
-        [...managedPosts.map((post) => post.icon), ...postGroups.map((group) => group.icon)].filter(Boolean),
+        [
+          ...managedPosts.map((post) => post.icon),
+          ...postGroups.map((group) => group.icon),
+        ].filter(Boolean),
       ),
     ] as string[];
     const icons = iconIds.length
@@ -293,95 +350,122 @@ export class GlobalSearchService {
     const iconsById = new Map(icons.map((icon) => [icon.id, icon]));
 
     return this.limited([
-      ...transactions.map((transaction): SearchResult => ({
-        id: transaction.id,
-        type: 'transaction',
-        label: 'Transaction',
-        title: transaction.description || transaction.categoryRef?.name || transaction.category,
-        subtitle: `${transaction.type} · ${transaction.account?.name || transaction.currency}`,
-        href: `/transactions?search=${encodeURIComponent(query)}`,
-        ...this.iconResult(transaction.icon ?? transaction.categoryRef?.icon),
-      })),
-      ...members.map((member): SearchResult => ({
-        id: member.id,
-        type: 'member',
-        label: 'Member',
-        title: member.user.name,
-        subtitle: `${member.user.email} · ${member.role}`,
-        href: '/workspace-members',
-        ...this.iconResult(member.avatarIcon),
-      })),
-      ...channels.map((channel): SearchResult => ({
-        id: channel.id,
-        type: 'telegram-channel',
-        label: channel.adminLinks.length ? 'Our channel' : 'External channel',
-        title: channel.title,
-        subtitle: channel.username ? `@${channel.username}` : null,
-        href: channel.adminLinks.length
-          ? `/telegram/channels/${channel.id}`
-          : '/telegram-channels?tab=channels&channelTab=external',
-        iconUrl: channel.photoUrl,
-      })),
-      ...telegramAccounts.map((account): SearchResult => ({
-        id: account.id,
-        type: 'telegram-account',
-        label: 'Telegram account',
-        title: account.username ? `@${account.username}` : account.label,
-        subtitle: [account.firstName, account.phoneMasked, account.status].filter(Boolean).join(' · '),
-        href: '/telegram-channels?tab=accounts&accountTab=mtproto',
-        iconUrl: account.photoUrl,
-      })),
-      ...bots.map((bot): SearchResult => ({
-        id: bot.id,
-        type: 'telegram-bot',
-        label: 'Bot',
-        title: bot.runtimeInstances[0]?.username
-          ? `@${bot.runtimeInstances[0].username}`
-          : bot.label,
-        subtitle: [
-          bot.runtimeInstances[0]?.firstName,
-          bot.runtimeInstances[0]?.botTokenMasked,
-          bot.isActive ? 'active' : 'inactive',
-        ]
-          .filter(Boolean)
-          .join(' · '),
-        href: '/telegram-channels?tab=bot',
-      })),
-      ...promos.map((promo): SearchResult => ({
-        id: promo.id,
-        type: 'promo',
-        label: 'Ad',
-        title: promo.title,
-        subtitle: promo.telegramChannel?.title,
-        href: '/promos',
-        iconUrl: promo.telegramChannel?.photoUrl,
-      })),
-      ...people.map((source): SearchResult => ({
-        id: source.id,
-        type: 'person',
-        label: 'Person',
-        title: source.name,
-        subtitle: source.telegramUsername ? `@${source.telegramUsername}` : source.url,
-        href: '/telegram-channels?tab=accounts&accountTab=people',
-        iconUrl: source.imageUrl,
-      })),
-      ...campaigns.map((campaign): SearchResult => ({
-        id: campaign.id,
-        type: 'ad-campaign',
-        label: 'Ad',
-        title: campaign.title,
-        subtitle: [campaign.telegramChannel?.title, campaign.promo?.title].filter(Boolean).join(' · '),
-        href: `/ad-campaigns/${campaign.id}`,
-        iconUrl: campaign.telegramChannel?.photoUrl,
-      })),
-      ...hypotheses.map((hypothesis): SearchResult => ({
-        id: hypothesis.id,
-        type: 'ad-hypothesis',
-        label: 'Ad hypothesis',
-        title: hypothesis.name,
-        subtitle: hypothesis.description || hypothesis.status,
-        href: '/ad-campaigns',
-      })),
+      ...transactions.map(
+        (transaction): SearchResult => ({
+          id: transaction.id,
+          type: 'transaction',
+          label: 'Transaction',
+          title:
+            transaction.description ||
+            transaction.categoryRef?.name ||
+            transaction.category,
+          subtitle: `${transaction.type} · ${transaction.account?.name || transaction.currency}`,
+          href: `/transactions?search=${encodeURIComponent(query)}`,
+          ...this.iconResult(transaction.icon ?? transaction.categoryRef?.icon),
+        }),
+      ),
+      ...members.map(
+        (member): SearchResult => ({
+          id: member.id,
+          type: 'member',
+          label: 'Member',
+          title: member.user.name,
+          subtitle: `${member.user.email} · ${member.role}`,
+          href: '/workspace-members',
+          ...this.iconResult(member.avatarIcon),
+        }),
+      ),
+      ...channels.map(
+        (channel): SearchResult => ({
+          id: channel.id,
+          type: 'telegram-channel',
+          label: channel.adminLinks.length ? 'Our channel' : 'External channel',
+          title: channel.title,
+          subtitle: channel.username ? `@${channel.username}` : null,
+          href: channel.adminLinks.length
+            ? `/telegram/channels/${channel.id}`
+            : '/telegram-channels?tab=channels&channelTab=external',
+          iconUrl: channel.photoUrl,
+        }),
+      ),
+      ...telegramAccounts.map(
+        (account): SearchResult => ({
+          id: account.id,
+          type: 'telegram-account',
+          label: 'Telegram account',
+          title: account.username ? `@${account.username}` : account.label,
+          subtitle: [account.firstName, account.phoneMasked, account.status]
+            .filter(Boolean)
+            .join(' · '),
+          href: '/telegram-channels?tab=accounts&accountTab=mtproto',
+          iconUrl: account.photoUrl,
+        }),
+      ),
+      ...bots.map(
+        (bot): SearchResult => ({
+          id: bot.id,
+          type: 'telegram-bot',
+          label: 'Bot',
+          title: bot.runtimeInstances[0]?.username
+            ? `@${bot.runtimeInstances[0].username}`
+            : bot.label,
+          subtitle: [
+            bot.runtimeInstances[0]?.firstName,
+            bot.runtimeInstances[0]?.botTokenMasked,
+            bot.isActive ? 'active' : 'inactive',
+          ]
+            .filter(Boolean)
+            .join(' · '),
+          href: '/telegram-channels?tab=bot',
+        }),
+      ),
+      ...promos.map(
+        (promo): SearchResult => ({
+          id: promo.id,
+          type: 'promo',
+          label: 'Ad',
+          title: promo.title,
+          subtitle: promo.telegramChannel?.title,
+          href: '/promos',
+          iconUrl: promo.telegramChannel?.photoUrl,
+        }),
+      ),
+      ...people.map(
+        (source): SearchResult => ({
+          id: source.id,
+          type: 'person',
+          label: 'Person',
+          title: source.name,
+          subtitle: source.telegramUsername
+            ? `@${source.telegramUsername}`
+            : source.url,
+          href: '/telegram-channels?tab=accounts&accountTab=people',
+          iconUrl: source.imageUrl,
+        }),
+      ),
+      ...campaigns.map(
+        (campaign): SearchResult => ({
+          id: campaign.id,
+          type: 'ad-campaign',
+          label: 'Ad',
+          title: campaign.title,
+          subtitle: [campaign.telegramChannel?.title, campaign.promo?.title]
+            .filter(Boolean)
+            .join(' · '),
+          href: `/ad-campaigns/${campaign.id}`,
+          iconUrl: campaign.telegramChannel?.photoUrl,
+        }),
+      ),
+      ...hypotheses.map(
+        (hypothesis): SearchResult => ({
+          id: hypothesis.id,
+          type: 'ad-hypothesis',
+          label: 'Ad hypothesis',
+          title: hypothesis.name,
+          subtitle: hypothesis.description || hypothesis.status,
+          href: '/ad-campaigns',
+        }),
+      ),
       ...managedPosts.map((post): SearchResult => {
         const icon = post.icon ? iconsById.get(post.icon) : null;
         return {
@@ -389,7 +473,13 @@ export class GlobalSearchService {
           type: 'telegram-managed-post',
           label: 'Post',
           title: post.title,
-          subtitle: [post.status.toLowerCase(), post.telegramChannel.title, post.group?.title].filter(Boolean).join(' · '),
+          subtitle: [
+            post.status.toLowerCase(),
+            post.telegramChannel.title,
+            post.group?.title,
+          ]
+            .filter(Boolean)
+            .join(' · '),
           href: `/telegram-posts/${encodeURIComponent(post.telegramChannelId)}/editor?postId=${encodeURIComponent(post.id)}`,
           iconUrl: icon?.imageUrl || post.telegramChannel.photoUrl,
           iconEmoji: icon?.emoji,
@@ -418,7 +508,10 @@ export class GlobalSearchService {
           note.postGroup?.telegramChannelId ||
           note.telegramChannelIds[0] ||
           '';
-        const title = note.title.trim() || note.content.trim().split('\n')[0] || 'Prompt note';
+        const title =
+          note.title.trim() ||
+          note.content.trim().split('\n')[0] ||
+          'Prompt note';
         const channelSubtitle =
           note.telegramChannel?.title ||
           note.postGroup?.title ||

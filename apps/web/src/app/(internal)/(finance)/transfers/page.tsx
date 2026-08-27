@@ -11,7 +11,8 @@ import { accountDisplayName } from '@/lib/features/finance/account-display';
 import { Account, Transfer, TransferQuery, accountsApi, currenciesApi, transfersApi } from '@/lib/api';
 import { InlineIconPicker } from '@/components/icons/inline-icon-picker';
 import { MoneyStack } from '@/components/ui/money-stack';
-import { Button, Card, ConfirmDeleteModal, DateInput, DateRangeInput, EmptyState, ErrorState, FormField, IconButton, Input, Modal, PageHeader, Select, TableLoadingState } from '@/components/ui/primitives';
+import { Button, Card, ConfirmDeleteModal, DateInput, DateRangeInput, EmptyState, ErrorState, FormField, Input, Modal, PageHeader, Select, TableLoadingState } from '@/components/ui/primitives';
+import { FinanceActionMenu } from '@/components/features/finance/internal/finance-action-menu';
 import { formatRate } from '@/lib/features/finance/money';
 import { useAppToast } from '@/providers/toast-provider';
 
@@ -102,7 +103,7 @@ export default function TransfersPage() {
                 <td className="px-3 py-2">{formatRate(t.exchangeRate, 1)}</td>
                 <td className="px-3 py-2">{t.transferLossAmount != null ? <MoneyStack amount={t.transferLossAmount} currency={t.toCurrency} settings={settings} rates={rates} mainClassName="font-medium text-white" subClassName="text-xs text-neutral-400" /> : '-'}</td>
                 <td className="max-w-[240px] truncate px-3 py-2">{t.description || '-'}</td>
-                <td className="px-3 py-2"><div className="flex gap-2"><IconButton onClick={() => setEditing(t)} /><IconButton kind="delete" onClick={() => setDeleting(t)} /></div></td>
+                <td className="px-3 py-2"><FinanceActionMenu label={`${nameOf(t.fromAccountId)} to ${nameOf(t.toAccountId)}`} onEdit={() => setEditing(t)} onDelete={() => setDeleting(t)} /></td>
               </tr>
             ))}
           </tbody>

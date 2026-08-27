@@ -150,11 +150,12 @@ function createService() {
     workspace: { findUnique: jest.fn(), findUniqueOrThrow: jest.fn() },
     account: { findFirst: jest.fn() },
     transactionCategory: { findFirst: jest.fn() },
-    transaction: { create: jest.fn() },
+    transaction: { create: jest.fn(), deleteMany: jest.fn() },
     telegramManagedPost: {
       findFirst: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
+      deleteMany: jest.fn(),
     },
     telegramPostMetricSnapshot: { findMany: jest.fn() },
     telegramChannel: { findFirst: jest.fn(), findMany: jest.fn() },
@@ -235,9 +236,16 @@ function createService() {
       findMany: jest.fn(),
       count: jest.fn(),
       findFirst: jest.fn(),
+      deleteMany: jest.fn(),
     },
+    telegramBotRuntimeInstance: { findFirst: jest.fn() },
+    telegramUserAccountIntegration: { findFirst: jest.fn() },
     telegramChannelAudienceSnapshot: { findFirst: jest.fn() },
-    $transaction: jest.fn(),
+    $transaction: jest.fn(async (operation: any) =>
+      typeof operation === 'function'
+        ? operation(prisma)
+        : Promise.all(operation),
+    ),
   };
   const workspaceService: any = {
     resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('ws-1'),
@@ -272,11 +280,25 @@ function createService() {
     createManagedPost: jest.fn(),
     scheduleManagedPost: jest.fn(),
     publishManagedPostNow: jest.fn(),
+    cancelScheduledManagedPost: jest.fn(),
+    returnManagedPostToDraft: jest.fn(),
     syncManagedPosts: jest.fn(),
+  };
+  const telegramPostGroupsService: any = {
+    ensureAdvertiseSystemGroup: jest
+      .fn()
+      .mockResolvedValue({ id: 'advertise-group-1' }),
+    addPostsToGroup: jest.fn(),
   };
   const mtprotoClient: any = { deletePublishedMessages: jest.fn() };
   const sourceAccessService: any = { sourcesForChannel: jest.fn() };
   const encryptionService: any = { decrypt: jest.fn() };
+  const telegramChannelAccessService: any = {
+    botTokenForSource: jest.fn(),
+    checkInlineButtonPublishingAccess: jest.fn(),
+    checkProductionBotPublishingAccess: jest.fn(),
+  };
+  const telegramBotApiClient: any = { deleteMessage: jest.fn() };
   const service = new TelegramAdSalesService(
     prisma,
     workspaceService,
@@ -285,11 +307,14 @@ function createService() {
     currencyConversionService,
     financeCategoriesService,
     telegramChannelsService,
+    telegramPostGroupsService,
     telegramChannelsService,
     telegramChannelsService,
     mtprotoClient,
     sourceAccessService,
     encryptionService,
+    telegramChannelAccessService,
+    telegramBotApiClient,
   );
   return {
     service,
@@ -300,6 +325,12 @@ function createService() {
     currencyConversionService,
     financeCategoriesService,
     telegramChannelsService,
+    telegramPostGroupsService,
+    sourceAccessService,
+    telegramChannelAccessService,
+    telegramBotApiClient,
+    mtprotoClient,
+    encryptionService,
   };
 }
 
@@ -343,6 +374,45 @@ describe('TelegramAdSalesService', () => {
           workspaceId: 'ws-1',
           OR: [{ telegramChannelId: 'channel-1', telegramMessageId: '42' }],
         }),
+      }),
+    );
+  });
+
+  it('includes unlinked legacy sales with the client Telegram username in the client order list', async () => {
+    const { service, prisma } = createService();
+    prisma.telegramAdvertiser.findFirst.mockResolvedValue({
+      telegramUsername: 'Artur_Pikhulia',
+    });
+    prisma.$transaction.mockResolvedValue([[], 0]);
+
+    await service.listSales('user-1', {
+      page: 1,
+      pageSize: 25,
+      advertiserId: 'advertiser-1',
+    });
+
+    expect(prisma.telegramAdSale.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          workspaceId: 'ws-1',
+          OR: [
+            { advertiserId: 'advertiser-1' },
+            {
+              advertiserId: null,
+              advertiserTelegram: {
+                in: ['artur_pikhulia', '@artur_pikhulia'],
+                mode: 'insensitive',
+              },
+            },
+            {
+              advertiserId: null,
+              advertiserTelegramSnapshot: {
+                in: ['artur_pikhulia', '@artur_pikhulia'],
+                mode: 'insensitive',
+              },
+            },
+          ],
+        },
       }),
     );
   });
@@ -463,10 +533,25 @@ describe('TelegramAdSalesService', () => {
     );
   });
 
-  it('deletes only a sale from the current workspace and returns affected channels', async () => {
+  it('deletes the sale and all linked local finance and post records', async () => {
     const { service, prisma } = createService();
     prisma.telegramAdSale.findFirst.mockResolvedValue(
-      makeSale({ advertiserId: null }),
+      makeSale({
+        advertiserId: null,
+        payments: [
+          makePayment({
+            transaction: { id: 'tx-1' },
+            reversalTransaction: { id: 'tx-reversal-1' },
+          }),
+        ],
+        placements: [
+          makePlacement({
+            publishedAt: null,
+            managedPost: { id: 'managed-post-1', telegramMessageIds: [] },
+            telegramPost: { id: 'telegram-post-1', telegramMessageId: '42' },
+          }),
+        ],
+      }),
     );
     prisma.telegramAdSale.delete.mockResolvedValue({ id: 'sale-1' });
 
@@ -482,6 +567,45 @@ describe('TelegramAdSalesService', () => {
     expect(prisma.telegramAdSale.delete).toHaveBeenCalledWith({
       where: { id: 'sale-1', workspaceId: 'ws-1' },
     });
+    expect(prisma.transaction.deleteMany).toHaveBeenCalledWith({
+      where: {
+        workspaceId: 'ws-1',
+        id: { in: ['tx-1', 'tx-reversal-1'] },
+      },
+    });
+    expect(prisma.telegramManagedPost.deleteMany).toHaveBeenCalledWith({
+      where: { workspaceId: 'ws-1', id: { in: ['managed-post-1'] } },
+    });
+    expect(prisma.telegramPost.deleteMany).toHaveBeenCalledWith({
+      where: { workspaceId: 'ws-1', id: { in: ['telegram-post-1'] } },
+    });
+  });
+
+  it('keeps the deal and local records when Telegram post deletion fails', async () => {
+    const { service, prisma } = createService();
+    prisma.telegramPost.findMany.mockResolvedValue([]);
+    prisma.telegramAdSale.findFirst.mockResolvedValue(
+      makeSale({
+        placements: [
+          makePlacement({
+            publishedAt: new Date('2026-08-22T09:00:00.000Z'),
+            deletedAt: null,
+            managedPost: { id: 'managed-post-1', telegramMessageIds: ['42'] },
+          }),
+        ],
+      }),
+    );
+    jest
+      .spyOn(service as any, 'deletePublishedPlacement')
+      .mockRejectedValue(new BadRequestException('Telegram deletion failed'));
+
+    await expect(service.deleteSale('user-1', 'sale-1')).rejects.toThrow(
+      'Telegram deletion failed',
+    );
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.telegramAdSale.delete).not.toHaveBeenCalled();
+    expect(prisma.transaction.deleteMany).not.toHaveBeenCalled();
   });
 
   it('creates and links an advertiser when the client id is null but creation is requested', async () => {
@@ -712,6 +836,254 @@ describe('TelegramAdSalesService', () => {
     });
   });
 
+  it('deletes a Bot API placement through the connected source token resolver', async () => {
+    const {
+      service,
+      prisma,
+      sourceAccessService,
+      telegramChannelAccessService,
+      telegramBotApiClient,
+    } = createService();
+    prisma.telegramAdSalePlacement.findFirst.mockResolvedValue(
+      makePlacement({
+        status: TelegramAdPlacementStatus.PUBLISHED,
+        publishedAt: new Date(),
+        managedPost: {
+          id: 'managed-post-1',
+          telegramMessageIds: ['42'],
+          telegramIdVerificationStatus: 'VERIFIED',
+          sourceType: 'BOT',
+          sourceId: 'system-bot',
+          publishedAt: new Date(),
+        },
+        telegramChannel: {
+          telegramChatId: '-100123',
+          username: 'channel',
+        },
+      }),
+    );
+    jest.spyOn(service as any, 'reconcilePlacementMetrics').mockResolvedValue({
+      actualViews24h: 10,
+      actualViews48h: 10,
+      actualViewsFinal: 10,
+      actualReactionsFinal: 1,
+      actualCpm: decimal(10),
+    });
+    jest.spyOn(service as any, 'getSaleDetails').mockResolvedValue(makeSale());
+    sourceAccessService.sourcesForChannel.mockResolvedValue([
+      {
+        sourceType: 'BOT',
+        sourceId: 'system-bot',
+        permissions: { canDeleteMessages: true },
+      },
+    ]);
+    telegramChannelAccessService.botTokenForSource.mockResolvedValue(
+      'connected-token',
+    );
+
+    await (service as any).deletePublishedPlacement('ws-1', 'placement-1');
+
+    expect(telegramChannelAccessService.botTokenForSource).toHaveBeenCalledWith(
+      'ws-1',
+      'system-bot',
+    );
+    expect(telegramBotApiClient.deleteMessage).toHaveBeenCalledWith(
+      'connected-token',
+      { chat_id: '-100123', message_id: 42 },
+    );
+    expect(prisma.telegramBotRuntimeInstance.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('completes an expired Bot API placement when Telegram says the post is already absent', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-27T18:05:00.000Z'));
+    const {
+      service,
+      prisma,
+      sourceAccessService,
+      telegramChannelAccessService,
+      telegramBotApiClient,
+    } = createService();
+    prisma.telegramAdSalePlacement.findFirst.mockResolvedValue(
+      makePlacement({
+        status: TelegramAdPlacementStatus.PUBLISHED,
+        publishedAt: new Date('2026-08-25T17:00:00.000Z'),
+        plannedDeleteAt: new Date('2026-08-27T18:00:00.000Z'),
+        managedPost: {
+          id: 'managed-post-1',
+          telegramMessageIds: ['42'],
+          telegramIdVerificationStatus: 'VERIFIED',
+          sourceType: 'BOT',
+          sourceId: 'system-bot',
+          publishedAt: new Date('2026-08-25T17:00:00.000Z'),
+        },
+        telegramChannel: {
+          telegramChatId: '-100123',
+          username: 'channel',
+        },
+      }),
+    );
+    jest.spyOn(service as any, 'reconcilePlacementMetrics').mockResolvedValue({
+      actualViews24h: 740,
+      actualViews48h: 740,
+      actualViewsFinal: 740,
+      actualReactionsFinal: 4,
+      actualCpm: decimal(10),
+    });
+    jest.spyOn(service as any, 'getSaleDetails').mockResolvedValue(makeSale());
+    sourceAccessService.sourcesForChannel.mockResolvedValue([
+      {
+        sourceType: 'BOT',
+        sourceId: 'system-bot',
+        permissions: { canDeleteMessages: true },
+      },
+    ]);
+    telegramChannelAccessService.botTokenForSource.mockResolvedValue(
+      'connected-token',
+    );
+    telegramBotApiClient.deleteMessage.mockRejectedValue(
+      new Error('Bad Request: message to delete not found'),
+    );
+
+    await expect(
+      (service as any).deletePublishedPlacement('ws-1', 'placement-1'),
+    ).resolves.toBeDefined();
+
+    expect(prisma.telegramAdSalePlacement.update).toHaveBeenCalledWith({
+      where: { id: 'placement-1' },
+      data: expect.objectContaining({
+        deletedAt: new Date('2026-08-27T18:05:00.000Z'),
+        status: TelegramAdPlacementStatus.COMPLETED,
+        completedAt: new Date('2026-08-27T18:05:00.000Z'),
+        lastDeletionError: null,
+      }),
+    });
+    expect(prisma.telegramManagedPost.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ telegramRemoteStatus: 'MISSING' }),
+      }),
+    );
+  });
+
+  it('falls back to MTProto when Bot API cannot access the channel', async () => {
+    const {
+      service,
+      prisma,
+      sourceAccessService,
+      telegramChannelAccessService,
+      telegramBotApiClient,
+      mtprotoClient,
+      encryptionService,
+    } = createService();
+    const telegramChannel = {
+      telegramChatId: '3976683330',
+      username: null,
+      telegramAccessHash: 'access-hash',
+    };
+    prisma.telegramAdSalePlacement.findFirst.mockResolvedValue(
+      makePlacement({
+        status: TelegramAdPlacementStatus.PUBLISHED,
+        publishedAt: new Date(),
+        managedPost: {
+          id: 'managed-post-1',
+          telegramMessageIds: ['86'],
+          telegramIdVerificationStatus: 'VERIFIED',
+          sourceType: 'BOT',
+          sourceId: 'system-bot',
+          publishedAt: new Date(),
+        },
+        telegramChannel,
+      }),
+    );
+    jest.spyOn(service as any, 'reconcilePlacementMetrics').mockResolvedValue({
+      actualViews24h: 10,
+      actualViews48h: 10,
+      actualViewsFinal: 10,
+      actualReactionsFinal: 1,
+      actualCpm: decimal(10),
+    });
+    jest.spyOn(service as any, 'getSaleDetails').mockResolvedValue(makeSale());
+    sourceAccessService.sourcesForChannel.mockResolvedValue([
+      {
+        sourceType: 'BOT',
+        sourceId: 'system-bot',
+        permissions: { canDeleteMessages: true },
+      },
+      {
+        sourceType: 'MTPROTO',
+        sourceId: 'account-1',
+        permissions: { canDeleteMessages: true },
+      },
+    ]);
+    telegramChannelAccessService.botTokenForSource.mockResolvedValue(
+      'connected-token',
+    );
+    telegramBotApiClient.deleteMessage.mockRejectedValue(
+      new Error('Bad Request: chat not found'),
+    );
+    prisma.telegramUserAccountIntegration.findFirst.mockResolvedValue({
+      id: 'account-1',
+      apiId: 123,
+      apiHashEncrypted: 'api-hash',
+      apiHashIv: 'api-hash-iv',
+      apiHashAuthTag: 'api-hash-tag',
+      sessionEncrypted: 'session',
+      sessionIv: 'session-iv',
+      sessionAuthTag: 'session-tag',
+    });
+    encryptionService.decrypt
+      .mockReturnValueOnce('decrypted-api-hash')
+      .mockReturnValueOnce('decrypted-session');
+
+    await (service as any).deletePublishedPlacement('ws-1', 'placement-1');
+
+    expect(mtprotoClient.deletePublishedMessages).toHaveBeenCalledWith({
+      apiId: 123,
+      apiHash: 'decrypted-api-hash',
+      session: 'decrypted-session',
+      channel: telegramChannel,
+      messageIds: ['86'],
+    });
+  });
+
+  it('recreates legacy MTProto scheduled ad posts through Bot API', async () => {
+    const { service, telegramChannelsService, telegramChannelAccessService } =
+      createService();
+    const sale = makeSale({
+      placements: [
+        makePlacement({
+          id: 'placement-1',
+          status: TelegramAdPlacementStatus.SCHEDULED,
+          scheduledAt: new Date('2026-08-28T13:30:00.000Z'),
+          managedPost: {
+            id: 'managed-post-1',
+            sourceType: 'MTPROTO',
+            telegramScheduledMessageIds: ['123'],
+          },
+        }),
+      ],
+    });
+    jest.spyOn(service as any, 'getSaleDetails').mockResolvedValue(sale);
+    jest.spyOn(service, 'getSale').mockResolvedValue(sale as never);
+    telegramChannelAccessService.checkProductionBotPublishingAccess.mockResolvedValue(
+      { canPublishWithInlineButtons: true },
+    );
+
+    await service.recreateScheduledPostsViaBot('user-1', 'sale-1');
+
+    expect(
+      telegramChannelAccessService.checkProductionBotPublishingAccess,
+    ).toHaveBeenCalledWith('user-1', 'channel-1');
+    expect(
+      telegramChannelsService.returnManagedPostToDraft,
+    ).toHaveBeenCalledWith('user-1', 'channel-1', 'managed-post-1');
+    expect(telegramChannelsService.scheduleManagedPost).toHaveBeenCalledWith(
+      'user-1',
+      'channel-1',
+      'managed-post-1',
+      { scheduledAt: '2026-08-28T13:30:00.000Z' },
+    );
+  });
+
   it('accepts analytics from/to aliases with whitelist validation and maps them into the range', async () => {
     const dto = plainToInstance(TelegramAdAnalyticsQueryDto, {
       from: '2026-08-01T00:00:00.000Z',
@@ -828,8 +1200,40 @@ describe('TelegramAdSalesService', () => {
     ).resolves.toBeDefined();
   });
 
+  it('creates advertising managed posts inside the channel Advertise system group', async () => {
+    const { service, prisma, telegramChannelsService, telegramPostGroupsService } =
+      createService();
+    jest.spyOn(service as any, 'getSaleDetails').mockResolvedValue(
+      makeSale({
+        assignedMemberId: 'member-1',
+        placements: [makePlacement()],
+      }),
+    );
+    telegramChannelsService.createManagedPost.mockResolvedValue({
+      id: 'managed-post-1',
+    });
+    prisma.telegramAdSalePlacement.update.mockResolvedValue({});
+
+    await service.createManagedPostFromPlacement(
+      'user-1',
+      'sale-1',
+      'placement-1',
+      { title: 'Advertising post' },
+    );
+
+    expect(
+      telegramPostGroupsService.ensureAdvertiseSystemGroup,
+    ).toHaveBeenCalledWith('ws-1', 'channel-1', 'member-1');
+    expect(telegramChannelsService.createManagedPost).toHaveBeenCalledWith(
+      'user-1',
+      'channel-1',
+      expect.objectContaining({ title: 'Advertising post' }),
+      { groupId: 'advertise-group-1' },
+    );
+  });
+
   it('attaches a published managed post to a past placement and marks it published', async () => {
-    const { service, prisma } = createService();
+    const { service, prisma, telegramPostGroupsService } = createService();
     const placement = makePlacement({
       status: TelegramAdPlacementStatus.RESERVED,
       scheduledAt: new Date('2026-08-01T10:00:00.000Z'),
@@ -884,6 +1288,11 @@ describe('TelegramAdSalesService', () => {
       }),
     );
     expect(wake).toHaveBeenCalledWith('telegram_ad_sales.due_deletions');
+    expect(telegramPostGroupsService.addPostsToGroup).toHaveBeenCalledWith(
+      'user-1',
+      'advertise-group-1',
+      { postIds: ['managed-post-1'] },
+    );
   });
 
   it('rejects a Telegram post URL from another channel with a clear message', async () => {

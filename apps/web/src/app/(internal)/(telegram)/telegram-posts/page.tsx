@@ -18,6 +18,7 @@ import * as Slider from "@radix-ui/react-slider";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  keepPreviousData,
   useMutation,
   useQueries,
   useQuery,
@@ -102,6 +103,9 @@ import { useManagedPostDueRefresh } from "@/components/features/telegram/telegra
 import { ManagedPostHistoryModal } from "@/components/features/telegram/telegram/managed-post-history-modal";
 import { ManagedPostExportButton } from "@/components/features/telegram/telegram/managed-post-export-button";
 import { ManagedPostReadOnlyPanel } from "@/components/features/telegram/telegram/managed-post-read-only-panel";
+import { ManagedPostSearchInput } from "@/components/features/telegram/telegram/managed-post-search-input";
+import { PostGroupCardsSkeleton } from "@/components/features/telegram/telegram/post-group-cards-skeleton";
+import { useManagedPostSearch } from "@/components/features/telegram/telegram/use-managed-post-search";
 import {
   expandDeepLinkedPostGroup,
   managedPostStatusTab,
@@ -1372,16 +1376,20 @@ function TelegramPostWorkspace({
                       !hasValidScheduleTime
                     ? "Enter publish time in HH:MM format."
                     : "";
-  const visiblePosts = (posts.data || []).filter(
-    (post) =>
-      savingPostIds.includes(post.id) ||
-      (statusTab === "DRAFT"
-        ? ["DRAFT", "FAILED", "PUBLISHING"].includes(post.status) ||
-          isBrokenPublishedPost(post)
-        : statusTab === "PUBLISHED"
-          ? post.status === "PUBLISHED" && !isBrokenPublishedPost(post)
-          : post.status === statusTab),
-  );
+  const {
+    query: postSearch,
+    setQuery: setPostSearch,
+    visiblePosts,
+    visiblePendingPosts: visiblePendingPostSaves,
+  } = useManagedPostSearch({
+    posts: posts.data || [],
+    pendingPosts: pendingPostSaves,
+    status: statusTab,
+    savingPostIds,
+    isBrokenPublishedPost,
+    groupTitle: (post) => effectivePostGroup(post)?.title,
+    memberName: (post) => effectivePostMember(post)?.user.name,
+  });
   const groupedVisiblePosts = useMemo(() => {
     const grouped = new Map<
       string,
@@ -1754,7 +1762,7 @@ function TelegramPostWorkspace({
     const grouped = new Map<string, PendingPostSave[]>();
     const ungrouped: PendingPostSave[] = [];
 
-    pendingPostSaves.forEach((post) => {
+    visiblePendingPostSaves.forEach((post) => {
       if (!post.groupId) {
         ungrouped.push(post);
         return;
@@ -1763,7 +1771,7 @@ function TelegramPostWorkspace({
     });
 
     return { grouped, ungrouped };
-  }, [pendingPostSaves]);
+  }, [visiblePendingPostSaves]);
   const canonicalSidebarKeys = useMemo(
     () =>
       [
@@ -5750,8 +5758,12 @@ function TelegramPostWorkspace({
                 </button>
               ))}
             </div>
+            <ManagedPostSearchInput
+              value={postSearch}
+              onChange={setPostSearch}
+            />
             {posts.isLoading ? <LoadingState /> : null}
-            {visiblePosts.length || pendingPostSaves.length ? (
+            {visiblePosts.length || visiblePendingPostSaves.length ? (
               <>
                 <div className="max-h-[calc(100vh-15rem)] space-y-2 overflow-y-auto pr-1">
                   {groupedPendingPostSaves.ungrouped.map((pending) => (
@@ -6101,7 +6113,13 @@ function TelegramPostWorkspace({
                 </div>
               </>
             ) : !posts.isLoading ? (
-              <EmptyState text={`No ${statusTab.toLowerCase()} posts`} />
+              <EmptyState
+                text={
+                  postSearch.trim()
+                    ? "No posts match this search"
+                    : `No ${statusTab.toLowerCase()} posts`
+                }
+              />
             ) : null}
           </Card>
         </div>
@@ -7006,6 +7024,7 @@ function PostGroupsWorkspace({
         page: groupsPagination.page,
         pageSize: groupsPagination.pageSize,
       }),
+    placeholderData: keepPreviousData,
   });
   const detail = useQuery({
     queryKey: ["post-group", selectedGroupId],
@@ -7032,6 +7051,7 @@ function PostGroupsWorkspace({
   }, [detail.data?.posts, orderedPostIds]);
 
   const groupsList = useMemo(() => groups.data?.items || [], [groups.data]);
+  const groupsLoading = groups.isLoading || groups.isPlaceholderData;
   useEffect(() => {
     if (!initialGroupId) {
       openedFromSearchRef.current = "";
@@ -7660,8 +7680,12 @@ function PostGroupsWorkspace({
           </p>
         </div>
       </div>
-      {groups.isLoading ? <LoadingState /> : null}
-      {groupsList.length ? (
+      {groupsLoading ? (
+        <PostGroupCardsSkeleton
+          count={groups.data?.items.length || groupsPagination.pageSize}
+        />
+      ) : null}
+      {!groupsLoading && groupsList.length ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {groupsList.map((group) => (
             <div
@@ -7736,7 +7760,7 @@ function PostGroupsWorkspace({
             </div>
           ))}
         </div>
-      ) : !groups.isLoading ? (
+      ) : !groupsLoading ? (
         <EmptyState text="No groups yet. Create the first named post series." />
       ) : null}
       {groups.data ? (
@@ -7749,7 +7773,7 @@ function PostGroupsWorkspace({
           hasPreviousPage={groups.data.pagination.hasPreviousPage}
           onPageChange={groupsPagination.setPage}
           onPageSizeChange={groupsPagination.setPageSize}
-          loading={groups.isFetching}
+          loading={groupsLoading}
         />
       ) : null}
       {groupForm ? (

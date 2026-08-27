@@ -13,11 +13,13 @@ export function AdSaleSharedPostEditor({
   channelTitle,
   channelPhotoUrl,
   onSave,
+  onRecreateViaBot,
 }: {
   sale: TelegramAdSale;
   channelTitle: string;
   channelPhotoUrl?: string | null;
   onSave: (draft: PlacementManagedPostDraft) => Promise<void>;
+  onRecreateViaBot?: () => Promise<void>;
 }) {
   const source = sale.placements.find(
     (placement) => placement.managedPost,
@@ -32,6 +34,7 @@ export function AdSaleSharedPostEditor({
     buttonRows: source?.buttonRows ?? [],
   }));
   const [saving, setSaving] = useState(false);
+  const [recreating, setRecreating] = useState(false);
   const [error, setError] = useState("");
 
   const save = async () => {
@@ -75,11 +78,34 @@ export function AdSaleSharedPostEditor({
         }}
       />
       {hasMtprotoPost ? (
-        <p className="rounded-lg border border-amber-800/60 bg-amber-950/20 px-3 py-2 text-sm text-amber-200">
-          Inline buttons cannot be added or changed because this post was
-          originally published through an MTProto account. Only posts published
-          through the Bot API can have inline buttons.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-800/60 bg-amber-950/20 px-3 py-2 text-sm text-amber-200">
+          <span>
+            Inline buttons require Bot API. Recreate the scheduled posts through
+            the bot to enable button editing in every channel.
+          </span>
+          <Button
+            variant="secondary"
+            disabled={recreating || saving || !onRecreateViaBot}
+            onClick={async () => {
+              if (!onRecreateViaBot) return;
+              setRecreating(true);
+              setError("");
+              try {
+                await onRecreateViaBot();
+              } catch (cause) {
+                setError(
+                  cause instanceof Error
+                    ? cause.message
+                    : "Could not recreate posts through the bot.",
+                );
+              } finally {
+                setRecreating(false);
+              }
+            }}
+          >
+            {recreating ? "Recreating via bot…" : "Recreate via bot"}
+          </Button>
+        </div>
       ) : null}
       {error ? <p className="text-sm text-rose-300">{error}</p> : null}
       <div className="flex justify-end border-t border-neutral-800 pt-4">

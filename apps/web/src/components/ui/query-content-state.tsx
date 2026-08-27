@@ -7,6 +7,7 @@ type QueryContentStateProps = {
   isError: boolean;
   isEmpty: boolean;
   loadingText?: string;
+  loadingContent?: ReactNode;
   errorText?: string;
   emptyText?: string;
   onRetry?: () => void;
@@ -23,12 +24,14 @@ export function QueryContentState({
   isError,
   isEmpty,
   loadingText,
+  loadingContent,
   errorText,
   emptyText,
   onRetry,
 }: QueryContentStateProps) {
   if (!isEmpty) return <>{children}</>;
-  if (isLoading) return <LoadingState text={loadingText} />;
+  if (isLoading)
+    return <>{loadingContent ?? <LoadingState text={loadingText} />}</>;
   if (isError)
     return (
       <div className="space-y-2">

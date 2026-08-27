@@ -10,12 +10,13 @@ import { AppShell } from '@/components/layout/app-shell';
 import { accountDisplayName } from '@/lib/features/finance/account-display';
 import { Account, TelegramChannelSelectOption as TelegramChannel, Transaction, TransactionCategory, TransactionQuery, WorkspaceMemberSelectOption as WorkspaceMember, accountsApi, currenciesApi, telegramChannelsApi, transactionCategoriesApi, transactionsApi, workspaceMembersApi } from '@/lib/api';
 import { MoneyStack } from '@/components/ui/money-stack';
-import { Button, Card, ConfirmDeleteModal, DateInput, DateRangeInput, EmptyState, ErrorState, FormField, IconButton, Input, Modal, PageHeader, Select, TableLoadingState } from '@/components/ui/primitives';
+import { Button, Card, ConfirmDeleteModal, DateInput, DateRangeInput, EmptyState, ErrorState, FormField, Input, Modal, PageHeader, Select, TableLoadingState } from '@/components/ui/primitives';
 import { IconPicker } from '@/components/icons/icon-picker';
 import { InlineIconPicker } from '@/components/icons/inline-icon-picker';
 import { useAppToast } from '@/providers/toast-provider';
 import { useDeleteTransactionMutation } from '@/lib/features/finance/use-delete-transaction-mutation';
 import { accountKeys } from '@/lib/query-keys';
+import { FinanceActionMenu } from '@/components/features/finance/internal/finance-action-menu';
 
 type Values = { accountId: string; type: 'income' | 'expense'; amount: number; categoryId: string; memberId?: string; telegramChannelId?: string; description?: string; date: string; iconId?: string | null };
 
@@ -179,7 +180,7 @@ export default function TransactionsPage() {
                     <span>{accountDisplayName(t.account)}</span>
                   </div>
                 </td>
-                <td className="px-3 py-2"><div className="flex gap-2"><IconButton onClick={() => setEditing(t)} /><IconButton kind="delete" onClick={() => setDeleting(t)} /></div></td>
+                <td className="px-3 py-2"><FinanceActionMenu label={getTransactionTitle(t)} onEdit={() => setEditing(t)} onDelete={() => setDeleting(t)} /></td>
               </tr>
             ))}
           </tbody>

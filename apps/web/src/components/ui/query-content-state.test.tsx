@@ -38,6 +38,16 @@ describe("QueryContentState", () => {
     expect(screen.queryByText("No records")).not.toBeInTheDocument();
   });
 
+  it("renders a structural loading placeholder when one is provided", () => {
+    renderState({
+      isLoading: true,
+      loadingContent: <div aria-label="Loading table rows">Rows skeleton</div>,
+    });
+
+    expect(screen.getByLabelText("Loading table rows")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Loading records")).not.toBeInTheDocument();
+  });
+
   it("keeps existing content visible during a failed background refresh", () => {
     renderState({ isError: true, isEmpty: false });
 

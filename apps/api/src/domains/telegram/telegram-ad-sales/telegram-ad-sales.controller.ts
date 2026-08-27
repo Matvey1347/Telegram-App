@@ -724,6 +724,14 @@ export class TelegramAdSalesController {
     return this.service.schedulePlacement(user.sub, saleId, placementId, dto);
   }
 
+  @Post(':saleId/recreate-scheduled-posts-via-bot')
+  recreateScheduledPostsViaBot(
+    @CurrentUser() user: JwtUser,
+    @Param('saleId') saleId: string,
+  ) {
+    return this.service.recreateScheduledPostsViaBot(user.sub, saleId);
+  }
+
   @Post(':saleId/schedule')
   scheduleSale(
     @CurrentUser() user: JwtUser,

@@ -25,6 +25,21 @@ describe('selectManagedPostPublishingSource', () => {
     ).toMatchObject({ sourceId: 'bot', sourceType: TelegramSourceType.BOT });
   });
 
+  it('selects the production bot for advertising when local and production bots are available', () => {
+    expect(
+      selectManagedPostPublishingSource(
+        [
+          source('system-bot', TelegramSourceType.BOT),
+          source('system-bot-production', TelegramSourceType.BOT),
+        ],
+        {
+          requiresBotApi: true,
+          preferredBotSourceId: 'system-bot-production',
+        },
+      ),
+    ).toMatchObject({ sourceId: 'system-bot-production' });
+  });
+
   it('keeps MTProto as the default source for ordinary posts', () => {
     expect(
       selectManagedPostPublishingSource(sources, {

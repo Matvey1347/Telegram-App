@@ -611,6 +611,12 @@ export function createTelegramAdSalesApi({
       ).data,
     scheduleSale: async (saleId: string, payload: Record<string, unknown>) =>
       (await api.post(`/telegram-ad-sales/${saleId}/schedule`, payload)).data,
+    recreateScheduledPostsViaBot: async (saleId: string) =>
+      (
+        await api.post<TelegramAdSale>(
+          `/telegram-ad-sales/${saleId}/recreate-scheduled-posts-via-bot`,
+        )
+      ).data,
     publishPlacement: async (
       saleId: string,
       placementId: string,

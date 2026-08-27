@@ -57,7 +57,9 @@ export class FinanceCategoriesService {
       '↩️',
       client,
     );
-    const buyChannelsCandidates = await (client as any).transactionCategory.findMany({
+    const buyChannelsCandidates = await (
+      client as any
+    ).transactionCategory.findMany({
       where: {
         workspaceId,
         type: 'expense',
@@ -92,7 +94,9 @@ export class FinanceCategoriesService {
       },
     });
 
-    const channelAdvertisingRevenueCategory = await (client as any).transactionCategory.upsert({
+    const channelAdvertisingRevenueCategory = await (
+      client as any
+    ).transactionCategory.upsert({
       where: {
         workspaceId_type_key: {
           workspaceId,
@@ -114,7 +118,9 @@ export class FinanceCategoriesService {
         iconId: channelAdvertisingRevenueIconId,
       },
     });
-    const telegramAdSalesCandidates = await (client as any).transactionCategory.findMany({
+    const telegramAdSalesCandidates = await (
+      client as any
+    ).transactionCategory.findMany({
       where: {
         workspaceId,
         type: 'income',
@@ -240,7 +246,7 @@ export class FinanceCategoriesService {
     await this.ensureSystemCategories(workspaceId);
 
     const categories = await (this.prisma as any).transactionCategory.findMany({
-      where: { workspaceId, type },
+      where: { workspaceId, type, deletedAt: null },
       include: {
         icon: {
           select: {
@@ -254,10 +260,12 @@ export class FinanceCategoriesService {
       },
       orderBy: [{ isSystem: 'desc' }, { name: 'asc' }],
     });
-    return categories.map((category: { icon?: Parameters<typeof iconToResolvedEmoji>[0] }) => ({
-      ...category,
-      iconPresentation: iconToResolvedEmoji(category.icon),
-    }));
+    return categories.map(
+      (category: { icon?: Parameters<typeof iconToResolvedEmoji>[0] }) => ({
+        ...category,
+        iconPresentation: iconToResolvedEmoji(category.icon),
+      }),
+    );
   }
 
   async create(userId: string, dto: CreateFinanceCategoryDto) {
@@ -293,7 +301,7 @@ export class FinanceCategoriesService {
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
     const category = await (this.prisma as any).transactionCategory.findFirst({
-      where: { id, workspaceId },
+      where: { id, workspaceId, deletedAt: null },
     });
     if (!category) throw new NotFoundException('Category not found');
 
@@ -356,6 +364,9 @@ export class FinanceCategoriesService {
       );
     }
 
-    return (this.prisma as any).transactionCategory.delete({ where: { id } });
+    return (this.prisma as any).transactionCategory.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 }
