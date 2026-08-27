@@ -3,8 +3,10 @@
 import { useMemo, useState } from "react";
 import type { TelegramAdSale } from "@telegram-system/shared";
 import type { Account } from "@/lib/api";
+import { formatDateTime } from "@/lib/date-format";
 import {
   Button,
+  CurrencySelect,
   FormField,
   Input,
   Modal,
@@ -129,12 +131,10 @@ export function RegisterPaymentModal({
               />
             </FormField>
             <FormField label="Currency">
-              <Input
+              <CurrencySelect
                 value={currency}
-                onChange={(event) =>
-                  setCurrency(event.target.value.toUpperCase())
-                }
-                maxLength={3}
+                onChange={setCurrency}
+                currencies={accounts.map((account) => account.currency)}
               />
             </FormField>
             <FormField label="Paid at">
@@ -172,7 +172,7 @@ export function RegisterPaymentModal({
                       {placement.telegramChannelId}
                     </p>
                     <p className="text-xs text-neutral-500">
-                      {new Date(placement.scheduledAt).toLocaleString()} ·{" "}
+                      {formatDateTime(placement.scheduledAt)} ·{" "}
                       {placement.status}
                     </p>
                   </div>

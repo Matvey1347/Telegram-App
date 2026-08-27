@@ -8,8 +8,177 @@ import {
   createTelegramChannelsTestHarness,
   type TelegramChannelsTestHarness,
 } from './__fixtures__/telegram-channels.test-harness';
+import { TelegramManagedPostEditTransportService } from './telegram-managed-post-edit-transport.service';
 
 describe('TelegramChannelsService updateManagedPost', () => {
+  it('edits a bot-owned advertising post through its bot even when MTProto is also available', async () => {
+    const botCall = jest.fn().mockResolvedValue({ ok: true });
+    const editReplyMarkup = jest.fn().mockResolvedValue({ ok: true });
+    const service = new TelegramManagedPostEditTransportService(
+      { editPostText: jest.fn() } as never,
+      {
+        sourcesForChannel: jest.fn().mockResolvedValue([
+          {
+            sourceId: 'account-1',
+            sourceType: TelegramSourceType.MTPROTO,
+            permissions: { canEditMessages: true, canPostMessages: true },
+          },
+          {
+            sourceId: 'bot-1',
+            sourceType: TelegramSourceType.BOT,
+            permissions: { canEditMessages: false, canPostMessages: true },
+          },
+        ]),
+      } as never,
+      { call: botCall, editMessageReplyMarkup: editReplyMarkup } as never,
+      {
+        mtprotoChannelReference: jest.fn().mockReturnValue({
+          telegramChatId: '-100123',
+          username: 'example',
+        }),
+        botTokenForSource: jest.fn().mockResolvedValue('token'),
+        botChatId: jest.fn().mockReturnValue('@example'),
+      } as never,
+      {
+        telegramTextEditNote: jest.fn(),
+        isBotMessageNotModified: jest.fn().mockReturnValue(false),
+      } as never,
+      {
+        resolveInternalPostLinksForPublish: jest
+          .fn()
+          .mockImplementation(async (_workspace, _post, text) => text),
+        renderManagedPostText: jest.fn().mockReturnValue({
+          richHtml: null,
+          publishMode: 'TEXT_ONLY',
+          captionHtml: '',
+          followupHtmlParts: [],
+          textHtmlParts: ['Updated text'],
+        }),
+        toBotMessageEntity: jest.fn(),
+      } as never,
+    );
+
+    await service.editManagedPostTextInTelegram({
+      workspaceId: 'workspace',
+      channelId: 'channel',
+      post: {
+        id: 'post-bot',
+        status: TelegramManagedPostStatus.PUBLISHED,
+        text: 'Old text',
+        imageUrls: [],
+        publishMode: 'TEXT_ONLY',
+        sourceId: 'bot-1',
+        sourceType: TelegramSourceType.BOT,
+        scheduledAt: null,
+        telegramScheduledMessageIds: [],
+        telegramMessageIds: ['42'],
+        telegramMessageUrls: [],
+        buttonRows: [],
+      },
+      channel: {
+        id: 'channel',
+        workspaceId: 'workspace',
+        username: 'example',
+        telegramChatId: '-100123',
+      },
+      nextText: 'Updated text',
+      buttonRows: [[{ text: 'Open', url: 'https://example.com' }]],
+      inPlaceOnly: true,
+    });
+
+    expect(botCall).toHaveBeenCalledWith(
+      'token',
+      'editMessageText',
+      expect.objectContaining({ message_id: 42 }),
+    );
+    expect(editReplyMarkup).toHaveBeenCalled();
+  });
+
+  it('updates an existing scheduled Telegram message instead of recreating it', async () => {
+    const post = {
+      id: 'post-scheduled',
+      workspaceId: 'workspace',
+      telegramChannelId: 'channel',
+      title: 'Campaign',
+      text: 'Old text',
+      imageUrls: [],
+      buttonRows: [],
+      status: TelegramManagedPostStatus.SCHEDULED,
+      telegramRemoteStatus: TelegramManagedPostRemoteStatus.SCHEDULED,
+      scheduledAt: new Date('2026-08-28T10:00:00Z'),
+      publishedAt: null,
+      telegramScheduledMessageIds: ['91'],
+      telegramMessageIds: [],
+      telegramMessageUrls: [],
+      sourceId: 'mtproto-1',
+      sourceType: TelegramSourceType.MTPROTO,
+      publishMode: 'TEXT_ONLY',
+      assignedMemberId: 'member-1',
+      icon: null,
+      groupId: null,
+      groupPosition: null,
+      statusPosition: null,
+      sidebarPosition: null,
+    };
+    const prisma = {
+      telegramManagedPost: {
+        findFirst: jest.fn().mockResolvedValue(post),
+        update: jest.fn().mockResolvedValue({ ...post, text: 'New text' }),
+      },
+      telegramChannel: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'channel',
+          workspaceId: 'workspace',
+          telegramChatId: '-100123',
+          username: 'example',
+        }),
+      },
+      $transaction: jest
+        .fn()
+        .mockImplementation(async (callback) => callback(prisma)),
+    };
+    const service = createTelegramChannelsTestHarness(
+      prisma as never,
+      {
+        resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace'),
+      } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    const editManagedPostTextInTelegram = jest.fn().mockResolvedValue({
+      telegramScheduledMessageIds: ['91'],
+      lastTelegramSyncNote: 'Scheduled Telegram message updated.',
+    });
+    service['editManagedPostTextInTelegram'] = editManagedPostTextInTelegram;
+    service['createManagedPostRevision'] = jest
+      .fn()
+      .mockResolvedValue(undefined);
+    service['attachManagedPostIcons'] = jest
+      .fn()
+      .mockImplementation(async (posts) => posts);
+
+    await service.updateManagedPost('user', 'channel', post.id, {
+      title: 'Campaign',
+      text: 'New text',
+    });
+
+    expect(editManagedPostTextInTelegram).toHaveBeenCalledWith(
+      expect.objectContaining({
+        post: expect.objectContaining({
+          id: post.id,
+          telegramScheduledMessageIds: ['91'],
+        }),
+        nextText: 'New text',
+      }),
+    );
+    expect(prisma.telegramManagedPost.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: post.id } }),
+    );
+  });
+
   it('recovers telegram message ids from the saved URL and reuses an editable source', async () => {
     const post = {
       id: 'post-1',

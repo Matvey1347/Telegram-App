@@ -107,6 +107,7 @@ export class TelegramChannelsService {
   inviteLinkHistory: TelegramChannelReadModelsService['inviteLinkHistory'];
   promosByChannel: TelegramChannelContentReadService['promosByChannel'];
   posts: TelegramChannelContentReadService['posts'];
+  publishedPostsForSelect: TelegramChannelContentReadService['publishedPostsForSelect'];
   analytics: TelegramChannelContentReadService['analytics'];
   attachInviteLinkCampaign: TelegramInviteCampaignService['attachInviteLinkCampaign'];
   detachInviteLinkCampaign: TelegramInviteCampaignService['detachInviteLinkCampaign'];
@@ -241,6 +242,7 @@ export class TelegramChannelsService {
     this.inviteLinkHistory = reads.inviteLinkHistory.bind(reads);
     this.promosByChannel = content.promosByChannel.bind(content);
     this.posts = content.posts.bind(content);
+    this.publishedPostsForSelect = content.publishedPostsForSelect.bind(content);
     this.analytics = content.analytics.bind(content);
     this.attachInviteLinkCampaign =
       campaign.attachInviteLinkCampaign.bind(campaign);

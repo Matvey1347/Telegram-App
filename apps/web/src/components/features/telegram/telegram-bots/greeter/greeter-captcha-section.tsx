@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDateTime } from "@/lib/date-format";
+
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
@@ -77,7 +79,7 @@ export function GreeterCaptchaSection({
               <p className="mt-1 text-xs text-neutral-400">
                 Draft r{configuration.draftRevision} · Published r{configuration.publishedRevision}
                 {configuration.publishedAt
-                  ? ` on ${new Date(configuration.publishedAt).toLocaleString()}`
+                  ? ` on ${formatDateTime(configuration.publishedAt)}`
                   : " · never published"}
               </p>
             </div>

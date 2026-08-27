@@ -249,19 +249,23 @@ export function TelegramNetworkCard({
             <span>{percent(summary.reactionRate)}</span>
           </div>
         </div>
-        {!network.isSystem ? (
+        {network.canEdit || network.canDelete ? (
           <TelegramCardActionsMenu label={`Actions for ${network.name}`}>
-            <TelegramCardMenuAction
-              label="Edit network"
-              icon={<Pencil size={17} />}
-              onClick={onEdit}
-            />
-            <TelegramCardMenuAction
-              danger
-              label="Delete network"
-              icon={<Trash2 size={17} />}
-              onClick={onDelete}
-            />
+            {network.canEdit ? (
+              <TelegramCardMenuAction
+                label={network.isSystem ? "Configure included channels" : "Edit network"}
+                icon={<Pencil size={17} />}
+                onClick={onEdit}
+              />
+            ) : null}
+            {network.canDelete ? (
+              <TelegramCardMenuAction
+                danger
+                label="Delete network"
+                icon={<Trash2 size={17} />}
+                onClick={onDelete}
+              />
+            ) : null}
           </TelegramCardActionsMenu>
         ) : null}
       </div>

@@ -598,4 +598,48 @@ describe('FinanceChatFlowService', () => {
     );
     expect(ledger.createTransaction).not.toHaveBeenCalled();
   });
+
+  it('accepts a sent Premium emoji at the account icon step', async () => {
+    prisma.financeChatFlow.findUnique.mockResolvedValue({
+      id: 'flow-icon',
+      profileId: input.profileId,
+      operationKind: 'ACCOUNT_CREATE',
+      status: 'ACTIVE',
+      step: 'ACCOUNT_EMOJI',
+      revision: 'rev-icon',
+      payload: {
+        revision: 'rev-icon',
+        name: 'Daily',
+        type: 'CARD',
+      },
+      expiresAt: future,
+    });
+
+    await expect(
+      service.consumeText({
+        ...input,
+        text: '🔥',
+        iconSource: '![🔥](tg://emoji?id=5368324170671202286)',
+      }),
+    ).resolves.toMatchObject({
+      kind: 'prompt',
+      step: 'ACCOUNT_CURRENCY',
+      payload: {
+        emoji: '![🔥](tg://emoji?id=5368324170671202286)',
+      },
+    });
+  });
+
+  it('shows full currency presentation in bot choices while preserving ISO ids', () => {
+    expect(service.currencyKeyboard()).toEqual([
+      [
+        { id: 'UAH', text: '🇺🇦 ₴ UAH' },
+        { id: 'USD', text: '🇺🇸 $ USD' },
+      ],
+      [
+        { id: 'EUR', text: '🇪🇺 € EUR' },
+        { id: 'PLN', text: '🇵🇱 zł PLN' },
+      ],
+    ]);
+  });
 });

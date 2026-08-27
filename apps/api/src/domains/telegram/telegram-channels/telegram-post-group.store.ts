@@ -13,6 +13,7 @@ import {
 import { TelegramChannelSchemaCompatibilityService } from './telegram-channel-schema-compatibility.service';
 import {
   ADVERTISE_SYSTEM_GROUP_KEY,
+  ADVERTISE_SYSTEM_GROUP_ICON,
   ADVERTISE_SYSTEM_GROUP_TITLE,
   SYSTEM_BOT_POSTS_GROUP_KEY,
   SYSTEM_BOT_POSTS_GROUP_TITLE,
@@ -103,13 +104,14 @@ export class TelegramPostGroupStore {
       groups.find(
         (group) =>
           group.title.trim().toLocaleLowerCase() ===
-          ADVERTISE_SYSTEM_GROUP_TITLE,
+          ADVERTISE_SYSTEM_GROUP_TITLE.toLocaleLowerCase(),
       );
     if (existing) {
       if (
         existing.isSystem &&
         existing.systemKey === ADVERTISE_SYSTEM_GROUP_KEY &&
-        existing.title === ADVERTISE_SYSTEM_GROUP_TITLE
+        existing.title === ADVERTISE_SYSTEM_GROUP_TITLE &&
+        existing.icon === ADVERTISE_SYSTEM_GROUP_ICON
       ) {
         return existing;
       }
@@ -117,6 +119,7 @@ export class TelegramPostGroupStore {
         where: { id: existing.id },
         data: {
           title: ADVERTISE_SYSTEM_GROUP_TITLE,
+          icon: ADVERTISE_SYSTEM_GROUP_ICON,
           isSystem: true,
           systemKey: ADVERTISE_SYSTEM_GROUP_KEY,
         },
@@ -152,12 +155,14 @@ export class TelegramPostGroupStore {
       },
       update: {
         title: ADVERTISE_SYSTEM_GROUP_TITLE,
+        icon: ADVERTISE_SYSTEM_GROUP_ICON,
         isSystem: true,
       },
       create: {
         workspaceId,
         telegramChannelId: channelId,
         title: ADVERTISE_SYSTEM_GROUP_TITLE,
+        icon: ADVERTISE_SYSTEM_GROUP_ICON,
         isSystem: true,
         systemKey: ADVERTISE_SYSTEM_GROUP_KEY,
         createdByMemberId,

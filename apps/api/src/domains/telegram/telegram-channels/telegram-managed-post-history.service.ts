@@ -263,6 +263,11 @@ export class TelegramManagedPostHistoryService {
       post.status === TelegramManagedPostStatus.SCHEDULED &&
       nextButtonRows.length > 0 &&
       post.scheduleMode !== 'LOCAL';
+    if (dto.inPlaceOnly && convertsNativeScheduleToLocal) {
+      throw new BadRequestException(
+        'This scheduled Telegram post cannot add inline buttons without replacing the remote message.',
+      );
+    }
     let localBotSource:
       | Awaited<
           ReturnType<TelegramSourceAccessService['sourcesForChannel']>
@@ -295,12 +300,14 @@ export class TelegramManagedPostHistoryService {
       );
     }
     const nextText = dto.text ?? post.text ?? '';
-    const canEditPublishedTelegramText =
-      post.status === TelegramManagedPostStatus.PUBLISHED &&
-      post.telegramRemoteStatus === TelegramManagedPostRemoteStatus.PUBLISHED;
+    const canEditRemoteTelegramText =
+      (post.status === TelegramManagedPostStatus.PUBLISHED &&
+        post.telegramRemoteStatus === TelegramManagedPostRemoteStatus.PUBLISHED) ||
+      (post.status === TelegramManagedPostStatus.SCHEDULED &&
+        post.telegramScheduledMessageIds.length > 0);
     const channel =
       (dto.text !== undefined || dto.buttonRows !== undefined) &&
-      canEditPublishedTelegramText
+      canEditRemoteTelegramText
         ? await this.prisma.telegramChannel.findFirst({
             where: { id: channelId, workspaceId },
             select: {
@@ -314,7 +321,7 @@ export class TelegramManagedPostHistoryService {
         : null;
     const telegramEdit =
       (dto.text !== undefined || dto.buttonRows !== undefined) &&
-      canEditPublishedTelegramText &&
+      canEditRemoteTelegramText &&
       channel
         ? await this.telegramManagedPostEditTransportService.editManagedPostTextInTelegram(
             {
@@ -325,6 +332,7 @@ export class TelegramManagedPostHistoryService {
               nextText,
               buttonRows:
                 dto.buttonRows === undefined ? post.buttonRows : dto.buttonRows,
+              inPlaceOnly: dto.inPlaceOnly,
             },
           )
         : null;

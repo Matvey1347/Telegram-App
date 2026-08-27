@@ -46,6 +46,40 @@ describe('TelegramBotInteractiveReplyService', () => {
     );
   });
 
+  it('preserves a Premium emoji document id on inline buttons', async () => {
+    const api = { sendMessage: jest.fn().mockResolvedValue({ message_id: 8 }) };
+    await new TelegramBotInteractiveReplyService(api as never).send(
+      'token',
+      'chat',
+      {
+        text: 'Choose',
+        inlineButtons: [
+          [
+            {
+              text: '🔥 Card',
+              callbackData: 'card',
+              iconCustomEmojiId: '5368324170671202286',
+            },
+          ],
+        ],
+      },
+    );
+    expect(api.sendMessage).toHaveBeenCalledWith(
+      'token',
+      expect.objectContaining({
+        reply_markup: {
+          inline_keyboard: [
+            [
+              expect.objectContaining({
+                icon_custom_emoji_id: '5368324170671202286',
+              }),
+            ],
+          ],
+        },
+      }),
+    );
+  });
+
   it('can explicitly remove a stale reply keyboard', async () => {
     const api = { sendMessage: jest.fn().mockResolvedValue({ message_id: 9 }) };
     await new TelegramBotInteractiveReplyService(api as never).send(

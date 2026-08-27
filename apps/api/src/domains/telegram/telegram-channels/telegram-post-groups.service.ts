@@ -188,6 +188,12 @@ export class TelegramPostGroupsService {
         select: { id: true, assignedMemberId: true },
       });
       if (!channel) throw new NotFoundException('Telegram channel not found');
+      await this.telegramPostGroupStore.ensureRequiredChannelSystemGroups(
+        this.prisma,
+        workspaceId,
+        query.telegramChannelId,
+        channel.assignedMemberId ?? null,
+      );
       await this.telegramPostGroupStore.ensureTelegramImportedSystemGroup(
         workspaceId,
         query.telegramChannelId,

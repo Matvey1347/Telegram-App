@@ -14,6 +14,7 @@ describe('TelegramAdPlacementLifecycleService', () => {
             id: 'placement-1',
             workspaceId: 'workspace-1',
             telegramChannelId: 'channel-1',
+            scheduledAt: new Date('2026-08-19T07:00:00.000Z'),
             status: TelegramAdPlacementStatus.SCHEDULED,
             telegramPostId: null,
             deleteAfterHoursSnapshot: 24,
@@ -46,11 +47,49 @@ describe('TelegramAdPlacementLifecycleService', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           status: TelegramAdPlacementStatus.PUBLISHED,
-          plannedDeleteAt: new Date('2026-08-20T08:00:00.000Z'),
+          plannedDeleteAt: new Date('2026-08-20T09:00:00.000Z'),
         }),
       }),
     );
     expect(wake).toHaveBeenCalledTimes(1);
     expect(wake).toHaveBeenCalledWith('telegram_ad_sales.due_deletions');
+  });
+
+  it('repairs a directly linked post that is missing its publication lifecycle', async () => {
+    const postDate = new Date('2026-08-20T09:16:00.000Z');
+    const update = jest.fn().mockResolvedValue({});
+    const prisma = {
+      telegramAdSalePlacement: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'placement-direct',
+            workspaceId: 'workspace-1',
+            telegramChannelId: 'channel-1',
+            scheduledAt: postDate,
+            status: TelegramAdPlacementStatus.RESERVED,
+            telegramPostId: 'post-1',
+            deleteAfterHoursSnapshot: 24,
+            isPermanentSnapshot: false,
+            managedPost: null,
+            telegramPost: { id: 'post-1', postDate },
+          },
+        ]),
+        update,
+      },
+      telegramPost: { findFirst: jest.fn() },
+    };
+    const service = new TelegramAdPlacementLifecycleService(prisma as never);
+
+    await expect(service.reconcilePublishedPlacements()).resolves.toEqual({
+      reconciled: 1,
+    });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'placement-direct' },
+      data: expect.objectContaining({
+        status: TelegramAdPlacementStatus.PUBLISHED,
+        publishedAt: postDate,
+        plannedDeleteAt: new Date('2026-08-21T10:16:00.000Z'),
+      }),
+    });
   });
 });

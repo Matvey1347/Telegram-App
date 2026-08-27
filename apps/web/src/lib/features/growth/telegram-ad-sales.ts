@@ -234,11 +234,35 @@ function zonedParts(date: Date, timezone: string) {
   return Object.fromEntries(parts.map((part) => [part.type, part.value]));
 }
 
+export function isValidZonedDateTimeInput(dateKey: string, time: string) {
+  const dateMatch = dateKey.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const timeMatch = time.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!dateMatch || !timeMatch) return false;
+  const [, yearValue, monthValue, dayValue] = dateMatch;
+  const [, hourValue, minuteValue, secondValue = "0"] = timeMatch;
+  const year = Number(yearValue);
+  const month = Number(monthValue);
+  const day = Number(dayValue);
+  const hour = Number(hourValue);
+  const minute = Number(minuteValue);
+  const second = Number(secondValue);
+  if (hour > 23 || minute > 59 || second > 59) return false;
+  const calendarDate = new Date(Date.UTC(year, month - 1, day));
+  return (
+    calendarDate.getUTCFullYear() === year &&
+    calendarDate.getUTCMonth() === month - 1 &&
+    calendarDate.getUTCDate() === day
+  );
+}
+
 export function zonedDateTimeToUtc(
   dateKey: string,
   time: string,
   timezone: string,
 ) {
+  if (!isValidZonedDateTimeInput(dateKey, time)) {
+    return new Date(Number.NaN);
+  }
   const [year, month, day] = dateKey.split("-").map(Number);
   const [hour, minute, second = 0] = time.split(":").map(Number);
   let guess = new Date(Date.UTC(year, month - 1, day, hour, minute, second));

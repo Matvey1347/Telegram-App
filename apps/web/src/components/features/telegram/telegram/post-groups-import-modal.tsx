@@ -12,17 +12,25 @@ import {
   parsePostGroupImportContent,
   postGroupsGptPrompt,
 } from "./post-groups-import-model";
+import {
+  ChannelImportNavigation,
+  type ChannelImportMode,
+} from "./channel-import-navigation";
 
 export function PostGroupsImportModal({
   open,
   channelId,
   onClose,
   onImported,
+  mode,
+  onModeChange,
 }: {
   open: boolean;
   channelId: string;
   onClose: () => void;
   onImported: () => Promise<void>;
+  mode: ChannelImportMode;
+  onModeChange: (mode: ChannelImportMode) => void;
 }) {
   const { pushToast, startOperation } = useAppToast();
   const [content, setContent] = useState("");
@@ -84,26 +92,32 @@ export function PostGroupsImportModal({
   );
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Import post groups"
-      size="xl"
-      headerAction={
-        <Button
-          type="button"
-          variant="secondary"
-          className="h-9 px-3 text-sm"
-          onClick={async () => {
-            await navigator.clipboard.writeText(prompt);
-            pushToast("Group import prompt copied.", "success");
-          }}
-        >
-          <ClipboardList size={15} /> GPT prompt
-        </Button>
-      }
-    >
+    <Modal open={open} onClose={onClose} title="Channel import" size="xl">
       <div className="space-y-4">
+        <ChannelImportNavigation
+          value={mode}
+          onChange={onModeChange}
+          disabled={importing}
+        />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-white">Import groups</h3>
+            <p className="mt-0.5 text-xs text-neutral-400">
+              Copy the expected format before preparing group data with GPT.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={importing}
+            onClick={async () => {
+              await navigator.clipboard.writeText(prompt);
+              pushToast("Prompt copied.", "success");
+            }}
+          >
+            <ClipboardList size={15} /> Prompt
+          </Button>
+        </div>
         <ManagedPostsImportSource
           content={content}
           fileName={fileName}

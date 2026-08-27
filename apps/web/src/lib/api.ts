@@ -729,6 +729,7 @@ const telegramChannelHelpers = createTelegramChannelHelpers({
   getPaginated,
   getAllPaginatedItems,
   streamProgressAction,
+  silentFeedbackConfig,
 });
 
 export const {
@@ -739,6 +740,7 @@ export const {
   syncTelegramChannelPostMetrics,
   getTelegramChannelAnalytics,
   getTelegramChannelPosts,
+  getAllTelegramChannelPosts,
   getTelegramChannelInviteLinks,
   getTelegramChannelInviteLinksForSelect,
   getAllTelegramChannelInviteLinks,
@@ -750,6 +752,7 @@ export const telegramAdSalesApi = createTelegramAdSalesApi({
   api,
   getPaginated,
   silentFeedbackConfig,
+  streamProgressAction,
 });
 
 export const scheduledTasksApi = createScheduledTasksApi(api);

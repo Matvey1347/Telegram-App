@@ -5,13 +5,17 @@ import { buildTelegramGptContextFilename } from "@telegram-system/shared";
 import { Button } from "@/components/ui/primitives";
 import { telegramChannelsApi } from "@/lib/api";
 import { useAppToast } from "@/providers/toast-provider";
+import { Download } from "lucide-react";
+import { TelegramCardMenuAction } from "./telegram-card-actions-menu";
 
 export function GptContextDownloadButton({
   channelId,
   channelTitle,
+  presentation = "button",
 }: {
   channelId: string;
   channelTitle: string;
+  presentation?: "button" | "menu";
 }) {
   const { pushToast } = useAppToast();
   const [downloading, setDownloading] = useState(false);
@@ -29,7 +33,7 @@ export function GptContextDownloadButton({
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      pushToast("GPT context downloaded.", "success");
+      pushToast("Context downloaded.", "success");
     } catch (error) {
       pushToast(
         apiErrorMessage(error, "Could not download GPT context"),
@@ -40,19 +44,32 @@ export function GptContextDownloadButton({
     }
   };
 
+  if (presentation === "menu") {
+    return (
+      <TelegramCardMenuAction
+        label={downloading ? "Downloading Context…" : "Context"}
+        icon={<Download size={15} />}
+        disabled={downloading}
+        onClick={() => void download()}
+      />
+    );
+  }
+
   return (
     <Button
       variant="secondary"
       className="shrink-0"
+      aria-label="Context"
       disabled={downloading}
       aria-busy={downloading}
       onClick={download}
     >
-      GPT Context
+      <Download size={15} />
+      Context
       {downloading ? (
         <span
           role="status"
-          aria-label="Downloading GPT context"
+          aria-label="Downloading context"
           className="inline-block w-4 animate-pulse text-left tracking-widest"
         >
           <span aria-hidden="true">...</span>

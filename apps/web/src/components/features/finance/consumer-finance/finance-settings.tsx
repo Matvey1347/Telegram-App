@@ -30,6 +30,7 @@ import {
   financeTimezoneLabel,
   financeTimezoneOptions,
 } from "./finance-timezones";
+import { FinanceCurrencySelect } from "./ui/finance-currency-select";
 
 export function FinanceSettings({
   botId,
@@ -193,15 +194,11 @@ export function FinanceSettings({
               </FormField>
               <div>
                 <FormField label={t.mainCurrency}>
-                  <Select
-                    uiLocale={locale}
+                  <FinanceCurrencySelect
+                    locale={locale}
                     value={currency}
-                    onChange={(event) => setCurrency(event.target.value)}
-                  >
-                    {["UAH", "USD", "EUR", "PLN"].map((item) => (
-                      <option key={item}>{item}</option>
-                    ))}
-                  </Select>
+                    onChange={setCurrency}
+                  />
                 </FormField>
                 <p className="mt-1 text-xs text-neutral-500">
                   {t.currencyHelp}

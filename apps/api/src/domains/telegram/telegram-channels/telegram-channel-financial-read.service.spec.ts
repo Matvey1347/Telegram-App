@@ -134,6 +134,31 @@ describe('TelegramChannelFinancialReadService', () => {
         revenue: 8_000,
       },
     });
+
+    const normalized = await service.buildChannelFinancialSummaryPreview(
+      'workspace-1',
+      [
+        {
+          id: 'channel-1',
+          purchaseTransactionId: 'purchase-1',
+          currentSubscribersCount: 1_000,
+          ownViewsPerPost: 10_000,
+          adBaseCpm: null,
+          kpiCurrency: 'UAH',
+          targetCpa: 9,
+          stopCpaFrom: 12,
+          audienceSnapshots: [],
+        },
+      ],
+      { normalizeToPrimaryCurrency: true },
+    );
+    expect(normalized.get('channel-1')?.assetEconomics).toMatchObject({
+      currency: 'USD',
+      purchasePrice: 468.72,
+      adSpend: 255.29,
+      invested: 724.01,
+      revenue: 179.1,
+    });
   });
 
   it('counts every active ad-sale allocation and falls back from zero own views for ad pricing', async () => {

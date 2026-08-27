@@ -10,28 +10,24 @@ describe('TelegramBotLoadingFeedbackService', () => {
     update: { message: { chat: { id: 'chat-1' }, text: 'hello' } },
   } as any;
 
-  it('shows and removes the same temporary loading message for a chat update', async () => {
+  it('uses Telegram native typing feedback without creating a message', async () => {
     const api = {
-      sendMessage: jest.fn().mockResolvedValue({ message_id: 42 }),
-      deleteMessage: jest.fn().mockResolvedValue(true),
+      sendChatAction: jest.fn().mockResolvedValue(true),
     };
     const service = new TelegramBotLoadingFeedbackService(api as any);
 
     const loading = await service.show(context);
     await service.remove(loading);
 
-    expect(api.sendMessage).toHaveBeenCalledWith('local-token', {
-      chat_id: 'chat-1',
-      text: '⏳ Loading…',
-    });
-    expect(api.deleteMessage).toHaveBeenCalledWith('local-token', {
-      chat_id: 'chat-1',
-      message_id: 42,
-    });
+    expect(api.sendChatAction).toHaveBeenCalledWith(
+      'local-token',
+      'chat-1',
+      'typing',
+    );
   });
 
   it('does not add chat work to a pre-checkout update', async () => {
-    const api = { sendMessage: jest.fn(), deleteMessage: jest.fn() };
+    const api = { sendChatAction: jest.fn() };
     const service = new TelegramBotLoadingFeedbackService(api as any);
 
     await expect(
@@ -40,6 +36,6 @@ describe('TelegramBotLoadingFeedbackService', () => {
         update: { pre_checkout_query: { id: 'pc' } },
       } as any),
     ).resolves.toBeNull();
-    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(api.sendChatAction).not.toHaveBeenCalled();
   });
 });

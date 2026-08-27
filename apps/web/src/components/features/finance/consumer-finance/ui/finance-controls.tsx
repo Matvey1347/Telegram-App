@@ -130,6 +130,9 @@ export function Select(
         fallback: optionProps[
           "data-icon-fallback" as keyof typeof optionProps
         ] as string | undefined,
+        meta: optionProps["data-option-meta" as keyof typeof optionProps] as
+          | string
+          | undefined,
         className:
           optionProps.className ||
           (value.toLowerCase() === "income"
@@ -197,13 +200,18 @@ export function Select(
         }}
         className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm disabled:opacity-50 ${financeUiTokens.control} ${props.className ?? ""}`}
       >
-        <span className="flex min-w-0 items-center gap-2">
+        <span className="flex min-w-0 flex-1 items-center gap-2">
           <OptionIcon emoji={selected?.emoji} fallback={selected?.fallback} />
           <span
             className={`truncate ${selected?.className || (selected ? "text-white" : "text-neutral-400")}`}
           >
             {selected?.label || copy.select}
           </span>
+          {selected?.meta ? (
+            <bdi className="ml-auto rounded-md bg-neutral-800 px-2 py-0.5 text-xs font-normal text-neutral-400">
+              {selected.meta}
+            </bdi>
+          ) : null}
         </span>
         <ChevronDown size={16} className="text-neutral-400" />
       </button>
@@ -237,11 +245,16 @@ export function Select(
                 onClick={() => commit(option.value)}
                 className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
               >
-                <span className="flex min-w-0 items-center gap-2">
+                <span className="flex min-w-0 flex-1 items-center gap-2">
                   <OptionIcon emoji={option.emoji} fallback={option.fallback} />
                   <span className={`truncate ${option.className}`}>
                     {option.label}
                   </span>
+                  {option.meta ? (
+                    <bdi className="ml-auto rounded-md bg-neutral-800/80 px-2 py-0.5 text-xs font-normal text-neutral-400">
+                      {option.meta}
+                    </bdi>
+                  ) : null}
                 </span>
                 {option.value === currentValue ? (
                   <Check size={14} className="text-blue-300" />

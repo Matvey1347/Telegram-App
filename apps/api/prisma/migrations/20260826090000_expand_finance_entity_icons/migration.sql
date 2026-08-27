@@ -1,0 +1,4 @@
+ALTER TABLE "FinanceAccount" ALTER COLUMN "emoji" TYPE TEXT;
+ALTER TABLE "FinanceCategory" ALTER COLUMN "emoji" TYPE TEXT;
+
+ALTER TYPE "TelegramSystemBotWorkflowKind" ADD VALUE IF NOT EXISTS 'WORKSPACE_SETTINGS';

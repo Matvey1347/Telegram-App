@@ -61,6 +61,7 @@ export class TelegramManagedPostEditTransportService {
     };
     nextText: string;
     buttonRows: unknown;
+    inPlaceOnly?: boolean;
   }) {
     const { workspaceId, channelId, post, channel, nextText } = params;
     const buttonRows = normalizeTelegramPostButtonRows(params.buttonRows);
@@ -95,25 +96,33 @@ export class TelegramManagedPostEditTransportService {
       workspaceId,
       channelId,
     );
-    const source =
-      (post.sourceId && post.sourceType
+    const recordedSource =
+      post.sourceId && post.sourceType
         ? sources.find(
             (item) =>
               item.sourceId === post.sourceId &&
               item.sourceType === post.sourceType &&
-              item.permissions.canEditMessages,
+              (item.permissions.canEditMessages ||
+                (item.sourceType === TelegramSourceType.BOT &&
+                  item.permissions.canPostMessages)),
           )
-        : undefined) ??
-      sources.find(
-        (item) =>
-          item.sourceType === TelegramSourceType.MTPROTO &&
-          item.permissions.canEditMessages,
-      ) ??
-      sources.find(
-        (item) =>
-          item.sourceType === TelegramSourceType.BOT &&
-          item.permissions.canEditMessages,
-      );
+        : undefined;
+    // A published message must be edited by its recorded transport. Falling
+    // back from its Bot API identity to MTProto loses its inline keyboard and
+    // incorrectly reports that a bot-owned post was published by MTProto.
+    const source = post.sourceId
+      ? recordedSource
+      : (sources.find(
+          (item) =>
+            item.sourceType === TelegramSourceType.MTPROTO &&
+            item.permissions.canEditMessages,
+        ) ??
+        sources.find(
+          (item) =>
+            item.sourceType === TelegramSourceType.BOT &&
+            (item.permissions.canEditMessages ||
+              item.permissions.canPostMessages),
+        ));
     if (!source) {
       throw new BadRequestException(
         'No connected Telegram source has permission to edit this post.',
@@ -156,6 +165,11 @@ export class TelegramManagedPostEditTransportService {
 
     if (source.sourceType === TelegramSourceType.MTPROTO) {
       if (rendered.richHtml) {
+        if (params.inPlaceOnly) {
+          throw new BadRequestException(
+            'This Telegram post cannot be converted to rich content without replacing the remote message.',
+          );
+        }
         let botSource = sources.find(
           (item) =>
             item.sourceType === TelegramSourceType.BOT &&

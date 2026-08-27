@@ -23,6 +23,7 @@ import { financeCopy, type FinanceLocale } from "./finance-i18n";
 import { FinanceConfirmModal } from "./finance-confirm-modal";
 import { IconAvatar } from "./ui/finance-icon-avatar";
 import { IconPicker } from "./ui/finance-icon-picker";
+import { FinanceCurrencySelect } from "./ui/finance-currency-select";
 
 const TYPES: ConsumerFinanceAccountType[] = [
   "CASH",
@@ -338,12 +339,10 @@ function AccountEditor({
           {!editing ? (
             <>
               <FormField label={t.currency}>
-                <Input
+                <FinanceCurrencySelect
                   value={currency}
-                  maxLength={3}
-                  onChange={(event) =>
-                    setCurrency(event.target.value.toUpperCase())
-                  }
+                  onChange={setCurrency}
+                  locale={locale}
                 />
               </FormField>
               <FormField label={t.openingBalance}>

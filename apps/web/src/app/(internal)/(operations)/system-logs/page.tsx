@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDateTime } from "@/lib/date-format";
+
 import { useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, RefreshCw, Trash2 } from "lucide-react";
@@ -596,7 +598,7 @@ export default function SystemLogsPage() {
                       onClick={() => setSelected(item)}
                     >
                       <td className="px-3 py-3 whitespace-nowrap text-neutral-300">
-                        {new Date(item.createdAt).toLocaleString()}
+                        {formatDateTime(item.createdAt)}
                       </td>
                       <td className="px-3 py-3">
                         <DataBadge
@@ -691,7 +693,7 @@ export default function SystemLogsPage() {
                   {selected.message}
                 </p>
                 <p className="mt-1 text-sm text-neutral-400">
-                  {new Date(selected.createdAt).toLocaleString()}
+                  {formatDateTime(selected.createdAt)}
                 </p>
               </div>
 

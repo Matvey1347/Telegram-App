@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDateTime } from "@/lib/date-format";
+
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -148,14 +150,14 @@ export function GreeterUsersSection({
                   <Td>{user.channel.title}</Td>
                   <Td>{user.captchaStatus.replaceAll("_", " ")}</Td>
                   <Td>{user.state.replaceAll("_", " ")}</Td>
-                  <Td>{new Date(user.firstSeenAt).toLocaleString()}</Td>
-                  <Td>{new Date(user.joinRequestedAt).toLocaleString()}</Td>
+                  <Td>{formatDateTime(user.firstSeenAt)}</Td>
+                  <Td>{formatDateTime(user.joinRequestedAt)}</Td>
                   <Td>
                     {user.approvedAt
-                      ? new Date(user.approvedAt).toLocaleString()
+                      ? formatDateTime(user.approvedAt)
                       : "—"}
                   </Td>
-                  <Td>{new Date(user.lastInteractionAt).toLocaleString()}</Td>
+                  <Td>{formatDateTime(user.lastInteractionAt)}</Td>
                 </tr>
               ))}
             </tbody>

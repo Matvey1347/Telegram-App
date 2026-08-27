@@ -50,7 +50,8 @@ describe('TelegramPostGroupStore advertise system group', () => {
     expect(client.postGroup.update).toHaveBeenCalledWith({
       where: { id: 'group-1' },
       data: {
-        title: 'advertise',
+        title: 'Advertise',
+        icon: '💰',
         isSystem: true,
         systemKey: 'ADVERTISE',
       },
@@ -62,7 +63,8 @@ describe('TelegramPostGroupStore advertise system group', () => {
   it('is idempotent when the canonical system group already exists', async () => {
     const existing = {
       id: 'group-1',
-      title: 'advertise',
+      title: 'Advertise',
+      icon: '💰',
       isSystem: true,
       systemKey: 'ADVERTISE',
     };
@@ -110,11 +112,12 @@ describe('TelegramPostGroupStore advertise system group', () => {
           systemKey: 'ADVERTISE',
         },
       },
-      update: { title: 'advertise', isSystem: true },
+      update: { title: 'Advertise', icon: '💰', isSystem: true },
       create: {
         workspaceId: 'workspace-1',
         telegramChannelId: 'channel-1',
-        title: 'advertise',
+        title: 'Advertise',
+        icon: '💰',
         isSystem: true,
         systemKey: 'ADVERTISE',
         createdByMemberId: 'oldest-local-member',

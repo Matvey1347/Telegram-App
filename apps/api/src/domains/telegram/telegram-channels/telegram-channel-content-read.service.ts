@@ -113,6 +113,22 @@ export class TelegramChannelContentReadService {
     );
   }
 
+  async publishedPostsForSelect(userId: string, channelId: string) {
+    const workspaceId =
+      await this.telegramChannelsSupportService.workspace(userId);
+    await this.telegramChannelCatalogService.findOne(userId, channelId);
+    return this.prisma.telegramPost.findMany({
+      where: { workspaceId, telegramChannelId: channelId },
+      orderBy: [{ postDate: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        telegramMessageId: true,
+        postDate: true,
+        text: true,
+      },
+    });
+  }
+
   async analytics(
     userId: string,
     channelId: string,

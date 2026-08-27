@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDateTime } from "@/lib/date-format";
+
 import type { ReactNode } from "react";
 import { RefreshCw, SearchCheck, Trash2 } from "lucide-react";
 import type { TelegramUserAccount } from "@/lib/api";
@@ -93,7 +95,7 @@ export function TelegramMtprotoAccountCard({
         <p>
           Last Check:{" "}
           {account.lastCheckedAt
-            ? new Date(account.lastCheckedAt).toLocaleString()
+            ? formatDateTime(account.lastCheckedAt)
             : "-"}
         </p>
         {account.lastErrorMessage ? (

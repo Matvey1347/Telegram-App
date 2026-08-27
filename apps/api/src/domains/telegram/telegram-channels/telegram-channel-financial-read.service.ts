@@ -27,6 +27,10 @@ export class TelegramChannelFinancialReadService {
   public async buildChannelFinancialSummaryPreview(
     workspaceId: string,
     channels: TelegramChannelFinancialPreviewInput[],
+    options: {
+      normalizeToPrimaryCurrency?: boolean;
+      targetCurrency?: string;
+    } = {},
   ) {
     if (!channels.length) {
       return new Map<string, Record<string, unknown>>();
@@ -50,87 +54,87 @@ export class TelegramChannelFinancialReadService {
       workspace,
       pricingWindowsByChannel,
     ] = await Promise.all([
-        this.prisma.adCampaign.findMany({
-          where: {
-            workspaceId,
-            telegramChannelId: { in: channelIds },
-            excludeFromAnalytics: false,
-          },
-          select: {
-            id: true,
-            telegramChannelId: true,
-            priceInPrimaryCurrency: true,
-            currency: true,
-            price: true,
-            status: true,
-            joinedCount: true,
-            newSubscribers: true,
-            cappedActiveSubscribersFromAd: true,
-            activeSubscribersFromAd: true,
-            activeRate: true,
-            retention7d: true,
-          },
-        }),
-        this.prisma.telegramInviteLink.findMany({
-          where: {
-            workspaceId,
-            telegramChannelId: { in: channelIds },
-            adCampaignId: { not: null },
-          },
-          select: {
-            telegramChannelId: true,
-            adCampaignId: true,
-            joinedCount: true,
-            requestedCount: true,
-          },
-        }),
-        this.prisma.transaction.findMany({
-          where: {
-            workspaceId,
-            OR: [
-              { telegramChannelId: { in: channelIds } },
-              { id: { in: purchaseTransactionIds } },
-              {
-                adCampaign: {
-                  telegramChannelId: { in: channelIds },
-                  excludeFromAnalytics: false,
-                },
+      this.prisma.adCampaign.findMany({
+        where: {
+          workspaceId,
+          telegramChannelId: { in: channelIds },
+          excludeFromAnalytics: false,
+        },
+        select: {
+          id: true,
+          telegramChannelId: true,
+          priceInPrimaryCurrency: true,
+          currency: true,
+          price: true,
+          status: true,
+          joinedCount: true,
+          newSubscribers: true,
+          cappedActiveSubscribersFromAd: true,
+          activeSubscribersFromAd: true,
+          activeRate: true,
+          retention7d: true,
+        },
+      }),
+      this.prisma.telegramInviteLink.findMany({
+        where: {
+          workspaceId,
+          telegramChannelId: { in: channelIds },
+          adCampaignId: { not: null },
+        },
+        select: {
+          telegramChannelId: true,
+          adCampaignId: true,
+          joinedCount: true,
+          requestedCount: true,
+        },
+      }),
+      this.prisma.transaction.findMany({
+        where: {
+          workspaceId,
+          OR: [
+            { telegramChannelId: { in: channelIds } },
+            { id: { in: purchaseTransactionIds } },
+            {
+              adCampaign: {
+                telegramChannelId: { in: channelIds },
+                excludeFromAnalytics: false,
               },
-            ],
-          },
-          select: {
-            id: true,
-            telegramChannelId: true,
-            type: true,
-            amount: true,
-            currency: true,
-            amountInPrimaryCurrency: true,
-            categoryRef: { select: { key: true, name: true } },
-            adCampaign: {
-              select: { telegramChannelId: true },
             },
-            telegramAdSalePayment: { select: { id: true } },
+          ],
+        },
+        select: {
+          id: true,
+          telegramChannelId: true,
+          type: true,
+          amount: true,
+          currency: true,
+          amountInPrimaryCurrency: true,
+          categoryRef: { select: { key: true, name: true } },
+          adCampaign: {
+            select: { telegramChannelId: true },
           },
-        }),
-        this.prisma.telegramAdSalePaymentAllocation.findMany({
-          where: {
-            workspaceId,
-            placement: { telegramChannelId: { in: channelIds } },
-            payment: { status: 'ACTIVE' },
-          },
-          select: {
-            amount: true,
-            currency: true,
-            amountInPrimaryCurrency: true,
-            placement: { select: { telegramChannelId: true } },
-          },
-        }),
-        this.prisma.workspace.findUnique({
-          where: { id: workspaceId },
-          select: { primaryCurrency: true },
-        }),
-        this.adPricingReadService.windowsForChannels(workspaceId, channels),
-      ]);
+          telegramAdSalePayment: { select: { id: true } },
+        },
+      }),
+      this.prisma.telegramAdSalePaymentAllocation.findMany({
+        where: {
+          workspaceId,
+          placement: { telegramChannelId: { in: channelIds } },
+          payment: { status: 'ACTIVE' },
+        },
+        select: {
+          amount: true,
+          currency: true,
+          amountInPrimaryCurrency: true,
+          placement: { select: { telegramChannelId: true } },
+        },
+      }),
+      this.prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { primaryCurrency: true },
+      }),
+      this.adPricingReadService.windowsForChannels(workspaceId, channels),
+    ]);
 
     const inviteLinksByCampaignId = new Map<
       string,
@@ -234,15 +238,15 @@ export class TelegramChannelFinancialReadService {
           if (nativeValue != null) return nativeValue;
           return row.amountInPrimaryCurrency == null
             ? null
-            : convertPrimary(Number(row.amountInPrimaryCurrency), targetCurrency);
+            : convertPrimary(
+                Number(row.amountInPrimaryCurrency),
+                targetCurrency,
+              );
         }),
       );
       return converted.some((value) => value == null)
         ? null
-        : converted.reduce<number>(
-            (sum, value) => sum + Number(value ?? 0),
-            0,
-          );
+        : converted.reduce<number>((sum, value) => sum + Number(value ?? 0), 0);
     };
 
     const summaries = new Map<string, Record<string, unknown>>();
@@ -368,13 +372,17 @@ export class TelegramChannelFinancialReadService {
         .filter(([, count]) => count === maxCount)
         .map(([currency]) => currency)
         .sort();
-      const dominantCurrency =
-        tiedCurrencies.find((currency) => currency === kpiCurrency) ??
-        tiedCurrencies.find(
-          (currency) => currency === primaryCurrency.toUpperCase(),
-        ) ??
-        tiedCurrencies[0] ??
-        kpiCurrency;
+      const requestedCurrency = options.targetCurrency?.trim().toUpperCase();
+      const dominantCurrency = requestedCurrency
+        ? requestedCurrency
+        : options.normalizeToPrimaryCurrency
+          ? primaryCurrency.toUpperCase()
+          : (tiedCurrencies.find((currency) => currency === kpiCurrency) ??
+            tiedCurrencies.find(
+              (currency) => currency === primaryCurrency.toUpperCase(),
+            ) ??
+            tiedCurrencies[0] ??
+            kpiCurrency);
       const [purchasePrice, revenue, adSpend, cpm] = await Promise.all([
         purchaseTransactions.length
           ? sumInCurrency(purchaseTransactions, dominantCurrency)

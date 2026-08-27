@@ -16,7 +16,7 @@ import {
 
 export class CreateFinanceAccountDto {
   @IsString() @MinLength(1) @MaxLength(80) name!: string;
-  @IsOptional() @IsString() @MaxLength(16) emoji?: string | null;
+  @IsOptional() @IsString() @MaxLength(2048) emoji?: string | null;
   @IsIn(['CASH', 'CARD', 'SAVINGS', 'OTHER']) type!:
     | 'CASH'
     | 'CARD'
@@ -27,7 +27,7 @@ export class CreateFinanceAccountDto {
 }
 export class UpdateFinanceAccountDto {
   @IsOptional() @IsString() @MinLength(1) @MaxLength(80) name?: string;
-  @IsOptional() @IsString() @MaxLength(16) emoji?: string | null;
+  @IsOptional() @IsString() @MaxLength(2048) emoji?: string | null;
   @IsOptional() @IsIn(['CASH', 'CARD', 'SAVINGS', 'OTHER']) type?:
     | 'CASH'
     | 'CARD'
@@ -100,13 +100,13 @@ export class UpdateFinanceSettingsDto {
 }
 export class CreateFinanceCategoryDto {
   @IsString() @MinLength(1) @MaxLength(80) name!: string;
-  @IsOptional() @IsString() @MaxLength(16) emoji?: string | null;
+  @IsOptional() @IsString() @MaxLength(2048) emoji?: string | null;
   @IsIn(['INCOME', 'EXPENSE']) type!: 'INCOME' | 'EXPENSE';
   @IsOptional() @IsString() parentId?: string;
 }
 export class UpdateFinanceCategoryDto {
   @IsString() @MinLength(1) @MaxLength(80) name!: string;
-  @IsOptional() @IsString() @MaxLength(16) emoji?: string | null;
+  @IsOptional() @IsString() @MaxLength(2048) emoji?: string | null;
   @IsIn(['INCOME', 'EXPENSE']) type!: 'INCOME' | 'EXPENSE';
   @IsOptional() @IsString() parentId?: string | null;
 }

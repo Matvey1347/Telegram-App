@@ -96,6 +96,7 @@ export type TelegramChannelNetwork = {
   systemKey?: "ALL" | null;
   canEdit?: boolean;
   canDelete?: boolean;
+  excludedTelegramChannelIds?: string[];
   createdAt: string;
   updatedAt: string;
   channels: TelegramChannelNetworkMember[];
@@ -115,4 +116,5 @@ export type UpdateTelegramChannelNetworkPayload = {
   description?: string | null;
   iconId?: string | null;
   telegramChannelIds?: string[];
+  excludedTelegramChannelIds?: string[];
 };

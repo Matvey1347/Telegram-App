@@ -1,4 +1,5 @@
 import type { ResolvedEmoji } from '@telegram-system/shared';
+import { storedTelegramIconPresentation } from '../../telegram/shared/telegram-bot-icon-source';
 
 export type ResolvedEmojiIconSource = {
   id: string;
@@ -8,17 +9,32 @@ export type ResolvedEmojiIconSource = {
   imageUrl?: string | null;
 };
 
+export type ResolvedEmojiTelegramAsset = {
+  kind: 'STATIC' | 'ANIMATED' | 'VIDEO';
+  assetUrl?: string | null;
+  renderAssetUrl?: string | null;
+};
+
 export function iconToResolvedEmoji(
   icon?: ResolvedEmojiIconSource | null,
+  telegramAsset?: ResolvedEmojiTelegramAsset | null,
 ): ResolvedEmoji | null {
   if (!icon) return null;
 
   if (icon.type === 'emoji' && icon.emoji) {
-    return {
-      type: 'unicode',
-      value: icon.emoji,
+    const presentation = {
+      ...storedTelegramIconPresentation(icon.emoji, '·'),
       name: icon.name ?? null,
     };
+    return presentation.type === 'unicode' && presentation.telegramCustomEmojiId
+      ? {
+          ...presentation,
+          telegramCustomEmojiKind: telegramAsset?.kind ?? null,
+          telegramCustomEmojiAssetUrl: telegramAsset?.assetUrl ?? null,
+          telegramCustomEmojiRenderAssetUrl:
+            telegramAsset?.renderAssetUrl ?? null,
+        }
+      : presentation;
   }
 
   if (icon.type === 'image' && icon.imageUrl) {

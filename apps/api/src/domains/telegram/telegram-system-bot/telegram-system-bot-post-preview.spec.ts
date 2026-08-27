@@ -88,6 +88,34 @@ describe('System Bot managed-post preview', () => {
     ]);
   });
 
+  it('renders the attached photo as a large Telegram media preview', () => {
+    const card = renderTelegramSystemBotPostCard({
+      workflow: workflow(
+        TelegramSystemBotWorkflowKind.POST_IMPORT,
+        'CHOOSE_CHANNEL',
+      ),
+      scope: {
+        connectionId: 'connection-1',
+        workspaceId: 'workspace-1',
+        userId: 'user-1',
+        telegramUserId: 'telegram-user-1',
+        chatId: 'chat-1',
+        timezone: 'Europe/Warsaw',
+      },
+      payload: {
+        content: { ...content, imageUrls: ['https://cdn.example/post.jpg'] },
+      },
+      channels: [{ id: 'channel-1', title: 'Channel' }],
+    });
+
+    expect(card.link_preview_options).toEqual({
+      url: 'https://cdn.example/post.jpg',
+      prefer_large_media: true,
+      show_above_text: true,
+    });
+    expect(card.text).not.toContain('photo(s) attached');
+  });
+
   it('uses the same full preview in the Ad Sale wizard', () => {
     const card = renderTelegramSystemBotAdSaleCard({
       workflow: workflow(

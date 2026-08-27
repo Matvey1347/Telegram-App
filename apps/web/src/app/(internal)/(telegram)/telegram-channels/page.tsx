@@ -68,6 +68,7 @@ import { buildTelegramPostsUrl } from "@/lib/features/telegram/telegram-posts-ur
 import {
   Button,
   ConfirmDeleteModal,
+  CurrencySelect,
   CustomSelect,
   DateInput,
   EmptyState,
@@ -78,6 +79,7 @@ import {
   LoadingState,
   MasonryGrid,
   Modal,
+  MultiSelect,
   PageHeader,
   Select,
   Textarea,
@@ -1987,6 +1989,7 @@ export default function TelegramChannelsPage() {
         description?: string | null;
         iconId?: string | null;
         telegramChannelIds?: string[];
+        excludedTelegramChannelIds?: string[];
       };
     }) => telegramChannelNetworksApi.update(id, payload),
     onSuccess: () => {
@@ -2477,9 +2480,18 @@ export default function TelegramChannelsPage() {
         }}
         onSubmit={(payload) => {
           if (editingNetwork) {
-            updateNetworkMutation.mutate({ id: editingNetwork.id, payload });
+            const networkId = editingNetwork.id;
+            setNetworkFormOpen(false);
+            setEditingNetwork(null);
+            updateNetworkMutation.mutate({ id: networkId, payload });
           } else {
-            createNetworkMutation.mutate(payload);
+            setNetworkFormOpen(false);
+            createNetworkMutation.mutate({
+              name: payload.name!,
+              description: payload.description,
+              iconId: payload.iconId,
+              telegramChannelIds: payload.telegramChannelIds!,
+            });
           }
         }}
       />
@@ -2935,14 +2947,13 @@ function AdAnalysisModal({
             />
           </FormField>
           <FormField label="Currency">
-            <Select {...register("currency")}>
-              <option value="">Select currency</option>
-              {currencyOptions.map((currency) => (
-                <option key={currency} value={currency}>
-                  {currency}
-                </option>
-              ))}
-            </Select>
+            <CurrencySelect
+              value={watch("currency") || ""}
+              currencies={currencyOptions}
+              onChange={(value) =>
+                setValue("currency", value, { shouldDirty: true })
+              }
+            />
           </FormField>
           <FormField label="Status">
             <Select {...register("status")}>
@@ -3061,10 +3072,11 @@ function NetworkFormModal({
   isSubmitting: boolean;
   onClose: () => void;
   onSubmit: (payload: {
-    name: string;
+    name?: string;
     description?: string | null;
     iconId?: string | null;
-    telegramChannelIds: string[];
+    telegramChannelIds?: string[];
+    excludedTelegramChannelIds?: string[];
   }) => void;
 }) {
   const [name, setName] = useState("");
@@ -3078,9 +3090,13 @@ function NetworkFormModal({
     setName(network?.name || "");
     setDescription(network?.description || "");
     setIconId(network?.iconId || null);
-    setSelectedIds(network?.channels.map((channel) => channel.id) || []);
+    setSelectedIds(
+      network?.isSystem
+        ? network.excludedTelegramChannelIds || []
+        : network?.channels.map((channel) => channel.id) || [],
+    );
     setError("");
-  }, [network, open]);
+  }, [channels, network, open]);
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const toggleChannel = (id: string) => {
@@ -3089,6 +3105,12 @@ function NetworkFormModal({
     );
   };
   const submit = () => {
+    if (network?.isSystem) {
+      onSubmit({
+        excludedTelegramChannelIds: selectedIds,
+      });
+      return;
+    }
     const trimmedName = name.trim();
     if (!trimmedName) {
       setError("Name is required.");
@@ -3110,47 +3132,80 @@ function NetworkFormModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={network ? "Edit network" : "Create network"}
+      title={
+        network?.isSystem
+          ? "Configure All network"
+          : network
+            ? "Edit network"
+            : "Create network"
+      }
     >
       <div className="space-y-4">
-        <FormField label="Emoji">
-          <IconPicker
-            iconId={iconId}
-            icon={network?.iconPresentation}
-            onChange={setIconId}
-            allowImages={false}
-            buttonLabel="Choose network emoji"
-          />
-        </FormField>
-        <FormField label="Name" required>
-          <Input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </FormField>
-        <FormField label="Description">
-          <Textarea
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-          />
-        </FormField>
-        <div>
-          <p className="mb-2 text-sm font-medium text-slate-200">Channels</p>
-          <div className="max-h-72 space-y-2 overflow-auto rounded-lg border border-slate-800 p-2">
-            {channels.map((channel) => (
-              <ChannelSelectRow
-                key={channel.id}
-                channel={channel}
-                checked={selectedSet.has(channel.id)}
-                onToggle={() => toggleChannel(channel.id)}
+        {!network?.isSystem ? (
+          <>
+            <FormField label="Emoji">
+              <IconPicker
+                iconId={iconId}
+                icon={network?.iconPresentation}
+                onChange={setIconId}
+                allowImages={false}
+                buttonLabel="Choose network emoji"
               />
-            ))}
-            {!channels.length ? (
-              <p className="p-2 text-sm text-slate-400">
-                No own channels available.
-              </p>
-            ) : null}
-          </div>
+            </FormField>
+            <FormField label="Name" required>
+              <Input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </FormField>
+            <FormField label="Description">
+              <Textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+              />
+            </FormField>
+          </>
+        ) : (
+          <p className="text-sm text-neutral-400">
+            Select test or internal channels that must not be included in the
+            All network or its aggregated analytics.
+          </p>
+        )}
+        <div>
+          <p className="mb-2 text-sm font-medium text-slate-200">
+            {network?.isSystem ? "Channels excluded from All" : "Channels"}
+          </p>
+          {network?.isSystem ? (
+            <MultiSelect
+              value={selectedIds}
+              onChange={setSelectedIds}
+              options={channels.map((channel) => ({
+                value: channel.id,
+                label: channel.title,
+                iconUrl: channel.photoUrl || undefined,
+                iconFallback: channel.title.slice(0, 1).toUpperCase(),
+              }))}
+              placeholder="No channels excluded"
+              searchPlaceholder="Search channels..."
+              allSelectedLabel="All channels excluded"
+            />
+          ) : (
+            <div className="max-h-72 space-y-2 overflow-auto rounded-lg border border-slate-800 p-2">
+              {channels.map((channel) => (
+                <ChannelSelectRow
+                  key={channel.id}
+                  channel={channel}
+                  checked={selectedSet.has(channel.id)}
+                  onToggle={() => toggleChannel(channel.id)}
+                />
+              ))}
+              {!channels.length ? (
+                <p className="p-2 text-sm text-slate-400">
+                  No own channels available.
+                </p>
+              ) : null}
+            </div>
+          )}
           {error ? <p className="mt-2 text-sm text-rose-300">{error}</p> : null}
         </div>
         <div className="flex justify-end gap-2">

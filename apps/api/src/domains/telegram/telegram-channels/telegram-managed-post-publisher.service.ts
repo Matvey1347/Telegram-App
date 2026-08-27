@@ -30,7 +30,10 @@ import {
   REVOKED_TELEGRAM_SESSION_MESSAGE,
 } from '../../../telegram/shared/telegram-session-errors';
 import { notifyScheduledTaskDueWorkChanged } from '../../operations/scheduled-tasks/scheduled-task-wake-notifier';
-import { selectManagedPostPublishingSource } from './managed-post-publishing-source';
+import {
+  managedPostRequiresBotApi,
+  selectManagedPostPublishingSource,
+} from './managed-post-publishing-source';
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
 import {
   BotMessageEntity,
@@ -104,6 +107,7 @@ export class TelegramManagedPostPublisherService {
     const [foundPost, channel, initialSources] = await Promise.all([
       this.prisma.telegramManagedPost.findFirst({
         where: { id: postId, workspaceId, telegramChannelId: channelId },
+        include: { _count: { select: { adSalePlacements: true } } },
       }),
       this.prisma.telegramChannel.findFirst({
         where: { id: channelId, workspaceId, isActive: true },
@@ -112,7 +116,8 @@ export class TelegramManagedPostPublisherService {
     ]);
     if (!foundPost || !channel)
       throw new NotFoundException('Post or channel not found');
-    let post = foundPost;
+    const { _count, ...postRecord } = foundPost;
+    let post = postRecord;
     let sources = initialSources;
     if (!post.text?.trim() && !post.imageUrls.length)
       throw new BadRequestException('Text or at least one image is required');
@@ -125,12 +130,21 @@ export class TelegramManagedPostPublisherService {
     const requiresRichMessage =
       !post.imageUrls.length &&
       requiresNativeTelegramRichMessage(post.text || '');
+    const requiresBotApi = managedPostRequiresBotApi({
+      hasInlineButtons: Boolean(buttonRows.length),
+      requiresRichMessage,
+      isAdvertisingPost: (_count?.adSalePlacements ?? 0) > 0,
+      existingSourceType: post.sourceType,
+      hasExistingPublication: Boolean(
+        post.publishedAt || post.telegramMessageIds.length,
+      ),
+    });
     let source = selectManagedPostPublishingSource(sources, {
       existingScheduledSourceId:
         scheduleAt && post.status === 'SCHEDULED' ? post.sourceId : null,
-      requiresBotApi: Boolean(buttonRows.length) || requiresRichMessage,
+      requiresBotApi,
     });
-    if ((buttonRows.length || requiresRichMessage) && !source) {
+    if (requiresBotApi && !source) {
       await this.telegramChannelAccessService.refreshSystemBotPublishingAccess(
         workspaceId,
         channel,
@@ -145,11 +159,13 @@ export class TelegramManagedPostPublisherService {
         requiresBotApi: true,
       });
     }
-    if ((buttonRows.length || requiresRichMessage) && !source) {
+    if (requiresBotApi && !source) {
       throw new BadRequestException(
         requiresRichMessage
           ? 'Native Telegram rich content (including pull quotes) requires an active workspace bot with posting permission for this channel.'
-          : 'Publishing inline buttons requires an active workspace bot with posting permission for this channel.',
+          : buttonRows.length
+            ? 'Publishing inline buttons requires an active workspace bot with posting permission for this channel.'
+            : 'Advertising posts require an active workspace bot with posting permission so inline buttons can be added later.',
       );
     }
     if (

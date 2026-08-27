@@ -241,6 +241,7 @@ export class UpdateTelegramManagedPostDto {
   @IsOptional() @IsArray() @IsString({ each: true }) imageUrls?: string[];
   @IsOptional() @IsString() assignedMemberId?: string;
   @IsOptional() @IsString() icon?: string | null;
+  @IsOptional() @IsBoolean() inPlaceOnly?: boolean;
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })

@@ -15,9 +15,10 @@ export function formatBillingMoney(
   }
 }
 export function formatBillingDate(value: string | null | undefined) {
-  return value ? new Date(value).toLocaleDateString() : "—";
+  return value ? formatDate(value) : "—";
 }
 export function toMinorUnits(value: string) {
   const parsed = Number(value.replace(",", "."));
   return Number.isFinite(parsed) ? Math.round(parsed * 100) : null;
 }
+import { formatDate } from "@/lib/date-format";

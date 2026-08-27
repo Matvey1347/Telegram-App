@@ -112,6 +112,28 @@ describe('TelegramSystemBotConnectionsService', () => {
     );
   });
 
+  it('switches the connected bot to an accessible website workspace', async () => {
+    prisma.telegramSystemBotConnection.findFirst.mockResolvedValue({
+      id: 'connection',
+      userId: 'user',
+      currentWorkspaceId: 'workspace-old',
+    });
+    prisma.workspaceMember.findFirst.mockResolvedValue({
+      workspaceId: 'workspace-current',
+    });
+    prisma.telegramSystemBotConnection.update.mockResolvedValue({});
+
+    await service.switchWorkspaceForUser('user', 'workspace-current');
+
+    expect(prisma.telegramSystemBotConnection.update).toHaveBeenCalledWith({
+      where: { id: 'connection' },
+      data: {
+        currentWorkspaceId: 'workspace-current',
+        lastInteractionAt: expect.any(Date),
+      },
+    });
+  });
+
   it('updates every notifiable task in a group atomically', async () => {
     prisma.telegramSystemBotConnection.findFirst.mockResolvedValue({
       id: 'connection', userId: 'user',

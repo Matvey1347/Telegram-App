@@ -1,5 +1,7 @@
 'use client';
 
+import { formatDate } from '@/lib/date-format';
+
 import axios from 'axios';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -92,7 +94,7 @@ export default function TransfersPage() {
           <tbody className="divide-y divide-neutral-800">
             {data?.map((t) => (
               <tr key={t.id} className="bg-neutral-950">
-                <td className="px-3 py-2">{new Date(t.date).toLocaleDateString()}</td>
+                <td className="px-3 py-2">{formatDate(t.date)}</td>
                 <td className="px-3 py-2"><TransferAccountCell account={accountOf(t.fromAccountId) ?? t.fromAccount} fallback={nameOf(t.fromAccountId)} onIconChange={(iconId) => updateAccountIconMutation.mutate({ id: t.fromAccountId, iconId })} /></td>
                 <td className="px-3 py-2"><MoneyStack amount={t.fromAmount} currency={t.fromCurrency} settings={settings} rates={rates} mainClassName="font-medium text-white" subClassName="text-xs text-neutral-400" /></td>
                 <td className="px-3 py-2"><TransferAccountCell account={accountOf(t.toAccountId) ?? t.toAccount} fallback={nameOf(t.toAccountId)} onIconChange={(iconId) => updateAccountIconMutation.mutate({ id: t.toAccountId, iconId })} /></td>

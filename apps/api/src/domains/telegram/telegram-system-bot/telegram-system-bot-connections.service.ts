@@ -260,6 +260,28 @@ export class TelegramSystemBotConnectionsService {
     });
   }
 
+  async switchWorkspaceForUser(userId: string, workspaceId: string) {
+    const connection = await this.requireEnabledConnectionForUser(userId);
+    await this.requireMembership(userId, workspaceId);
+    if (connection.currentWorkspaceId === workspaceId) return;
+    await this.prisma.telegramSystemBotConnection.update({
+      where: { id: connection.id },
+      data: { currentWorkspaceId: workspaceId, lastInteractionAt: new Date() },
+    });
+  }
+
+  async workflowScopeForUser(userId: string, workspaceId: string) {
+    const connection = await this.requireEnabledConnectionForUser(userId);
+    await this.requireMembership(userId, workspaceId);
+    return {
+      connectionId: connection.id,
+      workspaceId,
+      userId,
+      telegramUserId: connection.telegramUserId,
+      chatId: connection.telegramChatId,
+    };
+  }
+
   async updateSubscription(
     userId: string,
     payload: UpdateTelegramSystemBotSubscriptionPayload,
@@ -318,7 +340,11 @@ export class TelegramSystemBotConnectionsService {
             notifyOnSuccess: payload.notifyOnSuccess,
             notifyOnFailure: payload.notifyOnFailure,
           },
-          update: { enabled, notifyOnSuccess: payload.notifyOnSuccess, notifyOnFailure: payload.notifyOnFailure },
+          update: {
+            enabled,
+            notifyOnSuccess: payload.notifyOnSuccess,
+            notifyOnFailure: payload.notifyOnFailure,
+          },
         }),
       ),
     );

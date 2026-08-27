@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDateTime } from "@/lib/date-format";
+
 import {
   Fragment,
   type ReactNode,
@@ -51,6 +53,7 @@ import { NativeMoney } from "@/components/ui/native-money";
 import {
   Button,
   canonicalizeTimeInputValue,
+  CurrencySelect,
   DateRangeInput,
   FormField,
   Input,
@@ -1027,7 +1030,7 @@ export default function TelegramChannelAnalyticsPage() {
             <InfoTooltip
               tip={
                 latestSnapshot
-                  ? `Last sync: ${new Date(String(latestSnapshot.syncedAt)).toLocaleString()}`
+                  ? `Last sync: ${formatDateTime(String(latestSnapshot.syncedAt))}`
                   : "No Telegram snapshot yet."
               }
             >
@@ -1932,12 +1935,11 @@ function KpiSettingsControl({
         <div className="space-y-4">
           <div className="space-y-3">
             <FormField label="KPI currency">
-              <Select
+              <CurrencySelect
                 value={settings.kpiCurrency}
-                onChange={(event) => setValue("kpiCurrency", event.target.value)}
-              >
-                {currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
-              </Select>
+                onChange={(value) => setValue("kpiCurrency", value)}
+                currencies={currencies}
+              />
             </FormField>
             <KpiRangeFields
               label="Good up to"
@@ -2553,7 +2555,7 @@ function SyncStatusModal({
         <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
           <SnapshotItem
             label="Latest snapshot"
-            value={new Date(latestSnapshot.syncedAt).toLocaleString()}
+            value={formatDateTime(latestSnapshot.syncedAt)}
           />
           <SnapshotItem label="Status" value={mtprotoStats?.status || "unknown"} />
           <SnapshotItem

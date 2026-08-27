@@ -10,3 +10,12 @@ export function compactSystemBotInlineKeyboard<T>(
   }
   return rows;
 }
+
+export function systemBotReviewActionRow(prefix: string) {
+  return telegramBotApiActionRow({
+    back: `${prefix}back`,
+    cancel: `${prefix}cancel`,
+    confirm: `${prefix}confirm`,
+  });
+}
+import { telegramBotApiActionRow } from '../../../telegram/shared/telegram-bot-action-buttons';

@@ -16,6 +16,7 @@ import { UpdateTelegramChannelNetworkDto } from './dto/update-telegram-channel-n
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_IMAGE_URL } from '../telegram-channels/telegram-channels.internal';
 import { aggregateChannelNetworkSummary } from './telegram-channel-network-summary';
+import { resolveMajorityChannelCurrency } from './telegram-channel-network-currency';
 
 export const SYSTEM_ALL_NETWORK_ID = 'system-all';
 
@@ -197,6 +198,10 @@ export class TelegramChannelNetworksService {
         prepared?.get(channel.id)?.audience ??
         this.audienceFromChannel(channel),
     );
+    const summaryCurrency = resolveMajorityChannelCurrency(
+      channels,
+      channels[0]?.kpiCurrency ?? 'USD',
+    );
     const financialSummaries = prepared
       ? new Map(
           channels.map((channel: any) => [
@@ -210,6 +215,7 @@ export class TelegramChannelNetworksService {
             ...channel,
             audienceSnapshots: [audiences[index]],
           })),
+          { targetCurrency: summaryCurrency },
         );
     const channelSummaries = channels.map((channel: any, index: number) =>
       this.channelSummary(
@@ -234,8 +240,10 @@ export class TelegramChannelNetworksService {
       createdByUser: network.createdByUser,
       isSystem: Boolean(network.isSystem),
       systemKey: network.isSystem ? 'ALL' : null,
-      canEdit: !network.isSystem,
+      canEdit: true,
       canDelete: !network.isSystem,
+      excludedTelegramChannelIds:
+        network.excludedTelegramChannelIds ?? undefined,
       channels: channelSummaries.map((channel) => ({
         id: channel.id,
         title: channel.title,
@@ -267,9 +275,19 @@ export class TelegramChannelNetworksService {
   }
 
   private async systemNetwork(workspaceId: string) {
+    const workspace = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: {
+        systemNetworkExcludedChannelIds: true,
+        primaryCurrency: true,
+      },
+    });
+    const excludedTelegramChannelIds =
+      workspace?.systemNetworkExcludedChannelIds ?? [];
     const channels = await this.prisma.telegramChannel.findMany({
       where: {
         workspaceId,
+        id: { notIn: excludedTelegramChannelIds },
         isActive: true,
         archivedAt: null,
         adminLinks: { some: {} },
@@ -280,6 +298,10 @@ export class TelegramChannelNetworksService {
     const audiences = channels.map((channel) =>
       this.audienceFromChannel(channel),
     );
+    const summaryCurrency = resolveMajorityChannelCurrency(
+      channels,
+      workspace?.primaryCurrency ?? 'USD',
+    );
     const financialSummaries =
       await this.financialReadService.buildChannelFinancialSummaryPreview(
         workspaceId,
@@ -287,6 +309,7 @@ export class TelegramChannelNetworksService {
           ...channel,
           audienceSnapshots: [audiences[index]],
         })),
+        { targetCurrency: summaryCurrency },
       );
     const eligibleChannels = channels.filter((channel, index) =>
       this.hasMeaningfulData(
@@ -319,6 +342,7 @@ export class TelegramChannelNetworksService {
         icon: null,
         iconPresentation: SYSTEM_ALL_NETWORK_ICON,
         isSystem: true,
+        excludedTelegramChannelIds,
         createdAt: new Date(0),
         updatedAt: new Date(0),
         assignedMemberId: null,
@@ -436,6 +460,39 @@ export class TelegramChannelNetworksService {
     networkId: string,
     dto: UpdateTelegramChannelNetworkDto,
   ) {
+    if (networkId === SYSTEM_ALL_NETWORK_ID) {
+      if (dto.excludedTelegramChannelIds === undefined) {
+        throw new BadRequestException(
+          'System network update requires excluded channel ids',
+        );
+      }
+      const workspaceId = await this.workspace(userId);
+      const excludedIds = [
+        ...new Set(
+          (dto.excludedTelegramChannelIds ?? []).map((id) => id.trim()),
+        ),
+      ].filter(Boolean);
+      const channels = await this.prisma.telegramChannel.findMany({
+        where: {
+          workspaceId,
+          id: { in: excludedIds },
+          isActive: true,
+          archivedAt: null,
+          adminLinks: { some: {} },
+        },
+        select: { id: true },
+      });
+      if (channels.length !== excludedIds.length) {
+        throw new BadRequestException(
+          'Excluded channels must be own active channels in selected workspace',
+        );
+      }
+      await this.prisma.workspace.update({
+        where: { id: workspaceId },
+        data: { systemNetworkExcludedChannelIds: excludedIds },
+      });
+      return this.systemNetwork(workspaceId);
+    }
     this.assertMutable(networkId);
     this.assertNonSystemName(dto.name);
     const workspaceId = await this.workspace(userId);

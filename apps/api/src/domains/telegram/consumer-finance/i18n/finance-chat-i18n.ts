@@ -65,6 +65,8 @@ const en = {
     'That proposal is no longer available. Please create a new one and try again.',
   flowFailed:
     'I couldn’t complete that step. Your draft is still safe; review the current choices and try again.',
+  flowIconInvalid:
+    'Send one emoji, one Telegram Premium emoji, or one image up to 5 MB.',
   saved: ({ count }) =>
     `Transaction${count === 1 ? '' : 's'} saved. You can undo ${count === 1 ? 'it' : 'them'} in Finance for the next 10 minutes.`,
   cancelled:
@@ -133,14 +135,14 @@ const en = {
   changeLanguage: '🌐 Language',
   fullSettings: '⚙️ Full settings',
   subscription: '✨ Plan & subscription',
-  archive: 'Archive',
+  archive: 'Delete',
   flowExpired:
     'This draft expired. Start the action again from the menu below.',
   transactionCreated: '✅ Transaction saved.',
   transferCreated: '✅ Transfer saved.',
   accountSaved: '✅ Account saved.',
   categorySaved: '✅ Category saved.',
-  categoryArchived: '✅ Category archived.',
+  categoryArchived: '✅ Category deleted.',
   languageSaved: '✅ Language updated.',
   skip: 'Skip',
   back: '← Back',
@@ -156,13 +158,15 @@ const en = {
   flowTransactionCategory: 'Step 2 of 4 · Category\n\nChoose a category.',
   flowAccountName: 'Step 1 of 5 · Account name\n\nSend a short name.',
   flowAccountType: 'Step 2 of 5 · Account type',
-  flowAccountEmoji: 'Step 3 of 5 · Account emoji',
+  flowAccountEmoji:
+    'Step 3 of 5 · Account icon\n\nSend one emoji, Telegram Premium emoji, or image.',
   flowAccountCurrency: 'Step 4 of 5 · Currency',
   flowAccountBalance:
     'Step 5 of 5 · Opening balance\n\nSend 0 if the account is empty.',
   flowCategoryType: 'Step 1 of 4 · Category type',
   flowCategoryName: 'Step 2 of 4 · Category name\n\nSend a short name.',
-  flowCategoryEmoji: 'Step 3 of 4 · Category emoji',
+  flowCategoryEmoji:
+    'Step 3 of 4 · Category icon\n\nSend one emoji, Telegram Premium emoji, or image.',
   flowCategoryParent: 'Step 4 of 4 · Parent category\n\nChoose one, or skip.',
   flowTransferDescription:
     'Step 1 of 4 · Transfer note\n\nOptional: send a description, or skip.',
@@ -196,7 +200,7 @@ const en = {
   reviewCategory: ({ name, type }) =>
     `Review category\n\nName: ${name}\nType: ${type}`,
   reviewCategoryArchive: ({ name }) =>
-    `Archive category “${name}”?\n\nArchived categories disappear from normal choices. Existing transactions keep their category.`,
+    `Delete category “${name}”?\n\nIt will disappear from normal choices. Existing transactions will keep their category.`,
   reviewLanguage: ({ language }) => `Review language\n\nLanguage: ${language}`,
 } satisfies Translation;
 
@@ -260,6 +264,8 @@ const uk = {
     'Ця пропозиція більше недоступна. Створіть нову й спробуйте ще раз.',
   flowFailed:
     'Не вдалося завершити цей крок. Чернетка збережена — перевірте доступні варіанти й спробуйте ще раз.',
+  flowIconInvalid:
+    'Надішліть один емодзі, один Telegram Premium емодзі або одне зображення до 5 МБ.',
   saved: ({ count }) =>
     `Операці${count === 1 ? 'ю' : 'ї'} збережено. Ї${count === 1 ? 'ї' : 'х'} можна скасувати у Finance протягом наступних 10 хвилин.`,
   cancelled:
@@ -327,13 +333,13 @@ const uk = {
   changeLanguage: '🌐 Мова',
   fullSettings: '⚙️ Усі налаштування',
   subscription: '✨ План і підписка',
-  archive: 'Архівувати',
+  archive: 'Видалити',
   flowExpired: 'Термін дії чернетки минув. Почніть дію знову в меню нижче.',
   transactionCreated: '✅ Операцію збережено.',
   transferCreated: '✅ Переказ збережено.',
   accountSaved: '✅ Рахунок збережено.',
   categorySaved: '✅ Категорію збережено.',
-  categoryArchived: '✅ Категорію архівовано.',
+  categoryArchived: '✅ Категорію видалено.',
   languageSaved: '✅ Мову оновлено.',
   skip: 'Пропустити',
   back: '← Назад',
@@ -349,13 +355,15 @@ const uk = {
   flowTransactionCategory: 'Крок 2 із 4 · Категорія\n\nОберіть категорію.',
   flowAccountName: 'Крок 1 із 5 · Назва рахунку',
   flowAccountType: 'Крок 2 із 5 · Тип рахунку',
-  flowAccountEmoji: 'Крок 3 із 5 · Емодзі рахунку',
+  flowAccountEmoji:
+    'Крок 3 із 5 · Іконка рахунку\n\nНадішліть емодзі, Telegram Premium емодзі або зображення.',
   flowAccountCurrency: 'Крок 4 із 5 · Валюта',
   flowAccountBalance:
     'Крок 5 із 5 · Початковий баланс\n\nНадішліть 0, якщо рахунок порожній.',
   flowCategoryType: 'Крок 1 із 4 · Тип категорії',
   flowCategoryName: 'Крок 2 із 4 · Назва категорії',
-  flowCategoryEmoji: 'Крок 3 із 4 · Емодзі категорії',
+  flowCategoryEmoji:
+    'Крок 3 із 4 · Іконка категорії\n\nНадішліть емодзі, Telegram Premium емодзі або зображення.',
   flowCategoryParent:
     'Крок 4 із 4 · Батьківська категорія\n\nОберіть або пропустіть.',
   flowTransferDescription:
@@ -390,7 +398,7 @@ const uk = {
   reviewCategory: ({ name, type }) =>
     `Перевірте категорію\n\nНазва: ${name}\nТип: ${type}`,
   reviewCategoryArchive: ({ name }) =>
-    `Архівувати категорію «${name}»?\n\nВона зникне зі звичайного вибору. Категорія збережеться в наявних операціях.`,
+    `Видалити категорію «${name}»?\n\nВона зникне зі звичайного вибору. Наявні операції збережуть цю категорію.`,
   reviewLanguage: ({ language }) => `Перевірте мову\n\nМова: ${language}`,
 } satisfies typeof en;
 
@@ -453,6 +461,8 @@ const ru = {
     'Это предложение больше недоступно. Создайте новое и попробуйте ещё раз.',
   flowFailed:
     'Не удалось завершить этот шаг. Черновик сохранён — проверьте доступные варианты и попробуйте ещё раз.',
+  flowIconInvalid:
+    'Отправьте один эмодзи, один Telegram Premium эмодзи или одно изображение до 5 МБ.',
   saved: ({ count }) =>
     `Операци${count === 1 ? 'я' : 'и'} сохранен${count === 1 ? 'а' : 'ы'}. Их можно отменить в Finance в течение следующих 10 минут.`,
   cancelled:
@@ -520,14 +530,14 @@ const ru = {
   changeLanguage: '🌐 Язык',
   fullSettings: '⚙️ Все настройки',
   subscription: '✨ План и подписка',
-  archive: 'Архивировать',
+  archive: 'Удалить',
   flowExpired:
     'Срок действия черновика истёк. Начните действие снова в меню ниже.',
   transactionCreated: '✅ Операция сохранена.',
   transferCreated: '✅ Перевод сохранён.',
   accountSaved: '✅ Счёт сохранён.',
   categorySaved: '✅ Категория сохранена.',
-  categoryArchived: '✅ Категория архивирована.',
+  categoryArchived: '✅ Категория удалена.',
   languageSaved: '✅ Язык обновлён.',
   skip: 'Пропустить',
   back: '← Назад',
@@ -543,13 +553,15 @@ const ru = {
   flowTransactionCategory: 'Шаг 2 из 4 · Категория\n\nВыберите категорию.',
   flowAccountName: 'Шаг 1 из 5 · Название счёта',
   flowAccountType: 'Шаг 2 из 5 · Тип счёта',
-  flowAccountEmoji: 'Шаг 3 из 5 · Эмодзи счёта',
+  flowAccountEmoji:
+    'Шаг 3 из 5 · Иконка счёта\n\nОтправьте эмодзи, Telegram Premium эмодзи или изображение.',
   flowAccountCurrency: 'Шаг 4 из 5 · Валюта',
   flowAccountBalance:
     'Шаг 5 из 5 · Начальный баланс\n\nОтправьте 0, если счёт пуст.',
   flowCategoryType: 'Шаг 1 из 4 · Тип категории',
   flowCategoryName: 'Шаг 2 из 4 · Название категории',
-  flowCategoryEmoji: 'Шаг 3 из 4 · Эмодзи категории',
+  flowCategoryEmoji:
+    'Шаг 3 из 4 · Иконка категории\n\nОтправьте эмодзи, Telegram Premium эмодзи или изображение.',
   flowCategoryParent:
     'Шаг 4 из 4 · Родительская категория\n\nВыберите или пропустите.',
   flowTransferDescription:
@@ -584,7 +596,7 @@ const ru = {
   reviewCategory: ({ name, type }) =>
     `Проверьте категорию\n\nНазвание: ${name}\nТип: ${type}`,
   reviewCategoryArchive: ({ name }) =>
-    `Архивировать категорию «${name}»?\n\nОна исчезнет из обычного выбора. Категория сохранится в существующих операциях.`,
+    `Удалить категорию «${name}»?\n\nОна исчезнет из обычного выбора. Существующие операции сохранят эту категорию.`,
   reviewLanguage: ({ language }) => `Проверьте язык\n\nЯзык: ${language}`,
 } satisfies typeof en;
 

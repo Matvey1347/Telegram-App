@@ -1,4 +1,7 @@
-import { compactSystemBotInlineKeyboard } from './telegram-system-bot-inline-keyboard';
+import {
+  compactSystemBotInlineKeyboard,
+  systemBotReviewActionRow,
+} from './telegram-system-bot-inline-keyboard';
 
 describe('compactSystemBotInlineKeyboard', () => {
   it('packs options into two columns without dropping the final item', () => {
@@ -20,5 +23,13 @@ describe('compactSystemBotInlineKeyboard', () => {
 
   it('returns no rows for an empty list', () => {
     expect(compactSystemBotInlineKeyboard([])).toEqual([]);
+  });
+
+  it('keeps icon-only Back, Cancel and Confirm in the shared review order', () => {
+    expect(systemBotReviewActionRow('flow:')).toEqual([
+      { text: '←', callback_data: 'flow:back' },
+      { text: '❌', callback_data: 'flow:cancel' },
+      { text: '✅', callback_data: 'flow:confirm' },
+    ]);
   });
 });

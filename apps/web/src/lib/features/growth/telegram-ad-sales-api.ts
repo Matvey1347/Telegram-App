@@ -32,6 +32,9 @@ import type {
   TelegramAdSalesBulkCreateResponse,
   TelegramAdSaleCheckoutRequest,
   TelegramAdSaleCheckoutResponse,
+  TelegramAdSaleCheckoutWorkflowResponse,
+  TelegramAdCrmAdvertiserSortBy,
+  TelegramAdCrmSortDirection,
 } from "@telegram-system/shared";
 import type { PaginatedResponse, PaginationParams } from "../../api-types";
 
@@ -42,12 +45,18 @@ type TelegramAdSalesApiDeps = {
     params?: Record<string, unknown>,
   ) => Promise<PaginatedResponse<T>>;
   silentFeedbackConfig: AxiosRequestConfig;
+  streamProgressAction: <TResult, TItem>(
+    path: string,
+    payload: unknown,
+    onProgress: (item: TItem, current: number, total: number) => void,
+  ) => Promise<TResult>;
 };
 
 export function createTelegramAdSalesApi({
   api,
   getPaginated,
   silentFeedbackConfig,
+  streamProgressAction,
 }: TelegramAdSalesApiDeps) {
   return {
     listCrmAdvertisers: async (
@@ -57,6 +66,8 @@ export function createTelegramAdSalesApi({
         lifecycleStage?: string;
         ownerMemberId?: string;
         archived?: boolean;
+        sortBy?: TelegramAdCrmAdvertiserSortBy;
+        sortDirection?: TelegramAdCrmSortDirection;
       },
     ) =>
       getPaginated<TelegramAdCrmAdvertiserListItem>(
@@ -232,8 +243,9 @@ export function createTelegramAdSalesApi({
           silentFeedbackConfig,
         )
       ).data,
-    listSalesPage: async (params?: PaginationParams & { status?: string }) =>
-      getPaginated<TelegramAdSale>("/telegram-ad-sales", params),
+    listSalesPage: async (
+      params?: PaginationParams & { status?: string; advertiserId?: string },
+    ) => getPaginated<TelegramAdSale>("/telegram-ad-sales", params),
     getSale: async (id: string) =>
       (await api.get<TelegramAdSale>(`/telegram-ad-sales/${id}`)).data,
     createSale: async (payload: Record<string, unknown>, silent = false) =>
@@ -255,6 +267,18 @@ export function createTelegramAdSalesApi({
           silent ? silentFeedbackConfig : undefined,
         )
       ).data,
+    checkoutSaleWorkflow: async (
+      payload: TelegramAdSaleCheckoutRequest,
+      onProgress: (
+        item: { operation: string; message: string; placementId?: string },
+        current: number,
+        total: number,
+      ) => void,
+    ) =>
+      streamProgressAction<
+        TelegramAdSaleCheckoutWorkflowResponse,
+        { operation: string; message: string; placementId?: string }
+      >("/telegram-ad-sales/checkout-workflow", payload, onProgress),
     bulkCreate: async (
       payload: TelegramAdSalesBulkCreateRequest,
       silent = false,
@@ -266,9 +290,24 @@ export function createTelegramAdSalesApi({
           silent ? silentFeedbackConfig : undefined,
         )
       ).data,
-    updateSale: async (id: string, payload: Record<string, unknown>) =>
-      (await api.patch<TelegramAdSale>(`/telegram-ad-sales/${id}`, payload))
-        .data,
+    updateSale: async (
+      id: string,
+      payload: Record<string, unknown>,
+      silent = false,
+    ) =>
+      (
+        await api.patch<TelegramAdSale>(
+          `/telegram-ad-sales/${id}`,
+          payload,
+          silent ? silentFeedbackConfig : undefined,
+        )
+      ).data,
+    deleteSale: async (id: string) =>
+      (
+        await api.delete<{ id: string; channelIds: string[] }>(
+          `/telegram-ad-sales/${id}`,
+        )
+      ).data,
     listProductsPage: async (
       params?: PaginationParams & {
         telegramChannelId?: string;
@@ -279,6 +318,13 @@ export function createTelegramAdSalesApi({
       (
         await api.get<TelegramAdProduct[]>(
           `/telegram-ad-sales/channels/${channelId}/products`,
+        )
+      ).data,
+    listProductsByChannels: async (channelIds: string[]) =>
+      (
+        await api.get<Record<string, TelegramAdProduct[]>>(
+          "/telegram-ad-sales/products/by-channels",
+          { params: { channelIds: [...new Set(channelIds)].join(",") } },
         )
       ).data,
     getChannelSetup: async (channelId: string) =>
@@ -449,11 +495,13 @@ export function createTelegramAdSalesApi({
       saleId: string,
       placementId: string,
       payload: Record<string, unknown>,
+      silent = false,
     ) =>
       (
         await api.patch<TelegramAdSale["placements"][number]>(
           `/telegram-ad-sales/${saleId}/placements/${placementId}`,
           payload,
+          silent ? silentFeedbackConfig : undefined,
         )
       ).data,
     reserveSale: async (
@@ -496,11 +544,13 @@ export function createTelegramAdSalesApi({
       saleId: string,
       paymentId: string,
       payload: Record<string, unknown>,
+      silent = false,
     ) =>
       (
         await api.patch<TelegramAdSalePayment>(
           `/telegram-ad-sales/${saleId}/payments/${paymentId}`,
           payload,
+          silent ? silentFeedbackConfig : undefined,
         )
       ).data,
     voidPayment: async (
@@ -528,7 +578,11 @@ export function createTelegramAdSalesApi({
     attachManagedPost: async (
       saleId: string,
       placementId: string,
-      payload: { managedPostId?: string; telegramPostId?: string },
+      payload: {
+        managedPostId?: string;
+        telegramPostId?: string;
+        telegramPostUrl?: string;
+      },
       silent = false,
     ) =>
       (

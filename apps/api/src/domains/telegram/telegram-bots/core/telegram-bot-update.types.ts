@@ -18,6 +18,7 @@ export type TelegramBotWebhookUpdate = {
     chat?: { id?: number | string; type?: string };
     from?: TelegramBotUpdateActor;
     text?: string;
+    entities?: unknown[];
     photo?: Array<{
       file_id?: string;
       file_size?: number;

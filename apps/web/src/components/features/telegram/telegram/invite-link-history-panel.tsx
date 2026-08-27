@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDateTime } from "@/lib/date-format";
+
 import {
   CartesianGrid,
   Line,
@@ -165,7 +167,7 @@ export function InviteLinkHistoryPanel({
                 color: "#e2e8f0",
               }}
               labelFormatter={(value) =>
-                new Date(String(value)).toLocaleString()
+                formatDateTime(String(value))
               }
             />
             <Line

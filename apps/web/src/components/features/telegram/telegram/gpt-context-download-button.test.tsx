@@ -36,11 +36,11 @@ describe("GptContextDownloadButton", () => {
       <GptContextDownloadButton channelId="channel-1" channelTitle="Channel" />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /GPT Context/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Context$/i }));
 
-    expect(screen.getByRole("button", { name: /GPT Context/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Context$/i })).toBeDisabled();
     expect(
-      screen.getByRole("status", { name: "Downloading GPT context" }),
+      screen.getByRole("status", { name: "Downloading context" }),
     ).toBeInTheDocument();
     expect(mocks.pushToast).not.toHaveBeenCalled();
 
@@ -48,7 +48,7 @@ describe("GptContextDownloadButton", () => {
 
     await waitFor(() =>
       expect(mocks.pushToast).toHaveBeenCalledWith(
-        "GPT context downloaded.",
+        "Context downloaded.",
         "success",
       ),
     );
@@ -61,12 +61,12 @@ describe("GptContextDownloadButton", () => {
       <GptContextDownloadButton channelId="channel-1" channelTitle="Channel" />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /GPT Context/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Context$/i }));
 
     await waitFor(() =>
       expect(mocks.pushToast).toHaveBeenCalledWith("Download failed", "error"),
     );
     expect(mocks.pushToast).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: /GPT Context/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^Context$/i })).toBeEnabled();
   });
 });

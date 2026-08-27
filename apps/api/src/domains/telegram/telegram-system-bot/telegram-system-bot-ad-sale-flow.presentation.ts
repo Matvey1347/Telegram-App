@@ -1,5 +1,12 @@
 import { TelegramSystemBotWorkflowStatus } from '@prisma/client';
-import { compactSystemBotInlineKeyboard } from './telegram-system-bot-inline-keyboard';
+import {
+  compactSystemBotInlineKeyboard,
+  systemBotReviewActionRow,
+} from './telegram-system-bot-inline-keyboard';
+import {
+  TELEGRAM_BOT_ACTION_TEXT,
+  telegramBotApiActionRow,
+} from '../../../telegram/shared/telegram-bot-action-buttons';
 import { systemBotEmoji } from './telegram-system-bot-presentation';
 import type {
   TelegramSystemBotAdSaleOptions,
@@ -18,6 +25,11 @@ type Card = {
   text: string;
   parse_mode?: 'HTML';
   reply_markup?: { inline_keyboard: Button[][] };
+  link_preview_options?: {
+    url: string;
+    prefer_large_media: boolean;
+    show_above_text: boolean;
+  };
 };
 
 export function renderTelegramSystemBotAdSaleCard(input: {
@@ -33,10 +45,10 @@ export function renderTelegramSystemBotAdSaleCard(input: {
   if (terminal) return terminal;
   const options = input.options ?? {};
   const summary = adSaleSummary(payload);
-  const navigation = [
-    { text: '← Back', callback_data: `${prefix}back` },
-    { text: 'Cancel', callback_data: `${prefix}cancel` },
-  ];
+  const navigation: Button[] = telegramBotApiActionRow({
+    back: `${prefix}back`,
+    cancel: `${prefix}cancel`,
+  });
   let card: Card;
   switch (workflow.step) {
     case 'CHOOSE_SALE_MODE':
@@ -56,7 +68,12 @@ export function renderTelegramSystemBotAdSaleCard(input: {
                 callback_data: `${prefix}mode.existing`,
               },
             ],
-            [{ text: 'Cancel', callback_data: `${prefix}cancel` }],
+            [
+              {
+                text: TELEGRAM_BOT_ACTION_TEXT.cancel,
+                callback_data: `${prefix}cancel`,
+              },
+            ],
           ],
         },
       };
@@ -134,14 +151,24 @@ export function renderTelegramSystemBotAdSaleCard(input: {
       );
       break;
     default:
-      card = confirmCard(summary, payload, prefix, navigation);
+      card = confirmCard(summary, payload, prefix);
   }
   if (payload.content && card.reply_markup) {
+    const preview = telegramSystemBotPostPreview(payload.content);
     card = {
       ...card,
+      ...(preview.imageUrl
+        ? {
+            link_preview_options: {
+              url: preview.imageUrl,
+              prefer_large_media: true,
+              show_above_text: true,
+            },
+          }
+        : {}),
       reply_markup: {
         inline_keyboard: [
-          ...telegramSystemBotPostPreview(payload.content).buttonRows,
+          ...preview.buttonRows,
           ...card.reply_markup.inline_keyboard,
         ],
       },
@@ -181,7 +208,12 @@ function terminalCard(
       reply_markup: {
         inline_keyboard: [
           [{ text: 'Retry', callback_data: `${prefix}retry` }],
-          [{ text: 'Cancel', callback_data: `${prefix}cancel` }],
+          [
+            {
+              text: TELEGRAM_BOT_ACTION_TEXT.cancel,
+              callback_data: `${prefix}cancel`,
+            },
+          ],
         ],
       },
     };
@@ -201,7 +233,7 @@ function accountCard(
       inline_keyboard: [
         ...compactSystemBotInlineKeyboard(
           (options.accounts ?? []).map((item, index) => ({
-            text: `${systemBotEmoji(item.iconPresentation, '💳')} ${item.name} (${item.currency})`,
+            text: `${systemBotEmoji(item.iconPresentation, '💳')} ${item.name}${item.assignedMemberName ? ` · ${item.assignedMemberName}` : ''} (${item.currency})`,
             callback_data: `${prefix}account.${index}`,
           })),
         ),
@@ -326,7 +358,6 @@ function formatCard(
             text: item.name,
             callback_data: `${prefix}format.${index}`,
           })),
-          { columns: 3 },
         ),
         navigation,
       ],
@@ -361,15 +392,11 @@ function confirmCard(
   summary: string,
   payload: TelegramSystemBotAdSalePayload,
   prefix: string,
-  navigation: Button[],
 ): Card {
   return {
     text: `${summary}\n\nConfirm ${payload.mode === 'EXISTING' ? 'post attachment' : 'advertising creation'}?`,
     reply_markup: {
-      inline_keyboard: [
-        [{ text: '✅ Confirm', callback_data: `${prefix}confirm` }],
-        navigation,
-      ],
+      inline_keyboard: [systemBotReviewActionRow(prefix)],
     },
   };
 }

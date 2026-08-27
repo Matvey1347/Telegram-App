@@ -1,4 +1,5 @@
 import type {
+  TelegramAdCrmAdvertiserSortBy,
   TelegramAdCrmAdvertiserListItem,
   TelegramAdCrmAdvertisersListResult,
   TelegramAdCrmFrequencyBucket,
@@ -13,6 +14,7 @@ import {
   TelegramAdvertiserStatus,
   TelegramAdvertiserTaskPriority,
   TelegramAdvertiserTaskStatus,
+  TelegramAdPlacementStatus,
   TelegramAdSalePaymentStatus,
   TelegramAdSaleStatus,
 } from '@prisma/client';
@@ -217,6 +219,10 @@ export class TelegramAdSalesCrmAdvertisersService {
       displayName: true,
       companyName: true,
       telegramUsername: true,
+      description: true,
+      phone: true,
+      email: true,
+      website: true,
       status: true,
       lifecycleStage: true,
       completedSalesCount: true,
@@ -305,8 +311,20 @@ export class TelegramAdSalesCrmAdvertisersService {
       safeMonetaryValue,
       highValueThreshold,
     );
+    const effectiveStatus =
+      advertiser.status === TelegramAdvertiserStatus.LOST ||
+      advertiser.status === TelegramAdvertiserStatus.BLOCKED
+        ? advertiser.status
+        : advertiser.hasActiveSale
+          ? TelegramAdvertiserStatus.ACTIVE
+          : TelegramAdvertiserStatus.LEAD;
+    const activityStatus = advertiser.hasActivePlacement
+      ? ('ACTIVE' as const)
+      : advertiser.hasWaitingPlacement
+        ? ('WAITING' as const)
+        : ('LEAD' as const);
     const rfmSegment = this.rfmSegment({
-      status: advertiser.status,
+      status: effectiveStatus,
       lifecycleStage: advertiser.lifecycleStage,
       completedSalesCount: advertiser.completedSalesCount,
       recencyBucket,
@@ -319,12 +337,27 @@ export class TelegramAdSalesCrmAdvertisersService {
       nextContactAt: advertiser.nextContactAt ?? null,
       now,
     });
+    const revenueByCurrency = Array.isArray(advertiser.revenueByCurrency)
+      ? advertiser.revenueByCurrency
+      : [];
+    const averageOrderValueByCurrency = Array.isArray(
+      advertiser.averageOrderValueByCurrency,
+    )
+      ? advertiser.averageOrderValueByCurrency
+      : [];
+    const purchasedChannels = Array.isArray(advertiser.purchasedChannels)
+      ? advertiser.purchasedChannels
+      : [];
 
     return {
       id: advertiser.id,
       displayName: advertiser.displayName,
       companyName: advertiser.companyName,
       telegramUsername: advertiser.telegramUsername,
+      description: advertiser.description,
+      phone: advertiser.phone,
+      email: advertiser.email,
+      website: advertiser.website,
       primaryContact: primaryContact
         ? {
             id: primaryContact.id,
@@ -344,14 +377,19 @@ export class TelegramAdSalesCrmAdvertisersService {
             ),
           }
         : null,
-      status: advertiser.status,
+      status: effectiveStatus,
+      activityStatus,
       lifecycleStage: advertiser.lifecycleStage,
       completedSalesCount: advertiser.completedSalesCount,
       totalSalesCount: advertiser.totalSalesCount,
+      paidSalesCount: advertiser.paidSalesCount ?? 0,
       completedPlacementsCount: advertiser.completedPlacementsCount ?? 0,
       totalPlacementsCount: advertiser.totalPlacementsCount ?? 0,
       totalRevenueInPrimaryCurrency: totalRevenue,
       averageOrderValueInPrimaryCurrency: averageOrderValue,
+      revenueByCurrency,
+      averageOrderValueByCurrency,
+      purchasedChannels,
       firstPurchaseAt: advertiser.firstPurchaseAt?.toISOString() ?? null,
       lastPurchaseAt: advertiser.lastPurchaseAt?.toISOString() ?? null,
       lastContactAt: advertiser.lastContactAt?.toISOString() ?? null,
@@ -379,14 +417,12 @@ export class TelegramAdSalesCrmAdvertisersService {
     };
   }
 
-  private isUnspecifiedAdvertiser(
-    advertiser: {
-      displayName: string;
-      companyName: string | null;
-      telegramUsername: string | null;
-      primaryContact: unknown | null;
-    },
-  ) {
+  private isUnspecifiedAdvertiser(advertiser: {
+    displayName: string;
+    companyName: string | null;
+    telegramUsername: string | null;
+    primaryContact: unknown | null;
+  }) {
     return (
       advertiser.displayName.trim().toLowerCase() === 'advertiser' &&
       !advertiser.companyName &&
@@ -404,6 +440,7 @@ export class TelegramAdSalesCrmAdvertisersService {
       telegramUsername: string | null;
       contacts?: Array<unknown>;
     }>,
+    now: Date,
   ) {
     const advertiserIds = advertisers.map((advertiser) => advertiser.id);
     if (!advertiserIds.length) return new Map<string, Partial<any>>();
@@ -426,12 +463,34 @@ export class TelegramAdSalesCrmAdvertisersService {
       },
       select: {
         advertiserId: true,
+        advertiserName: true,
+        advertiserNameSnapshot: true,
+        advertiserTelegram: true,
+        advertiserTelegramSnapshot: true,
+        advertiserContact: true,
+        advertiserCompanySnapshot: true,
         status: true,
         createdAt: true,
-        placements: { select: { id: true, status: true } },
+        placements: {
+          select: {
+            id: true,
+            status: true,
+            publishedAt: true,
+            plannedDeleteAt: true,
+            deletedAt: true,
+            agreedPrice: true,
+            telegramChannel: {
+              select: { id: true, title: true, photoUrl: true },
+            },
+          },
+        },
         payments: {
           where: { status: { not: TelegramAdSalePaymentStatus.VOIDED } },
-          select: { amountInPrimaryCurrency: true },
+          select: {
+            amount: true,
+            currency: true,
+            amountInPrimaryCurrency: true,
+          },
         },
       },
       orderBy: { createdAt: 'asc' },
@@ -440,31 +499,98 @@ export class TelegramAdSalesCrmAdvertisersService {
       string,
       {
         totalSalesCount: number;
+        paidSalesCount: number;
         completedSalesCount: number;
         totalPlacementsCount: number;
         completedPlacementsCount: number;
         totalRevenueInPrimaryCurrency: Prisma.Decimal;
         averageOrderValueInPrimaryCurrency: Prisma.Decimal;
+        revenueByCurrency: Array<{ currency: string; amount: string }>;
+        averageOrderValueByCurrency: Array<{
+          currency: string;
+          amount: string;
+        }>;
+        purchasedChannels: Array<{
+          id: string;
+          title: string;
+          photoUrl: string | null;
+        }>;
         firstPurchaseAt: Date | null;
         lastPurchaseAt: Date | null;
+        hasActiveSale: boolean;
+        hasActivePlacement: boolean;
+        hasWaitingPlacement: boolean;
       }
     >();
     for (const sale of sales) {
-      const advertiserId = sale.advertiserId ?? unassignedAdvertiserId;
+      const advertiserId =
+        sale.advertiserId ??
+        (this.isAnonymousSaleSnapshot(sale) ? unassignedAdvertiserId : null);
       if (!advertiserId) continue;
-      const current =
-        stats.get(advertiserId) ?? {
-          totalSalesCount: 0,
-          completedSalesCount: 0,
-          totalPlacementsCount: 0,
-          completedPlacementsCount: 0,
-          totalRevenueInPrimaryCurrency: decimal(0),
-          averageOrderValueInPrimaryCurrency: decimal(0),
-          firstPurchaseAt: null,
-          lastPurchaseAt: null,
-        };
+      const current = stats.get(advertiserId) ?? {
+        totalSalesCount: 0,
+        paidSalesCount: 0,
+        completedSalesCount: 0,
+        totalPlacementsCount: 0,
+        completedPlacementsCount: 0,
+        totalRevenueInPrimaryCurrency: decimal(0),
+        averageOrderValueInPrimaryCurrency: decimal(0),
+        revenueByCurrency: [],
+        averageOrderValueByCurrency: [],
+        purchasedChannels: [],
+        firstPurchaseAt: null,
+        lastPurchaseAt: null,
+        hasActiveSale: false,
+        hasActivePlacement: false,
+        hasWaitingPlacement: false,
+      };
       current.totalSalesCount += 1;
+      if (
+        sale.status === TelegramAdSaleStatus.RESERVED ||
+        sale.status === TelegramAdSaleStatus.CONFIRMED ||
+        sale.status === TelegramAdSaleStatus.IN_PROGRESS
+      ) {
+        current.hasActiveSale = true;
+      }
+      const agreedTotal = sale.placements.reduce(
+        (sum, placement) => sum.add(decimal(placement.agreedPrice ?? 0)),
+        decimal(0),
+      );
+      const paidTotal = sale.payments.reduce(
+        (sum, payment) => sum.add(decimal(payment.amount)),
+        decimal(0),
+      );
+      if (
+        agreedTotal.greaterThan(0) &&
+        paidTotal.greaterThanOrEqualTo(agreedTotal)
+      ) {
+        current.paidSalesCount += 1;
+      }
       current.totalPlacementsCount += sale.placements.length;
+      current.hasActivePlacement ||= sale.placements.some(
+        (placement) =>
+          Boolean(placement.publishedAt) &&
+          !placement.deletedAt &&
+          placement.plannedDeleteAt != null &&
+          placement.plannedDeleteAt.getTime() > now.getTime(),
+      );
+      current.hasWaitingPlacement ||= sale.placements.some(
+        (placement) =>
+          !placement.publishedAt &&
+          (placement.status === TelegramAdPlacementStatus.DRAFT ||
+            placement.status === TelegramAdPlacementStatus.RESERVED ||
+            placement.status === TelegramAdPlacementStatus.SCHEDULED),
+      );
+      current.purchasedChannels = [
+        ...new Map(
+          [
+            ...current.purchasedChannels,
+            ...sale.placements
+              .map((placement) => placement.telegramChannel)
+              .filter(Boolean),
+          ].map((channel) => [channel.id, channel] as const),
+        ).values(),
+      ].sort((left, right) => left.title.localeCompare(right.title));
       current.completedPlacementsCount += this.completedPlacementsCount(
         sale.placements,
       );
@@ -484,14 +610,102 @@ export class TelegramAdSalesCrmAdvertisersService {
             decimal(0),
           ),
         );
+      const nativeRevenue = new Map(
+        current.revenueByCurrency.map((item) => [
+          item.currency,
+          decimal(item.amount),
+        ]),
+      );
+      for (const payment of sale.payments) {
+        const currency = payment.currency.trim().toUpperCase();
+        nativeRevenue.set(
+          currency,
+          (nativeRevenue.get(currency) ?? decimal(0)).add(payment.amount),
+        );
+      }
+      current.revenueByCurrency = [...nativeRevenue.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([currency, amount]) => ({
+          currency,
+          amount: decimalToString(amount) ?? '0',
+        }));
       stats.set(advertiserId, current);
     }
     for (const value of stats.values()) {
       value.averageOrderValueInPrimaryCurrency = value.totalSalesCount
         ? value.totalRevenueInPrimaryCurrency.div(value.totalSalesCount)
         : decimal(0);
+      value.averageOrderValueByCurrency = value.revenueByCurrency.map(
+        ({ currency, amount }) => ({
+          currency,
+          amount: value.totalSalesCount
+            ? (decimalToString(decimal(amount).div(value.totalSalesCount)) ??
+              '0')
+            : '0',
+        }),
+      );
     }
     return stats;
+  }
+
+  private isAnonymousSaleSnapshot(sale: {
+    advertiserName: string;
+    advertiserNameSnapshot: string | null;
+    advertiserTelegram: string | null;
+    advertiserTelegramSnapshot: string | null;
+    advertiserContact: string | null;
+    advertiserCompanySnapshot: string | null;
+  }) {
+    if (
+      sale.advertiserTelegram?.trim() ||
+      sale.advertiserTelegramSnapshot?.trim() ||
+      sale.advertiserContact?.trim() ||
+      sale.advertiserCompanySnapshot?.trim()
+    ) {
+      return false;
+    }
+    const name = (sale.advertiserNameSnapshot ?? sale.advertiserName)
+      .trim()
+      .toLowerCase();
+    return [
+      'advertiser',
+      'direct sale',
+      'telegram advertiser',
+      'no client',
+    ].includes(name);
+  }
+
+  private advertiserOrderBy(
+    sortBy: TelegramAdCrmAdvertiserSortBy = 'PRIORITY',
+    sortDirection: Prisma.SortOrder = 'desc',
+  ): Prisma.TelegramAdvertiserOrderByWithRelationInput[] {
+    const direction = sortDirection;
+    if (sortBy === 'REVENUE') {
+      return [{ totalRevenueInPrimaryCurrency: direction }, { id: direction }];
+    }
+    if (sortBy === 'RECENT_PURCHASE') {
+      return [
+        { lastPurchaseAt: { sort: direction, nulls: 'last' } },
+        { id: direction },
+      ];
+    }
+    if (sortBy === 'NAME') {
+      return [{ displayName: direction }, { id: direction }];
+    }
+    if (sortBy === 'SALES') {
+      return [{ totalSalesCount: direction }, { id: direction }];
+    }
+    return [
+      {
+        nextContactAt: {
+          sort: direction === 'desc' ? 'asc' : 'desc',
+          nulls: 'last',
+        },
+      },
+      { totalRevenueInPrimaryCurrency: direction },
+      { updatedAt: direction },
+      { id: direction },
+    ];
   }
 
   async listCrmAdvertisers(
@@ -557,25 +771,67 @@ export class TelegramAdSalesCrmAdvertisersService {
       decimalToString(crmSettings?.highValueCustomerThreshold ?? decimal(0)) ??
         '0',
     );
-    const [items, totalItems] = await this.prisma.$transaction([
-      this.prisma.telegramAdvertiser.findMany({
-        where,
-        select: this.crmAdvertiserSelect(),
-        orderBy: [
-          { nextContactAt: 'asc' },
-          { totalRevenueInPrimaryCurrency: 'desc' },
-          { updatedAt: 'desc' },
-          { id: 'desc' },
-        ],
-        skip: pagination.skip,
-        take: pagination.take,
-      }),
-      this.prisma.telegramAdvertiser.count({ where }),
-    ]);
+    const direction = query.sortDirection === 'ASC' ? 'asc' : 'desc';
+    let items: any[];
+    let totalItems: number;
+    if (query.sortBy === 'PRIORITY') {
+      const unspecifiedWhere: Prisma.TelegramAdvertiserWhereInput = {
+        displayName: { equals: 'Advertiser', mode: 'insensitive' },
+        companyName: null,
+        telegramUsername: null,
+        contacts: { none: {} },
+      };
+      const regularWhere: Prisma.TelegramAdvertiserWhereInput = {
+        AND: [where, { NOT: unspecifiedWhere }],
+      };
+      const fallbackWhere: Prisma.TelegramAdvertiserWhereInput = {
+        AND: [where, unspecifiedWhere],
+      };
+      const [regularCount, fallbackCount] = await this.prisma.$transaction([
+        this.prisma.telegramAdvertiser.count({ where: regularWhere }),
+        this.prisma.telegramAdvertiser.count({ where: fallbackWhere }),
+      ]);
+      const regularTake = Math.max(
+        0,
+        Math.min(pagination.take, regularCount - pagination.skip),
+      );
+      const fallbackSkip = Math.max(0, pagination.skip - regularCount);
+      const fallbackTake = pagination.take - regularTake;
+      const [regularItems, fallbackItems] = await this.prisma.$transaction([
+        this.prisma.telegramAdvertiser.findMany({
+          where: regularWhere,
+          select: this.crmAdvertiserSelect(),
+          orderBy: this.advertiserOrderBy('PRIORITY', direction),
+          skip: pagination.skip,
+          take: regularTake,
+        }),
+        this.prisma.telegramAdvertiser.findMany({
+          where: fallbackWhere,
+          select: this.crmAdvertiserSelect(),
+          orderBy: [{ id: 'asc' }],
+          skip: fallbackSkip,
+          take: fallbackTake,
+        }),
+      ]);
+      items = [...regularItems, ...fallbackItems];
+      totalItems = regularCount + fallbackCount;
+    } else {
+      [items, totalItems] = await this.prisma.$transaction([
+        this.prisma.telegramAdvertiser.findMany({
+          where,
+          select: this.crmAdvertiserSelect(),
+          orderBy: this.advertiserOrderBy(query.sortBy, direction),
+          skip: pagination.skip,
+          take: pagination.take,
+        }),
+        this.prisma.telegramAdvertiser.count({ where }),
+      ]);
+    }
     const now = new Date();
     const currentStats = await this.currentStatsByAdvertiser(
       workspaceId,
       items,
+      now,
     );
     return createPaginatedResponse(
       items.map((item) =>

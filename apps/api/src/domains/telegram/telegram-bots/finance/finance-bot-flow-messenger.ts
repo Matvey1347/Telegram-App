@@ -1,7 +1,9 @@
 import { TelegramBotInteractiveReplyService } from '../../../../telegram/shared/telegram-bot-interactive-reply.service';
+import { telegramMarkupToHtml } from '../../../../telegram/shared/telegram-markup';
 import type { TelegramBotApplicationContext } from '../core/telegram-bot-update.types';
 import { FinanceBotChatResponderService } from './finance-bot-chat-responder.service';
 import { FinanceChatFlowPresenterService } from '../../consumer-finance/chat-flows/finance-chat-flow-presenter.service';
+import { FinanceBotIconInputService } from './finance-bot-icon-input.service';
 import {
   FinanceChatFlowService,
   type AccountFlowResult,
@@ -18,7 +20,40 @@ export class FinanceBotFlowMessenger {
     private readonly chat: FinanceBotChatResponderService,
     private readonly flows: FinanceChatFlowService,
     private readonly presenter: FinanceChatFlowPresenterService,
+    private readonly iconInput: FinanceBotIconInputService,
   ) {}
+
+  async handleIcon(
+    context: TelegramBotApplicationContext,
+    userId: string,
+    chatId: string,
+    locale: ReturnType<typeof financeChatLocale>,
+    profileId: string,
+    message: NonNullable<TelegramBotApplicationContext['update']['message']>,
+  ) {
+    const icon = await this.iconInput.consume(
+      context.token,
+      chatId,
+      {
+        profileId,
+        botIntegrationId: context.bot.id,
+        telegramBotUserId: userId,
+      },
+      message,
+    );
+    if (!icon.handled) return false;
+    if ('result' in icon && icon.result)
+      await this.send(context, userId, chatId, locale, icon.result, profileId);
+    else
+      await this.chat.sendSafe(
+        context,
+        userId,
+        chatId,
+        t(locale, 'flowIconInvalid'),
+        `finance-flow-icon-error:${context.updateLogId}`,
+      );
+    return true;
+  }
 
   async send(
     context: TelegramBotApplicationContext,
@@ -74,7 +109,13 @@ export class FinanceBotFlowMessenger {
       return;
     }
     if (result.kind !== 'prompt' && result.kind !== 'review') return;
-    const message = await this.presenter.present(profileId, locale, result);
+    const presented = await this.presenter.present(profileId, locale, result);
+    if (!presented) return;
+    const message = {
+      ...presented,
+      text: telegramMarkupToHtml(presented.text),
+      parseMode: 'HTML',
+    };
     if (target !== undefined)
       try {
         await this.interactive.edit(context.token, chatId, target, message);

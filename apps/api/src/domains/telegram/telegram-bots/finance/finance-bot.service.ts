@@ -36,6 +36,9 @@ import {
 import { financeBotProButtons } from './finance-bot-pro-buttons';
 import { warnSlowFinanceContext } from './finance-bot-observability';
 import { FinanceBotBrowserLogin } from './finance-bot-browser-login';
+import { financeBotIncomingFile } from './finance-bot-icon-input.service';
+import { financeBotFlowInput } from './finance-bot-icon-input.service';
+import { FinanceBotIconInputService } from './finance-bot-icon-input.service';
 @Injectable()
 export class FinanceBotService {
   private readonly flowMessages: FinanceBotFlowMessenger;
@@ -52,6 +55,7 @@ export class FinanceBotService {
     private readonly chat: FinanceBotChatResponderService,
     private readonly flows: FinanceChatFlowService,
     private readonly browserLogin: FinanceBotBrowserLogin,
+    private readonly iconInput: FinanceBotIconInputService,
     flowPresenter: FinanceChatFlowPresenterService,
   ) {
     this.flowMessages = new FinanceBotFlowMessenger(
@@ -59,6 +63,7 @@ export class FinanceBotService {
       chat,
       flows,
       flowPresenter,
+      iconInput,
     );
   }
   async handle(context: TelegramBotApplicationContext) {
@@ -156,11 +161,11 @@ export class FinanceBotService {
       ].includes(action)
         ? argument
         : callbackId;
-      const flowInput = {
-        profileId: profile.id,
-        botIntegrationId: context.bot.id,
-        telegramBotUserId: user.id,
-      };
+      const flowInput = financeBotFlowInput(
+        profile.id,
+        context.bot.id,
+        user.id,
+      );
       let result: FinanceFlowResult;
       try {
         if (action === 'start-expense' || action === 'start-income') {
@@ -318,6 +323,7 @@ export class FinanceBotService {
       return;
     }
     const message = context.update.message;
+    const flowInput = financeBotFlowInput(profile.id, context.bot.id, user.id);
     const voice = message?.voice;
     if (voice?.file_id) {
       const entitled = await this.entitlements.has(
@@ -377,11 +383,7 @@ export class FinanceBotService {
         });
         await this.interactive.send(context.token, chatId, {
           text: `${t(locale, 'suggested', { count: proposal.operations.length })}\n\n${this.chat.batchPreview(proposal.preview, locale)}\n\n${t(locale, 'review')}`,
-          inlineButtons: this.chat.proposalButtons(
-            proposal.token,
-            t(locale, 'saveAll'),
-            locale,
-          ),
+          inlineButtons: this.chat.proposalButtons(proposal.token),
         });
       } catch {
         await this.chat.sendSafe(
@@ -394,19 +396,19 @@ export class FinanceBotService {
       }
       return;
     }
-    const file = message?.document?.file_id
-      ? {
-          id: message.document.file_id,
-          size: message.document.file_size,
-          mime: message.document.mime_type,
-        }
-      : message?.photo?.length
-        ? {
-            id: message.photo.at(-1)?.file_id,
-            size: message.photo.at(-1)?.file_size,
-            mime: 'image/jpeg',
-          }
-        : null;
+    const file = financeBotIncomingFile(message);
+    if (
+      message &&
+      (await this.flowMessages.handleIcon(
+        context,
+        user.id,
+        chatId,
+        locale,
+        profile.id,
+        message,
+      ))
+    )
+      return;
     if (file?.id) {
       const entitled = await this.entitlements.has(
         {
@@ -461,11 +463,7 @@ export class FinanceBotService {
         });
         await this.interactive.send(context.token, chatId, {
           text: `${t(locale, 'receiptProposal')}\n\n${this.chat.batchPreview(proposal.preview, locale)}\n\n${t(locale, 'review')}`,
-          inlineButtons: this.chat.proposalButtons(
-            proposal.token,
-            t(locale, 'saveReceipt'),
-            locale,
-          ),
+          inlineButtons: this.chat.proposalButtons(proposal.token),
         });
       } catch {
         await this.chat.sendSafe(
@@ -513,10 +511,9 @@ export class FinanceBotService {
       ].includes(text || '');
     if (text && !menuAction) {
       const flow = await (this.flows.consumeText?.({
-        profileId: profile.id,
-        botIntegrationId: context.bot.id,
-        telegramBotUserId: user.id,
+        ...flowInput,
         text,
+        iconSource: message ? this.iconInput.text(message) : null,
       }) ??
         this.flows.consume({
           profileId: profile.id,
@@ -755,11 +752,7 @@ export class FinanceBotService {
         });
         await this.interactive.send(context.token, chatId, {
           text: `${t(locale, 'suggested', { count: proposal.operations.length })}\n\n${this.chat.batchPreview(proposal.preview, locale)}\n\n${t(locale, 'review')}`,
-          inlineButtons: this.chat.proposalButtons(
-            proposal.token,
-            t(locale, 'saveAll'),
-            locale,
-          ),
+          inlineButtons: this.chat.proposalButtons(proposal.token),
         });
       } catch {
         await this.chat.sendSafe(
@@ -784,11 +777,7 @@ export class FinanceBotService {
         : `💰 ${t(locale, 'incomeLabel')}`;
     await this.interactive.send(context.token, chatId, {
       text: `${label}\n\n💳 ${t(locale, 'amount')}: ${proposal.payload.amount} ${proposal.payload.currency}\n${financeCategoryEmoji(proposal.category?.name)} ${t(locale, 'category')}: ${proposal.category?.name || t(locale, 'other')}\n🏦 ${t(locale, 'account')}: ${proposal.account.name}\n📝 ${t(locale, 'description')}: ${proposal.payload.description || t(locale, 'notProvided')}\n\n${t(locale, 'review')}`,
-      inlineButtons: this.chat.proposalButtons(
-        proposal.token,
-        t(locale, 'save'),
-        locale,
-      ),
+      inlineButtons: this.chat.proposalButtons(proposal.token),
     });
   }
 }

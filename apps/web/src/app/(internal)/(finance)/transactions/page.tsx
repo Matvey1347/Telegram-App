@@ -1,5 +1,7 @@
 'use client';
 
+import { formatDate } from '@/lib/date-format';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -148,7 +150,7 @@ export default function TransactionsPage() {
                       <div className="truncate font-medium text-white">{getTransactionTitle(t)}</div>
                     </div>
                     <div className={`mt-1 text-xs ${t.type === 'income' ? 'text-emerald-300' : 'text-rose-300'}`}>
-                      {t.type} • {new Date(t.date).toLocaleDateString()}
+                      {t.type} • {formatDate(t.date)}
                     </div>
                   </div>
                 </td>

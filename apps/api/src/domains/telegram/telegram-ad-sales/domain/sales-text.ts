@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { decimal } from './decimal';
 
 export const SALES_OFFER_ROUNDING_STEP = 10;
+export const AD_PLACEMENT_DELETION_GRACE_HOURS = 1;
 
 /** Rounds a presentation quote, never an accounting price. */
 export function roundSalesOfferPrice(
@@ -17,13 +18,20 @@ export function roundSalesOfferPrice(
 }
 
 export function calculateAdPlacementDeleteAt(input: {
-  publishedAt: Date;
+  scheduledAt: Date;
+  publishedAt?: Date | null;
   deleteAfterHoursSnapshot: number | null;
   isPermanentSnapshot: boolean;
+  graceHours?: number;
 }) {
   if (input.isPermanentSnapshot || !input.deleteAfterHoursSnapshot) return null;
+  const lifecycleStartedAt = input.publishedAt ?? input.scheduledAt;
   return new Date(
-    input.publishedAt.getTime() +
-      input.deleteAfterHoursSnapshot * 60 * 60 * 1000,
+    lifecycleStartedAt.getTime() +
+      (input.deleteAfterHoursSnapshot +
+        (input.graceHours ?? AD_PLACEMENT_DELETION_GRACE_HOURS)) *
+        60 *
+        60 *
+        1000,
   );
 }

@@ -15,6 +15,7 @@ describe('FinanceBotFlowMessenger language completion', () => {
       chat as never,
       {} as never,
       presenter as never,
+      {} as never,
     );
     const context = {
       token: 'bot-token',
@@ -51,5 +52,50 @@ describe('FinanceBotFlowMessenger language completion', () => {
       'chat-1',
       'ru',
     );
+  });
+
+  it('sends Telegram Premium emoji markup as animated tg-emoji HTML', async () => {
+    const interactive = {
+      edit: jest.fn(),
+      send: jest.fn().mockResolvedValue({ message_id: 12 }),
+    };
+    const presenter = {
+      present: jest.fn().mockResolvedValue({
+        text: 'Name: ![📊](tg://emoji?id=5368324170671202286) Test',
+        inlineButtons: [],
+      }),
+    };
+    const flows = { bindMessage: jest.fn().mockResolvedValue(undefined) };
+    const messenger = new FinanceBotFlowMessenger(
+      interactive as never,
+      {} as never,
+      flows as never,
+      presenter as never,
+      {} as never,
+    );
+
+    await messenger.send(
+      {
+        token: 'bot-token',
+        bot: { id: 'bot-1' },
+        update: {},
+      } as never,
+      'telegram-user-1',
+      'chat-1',
+      'uk',
+      {
+        kind: 'review',
+        flow: 'CATEGORY_CREATE',
+        step: 'CATEGORY_REVIEW',
+        payload: { revision: 'revision-1' },
+      } as never,
+      'profile-1',
+    );
+
+    expect(interactive.send).toHaveBeenCalledWith('bot-token', 'chat-1', {
+      text: 'Name: <tg-emoji emoji-id="5368324170671202286">📊</tg-emoji> Test',
+      inlineButtons: [],
+      parseMode: 'HTML',
+    });
   });
 });

@@ -30,6 +30,33 @@ describe('iconToResolvedEmoji', () => {
     });
   });
 
+  it('includes the stored Telegram Premium animation asset', () => {
+    expect(
+      iconToResolvedEmoji(
+        {
+          id: 'icon-premium',
+          type: 'emoji',
+          name: 'premium bubble',
+          emoji: '![💬](tg://emoji?id=5368324170671202286)',
+          imageUrl: null,
+        },
+        {
+          kind: 'ANIMATED',
+          assetUrl: 'https://cdn.example.com/emoji.tgs',
+          renderAssetUrl: 'https://cdn.example.com/emoji.json',
+        },
+      ),
+    ).toEqual({
+      type: 'unicode',
+      value: '💬',
+      name: 'premium bubble',
+      telegramCustomEmojiId: '5368324170671202286',
+      telegramCustomEmojiKind: 'ANIMATED',
+      telegramCustomEmojiAssetUrl: 'https://cdn.example.com/emoji.tgs',
+      telegramCustomEmojiRenderAssetUrl: 'https://cdn.example.com/emoji.json',
+    });
+  });
+
   it('returns null for incomplete icons', () => {
     expect(
       iconToResolvedEmoji({

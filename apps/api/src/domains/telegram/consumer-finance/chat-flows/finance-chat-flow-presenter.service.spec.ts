@@ -41,6 +41,43 @@ describe('FinanceChatFlowPresenterService', () => {
     },
   );
 
+  it('uses the shared one-row Back, Cancel and Confirm controls', async () => {
+    const result = await presenter.present('profile', 'en', {
+      kind: 'review',
+      flow: 'TRANSACTION_CREATE',
+      step: 'TRANSACTION_REVIEW',
+      payload: {
+        type: 'EXPENSE',
+        amount: '25',
+        accountName: 'Cash',
+        accountCurrency: 'UAH',
+      },
+    });
+
+    expect(result.inlineButtons).toHaveLength(1);
+    expect(result.inlineButtons[0]).toEqual([
+      expect.objectContaining({ text: '←' }),
+      expect.objectContaining({ text: '❌' }),
+      expect.objectContaining({ text: '✅' }),
+    ]);
+  });
+
+  it('preserves a Telegram Premium emoji in the category review', async () => {
+    flows.reviewLabels.mockResolvedValue({ accounts: [] });
+    const result = await presenter.present('profile', 'uk', {
+      kind: 'review',
+      flow: 'CATEGORY_CREATE',
+      step: 'CATEGORY_REVIEW',
+      payload: {
+        name: 'Test',
+        type: 'EXPENSE',
+        emoji: '![📊](tg://emoji?id=5368324170671202286)',
+      },
+    });
+
+    expect(result.text).toContain('![📊](tg://emoji?id=5368324170671202286)');
+  });
+
   it('keeps choice keyboards bounded and two-column', async () => {
     flows.choices.mockResolvedValue(
       Array.from({ length: 30 }, (_, index) => ({
@@ -66,6 +103,21 @@ describe('FinanceChatFlowPresenterService', () => {
       ]),
     );
     expect(choiceRows.every((row) => row.length <= 2)).toBe(true);
+  });
+
+  it('asks for a sent icon instead of showing a fixed emoji keyboard', async () => {
+    const result = await presenter.present('profile', 'ru', {
+      kind: 'prompt',
+      flow: 'CATEGORY_CREATE',
+      step: 'CATEGORY_EMOJI',
+      payload: { revision: 'rev-icon' },
+    });
+
+    expect(result.text).toContain('Telegram Premium');
+    expect(result.inlineButtons.flat()).toEqual([
+      expect.objectContaining({ callbackData: 'fin:flow:back:rev-icon' }),
+      expect.objectContaining({ callbackData: 'fin:flow:cancel:rev-icon' }),
+    ]);
   });
 
   it('keeps localized category choices paginated and bounded', async () => {

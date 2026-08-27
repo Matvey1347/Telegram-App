@@ -21,6 +21,7 @@ import {
 import { patchTelegramChannelCaches } from "@/lib/features/telegram/telegram-channel-cache";
 import { telegramChannelKeys } from "@/lib/query-keys";
 import { useAppToast } from "@/providers/toast-provider";
+import { TelegramCardMenuAction } from "./telegram-card-actions-menu";
 
 type TimePostDraft = TelegramChannelTimePost;
 
@@ -113,9 +114,11 @@ function TimePostEditor({
 export function TimePostsControl({
   channelId,
   timePosts,
+  presentation = "button",
 }: {
   channelId: string;
   timePosts: TelegramChannelTimePost[];
+  presentation?: "button" | "menu";
 }) {
   const queryClient = useQueryClient();
   const { pushToast } = useAppToast();
@@ -140,19 +143,30 @@ export function TimePostsControl({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="secondary"
-        onClick={() => {
+      {presentation === "menu" ? (
+        <TelegramCardMenuAction
+          label="Time posts"
+          icon={<Clock3 size={15} />}
+          onClick={() => {
+            setDraftTimePosts(timePosts);
+            setOpen(true);
+          }}
+        />
+      ) : (
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => {
           setDraftTimePosts(timePosts);
           setOpen(true);
-        }}
-      >
-        <span className="inline-flex items-center gap-2">
-          <Clock3 size={15} />
-          Time posts
-        </span>
-      </Button>
+          }}
+        >
+          <span className="inline-flex items-center gap-2">
+            <Clock3 size={15} />
+            Time posts
+          </span>
+        </Button>
+      )}
       <Modal
         open={open}
         onClose={() => setOpen(false)}

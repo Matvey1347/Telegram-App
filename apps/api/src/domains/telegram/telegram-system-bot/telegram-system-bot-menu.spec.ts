@@ -16,11 +16,16 @@ describe('Telegram System Bot menu', () => {
         '📝 Posts',
         '💼 Ad Sale',
         '💰 Finance',
-        '🏢 Switch Workspace',
+        '🏢 Workspace',
       ]),
     );
     expect(labels).not.toContain('⏱ Scheduled Tasks');
     expect(SYSTEM_BOT_HELP_TEXT).not.toContain('/tasks');
+  });
+
+  it('maps both the current and legacy workspace labels to the command', () => {
+    expect(systemBotCommandFor('🏢 Workspace')).toBe('/workspace');
+    expect(systemBotCommandFor('🏢 Switch Workspace')).toBe('/workspace');
   });
 
   it('does not translate the removed task button into a command', () => {

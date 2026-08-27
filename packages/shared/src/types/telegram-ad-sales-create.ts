@@ -18,6 +18,18 @@ export type TelegramAdSaleCheckoutPlacement = {
   currency: string;
   manualPriceReason?: string | null;
   telegramPostId?: string | null;
+  managedPostDraft?: {
+    title: string;
+    text: string;
+    imageUrls: string[];
+    buttonRows: Array<
+      Array<{
+        text: string;
+        url: string;
+        style: "default" | "primary" | "success" | "danger";
+      }>
+    >;
+  } | null;
 };
 
 export type TelegramAdSaleCheckoutRequest = {
@@ -46,3 +58,21 @@ export type TelegramAdSaleCheckoutRequest = {
 };
 
 export type TelegramAdSaleCheckoutResponse = TelegramAdSale;
+
+export type TelegramAdSaleCheckoutWorkflowFailure = {
+  placementId: string;
+  channelId: string;
+  operation: "CREATE_POST" | "SCHEDULE_POST";
+  message: string;
+};
+
+export type TelegramAdSaleCheckoutWorkflowResponse = {
+  sale: TelegramAdSale;
+  summary: {
+    total: number;
+    successful: number;
+    failed: number;
+    skipped: number;
+  };
+  failures: TelegramAdSaleCheckoutWorkflowFailure[];
+};

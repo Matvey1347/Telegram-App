@@ -482,6 +482,7 @@ enum TelegramSystemBotFinanceDraftKind {
 enum TelegramSystemBotWorkflowKind {
   POST_IMPORT
   AD_SALE
+  WORKSPACE_SETTINGS
 }
 
 enum TelegramSystemBotWorkflowStatus {
@@ -679,6 +680,7 @@ model Workspace {
   tertiaryCurrency    String              @default("UAH") @db.VarChar(3)
   currencyDisplayMode CurrencyDisplayMode @default(code)
   avatarIconId        String?
+  systemNetworkExcludedChannelIds String[] @default([])
 
   members                                WorkspaceMember[]
   accounts                               Account[]
@@ -3285,7 +3287,8 @@ model FinanceAccount {
   id                String               @id @default(cuid())
   profileId         String
   name              String
-  emoji             String?              @db.VarChar(16)
+  /// Unicode, canonical Telegram Custom Emoji markup, or an immutable image source.
+  emoji             String?              @db.Text
   type              FinanceAccountType   @default(OTHER)
   currency          String               @db.VarChar(3)
   openingBalance    Decimal              @default(0)
@@ -3305,7 +3308,8 @@ model FinanceCategory {
   profileId    String
   parentId     String?
   name         String
-  emoji        String?                 @db.VarChar(16)
+  /// Unicode, canonical Telegram Custom Emoji markup, or an immutable image source.
+  emoji        String?                 @db.Text
   type         FinanceTransactionType
   key          String?
   archivedAt   DateTime?

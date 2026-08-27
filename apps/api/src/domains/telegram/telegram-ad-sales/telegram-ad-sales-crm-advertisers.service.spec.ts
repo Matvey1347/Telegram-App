@@ -102,6 +102,24 @@ describe('TelegramAdSalesCrmAdvertisersService', () => {
     expect(dto.archived).toBe(false);
   });
 
+  it('accepts stable advertiser sort query enums and rejects unknown values', async () => {
+    const valid = plainToInstance(TelegramAdvertisersQueryDto, {
+      sortBy: 'REVENUE',
+      sortDirection: 'ASC',
+    });
+    const invalid = plainToInstance(TelegramAdvertisersQueryDto, {
+      sortBy: 'VALUE',
+      sortDirection: 'SIDEWAYS',
+    });
+
+    expect(
+      await validate(valid, { whitelist: true, forbidNonWhitelisted: true }),
+    ).toHaveLength(0);
+    expect(
+      await validate(invalid, { whitelist: true, forbidNonWhitelisted: true }),
+    ).toHaveLength(2);
+  });
+
   it('lists compact CRM advertisers without heavy sale includes', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-08-08T12:00:00.000Z'));
     const { service, prisma } = createService();
@@ -139,6 +157,7 @@ describe('TelegramAdSalesCrmAdvertisersService', () => {
     expect(result.pagination.totalItems).toBe(1);
     expect(result.items[0]).toEqual(
       expect.objectContaining({
+        status: TelegramAdvertiserStatus.LEAD,
         id: 'advertiser-1',
         displayName: 'Acme Media',
         primaryContact: {
@@ -175,6 +194,83 @@ describe('TelegramAdSalesCrmAdvertisersService', () => {
       }),
     );
   });
+
+  it('marks a client with only past deals as a lead', async () => {
+    const { service, prisma } = createService();
+    prisma.telegramAdCrmWorkspaceSettings.findUnique.mockResolvedValue(null);
+    prisma.telegramAdvertiser.findMany.mockReturnValue('advertisers-query');
+    prisma.telegramAdvertiser.count.mockReturnValue('count-query');
+    prisma.$transaction.mockResolvedValue([
+      [makeCrmAdvertiser({ status: TelegramAdvertiserStatus.ACTIVE })],
+      1,
+    ]);
+    prisma.telegramAdSale.findMany.mockResolvedValue([
+      {
+        advertiserId: 'advertiser-1',
+        status: TelegramAdSaleStatus.COMPLETED,
+        createdAt: new Date('2026-08-01T00:00:00.000Z'),
+        placements: [],
+        payments: [],
+      },
+    ]);
+
+    const result = await service.listCrmAdvertisers('user-1', {
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(result.items[0].status).toBe(TelegramAdvertiserStatus.LEAD);
+    expect(result.items[0].activityStatus).toBe('LEAD');
+  });
+
+  it.each([
+    [
+      'WAITING',
+      {
+        status: TelegramAdPlacementStatus.SCHEDULED,
+        publishedAt: null,
+        plannedDeleteAt: null,
+        deletedAt: null,
+      },
+    ],
+    [
+      'ACTIVE',
+      {
+        status: TelegramAdPlacementStatus.PUBLISHED,
+        publishedAt: new Date('2026-08-27T09:00:00.000Z'),
+        plannedDeleteAt: new Date('2026-08-28T09:00:00.000Z'),
+        deletedAt: null,
+      },
+    ],
+  ] as const)(
+    'returns %s from the current placement lifecycle',
+    async (expectedStatus, placement) => {
+      jest
+        .useFakeTimers()
+        .setSystemTime(new Date('2026-08-27T12:00:00.000Z'));
+      const { service, prisma } = createService();
+      prisma.telegramAdCrmWorkspaceSettings.findUnique.mockResolvedValue(null);
+      prisma.telegramAdvertiser.findMany.mockReturnValue('advertisers-query');
+      prisma.telegramAdvertiser.count.mockReturnValue('count-query');
+      prisma.$transaction.mockResolvedValue([[makeCrmAdvertiser()], 1]);
+      prisma.telegramAdSale.findMany.mockResolvedValue([
+        {
+          advertiserId: 'advertiser-1',
+          status: TelegramAdSaleStatus.CONFIRMED,
+          createdAt: new Date('2026-08-20T00:00:00.000Z'),
+          placements: [{ id: 'placement-1', ...placement }],
+          payments: [],
+        },
+      ]);
+
+      const result = await service.listCrmAdvertisers('user-1', {
+        page: 1,
+        pageSize: 10,
+      });
+
+      expect(result.items[0].activityStatus).toBe(expectedStatus);
+    },
+  );
 
   it('filters archived-only advertisers explicitly', async () => {
     const { service, prisma } = createService();
@@ -224,10 +320,24 @@ describe('TelegramAdSalesCrmAdvertisersService', () => {
         status: TelegramAdSaleStatus.CONFIRMED,
         createdAt: new Date('2026-08-05T00:00:00.000Z'),
         placements: [
-          { id: 'placement-1', status: TelegramAdPlacementStatus.PUBLISHED },
-          { id: 'placement-2', status: TelegramAdPlacementStatus.SCHEDULED },
+          {
+            id: 'placement-1',
+            status: TelegramAdPlacementStatus.PUBLISHED,
+            agreedPrice: decimal(500),
+          },
+          {
+            id: 'placement-2',
+            status: TelegramAdPlacementStatus.SCHEDULED,
+            agreedPrice: decimal(280),
+          },
         ],
-        payments: [{ amountInPrimaryCurrency: decimal(780) }],
+        payments: [
+          {
+            amount: decimal(780),
+            currency: 'UAH',
+            amountInPrimaryCurrency: decimal(19.5),
+          },
+        ],
       },
     ]);
 
@@ -238,12 +348,16 @@ describe('TelegramAdSalesCrmAdvertisersService', () => {
 
     expect(result.items[0]).toEqual(
       expect.objectContaining({
+        status: TelegramAdvertiserStatus.ACTIVE,
         completedSalesCount: 1,
         totalSalesCount: 1,
+        paidSalesCount: 1,
         completedPlacementsCount: 1,
         totalPlacementsCount: 2,
-        totalRevenueInPrimaryCurrency: '780',
-        averageOrderValueInPrimaryCurrency: '780',
+        totalRevenueInPrimaryCurrency: '19.5',
+        averageOrderValueInPrimaryCurrency: '19.5',
+        revenueByCurrency: [{ currency: 'UAH', amount: '780' }],
+        averageOrderValueByCurrency: [{ currency: 'UAH', amount: '780' }],
         lastPurchaseAt: '2026-08-05T00:00:00.000Z',
       }),
     );
@@ -283,7 +397,13 @@ describe('TelegramAdSalesCrmAdvertisersService', () => {
           { id: 'placement-1', status: TelegramAdPlacementStatus.PUBLISHED },
           { id: 'placement-2', status: TelegramAdPlacementStatus.SCHEDULED },
         ],
-        payments: [{ amountInPrimaryCurrency: decimal(780) }],
+        payments: [
+          {
+            amount: decimal(780),
+            currency: 'UAH',
+            amountInPrimaryCurrency: decimal(19.5),
+          },
+        ],
       },
       {
         advertiserId: null,
@@ -292,7 +412,19 @@ describe('TelegramAdSalesCrmAdvertisersService', () => {
         placements: [
           { id: 'placement-3', status: TelegramAdPlacementStatus.PUBLISHED },
         ],
-        payments: [{ amountInPrimaryCurrency: decimal(60) }],
+        advertiserName: 'Direct sale',
+        advertiserNameSnapshot: 'Direct sale',
+        advertiserTelegram: null,
+        advertiserTelegramSnapshot: null,
+        advertiserContact: null,
+        advertiserCompanySnapshot: null,
+        payments: [
+          {
+            amount: decimal(60),
+            currency: 'UAH',
+            amountInPrimaryCurrency: decimal(1.5),
+          },
+        ],
       },
     ]);
 
@@ -307,10 +439,78 @@ describe('TelegramAdSalesCrmAdvertisersService', () => {
         totalSalesCount: 2,
         completedPlacementsCount: 2,
         totalPlacementsCount: 3,
-        totalRevenueInPrimaryCurrency: '840',
-        averageOrderValueInPrimaryCurrency: '420',
+        totalRevenueInPrimaryCurrency: '21',
+        averageOrderValueInPrimaryCurrency: '10.5',
+        revenueByCurrency: [{ currency: 'UAH', amount: '840' }],
+        averageOrderValueByCurrency: [{ currency: 'UAH', amount: '420' }],
         lastPurchaseAt: '2026-08-06T00:00:00.000Z',
       }),
+    );
+  });
+
+  it('does not collapse an unlinked named snapshot into No client', async () => {
+    const { service, prisma } = createService();
+    prisma.telegramAdCrmWorkspaceSettings.findUnique.mockResolvedValue(null);
+    prisma.telegramAdvertiser.findMany.mockReturnValue('advertisers-query');
+    prisma.telegramAdvertiser.count.mockReturnValue('count-query');
+    prisma.$transaction.mockResolvedValue([
+      [
+        makeCrmAdvertiser({
+          displayName: 'Advertiser',
+          companyName: null,
+          telegramUsername: null,
+          contacts: [],
+        }),
+      ],
+      1,
+    ]);
+    prisma.telegramAdSale.findMany.mockResolvedValue([
+      {
+        advertiserId: null,
+        advertiserName: 'Legacy Acme',
+        advertiserNameSnapshot: 'Legacy Acme',
+        advertiserTelegram: null,
+        advertiserTelegramSnapshot: null,
+        advertiserContact: null,
+        advertiserCompanySnapshot: null,
+        status: TelegramAdSaleStatus.CONFIRMED,
+        createdAt: new Date('2026-08-05T00:00:00.000Z'),
+        placements: [],
+        payments: [
+          {
+            amount: decimal(780),
+            currency: 'UAH',
+            amountInPrimaryCurrency: decimal(19.5),
+          },
+        ],
+      },
+    ]);
+
+    const result = await service.listCrmAdvertisers('user-1', {
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(result.items[0].totalSalesCount).toBe(7);
+    expect(result.items[0].revenueByCurrency).toEqual([]);
+  });
+
+  it('applies revenue sorting with a deterministic id tie-breaker', async () => {
+    const { service, prisma } = createService();
+    prisma.telegramAdCrmWorkspaceSettings.findUnique.mockResolvedValue(null);
+    prisma.telegramAdvertiser.findMany.mockReturnValue('advertisers-query');
+    prisma.telegramAdvertiser.count.mockReturnValue('count-query');
+    prisma.$transaction.mockResolvedValue([[], 0]);
+
+    await service.listCrmAdvertisers('user-1', {
+      page: 1,
+      pageSize: 10,
+      sortBy: 'REVENUE',
+      sortDirection: 'ASC',
+    });
+
+    expect(prisma.telegramAdvertiser.findMany.mock.calls[0][0].orderBy).toEqual(
+      [{ totalRevenueInPrimaryCurrency: 'asc' }, { id: 'asc' }],
     );
   });
 
@@ -329,6 +529,34 @@ describe('TelegramAdSalesCrmAdvertisersService', () => {
     expect(prisma.telegramAdvertiser.findMany.mock.calls[0][0].where).toEqual({
       workspaceId: 'ws-1',
     });
+  });
+
+  it('keeps the No client fallback after real clients in priority sorting', async () => {
+    const { service, prisma } = createService();
+    prisma.telegramAdCrmWorkspaceSettings.findUnique.mockResolvedValue(null);
+    const realClient = makeCrmAdvertiser({ id: 'real-client' });
+    const noClient = makeCrmAdvertiser({
+      id: 'no-client',
+      displayName: 'Advertiser',
+      companyName: null,
+      telegramUsername: null,
+      contacts: [],
+    });
+    prisma.$transaction
+      .mockResolvedValueOnce([1, 1])
+      .mockResolvedValueOnce([[realClient], [noClient]]);
+
+    const result = await service.listCrmAdvertisers('user-1', {
+      page: 1,
+      pageSize: 25,
+      sortBy: 'PRIORITY',
+      sortDirection: 'DESC',
+    });
+
+    expect(result.items.map((item) => item.id)).toEqual([
+      'real-client',
+      'no-client',
+    ]);
   });
 
   it('returns an empty paginated CRM advertiser list', async () => {

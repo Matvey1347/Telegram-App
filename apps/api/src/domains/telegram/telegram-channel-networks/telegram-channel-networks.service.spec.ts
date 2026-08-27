@@ -14,6 +14,13 @@ function harness() {
   };
   const prisma = {
     icon: { findFirst: jest.fn() },
+    workspace: {
+      findUnique: jest.fn().mockResolvedValue({
+        systemNetworkExcludedChannelIds: [],
+        primaryCurrency: 'USD',
+      }),
+      update: jest.fn(),
+    },
     telegramChannel: { findMany: jest.fn().mockResolvedValue([]) },
     telegramChannelNetwork: {
       findFirst: jest.fn(),
@@ -111,6 +118,70 @@ describe('TelegramChannelNetworksService icons', () => {
       iconId: 'icon-1',
       iconPresentation: { type: 'unicode', value: '🛰️' },
     });
+    expect(
+      test.financialRead.buildChannelFinancialSummaryPreview,
+    ).toHaveBeenCalledWith(undefined, [], { targetCurrency: 'USD' });
+  });
+
+  it('normalizes a custom network to the currency used by most channels', async () => {
+    const test = harness();
+    const finance = {
+      currency: 'UAH',
+      totalAdSpend: 0,
+      campaignsCount: 0,
+      totalJoinedSubscribers: 0,
+      totalPendingSubscribers: 0,
+      totalAttributedSubscribers: 0,
+      paidActiveSubscribersEstimate: null,
+      avgCpa: null,
+      activeCpa: null,
+      kpiStatus: 'unknown',
+      kpiLabel: '-',
+      assetEconomics: null,
+    };
+    test.financialRead.buildChannelFinancialSummaryPreview.mockResolvedValue(
+      new Map([
+        ['channel-1', finance],
+        ['channel-2', finance],
+        ['channel-3', finance],
+      ]),
+    );
+    const channel = (id: string, kpiCurrency: string) => ({
+      telegramChannel: {
+        id,
+        title: id,
+        username: null,
+        photoUrl: null,
+        currentSubscribersCount: 0,
+        pendingJoinRequestsCount: 0,
+        activeSubscribersWindow: 5,
+        audienceSnapshots: [],
+        kpiCurrency,
+      },
+    });
+    await (
+      test.service as unknown as {
+        enrichNetwork: (network: unknown) => Promise<Record<string, unknown>>;
+      }
+    ).enrichNetwork({
+      id: 'network-1',
+      workspaceId: 'workspace-1',
+      name: 'UAH network',
+      description: null,
+      iconId: null,
+      icon: null,
+      channels: [
+        channel('channel-1', 'UAH'),
+        channel('channel-2', 'USD'),
+        channel('channel-3', 'UAH'),
+      ],
+    });
+
+    expect(
+      test.financialRead.buildChannelFinancialSummaryPreview,
+    ).toHaveBeenCalledWith('workspace-1', expect.any(Array), {
+      targetCurrency: 'UAH',
+    });
   });
 });
 
@@ -155,6 +226,7 @@ describe('TelegramChannelNetworksService system All network', () => {
       photoUrl: null,
       currentSubscribersCount: 100,
       pendingJoinRequestsCount: 302,
+      kpiCurrency: 'UAH',
       audienceSnapshots: [
         {
           subscribersCount: 100,
@@ -170,6 +242,7 @@ describe('TelegramChannelNetworksService system All network', () => {
       username: null,
       photoUrl: null,
       currentSubscribersCount: null,
+      kpiCurrency: 'UAH',
       audienceSnapshots: [],
     };
     test.prisma.telegramChannel.findMany.mockResolvedValue([included, empty]);
@@ -212,11 +285,17 @@ describe('TelegramChannelNetworksService system All network', () => {
 
     const result = await test.service.getById('user-1', SYSTEM_ALL_NETWORK_ID);
 
+    expect(
+      test.financialRead.buildChannelFinancialSummaryPreview,
+    ).toHaveBeenCalledWith('workspace-1', expect.any(Array), {
+      targetCurrency: 'UAH',
+    });
+
     expect(result).toMatchObject({
       id: SYSTEM_ALL_NETWORK_ID,
       name: 'All',
       isSystem: true,
-      canEdit: false,
+      canEdit: true,
       canDelete: false,
       iconPresentation: {
         type: 'image',
@@ -233,6 +312,7 @@ describe('TelegramChannelNetworksService system All network', () => {
       expect.objectContaining({
         where: {
           workspaceId: 'workspace-1',
+          id: { notIn: [] },
           isActive: true,
           archivedAt: null,
           adminLinks: { some: {} },
@@ -241,23 +321,32 @@ describe('TelegramChannelNetworksService system All network', () => {
     );
   });
 
-  it.each(['update', 'remove'] as const)(
-    'rejects %s for the system network',
-    async (operation) => {
-      const test = harness();
-      const action =
-        operation === 'update'
-          ? test.service.update('user-1', SYSTEM_ALL_NETWORK_ID, {
-              name: 'Renamed',
-            })
-          : test.service.remove('user-1', SYSTEM_ALL_NETWORK_ID);
+  it('stores workspace-scoped channel exclusions for the system network', async () => {
+    const test = harness();
+    test.prisma.telegramChannel.findMany
+      .mockResolvedValueOnce([{ id: 'test-channel' }])
+      .mockResolvedValueOnce([]);
+    test.prisma.workspace.findUnique.mockResolvedValue({
+      systemNetworkExcludedChannelIds: ['test-channel'],
+    });
 
-      await expect(action).rejects.toBeInstanceOf(ForbiddenException);
-      expect(
-        test.prisma.telegramChannelNetwork.findFirst,
-      ).not.toHaveBeenCalled();
-    },
-  );
+    const result = await test.service.update('user-1', SYSTEM_ALL_NETWORK_ID, {
+      excludedTelegramChannelIds: ['test-channel'],
+    });
+
+    expect(test.prisma.workspace.update).toHaveBeenCalledWith({
+      where: { id: 'workspace-1' },
+      data: { systemNetworkExcludedChannelIds: ['test-channel'] },
+    });
+    expect(result.excludedTelegramChannelIds).toEqual(['test-channel']);
+  });
+
+  it('still rejects deleting the system network', async () => {
+    const test = harness();
+    await expect(
+      test.service.remove('user-1', SYSTEM_ALL_NETWORK_ID),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
 
   it('reserves the All name for the system network', async () => {
     const test = harness();

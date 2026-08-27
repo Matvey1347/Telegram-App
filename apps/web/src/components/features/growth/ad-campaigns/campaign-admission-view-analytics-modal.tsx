@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDate as formatDisplayDate, formatDateTime } from "@/lib/date-format";
+
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -25,7 +27,7 @@ function formatNumber(value: unknown, decimals = 0) {
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
-  return new Date(value).toLocaleString();
+  return formatDateTime(value);
 }
 
 function modeLabel(value?: string | null) {
@@ -68,7 +70,7 @@ export function CampaignAdmissionViewAnalyticsModal({
           const key = new Date(timestamp).toISOString();
           const row =
             byTime.get(key) ?? {
-              collectedAt: new Date(timestamp).toLocaleDateString(),
+              collectedAt: formatDisplayDate(timestamp),
               timestamp,
               avgViewsTotal: 0,
               avgViewsCount: 0,

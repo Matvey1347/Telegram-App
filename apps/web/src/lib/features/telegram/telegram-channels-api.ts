@@ -608,6 +608,7 @@ export function createTelegramChannelsApi({
         buttonRows?: TelegramPostButtonRows;
         assignedMemberId?: string;
         icon?: string | null;
+        inPlaceOnly?: boolean;
       },
       background = false,
     ) =>

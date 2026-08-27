@@ -4,6 +4,11 @@ import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { normalizeTelegramPostButtonRows } from '../../../telegram/shared/telegram-inline-keyboard';
 import {
+  ADVERTISE_SYSTEM_GROUP_ICON,
+  ADVERTISE_SYSTEM_GROUP_KEY,
+  SYSTEM_BOT_POSTS_GROUP_ICON_IMAGE_URL,
+  SYSTEM_BOT_POSTS_GROUP_ICON_NAME,
+  SYSTEM_BOT_POSTS_GROUP_KEY,
   TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_FALLBACK_ID,
   TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_IMAGE_URL,
   TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_NAME,
@@ -34,6 +39,30 @@ export class TelegramManagedPostGroupPresentationService {
       emoji: value,
       imageUrl: null,
     });
+  }
+
+  private systemGroupIconPresentation(group?: {
+    systemKey?: string | null;
+  } | null) {
+    if (group?.systemKey === SYSTEM_BOT_POSTS_GROUP_KEY) {
+      return iconToResolvedEmoji({
+        id: SYSTEM_BOT_POSTS_GROUP_ICON_NAME,
+        type: 'image',
+        name: SYSTEM_BOT_POSTS_GROUP_ICON_NAME,
+        emoji: null,
+        imageUrl: SYSTEM_BOT_POSTS_GROUP_ICON_IMAGE_URL,
+      });
+    }
+    if (group?.systemKey === ADVERTISE_SYSTEM_GROUP_KEY) {
+      return iconToResolvedEmoji({
+        id: ADVERTISE_SYSTEM_GROUP_ICON,
+        type: 'emoji',
+        name: ADVERTISE_SYSTEM_GROUP_ICON,
+        emoji: ADVERTISE_SYSTEM_GROUP_ICON,
+        imageUrl: null,
+      });
+    }
+    return null;
   }
 
   public async resolveTelegramImportedSystemGroupIconId(): Promise<string> {
@@ -214,15 +243,18 @@ export class TelegramManagedPostGroupPresentationService {
             iconPresentation:
               typeof post.group.icon === 'string'
                 ? (iconToResolvedEmoji(iconsById.get(post.group.icon)) ??
+                  this.legacyUnicodeIconPresentation(post.group.icon) ??
+                  this.systemGroupIconPresentation(post.group) ??
                   (this.isSystemGroupIconCandidate(
                     post.group,
                     Boolean(iconsById.get(post.group.icon)),
                   )
                     ? fallbackSystemGroupIcon
                     : null))
-                : this.isSystemGroupIconCandidate(post.group, false)
-                  ? fallbackSystemGroupIcon
-                  : null,
+                : (this.systemGroupIconPresentation(post.group) ??
+                  (this.isSystemGroupIconCandidate(post.group, false)
+                    ? fallbackSystemGroupIcon
+                    : null)),
           }
         : post.group,
     }));
@@ -261,15 +293,17 @@ export class TelegramManagedPostGroupPresentationService {
       iconPresentation: group.icon
         ? (iconToResolvedEmoji(iconsById.get(group.icon)) ??
           this.legacyUnicodeIconPresentation(group.icon) ??
+          this.systemGroupIconPresentation(group) ??
           (this.isSystemGroupIconCandidate(
             group,
             Boolean(group.icon && iconsById.get(group.icon)),
           )
             ? fallbackSystemGroupIcon
             : null))
-        : this.isSystemGroupIconCandidate(group, false)
-          ? fallbackSystemGroupIcon
-          : null,
+        : (this.systemGroupIconPresentation(group) ??
+          (this.isSystemGroupIconCandidate(group, false)
+            ? fallbackSystemGroupIcon
+            : null)),
       posts: group.posts
         ? group.posts.map((post) => ({
             ...post,

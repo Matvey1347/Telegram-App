@@ -17,26 +17,33 @@ export class WorkspacesService {
     private readonly workspaceService: WorkspaceService,
   ) {}
 
-  private shapeMembership(row: {
-    id: string;
-    workspaceId: string;
-    role: WorkspaceRole;
-    workspace: {
+  private shapeMembership(
+    row: {
       id: string;
-      name: string;
-      timezone: string;
-      primaryCurrency: string;
-      secondaryCurrency: string;
-      avatarIcon?: {
+      workspaceId: string;
+      role: WorkspaceRole;
+      workspace: {
         id: string;
-        type: 'emoji' | 'image';
         name: string;
-        emoji?: string | null;
-        imageUrl?: string | null;
-      } | null;
-      currencyDisplayMode?: 'code' | 'symbol';
-    };
-  }) {
+        timezone: string;
+        primaryCurrency: string;
+        secondaryCurrency: string;
+        avatarIcon?: {
+          id: string;
+          type: 'emoji' | 'image';
+          name: string;
+          emoji?: string | null;
+          imageUrl?: string | null;
+        } | null;
+        currencyDisplayMode?: 'code' | 'symbol';
+      };
+    },
+    telegramAsset?: {
+      kind: 'STATIC' | 'ANIMATED' | 'VIDEO';
+      assetUrl: string | null;
+      renderAssetUrl: string | null;
+    } | null,
+  ) {
     return {
       id: row.workspace.id,
       name: row.workspace.name,
@@ -46,8 +53,70 @@ export class WorkspacesService {
       secondaryCurrency: row.workspace.secondaryCurrency,
       currencyDisplayMode: row.workspace.currencyDisplayMode ?? 'code',
       avatarIcon: row.workspace.avatarIcon ?? null,
-      avatarPresentation: iconToResolvedEmoji(row.workspace.avatarIcon),
+      avatarPresentation: iconToResolvedEmoji(
+        row.workspace.avatarIcon,
+        telegramAsset,
+      ),
     };
+  }
+
+  private async premiumEmojiAssets(
+    rows: Array<{
+      workspaceId: string;
+      workspace: { avatarIcon?: Parameters<typeof iconToResolvedEmoji>[0] };
+    }>,
+  ) {
+    const targets = rows.flatMap((row) => {
+      const presentation = iconToResolvedEmoji(row.workspace.avatarIcon);
+      return presentation?.type === 'unicode' &&
+        presentation.telegramCustomEmojiId
+        ? [
+            {
+              workspaceId: row.workspaceId,
+              documentId: presentation.telegramCustomEmojiId,
+            },
+          ]
+        : [];
+    });
+    if (!targets.length) return new Map<string, never>();
+    const assets = await this.prisma.telegramCustomEmoji.findMany({
+      where: {
+        documentId: {
+          in: [...new Set(targets.map((target) => target.documentId))],
+        },
+      },
+      select: {
+        documentId: true,
+        kind: true,
+        assetUrl: true,
+        renderAssetUrl: true,
+        pack: { select: { workspaceId: true } },
+      },
+    });
+    const resolved = new Map<
+      string,
+      {
+        kind: 'STATIC' | 'ANIMATED' | 'VIDEO';
+        assetUrl: string | null;
+        renderAssetUrl: string | null;
+      }
+    >();
+    for (const asset of assets) {
+      const presentation = {
+        kind: asset.kind as 'STATIC' | 'ANIMATED' | 'VIDEO',
+        assetUrl: asset.assetUrl,
+        renderAssetUrl: asset.renderAssetUrl,
+      };
+      resolved.set(
+        `${asset.pack.workspaceId}:${asset.documentId}`,
+        presentation,
+      );
+      // Telegram Custom Emoji document IDs are global. Reuse an already stored
+      // immutable Telegram asset when another workspace selected the same emoji.
+      if (!resolved.has(`*:${asset.documentId}`))
+        resolved.set(`*:${asset.documentId}`, presentation);
+    }
+    return resolved;
   }
 
   async findAll(userId: string) {
@@ -78,15 +147,25 @@ export class WorkspacesService {
       },
       orderBy: { createdAt: 'asc' },
     });
-    return rows.map((row) =>
-      this.shapeMembership({
-        ...row,
-        workspace: {
-          ...row.workspace,
-          currencyDisplayMode: 'code',
+    const premiumAssets = await this.premiumEmojiAssets(rows);
+    return rows.map((row) => {
+      const presentation = iconToResolvedEmoji(row.workspace.avatarIcon);
+      return this.shapeMembership(
+        {
+          ...row,
+          workspace: {
+            ...row.workspace,
+            currencyDisplayMode: 'code',
+          },
         },
-      }),
-    );
+        premiumAssets.get(
+          `${row.workspaceId}:${presentation?.type === 'unicode' ? presentation.telegramCustomEmojiId : ''}`,
+        ) ??
+          premiumAssets.get(
+            `*:${presentation?.type === 'unicode' ? presentation.telegramCustomEmojiId : ''}`,
+          ),
+      );
+    });
   }
 
   async findOne(userId: string, id: string) {
@@ -117,13 +196,23 @@ export class WorkspacesService {
       },
     });
     if (!membership) throw new NotFoundException('Workspace not found');
-    return this.shapeMembership({
-      ...membership,
-      workspace: {
-        ...membership.workspace,
-        currencyDisplayMode: 'code',
+    const premiumAssets = await this.premiumEmojiAssets([membership]);
+    const presentation = iconToResolvedEmoji(membership.workspace.avatarIcon);
+    return this.shapeMembership(
+      {
+        ...membership,
+        workspace: {
+          ...membership.workspace,
+          currencyDisplayMode: 'code',
+        },
       },
-    });
+      premiumAssets.get(
+        `${membership.workspaceId}:${presentation?.type === 'unicode' ? presentation.telegramCustomEmojiId : ''}`,
+      ) ??
+        premiumAssets.get(
+          `*:${presentation?.type === 'unicode' ? presentation.telegramCustomEmojiId : ''}`,
+        ),
+    );
   }
 
   async create(userId: string, dto: CreateWorkspaceDto) {

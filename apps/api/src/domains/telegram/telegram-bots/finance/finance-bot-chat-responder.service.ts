@@ -16,6 +16,11 @@ import {
   financeMiniAppUrl,
 } from '../../consumer-finance/telegram-presentation/finance-telegram-menu';
 import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
+import {
+  TELEGRAM_BOT_ACTION_TEXT,
+  telegramBotActionRow,
+  telegramBotEditButtonText,
+} from '../../../../telegram/shared/telegram-bot-action-buttons';
 export { financeCategoryEmoji } from '../../consumer-finance/catalog/finance-entity-emoji';
 
 function rowsOfTwo<T>(items: T[]) {
@@ -41,16 +46,12 @@ export class FinanceBotChatResponderService {
     private readonly botApi: TelegramBotApiClient,
   ) {}
 
-  proposalButtons(
-    token: string,
-    saveText: string,
-    locale: FinanceChatLocale = 'en',
-  ) {
+  proposalButtons(token: string) {
     return [
-      [
-        { text: saveText, callbackData: `fin:save:${token}` },
-        { text: t(locale, 'cancel'), callbackData: `fin:cancel:${token}` },
-      ],
+      telegramBotActionRow({
+        cancel: `fin:cancel:${token}`,
+        confirm: `fin:save:${token}`,
+      }),
     ];
   }
 
@@ -193,6 +194,13 @@ export class FinanceBotChatResponderService {
             active.slice(0, 8).map((account) => ({
               text: `${unicodeEmoji(account.iconPresentation, '💰')} ${account.name}`,
               callbackData: `fin:flow:edit-account:${account.id}`,
+              ...(account.iconPresentation?.type === 'unicode' &&
+              account.iconPresentation.telegramCustomEmojiId
+                ? {
+                    iconCustomEmojiId:
+                      account.iconPresentation.telegramCustomEmojiId,
+                  }
+                : {}),
             })),
           ),
           ...(financeMiniAppUrl(context.bot.id, undefined, 'accounts')
@@ -261,13 +269,26 @@ export class FinanceBotChatResponderService {
               category.key,
               category.name,
             );
+            const customEmojiId =
+              category.iconPresentation?.type === 'unicode'
+                ? category.iconPresentation.telegramCustomEmojiId
+                : null;
             return [
               {
-                text: `${unicodeEmoji(category.iconPresentation, financeCategoryEmoji(category.name))} ${label}`,
+                text: telegramBotEditButtonText(
+                  customEmojiId
+                    ? label
+                    : `${unicodeEmoji(category.iconPresentation, financeCategoryEmoji(category.name))} ${label}`,
+                ),
                 callbackData: `fin:flow:edit-category:${category.id}`,
+                ...(customEmojiId
+                  ? {
+                      iconCustomEmojiId: customEmojiId,
+                    }
+                  : {}),
               },
               {
-                text: `🗄 ${t(locale, 'archive')}`,
+                text: TELEGRAM_BOT_ACTION_TEXT.delete,
                 callbackData: `fin:flow:archive-category:${category.id}`,
               },
             ];

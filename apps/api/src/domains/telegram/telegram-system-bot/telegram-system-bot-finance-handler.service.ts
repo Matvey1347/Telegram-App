@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { TELEGRAM_BOT_ACTION_TEXT } from '../../../telegram/shared/telegram-bot-action-buttons';
 import { TransactionType } from '@prisma/client';
 import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
@@ -176,7 +177,7 @@ export class TelegramSystemBotFinanceHandlerService {
             ...this.compactRows(result.buttons),
             [
               {
-                text: 'Cancel',
+                text: TELEGRAM_BOT_ACTION_TEXT.cancel,
                 callback_data: `finance:cancel:${this.draftId(result.buttons)}`,
               },
             ],
@@ -192,7 +193,7 @@ export class TelegramSystemBotFinanceHandlerService {
           inline_keyboard: [
             [
               {
-                text: 'Cancel',
+                text: TELEGRAM_BOT_ACTION_TEXT.cancel,
                 callback_data: `finance:cancel:${result.draftId}`,
               },
             ],
@@ -208,8 +209,14 @@ export class TelegramSystemBotFinanceHandlerService {
         reply_markup: {
           inline_keyboard: [
             [
-              { text: '✅ Confirm', callback_data: result.callbackData },
-              { text: 'Cancel', callback_data: `finance:cancel:${draftId}` },
+              {
+                text: TELEGRAM_BOT_ACTION_TEXT.confirm,
+                callback_data: result.callbackData,
+              },
+              {
+                text: TELEGRAM_BOT_ACTION_TEXT.cancel,
+                callback_data: `finance:cancel:${draftId}`,
+              },
             ],
           ],
         },

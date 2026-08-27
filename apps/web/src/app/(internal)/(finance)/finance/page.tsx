@@ -1,5 +1,7 @@
 'use client';
 
+import { formatDate } from '@/lib/date-format';
+
 import Link from 'next/link';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -139,7 +141,7 @@ export default function FinancePage() {
                           <div className="truncate font-medium text-white">{getTransactionTitle(transaction)}</div>
                         </div>
                         <div className={`mt-1 text-xs ${transaction.type === 'income' ? 'text-emerald-300' : 'text-rose-300'}`}>
-                          {transaction.type} • {new Date(transaction.date).toLocaleDateString()}
+                          {transaction.type} • {formatDate(transaction.date)}
                         </div>
                       </div>
                     </td>
@@ -223,7 +225,7 @@ export default function FinancePage() {
               <tbody className="divide-y divide-neutral-800">
                 {transfers?.map((transfer) => (
                   <tr key={transfer.id} className="bg-neutral-950">
-                    <td className="px-3 py-2">{new Date(transfer.date).toLocaleDateString()}</td>
+                    <td className="px-3 py-2">{formatDate(transfer.date)}</td>
                     <td className="px-3 py-2"><TransferAccountCell account={transfer.fromAccount} fallback={transfer.fromAccountId} onIconChange={(iconId) => updateAccountIconMutation.mutate({ id: transfer.fromAccountId, iconId })} /></td>
                     <td className="px-3 py-2"><MoneyStack amount={transfer.fromAmount} currency={transfer.fromCurrency} settings={settings} rates={rates} mainClassName="font-medium text-white" subClassName="text-xs text-neutral-400" /></td>
                     <td className="px-3 py-2"><TransferAccountCell account={transfer.toAccount} fallback={transfer.toAccountId} onIconChange={(iconId) => updateAccountIconMutation.mutate({ id: transfer.toAccountId, iconId })} /></td>

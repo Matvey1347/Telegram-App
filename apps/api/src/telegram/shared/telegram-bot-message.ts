@@ -11,6 +11,7 @@ export type TelegramBotMessage = {
       url?: string;
       webAppUrl?: string;
       callbackData?: string;
+      iconCustomEmojiId?: string;
     }>
   >;
   replyKeyboard?: Array<Array<{ text: string; webAppUrl?: string }>>;
@@ -40,6 +41,9 @@ export function telegramBotMessagePayload(
                     : {}),
                   ...(button.callbackData
                     ? { callback_data: button.callbackData }
+                    : {}),
+                  ...(button.iconCustomEmojiId
+                    ? { icon_custom_emoji_id: button.iconCustomEmojiId }
                     : {}),
                 })),
               ),

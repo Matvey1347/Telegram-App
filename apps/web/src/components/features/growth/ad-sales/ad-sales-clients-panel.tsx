@@ -1,8 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { ReactNode } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { ArrowUpDown, Check, SlidersHorizontal, X } from "lucide-react";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 import { Pagination } from "@/components/ui/pagination";
 import {
@@ -11,18 +16,15 @@ import {
   FormField,
   Input,
   Select,
-  TableLoadingState,
   Skeleton,
 } from "@/components/ui/primitives";
 import { AdSalesClientsTable } from "@/components/features/growth/ad-sales/ad-sales-clients-table";
-import type { CurrencySettings, ExchangeRate } from "@/lib/api";
+import { ClientOrdersModal } from "@/components/features/growth/ad-sales/client-orders-modal";
+import type { TelegramAdCrmAdvertiserListItem } from "@/lib/api";
 import { telegramAdSalesApi } from "@/lib/api";
-import { formatMoneyPreview } from "@/lib/features/finance/money";
 import { telegramAdSalesKeys } from "@/lib/features/growth/telegram-ad-sales-query";
 
 const panelClass = "rounded-[22px] border border-neutral-800 bg-[#171717]";
-const tileClass =
-  "rounded-[18px] border border-slate-800/80 bg-[#0b1220] p-4 shadow-[inset_0_1px_0_rgba(96,165,250,0.05)]";
 const clientsCacheOptions = {
   staleTime: 2 * 60 * 1000,
   gcTime: 15 * 60 * 1000,
@@ -52,33 +54,93 @@ const lifecycleOptions = [
 ];
 
 type ArchivedFilter = "active" | "archived" | "all";
+type ClientSort = "PRIORITY" | "REVENUE" | "RECENT_PURCHASE" | "NAME" | "SALES";
+type SortDirection = "ASC" | "DESC";
 
-export function AdSalesClientsPanel({
-  settings,
-  rates,
-}: {
-  settings?: CurrencySettings;
-  rates?: ExchangeRate[];
-}) {
+const clientSortOptions: Array<{
+  label: string;
+  sortBy: ClientSort;
+  sortDirection: SortDirection;
+}> = [
+  { label: "Priority", sortBy: "PRIORITY", sortDirection: "DESC" },
+  {
+    label: "Recent purchase",
+    sortBy: "RECENT_PURCHASE",
+    sortDirection: "DESC",
+  },
+  { label: "Revenue: high to low", sortBy: "REVENUE", sortDirection: "DESC" },
+  { label: "Revenue: low to high", sortBy: "REVENUE", sortDirection: "ASC" },
+  { label: "Orders: most first", sortBy: "SALES", sortDirection: "DESC" },
+  { label: "Name: A–Z", sortBy: "NAME", sortDirection: "ASC" },
+  { label: "Name: Z–A", sortBy: "NAME", sortDirection: "DESC" },
+];
+
+export function AdSalesClientsPanel() {
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState("");
   const [lifecycleStage, setLifecycleStage] = useState("");
   const [ownerMemberId, setOwnerMemberId] = useState("");
   const [archived, setArchived] = useState<ArchivedFilter>("active");
+  const [sortBy, setSortBy] = useState<ClientSort>("PRIORITY");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("DESC");
+  const [sortOpen, setSortOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [ordersClient, setOrdersClient] =
+    useState<TelegramAdCrmAdvertiserListItem | null>(null);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(
+      () => setDebouncedSearch(search.trim()),
+      300,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [search]);
+
+  useEffect(() => {
+    if (!sortOpen) return;
+    const closeOutside = (event: MouseEvent) => {
+      if (!sortMenuRef.current?.contains(event.target as Node))
+        setSortOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSortOpen(false);
+    };
+    document.addEventListener("mousedown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [sortOpen]);
 
   const queryParams = useMemo(
     () => ({
       page,
       pageSize,
-      ...(search.trim() ? { search: search.trim() } : {}),
+      ...(debouncedSearch ? { search: debouncedSearch } : {}),
       ...(status ? { status } : {}),
       ...(lifecycleStage ? { lifecycleStage } : {}),
       ...(ownerMemberId ? { ownerMemberId } : {}),
       ...(archived === "all" ? {} : { archived: archived === "archived" }),
+      sortBy,
+      sortDirection,
     }),
-    [archived, lifecycleStage, ownerMemberId, page, pageSize, search, status],
+    [
+      archived,
+      debouncedSearch,
+      lifecycleStage,
+      ownerMemberId,
+      page,
+      pageSize,
+      sortBy,
+      sortDirection,
+      status,
+    ],
   );
 
   const clientsQuery = useQuery({
@@ -86,21 +148,21 @@ export function AdSalesClientsPanel({
     queryFn: () => telegramAdSalesApi.listCrmAdvertisers(queryParams),
     ...clientsCacheOptions,
   });
+  const updateClient = useMutation({
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: string;
+      payload: Record<string, unknown>;
+    }) => telegramAdSalesApi.updateAdvertiser(id, payload),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: telegramAdSalesKeys.crmAdvertisersRoot(),
+      }),
+  });
 
   const clients = clientsQuery.data?.items ?? [];
-  const pageRevenue = clients.reduce(
-    (sum, client) => sum + Number(client.totalRevenueInPrimaryCurrency ?? 0),
-    0,
-  );
-  const moneySettings = settings ?? {
-    primaryCurrency: "USD",
-    secondaryCurrency: "UAH",
-    tertiaryCurrency: "UAH",
-    currencyDisplayMode: "code" as const,
-  };
-  const urgentCount = clients.filter((client) =>
-    ["HIGH", "URGENT"].includes(String(client.urgency ?? "").toUpperCase()),
-  ).length;
   const nowMs = clientsQuery.dataUpdatedAt;
   const overdueTaskCount = clients.filter((client) =>
     client.nextOpenTask?.dueAt
@@ -112,112 +174,161 @@ export function AdSalesClientsPanel({
     setPage(1);
     callback();
   };
+  const activeFilterCount =
+    [status, lifecycleStage, ownerMemberId].filter(Boolean).length +
+    Number(archived !== "active");
+  const clearFilters = () => {
+    setPage(1);
+    setStatus("");
+    setLifecycleStage("");
+    setOwnerMemberId("");
+    setArchived("active");
+  };
 
   return (
     <div className="space-y-5">
-      <Card className={panelClass}>
-        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_180px] xl:items-end">
-          <FormField label="Search">
-            <Input
-              value={search}
-              onChange={(event) =>
-                resetPage(() => setSearch(event.target.value))
-              }
-              placeholder="Name, company, Telegram, contact"
-            />
-          </FormField>
-          <FormField label="Status">
-            <Select
-              value={status}
-              onChange={(event) =>
-                resetPage(() => setStatus(event.target.value))
-              }
+      <Card className={`${panelClass} p-3`}>
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-end">
+          <div className="min-w-0 flex-1">
+            <FormField label="Search">
+              <Input
+                value={search}
+                onChange={(event) =>
+                  resetPage(() => setSearch(event.target.value))
+                }
+                placeholder="Name, company, Telegram, contact"
+              />
+            </FormField>
+          </div>
+          <div ref={sortMenuRef} className="relative self-end">
+            <button
+              type="button"
+              className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-lg text-neutral-300 transition hover:bg-neutral-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              aria-label="Sort clients"
+              aria-haspopup="menu"
+              aria-expanded={sortOpen}
+              title="Sort clients"
+              onClick={() => setSortOpen((current) => !current)}
             >
-              {statusOptions.map((option) => (
-                <option key={option.value || "all"} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          <FormField label="Lifecycle">
-            <Select
-              value={lifecycleStage}
-              onChange={(event) =>
-                resetPage(() => setLifecycleStage(event.target.value))
-              }
+              <ArrowUpDown size={20} />
+            </button>
+            {sortOpen ? (
+              <div
+                role="menu"
+                className="absolute right-0 top-full z-40 mt-1 w-56 rounded-lg border border-neutral-700 bg-neutral-950 p-1 shadow-2xl"
+              >
+                {clientSortOptions.map((option) => {
+                  const selected =
+                    option.sortBy === sortBy &&
+                    option.sortDirection === sortDirection;
+                  return (
+                    <button
+                      key={`${option.sortBy}-${option.sortDirection}`}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={selected}
+                      onClick={() => {
+                        setPage(1);
+                        setSortBy(option.sortBy);
+                        setSortDirection(option.sortDirection);
+                        setSortOpen(false);
+                      }}
+                      className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-800 hover:text-white"
+                    >
+                      {option.label}
+                      {selected ? (
+                        <Check size={15} className="text-blue-400" />
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="relative inline-flex h-[38px] w-[38px] items-center justify-center rounded-lg text-neutral-300 transition hover:bg-neutral-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            aria-label="Filters"
+            aria-expanded={filtersOpen}
+            title="Filters"
+            onClick={() => setFiltersOpen((current) => !current)}
+          >
+            <SlidersHorizontal size={20} />
+            {activeFilterCount ? (
+              <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-semibold text-white">
+                {activeFilterCount}
+              </span>
+            ) : null}
+          </button>
+          {activeFilterCount ? (
+            <button
+              type="button"
+              aria-label="Clear filters"
+              title="Clear filters"
+              className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-lg text-neutral-400 transition hover:bg-neutral-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              onClick={clearFilters}
             >
-              {lifecycleOptions.map((option) => (
-                <option key={option.value || "all"} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          <FormField label="Owner">
-            <MemberSelect
-              value={ownerMemberId}
-              onChange={(value) => resetPage(() => setOwnerMemberId(value))}
-              includeAll
-            />
-          </FormField>
-          <FormField label="Archive">
-            <Select
-              value={archived}
-              onChange={(event) =>
-                resetPage(() =>
-                  setArchived(event.target.value as ArchivedFilter),
-                )
-              }
-            >
-              <option value="active">Active only</option>
-              <option value="archived">Archived only</option>
-              <option value="all">All clients</option>
-            </Select>
-          </FormField>
+              <X size={20} />
+            </button>
+          ) : null}
         </div>
+        {filtersOpen ? (
+          <div className="mt-3 grid gap-3 border-t border-neutral-800 pt-3 sm:grid-cols-2 xl:grid-cols-4">
+            <FormField label="Status">
+              <Select
+                value={status}
+                onChange={(event) =>
+                  resetPage(() => setStatus(event.target.value))
+                }
+              >
+                {statusOptions.map((option) => (
+                  <option key={option.value || "all"} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+            <FormField label="Lifecycle">
+              <Select
+                value={lifecycleStage}
+                onChange={(event) =>
+                  resetPage(() => setLifecycleStage(event.target.value))
+                }
+              >
+                {lifecycleOptions.map((option) => (
+                  <option key={option.value || "all"} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+            <FormField label="Owner">
+              <MemberSelect
+                value={ownerMemberId}
+                onChange={(value) => resetPage(() => setOwnerMemberId(value))}
+                includeAll
+              />
+            </FormField>
+            <FormField label="Archive">
+              <Select
+                value={archived}
+                onChange={(event) =>
+                  resetPage(() =>
+                    setArchived(event.target.value as ArchivedFilter),
+                  )
+                }
+              >
+                <option value="active">Active only</option>
+                <option value="archived">Archived only</option>
+                <option value="all">All clients</option>
+              </Select>
+            </FormField>
+          </div>
+        ) : null}
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricTile
-          label="Clients"
-          value={
-            clientsQuery.isLoading
-              ? <MetricTileSkeleton />
-              : String(clientsQuery.data?.pagination.totalItems ?? 0)
-          }
-        />
-        <MetricTile
-          label="High value"
-          value={
-            clientsQuery.isLoading
-              ? <MetricTileSkeleton />
-              : String(clients.filter((client) => client.isHighValue).length)
-          }
-        />
-        <MetricTile
-          label="Needs action"
-          value={clientsQuery.isLoading ? <MetricTileSkeleton /> : String(urgentCount)}
-        />
-        <MetricTile
-          label="Page revenue"
-          value={
-            clientsQuery.isLoading ? (
-              <MetricTileSkeleton />
-            ) : (
-              formatMoneyPreview({
-                amount: pageRevenue,
-                currency: moneySettings.primaryCurrency,
-                settings: moneySettings,
-                rates,
-              })
-            )
-          }
-        />
-      </div>
-
       {clientsQuery.isLoading ? (
-        <TableLoadingState columns={8} rows={6} />
+        <ClientsCardSkeleton />
       ) : null}
       {clientsQuery.error ? (
         <ErrorState text="Could not load ad-sales clients." />
@@ -225,11 +336,18 @@ export function AdSalesClientsPanel({
       {!clientsQuery.isLoading && !clientsQuery.error ? (
         <AdSalesClientsTable
           clients={clients}
-          settings={moneySettings}
-          rates={rates}
           overdueTaskCount={overdueTaskCount}
+          onUpdateClient={(id, payload) =>
+            updateClient.mutateAsync({ id, payload })
+          }
+          onOpenOrders={setOrdersClient}
         />
       ) : null}
+
+      <ClientOrdersModal
+        client={ordersClient}
+        onClose={() => setOrdersClient(null)}
+      />
 
       {clientsQuery.data?.pagination ? (
         <Pagination
@@ -250,20 +368,34 @@ export function AdSalesClientsPanel({
   );
 }
 
-function MetricTile({ label, value }: { label: string; value: ReactNode }) {
+function ClientsCardSkeleton() {
   return (
-    <Card className={tileClass}>
-      <p className="text-xs font-medium uppercase text-neutral-500">{label}</p>
-      <div className="mt-2 whitespace-pre-line text-2xl font-semibold text-white">{value}</div>
-    </Card>
-  );
-}
-
-function MetricTileSkeleton() {
-  return (
-    <div className="space-y-2" role="status" aria-label="Loading metric">
-      <Skeleton className="h-7 w-24" />
-      <Skeleton className="h-4 w-16" />
+    <div aria-label="Loading clients">
+      <div className="columns-1 gap-4 md:columns-2 xl:columns-3">
+        {Array.from({ length: 6 }, (_, index) => (
+          <div
+            key={index}
+            className="mb-4 break-inside-avoid rounded-lg border border-neutral-800 bg-neutral-950 p-3"
+          >
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-4 gap-3 border-t border-neutral-900 pt-3">
+              {Array.from({ length: 4 }, (_, metric) => (
+                <div key={metric} className="space-y-2">
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-5 w-4/5" />
+                </div>
+              ))}
+            </div>
+            <Skeleton className="mt-4 h-8 w-full" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

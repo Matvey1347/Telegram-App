@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDateTime } from "@/lib/date-format";
+
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
@@ -144,7 +146,7 @@ export function GreeterTestModeSection({
                 label="Last interaction"
                 value={
                   session?.lastInteractionAt
-                    ? new Date(session.lastInteractionAt).toLocaleString()
+                    ? formatDateTime(session.lastInteractionAt)
                     : "—"
                 }
               />

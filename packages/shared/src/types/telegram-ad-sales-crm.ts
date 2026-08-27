@@ -85,11 +85,36 @@ export type TelegramAdCrmRfmSegment =
 
 export type TelegramAdCrmUrgency = "NONE" | "LOW" | "MEDIUM" | "HIGH";
 
+export const TELEGRAM_AD_CRM_ADVERTISER_SORT_BY = [
+  "PRIORITY",
+  "REVENUE",
+  "RECENT_PURCHASE",
+  "NAME",
+  "SALES",
+] as const;
+
+export type TelegramAdCrmAdvertiserSortBy =
+  (typeof TELEGRAM_AD_CRM_ADVERTISER_SORT_BY)[number];
+
+export const TELEGRAM_AD_CRM_SORT_DIRECTION = ["ASC", "DESC"] as const;
+
+export type TelegramAdCrmSortDirection =
+  (typeof TELEGRAM_AD_CRM_SORT_DIRECTION)[number];
+
+export type TelegramAdCrmMoneyByCurrency = {
+  currency: string;
+  amount: string;
+};
+
 export type TelegramAdCrmAdvertiserListItem = {
   id: string;
   displayName: string;
   companyName: string | null;
   telegramUsername: string | null;
+  description: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
   primaryContact: {
     id: string;
     type: TelegramAdvertiserContactType;
@@ -104,13 +129,22 @@ export type TelegramAdCrmAdvertiserListItem = {
     avatarPresentation?: ResolvedEmoji | null;
   } | null;
   status: TelegramAdvertiserStatus;
+  activityStatus: "LEAD" | "WAITING" | "ACTIVE";
   lifecycleStage: TelegramAdvertiserLifecycleStage;
   completedSalesCount: number;
   totalSalesCount: number;
+  paidSalesCount: number;
   completedPlacementsCount: number;
   totalPlacementsCount: number;
   totalRevenueInPrimaryCurrency: string;
   averageOrderValueInPrimaryCurrency: string;
+  revenueByCurrency: TelegramAdCrmMoneyByCurrency[];
+  averageOrderValueByCurrency: TelegramAdCrmMoneyByCurrency[];
+  purchasedChannels: Array<{
+    id: string;
+    title: string;
+    photoUrl: string | null;
+  }>;
   firstPurchaseAt: string | null;
   lastPurchaseAt: string | null;
   lastContactAt: string | null;

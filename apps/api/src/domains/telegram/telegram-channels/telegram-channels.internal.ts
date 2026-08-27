@@ -25,11 +25,19 @@ export const TELEGRAM_IMPORTED_SYSTEM_GROUP_TITLE = 'Created in Telegram';
 
 export const ADVERTISE_SYSTEM_GROUP_KEY = 'ADVERTISE';
 
-export const ADVERTISE_SYSTEM_GROUP_TITLE = 'advertise';
+export const ADVERTISE_SYSTEM_GROUP_TITLE = 'Advertise';
+
+export const ADVERTISE_SYSTEM_GROUP_ICON = '💰';
 
 export const SYSTEM_BOT_POSTS_GROUP_KEY = 'SYSTEM_BOT_POSTS';
 
 export const SYSTEM_BOT_POSTS_GROUP_TITLE = 'System Bot posts';
+
+export const SYSTEM_BOT_POSTS_GROUP_ICON_NAME =
+  'telegram-system-service-group-icon';
+
+export const SYSTEM_BOT_POSTS_GROUP_ICON_IMAGE_URL =
+  '/brand/telegram-system.png';
 
 export const TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_NAME =
   'telegram-system-group-icon';

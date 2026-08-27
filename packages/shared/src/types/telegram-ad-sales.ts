@@ -1,5 +1,6 @@
 import type { PaginatedResponse } from "../pagination";
 import type { ResolvedEmoji } from "./resolved-emoji";
+import type { TelegramPostButtonRows } from "./telegram-post-buttons";
 
 export type TelegramAdPricingMode = "CPM" | "FIXED" | "MANUAL";
 
@@ -346,6 +347,12 @@ export type TelegramAdAvailabilitySlot = {
     id: string;
     saleId: string;
     status: TelegramAdPlacementStatus;
+    scheduledAt?: string;
+    title?: string | null;
+    advertiserName?: string | null;
+    agreedPrice?: string;
+    currency?: string;
+    viewsCount?: number | null;
   } | null;
   organicPostsCountForDay: number;
   adsCountForDay: number;
@@ -393,7 +400,32 @@ export type TelegramAdSalePlacement = {
   isPermanentSnapshot: boolean;
   manualPriceReason: string | null;
   managedPostId: string | null;
+  managedPost?: {
+    id: string;
+    title: string;
+    text: string | null;
+    imageUrls: string[];
+    buttonRows: TelegramPostButtonRows;
+    sourceType?: "MTPROTO" | "BOT" | null;
+    status: string;
+    telegramRemoteStatus: string;
+    telegramMessageIds: string[];
+    telegramMessageUrls: string[];
+    publishedAt: string | null;
+    scheduledAt: string | null;
+    lastError: string | null;
+  } | null;
   telegramPostId: string | null;
+  telegramPostUrl?: string | null;
+  telegramPost?: {
+    id: string;
+    telegramMessageId: string;
+    viewsCount: number | null;
+    forwardsCount: number | null;
+    reactionsCount: number | null;
+    commentsCount: number | null;
+    postDate: string;
+  } | null;
   publishedAt: string | null;
   plannedDeleteAt: string | null;
   deletedAt: string | null;
@@ -485,6 +517,12 @@ export type TelegramAdSale = {
   sourceAdvertiserActivityId?: string | null;
   createdByUserId: string | null;
   assignedMemberId: string | null;
+  assignedMember?: {
+    id: string;
+    name: string;
+    email: string | null;
+    avatarPresentation: ResolvedEmoji | null;
+  } | null;
   createdAt: string;
   updatedAt: string;
   placements: TelegramAdSalePlacement[];

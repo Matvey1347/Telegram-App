@@ -30,6 +30,9 @@ describe('TelegramSystemBotHandlerService', () => {
     } as any;
     const postFlow = {
       begin: jest.fn().mockResolvedValue({ handled: 'post-begin' }),
+      resumeAdSaleImport: jest
+        .fn()
+        .mockResolvedValue({ handled: 'ad-sale-post-import' }),
       isCallback: jest.fn().mockReturnValue(false),
       callback: jest.fn(),
       input: jest.fn().mockResolvedValue(null),
@@ -73,6 +76,43 @@ describe('TelegramSystemBotHandlerService', () => {
       workspaceId: 'workspace',
       timezone: 'Europe/Warsaw',
     });
+  });
+
+  it('opens post import rather than Ad Sale from the website post deep link', async () => {
+    const test = workflowHarness();
+
+    await expect(
+      test.service.handle({
+        message: {
+          chat: { id: 44, type: 'private' },
+          from: { id: 44 },
+          text: '/start post',
+        },
+      }),
+    ).resolves.toEqual({ handled: 'post-begin' });
+
+    expect(test.postFlow.begin).toHaveBeenCalled();
+    expect(test.adSaleFlow.begin).not.toHaveBeenCalled();
+  });
+
+  it('resumes the prepared Ad Sale post import without choosing a channel', async () => {
+    const test = workflowHarness();
+
+    await expect(
+      test.service.handle({
+        message: {
+          chat: { id: 44, type: 'private' },
+          from: { id: 44 },
+          text: '/start ad_post_workflow-1',
+        },
+      }),
+    ).resolves.toEqual({ handled: 'ad-sale-post-import' });
+
+    expect(test.postFlow.resumeAdSaleImport).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: 'workspace' }),
+      'workflow-1',
+    );
+    expect(test.postFlow.begin).not.toHaveBeenCalled();
   });
 
   it('stores the Telegram message id for a connection prompt', async () => {
@@ -201,6 +241,7 @@ describe('TelegramSystemBotHandlerService', () => {
   it('handles a persistent Channels keyboard button as the channels command', async () => {
     const api = {
       sendMessage: jest.fn(),
+      editMessageText: jest.fn(),
       answerCallbackQuery: jest.fn(),
     } as any;
     const connections = {
@@ -425,19 +466,16 @@ describe('TelegramSystemBotHandlerService', () => {
       },
     });
 
-    expect(api.sendMessage).toHaveBeenNthCalledWith(1, 'token', {
-      chat_id: '44',
-      text: '⏳ Loading…',
-    });
-    expect(api.deleteMessage).toHaveBeenCalledWith('token', {
-      chat_id: '44',
-      message_id: 99,
-    });
+    expect(api.sendMessage).not.toHaveBeenCalledWith(
+      'token',
+      expect.objectContaining({ text: '⏳ Loading…' }),
+    );
   });
 
   it('switches workspace before requiring the stale current workspace', async () => {
     const api = {
       sendMessage: jest.fn(),
+      editMessageText: jest.fn(),
       answerCallbackQuery: jest.fn(),
     } as any;
     const connections = {
@@ -446,11 +484,24 @@ describe('TelegramSystemBotHandlerService', () => {
         userId: 'user',
       }),
       switchWorkspace: jest.fn().mockResolvedValue(undefined),
-      requireCurrentWorkspace: jest.fn().mockResolvedValue({
-        workspaceId: 'workspace-b',
-        role: 'admin',
-        workspace: { name: 'Available' },
-      }),
+      workspacesForConnection: jest.fn().mockResolvedValue([
+        {
+          id: 'workspace-a',
+          name: 'Business',
+          selected: false,
+          avatarPresentation: null,
+        },
+        {
+          id: 'workspace-b',
+          name: 'Test',
+          selected: true,
+          avatarPresentation: {
+            type: 'unicode',
+            value: '💬',
+            telegramCustomEmojiId: '5368324170671202286',
+          },
+        },
+      ]),
     } as any;
     const service = new TelegramSystemBotHandlerService(
       { token: 'token' } as any,
@@ -466,7 +517,7 @@ describe('TelegramSystemBotHandlerService', () => {
         id: 'callback',
         data: 'workspace:workspace-b',
         from: { id: 44 },
-        message: { chat: { id: 44, type: 'private' } },
+        message: { chat: { id: 44, type: 'private' }, message_id: 77 },
       },
     });
 
@@ -474,10 +525,29 @@ describe('TelegramSystemBotHandlerService', () => {
       'connection',
       'workspace-b',
     );
+    expect(api.editMessageText).toHaveBeenCalledWith(
+      'token',
+      expect.objectContaining({
+        chat_id: '44',
+        message_id: 77,
+        text: '🏢 Choose workspace:',
+      }),
+    );
+    expect(api.sendMessage).not.toHaveBeenCalled();
     expect(
-      connections.switchWorkspace.mock.invocationCallOrder[0],
-    ).toBeLessThan(
-      connections.requireCurrentWorkspace.mock.invocationCallOrder[0],
+      api.editMessageText.mock.calls[0][1].reply_markup.inline_keyboard,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.arrayContaining([
+          expect.objectContaining({
+            text: 'Test ✓',
+            icon_custom_emoji_id: '5368324170671202286',
+          }),
+        ]),
+      ]),
+    );
+    expect(JSON.stringify(api.editMessageText.mock.calls[0][1])).not.toContain(
+      '💬 Test',
     );
   });
 
@@ -555,6 +625,7 @@ describe('TelegramSystemBotHandlerService', () => {
 
   it('keeps pending finance text ahead of the generic post input', async () => {
     const test = workflowHarness();
+    test.postFlow.input.mockResolvedValue(null);
     test.finance.pendingInput.mockResolvedValue({ handled: 'finance-input' });
 
     await test.service.handle({
@@ -569,7 +640,24 @@ describe('TelegramSystemBotHandlerService', () => {
     expect(test.finance.pendingInput).toHaveBeenCalledWith(
       expect.objectContaining({ text: '125 client payment' }),
     );
-    expect(test.postFlow.input).not.toHaveBeenCalled();
+    expect(test.postFlow.input).toHaveBeenCalled();
+  });
+
+  it('keeps an active post editor ahead of unrelated input flows', async () => {
+    const test = workflowHarness();
+    test.postFlow.input.mockResolvedValue({ handled: 'post-input' });
+
+    await test.service.handle({
+      message: {
+        chat: { id: 44, type: 'private' },
+        from: { id: 44 },
+        text: 'Website | https://example.com',
+      },
+    });
+
+    expect(test.postFlow.input).toHaveBeenCalled();
+    expect(test.adSaleFlow.input).not.toHaveBeenCalled();
+    expect(test.finance.pendingInput).not.toHaveBeenCalled();
   });
 
   it('does not dispatch workflows from a non-private chat', async () => {

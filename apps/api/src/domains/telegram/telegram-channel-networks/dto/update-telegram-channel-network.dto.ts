@@ -23,4 +23,9 @@ export class UpdateTelegramChannelNetworkDto {
   @ArrayMinSize(2)
   @IsString({ each: true })
   telegramChannelIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  excludedTelegramChannelIds?: string[];
 }

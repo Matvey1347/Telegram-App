@@ -28,6 +28,8 @@ export const telegramAdSalesKeys = {
     ["telegram-ad-products", params ?? {}] as const,
   channelProducts: (channelId: string) =>
     ["telegram-ad-products", "channel", channelId] as const,
+  productsByChannels: (channelIds: string[]) =>
+    ["telegram-ad-products", "channels", [...channelIds].sort()] as const,
   channelSetup: (channelId: string) =>
     ["telegram-ad-sales", "channel-setup", channelId] as const,
   policy: (channelId: string) => ["telegram-ad-policy", channelId] as const,

@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDateTime } from "@/lib/date-format";
+
 import { useQuery } from "@tanstack/react-query";
 import { LoaderCircle } from "lucide-react";
 import { Button, Modal } from "@/components/ui/primitives";
@@ -62,7 +64,7 @@ export function ManagedPostHistoryModal({
                   {revisionReason(revision.reason)}
                 </p>
                 <p className="text-xs text-neutral-400">
-                  {new Date(revision.createdAt).toLocaleString()}
+                  {formatDateTime(revision.createdAt)}
                 </p>
               </div>
               <Button

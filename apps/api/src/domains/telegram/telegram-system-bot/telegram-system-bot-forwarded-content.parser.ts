@@ -64,7 +64,12 @@ export type TelegramSystemBotIncomingMessage = {
   forward_date?: number;
   animation?: unknown;
   audio?: unknown;
-  document?: unknown;
+  document?: {
+    file_id?: string;
+    file_size?: number;
+    mime_type?: string;
+    file_name?: string;
+  };
   paid_media?: unknown;
   sticker?: unknown;
   story?: unknown;

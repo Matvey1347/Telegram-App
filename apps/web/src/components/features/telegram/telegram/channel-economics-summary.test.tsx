@@ -9,12 +9,34 @@ import {
   sortChannelsByScale,
 } from "./channel-economics-summary";
 
+const editorMocks = vi.hoisted(() => ({
+  useQuery: vi.fn(() => ({
+    data: { products: [] },
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  })),
+  mutate: vi.fn(),
+  mutateAsync: vi.fn(),
+}));
+
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
-  useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useQuery: editorMocks.useQuery,
+  useMutation: () => ({
+    mutate: editorMocks.mutate,
+    mutateAsync: editorMocks.mutateAsync,
+    isPending: false,
+  }),
 }));
 vi.mock("@/lib/api", () => ({
   telegramChannelsApi: { updateQuiet: vi.fn() },
+  telegramAdSalesApi: {
+    getChannelSetup: vi.fn(),
+    createProduct: vi.fn(),
+    updateProduct: vi.fn(),
+    deactivateProduct: vi.fn(),
+  },
 }));
 vi.mock("@/providers/toast-provider", () => ({
   useAppToast: () => ({ pushToast: vi.fn() }),
@@ -258,6 +280,65 @@ describe("ChannelEconomicsSummary", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "USD" }));
     expect(screen.getByRole("button", { name: "UAH" })).toBeInTheDocument();
+  });
+
+  it("loads placement formats only inside economics and exposes compact management actions", async () => {
+    editorMocks.useQuery.mockReturnValueOnce({
+      data: {
+        products: [
+          {
+            id: "standard",
+            name: "1/24",
+            topDurationMinutes: 60,
+            feedDurationHours: 24,
+            deleteAfterHours: 24,
+            isPermanent: false,
+            isActive: true,
+            position: 0,
+          },
+          {
+            id: "custom",
+            name: "Weekend",
+            topDurationMinutes: 120,
+            feedDurationHours: 48,
+            deleteAfterHours: 48,
+            isPermanent: false,
+            isActive: false,
+            position: 1,
+          },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+
+    render(
+      <ChannelEconomicsEditor
+        channel={{ id: "channel-1", title: "Mentor", preview: { financialSummary: {} } } as never}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(editorMocks.useQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: ["telegram-ad-sales", "channel-setup", "channel-1"],
+      }),
+    );
+    expect(screen.getByText("Placement formats")).toBeInTheDocument();
+    expect(screen.getByText("1/24")).toBeInTheDocument();
+    expect(screen.getByText("Weekend")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete 1/24" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Delete Weekend" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Enable Weekend" }));
+    expect(editorMocks.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "toggle", product: expect.objectContaining({ id: "custom" }) }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Edit Weekend" }));
+    expect(screen.getByDisplayValue("Weekend")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "New format" }));
+    expect(screen.getByRole("button", { name: "Save format" })).toBeDisabled();
   });
 
   it("keeps operational channel counts when economics are empty", () => {

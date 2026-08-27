@@ -2,6 +2,7 @@ import { PrismaService } from '../../../../prisma/prisma.service';
 import {
   financeAccountEmoji,
   financeCategoryEmoji,
+  financeIconPresentation,
 } from '../catalog/finance-entity-emoji';
 
 type Payload = Record<string, string | null | undefined>;
@@ -37,11 +38,21 @@ export class FinanceChatFlowReadModel {
           skip,
           take: 11,
         })
-      ).map((account) => ({
-        id: account.id,
-        label: `${account.name} · ${account.currency}`,
-        emoji: account.emoji || financeAccountEmoji(account.type),
-      }));
+      ).map((account) => {
+        const icon = financeIconPresentation(
+          account.emoji,
+          financeAccountEmoji(account.type),
+        );
+        return {
+          id: account.id,
+          label: `${account.name} · ${account.currency}`,
+          emoji: icon.type === 'unicode' ? icon.value : '🖼️',
+          telegramCustomEmojiId:
+            icon.type === 'unicode'
+              ? (icon.telegramCustomEmojiId ?? undefined)
+              : undefined,
+        };
+      });
     if (
       result.step === 'TRANSACTION_CATEGORY' ||
       result.step === 'CATEGORY_PARENT'
@@ -61,13 +72,22 @@ export class FinanceChatFlowReadModel {
           skip,
           take: 11,
         })
-      ).map((category) => ({
-        id: category.id,
-        label: category.name,
-        key: category.key,
-        emoji:
-          category.emoji || financeCategoryEmoji(category.name, category.key),
-      }));
+      ).map((category) => {
+        const icon = financeIconPresentation(
+          category.emoji,
+          financeCategoryEmoji(category.name, category.key),
+        );
+        return {
+          id: category.id,
+          label: category.name,
+          key: category.key,
+          emoji: icon.type === 'unicode' ? icon.value : '🖼️',
+          telegramCustomEmojiId:
+            icon.type === 'unicode'
+              ? (icon.telegramCustomEmojiId ?? undefined)
+              : undefined,
+        };
+      });
     return [];
   }
 

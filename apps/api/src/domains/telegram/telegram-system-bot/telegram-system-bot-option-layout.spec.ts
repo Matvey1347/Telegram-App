@@ -49,10 +49,10 @@ describe('Telegram System Bot option layouts', () => {
   });
 
   it.each([
-    ['CHOOSE_ACCOUNT', [2, 2, 1, 1, 1, 1]],
+    ['CHOOSE_ACCOUNT', [2, 2, 1, 1, 1, 2]],
     ['CHOOSE_MEMBER', [2, 2, 1, 2]],
-    ['CHOOSE_CHANNEL', [2, 2, 1, 2]],
-    ['CHOOSE_PRODUCT', [3, 2, 2]],
+    ['CHOOSE_TARGET', [2, 2, 1, 2]],
+    ['CHOOSE_FORMAT', [2, 2, 1, 2]],
   ])('packs Ad Sale %s options into compact rows', (step, expected) => {
     const card = renderTelegramSystemBotAdSaleCard({
       workflow: workflow(TelegramSystemBotWorkflowKind.AD_SALE, step),
@@ -76,6 +76,10 @@ describe('Telegram System Bot option layouts', () => {
         products: Array.from({ length: 5 }, (_, index) => ({
           id: `product-${index}`,
           name: `Product ${index}`,
+        })),
+        formats: Array.from({ length: 5 }, (_, index) => ({
+          id: `format-${index}`,
+          name: `Format ${index}`,
         })),
       },
     });

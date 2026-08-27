@@ -170,8 +170,10 @@ describe("TelegramBotCard", () => {
     await user.click(
       screen.getByRole("button", { name: "Actions for Admissions bot" }),
     );
+    const menuItems = screen.getAllByRole("menuitem");
+    expect(menuItems[0]).toHaveAccessibleName("Finance Dashboard");
     expect(
-      screen.getByRole("menuitem", { name: "View Finance" }),
+      screen.getByRole("menuitem", { name: "Finance Dashboard" }),
     ).toHaveAttribute("href", "/telegram-bots/bot-1/finance");
     expect(
       screen.getByRole("menuitem", { name: "Change app" }),

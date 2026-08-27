@@ -140,20 +140,25 @@ export function adDeletionReadyWhere(
 
 export function adPlacementLifecycleReadyWhere(): Prisma.TelegramAdSalePlacementWhereInput {
   return {
-    managedPostId: { not: null },
     OR: [
-      { status: TelegramAdPlacementStatus.SCHEDULED },
       {
-        status: TelegramAdPlacementStatus.PUBLISHED,
-        plannedDeleteAt: null,
-        isPermanentSnapshot: false,
+        managedPostId: { not: null },
+        OR: [
+          { status: TelegramAdPlacementStatus.SCHEDULED },
+          {
+            status: TelegramAdPlacementStatus.PUBLISHED,
+            plannedDeleteAt: null,
+            isPermanentSnapshot: false,
+          },
+        ],
+        managedPost: {
+          status: TelegramManagedPostStatus.PUBLISHED,
+          telegramIdVerificationStatus:
+            TelegramManagedPostIdVerificationStatus.VERIFIED,
+          publishedAt: { not: null },
+        },
       },
+      { telegramPostId: { not: null }, publishedAt: null },
     ],
-    managedPost: {
-      status: TelegramManagedPostStatus.PUBLISHED,
-      telegramIdVerificationStatus:
-        TelegramManagedPostIdVerificationStatus.VERIFIED,
-      publishedAt: { not: null },
-    },
   };
 }

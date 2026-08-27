@@ -1,4 +1,6 @@
 "use client";
+
+import { formatDateTime } from "@/lib/date-format";
 import {
   Line,
   LineChart,
@@ -149,7 +151,7 @@ function InviteLinkHistoryMiniPreview({
                 color: "#e2e8f0",
               }}
               labelFormatter={(value) =>
-                new Date(String(value)).toLocaleString()
+                formatDateTime(String(value))
               }
             />
             <Line

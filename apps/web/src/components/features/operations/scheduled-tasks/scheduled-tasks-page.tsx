@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDateTime as formatDisplayDateTime } from "@/lib/date-format";
+
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
@@ -358,5 +360,5 @@ function formatSchedule(schedule: ScheduledTaskSchedule) {
 }
 
 function formatDateTime(value: string) {
-  return new Date(value).toLocaleString();
+  return formatDisplayDateTime(value);
 }

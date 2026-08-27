@@ -58,9 +58,13 @@ export function TelegramCardMenuLink({
 export function TelegramCardActionsMenu({
   label,
   children,
+  keepMounted = false,
+  triggerClassName = "",
 }: {
   label: string;
   children: ReactNode;
+  keepMounted?: boolean;
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -127,18 +131,18 @@ export function TelegramCardActionsMenu({
           aria-haspopup="menu"
           aria-expanded={open}
           onClick={() => setOpen((value) => !value)}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-400 transition hover:bg-neutral-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className={`inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-400 transition hover:bg-neutral-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${triggerClassName}`}
         >
           <MoreVertical size={20} />
         </button>
       </div>
-      {open && typeof document !== "undefined"
+      {(open || keepMounted) && typeof document !== "undefined"
         ? createPortal(
             <div
               ref={menu}
               role="menu"
               style={{ top: position.top, left: position.left }}
-              className="fixed z-[100] w-56 rounded-lg border border-neutral-700 bg-neutral-950 p-1.5 shadow-2xl"
+              className={`${open ? "fixed" : "hidden"} z-[100] w-56 rounded-lg border border-neutral-700 bg-neutral-950 p-1.5 shadow-2xl`}
               onClick={(event) => {
                 if ((event.target as HTMLElement).closest("button,a")) {
                   setOpen(false);

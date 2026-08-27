@@ -19,6 +19,7 @@ export type TelegramSystemBotCapturedPostContent = {
 };
 
 export type TelegramSystemBotPostPayload = {
+  destination?: 'MANAGED_POST' | 'AD_SALE_MODAL';
   content?: TelegramSystemBotCapturedPostContent;
   channelId?: string;
   channelTitle?: string;

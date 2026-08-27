@@ -9,12 +9,14 @@ const SYSTEM_BOT_ACTIONS: Readonly<Record<string, string>> = {
   Posts: '/posts',
   'Ad Sale': '/adsale',
   'Switch Workspace': '/workspace',
+  Workspace: '/workspace',
   '📢 Channels': '/channels',
   '📊 Statistics': '/stats',
   '💰 Finance': '/finance',
   '📝 Posts': '/posts',
   '💼 Ad Sale': '/adsale',
   '🏢 Switch Workspace': '/workspace',
+  '🏢 Workspace': '/workspace',
 };
 
 export const SYSTEM_BOT_HELP_TEXT =
@@ -34,7 +36,7 @@ export function systemBotMenuPayload(workspace: {
       [
         [{ text: '📢 Channels' }, { text: '📊 Statistics' }],
         [{ text: '📝 Posts' }, { text: '💼 Ad Sale' }],
-        [{ text: '💰 Finance' }, { text: '🏢 Switch Workspace' }],
+        [{ text: '💰 Finance' }, { text: '🏢 Workspace' }],
       ],
       { inputFieldPlaceholder: 'Choose an action or send a message' },
     ),

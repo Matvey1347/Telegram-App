@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDateTime } from "@/lib/date-format";
+
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -455,7 +457,7 @@ export function BotAccountsPanel({
                 <p>
                   Last Check:{" "}
                   {runtime?.lastCheckedAt
-                    ? new Date(runtime.lastCheckedAt).toLocaleString()
+                    ? formatDateTime(runtime.lastCheckedAt)
                     : "-"}
                 </p>
               </div>

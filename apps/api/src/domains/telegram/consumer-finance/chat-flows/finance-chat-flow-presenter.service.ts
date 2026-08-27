@@ -9,12 +9,18 @@ import {
   type FinanceFlowResult,
 } from './finance-chat-flow.service';
 import {
-  FINANCE_EMOJI_CHOICES,
   financeAccountEmoji,
   financeCategoryEmoji,
+  financeIconPresentation,
+  financeStoredIconSource,
 } from '../catalog/finance-entity-emoji';
+import { telegramBotActionRow } from '../../../../telegram/shared/telegram-bot-action-buttons';
 
-type Button = { text: string; callbackData: string };
+type Button = {
+  text: string;
+  callbackData: string;
+  iconCustomEmojiId?: string;
+};
 
 function pairs(items: Button[]) {
   const rows: Button[][] = [];
@@ -38,17 +44,7 @@ export class FinanceChatFlowPresenterService {
       revision
         ? `fin:flow:${action}:${revision}${id ? `.${id}` : ''}`
         : `fin:flow:${action}${id ? `:${id}` : ''}`;
-    if (result.kind === 'review') {
-      buttons.push([
-        {
-          text: t(
-            locale,
-            result.flow === 'CATEGORY_ARCHIVE' ? 'archive' : 'confirm',
-          ),
-          callbackData: callback('confirm'),
-        },
-      ]);
-    } else {
+    if (result.kind !== 'review') {
       const action = this.action(result.step);
       if (action === 'type') {
         const values = result.flow.startsWith('CATEGORY')
@@ -73,9 +69,9 @@ export class FinanceChatFlowPresenterService {
       } else if (action === 'currency') {
         buttons.push(
           ...this.flows.currencyKeyboard().map((row) =>
-            row.map(({ text }) => ({
+            row.map(({ id, text }) => ({
               text,
-              callbackData: callback('currency', text),
+              callbackData: callback('currency', id),
             })),
           ),
         );
@@ -87,16 +83,7 @@ export class FinanceChatFlowPresenterService {
           ],
           [{ text: 'English', callbackData: callback('language', 'en') }],
         );
-      } else if (action === 'emoji') {
-        buttons.push(
-          ...pairs(
-            FINANCE_EMOJI_CHOICES.map((emoji) => ({
-              text: emoji,
-              callbackData: callback('emoji', emoji),
-            })),
-          ),
-        );
-      } else if (action) {
+      } else if (action && action !== 'emoji') {
         const page = result.page || 0;
         const choices =
           result.choices || (await this.flows.choices(profileId, result, page));
@@ -109,6 +96,9 @@ export class FinanceChatFlowPresenterService {
                   ? `${item.emoji || financeCategoryEmoji(item.label, item.key)} ${financeCategoryLabel(locale, item.key, item.label)}`
                   : `${item.emoji ? `${item.emoji} ` : ''}${item.label}`,
               callbackData: callback(action, item.id),
+              ...(item.telegramCustomEmojiId
+                ? { iconCustomEmojiId: item.telegramCustomEmojiId }
+                : {}),
             })),
           ),
         );
@@ -143,12 +133,13 @@ export class FinanceChatFlowPresenterService {
           { text: t(locale, 'skip'), callbackData: callback('skip') },
         ]);
     }
-    if (this.canGoBack(result.step))
-      buttons.push([
-        { text: '←', callbackData: callback('back') },
-        { text: '✕', callbackData: callback('cancel') },
-      ]);
-    else buttons.push([{ text: '✕', callbackData: callback('cancel') }]);
+    buttons.push(
+      telegramBotActionRow({
+        ...(this.canGoBack(result.step) ? { back: callback('back') } : {}),
+        cancel: callback('cancel'),
+        ...(result.kind === 'review' ? { confirm: callback('confirm') } : {}),
+      }),
+    );
     return {
       text:
         result.kind === 'review'
@@ -226,6 +217,12 @@ export class FinanceChatFlowPresenterService {
     result: Extract<FinanceFlowResult, { kind: 'review' }>,
   ) {
     const p = result.payload;
+    const iconText = (value: string | null | undefined, fallback: string) => {
+      const icon = financeIconPresentation(value, fallback);
+      return icon.type === 'unicode'
+        ? financeStoredIconSource(icon) || icon.value
+        : '🖼️';
+    };
     if (result.flow === 'TRANSACTION_CREATE') {
       return t(locale, 'reviewTransaction', {
         type: t(locale, p.type === 'INCOME' ? 'incomeLabel' : 'expense'),
@@ -256,14 +253,14 @@ export class FinanceChatFlowPresenterService {
     if (result.flow === 'ACCOUNT_EDIT') {
       const selected = account(p.entityId);
       return t(locale, 'reviewAccountEdit', {
-        name: `${p.emoji || financeAccountEmoji(p.type)} ${p.name || '—'}`,
+        name: `${iconText(p.emoji, financeAccountEmoji(p.type))} ${p.name || '—'}`,
         type: p.type || '—',
         currency: selected?.currency || '—',
       });
     }
     if (result.flow.startsWith('ACCOUNT'))
       return t(locale, 'reviewAccount', {
-        name: `${p.emoji || financeAccountEmoji(p.type)} ${p.name || '—'}`,
+        name: `${iconText(p.emoji, financeAccountEmoji(p.type))} ${p.name || '—'}`,
         type: p.type || '—',
         currency: p.currency || account(p.entityId)?.currency || '—',
         balance: p.amount || '0',
@@ -272,7 +269,7 @@ export class FinanceChatFlowPresenterService {
       return t(locale, 'reviewCategoryArchive', { name: p.name || '—' });
     if (result.flow.startsWith('CATEGORY'))
       return t(locale, 'reviewCategory', {
-        name: `${p.emoji || financeCategoryEmoji(p.name)} ${p.name || '—'}`,
+        name: `${iconText(p.emoji, financeCategoryEmoji(p.name))} ${p.name || '—'}`,
         type:
           p.type === 'INCOME' ? t(locale, 'incomeLabel') : t(locale, 'expense'),
       });

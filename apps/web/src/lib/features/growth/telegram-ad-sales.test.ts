@@ -5,8 +5,10 @@ import {
   buildUnderpricingSummary,
   channelLocalTime,
   expandNetworkChannelIds,
+  isValidZonedDateTimeInput,
   readAdSalesCalendarRangeMode,
   writeAdSalesCalendarRangeMode,
+  zonedDateTimeToUtc,
 } from "./telegram-ad-sales";
 
 describe("telegram-ad-sales helpers", () => {
@@ -129,5 +131,11 @@ describe("telegram-ad-sales helpers", () => {
 
   it("formats local time consistently", () => {
     expect(channelLocalTime("2026-08-05T18:15:00.000Z")).toMatch(/^\d{2}:\d{2}$/);
+  });
+
+  it("keeps incomplete time input from crashing timezone calculations", () => {
+    expect(isValidZonedDateTimeInput("2026-08-27", "0")).toBe(false);
+    expect(zonedDateTimeToUtc("2026-08-27", "0", "Europe/Warsaw").getTime()).toBeNaN();
+    expect(isValidZonedDateTimeInput("2026-08-27", "00:00")).toBe(true);
   });
 });

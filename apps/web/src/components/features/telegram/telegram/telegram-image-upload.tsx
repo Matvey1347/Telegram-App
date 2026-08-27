@@ -25,12 +25,11 @@ export function TelegramImageUpload({
 }) {
   const [uploadingPreviews, setUploadingPreviews] = useState<string[]>([]);
   const [imageUrl, setImageUrl] = useState("");
-  const [uploadingFromUrl, setUploadingFromUrl] = useState(false);
   const [pasteFocused, setPasteFocused] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { pushToast } = useAppToast();
 
-  const uploadBusy = uploadingPreviews.length > 0 || uploadingFromUrl;
+  const uploadBusy = uploadingPreviews.length > 0;
   const disabledState = disabled || uploadBusy;
   const helperText = useMemo(
     () =>
@@ -96,44 +95,20 @@ export function TelegramImageUpload({
     return () => window.removeEventListener("paste", onPaste);
   }, [disabledState, pasteFocused, readOnly, value]);
 
-  const uploadImageFromUrl = async () => {
+  const addImageUrl = () => {
     const normalizedUrl = imageUrl.trim();
     if (!normalizedUrl) return;
-
-    setUploadingFromUrl(true);
-    onUploadingChange?.(true);
     try {
-      const response = await fetch(normalizedUrl);
-      if (!response.ok) {
-        throw new Error(`Request failed with ${response.status}`);
+      const parsedUrl = new URL(normalizedUrl);
+      if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+        throw new Error("Image URL must use HTTP or HTTPS.");
       }
-      const blob = await response.blob();
-      if (!blob.type.startsWith("image/")) {
-        throw new Error("The URL does not point to an image.");
-      }
-
-      let filename = "telegram-image";
-      try {
-        const parsedUrl = new URL(normalizedUrl);
-        const lastSegment = parsedUrl.pathname.split("/").filter(Boolean).at(-1);
-        if (lastSegment) filename = lastSegment;
-      } catch {}
-
-      if (!/\.[a-z0-9]+$/i.test(filename)) {
-        const extension = blob.type.split("/")[1] || "png";
-        filename = `${filename}.${extension}`;
-      }
-
-      const file = new File([blob], filename, { type: blob.type });
-      await uploadFiles([file]);
+      onChange(value.includes(parsedUrl.toString()) ? value : [...value, parsedUrl.toString()]);
       setImageUrl("");
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Failed to load image from URL.";
+        error instanceof Error ? error.message : "Invalid image URL.";
       pushToast(message, "error");
-      onUploadingChange?.(false);
-    } finally {
-      setUploadingFromUrl(false);
     }
   };
 
@@ -191,7 +166,7 @@ export function TelegramImageUpload({
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
-                    void uploadImageFromUrl();
+                    addImageUrl();
                   }
                 }}
               />
@@ -201,15 +176,11 @@ export function TelegramImageUpload({
               variant="secondary"
               disabled={disabledState || !imageUrl.trim()}
               onClick={() => {
-                void uploadImageFromUrl();
+                addImageUrl();
               }}
             >
               <span className="inline-flex items-center gap-2">
-                {uploadingFromUrl ? (
-                  <LoaderCircle size={15} className="animate-spin" />
-                ) : (
-                  <Link2 size={15} />
-                )}
+                <Link2 size={15} />
                 Add by URL
               </span>
             </Button>

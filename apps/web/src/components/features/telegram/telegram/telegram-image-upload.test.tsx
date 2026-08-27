@@ -21,10 +21,13 @@ describe("TelegramImageUpload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal("fetch", vi.fn());
-    vi.stubGlobal("URL", {
-      ...URL,
-      createObjectURL: vi.fn(() => "blob:test-preview"),
-      revokeObjectURL: vi.fn(),
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: vi.fn(() => "blob:test-preview"),
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: vi.fn(),
     });
   });
 
@@ -52,13 +55,9 @@ describe("TelegramImageUpload", () => {
     expect(onChange).toHaveBeenCalledWith(["https://cdn.test/pasted.png"]);
   });
 
-  it("loads an image by URL and uploads it", async () => {
-    uploadMock.mockResolvedValueOnce({ imageUrl: "https://cdn.test/remote.png" });
+  it("keeps an image URL without downloading or uploading it", async () => {
     const onChange = vi.fn();
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      blob: async () => new Blob(["image"], { type: "image/png" }),
-    });
+    const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
     render(<TelegramImageUpload value={[]} onChange={onChange} />);
@@ -68,12 +67,8 @@ describe("TelegramImageUpload", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /add by url/i }));
 
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("https://example.com/remote.png");
-    });
-    await waitFor(() => {
-      expect(uploadMock).toHaveBeenCalledTimes(1);
-    });
-    expect(onChange).toHaveBeenCalledWith(["https://cdn.test/remote.png"]);
+    expect(onChange).toHaveBeenCalledWith(["https://example.com/remote.png"]);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(uploadMock).not.toHaveBeenCalled();
   });
 });

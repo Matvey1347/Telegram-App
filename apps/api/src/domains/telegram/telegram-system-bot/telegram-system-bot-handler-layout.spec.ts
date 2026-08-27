@@ -64,6 +64,6 @@ describe('Telegram System Bot handler option layouts', () => {
       api.sendMessage.mock.calls
         .at(-1)[1]
         .reply_markup.inline_keyboard.map((row: unknown[]) => row.length),
-    ).toEqual([2, 2, 1]);
+    ).toEqual([2, 2, 1, 2]);
   });
 });

@@ -855,6 +855,13 @@ export class TelegramChannelsController {
   ) {
     return this.service.posts(user.sub, id, query);
   }
+  @Get(':id/posts/select')
+  publishedPostsForSelect(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+  ) {
+    return this.service.publishedPostsForSelect(user.sub, id);
+  }
   @Patch(':channelId/posts/:postId/manual-metrics')
   updatePostManualMetrics(
     @CurrentUser() user: JwtUser,

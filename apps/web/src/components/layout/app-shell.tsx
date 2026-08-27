@@ -275,7 +275,6 @@ export function AppShell({ children }: PropsWithChildren) {
           ],
         }),
       );
-      pushToast("Data refreshed from server.", "success");
     } catch {
       pushToast("Failed to refresh data.", "error");
     } finally {
@@ -436,6 +435,7 @@ export function AppShell({ children }: PropsWithChildren) {
             options={(workspaces ?? []).map((workspace) => ({
               value: workspace.id,
               label: `${workspace.name} (${workspace.role})`,
+              iconPresentation: workspace.avatarPresentation ?? undefined,
               iconUrl:
                 workspace.avatarPresentation?.type === "image"
                   ? workspace.avatarPresentation.url
@@ -444,6 +444,9 @@ export function AppShell({ children }: PropsWithChildren) {
                 workspace.avatarPresentation?.type === "unicode"
                   ? workspace.avatarPresentation.value
                   : undefined,
+              iconPremium:
+                workspace.avatarPresentation?.type === "unicode" &&
+                Boolean(workspace.avatarPresentation.telegramCustomEmojiId),
             }))}
           />
           {creatingWorkspace ? (

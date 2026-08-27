@@ -32,8 +32,6 @@ import { telegramAdSalesKeys } from "@/lib/features/growth/telegram-ad-sales-que
 type Props = {
   selectedChannelIds: string[];
   selectedNetworkId?: string | null;
-  from: Date;
-  to: Date;
   settings?: CurrencySettings;
   rates?: ExchangeRate[];
 };
@@ -67,15 +65,12 @@ const analyticsMetricTips: Record<string, string> = {
 export function AdSalesAnalyticsPanel({
   selectedChannelIds,
   selectedNetworkId,
-  from,
-  to,
   settings,
   rates,
 }: Props) {
   const scopedParams = useMemo(
     () => ({
-      dateFrom: from.toISOString(),
-      dateTo: to.toISOString(),
+      allTime: true,
       ...(selectedChannelIds.length
         ? { channelIds: selectedChannelIds.slice(0, 6).join(",") }
         : {}),
@@ -83,7 +78,7 @@ export function AdSalesAnalyticsPanel({
         ? { networkId: selectedNetworkId }
         : {}),
     }),
-    [from, selectedChannelIds, selectedNetworkId, to],
+    [selectedChannelIds, selectedNetworkId],
   );
   const overviewQuery = useQuery({
     queryKey: telegramAdSalesKeys.analyticsOverview(scopedParams),

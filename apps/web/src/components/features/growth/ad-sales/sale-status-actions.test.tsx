@@ -25,14 +25,32 @@ describe("allowedSaleActions", () => {
   it("exposes confirm for reserved sale and scheduling actions for reserved placement with post", () => {
     expect(allowedSaleActions(sale as never)).toContain("confirm");
     expect(
-      allowedSaleActions(sale as never, {
-        id: "placement-1",
-        managedPostId: "post-1",
-        status: "RESERVED",
-        isPermanentSnapshot: false,
-        deletedAt: null,
-      } as never),
+      allowedSaleActions(
+        sale as never,
+        {
+          id: "placement-1",
+          managedPostId: "post-1",
+          status: "RESERVED",
+          isPermanentSnapshot: false,
+          deletedAt: null,
+        } as never,
+      ),
     ).toContain("schedule");
+  });
+
+  it("does not expose a manual deletion retry for published placements", () => {
+    expect(
+      allowedSaleActions(
+        sale as never,
+        {
+          id: "placement-1",
+          managedPostId: "post-1",
+          status: "PUBLISHED",
+          isPermanentSnapshot: false,
+          deletedAt: null,
+        } as never,
+      ),
+    ).toEqual([]);
   });
 });
 

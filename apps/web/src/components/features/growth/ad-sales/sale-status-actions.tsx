@@ -1,6 +1,9 @@
 "use client";
 
-import type { TelegramAdSale, TelegramAdSalePlacement } from "@telegram-system/shared";
+import type {
+  TelegramAdSale,
+  TelegramAdSalePlacement,
+} from "@telegram-system/shared";
 import { Button } from "@/components/ui/primitives";
 
 export type SaleActionKey =
@@ -12,7 +15,6 @@ export type SaleActionKey =
   | "attach-post"
   | "schedule"
   | "publish"
-  | "retry-deletion"
   | "complete-permanent"
   | "reschedule";
 
@@ -45,13 +47,6 @@ export function allowedSaleActions(
   if (placement.status === "SCHEDULED") {
     actions.push("publish", "reschedule");
   }
-  if (
-    placement.status === "PUBLISHED" &&
-    !placement.isPermanentSnapshot &&
-    !placement.deletedAt
-  ) {
-    actions.push("retry-deletion");
-  }
   if (placement.status === "PUBLISHED" && placement.isPermanentSnapshot) {
     actions.push("complete-permanent");
   }
@@ -62,12 +57,20 @@ export function SaleStatusActions({
   sale,
   placement,
   onAction,
+  hidePayment = false,
+  hideSchedule = false,
 }: {
   sale: TelegramAdSale;
   placement?: TelegramAdSalePlacement | null;
   onAction: (action: SaleActionKey) => void;
+  hidePayment?: boolean;
+  hideSchedule?: boolean;
 }) {
-  const actions = allowedSaleActions(sale, placement);
+  const actions = allowedSaleActions(sale, placement).filter(
+    (action) =>
+      (!hidePayment || action !== "register-payment") &&
+      (!hideSchedule || action !== "schedule"),
+  );
 
   return (
     <div className="flex flex-wrap gap-2">

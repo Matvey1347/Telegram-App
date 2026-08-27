@@ -14,6 +14,7 @@ export function Modal({
   onClose,
   title,
   headerAction,
+  leadingHeaderAction,
   children,
   size = "md",
   allowOverflow = false,
@@ -21,8 +22,9 @@ export function Modal({
 }: PropsWithChildren<{
   open: boolean;
   onClose: () => void;
-  title: string;
+  title: ReactNode;
   headerAction?: ReactNode;
+  leadingHeaderAction?: ReactNode;
   size?: "md" | "sm" | "xl";
   allowOverflow?: boolean;
   loading?: boolean;
@@ -104,6 +106,7 @@ export function Modal({
       >
         <div className="mb-1 flex items-center justify-between gap-3 p-4 pb-3 sm:p-5 sm:pb-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
+            {leadingHeaderAction}
             <h3 id={titleId} className="text-lg font-semibold sm:text-xl">
               {title}
             </h3>

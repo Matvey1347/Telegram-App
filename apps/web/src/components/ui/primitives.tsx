@@ -31,6 +31,9 @@ import {
 import { createPortal } from "react-dom";
 import { Modal } from "./modal";
 import { uiCopy, type UiLocale } from "@/lib/ui-i18n";
+import { currencyPresentation } from "@telegram-system/shared";
+import type { ResolvedEmoji } from "@telegram-system/shared";
+import { IconAvatar } from "@/components/icons/icon-avatar";
 export { Modal } from "./modal";
 export { MasonryGrid } from "./masonry-grid";
 
@@ -128,7 +131,7 @@ export const Input = forwardRef<
       {...props}
       ref={ref}
       type={isPassword && passwordVisible ? "text" : type}
-      className={`w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white outline-none ring-blue-500 focus:ring ${isPassword ? "pr-11" : ""} ${className ?? ""}`}
+      className={`min-h-9 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white outline-none ring-blue-500 focus:ring ${isPassword ? "pr-11" : ""} ${className ?? ""}`}
     />
   );
 
@@ -179,7 +182,7 @@ export function isValidTimeInputValue(value: string) {
 }
 
 export function TimeInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  const { className, onChange, placeholder, ...restProps } = props;
+  const { className, onBlur, onChange, placeholder, ...restProps } = props;
   return (
     <div className="relative">
       <input
@@ -192,7 +195,15 @@ export function TimeInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
           event.target.value = normalizeTimeInputValue(event.target.value);
           onChange?.(event);
         }}
-        className={`w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 pr-11 text-sm text-white outline-none ring-blue-500 focus:ring ${className ?? ""}`}
+        onBlur={(event) => {
+          const canonical = canonicalizeTimeInputValue(event.target.value);
+          if (canonical !== event.target.value) {
+            event.target.value = canonical ?? "12:00";
+            onChange?.(event);
+          }
+          onBlur?.(event);
+        }}
+        className={`min-h-9 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 pr-11 text-sm text-white outline-none ring-blue-500 focus:ring ${className ?? ""}`}
       />
       <Clock3
         size={16}
@@ -203,14 +214,27 @@ export function TimeInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
 }
 
 function OptionIcon({
+  iconPresentation,
   iconUrl,
   iconEmoji,
+  premium,
   fallback,
 }: {
+  iconPresentation?: ResolvedEmoji;
   iconUrl?: string;
   iconEmoji?: string;
+  premium?: boolean;
   fallback?: string;
 }) {
+  if (iconPresentation)
+    return (
+      <IconAvatar
+        icon={iconPresentation}
+        size="xs"
+        bordered={false}
+        className="!rounded-md"
+      />
+    );
   if (iconUrl)
     return (
       <img
@@ -221,8 +245,19 @@ function OptionIcon({
     );
   if (iconEmoji)
     return (
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[15px] leading-none">
+      <span
+        className={`relative flex h-5 w-5 shrink-0 items-center justify-center text-[15px] leading-none ${premium ? "rounded-md ring-1 ring-sky-400/70" : ""}`}
+        title={premium ? "Telegram Premium emoji" : undefined}
+      >
         {iconEmoji}
+        {premium ? (
+          <span
+            className="absolute -right-1 -top-1 text-[8px] leading-none text-sky-300"
+            aria-label="Telegram Premium emoji"
+          >
+            ✦
+          </span>
+        ) : null}
       </span>
     );
   if (!fallback) return null;
@@ -233,7 +268,13 @@ function OptionIcon({
   );
 }
 
-export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement> & { uiLocale?: UiLocale }) {
+export function Select(
+  props: React.SelectHTMLAttributes<HTMLSelectElement> & {
+    uiLocale?: UiLocale;
+    onSearchPaste?: (value: string) => boolean | Promise<boolean>;
+    searchPlaceholder?: string;
+  },
+) {
   const ui = uiCopy(props.uiLocale);
   const financeTypeClass = (value: string) => {
     if (value === "income") return "text-emerald-300";
@@ -286,10 +327,13 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement> & { 
 
   const selected = options.find((o) => o.value === currentValue);
   const menuOptions = options.filter((o) => !o.hidden);
-  const showSearch = menuOptions.length > 5;
+  const showSearch = menuOptions.length > 5 || Boolean(props.onSearchPaste);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties | null>(null);
   const filteredMenuOptions = showSearch
     ? menuOptions.filter((option) =>
         option.label
@@ -312,7 +356,11 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement> & { 
   useEffect(() => {
     const onDocPointerDown = (event: PointerEvent) => {
       if (!rootRef.current) return;
-      if (!rootRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        !rootRef.current.contains(target) &&
+        !menuRef.current?.contains(target)
+      ) {
         setOpen(false);
         setSearch("");
       }
@@ -320,6 +368,42 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement> & { 
     document.addEventListener("pointerdown", onDocPointerDown);
     return () => document.removeEventListener("pointerdown", onDocPointerDown);
   }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const gap = 4;
+      const padding = 8;
+      const below = window.innerHeight - rect.bottom - gap - padding;
+      const above = rect.top - gap - padding;
+      const openUp = below < 240 && above > below;
+      const maxHeight = Math.max(120, Math.min(320, openUp ? above : below));
+      const width = Math.min(rect.width, window.innerWidth - padding * 2);
+      const left = Math.min(
+        Math.max(rect.left, padding),
+        window.innerWidth - width - padding,
+      );
+      setMenuStyle({
+        position: "fixed",
+        left,
+        width,
+        maxHeight,
+        ...(openUp
+          ? { bottom: window.innerHeight - rect.top + gap }
+          : { top: rect.bottom + gap }),
+      });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [open]);
 
   const commit = (next: string) => {
     if (!isControlled) setInternalValue(next);
@@ -331,15 +415,21 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement> & { 
   return (
     <div ref={rootRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         disabled={props.disabled}
         onClick={() => {
+          if (!open && props.onFocus) {
+            props.onFocus({
+              target: { name: props.name, value: currentValue },
+            } as unknown as React.FocusEvent<HTMLSelectElement>);
+          }
           setOpen((value) => {
             if (value) setSearch("");
             return !value;
           });
         }}
-        className={`flex w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white outline-none ring-blue-500 focus:ring disabled:opacity-50 ${props.className ?? ""}`}
+        className={`flex min-h-9 w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white outline-none ring-blue-500 focus:ring disabled:opacity-50 ${props.className ?? ""}`}
       >
         <span className="flex min-w-0 items-center gap-2">
           {selected ? (
@@ -357,67 +447,86 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement> & { 
         </span>
         <ChevronDown size={16} className="text-neutral-400" />
       </button>
-      {open ? (
-        <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-xl">
-          {showSearch ? (
-            <div className="border-b border-neutral-800 p-2">
-              <input
-                autoFocus
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
-                    setOpen(false);
-                    setSearch("");
-                    return;
-                  }
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    pickFirstFilteredOption();
-                  }
-                }}
-                placeholder={ui.search}
-                className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-2 text-sm text-white outline-none placeholder:text-neutral-500 focus:border-blue-600"
-              />
-            </div>
-          ) : null}
-          <div className="max-h-60 overflow-auto">
-            {filteredMenuOptions.map((opt) => (
-              <button
-                key={opt.key}
-                type="button"
-                disabled={opt.disabled}
-                onClick={() => {
-                  if (opt.disabled) return;
-                  commit(opt.value);
-                  setOpen(false);
-                  setSearch("");
-                }}
-                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <OptionIcon
-                    iconUrl={opt.iconUrl}
-                    iconEmoji={opt.iconEmoji}
-                    fallback={opt.iconFallback}
+      {open && menuStyle
+        ? createPortal(
+            <div
+              ref={menuRef}
+              style={menuStyle}
+              className="z-[120] flex flex-col overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl"
+            >
+              {showSearch ? (
+                <div className="border-b border-neutral-800 p-2">
+                  <input
+                    autoFocus
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        setOpen(false);
+                        setSearch("");
+                        return;
+                      }
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        pickFirstFilteredOption();
+                      }
+                    }}
+                    placeholder={props.searchPlaceholder ?? ui.search}
+                    onPaste={(event) => {
+                      const pasted = event.clipboardData.getData("text").trim();
+                      if (!pasted || !props.onSearchPaste) return;
+                      setSearch(pasted);
+                      void Promise.resolve(props.onSearchPaste(pasted)).then(
+                        (resolved) => {
+                          if (!resolved) return;
+                          setOpen(false);
+                          setSearch("");
+                        },
+                      );
+                    }}
+                    className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-2 text-sm text-white outline-none placeholder:text-neutral-500 focus:border-blue-600"
                   />
-                  <span className={`truncate ${opt.className}`}>
-                    {opt.label}
-                  </span>
-                </span>
-                {opt.value === currentValue ? (
-                  <Check size={14} className="text-blue-300" />
+                </div>
+              ) : null}
+              <div className="min-h-0 flex-1 overflow-auto">
+                {filteredMenuOptions.map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    disabled={opt.disabled}
+                    onClick={() => {
+                      if (opt.disabled) return;
+                      commit(opt.value);
+                      setOpen(false);
+                      setSearch("");
+                    }}
+                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <OptionIcon
+                        iconUrl={opt.iconUrl}
+                        iconEmoji={opt.iconEmoji}
+                        fallback={opt.iconFallback}
+                      />
+                      <span className={`truncate ${opt.className}`}>
+                        {opt.label}
+                      </span>
+                    </span>
+                    {opt.value === currentValue ? (
+                      <Check size={14} className="text-blue-300" />
+                    ) : null}
+                  </button>
+                ))}
+                {!filteredMenuOptions.length ? (
+                  <p className="px-3 py-3 text-center text-sm text-neutral-500">
+                    {ui.noOptions}
+                  </p>
                 ) : null}
-              </button>
-            ))}
-            {!filteredMenuOptions.length ? (
-              <p className="px-3 py-3 text-center text-sm text-neutral-500">
-                {ui.noOptions}
-              </p>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
       <input type="hidden" name={props.name} value={currentValue} />
     </div>
   );
@@ -439,17 +548,21 @@ export function CurrencySelect({
   ).sort();
 
   return (
-    <Select
-      value={value}
-      onChange={(event) => onChange(event.target.value.toUpperCase())}
+    <CustomSelect
+      value={value.toUpperCase()}
+      onChange={(next) => onChange(next.toUpperCase())}
       disabled={disabled}
-    >
-      {options.map((currency) => (
-        <option key={currency} value={currency}>
-          {currency}
-        </option>
-      ))}
-    </Select>
+      searchable={options.length > 5}
+      options={options.map((currency) => {
+        const presentation = currencyPresentation(currency);
+        return {
+          value: presentation.code,
+          label: presentation.code,
+          meta: presentation.symbol,
+          iconEmoji: presentation.flag,
+        };
+      })}
+    />
   );
 }
 
@@ -459,6 +572,7 @@ type MultiSelectOption = {
   selectedLabel?: string;
   iconUrl?: string;
   iconEmoji?: string;
+  iconPremium?: boolean;
   iconFallback?: string;
 };
 
@@ -471,6 +585,7 @@ export function MultiSelect({
   disabled = false,
   className = "",
   allSelectedLabel,
+  compactSelectedAfter = 2,
 }: {
   value: string[];
   onChange: (value: string[]) => void;
@@ -480,15 +595,23 @@ export function MultiSelect({
   disabled?: boolean;
   className?: string;
   allSelectedLabel?: string;
+  compactSelectedAfter?: number;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties | null>(null);
 
   useEffect(() => {
     const onDocPointerDown = (event: PointerEvent) => {
       if (!rootRef.current) return;
-      if (!rootRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        !rootRef.current.contains(target) &&
+        !menuRef.current?.contains(target)
+      ) {
         setOpen(false);
         setSearch("");
       }
@@ -496,6 +619,45 @@ export function MultiSelect({
     document.addEventListener("pointerdown", onDocPointerDown);
     return () => document.removeEventListener("pointerdown", onDocPointerDown);
   }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const gap = 4;
+      const padding = 8;
+      const spaceBelow = window.innerHeight - rect.bottom - gap - padding;
+      const spaceAbove = rect.top - gap - padding;
+      const openUp = spaceBelow < 240 && spaceAbove > spaceBelow;
+      const maxHeight = Math.max(
+        120,
+        Math.min(360, openUp ? spaceAbove : spaceBelow),
+      );
+      const width = Math.min(rect.width, window.innerWidth - padding * 2);
+      const left = Math.min(
+        Math.max(rect.left, padding),
+        window.innerWidth - width - padding,
+      );
+      setMenuStyle({
+        position: "fixed",
+        left,
+        width,
+        maxHeight,
+        ...(openUp
+          ? { bottom: window.innerHeight - rect.top + gap }
+          : { top: rect.bottom + gap }),
+      });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [open]);
 
   const selectedSet = useMemo(() => new Set(value), [value]);
   const selectedOptions = options.filter((option) =>
@@ -520,6 +682,7 @@ export function MultiSelect({
   return (
     <div ref={rootRef} className={`relative ${className}`}>
       <button
+        ref={triggerRef}
         type="button"
         disabled={disabled}
         onClick={() => {
@@ -528,11 +691,36 @@ export function MultiSelect({
             return !current;
           });
         }}
-        className="flex min-h-[42px] w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white outline-none ring-blue-500 focus:ring disabled:opacity-50"
+        className="flex min-h-9 w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white outline-none ring-blue-500 focus:ring disabled:opacity-50"
       >
         <span className="flex min-w-0 flex-wrap items-center gap-1.5">
           {selectedOptions.length ? (
-            isAllSelected && allSelectedLabel ? (
+            compactSelectedAfter != null &&
+            selectedOptions.length > compactSelectedAfter ? (
+              <span
+                className="flex items-center -space-x-1"
+                aria-label={`${selectedOptions.length} options selected`}
+              >
+                {selectedOptions.slice(0, 8).map((option) => (
+                  <span
+                    key={option.value}
+                    title={option.selectedLabel ?? option.label}
+                    className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-md border border-neutral-600 bg-neutral-800"
+                  >
+                    <OptionIcon
+                      iconUrl={option.iconUrl}
+                      iconEmoji={option.iconEmoji}
+                      fallback={option.iconFallback}
+                    />
+                  </span>
+                ))}
+                {selectedOptions.length > 8 ? (
+                  <span className="relative flex h-6 min-w-6 items-center justify-center rounded-md border border-neutral-600 bg-neutral-800 px-1 text-[10px] text-neutral-200">
+                    +{selectedOptions.length - 8}
+                  </span>
+                ) : null}
+              </span>
+            ) : isAllSelected && allSelectedLabel ? (
               <span className="text-neutral-100">{allSelectedLabel}</span>
             ) : (
               selectedOptions.map((option) => (
@@ -557,55 +745,62 @@ export function MultiSelect({
         </span>
         <ChevronDown size={16} className="shrink-0 text-neutral-400" />
       </button>
-      {open ? (
-        <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-xl">
-          <div className="border-b border-neutral-800 p-2">
-            <input
-              autoFocus
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  setOpen(false);
-                  setSearch("");
-                }
-              }}
-              placeholder={searchPlaceholder}
-              className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-2 text-sm text-white outline-none placeholder:text-neutral-500 focus:border-blue-600"
-            />
-          </div>
-          <div className="max-h-72 overflow-auto">
-            {filteredOptions.map((option) => {
-              const checked = selectedSet.has(option.value);
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => toggleValue(option.value)}
-                  className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-800"
-                >
-                  <span className="flex min-w-0 items-center gap-2">
-                    <OptionIcon
-                      iconUrl={option.iconUrl}
-                      iconEmoji={option.iconEmoji}
-                      fallback={option.iconFallback}
-                    />
-                    <span className="truncate">{option.label}</span>
-                  </span>
-                  {checked ? (
-                    <Check size={14} className="text-blue-300" />
-                  ) : null}
-                </button>
-              );
-            })}
-            {!filteredOptions.length ? (
-              <p className="px-3 py-3 text-center text-sm text-neutral-500">
-                No options found
-              </p>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      {open && menuStyle
+        ? createPortal(
+            <div
+              ref={menuRef}
+              style={menuStyle}
+              className="z-[120] flex flex-col overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl"
+            >
+              <div className="border-b border-neutral-800 p-2">
+                <input
+                  autoFocus
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      setOpen(false);
+                      setSearch("");
+                    }
+                  }}
+                  placeholder={searchPlaceholder}
+                  className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-2 text-sm text-white outline-none placeholder:text-neutral-500 focus:border-blue-600"
+                />
+              </div>
+              <div className="min-h-0 overflow-auto">
+                {filteredOptions.map((option) => {
+                  const checked = selectedSet.has(option.value);
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => toggleValue(option.value)}
+                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-800"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <OptionIcon
+                          iconUrl={option.iconUrl}
+                          iconEmoji={option.iconEmoji}
+                          fallback={option.iconFallback}
+                        />
+                        <span className="truncate">{option.label}</span>
+                      </span>
+                      {checked ? (
+                        <Check size={14} className="text-blue-300" />
+                      ) : null}
+                    </button>
+                  );
+                })}
+                {!filteredOptions.length ? (
+                  <p className="px-3 py-3 text-center text-sm text-neutral-500">
+                    No options found
+                  </p>
+                ) : null}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -741,7 +936,7 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`flex w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm outline-none ring-blue-500 focus:ring ${props.className ?? ""}`}
+        className={`flex min-h-9 w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm outline-none ring-blue-500 focus:ring ${props.className ?? ""}`}
       >
         <span className={selectedIso ? "text-white" : "text-neutral-400"}>
           {display}
@@ -945,7 +1140,7 @@ export function DateRangeInput({
       ? start && end && start === end
         ? formatDisplayDate(start)
         : `${formatDisplayDate(start)}${end ? ` - ${formatDisplayDate(end)}` : ""}`
-      : placeholder ?? ui.selectPeriod;
+      : (placeholder ?? ui.selectPeriod);
   const cells = monthCells(cursor);
 
   const pick = (iso: string) => {
@@ -990,10 +1185,17 @@ export function DateRangeInput({
               <ChevronLeft size={16} />
             </button>
             <p className="text-sm font-medium">
-              {cursor.toLocaleString(uiLocale === "uk" ? "uk-UA" : uiLocale === "ru" ? "ru-RU" : "en-US", {
-                month: "long",
-                year: "numeric",
-              })}
+              {cursor.toLocaleString(
+                uiLocale === "uk"
+                  ? "uk-UA"
+                  : uiLocale === "ru"
+                    ? "ru-RU"
+                    : "en-US",
+                {
+                  month: "long",
+                  year: "numeric",
+                },
+              )}
             </p>
             <button
               type="button"
@@ -1007,7 +1209,9 @@ export function DateRangeInput({
               <ChevronRight size={16} />
             </button>
           </div>
-          <div className="mb-2 text-xs text-neutral-400">{selectingEnd ? ui.selectEndDate : ui.selectStartDate}</div>
+          <div className="mb-2 text-xs text-neutral-400">
+            {selectingEnd ? ui.selectEndDate : ui.selectStartDate}
+          </div>
           <div className="mb-1 grid grid-cols-7 gap-1 text-center text-xs text-neutral-400">
             {ui.weekdays.map((d) => (
               <span key={d}>{d}</span>
@@ -1084,8 +1288,11 @@ export function StatusPill({ value }: { value: string }) {
 type SelectOption = {
   value: string;
   label: string;
+  meta?: string;
   iconUrl?: string;
   iconEmoji?: string;
+  iconPremium?: boolean;
+  iconPresentation?: ResolvedEmoji;
   iconFallback?: string;
   tone?: "success" | "warning" | "danger" | "muted" | "info";
 };
@@ -1170,19 +1377,32 @@ export function CustomSelect({
         window.innerWidth - width - viewportPadding,
       );
 
+      const availableBelow =
+        window.innerHeight - rect.bottom - gap - viewportPadding;
+      const availableAbove = rect.top - gap - viewportPadding;
+      const openUp =
+        dropdownDirection === "up" ||
+        (availableBelow < 240 && availableAbove > availableBelow);
+      const maxHeight = Math.max(
+        120,
+        Math.min(320, openUp ? availableAbove : availableBelow),
+      );
+
       setDropdownStyle(
-        dropdownDirection === "up"
+        openUp
           ? {
               position: "fixed",
               left,
               bottom: Math.max(window.innerHeight - rect.top + gap, gap),
               width,
+              maxHeight,
             }
           : {
               position: "fixed",
               left,
               top: Math.min(rect.bottom + gap, window.innerHeight - gap),
               width,
+              maxHeight,
             },
       );
     };
@@ -1219,13 +1439,15 @@ export function CustomSelect({
             return !value;
           });
         }}
-        className="flex w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white outline-none ring-blue-500 focus:ring disabled:opacity-50"
+        className="flex min-h-9 w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white outline-none ring-blue-500 focus:ring disabled:opacity-50"
       >
-        <span className="flex min-w-0 items-center gap-2">
+        <span className="flex min-w-0 flex-1 items-center gap-2">
           {selected ? (
             <OptionIcon
+              iconPresentation={selected.iconPresentation}
               iconUrl={selected.iconUrl}
               iconEmoji={selected.iconEmoji}
+              premium={selected.iconPremium}
               fallback={selected.iconFallback}
             />
           ) : null}
@@ -1234,6 +1456,11 @@ export function CustomSelect({
           >
             {selected?.label || placeholder}
           </span>
+          {selected?.meta ? (
+            <bdi className="ml-auto rounded-md bg-neutral-800 px-2 py-0.5 text-xs font-normal text-neutral-400">
+              {selected.meta}
+            </bdi>
+          ) : null}
         </span>
         <ChevronDown
           size={16}
@@ -1244,7 +1471,7 @@ export function CustomSelect({
         ? createPortal(
             <div
               ref={dropdownRef}
-              className={`z-[120] overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl ${dropdownClassName}`.trim()}
+              className={`z-[120] flex flex-col overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl ${dropdownClassName}`.trim()}
               style={dropdownStyle}
             >
               {showSearch ? (
@@ -1269,7 +1496,7 @@ export function CustomSelect({
                   />
                 </div>
               ) : null}
-              <div className="z-[120] max-h-60 overflow-auto">
+              <div className="z-[120] min-h-0 flex-1 overflow-auto">
                 {filteredOptions.map((opt) => {
                   const isSelected = opt.value === value;
                   return (
@@ -1283,15 +1510,22 @@ export function CustomSelect({
                       }}
                       className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-neutral-800"
                     >
-                      <span className="flex min-w-0 items-center gap-2">
+                      <span className="flex min-w-0 flex-1 items-center gap-2">
                         <OptionIcon
+                          iconPresentation={opt.iconPresentation}
                           iconUrl={opt.iconUrl}
                           iconEmoji={opt.iconEmoji}
+                          premium={opt.iconPremium}
                           fallback={opt.iconFallback}
                         />
                         <span className={`truncate ${toneClass(opt.tone)}`}>
                           {opt.label}
                         </span>
+                        {opt.meta ? (
+                          <bdi className="ml-auto rounded-md bg-neutral-800/80 px-2 py-0.5 text-xs font-normal text-neutral-400">
+                            {opt.meta}
+                          </bdi>
+                        ) : null}
                       </span>
                       {isSelected ? (
                         <Check size={14} className="text-blue-300" />
@@ -1366,7 +1600,7 @@ export function IconButton({
   return (
     <button
       {...props}
-      className={`cursor-pointer rounded-lg border p-2 ${kind === "delete" ? "border-red-700 text-red-300 hover:bg-red-950" : "border-neutral-700 text-neutral-200 hover:bg-neutral-800"} ${props.className ?? ""}`}
+      className={`inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border p-0 ${kind === "delete" ? "border-red-700 text-red-300 hover:bg-red-950" : "border-neutral-700 text-neutral-200 hover:bg-neutral-800"} ${props.className ?? ""}`}
     >
       {kind === "delete" ? <Trash2 size={16} /> : <Pencil size={16} />}
     </button>
@@ -1684,7 +1918,11 @@ export function FormField({
   required,
   error,
   children,
-}: PropsWithChildren<{ label: React.ReactNode; required?: boolean; error?: string }>) {
+}: PropsWithChildren<{
+  label: React.ReactNode;
+  required?: boolean;
+  error?: string;
+}>) {
   return (
     <div className="block text-sm">
       <span className="mb-1 block text-neutral-300">
@@ -1861,9 +2099,12 @@ export function ToastStack({
             ? CircleCheck
             : tone === "error"
               ? CircleX
-              : tone === "loading" ? LoaderCircle : Info;
+              : tone === "loading"
+                ? LoaderCircle
+                : Info;
         const percentage = item.progress?.total
-          ? Math.min(100, (item.progress.current / item.progress.total) * 100) : 0;
+          ? Math.min(100, (item.progress.current / item.progress.total) * 100)
+          : 0;
         return (
           <div
             key={item.id}
@@ -1885,12 +2126,17 @@ export function ToastStack({
                 <span
                   className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${styles.icon}`}
                 >
-                  <StatusIcon size={19} className={tone === "loading" ? "animate-spin" : ""} />
+                  <StatusIcon
+                    size={19}
+                    className={tone === "loading" ? "animate-spin" : ""}
+                  />
                 </span>
               )}
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-3">
-                  <p className="text-sm font-semibold text-white">{item.title || styles.title}</p>
+                  <p className="text-sm font-semibold text-white">
+                    {item.title || styles.title}
+                  </p>
                   {item.progress ? (
                     <span className="shrink-0 text-xs tabular-nums text-neutral-400">
                       {item.progress.current}/{item.progress.total}
@@ -1908,10 +2154,16 @@ export function ToastStack({
                     />
                   </div>
                 ) : null}
-                {item.progressSummary ? <div className="mt-2 flex gap-3 text-xs font-medium tabular-nums">
-                  <span className="text-emerald-300">{item.progressSummary.successful} successful</span>
-                  <span className="text-rose-300">{item.progressSummary.failed} failed</span>
-                </div> : null}
+                {item.progressSummary ? (
+                  <div className="mt-2 flex gap-3 text-xs font-medium tabular-nums">
+                    <span className="text-emerald-300">
+                      {item.progressSummary.successful} successful
+                    </span>
+                    <span className="text-rose-300">
+                      {item.progressSummary.failed} failed
+                    </span>
+                  </div>
+                ) : null}
                 {item.details ? (
                   <p className="mt-2 text-xs text-neutral-400">
                     {item.details}
@@ -1921,7 +2173,9 @@ export function ToastStack({
               {tone !== "loading" || item.cancelable ? (
                 <button
                   type="button"
-                  aria-label={item.cancelable ? "Stop operation" : "Close notification"}
+                  aria-label={
+                    item.cancelable ? "Stop operation" : "Close notification"
+                  }
                   title={item.cancelable ? "Stop operation" : undefined}
                   className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-neutral-400 hover:bg-white/10 hover:text-white"
                   onClick={() => onClose(item.id)}

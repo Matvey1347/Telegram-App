@@ -1,8 +1,9 @@
 import type { ComponentProps } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, expect, it, vi } from "vitest";
-import { AdSaleModal } from "./ad-sale-modal";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AdSaleModal, defaultAdSaleAccountId } from "./ad-sale-modal";
+import { resolveAdSaleCurrency } from "./ad-sale-placement-draft";
 
 vi.mock("@/providers/toast-provider", () => ({
   useAppToast: () => ({ pushToast: vi.fn() }),
@@ -97,6 +98,155 @@ function renderModal(
 }
 
 describe("AdSaleModal", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("offers to continue an unfinished draft and restores its placement settings", async () => {
+    const first = renderModal();
+    fireEvent.change(screen.getByRole("textbox", { name: "Time for all" }), {
+      target: { value: "18:30" },
+    });
+    await waitFor(() =>
+      expect(
+        window.localStorage.getItem("telegram-ad-sales:draft:default"),
+      ).toContain("18:30"),
+    );
+    first.unmount();
+
+    renderModal();
+    expect(await screen.findByText("Unfinished Ad Sale draft")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Continue draft" }));
+
+    expect(screen.getByRole("textbox", { name: "Time for all" })).toHaveValue(
+      "18:30",
+    );
+  });
+
+  it("deletes an unfinished draft when the user chooses to start again", async () => {
+    window.localStorage.setItem(
+      "telegram-ad-sales:draft:default",
+      JSON.stringify({ version: 1, placements: [] }),
+    );
+    renderModal();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Delete draft" }),
+    );
+
+    expect(
+      window.localStorage.getItem("telegram-ad-sales:draft:default"),
+    ).toBeNull();
+    expect(screen.getByText("Placement source")).toBeTruthy();
+  });
+
+  it("shows the financial account currency and keeps the old draft when starting another sale", async () => {
+    window.localStorage.setItem(
+      "telegram-ad-sales:draft:default",
+      JSON.stringify({
+        version: 1,
+        accountId: "account-1",
+        networkPricingMode: "total",
+        networkTotalPrice: "100",
+        placements: [
+          {
+            key: "placement-1",
+            channelId: "channel-1",
+            productId: "format-usd",
+            agreedPrice: "100",
+          },
+        ],
+      }),
+    );
+    renderModal({
+      defaultCurrency: "UAH",
+      productsByChannelId: {
+        "channel-1": [
+          {
+            id: "format-usd",
+            name: "1/24",
+            currency: "USD",
+            isActive: true,
+            position: 0,
+          },
+        ] as never,
+      },
+    });
+
+    expect(await screen.findByText("100 UAH")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Create new" }));
+
+    expect(
+      window.localStorage.getItem("telegram-ad-sales:draft:default"),
+    ).toContain('"networkTotalPrice":"100"');
+    expect(screen.getByText("Placement source")).toBeTruthy();
+  });
+
+  it("shows only channel avatars in a draft preview with multiple channels", async () => {
+    window.localStorage.setItem(
+      "telegram-ad-sales:draft:default",
+      JSON.stringify({
+        version: 1,
+        placements: [
+          { key: "placement-1", channelId: "channel-1", agreedPrice: "50" },
+          { key: "placement-2", channelId: "channel-2", agreedPrice: "50" },
+        ],
+      }),
+    );
+    renderModal({
+      channels: [
+        { id: "channel-1", title: "First channel", photoUrl: null },
+        { id: "channel-2", title: "Second channel", photoUrl: null },
+      ] as never,
+    });
+
+    expect(
+      await screen.findByLabelText("2 channels selected"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("First channel")).not.toBeInTheDocument();
+    expect(screen.queryByText("Second channel")).not.toBeInTheDocument();
+  });
+
+  it("defaults to the active financial account assigned to the selected member", () => {
+    expect(
+      defaultAdSaleAccountId(
+        [
+          {
+            id: "sasha-account",
+            assignedMemberId: "member-sasha",
+            isActive: true,
+          },
+          {
+            id: "matvii-account",
+            assignedMemberId: "member-matvii",
+            isActive: true,
+          },
+        ] as never,
+        "member-matvii",
+      ),
+    ).toBe("matvii-account");
+  });
+
+  it("ignores inherited fallback currency when another channel explicitly uses UAH", () => {
+    expect(
+      resolveAdSaleCurrency({
+        channelIds: ["channel-1", "channel-2", "channel-3"],
+        channels: [
+          { id: "channel-1", adBaseCpm: null, adBaseCurrency: "USD" },
+          { id: "channel-2", adBaseCpm: null, adBaseCurrency: "USD" },
+          { id: "channel-3", adBaseCpm: 100, adBaseCurrency: "UAH" },
+        ],
+        placements: [],
+        productsByChannelId: {
+          "channel-1": [{ currency: "USD" } as never],
+          "channel-2": [{ currency: "USD" } as never],
+          "channel-3": [{ currency: "USD" } as never],
+        },
+        fallback: "USD",
+      }),
+    ).toBe("UAH");
+  });
+
   it("submits the selected sale origin", async () => {
     const onSubmit = vi.fn().mockResolvedValue({});
     renderModal({ onSubmit });
@@ -118,7 +268,7 @@ describe("AdSaleModal", () => {
       "https://adsell.io/assets/img/favicon.png",
     );
     fireEvent.click(adsellOption);
-    await screen.findByText("Recommended: 125 UAH");
+    await screen.findByText(/1\/24 · 125 UAH/);
     fireEvent.click(screen.getByRole("button", { name: "Create sale" }));
 
     await waitFor(() =>
@@ -170,27 +320,53 @@ describe("AdSaleModal", () => {
     expect(screen.queryByText(/Warning:/)).toBeNull();
   });
 
+  it("keeps network channels and placement settings when switching to channel selection", async () => {
+    renderModal({ initialChannelId: null });
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose network" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Improvement/ }));
+    await screen.findByText(/1\/24 · 125 UAH/);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Time for all" }), {
+      target: { value: "18:30" },
+    });
+    expect(screen.getByText(/· 18:30 · 1\/24/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Channels" }));
+
+    expect(
+      screen.getByRole("button", { name: "Example channel" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Time for all" })).toHaveValue(
+      "18:30",
+    );
+    expect(screen.getByText(/· 18:30 · 1\/24/)).toBeTruthy();
+  });
+
   it("fills the calculated Setup price and refreshes it when the format changes", async () => {
     renderModal();
 
-    const firstRecommendation = await screen.findByText("Recommended: 125 UAH");
-    expect(
-      firstRecommendation.parentElement?.querySelector("input")?.value,
-    ).toBe("125");
+    await screen.findByText(/1\/24 · 125 UAH/);
 
-    fireEvent.click(screen.getByRole("button", { name: "1/24" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Time for all" }), {
+      target: { value: "18:30" },
+    });
+    expect(screen.getByText(/· 18:30 · 1\/24/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Format for all" }));
     fireEvent.click(await screen.findByRole("button", { name: "2/48" }));
 
-    const secondRecommendation = await screen.findByText(
-      "Recommended: 250 UAH",
-    );
-    expect(
-      secondRecommendation.parentElement?.querySelector("input")?.value,
-    ).toBe("250");
+    await screen.findByText(/2\/48 · 250 UAH/);
   });
 
   it("creates placement rows for every selected date without a separate bulk mode", async () => {
     renderModal({ initialScheduledAt: "2099-08-10T12:00:00.000Z" });
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Time for all" }), {
+      target: { value: "18:30" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Format for all" }));
+    fireEvent.click(await screen.findByRole("button", { name: "2/48" }));
 
     fireEvent.click(screen.getAllByRole("button", { name: "10.08.2099" })[0]);
     fireEvent.click(screen.getAllByRole("button", { name: "11" })[0]);
@@ -198,11 +374,12 @@ describe("AdSaleModal", () => {
 
     await waitFor(() =>
       expect(
-        screen.getAllByRole("button", { name: "Configure post" }),
+        screen.getAllByRole("button", { name: /Actions for Example channel/ }),
       ).toHaveLength(2),
     );
     expect(screen.getByText("Network sale price")).toBeTruthy();
-    expect(screen.getByText(/Split proportionally by current channel audience/)).toBeTruthy();
+    expect(screen.getAllByText(/· 18:30 · 2\/48/)).toHaveLength(2);
+    expect(screen.getByText(/expected value \(views × CPM\)/i)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Bulk sales/ })).toBeNull();
   });
 
@@ -226,15 +403,17 @@ describe("AdSaleModal", () => {
       ] as never),
     });
 
-    fireEvent.click(screen.getByText("Find nearby date"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Actions for Example channel" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Find nearby date" }));
     const pastDate = await screen.findByText("Past date");
     const availableDate = await screen.findByText("Available");
     expect(pastDate.closest("button")?.className).toContain("rose");
     expect(availableDate.closest("button")?.className).toContain("emerald");
 
     fireEvent.click(availableDate.closest("button")!);
-    expect(screen.getByDisplayValue("2099-01-01")).toBeTruthy();
-    expect(screen.getByDisplayValue("12:00")).toBeTruthy();
+    expect(screen.getByText(/2099-01-01 · 12:00/)).toBeTruthy();
   });
 
   it("loads published posts on open and uses the selected post time", async () => {
@@ -250,14 +429,19 @@ describe("AdSaleModal", () => {
     });
 
     expect(
-      (await screen.findAllByText("Advertising post")).length,
-    ).toBeGreaterThan(0);
+      await screen.findByRole("button", {
+        name: "Actions for Example channel",
+      }),
+    ).toBeTruthy();
     expect(onLoadPublishedPosts).not.toHaveBeenCalled();
     expect(screen.getByDisplayValue("12:00")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Configure post" }));
     fireEvent.click(
-      screen.getByRole("button", { name: "Load published posts" }),
+      screen.getByRole("button", { name: "Actions for Example channel" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Configurate post" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Select a published post" }),
     );
     expect(onLoadPublishedPosts).toHaveBeenCalledTimes(1);
 
@@ -266,7 +450,31 @@ describe("AdSaleModal", () => {
     });
     fireEvent.click(postOption);
 
-    expect(screen.getByDisplayValue("17:00")).toBeTruthy();
+    expect(screen.getByText(/· 17:00 ·/)).toBeTruthy();
+  });
+
+  it("shows the published-post selector immediately for a past placement", async () => {
+    const onLoadPublishedPosts = vi.fn().mockResolvedValue([]);
+    renderModal({
+      initialScheduledAt: "2020-08-25T12:00:00.000Z",
+      onLoadPublishedPosts,
+    });
+
+    const postSelector = await screen.findByRole("button", {
+      name: "Select a published post",
+    });
+    expect(
+      screen.queryByRole("button", { name: "Configurate post" }),
+    ).toBeNull();
+
+    fireEvent.click(postSelector);
+    await waitFor(() => expect(onLoadPublishedPosts).toHaveBeenCalledTimes(1));
+    expect(onLoadPublishedPosts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channelId: "channel-1",
+        date: "2020-08-25",
+      }),
+    );
   });
 
   it("keeps the post selector available and retries after a loading failure", async () => {
@@ -275,10 +483,13 @@ describe("AdSaleModal", () => {
       .mockRejectedValue(new Error("Telegram unavailable"));
     renderModal({ onLoadPublishedPosts });
 
-    fireEvent.click(screen.getByRole("button", { name: "Configure post" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Actions for Example channel" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Configurate post" }));
     await screen.findByRole("button", { name: "Select a published post" });
     fireEvent.click(
-      screen.getByRole("button", { name: "Load published posts" }),
+      screen.getByRole("button", { name: "Select a published post" }),
     );
     await waitFor(() =>
       expect(screen.queryByText("Loading posts...")).toBeNull(),
@@ -286,32 +497,65 @@ describe("AdSaleModal", () => {
 
     expect(onLoadPublishedPosts).toHaveBeenCalledTimes(1);
     fireEvent.click(
-      screen.getByRole("button", { name: "Load published posts" }),
+      screen.getAllByRole("button", { name: "Select a published post" })[0],
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Select a published post" }),
     );
     await waitFor(() => expect(onLoadPublishedPosts).toHaveBeenCalledTimes(2));
     expect(screen.getAllByText("Advertising post").length).toBeGreaterThan(0);
   });
 
-  it("splits one sold total by audience and reuses one post across the network", async () => {
+  it("splits one sold total by expected value and reuses one post across the network", async () => {
     const onSubmit = vi.fn().mockResolvedValue({});
+    const onRequestQuote = vi.fn().mockImplementation(({ channelId }) =>
+      Promise.resolve({
+        expectedViews: channelId === "channel-2" ? 2_000 : 1_000,
+        targetCpm: channelId === "channel-2" ? "200" : "100",
+        recommendedPrice: channelId === "channel-2" ? "400" : "100",
+        minimumPrice: "0",
+        warnings: [],
+      }),
+    );
     const product = {
       id: "format-1",
       name: "No auto-delete",
       currency: "UAH",
       defaultPricingMode: "FIXED",
       defaultCpm: null,
-      defaultFixedPrice: "400",
+      defaultFixedPrice: "100",
       minimumPrice: "0",
       estimatedViews: 1_000,
-      estimatedPrice: "400",
+      estimatedPrice: "100",
       isActive: true,
       position: 0,
     };
     renderModal({
       initialChannelId: null,
+      defaultCurrency: "USD",
+      accounts: [
+        {
+          id: "account-1",
+          name: "USD account",
+          currency: "USD",
+          isActive: true,
+        },
+      ] as never,
       channels: [
-        { id: "channel-1", title: "Small", currentSubscribersCount: 30_000 },
-        { id: "channel-2", title: "Large", currentSubscribersCount: 70_000 },
+        {
+          id: "channel-1",
+          title: "Small",
+          currentSubscribersCount: 30_000,
+          adBaseCpm: 100,
+          adBaseCurrency: "UAH",
+        },
+        {
+          id: "channel-2",
+          title: "Large",
+          currentSubscribersCount: 70_000,
+          adBaseCpm: 100,
+          adBaseCurrency: "UAH",
+        },
       ] as never,
       networks: [
         {
@@ -324,13 +568,7 @@ describe("AdSaleModal", () => {
         "channel-1": [product],
         "channel-2": [{ ...product, id: "format-2" }],
       } as never,
-      onRequestQuote: vi.fn().mockResolvedValue({
-        expectedViews: 1_000,
-        targetCpm: "0",
-        recommendedPrice: "400",
-        minimumPrice: "0",
-        warnings: [],
-      }),
+      onRequestQuote,
       onSubmit,
     });
 
@@ -340,8 +578,13 @@ describe("AdSaleModal", () => {
     );
     await waitFor(() =>
       expect(
-        screen.getAllByRole("button", { name: "Configure post" }),
+        screen.getAllByRole("button", { name: /Actions for/ }),
       ).toHaveLength(2),
+    );
+    await waitFor(() =>
+      expect(onRequestQuote).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: "USD" }),
+      ),
     );
     const soldTotal = screen
       .getByText("Sold total")
@@ -351,6 +594,17 @@ describe("AdSaleModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create shared post" }));
     const [title] = await screen.findAllByDisplayValue("Advertising post");
     fireEvent.change(title, { target: { value: "Campaign creative" } });
+    fireEvent.change(screen.getByPlaceholderText(/Write your Telegram post/), {
+      target: { value: "Campaign text" },
+    });
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Actions for/ })[0]);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Edit channel post" }),
+    );
+    expect(
+      screen.queryByRole("button", { name: "Select a published post" }),
+    ).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Create sale" }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
@@ -363,7 +617,7 @@ describe("AdSaleModal", () => {
       payload.placements.map(
         (placement: { agreedPrice: number }) => placement.agreedPrice,
       ),
-    ).toEqual([220.5, 514.5]);
+    ).toEqual([147, 588]);
     expect(
       payload.placements.every(
         (placement: { managedPostDraft?: { title: string } }) =>
@@ -371,5 +625,6 @@ describe("AdSaleModal", () => {
       ),
     ).toBe(true);
     expect(payload.paymentAmount).toBe(735);
+    expect(payload.paymentCurrency).toBe("USD");
   });
 });

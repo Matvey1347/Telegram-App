@@ -8,11 +8,16 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { CurrentUser, type JwtUser } from '../../../common/current-user.decorator';
+import {
+  CurrentUser,
+  type JwtUser,
+} from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
+import { WorkspaceService } from '../../../common/workspace.service';
 import { TelegramSystemBotConnectionsService } from './telegram-system-bot-connections.service';
 import { TelegramSystemBotHandlerService } from './telegram-system-bot-handler.service';
 import { TelegramSystemBotRuntimeService } from './telegram-system-bot-runtime.service';
+import { TelegramSystemBotPostFlowService } from './telegram-system-bot-post-flow.service';
 import type { TelegramSystemBotUpdate } from './telegram-system-bot-handler.service';
 import {
   TelegramSystemBotSubscriptionsQueryDto,
@@ -26,6 +31,8 @@ export class TelegramSystemBotController {
     private readonly connections: TelegramSystemBotConnectionsService,
     private readonly runtime: TelegramSystemBotRuntimeService,
     private readonly handler: TelegramSystemBotHandlerService,
+    private readonly postFlow: TelegramSystemBotPostFlowService,
+    private readonly workspace: WorkspaceService,
   ) {}
 
   @Post('webhook')
@@ -58,6 +65,76 @@ export class TelegramSystemBotController {
       connectionId: confirmed.connectionId,
     });
     return confirmed.status;
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('connection/workspace')
+  async selectCurrentWorkspace(@CurrentUser() user: JwtUser) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
+      user.sub,
+    );
+    await this.connections.switchWorkspaceForUser(user.sub, workspaceId);
+    return { success: true };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('ad-sale-post-import')
+  async prepareAdSalePostImport(@CurrentUser() user: JwtUser) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
+      user.sub,
+    );
+    await this.connections.switchWorkspaceForUser(user.sub, workspaceId);
+    const connection = await this.connections.workflowScopeForUser(
+      user.sub,
+      workspaceId,
+    );
+    return this.postFlow.prepareAdSaleImport({
+      ...connection,
+      timezone: 'UTC',
+    });
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('ad-sale-post-import')
+  async adSalePostImportResult(
+    @CurrentUser() user: JwtUser,
+    @Query('workflowId') workflowId: string,
+  ) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
+      user.sub,
+    );
+    const connection = await this.connections.workflowScopeForUser(
+      user.sub,
+      workspaceId,
+    );
+    return this.postFlow.adSaleImportResult(
+      { ...connection, timezone: 'UTC' },
+      workflowId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('ad-sale-post-preview')
+  async sendAdSalePostPreview(
+    @CurrentUser() user: JwtUser,
+    @Body()
+    draft: {
+      text?: string;
+      imageUrls?: string[];
+      buttonRows?: Array<Array<{ text?: string; url?: string }>>;
+    },
+  ) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
+      user.sub,
+    );
+    const connection = await this.connections.workflowScopeForUser(
+      user.sub,
+      workspaceId,
+    );
+    return this.postFlow.sendAdSalePreview(
+      { ...connection, timezone: 'UTC' },
+      draft,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

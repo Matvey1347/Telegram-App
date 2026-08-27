@@ -18,6 +18,10 @@ import {
 } from "./managed-posts-import-source";
 import { ManagedPostsImportWorkspace } from "./managed-posts-import-workspace";
 import {
+  ChannelImportNavigation,
+  type ChannelImportMode,
+} from "./channel-import-navigation";
+import {
   ManagedPostsImportErrors,
   ManagedPostsImportStats,
 } from "./managed-posts-import-summary";
@@ -69,6 +73,8 @@ export function ManagedPostsImportModal({
   channelTelegramChatId,
   captionLengthMax = 1024,
   messageLengthMax = 4096,
+  mode,
+  onModeChange,
 }: {
   open: boolean;
   onClose: () => void;
@@ -78,6 +84,8 @@ export function ManagedPostsImportModal({
   channelTelegramChatId?: string | null;
   captionLengthMax?: number;
   messageLengthMax?: number;
+  mode: ChannelImportMode;
+  onModeChange: (mode: ChannelImportMode) => void;
 }) {
   const queryClient = useQueryClient();
   const { pushToast, startOperation } = useAppToast();
@@ -419,28 +427,35 @@ export function ManagedPostsImportModal({
   };
 
   return (
-    <Modal
-      open={open}
-      onClose={close}
-      title="Import managed posts"
-      size={editableRows.length ? "xl" : "md"}
-      headerAction={
-        <Button
-          type="button"
-          variant="secondary"
-          className="px-2.5 py-1.5 text-xs"
+    <Modal open={open} onClose={close} title="Channel import" size="xl">
+      <div className="mb-4">
+        <ChannelImportNavigation
+          value={mode}
+          onChange={onModeChange}
           disabled={importing}
-          onClick={() => void copyPromptFormat()}
-          title="Copy GPT prompt format"
-          aria-label="Copy GPT prompt format"
-        >
-          <ClipboardList size={14} />
-          <span>GPT prompt</span>
-          <Copy size={12} />
-        </Button>
-      }
-    >
+        />
+      </div>
       <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-white">Import posts</h3>
+            <p className="mt-0.5 text-xs text-neutral-400">
+              Copy the expected format before preparing import data with GPT.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={importing}
+            onClick={() => void copyPromptFormat()}
+            title="Copy prompt"
+            aria-label="Copy prompt"
+          >
+            <ClipboardList size={15} />
+            <span>Prompt</span>
+            <Copy size={13} />
+          </Button>
+        </div>
         <ManagedPostsImportSource
           content={content}
           fileName={fileName}
@@ -462,17 +477,20 @@ export function ManagedPostsImportModal({
           />
         ) : null}
 
-        <p className="text-xs text-neutral-500">
-          Up to {MAX_MANAGED_POST_IMPORT_BATCH_SIZE} posts are processed per
-          request. Larger imports are processed sequentially in batches.
-        </p>
-
-        <ManagedPostsImportStats
-          parsed={editableRows.length}
-          successful={resultSummary.created}
-          skipped={resultSummary.skipped}
-          errors={resultSummary.errors}
-        />
+        {editableRows.length ? (
+          <>
+            <p className="text-xs text-neutral-500">
+              Up to {MAX_MANAGED_POST_IMPORT_BATCH_SIZE} posts are processed per
+              request. Larger imports are processed sequentially in batches.
+            </p>
+            <ManagedPostsImportStats
+              parsed={editableRows.length}
+              successful={resultSummary.created}
+              skipped={resultSummary.skipped}
+              errors={resultSummary.errors}
+            />
+          </>
+        ) : null}
 
         {editableRows.length ? (
           <ManagedPostsImportWorkspace
@@ -505,14 +523,16 @@ export function ManagedPostsImportModal({
         ) : null}
 
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={close}
-            disabled={importing}
-          >
-            Close
-          </Button>
+          {editableRows.length ? (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={close}
+              disabled={importing}
+            >
+              Close
+            </Button>
+          ) : null}
           <Button
             type="button"
             onClick={submit}

@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowLeftRight,
+  ChartNoAxesCombined,
   CheckCircle2,
   CircleX,
   LoaderCircle,
@@ -97,6 +98,26 @@ export function BotCardShell({
         <TelegramCardActionsMenu
           label={`Actions for ${runtime?.firstName || bot.label}`}
         >
+          {configureHref ? (
+            <TelegramCardMenuLink
+              href={configureHref}
+              label={
+                appType === "FINANCE"
+                  ? "Finance Dashboard"
+                  : `View ${currentApp?.label || applicationLabel(appType)}`
+              }
+              icon={
+                appType === "FINANCE" ? (
+                  <ChartNoAxesCombined
+                    data-testid="configure-bot-app-icon"
+                    size={17}
+                  />
+                ) : (
+                  <Settings data-testid="configure-bot-app-icon" size={17} />
+                )
+              }
+            />
+          ) : null}
           <TelegramCardMenuAction
             label={
               checkingEnvironment === environment
@@ -131,13 +152,6 @@ export function BotCardShell({
             }
             onClick={onSwitch}
           />
-          {configureHref ? (
-            <TelegramCardMenuLink
-              href={configureHref}
-              label={`View ${currentApp?.label || applicationLabel(appType)}`}
-              icon={<Settings data-testid="configure-bot-app-icon" size={17} />}
-            />
-          ) : null}
           <div className="my-1 border-t border-neutral-800" />
           <TelegramCardMenuAction
             label="Delete bot"

@@ -8,8 +8,11 @@ import {
   Post,
   Put,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
+import { StreamResponseService } from '../../../common/stream/stream-response.service';
 import { CurrentUser } from '../../../common/current-user.decorator';
 import type { JwtUser } from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
@@ -46,6 +49,7 @@ import {
   TelegramAdAvailabilityQueryDto,
   TelegramAdPriceHistoryQueryDto,
   TelegramAdProductsQueryDto,
+  TelegramAdProductsByChannelsQueryDto,
   TelegramAdSalesBulkCreateDto,
   TelegramAdSalesQueryDto,
   TelegramAdvertiserActivitiesQueryDto,
@@ -84,6 +88,7 @@ export class TelegramAdSalesController {
     private readonly checkoutService: TelegramAdSalesCheckoutService,
     private readonly crmAdvertisersService: TelegramAdSalesCrmAdvertisersService,
     private readonly crmSettingsService: TelegramAdSalesCrmSettingsService,
+    private readonly streamResponse: StreamResponseService,
   ) {}
 
   @Get('settings/workspace')
@@ -118,6 +123,20 @@ export class TelegramAdSalesController {
     @Query() query: TelegramAdProductsQueryDto,
   ) {
     return this.service.listProducts(user.sub, query);
+  }
+
+  @Get('products/by-channels')
+  listProductsByChannels(
+    @CurrentUser() user: JwtUser,
+    @Query() query: TelegramAdProductsByChannelsQueryDto,
+  ) {
+    return this.service.listProductsByChannels(
+      user.sub,
+      query.channelIds
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean),
+    );
   }
 
   @Get('channels/:channelId/products')
@@ -548,6 +567,20 @@ export class TelegramAdSalesController {
     return this.checkoutService.create(user.sub, dto);
   }
 
+  @Post('checkout-workflow')
+  createPaidReservedSaleWorkflow(
+    @CurrentUser() user: JwtUser,
+    @Body() dto: CreateTelegramAdSaleCheckoutDto,
+    @Res() res: Response,
+  ) {
+    return this.streamResponse.stream(res, {
+      eventPrefix: 'telegram_ad_sales.checkout_workflow',
+      persistLifecycleLogs: false,
+      action: (onProgress) =>
+        this.checkoutService.createWorkflow(user.sub, dto, onProgress),
+    });
+  }
+
   @Get(':id')
   getSale(@CurrentUser() user: JwtUser, @Param('id') id: string) {
     return this.service.getSale(user.sub, id);
@@ -568,6 +601,11 @@ export class TelegramAdSalesController {
     @Body() dto: UpdateTelegramAdSaleDto,
   ) {
     return this.service.updateSale(user.sub, id, dto);
+  }
+
+  @Delete(':id')
+  deleteSale(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.service.deleteSale(user.sub, id);
   }
 
   @Post(':id/placements')

@@ -11,6 +11,7 @@ import {
 } from '@prisma/client';
 import { sanitizeOperationalError } from '../../../common/security/operational-error';
 import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
+import { telegramMarkupToHtml } from '../../../telegram/shared/telegram-markup';
 import { TelegramManagedPostCommandService } from '../telegram-channels/telegram-managed-post-command.service';
 import { TelegramManagedPostPublicationService } from '../telegram-channels/telegram-managed-post-publication.service';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
@@ -65,6 +66,119 @@ export class TelegramSystemBotPostFlowService {
       expiresAt: telegramSystemBotPostWorkflowExpiry(),
     });
     return this.render(workflow, scope);
+  }
+
+  async prepareAdSaleImport(scope: TelegramSystemBotPostFlowScope) {
+    const conflictingAdSale = await this.workflows.active(
+      scope,
+      TelegramSystemBotWorkflowKind.AD_SALE,
+    );
+    if (conflictingAdSale) {
+      await this.workflows.cancel({
+        ...scope,
+        id: conflictingAdSale.id,
+        expectedVersion: conflictingAdSale.version,
+      });
+    }
+    const workflow = await this.workflows.create({
+      ...scope,
+      kind: TelegramSystemBotWorkflowKind.POST_IMPORT,
+      step: 'AWAIT_CONTENT',
+      payload: telegramSystemBotPostJson({ destination: 'AD_SALE_MODAL' }),
+      expiresAt: telegramSystemBotPostWorkflowExpiry(),
+    });
+    await this.render(workflow, scope);
+    return { workflowId: workflow.id };
+  }
+
+  async sendAdSalePreview(
+    scope: TelegramSystemBotPostFlowScope,
+    draft: {
+      text?: string;
+      imageUrls?: string[];
+      buttonRows?: Array<Array<{ text?: string; url?: string }>>;
+    },
+  ) {
+    const text = String(draft.text ?? '').trim();
+    const formattedText = telegramMarkupToHtml(text);
+    const imageUrls = (draft.imageUrls ?? [])
+      .map((url) => String(url).trim())
+      .filter(Boolean)
+      .slice(0, 10);
+    if (!text && !imageUrls.length)
+      throw new ConflictException('Advertising post is empty');
+    const replyMarkup = {
+      inline_keyboard: (draft.buttonRows ?? [])
+        .map((row) =>
+          row
+            .map((button) => ({
+              text: String(button.text ?? '').trim(),
+              url: String(button.url ?? '').trim(),
+            }))
+            .filter((button) => button.text && button.url),
+        )
+        .filter((row) => row.length),
+    };
+    const token = this.config.token!;
+    if (imageUrls.length === 1 && text.length <= 1024) {
+      await this.api.sendPhoto(token, {
+        chat_id: scope.chatId,
+        photo: imageUrls[0],
+        caption: formattedText || undefined,
+        parse_mode: 'HTML',
+        reply_markup: replyMarkup,
+      });
+    } else {
+      if (imageUrls.length) {
+        await this.api.sendMediaGroup(token, {
+          chat_id: scope.chatId,
+          media: imageUrls.map((media) => ({ type: 'photo', media })),
+        });
+      }
+      if (text || replyMarkup.inline_keyboard.length) {
+        await this.api.sendMessage(token, {
+          chat_id: scope.chatId,
+          text: formattedText || 'Advertising post',
+          parse_mode: 'HTML',
+          reply_markup: replyMarkup,
+        });
+      }
+    }
+    return { status: 'SENT' as const };
+  }
+
+  async resumeAdSaleImport(
+    scope: TelegramSystemBotPostFlowScope,
+    workflowId: string,
+  ) {
+    const workflow = await this.workflows.get(scope, workflowId);
+    const payload = telegramSystemBotPostPayload(workflow.payload);
+    if (payload.destination !== 'AD_SALE_MODAL')
+      throw new NotFoundException('Ad Sale post import is unavailable');
+    return this.render(workflow, scope);
+  }
+
+  async adSaleImportResult(
+    scope: TelegramSystemBotPostFlowScope,
+    workflowId: string,
+  ) {
+    const workflow = await this.workflows.get(scope, workflowId);
+    const payload = telegramSystemBotPostPayload(workflow.payload);
+    if (
+      payload.destination !== 'AD_SALE_MODAL' ||
+      workflow.status !== TelegramSystemBotWorkflowStatus.COMPLETED ||
+      !payload.content
+    )
+      return { ready: false as const };
+    return {
+      ready: true as const,
+      draft: {
+        title: telegramSystemBotPostTitle(payload.content),
+        text: payload.content.text,
+        imageUrls: payload.content.imageUrls,
+        buttonRows: payload.content.buttonRows,
+      },
+    };
   }
 
   async input(
@@ -129,7 +243,9 @@ export class TelegramSystemBotPostFlowService {
               scope,
               capture.reason === 'UNSUPPORTED_MEDIA'
                 ? `Unsupported media: ${capture.unsupportedMedia.join(', ')}. Send text or photos.`
-                : 'Forward a text or photo post.',
+                : capture.reason === 'PHOTO_IMPORT_FAILED'
+                  ? 'Could not download or store this photo. Forward the post again to retry.'
+                  : 'Forward a text or photo post.',
             )
           : null;
       }
@@ -190,10 +306,13 @@ export class TelegramSystemBotPostFlowService {
       });
       return this.commit(scope, retrying);
     }
-    if (action === 'back') return this.back(scope, workflow);
-    if (action === 'confirm') return this.commit(scope, workflow);
-
     const payload = telegramSystemBotPostPayload(workflow.payload);
+    if (action === 'back') return this.back(scope, workflow);
+    if (action === 'confirm') {
+      if (payload.destination === 'AD_SALE_MODAL')
+        return this.completeAdSaleImport(scope, workflow);
+      return this.commit(scope, workflow);
+    }
     if (action.startsWith('channel.')) {
       const channels = await this.options.channels(scope);
       const channel = channels[Number(action.slice('channel.'.length))];
@@ -396,6 +515,26 @@ export class TelegramSystemBotPostFlowService {
     }
   }
 
+  private async completeAdSaleImport(
+    scope: TelegramSystemBotPostFlowScope,
+    workflow: TelegramSystemBotPostWorkflow,
+  ) {
+    const payload = telegramSystemBotPostPayload(workflow.payload);
+    if (!payload.content)
+      return this.render(workflow, scope, 'Post content is unavailable.');
+    const claimed = await this.workflows.claimCommit({
+      ...scope,
+      id: workflow.id,
+      expectedVersion: workflow.version,
+    });
+    const completed = await this.workflows.complete({
+      ...scope,
+      id: claimed.id,
+      expectedVersion: claimed.version,
+    });
+    return this.render(completed, scope);
+  }
+
   private async transitionAndRender(
     scope: TelegramSystemBotPostFlowScope,
     workflow: TelegramSystemBotPostWorkflow,
@@ -403,13 +542,33 @@ export class TelegramSystemBotPostFlowService {
     payload: TelegramSystemBotPostPayload,
     notice?: string,
   ) {
-    const next = await this.workflows.transition({
-      ...scope,
-      id: workflow.id,
-      expectedVersion: workflow.version,
-      step,
-      payload: telegramSystemBotPostJson(payload),
-    });
+    let current = workflow;
+    let next: TelegramSystemBotPostWorkflow;
+    try {
+      next = await this.workflows.transition({
+        ...scope,
+        id: current.id,
+        expectedVersion: current.version,
+        step,
+        payload: telegramSystemBotPostJson(payload),
+      });
+    } catch (error) {
+      if (!(error instanceof ConflictException)) throw error;
+      current = await this.workflows.get(scope, workflow.id);
+      if (
+        current.status !== TelegramSystemBotWorkflowStatus.ACTIVE ||
+        (current.step !== workflow.step && current.step !== step)
+      ) {
+        return this.render(current, scope, 'This view was refreshed.');
+      }
+      next = await this.workflows.transition({
+        ...scope,
+        id: current.id,
+        expectedVersion: current.version,
+        step,
+        payload: telegramSystemBotPostJson(payload),
+      });
+    }
     return this.render(next, scope, notice);
   }
 
@@ -420,6 +579,118 @@ export class TelegramSystemBotPostFlowService {
   ) {
     const card = await this.card(workflow, scope, notice);
     const token = this.config.token!;
+    const payload = telegramSystemBotPostPayload(workflow.payload);
+    if (
+      payload.destination === 'AD_SALE_MODAL' &&
+      workflow.status === TelegramSystemBotWorkflowStatus.COMPLETED
+    ) {
+      if (workflow.controlMessageId) {
+        await this.api
+          .editMessageReplyMarkup(token, {
+            chat_id: scope.chatId,
+            message_id: workflow.controlMessageId,
+            reply_markup: { inline_keyboard: [] },
+          })
+          .catch(() => undefined);
+      }
+      return this.api.sendMessage(token, {
+        chat_id: scope.chatId,
+        text: '✅ Post added to the Ad Sale form. Return to the website.',
+      });
+    }
+    const previewImageUrl =
+      payload.destination === 'AD_SALE_MODAL'
+        ? payload.content?.imageUrls[0]
+        : undefined;
+    if (previewImageUrl) {
+      const nativeCard = {
+        chat_id: scope.chatId,
+        photo: previewImageUrl,
+        caption: card.text,
+        parse_mode: 'parse_mode' in card ? card.parse_mode : undefined,
+        reply_markup: 'reply_markup' in card ? card.reply_markup : undefined,
+      };
+      if (workflow.controlMessageId) {
+        try {
+          return await this.api.editMessageCaption(token, {
+            chat_id: scope.chatId,
+            message_id: workflow.controlMessageId,
+            caption: nativeCard.caption,
+            parse_mode: nativeCard.parse_mode,
+            reply_markup: nativeCard.reply_markup,
+          });
+        } catch {
+          // The current control may still be a text card. Keep it until the
+          // native photo replacement has been created successfully.
+        }
+      }
+      let sent: { message_id: number };
+      try {
+        sent = await this.api.sendPhoto(token, nativeCard);
+      } catch {
+        if (workflow.controlMessageId) {
+          try {
+            return await this.api.editMessageText(token, {
+              chat_id: scope.chatId,
+              message_id: workflow.controlMessageId,
+              ...card,
+            });
+          } catch {
+            // The previous card may already have been removed by an older
+            // failed render. Recreate it below without losing the workflow.
+          }
+        }
+        const textCard = await this.api.sendMessage(token, {
+          chat_id: scope.chatId,
+          ...card,
+        });
+        if (workflow.status !== TelegramSystemBotWorkflowStatus.ACTIVE)
+          return textCard;
+        const attached = await this.workflows.transition({
+          ...scope,
+          id: workflow.id,
+          expectedVersion: workflow.version,
+          step: workflow.step,
+          payload: workflow.payload as Prisma.InputJsonValue,
+          controlMessageId: textCard.message_id,
+        });
+        return this.api.editMessageText(token, {
+          chat_id: scope.chatId,
+          message_id: textCard.message_id,
+          ...(await this.card(attached, scope, notice)),
+        });
+      }
+      if (workflow.controlMessageId) {
+        await this.api
+          .deleteMessage(token, {
+            chat_id: scope.chatId,
+            message_id: workflow.controlMessageId,
+          })
+          .catch(() => undefined);
+      }
+      if (workflow.status !== TelegramSystemBotWorkflowStatus.ACTIVE)
+        return sent;
+      const attached = await this.workflows.transition({
+        ...scope,
+        id: workflow.id,
+        expectedVersion: workflow.version,
+        step: workflow.step,
+        payload: workflow.payload as Prisma.InputJsonValue,
+        controlMessageId: sent.message_id,
+      });
+      const attachedCard = await this.card(attached, scope, notice);
+      return this.api.editMessageCaption(token, {
+        chat_id: scope.chatId,
+        message_id: sent.message_id,
+        caption: attachedCard.text,
+        parse_mode:
+          'parse_mode' in attachedCard ? attachedCard.parse_mode : undefined,
+        reply_markup:
+          'reply_markup' in attachedCard
+            ? attachedCard.reply_markup
+            : undefined,
+      });
+    }
     if (workflow.controlMessageId) {
       try {
         return await this.api.editMessageText(token, {

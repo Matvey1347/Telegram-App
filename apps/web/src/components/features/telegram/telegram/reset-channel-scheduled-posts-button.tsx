@@ -7,15 +7,18 @@ import { telegramChannelsApi } from "@/lib/api";
 import { telegramPostKeys } from "@/lib/query-keys";
 import { Button, ConfirmDeleteModal } from "@/components/ui/primitives";
 import { useAppToast } from "@/providers/toast-provider";
+import { TelegramCardMenuAction } from "./telegram-card-actions-menu";
 
 export function ResetChannelScheduledPostsButton({
   channelId,
   channelTitle,
   onCompleted,
+  presentation = "button",
 }: {
   channelId: string;
   channelTitle: string;
   onCompleted?: () => void;
+  presentation?: "button" | "menu";
 }) {
   const queryClient = useQueryClient();
   const { pushToast } = useAppToast();
@@ -65,17 +68,27 @@ export function ResetChannelScheduledPostsButton({
 
   return (
     <>
-      <Button
-        variant="danger"
-        className="shrink-0"
-        disabled={resetScheduled.isPending}
-        onClick={() => setConfirmationOpen(true)}
-      >
-        <span className="inline-flex items-center gap-2">
-          <RotateCcw size={15} />
-          {resetScheduled.isPending ? "Returning…" : "Return all to drafts"}
-        </span>
-      </Button>
+      {presentation === "menu" ? (
+        <TelegramCardMenuAction
+          label={resetScheduled.isPending ? "Returning…" : "Return all to drafts"}
+          icon={<RotateCcw size={15} />}
+          danger
+          disabled={resetScheduled.isPending}
+          onClick={() => setConfirmationOpen(true)}
+        />
+      ) : (
+        <Button
+          variant="danger"
+          className="shrink-0"
+          disabled={resetScheduled.isPending}
+          onClick={() => setConfirmationOpen(true)}
+        >
+          <span className="inline-flex items-center gap-2">
+            <RotateCcw size={15} />
+            {resetScheduled.isPending ? "Returning…" : "Return all to drafts"}
+          </span>
+        </Button>
+      )}
       <ConfirmDeleteModal
         open={confirmationOpen}
         onClose={() => setConfirmationOpen(false)}

@@ -186,6 +186,7 @@ export class TelegramBotApiClient {
       text: string;
       parse_mode?: string;
       reply_markup?: unknown;
+      link_preview_options?: unknown;
     },
   ) {
     return this.call<{ message_id: number }>(token, 'sendMessage', payload);
@@ -214,6 +215,7 @@ export class TelegramBotApiClient {
       caption?: string;
       parse_mode?: string;
       reply_markup?: unknown;
+      link_preview_options?: unknown;
     },
   ) {
     return this.call<{ message_id: number }>(token, 'sendPhoto', payload);

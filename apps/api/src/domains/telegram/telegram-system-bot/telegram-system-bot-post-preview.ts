@@ -12,15 +12,15 @@ export type TelegramSystemBotCardButton = {
 export function telegramSystemBotPostPreview(
   content: TelegramSystemBotCapturedPostContent | undefined,
 ) {
-  if (!content) return { html: '', buttonRows: [] };
+  if (!content)
+    return { html: '', buttonRows: [], imageUrl: null, imageCount: 0 };
   const formattedText = content.text
     ? telegramMarkupToHtml(content.text)
     : '<i>No text</i>';
-  const media = content.imageUrls.length
-    ? `\n\n<i>🖼 ${content.imageUrls.length} photo(s) attached</i>`
-    : '';
   return {
-    html: `${formattedText}${media}`,
+    html: formattedText,
+    imageUrl: content.imageUrls[0] ?? null,
+    imageCount: content.imageUrls.length,
     buttonRows:
       toTelegramBotInlineKeyboard(content.buttonRows)?.inline_keyboard ?? [],
   };

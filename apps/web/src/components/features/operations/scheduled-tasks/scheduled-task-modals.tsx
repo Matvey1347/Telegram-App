@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDateTime } from "@/lib/date-format";
+
 import { useMemo, useState } from "react";
 import {
   Button,
@@ -236,7 +238,7 @@ export function HistoryModal({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <RunBadge status={run.status} />
               <span className="text-xs text-neutral-500">
-                {run.trigger} · {new Date(run.startedAt).toLocaleString()}
+                {run.trigger} · {formatDateTime(run.startedAt)}
               </span>
             </div>
             {run.resultSummary ? (

@@ -1,5 +1,7 @@
 'use client';
 
+import { formatDate } from '@/lib/date-format';
+
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -70,7 +72,7 @@ export default function CurrenciesPage() {
             }
           >
             <p>Rate: {formatRate(rate.rate)}</p>
-            <p>Date: {new Date(rate.date).toLocaleDateString()}</p>
+            <p>Date: {formatDate(rate.date)}</p>
             <p>Source: {rate.source || 'manual'}</p>
           </EntityCard>
         ))}
@@ -141,7 +143,7 @@ function rateDefaults(initial?: ExchangeRate): RateValues {
 }
 
 function RateModal({ open, onClose, onSubmit, title, initial, currencies }: { open: boolean; onClose: () => void; onSubmit: (v: RateValues) => void; title: string; initial?: ExchangeRate; currencies: Currency[] }) {
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<RateValues>({
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<RateValues>({
     defaultValues: rateDefaults(initial),
   });
   useEffect(() => {
@@ -153,14 +155,11 @@ function RateModal({ open, onClose, onSubmit, title, initial, currencies }: { op
     <Modal open={open} onClose={onClose} title={title}>
       <form className="space-y-3" onSubmit={handleSubmit(onSubmit)}>
         <FormField label="Base currency" required error={errors.baseCurrency ? 'Required field' : undefined}>
-          <Input maxLength={3} list="rate-currency-codes" {...register('baseCurrency', { required: true, setValueAs: (value) => String(value).toUpperCase() })} />
+          <CurrencySelect value={watch('baseCurrency')} currencies={currencies} onChange={(value) => setValue('baseCurrency', value as Currency, { shouldDirty: true, shouldValidate: true })} />
         </FormField>
         <FormField label="Target currency" required error={errors.targetCurrency ? 'Required field' : undefined}>
-          <Input maxLength={3} list="rate-currency-codes" {...register('targetCurrency', { required: true, setValueAs: (value) => String(value).toUpperCase() })} />
+          <CurrencySelect value={watch('targetCurrency')} currencies={currencies} onChange={(value) => setValue('targetCurrency', value as Currency, { shouldDirty: true, shouldValidate: true })} />
         </FormField>
-        <datalist id="rate-currency-codes">
-          {currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
-        </datalist>
         <FormField label="Rate">
           <Input type="number" step="0.0001" {...register('rate', { valueAsNumber: true })} />
         </FormField>

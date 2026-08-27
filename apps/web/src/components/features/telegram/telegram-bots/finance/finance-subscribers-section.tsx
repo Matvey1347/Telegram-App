@@ -10,6 +10,7 @@ import { Gift, Search, Settings2, UserRound } from "lucide-react";
 import {
   Button,
   Card,
+  CurrencySelect,
   FormField,
   Input,
   Modal,
@@ -299,12 +300,10 @@ function UserSupportModal({
                   </Select>
                 </FormField>
                 <FormField label="Currency">
-                  <Input
-                    maxLength={3}
+                  <CurrencySelect
                     value={currency}
-                    onChange={(event) =>
-                      setCurrency(event.target.value.toUpperCase())
-                    }
+                    onChange={setCurrency}
+                    currencies={["UAH", "USD", "EUR", "PLN"]}
                   />
                 </FormField>
                 <FormField label="Timezone">

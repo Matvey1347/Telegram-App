@@ -17,6 +17,7 @@ export class TelegramAdPlacementLifecycleService {
         id: true,
         workspaceId: true,
         telegramChannelId: true,
+        scheduledAt: true,
         status: true,
         telegramPostId: true,
         deleteAfterHoursSnapshot: true,
@@ -24,16 +25,19 @@ export class TelegramAdPlacementLifecycleService {
         managedPost: {
           select: { publishedAt: true, telegramMessageIds: true },
         },
+        telegramPost: { select: { id: true, postDate: true } },
       },
       take: Math.max(1, Math.min(500, limit)),
     });
     let reconciled = 0;
     for (const placement of placements) {
       const managedPost = placement.managedPost;
-      const publishedAt = managedPost?.publishedAt;
-      if (!publishedAt || !managedPost) continue;
+      const publishedAt =
+        placement.telegramPost?.postDate ?? managedPost?.publishedAt;
+      if (!publishedAt) continue;
       const telegramPost =
-        placement.telegramPostId || !managedPost.telegramMessageIds.length
+        placement.telegramPost ??
+        (!managedPost?.telegramMessageIds.length
           ? null
           : await this.prisma.telegramPost.findFirst({
               where: {
@@ -42,15 +46,16 @@ export class TelegramAdPlacementLifecycleService {
                 telegramMessageId: { in: managedPost.telegramMessageIds },
               },
               orderBy: { postDate: 'desc' },
-              select: { id: true },
-            });
+              select: { id: true, postDate: true },
+            }));
       await this.prisma.telegramAdSalePlacement.update({
         where: { id: placement.id },
         data: {
           status: TelegramAdPlacementStatus.PUBLISHED,
-          publishedAt,
+          publishedAt: telegramPost?.postDate ?? publishedAt,
           plannedDeleteAt: calculateAdPlacementDeleteAt({
-            publishedAt,
+            scheduledAt: placement.scheduledAt,
+            publishedAt: telegramPost?.postDate ?? publishedAt,
             deleteAfterHoursSnapshot: placement.deleteAfterHoursSnapshot,
             isPermanentSnapshot: placement.isPermanentSnapshot,
           }),

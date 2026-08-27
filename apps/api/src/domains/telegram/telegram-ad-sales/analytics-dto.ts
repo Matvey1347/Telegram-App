@@ -16,6 +16,12 @@ import {
 import { PaginationQueryDto } from '../../../common/pagination/pagination-query.dto';
 
 export class TelegramAdAnalyticsQueryDto {
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value === 'true' : value,
+  )
+  @IsBoolean()
+  allTime?: boolean;
   @Allow() @IsOptional() @IsDateString() from?: string;
   @Allow() @IsOptional() @IsDateString() to?: string;
   @IsOptional()

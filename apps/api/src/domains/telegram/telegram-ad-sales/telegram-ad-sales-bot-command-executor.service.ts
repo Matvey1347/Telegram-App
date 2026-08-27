@@ -311,7 +311,7 @@ export class TelegramAdSalesBotCommandExecutorService {
             imageUrls: post.imageUrls,
             assignedMemberId: params.assignedMemberId,
             icon: post.icon,
-            buttonRows: post.buttonRows?.map((buttons) => ({ buttons })),
+            buttonRows: post.buttonRows,
           },
         );
         placement = { ...placement, managedPostId: created.id };

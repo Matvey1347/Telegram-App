@@ -3,6 +3,7 @@ import {
   TelegramSystemBotWorkflowKind,
   TelegramSystemBotWorkflowStatus,
 } from '@prisma/client';
+import { ConflictException } from '@nestjs/common';
 import { TelegramSystemBotPostFlowService } from './telegram-system-bot-post-flow.service';
 import { TelegramSystemBotPostContentService } from './telegram-system-bot-post-content.service';
 
@@ -167,5 +168,35 @@ describe('TelegramSystemBotPostFlowService editing', () => {
     );
     expect(api.deleteMessage).toHaveBeenCalledTimes(1);
     expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('retries button editing against the refreshed workflow version', async () => {
+    const { service, workflows } = setup();
+    const payload = {
+      content: originalContent,
+      channelId: 'channel-1',
+      channelTitle: 'Channel',
+    };
+    const stale = workflow('AWAIT_EDIT_BUTTONS', 3, payload);
+    const refreshed = workflow('AWAIT_EDIT_BUTTONS', 4, payload);
+    const edited = workflow('CHOOSE_ACTION', 5, payload);
+    workflows.active.mockResolvedValue(stale);
+    workflows.get.mockResolvedValue(refreshed);
+    workflows.transition
+      .mockRejectedValueOnce(new ConflictException('Workflow changed'))
+      .mockResolvedValueOnce(edited);
+
+    await service.input(scope, {
+      message_id: 22,
+      text: 'Website | https://example.com',
+    });
+
+    expect(workflows.transition).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        id: 'workflow-1',
+        expectedVersion: 4,
+        step: 'CHOOSE_ACTION',
+      }),
+    );
   });
 });

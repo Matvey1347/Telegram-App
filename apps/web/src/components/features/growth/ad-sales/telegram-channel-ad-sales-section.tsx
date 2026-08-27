@@ -10,6 +10,7 @@ import {
 import { telegramAdSalesApi } from "@/lib/api";
 import { MetricPreviewLabel } from "@/lib/metric-preview-icons";
 import { telegramAdSalesKeys } from "@/lib/features/growth/telegram-ad-sales-query";
+import { formatDateTime } from "@/lib/date-format";
 
 function money(value: string | number | null | undefined) {
   return Number(value ?? 0).toLocaleString(undefined, {
@@ -123,7 +124,7 @@ export function TelegramChannelAdSalesSection({
                       {sale.advertiserName}
                     </td>
                     <td className="px-3 py-2">
-                      {new Date(sale.scheduledAt).toLocaleString()}
+                      {formatDateTime(sale.scheduledAt)}
                     </td>
                     <td className="px-3 py-2">
                       {money(sale.agreedPrice)} {sale.currency}

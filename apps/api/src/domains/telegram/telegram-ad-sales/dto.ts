@@ -16,12 +16,33 @@ import {
   TelegramAdvertiserTaskStatus,
   TelegramAdvertiserTaskType,
 } from '@prisma/client';
-import { Allow, ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsDefined, IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsString, Matches, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import {
+  Allow,
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
+  IsDateString,
+  IsDefined,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  Min,
+  ValidateIf,
+  ValidateNested,
+} from 'class-validator';
 import { PaginationQueryDto } from '../../../common/pagination/pagination-query.dto';
 
-const normalizeCurrency = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim().toUpperCase() : value);
+const normalizeCurrency = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim().toUpperCase() : value;
 
 export * from './analytics-dto';
+export * from './crm-advertisers-query-dto';
 export * from './crm-member-settings-dto';
 
 export class TelegramAdProductsQueryDto extends PaginationQueryDto {
@@ -29,17 +50,33 @@ export class TelegramAdProductsQueryDto extends PaginationQueryDto {
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
+export class TelegramAdProductsByChannelsQueryDto {
+  @IsString() channelIds!: string;
+}
+
 export class CreateTelegramAdProductDto {
   @IsString() name!: string;
   @IsOptional() @IsString() description?: string | null;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) topDurationMinutes?: number | null;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) feedDurationHours?: number | null;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) deleteAfterHours?: number | null;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) topDurationMinutes?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) feedDurationHours?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) deleteAfterHours?:
+    | number
+    | null;
   @IsOptional() @IsBoolean() isPermanent?: boolean;
   @IsEnum(TelegramAdPricingMode) defaultPricingMode!: TelegramAdPricingMode;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) defaultCpm?: number | null;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) defaultFixedPrice?: number | null;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minimumPrice?: number | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) defaultCpm?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) defaultFixedPrice?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minimumPrice?:
+    | number
+    | null;
   @Transform(normalizeCurrency)
   @IsString()
   @Matches(/^[A-Z]{3}$/)
@@ -51,16 +88,28 @@ export class CreateTelegramAdProductDto {
 export class UpdateTelegramAdProductDto {
   @IsOptional() @IsString() name?: string;
   @IsOptional() @IsString() description?: string | null;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) topDurationMinutes?: number | null;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) feedDurationHours?: number | null;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) deleteAfterHours?: number | null;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) topDurationMinutes?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) feedDurationHours?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) deleteAfterHours?:
+    | number
+    | null;
   @IsOptional() @IsBoolean() isPermanent?: boolean;
   @IsOptional()
   @IsEnum(TelegramAdPricingMode)
   defaultPricingMode?: TelegramAdPricingMode;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) defaultCpm?: number | null;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) defaultFixedPrice?: number | null;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minimumPrice?: number | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) defaultCpm?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) defaultFixedPrice?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minimumPrice?:
+    | number
+    | null;
   @IsOptional()
   @Transform(normalizeCurrency)
   @IsString()
@@ -144,9 +193,15 @@ export class RecommendTelegramAdPolicyDto {
 export class CreateTelegramAdQuoteDto {
   @IsString() telegramChannelId!: string;
   @IsOptional() @IsString() telegramAdProductId?: string | null;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) targetCpm?: number | null;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minimumCpm?: number | null;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) fixedPrice?: number | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) targetCpm?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minimumCpm?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) fixedPrice?:
+    | number
+    | null;
   @IsOptional()
   @IsEnum(TelegramAdPricingMode)
   pricingMode?: TelegramAdPricingMode;
@@ -180,21 +235,7 @@ export class TelegramAdAvailabilityQueryDto {
 
 export class TelegramAdSalesQueryDto extends PaginationQueryDto {
   @IsOptional() @IsEnum(TelegramAdSaleStatus) status?: TelegramAdSaleStatus;
-}
-
-export class TelegramAdvertisersQueryDto extends PaginationQueryDto {
-  @IsOptional() @IsString() search?: string;
-  @IsOptional()
-  @IsEnum(TelegramAdvertiserStatus)
-  status?: TelegramAdvertiserStatus;
-  @IsOptional()
-  @IsEnum(TelegramAdvertiserLifecycleStage)
-  lifecycleStage?: TelegramAdvertiserLifecycleStage;
-  @IsOptional() @IsString() ownerMemberId?: string;
-  @IsOptional()
-  @Transform(({ value }) => (value === true || value === 'true' ? true : value === false || value === 'false' ? false : value))
-  @IsBoolean()
-  archived?: boolean;
+  @IsOptional() @IsString() advertiserId?: string;
 }
 
 export class TelegramAdvertiserSearchDto {
@@ -482,11 +523,21 @@ export class CreateTelegramAdSalePlacementDto {
   @IsOptional()
   @IsEnum(TelegramAdPricingMode)
   pricingMode?: TelegramAdPricingMode;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) quotedCpm?: number | null;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) agreedPrice?: number | null;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) expectedViews?: number | null;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) recommendedPrice?: number | null;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minimumPrice?: number | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) quotedCpm?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) agreedPrice?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) expectedViews?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) recommendedPrice?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minimumPrice?:
+    | number
+    | null;
   @IsOptional()
   @Transform(normalizeCurrency)
   @IsString()
@@ -496,6 +547,7 @@ export class CreateTelegramAdSalePlacementDto {
 }
 
 export class UpdateTelegramAdSalePlacementDto {
+  @IsOptional() @IsString() telegramAdProductId?: string | null;
   @IsOptional() @IsDateString() scheduledAt?: string;
   @IsOptional() @IsString() timezone?: string;
   @IsOptional()
@@ -509,7 +561,9 @@ export class UpdateTelegramAdSalePlacementDto {
   @Min(0)
   recommendedPrice?: number;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minimumPrice?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) quotedCpm?: number | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) quotedCpm?:
+    | number
+    | null;
   @IsOptional()
   @Transform(normalizeCurrency)
   @IsString()
@@ -560,6 +614,11 @@ export class CreateTelegramAdSaleCheckoutPlacementDto extends CreateTelegramAdSa
   @Matches(/^[A-Z]{3}$/)
   declare currency: string;
   @IsOptional() @IsString() telegramPostId?: string | null;
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => CreatePlacementManagedPostDto)
+  managedPostDraft?: CreatePlacementManagedPostDto | null;
 }
 
 export class TelegramAdSaleCheckoutPriceAllocationDto {
@@ -616,28 +675,25 @@ export class CreatePlacementManagedPostDto {
   @IsOptional() @IsString() icon?: string | null;
   @IsOptional()
   @IsArray()
-  @Transform(({ value }) => (Array.isArray(value) ? value.map((row) => (Array.isArray(row) ? { buttons: row } : row)) : value))
   @ValidateNested({ each: true })
-  @Type(() => TelegramAdSalesManagedPostButtonRowDto)
-  buttonRows?: TelegramAdSalesManagedPostButtonRowDto[];
+  @Type(() => TelegramAdSalesManagedPostButtonDto)
+  buttonRows?: TelegramAdSalesManagedPostButtonDto[][];
 }
 
 class TelegramAdSalesManagedPostButtonDto {
   @IsString() text!: string;
   @IsString() @Matches(/^(https?|tg):\/\//i) url!: string;
-  @IsIn(['default', 'primary', 'success', 'danger']) style!: 'default' | 'primary' | 'success' | 'danger';
-}
-
-class TelegramAdSalesManagedPostButtonRowDto {
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => TelegramAdSalesManagedPostButtonDto)
-  buttons!: TelegramAdSalesManagedPostButtonDto[];
+  @IsIn(['default', 'primary', 'success', 'danger']) style!:
+    | 'default'
+    | 'primary'
+    | 'success'
+    | 'danger';
 }
 
 export class AttachPlacementManagedPostDto {
   @IsOptional() @IsString() managedPostId?: string;
   @IsOptional() @IsString() telegramPostId?: string;
+  @IsOptional() @IsString() telegramPostUrl?: string;
 }
 
 export class SchedulePlacementDto {
@@ -723,9 +779,15 @@ export class TelegramAdSalesBulkDefaultsDto extends TelegramAdSalesBulkAdvertise
   @IsOptional()
   @IsEnum(TelegramAdPricingMode)
   pricingMode?: TelegramAdPricingMode;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0) expectedViews?: number | null;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) recommendedPrice?: number | null;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minimumPrice?: number | null;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) expectedViews?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) recommendedPrice?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minimumPrice?:
+    | number
+    | null;
   @IsOptional() @IsString() manualPriceReason?: string | null;
   @Transform(normalizeCurrency)
   @IsString()
@@ -745,9 +807,15 @@ export class TelegramAdSalesBulkChannelOverrideDto {
   @IsOptional()
   @IsEnum(TelegramAdPricingMode)
   pricingMode?: TelegramAdPricingMode;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0) expectedViews?: number | null;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) recommendedPrice?: number | null;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minimumPrice?: number | null;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) expectedViews?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) recommendedPrice?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minimumPrice?:
+    | number
+    | null;
   @IsOptional() @IsString() manualPriceReason?: string | null;
 }
 
@@ -758,7 +826,9 @@ export class TelegramAdSalesBulkRowDto {
   @ValidateNested()
   @Type(() => TelegramAdSalesBulkAdvertiserDto)
   advertiserOverride?: TelegramAdSalesBulkAdvertiserDto | null;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) agreedPriceOverride?: number | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) agreedPriceOverride?:
+    | number
+    | null;
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(500)

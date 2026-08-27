@@ -148,6 +148,8 @@ describe('FinanceBotService chat UX', () => {
       consumeCallback: jest.fn(),
       currencyKeyboard: jest.fn(),
       activeAccounts: jest.fn(),
+      expectsIcon: jest.fn().mockResolvedValue(false),
+      consumeIcon: jest.fn().mockResolvedValue(null),
       startTransfer: jest.fn(),
       startTransaction: jest.fn(),
       bindMessage: jest.fn().mockResolvedValue(undefined),
@@ -158,6 +160,10 @@ describe('FinanceBotService chat UX', () => {
     };
     const browserLogin = {
       handle: jest.fn().mockResolvedValue(false),
+    };
+    const iconInput = {
+      text: jest.fn().mockReturnValue(null),
+      consume: jest.fn().mockResolvedValue({ handled: false }),
     };
     const instance = new FinanceBotService(
       users as any,
@@ -172,6 +178,7 @@ describe('FinanceBotService chat UX', () => {
       chat as any,
       flows as any,
       browserLogin as any,
+      iconInput as any,
       flowPresenter as any,
     );
     return {

@@ -18,29 +18,32 @@ import {
 import {
   allocateTelegramAdSalesTotalPrice,
   type TelegramAdSale,
+  type TelegramAdSaleCheckoutWorkflowResponse,
 } from '@telegram-system/shared';
 import { CurrencyConversionService } from '../../../common/currency-conversion.service';
 import { ResponseCacheService } from '../../../common/response-cache.service';
+import { runBounded } from '../../../common/run-bounded';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { FinanceCategoriesService } from '../../finance/finance-categories/finance-categories.service';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
+import { notifyScheduledTaskDueWorkChanged } from '../../operations/scheduled-tasks/scheduled-task-wake-notifier';
 import { decimal, decimalOrNull } from './domain/decimal';
-import { utcDateKey } from './domain/timezone';
+import { calculateAdPlacementDeleteAt } from './domain/sales-text';
 import {
   CreateTelegramAdSaleCheckoutDto,
   CreateTelegramAdSaleCheckoutPaymentDto,
 } from './dto';
-import {
-  assertTelegramAdPlacementConflictFree,
-  telegramAdSalesAdvisoryLockKey,
-} from './telegram-ad-sales-reservation';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
 
 type CheckoutProduct = Prisma.TelegramAdProductGetPayload<
   Record<string, never>
 >;
-type CheckoutPost = { id: string; telegramChannelId: string };
+type CheckoutPost = {
+  id: string;
+  telegramChannelId: string;
+  postDate: Date;
+};
 type CheckoutNetwork = Prisma.TelegramChannelNetworkGetPayload<{
   include: { channels: { select: { telegramChannelId: true } } };
 }>;
@@ -89,6 +92,162 @@ export class TelegramAdSalesCheckoutService {
       financeSkipped: false,
       payment: dto.payment,
     });
+  }
+
+  async createWorkflow(
+    userId: string,
+    dto: CreateTelegramAdSaleCheckoutDto,
+    onProgress?: (
+      item: { operation: string; message: string; placementId?: string },
+      current: number,
+      total: number,
+    ) => void,
+  ): Promise<TelegramAdSaleCheckoutWorkflowResponse> {
+    const total =
+      1 +
+      dto.placements.filter((placement) => placement.managedPostDraft).length *
+        2;
+    let current = 0;
+    const report = (item: {
+      operation: string;
+      message: string;
+      placementId?: string;
+    }) => onProgress?.(item, ++current, total);
+    const sale = await this.create(userId, dto);
+    report({ operation: 'CREATE_SALE', message: 'Sale and placements saved' });
+    const placementByTarget = new Map(
+      sale.placements.map((placement) => [
+        `${placement.telegramChannelId}:${placement.scheduledAt}`,
+        placement,
+      ]),
+    );
+    const failures: TelegramAdSaleCheckoutWorkflowResponse['failures'] = [];
+    const schedulePlacementIds: string[] = [];
+    let successful = 1;
+    let skipped = 0;
+
+    await runBounded(dto.placements, 4, async (input) => {
+      const managedPostDraft = input.managedPostDraft;
+      if (!managedPostDraft) return;
+      const placement = placementByTarget.get(
+        `${input.telegramChannelId}:${input.scheduledAt}`,
+      );
+      if (!placement) {
+        failures.push({
+          placementId: '',
+          channelId: input.telegramChannelId,
+          operation: 'CREATE_POST',
+          message: 'Reserved placement could not be matched',
+        });
+        skipped += 1;
+        report({ operation: 'CREATE_POST', message: 'Post creation skipped' });
+        report({ operation: 'SCHEDULE_POST', message: 'Scheduling skipped' });
+        return;
+      }
+      if (placement.managedPostId) {
+        skipped += 1;
+        report({
+          operation: 'CREATE_POST',
+          placementId: placement.id,
+          message: 'Post already exists',
+        });
+        if (!['SCHEDULED', 'PUBLISHED'].includes(placement.status)) {
+          schedulePlacementIds.push(placement.id);
+        } else {
+          report({
+            operation: 'SCHEDULE_POST',
+            placementId: placement.id,
+            message: 'Post already scheduled',
+          });
+        }
+        return;
+      }
+      try {
+        await this.salesService.createManagedPostFromPlacement(
+          userId,
+          sale.id,
+          placement.id,
+          {
+            ...managedPostDraft,
+            buttonRows: managedPostDraft.buttonRows ?? [],
+          },
+        );
+        successful += 1;
+        schedulePlacementIds.push(placement.id);
+        report({
+          operation: 'CREATE_POST',
+          placementId: placement.id,
+          message: 'Advertising post created',
+        });
+      } catch (error) {
+        failures.push({
+          placementId: placement.id,
+          channelId: input.telegramChannelId,
+          operation: 'CREATE_POST',
+          message:
+            error instanceof Error ? error.message : 'Could not create post',
+        });
+        skipped += 1;
+        report({
+          operation: 'CREATE_POST',
+          placementId: placement.id,
+          message: 'Post creation failed',
+        });
+        report({
+          operation: 'SCHEDULE_POST',
+          placementId: placement.id,
+          message: 'Scheduling skipped',
+        });
+      }
+    });
+    if (schedulePlacementIds.length) {
+      const scheduled = await this.salesService.scheduleSale(userId, sale.id, {
+        placements: schedulePlacementIds.map((placementId) => ({
+          placementId,
+        })),
+      });
+      for (const result of scheduled.results) {
+        const placement = sale.placements.find(
+          (item) => item.id === result.placementId,
+        );
+        if (result.success) {
+          successful += 1;
+          report({
+            operation: 'SCHEDULE_POST',
+            placementId: String(result.placementId),
+            message: 'Post scheduled',
+          });
+          continue;
+        }
+        failures.push({
+          placementId: String(result.placementId),
+          channelId: placement?.telegramChannelId ?? '',
+          operation: 'SCHEDULE_POST',
+          message:
+            typeof result.error === 'string'
+              ? result.error
+              : 'Could not schedule post',
+        });
+        report({
+          operation: 'SCHEDULE_POST',
+          placementId: String(result.placementId),
+          message: 'Post scheduling failed',
+        });
+      }
+    }
+    return {
+      sale: (await this.salesService.getSale(
+        userId,
+        sale.id,
+      )) as TelegramAdSale,
+      summary: {
+        total,
+        successful,
+        failed: failures.length,
+        skipped,
+      },
+      failures,
+    };
   }
 
   async reserveWithoutPayment(
@@ -169,7 +328,7 @@ export class TelegramAdSalesCheckoutService {
     const postsPromise: Promise<CheckoutPost[]> = postIds.length
       ? this.prisma.telegramPost.findMany({
           where: { id: { in: postIds }, workspaceId },
-          select: { id: true, telegramChannelId: true },
+          select: { id: true, telegramChannelId: true, postDate: true },
         })
       : Promise.resolve([]);
     const networksPromise: Promise<CheckoutNetwork[]> = networkIds.length
@@ -282,18 +441,14 @@ export class TelegramAdSalesCheckoutService {
           'Payment amount must equal the total placement price',
         );
       }
-      const audienceByChannelId = new Map(
-        channels.map((channel) => [
-          channel.id,
-          channel.currentSubscribersCount ?? 0,
-        ]),
-      );
       try {
         agreedPrices = allocateTelegramAdSalesTotalPrice(
           dto.priceAllocation.totalAmount,
           dto.placements.map((placement, index) => ({
             key: `${placement.telegramChannelId}:${index}`,
-            weight: audienceByChannelId.get(placement.telegramChannelId) ?? 0,
+            // recommendedPrice is the quote value after expected views and CPM
+            // (or fixed pricing) have both been applied.
+            weight: placement.recommendedPrice,
           })),
         ).map((share) => share.amount);
       } catch (error) {
@@ -396,6 +551,17 @@ export class TelegramAdSalesCheckoutService {
           ? productById.get(input.telegramAdProductId)
           : null;
         const scheduledAt = new Date(input.scheduledAt);
+        const linkedPublishedAt = input.telegramPostId
+          ? (postById.get(input.telegramPostId)?.postDate ?? null)
+          : null;
+        const plannedDeleteAt = linkedPublishedAt
+          ? calculateAdPlacementDeleteAt({
+              scheduledAt,
+              publishedAt: linkedPublishedAt,
+              deleteAfterHoursSnapshot: product?.deleteAfterHours ?? null,
+              isPermanentSnapshot: product?.isPermanent ?? false,
+            })
+          : null;
         const placement = await tx.telegramAdSalePlacement.create({
           data: {
             workspaceId,
@@ -405,7 +571,9 @@ export class TelegramAdSalesCheckoutService {
             telegramAdProductId: product?.id ?? null,
             inventoryOpportunityKey:
               input.inventoryOpportunityKey?.trim() || null,
-            status: TelegramAdPlacementStatus.DRAFT,
+            status: linkedPublishedAt
+              ? TelegramAdPlacementStatus.PUBLISHED
+              : TelegramAdPlacementStatus.DRAFT,
             scheduledAt,
             timezone: input.timezone,
             pricingMode:
@@ -427,23 +595,17 @@ export class TelegramAdSalesCheckoutService {
             isPermanentSnapshot: product?.isPermanent ?? false,
             manualPriceReason: input.manualPriceReason?.trim() || null,
             telegramPostId: input.telegramPostId ?? null,
+            publishedAt: linkedPublishedAt,
+            plannedDeleteAt,
           },
-        });
-        const lockKey = telegramAdSalesAdvisoryLockKey(
-          input.telegramChannelId,
-          utcDateKey(scheduledAt, input.timezone),
-        );
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
-        await assertTelegramAdPlacementConflictFree(tx, {
-          workspaceId,
-          placementId: placement.id,
-          channelId: input.telegramChannelId,
-          scheduledAt,
-          logger: this.logger,
         });
         await tx.telegramAdSalePlacement.update({
           where: { id: placement.id },
-          data: { status: TelegramAdPlacementStatus.RESERVED },
+          data: {
+            status: linkedPublishedAt
+              ? TelegramAdPlacementStatus.PUBLISHED
+              : TelegramAdPlacementStatus.RESERVED,
+          },
         });
         createdPlacements.push(placement);
       }
@@ -515,6 +677,9 @@ export class TelegramAdSalesCheckoutService {
     this.responseCache.clearByPrefix(
       `telegram-ad-sales:availability:${workspaceId}:`,
     );
+    if (postIds.length) {
+      notifyScheduledTaskDueWorkChanged('telegram_ad_sales.due_deletions');
+    }
     return (await this.salesService.getSale(userId, saleId)) as TelegramAdSale;
   }
 

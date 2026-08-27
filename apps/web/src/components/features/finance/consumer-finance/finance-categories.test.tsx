@@ -24,14 +24,14 @@ const category: ConsumerFinanceCategory = {
   archivedAt: null,
 };
 
-function renderCategories() {
+function renderCategories(locale: "en" | "uk" = "en") {
   return render(
     <QueryClientProvider
       client={
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      <FinanceCategories botId="bot" locale="en" />
+      <FinanceCategories botId="bot" locale={locale} />
     </QueryClientProvider>,
   );
 }
@@ -81,6 +81,19 @@ describe("FinanceCategories CRUD", () => {
       type: "EXPENSE",
       parentId: null,
     });
+  });
+
+  it("uses the shared localized icon picker with a populated emoji grid", async () => {
+    renderCategories("uk");
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Редагувати категорію: Coffee" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Змінити емодзі" }));
+
+    expect(await screen.findByRole("button", { name: "Люди" })).toBeInTheDocument();
+    expect(await screen.findByTitle("alien")).toHaveTextContent("👽");
+    expect(screen.queryByText("People")).not.toBeInTheDocument();
   });
 
   it("archives only after typed confirmation", async () => {

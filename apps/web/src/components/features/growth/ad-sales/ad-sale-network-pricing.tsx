@@ -8,7 +8,6 @@ import {
   type SetStateAction,
 } from "react";
 import { allocateTelegramAdSalesTotalPrice } from "@telegram-system/shared";
-import type { TelegramChannel } from "@/lib/api";
 import { Button, FormField, Input } from "@/components/ui/primitives";
 import { toNumber } from "@/lib/features/growth/telegram-ad-sales";
 import type { SalePlacementDraft } from "./ad-sale-types";
@@ -20,12 +19,10 @@ export type AdSalePriceAllocation = {
 
 export function useAdSaleNetworkPricing({
   open,
-  channels,
   placements,
   setPlacements,
 }: {
   open: boolean;
-  channels: TelegramChannel[];
   placements: SalePlacementDraft[];
   setPlacements: Dispatch<SetStateAction<SalePlacementDraft[]>>;
 }) {
@@ -43,6 +40,8 @@ export function useAdSaleNetworkPricing({
 
   useEffect(() => {
     if (!open) return;
+    // Reset the form-owned pricing session whenever the parent modal opens.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMode("total");
     setTotalPrice("");
     setTotalEdited(false);
@@ -50,6 +49,8 @@ export function useAdSaleNetworkPricing({
 
   useEffect(() => {
     if (mode !== "total" || totalEdited || recommendedTotal <= 0) return;
+    // Keep the untouched total synchronized with asynchronously loaded quotes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTotalPrice(String(Number(recommendedTotal.toFixed(2))));
   }, [mode, recommendedTotal, totalEdited]);
 
@@ -57,20 +58,15 @@ export function useAdSaleNetworkPricing({
     const total = toNumber(totalPrice);
     if (mode !== "total" || total <= 0 || !placements.length) return;
     try {
-      const audienceByChannelId = new Map(
-        channels.map((channel) => [
-          channel.id,
-          channel.currentSubscribersCount ??
-            channel.preview?.audience?.subscribersCount ??
-            0,
-        ]),
-      );
       const shares = new Map(
         allocateTelegramAdSalesTotalPrice(
           total,
           placements.map((placement) => ({
             key: placement.key,
-            weight: audienceByChannelId.get(placement.channelId) ?? 0,
+            // The quote already combines expected views with the channel/product
+            // CPM (or its fixed-price equivalent), so it is the correct value
+            // weight for a discounted network total.
+            weight: toNumber(placement.recommendedPrice),
           })),
         ).map((share) => [share.key, share.amount] as const),
       );
@@ -92,7 +88,7 @@ export function useAdSaleNetworkPricing({
     } catch {
       // Validation is shown below and the server remains authoritative.
     }
-  }, [channels, mode, placements, setPlacements, totalPrice]);
+  }, [mode, placements, setPlacements, totalPrice]);
 
   const allocatedTotal = placements.reduce(
     (sum, placement) => sum + toNumber(placement.agreedPrice),
@@ -140,34 +136,44 @@ export function AdSaleNetworkPricing({
   const exact =
     Math.round(toNumber(totalPrice) * 100) === Math.round(allocatedTotal * 100);
   return (
-    <section className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <section className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-sm font-medium text-white">Network sale price</p>
-          <p className="mt-1 text-xs text-neutral-400">
-            Split proportionally by current channel audience; residual cents are
-            reconciled automatically.
+          <p className="text-xs text-neutral-400">
+            The total is split by each placement&apos;s expected value (views ×
+            CPM).
           </p>
         </div>
-        <div className="inline-grid grid-cols-2 rounded-lg border border-neutral-700 bg-neutral-950 p-0.5">
-          <Button
+        <div className="inline-grid shrink-0 grid-cols-2 rounded-md border border-neutral-700 bg-neutral-950 p-px">
+          <button
             type="button"
-            variant={mode === "total" ? "primary" : "secondary"}
+            aria-pressed={mode === "total"}
+            className={`h-6 rounded-[5px] px-2 text-[11px] font-medium leading-none transition ${
+              mode === "total"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
+            }`}
             onClick={() => onModeChange("total")}
           >
             One total
-          </Button>
-          <Button
+          </button>
+          <button
             type="button"
-            variant={mode === "per-placement" ? "primary" : "secondary"}
+            aria-pressed={mode === "per-placement"}
+            className={`h-6 rounded-[5px] px-2 text-[11px] font-medium leading-none transition ${
+              mode === "per-placement"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
+            }`}
             onClick={() => onModeChange("per-placement")}
           >
             Per channel
-          </Button>
+          </button>
         </div>
       </div>
       {mode === "total" ? (
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <div className="mt-2 grid gap-3 sm:grid-cols-3">
           <FormField label="Sold total" required>
             <Input
               value={totalPrice}

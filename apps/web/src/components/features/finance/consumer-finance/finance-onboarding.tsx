@@ -13,8 +13,7 @@ import {
   financeTimezoneLabel,
   financeTimezoneOptions,
 } from "./finance-timezones";
-
-const currencies = ["UAH", "USD", "EUR", "PLN"];
+import { FinanceCurrencySelect } from "./ui/finance-currency-select";
 
 export function FinanceOnboarding({
   profile,
@@ -96,15 +95,11 @@ export function FinanceOnboarding({
             </Select>
           </FormField>
           <FormField label={t.mainCurrency}>
-            <Select
-              uiLocale={locale}
+            <FinanceCurrencySelect
+              locale={locale}
               value={currency}
-              onChange={(event) => setCurrency(event.target.value)}
-            >
-              {currencies.map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </Select>
+              onChange={setCurrency}
+            />
           </FormField>
           <FormField label={t.onboardingTimezone}>
             <Select

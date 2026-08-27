@@ -1,4 +1,6 @@
 import type { ResolvedEmoji } from '@telegram-system/shared';
+import { storedTelegramIconPresentation } from '../../../../telegram/shared/telegram-bot-icon-source';
+import { renderTelegramCustomEmojiToken } from '../../../../telegram/shared/telegram-custom-emoji-markup';
 
 export const FINANCE_EMOJI_CHOICES = [
   '💵',
@@ -50,5 +52,18 @@ export function financeIconPresentation(
   emoji: string | null | undefined,
   fallback: string,
 ): ResolvedEmoji {
-  return { type: 'unicode', value: emoji || fallback };
+  return storedTelegramIconPresentation(emoji, fallback);
+}
+
+export function financeStoredIconSource(
+  presentation: ResolvedEmoji | null | undefined,
+) {
+  if (!presentation) return null;
+  if (presentation.type === 'image') return `image:${presentation.url}`;
+  return presentation.telegramCustomEmojiId
+    ? renderTelegramCustomEmojiToken(
+        presentation.value,
+        presentation.telegramCustomEmojiId,
+      )
+    : presentation.value;
 }

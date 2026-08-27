@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDateWithWeekday } from "@/lib/date-format";
+
 import { useMemo } from "react";
 import type {
   TelegramAdAvailabilitySlot,
@@ -7,23 +9,17 @@ import type {
 } from "@telegram-system/shared";
 import { CalendarSlotCard } from "@/components/features/growth/ad-sales/calendar-slot-card";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
-import { Card, FormField, Select, Skeleton } from "@/components/ui/primitives";
+import { Skeleton } from "@/components/ui/primitives";
 import type { CurrencySettings, TelegramChannel } from "@/lib/api";
 import {
   buildAdCalendarSlots,
   channelLocalDateKey,
-  channelLocalTime,
   toNumber,
 } from "@/lib/features/growth/telegram-ad-sales";
 import { formatMoney } from "@/lib/features/finance/money";
 
 const adSalesPanelClass =
   "rounded-[22px] border border-neutral-800 bg-[#171717]";
-const adSalesSoftPanelClass =
-  "rounded-[18px] border border-neutral-800 bg-[#111111]";
-
-type SlotsLayoutView = "calendar" | "list";
-
 function dateKey(value: Date) {
   return channelLocalDateKey(value);
 }
@@ -36,11 +32,26 @@ export function formatCalendarTransactionMoney(
   return formatMoney(amount, currency, settings?.currencyDisplayMode ?? "code");
 }
 
+export function groupCalendarSoldSlotsBySale<
+  T extends {
+    slot: { existingPlacement?: { saleId: string } | null };
+  },
+>(entries: T[]) {
+  const grouped = new Map<string, T[]>();
+  for (const entry of entries) {
+    const saleId = entry.slot.existingPlacement?.saleId;
+    if (!saleId) continue;
+    grouped.set(saleId, [...(grouped.get(saleId) ?? []), entry]);
+  }
+  return Array.from(grouped, ([saleId, saleEntries]) => ({
+    saleId,
+    entries: saleEntries,
+  }));
+}
+
 export function CalendarTab(props: {
   loadingChannelIds: string[];
   failedChannelIds: string[];
-  calendarView: SlotsLayoutView;
-  onCalendarViewChange: (value: SlotsLayoutView) => void;
   calendarRangeMode: "week" | "month" | "threeMonths";
   calendarCursor: Date;
   calendarFrom: Date;
@@ -48,10 +59,6 @@ export function CalendarTab(props: {
   calendarDays: Date[];
   channels: TelegramChannel[];
   selectedChannelIds: string[];
-  statusFilter: string;
-  onStatusFilterChange: (value: string) => void;
-  slotVisibility: "all" | "free" | "busy";
-  onSlotVisibilityChange: (value: "all" | "free" | "busy") => void;
   filteredSlots: ReturnType<typeof buildAdCalendarSlots>;
   sales: TelegramAdSale[];
   daySummaries: Array<{
@@ -66,6 +73,7 @@ export function CalendarTab(props: {
   onCreateFromSlot: (slot: TelegramAdAvailabilitySlot) => void;
   onOpenSale: (saleId: string) => void;
 }) {
+  const { filteredSlots } = props;
   const loadingChannelIds = useMemo(
     () => new Set(props.loadingChannelIds),
     [props.loadingChannelIds],
@@ -75,15 +83,15 @@ export function CalendarTab(props: {
     [props.failedChannelIds],
   );
   const slotsByChannelDay = useMemo(() => {
-    const grouped = new Map<string, typeof props.filteredSlots>();
-    for (const slot of props.filteredSlots) {
+    const grouped = new Map<string, typeof filteredSlots>();
+    for (const slot of filteredSlots) {
       const key = `${slot.channelId}:${slot.date}`;
       const current = grouped.get(key) ?? [];
       current.push(slot);
       grouped.set(key, current);
     }
     return grouped;
-  }, [props.filteredSlots]);
+  }, [filteredSlots]);
 
   const daySummariesByChannelDay = useMemo(() => {
     const grouped = new Map<
@@ -112,24 +120,6 @@ export function CalendarTab(props: {
     [props.channels, props.selectedChannelIds],
   );
   const todayKey = channelLocalDateKey(new Date());
-  const futureSlotsByChannel = useMemo(() => {
-    const grouped = new Map<string, typeof props.filteredSlots>();
-    for (const slot of props.filteredSlots) {
-      if (slot.date < todayKey) continue;
-      const current = grouped.get(slot.channelId) ?? [];
-      current.push(slot);
-      grouped.set(slot.channelId, current);
-    }
-    for (const slots of grouped.values()) {
-      slots.sort(
-        (left, right) =>
-          new Date(left.scheduledAt).getTime() -
-          new Date(right.scheduledAt).getTime(),
-      );
-    }
-    return grouped;
-  }, [props.filteredSlots, todayKey]);
-
   const saleById = useMemo(
     () => new Map(props.sales.map((sale) => [sale.id, sale])),
     [props.sales],
@@ -177,7 +167,8 @@ export function CalendarTab(props: {
       sale,
       placement,
       price: toNumber(placement?.agreedPrice),
-      currency: sale?.settlementCurrency || placement?.currency || slot.currency,
+      currency:
+        sale?.settlementCurrency || placement?.currency || slot.currency,
     };
   };
   const summarizeRevenue = (slots: ReturnType<typeof buildAdCalendarSlots>) => {
@@ -224,71 +215,7 @@ export function CalendarTab(props: {
 
   return (
     <div className="space-y-5">
-      <Card className={adSalesPanelClass}>
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_180px]">
-          <FormField label="Status">
-            <Select
-              value={props.statusFilter}
-              onChange={(event) =>
-                props.onStatusFilterChange(event.target.value)
-              }
-            >
-              <option value="">All states</option>
-              <option value="AVAILABLE" className="text-emerald-300">
-                ● Available
-              </option>
-              <option value="RESERVED" className="text-amber-300">
-                ● Reserved
-              </option>
-              <option value="SOLD" className="text-blue-300">
-                ● Sold
-              </option>
-              <option value="BLOCKED_BY_POLICY" className="text-rose-300">
-                ● Blocked
-              </option>
-              <option
-                value="CONFLICT_WITH_ORGANIC_POST"
-                className="text-orange-300"
-              >
-                ● Conflict
-              </option>
-              <option value="PAST" className="text-neutral-400">
-                ● Past
-              </option>
-            </Select>
-          </FormField>
-          <FormField label="Visibility">
-            <Select
-              value={props.slotVisibility}
-              onChange={(event) =>
-                props.onSlotVisibilityChange(
-                  event.target.value as "all" | "free" | "busy",
-                )
-              }
-            >
-              <option value="all">All</option>
-              <option value="free">Only free</option>
-              <option value="busy">Only busy</option>
-            </Select>
-          </FormField>
-          <FormField label="Layout">
-            <Select
-              value={props.calendarView}
-              onChange={(event) =>
-                props.onCalendarViewChange(
-                  event.target.value as "calendar" | "list",
-                )
-              }
-            >
-              <option value="calendar">Calendar</option>
-              <option value="list">List</option>
-            </Select>
-          </FormField>
-        </div>
-      </Card>
-
-      {props.calendarView === "calendar" &&
-      props.calendarRangeMode !== "week" ? (
+      {props.calendarRangeMode !== "week" ? (
         <div className={adSalesPanelClass}>
           <div className="overflow-hidden rounded-xl border border-slate-800/80">
             <div className="grid grid-cols-7 border-b border-slate-800/80 bg-[#09111e]">
@@ -319,6 +246,7 @@ export function CalendarTab(props: {
                 const soldSlots = daySlots.filter(({ slot }) =>
                   Boolean(slot.existingPlacement),
                 );
+                const soldDeals = groupCalendarSoldSlotsBySale(soldSlots);
                 const addSlotChannel = visibleChannels[0] ?? null;
                 const revenue = summarizeRevenue(
                   soldSlots.map(({ slot }) => slot),
@@ -363,48 +291,67 @@ export function CalendarTab(props: {
                       ) : null}
                     </div>
                     <div className="space-y-1">
-                      {soldSlots.slice(0, 3).map(({ channel, slot }) => {
-                        const details = placementDetailsForSlot(slot);
+                      {soldDeals.slice(0, 3).map((deal) => {
+                        const firstEntry = deal.entries[0];
+                        const details = placementDetailsForSlot(
+                          firstEntry.slot,
+                        );
+                        const dealRevenue = summarizeRevenue(
+                          deal.entries.map(({ slot }) => slot),
+                        );
+                        const dealChannels = Array.from(
+                          new Map(
+                            deal.entries.map(({ channel }) => [
+                              channel.id,
+                              channel,
+                            ]),
+                          ).values(),
+                        );
+                        const dealLabel =
+                          details.sale?.advertiserName ||
+                          details.sale?.title ||
+                          "Direct sale";
                         return (
                           <button
-                            key={`${channel.id}:${slot.id}`}
+                            key={deal.saleId}
                             type="button"
-                            disabled={!slot.existingPlacement?.saleId}
-                            onClick={() => {
-                              if (slot.existingPlacement?.saleId) {
-                                props.onOpenSale(slot.existingPlacement.saleId);
-                              }
-                            }}
-                            title={`${channel.title} · ${details.sale?.advertiserName || "Ad placement"} · ${formatCalendarTransactionMoney(details.price, details.currency, props.settings)}`}
+                            onClick={() => props.onOpenSale(deal.saleId)}
+                            title={`${dealLabel} · ${deal.entries.length} placement${deal.entries.length === 1 ? "" : "s"} · ${dealRevenue.map((item) => item.label).join(" · ")}`}
                             className="flex w-full items-center gap-1.5 rounded-md border border-sky-800/70 bg-sky-950/20 px-1.5 py-1 text-left text-[10px] font-medium text-sky-100 transition hover:border-sky-500"
                           >
-                            <TelegramEntityAvatar
-                              imageUrl={channel.photoUrl}
-                              kind="channel"
-                              alt={channel.title}
-                              size="xs"
-                            />
-                            <span className="min-w-0 truncate">
-                              {details.sale?.advertiserName || channel.title}
+                            <span className="flex shrink-0 -space-x-1">
+                              {dealChannels.slice(0, 2).map((channel) => (
+                                <TelegramEntityAvatar
+                                  key={channel.id}
+                                  imageUrl={channel.photoUrl}
+                                  kind="channel"
+                                  alt={channel.title}
+                                  size="xs"
+                                />
+                              ))}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate">
+                              {dealLabel}
+                              {deal.entries.length > 1
+                                ? ` · ${deal.entries.length}`
+                                : ""}
                             </span>
                             <span className="ml-auto shrink-0 text-[9px] opacity-80">
-                              {formatCalendarTransactionMoney(details.price, details.currency, props.settings)}
+                              {dealRevenue
+                                .map((item) => item.label)
+                                .join(" · ")}
                             </span>
                           </button>
                         );
                       })}
-                      {soldSlots.length > 3 ? (
+                      {soldDeals.length > 3 ? (
                         <button
                           type="button"
-                          onClick={() =>
-                            soldSlots[3]?.slot.existingPlacement?.saleId &&
-                            props.onOpenSale(
-                              soldSlots[3].slot.existingPlacement.saleId,
-                            )
-                          }
+                          onClick={() => props.onOpenSale(soldDeals[3].saleId)}
                           className="w-full rounded-md border border-neutral-800 bg-neutral-950/70 px-2 py-1 text-left text-[10px] font-medium text-neutral-300 transition hover:border-neutral-600"
                         >
-                          +{soldSlots.length - 3} more sold
+                          +{soldDeals.length - 3} more deal
+                          {soldDeals.length - 3 === 1 ? "" : "s"}
                         </button>
                       ) : null}
                       {props.loadingChannelIds.length ? (
@@ -419,8 +366,7 @@ export function CalendarTab(props: {
         </div>
       ) : null}
 
-      {props.calendarView === "calendar" &&
-      props.calendarRangeMode === "week" ? (
+      {props.calendarRangeMode === "week" ? (
         <div className={adSalesPanelClass}>
           <div className="overflow-x-auto">
             <div className="min-w-max">
@@ -440,11 +386,7 @@ export function CalendarTab(props: {
                     className="border-r border-slate-800/80 px-3 py-2.5 text-sm"
                   >
                     <p className="font-semibold text-white">
-                      {day.toLocaleDateString(undefined, {
-                        weekday: "short",
-                        day: "numeric",
-                        month: "short",
-                      })}
+                      {formatDateWithWeekday(day)}
                     </p>
                   </div>
                 ))}
@@ -542,88 +484,6 @@ export function CalendarTab(props: {
               ))}
             </div>
           </div>
-        </div>
-      ) : null}
-
-      {props.calendarView === "list" ? (
-        <div className="space-y-3">
-          {visibleChannels.map((channel) => {
-            const slots = futureSlotsByChannel.get(channel.id) ?? [];
-            return (
-              <Card key={channel.id} className={adSalesSoftPanelClass}>
-                <div className="flex items-center gap-2">
-                  <TelegramEntityAvatar
-                    imageUrl={channel.photoUrl}
-                    kind="channel"
-                    alt={channel.title}
-                    size="sm"
-                  />
-                  <p className="font-medium text-white">{channel.title}</p>
-                </div>
-                {loadingChannelIds.has(channel.id) ? (
-                  <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                    {Array.from({ length: 3 }, (_, index) => (
-                      <Skeleton key={index} className="h-16 w-full" />
-                    ))}
-                  </div>
-                ) : failedChannelIds.has(channel.id) ? (
-                  <p className="mt-3 text-sm text-rose-300">
-                    Could not load slots.
-                  </p>
-                ) : slots.length ? (
-                  <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                    {slots.slice(0, 6).map((slot) => (
-                      <button
-                        key={slot.id}
-                        type="button"
-                        disabled={
-                          slot.state !== "AVAILABLE" &&
-                          !slot.existingPlacement?.saleId
-                        }
-                        onClick={() => {
-                          if (slot.existingPlacement?.saleId) {
-                            props.onOpenSale(slot.existingPlacement.saleId);
-                            return;
-                          }
-                          if (slot.state === "AVAILABLE")
-                            props.onCreateFromSlot(slot);
-                        }}
-                        className={`rounded-lg border p-3 text-left transition ${
-                          slot.state === "AVAILABLE"
-                            ? "border-emerald-700/60 bg-emerald-950/20 hover:border-emerald-500"
-                            : slot.existingPlacement?.saleId
-                              ? "border-slate-700 bg-slate-950/70 hover:border-slate-500"
-                              : "cursor-default border-neutral-800 bg-neutral-950/60"
-                        }`}
-                      >
-                        <p className="text-sm font-medium text-white">
-                          {new Date(slot.scheduledAt).toLocaleDateString(
-                            undefined,
-                            {
-                              weekday: "short",
-                              day: "numeric",
-                              month: "short",
-                            },
-                          )}
-                          {" · "}
-                          {channelLocalTime(slot.scheduledAt, slot.timezone)}
-                        </p>
-                        <p className="mt-1 text-xs text-neutral-400">
-                          {slot.state === "AVAILABLE"
-                            ? "Add Ad Slot"
-                            : slot.state.replaceAll("_", " ")}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-3 text-sm text-neutral-500">
-                    No upcoming slots for the selected filters.
-                  </p>
-                )}
-              </Card>
-            );
-          })}
         </div>
       ) : null}
     </div>

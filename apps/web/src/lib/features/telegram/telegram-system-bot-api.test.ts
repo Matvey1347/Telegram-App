@@ -43,6 +43,20 @@ describe("telegramSystemBotApi subscriptions", () => {
     );
   });
 
+  it("selects the current website workspace for the connected bot", async () => {
+    const post = vi.fn().mockResolvedValue({ data: { success: true } });
+    const client = createTelegramSystemBotApi({
+      post,
+    } as unknown as AxiosInstance);
+
+    await expect(client.selectCurrentWorkspace()).resolves.toEqual({
+      success: true,
+    });
+    expect(post).toHaveBeenCalledWith(
+      "/telegram/system-bot/connection/workspace",
+    );
+  });
+
   it("updates all subscriptions in a task group with one request", async () => {
     const payload = {
       workspaceId: "workspace-a",

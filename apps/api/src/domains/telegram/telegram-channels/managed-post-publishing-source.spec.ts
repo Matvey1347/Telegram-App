@@ -1,5 +1,8 @@
 import { TelegramSourceType } from '@prisma/client';
-import { selectManagedPostPublishingSource } from './managed-post-publishing-source';
+import {
+  managedPostRequiresBotApi,
+  selectManagedPostPublishingSource,
+} from './managed-post-publishing-source';
 import { isRevokedTelegramSessionError } from '../../../telegram/shared/telegram-session-errors';
 
 const source = (sourceId: string, sourceType: TelegramSourceType) => ({
@@ -56,6 +59,43 @@ describe('selectManagedPostPublishingSource', () => {
         requiresBotApi: true,
       }),
     ).toBeUndefined();
+  });
+});
+
+describe('managedPostRequiresBotApi', () => {
+  it('routes a new advertising post through Bot API before buttons are added', () => {
+    expect(
+      managedPostRequiresBotApi({
+        hasInlineButtons: false,
+        requiresRichMessage: false,
+        isAdvertisingPost: true,
+        existingSourceType: null,
+      }),
+    ).toBe(true);
+  });
+
+  it('does not silently migrate an existing MTProto publication', () => {
+    expect(
+      managedPostRequiresBotApi({
+        hasInlineButtons: false,
+        requiresRichMessage: false,
+        isAdvertisingPost: true,
+        existingSourceType: TelegramSourceType.MTPROTO,
+        hasExistingPublication: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('moves an unpublished advertising post from MTProto scheduling to Bot API', () => {
+    expect(
+      managedPostRequiresBotApi({
+        hasInlineButtons: false,
+        requiresRichMessage: false,
+        isAdvertisingPost: true,
+        existingSourceType: TelegramSourceType.MTPROTO,
+        hasExistingPublication: false,
+      }),
+    ).toBe(true);
   });
 });
 

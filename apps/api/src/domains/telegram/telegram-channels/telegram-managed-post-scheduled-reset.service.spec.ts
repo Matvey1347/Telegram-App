@@ -54,8 +54,12 @@ function scheduledPost(id = 'post-1') {
   };
 }
 
-function harness(options?: { posts?: ReturnType<typeof scheduledPost>[] }) {
+function harness(options?: {
+  posts?: ReturnType<typeof scheduledPost>[];
+  postsAfterSync?: ReturnType<typeof scheduledPost>[];
+}) {
   const posts = options?.posts ?? [scheduledPost()];
+  const postsAfterSync = options?.postsAfterSync ?? posts;
   const updateInputs: Array<{
     where: Record<string, unknown>;
     data: Record<string, unknown>;
@@ -66,7 +70,7 @@ function harness(options?: { posts?: ReturnType<typeof scheduledPost>[] }) {
         .fn()
         .mockImplementation((input: (typeof updateInputs)[number]) => {
           updateInputs.push(input);
-          return Promise.resolve({ count: posts.length });
+          return Promise.resolve({ count: postsAfterSync.length });
         }),
     },
   };
@@ -81,7 +85,7 @@ function harness(options?: { posts?: ReturnType<typeof scheduledPost>[] }) {
       }),
     },
     telegramManagedPost: {
-      findMany: jest.fn().mockResolvedValue(posts),
+      findMany: jest.fn().mockResolvedValue(postsAfterSync),
     },
     $transaction: jest
       .fn()
@@ -116,6 +120,9 @@ function harness(options?: { posts?: ReturnType<typeof scheduledPost>[] }) {
   const groups = {
     normalizePostGroupNumbering: jest.fn().mockResolvedValue(undefined),
   };
+  const remoteSync = {
+    syncManagedPosts: jest.fn().mockResolvedValue({ checked: posts.length }),
+  };
   const service = new TelegramManagedPostScheduledResetService(
     prisma as never,
     mtproto as never,
@@ -123,15 +130,33 @@ function harness(options?: { posts?: ReturnType<typeof scheduledPost>[] }) {
     access as never,
     revisions as never,
     groups as never,
+    remoteSync as never,
   );
-  return { service, prisma, tx, mtproto, revisions, groups, updateInputs };
+  return {
+    service,
+    prisma,
+    tx,
+    mtproto,
+    revisions,
+    groups,
+    remoteSync,
+    updateInputs,
+  };
 }
 
 describe('TelegramManagedPostScheduledResetService', () => {
   it('deletes every remote scheduled message and resets channel posts to clean drafts', async () => {
     const second = { ...scheduledPost('post-2'), groupId: null };
-    const { service, prisma, tx, mtproto, revisions, groups, updateInputs } =
-      harness({ posts: [scheduledPost(), second] });
+    const {
+      service,
+      prisma,
+      tx,
+      mtproto,
+      revisions,
+      groups,
+      remoteSync,
+      updateInputs,
+    } = harness({ posts: [scheduledPost(), second] });
 
     const result = await service.resetChannelScheduledPosts(
       'user-1',
@@ -146,6 +171,10 @@ describe('TelegramManagedPostScheduledResetService', () => {
           isActive: true,
         },
       }),
+    );
+    expect(remoteSync.syncManagedPosts).toHaveBeenCalledWith(
+      'user-1',
+      'channel-1',
     );
     expect(mtproto.deleteScheduledPost).toHaveBeenCalledWith(
       expect.objectContaining({ messageIds: ['101', '102'] }),
@@ -191,6 +220,31 @@ describe('TelegramManagedPostScheduledResetService', () => {
       postsReturnedToDraftCount: 2,
       postIds: ['post-1', 'post-2'],
     });
+  });
+
+  it('reconciles Telegram first and preserves posts that became published', async () => {
+    const stillScheduled = scheduledPost('post-2');
+    const { service, prisma, revisions, updateInputs } = harness({
+      posts: [scheduledPost(), stillScheduled],
+      postsAfterSync: [stillScheduled],
+    });
+
+    const result = await service.resetChannelScheduledPosts(
+      'user-1',
+      'channel-1',
+    );
+
+    expect(prisma.telegramManagedPost.findMany).toHaveBeenCalledTimes(1);
+    expect(revisions.createManagedPostRevisions).toHaveBeenCalledWith(
+      expect.anything(),
+      [expect.objectContaining({ id: 'post-2' })],
+      'before_channel_scheduled_reset',
+    );
+    expect(updateInputs[0]?.where).toMatchObject({
+      id: { in: ['post-2'] },
+      status: TelegramManagedPostStatus.SCHEDULED,
+    });
+    expect(result.postIds).toEqual(['post-2']);
   });
 
   it('does not change local posts when Telegram cancellation fails', async () => {

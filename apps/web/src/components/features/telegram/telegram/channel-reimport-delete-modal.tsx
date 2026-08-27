@@ -1,0 +1,411 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  ClipboardList,
+  ExternalLink,
+  Folder,
+  LoaderCircle,
+  Trash2,
+} from "lucide-react";
+import { IconAvatar } from "@/components/icons/icon-avatar";
+import { Button, Modal } from "@/components/ui/primitives";
+import { telegramChannelsApi } from "@/lib/api";
+import { telegramPostKeys } from "@/lib/query-keys";
+import { useAppToast } from "@/providers/toast-provider";
+import { ManagedPostsImportSource } from "./managed-posts-import-source";
+import {
+  ChannelImportNavigation,
+  type ChannelImportMode,
+} from "./channel-import-navigation";
+
+export const channelDeletionPrompt = `Prepare a deletion file for the current Telegram channel. Return only one JSON object in this exact shape:
+
+{
+  "postIds": ["managed-post-id"],
+  "groupIds": ["post-group-id"]
+}
+
+Rules and consequences:
+- Use only managed post IDs and post group IDs from the current channel.
+- postIds deletes only the listed managed posts. Other posts and other copies are not deleted.
+- A scheduled post is cancelled in Telegram before its managed record is deleted.
+- Deleting a published managed post does not remove the already published Telegram message.
+- groupIds deletes only the listed group. If a group contains 10 posts, all 10 posts remain and become ungrouped.
+- Posts are processed before groups, so a file may explicitly delete selected posts and then delete their group.
+- Empty arrays are allowed, but at least one ID must be present across both arrays.
+- Do not add comments, Markdown fences, explanations, titles, or IDs that were not provided.`;
+
+export function parseChannelDeletionFile(content: string) {
+  const parsed = JSON.parse(content) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Deletion file must be a JSON object.");
+  }
+  const value = parsed as { postIds?: unknown; groupIds?: unknown };
+  const parseIds = (input: unknown, field: string) => {
+    if (input == null) return [];
+    if (!Array.isArray(input) || input.some((id) => typeof id !== "string")) {
+      throw new Error(`${field} must be an array of IDs.`);
+    }
+    return [...new Set(input.map((id) => id.trim()).filter(Boolean))];
+  };
+  const postIds = parseIds(value.postIds, "postIds");
+  const groupIds = parseIds(value.groupIds, "groupIds");
+  if (!postIds.length && !groupIds.length) {
+    throw new Error("Add at least one postId or groupId.");
+  }
+  return { postIds, groupIds };
+}
+
+export function excludeChannelDeletionItem(
+  value: { postIds: string[]; groupIds: string[] },
+  field: "postIds" | "groupIds",
+  id: string,
+) {
+  const next = {
+    postIds: [...value.postIds],
+    groupIds: [...value.groupIds],
+    [field]: value[field].filter((itemId) => itemId !== id),
+  };
+  return next.postIds.length || next.groupIds.length
+    ? JSON.stringify(next, null, 2)
+    : "";
+}
+
+function PreviewSkeleton() {
+  return (
+    <div className="space-y-2" aria-label="Loading deletion preview">
+      {[0, 1].map((item) => (
+        <div
+          key={item}
+          className="h-14 animate-pulse rounded-lg bg-neutral-900"
+        />
+      ))}
+    </div>
+  );
+}
+
+export function ChannelReimportDeleteModal({
+  open,
+  channelId,
+  mode,
+  onModeChange,
+  onClose,
+}: {
+  open: boolean;
+  channelId: string;
+  mode: ChannelImportMode;
+  onModeChange: (mode: ChannelImportMode) => void;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const { pushToast, startOperation } = useAppToast();
+  const [content, setContent] = useState("");
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const posts = useQuery({
+    queryKey: telegramPostKeys.managed(channelId),
+    queryFn: () => telegramChannelsApi.managedPosts(channelId),
+    enabled: open,
+  });
+  const groups = useQuery({
+    queryKey: telegramPostKeys.postGroups(channelId),
+    queryFn: () =>
+      telegramChannelsApi.postGroups({ telegramChannelId: channelId }),
+    enabled: open,
+  });
+  const parsed = useMemo(() => {
+    if (!content.trim()) return { value: null, error: "" };
+    try {
+      return { value: parseChannelDeletionFile(content), error: "" };
+    } catch (error) {
+      return {
+        value: null,
+        error:
+          error instanceof Error ? error.message : "Invalid deletion file.",
+      };
+    }
+  }, [content]);
+  const postById = new Map((posts.data || []).map((post) => [post.id, post]));
+  const groupById = new Map(
+    (groups.data || []).map((group) => [group.id, group]),
+  );
+  const previewLoading = posts.isPending || groups.isPending;
+  const unknownIds =
+    parsed.value && !previewLoading
+      ? [
+          ...parsed.value.postIds.filter((id) => !postById.has(id)),
+          ...parsed.value.groupIds.filter((id) => !groupById.has(id)),
+        ]
+      : [];
+  const canDelete =
+    Boolean(parsed.value) && !previewLoading && !unknownIds.length && !busy;
+
+  const excludeItem = (field: "postIds" | "groupIds", id: string) => {
+    if (!parsed.value) return;
+    setContent(excludeChannelDeletionItem(parsed.value, field, id));
+    setFileName(null);
+  };
+
+  const copyDeletionPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(channelDeletionPrompt);
+      pushToast("Deletion prompt copied.", "success");
+    } catch {
+      pushToast("Could not copy deletion prompt.", "error");
+    }
+  };
+
+  const execute = async () => {
+    if (!parsed.value || !canDelete) return;
+    setBusy(true);
+    const total = parsed.value.postIds.length + parsed.value.groupIds.length;
+    const operation = startOperation({
+      id: `channel-file-delete:${channelId}`,
+      title: "Delete channel content",
+      message: "Deleting selected posts and groups…",
+      current: 0,
+      total,
+    });
+    try {
+      let completed = 0;
+      if (parsed.value.postIds.length) {
+        const result = await telegramChannelsApi.deleteManagedPosts(
+          channelId,
+          parsed.value.postIds,
+        );
+        if (result.failedCount)
+          throw new Error(`${result.failedCount} posts could not be deleted.`);
+        completed += parsed.value.postIds.length;
+        operation.update({
+          current: completed,
+          total,
+          message: "Posts deleted. Removing groups…",
+        });
+      }
+      for (const groupId of parsed.value.groupIds) {
+        await telegramChannelsApi.deletePostGroup(groupId);
+        completed += 1;
+        operation.update({
+          current: completed,
+          total,
+          message: "Deleting groups…",
+        });
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: telegramPostKeys.managed(channelId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: telegramPostKeys.managedCalendar(channelId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: telegramPostKeys.postGroups(channelId),
+        }),
+      ]);
+      operation.succeed({ message: `Deleted ${total} items.` });
+      setContent("");
+      setFileName(null);
+      onClose();
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Could not delete channel content.";
+      operation.fail({ message });
+      pushToast(message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="Channel import" size="xl">
+      <div className="space-y-4">
+        <ChannelImportNavigation
+          value={mode}
+          onChange={onModeChange}
+          disabled={busy}
+        />
+        <div className="rounded-xl border border-rose-900/70 bg-rose-950/20 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-rose-100">
+                Delete by reimport file
+              </h3>
+              <p className="mt-1 text-sm text-neutral-400">
+                Only IDs found in this channel can be deleted. Posts are deleted
+                first; deleting a group does not delete posts outside the file.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => void copyDeletionPrompt()}
+            >
+              <ClipboardList size={15} /> Prompt
+            </Button>
+          </div>
+        </div>
+        <ManagedPostsImportSource
+          content={content}
+          fileName={fileName}
+          disabled={busy}
+          onContent={(value) => {
+            setContent(value);
+            setFileName(null);
+          }}
+          onFile={(file) =>
+            void file.text().then((value) => {
+              setContent(value);
+              setFileName(file.name);
+            })
+          }
+          onClear={() => {
+            setContent("");
+            setFileName(null);
+          }}
+          onCopyContent={() => void navigator.clipboard.writeText(content)}
+        />
+        {parsed.error || unknownIds.length ? (
+          <p className="rounded-lg border border-rose-800/70 bg-rose-950/30 px-3 py-2 text-sm text-rose-200">
+            {parsed.error ||
+              `Unknown IDs in this channel: ${unknownIds.join(", ")}`}
+          </p>
+        ) : null}
+        {parsed.value && previewLoading ? <PreviewSkeleton /> : null}
+        {parsed.value && !previewLoading && !unknownIds.length ? (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <section className="min-w-0 rounded-xl border border-neutral-800 bg-neutral-950/40 p-3">
+              <h4 className="mb-2 text-sm font-semibold text-white">
+                Posts to delete · {parsed.value.postIds.length}
+              </h4>
+              {parsed.value.postIds.length ? (
+                <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                  {parsed.value.postIds.map((id) => {
+                    const post = postById.get(id);
+                    if (!post) return null;
+                    const relevantDate = post.scheduledAt || post.publishedAt;
+                    return (
+                      <div
+                        key={id}
+                        className="flex min-w-0 items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-900/70 p-2"
+                      >
+                        <IconAvatar
+                          icon={post.iconPresentation}
+                          label={post.title}
+                          size="sm"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-white">
+                            {post.title}
+                          </p>
+                          <p className="truncate text-xs text-neutral-400">
+                            {post.status}
+                            {relevantDate
+                              ? ` · ${new Date(relevantDate).toLocaleString()}`
+                              : ""}
+                          </p>
+                        </div>
+                        <a
+                          href={`/telegram-posts/${channelId}/editor?postId=${post.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-neutral-700 text-neutral-400 transition hover:border-blue-500 hover:text-blue-400"
+                          aria-label={`Open ${post.title} in a new tab`}
+                          title="Open post in a new tab"
+                        >
+                          <ExternalLink size={15} />
+                        </a>
+                        <button
+                          type="button"
+                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-neutral-700 text-neutral-400 transition hover:border-neutral-500 hover:text-white"
+                          aria-label={`Exclude ${post.title} from deletion`}
+                          title="Exclude from deletion"
+                          onClick={() => excludeItem("postIds", id)}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-neutral-500">No posts selected.</p>
+              )}
+            </section>
+            <section className="min-w-0 rounded-xl border border-neutral-800 bg-neutral-950/40 p-3">
+              <h4 className="mb-2 text-sm font-semibold text-white">
+                Groups to delete · {parsed.value.groupIds.length}
+              </h4>
+              {parsed.value.groupIds.length ? (
+                <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                  {parsed.value.groupIds.map((id) => {
+                    const group = groupById.get(id);
+                    if (!group) return null;
+                    const postsCount =
+                      group.postsCount ?? group.statusSummary.totalPosts;
+                    return (
+                      <div
+                        key={id}
+                        className="flex min-w-0 items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-900/70 p-2"
+                      >
+                        {group.iconPresentation ? (
+                          <IconAvatar
+                            icon={group.iconPresentation}
+                            label={group.title}
+                            size="sm"
+                          />
+                        ) : (
+                          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-neutral-800 text-neutral-300">
+                            <Folder size={15} />
+                          </span>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-white">
+                            {group.title}
+                          </p>
+                          <p className="truncate text-xs text-neutral-400">
+                            {postsCount} {postsCount === 1 ? "post" : "posts"}
+                            {group.description ? ` · ${group.description}` : ""}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-neutral-700 text-neutral-400 transition hover:border-neutral-500 hover:text-white"
+                          aria-label={`Exclude ${group.title} from deletion`}
+                          title="Exclude from deletion"
+                          onClick={() => excludeItem("groupIds", id)}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-neutral-500">No groups selected.</p>
+              )}
+            </section>
+          </div>
+        ) : null}
+        <div className="flex justify-end">
+          <Button
+            variant="danger"
+            disabled={!canDelete}
+            onClick={() => void execute()}
+          >
+            {busy ? (
+              <LoaderCircle size={15} className="animate-spin" />
+            ) : (
+              <Trash2 size={15} />
+            )}
+            Delete selected content
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}

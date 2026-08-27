@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { randomBytes, randomUUID } from 'node:crypto';
+import {
+  CURRENCIES,
+  currencyCodeFromSelection,
+  currencySelectLabel,
+} from '@telegram-system/shared';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { FinanceCoreService } from '../catalog/finance-core.service';
 import { FinanceLedgerService } from '../ledger/finance-ledger.service';
@@ -7,6 +12,8 @@ import { FinanceTransferService } from '../transfers/finance-transfer.service';
 import {
   FINANCE_EMOJI_CHOICES,
   financeAccountEmoji,
+  financeIconPresentation,
+  financeStoredIconSource,
 } from '../catalog/finance-entity-emoji';
 import { FinanceChatFlowReadModel } from './finance-chat-flow-read-model';
 import { FinanceChatFlowWriter } from './finance-chat-flow-writer';
@@ -30,7 +37,6 @@ export type {
 } from './finance-chat-flow.types';
 
 const FLOW_TTL_MS = 15 * 60 * 1000;
-const COMMON_CURRENCIES = ['UAH', 'USD', 'EUR', 'PLN'] as const;
 
 type Payload = FinanceFlowPayload;
 
@@ -84,10 +90,20 @@ export class FinanceChatFlowService {
     await this.persistStart(input, 'TRANSACTION_CREATE', step, payload);
     return {
       ...this.result('TRANSACTION_CREATE', step, payload),
-      choices: accounts.map((account) => ({
-        id: account.id,
-        label: `${account.emoji || financeAccountEmoji(account.type)} ${account.name} · ${account.currency}`,
-      })),
+      choices: accounts.map((account) => {
+        const icon = financeIconPresentation(
+          account.emoji,
+          financeAccountEmoji(account.type),
+        );
+        return {
+          id: account.id,
+          label: `${icon.type === 'unicode' ? icon.value : '🖼️'} ${account.name} · ${account.currency}`,
+          telegramCustomEmojiId:
+            icon.type === 'unicode'
+              ? (icon.telegramCustomEmojiId ?? undefined)
+              : undefined,
+        };
+      }),
     };
   }
   async startAccountEdit(input: FinanceFlowInput & { accountId: string }) {
@@ -101,10 +117,7 @@ export class FinanceChatFlowService {
       entityId: account.id,
       name: account.name,
       type: account.type,
-      emoji:
-        account.iconPresentation.type === 'unicode'
-          ? account.iconPresentation.value
-          : null,
+      emoji: financeStoredIconSource(account.iconPresentation),
     };
     await this.persistStart(input, 'ACCOUNT_EDIT', 'ACCOUNT_NAME', payload);
     return this.result('ACCOUNT_EDIT', 'ACCOUNT_NAME', payload);
@@ -123,10 +136,7 @@ export class FinanceChatFlowService {
       entityId: category.id,
       type: category.type,
       name: category.name,
-      emoji:
-        category.iconPresentation.type === 'unicode'
-          ? category.iconPresentation.value
-          : null,
+      emoji: financeStoredIconSource(category.iconPresentation),
       parentId: category.parentId,
     };
     await this.persistStart(input, 'CATEGORY_EDIT', 'CATEGORY_NAME', payload);
@@ -224,7 +234,7 @@ export class FinanceChatFlowService {
   }
 
   async consumeText(
-    input: FinanceFlowInput & { text: string },
+    input: FinanceFlowInput & { text: string; iconSource?: string | null },
   ): Promise<FinanceFlowResult> {
     const row = await this.active(input);
     if (!row) return null;
@@ -234,9 +244,18 @@ export class FinanceChatFlowService {
     const field = this.field(row.step);
     if (!flow || !field) return { kind: 'invalid', flow, reason: 'selection' };
     const text = input.text.trim();
+    if (field === 'emoji') {
+      if (!input.iconSource) return { kind: 'invalid', flow, reason: 'text' };
+      return this.move(row.id, flow, this.next(row.step, flow), {
+        ...payload,
+        emoji: input.iconSource,
+      });
+    }
     if (field === 'amount' && !this.amount(text, row.step === 'ACCOUNT_AMOUNT'))
       return { kind: 'invalid', flow, reason: 'amount' };
-    if (field === 'currency' && !/^[A-Z]{3}$/u.test(text.toUpperCase()))
+    const selectedCurrency =
+      field === 'currency' ? currencyCodeFromSelection(text) : null;
+    if (field === 'currency' && !selectedCurrency)
       return { kind: 'invalid', flow, reason: 'currency' };
     if (
       field !== 'amount' &&
@@ -250,8 +269,34 @@ export class FinanceChatFlowService {
         field === 'amount'
           ? text.replace(',', '.')
           : field === 'currency'
-            ? text.toUpperCase()
+            ? selectedCurrency
             : text,
+    });
+  }
+
+  async expectsIcon(input: FinanceFlowInput) {
+    const row = await this.active(input);
+    return Boolean(
+      row &&
+      row.status === 'ACTIVE' &&
+      ['ACCOUNT_EMOJI', 'CATEGORY_EMOJI'].includes(row.step),
+    );
+  }
+
+  async consumeIcon(
+    input: FinanceFlowInput & { iconSource: string },
+  ): Promise<FinanceFlowResult> {
+    const row = await this.active(input);
+    if (
+      !row ||
+      row.status !== 'ACTIVE' ||
+      !['ACCOUNT_EMOJI', 'CATEGORY_EMOJI'].includes(row.step)
+    )
+      return null;
+    const flow = row.operationKind as FinanceFlowKind;
+    return this.move(row.id, flow, this.next(row.step, flow), {
+      ...this.payload(row.payload),
+      emoji: input.iconSource,
     });
   }
   async consumeCallback(
@@ -355,8 +400,8 @@ export class FinanceChatFlowService {
 
   currencyKeyboard() {
     return [
-      COMMON_CURRENCIES.slice(0, 2).map((text) => ({ text })),
-      COMMON_CURRENCIES.slice(2).map((text) => ({ text })),
+      CURRENCIES.slice(0, 2).map((id) => ({ id, text: currencySelectLabel(id) })),
+      CURRENCIES.slice(2).map((id) => ({ id, text: currencySelectLabel(id) })),
     ];
   }
 
@@ -592,8 +637,10 @@ export class FinanceChatFlowService {
         TRANSACTION_DESCRIPTION: 'description',
         TRANSACTION_AMOUNT: 'amount',
         ACCOUNT_NAME: 'name',
+        ACCOUNT_EMOJI: 'emoji',
         ACCOUNT_AMOUNT: 'amount',
         CATEGORY_NAME: 'name',
+        CATEGORY_EMOJI: 'emoji',
         TRANSFER_DESCRIPTION: 'description',
         TRANSFER_AMOUNT: 'amount',
       } as Record<string, string>

@@ -9,7 +9,7 @@ export type TelegramAdSalesPriceAllocationShare = {
 };
 
 /**
- * Allocates a two-decimal monetary total by audience weight. Integer minor
+ * Allocates a two-decimal monetary total by caller-provided value weight. Integer minor
  * units and deterministic largest remainders guarantee an exact final sum.
  */
 export function allocateTelegramAdSalesTotalPrice(

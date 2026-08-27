@@ -11,6 +11,7 @@ import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
+import { TelegramManagedPostRemoteSyncService } from './telegram-managed-post-remote-sync.service';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 
 @Injectable()
@@ -22,12 +23,18 @@ export class TelegramManagedPostScheduledResetService {
     private readonly access: TelegramChannelAccessService,
     private readonly revisions: TelegramManagedPostRevisionStore,
     private readonly groups: TelegramPostGroupsService,
+    private readonly remoteSync: TelegramManagedPostRemoteSyncService,
   ) {}
 
   async resetChannelScheduledPosts(
     userId: string,
     channelId: string,
   ): Promise<ResetChannelScheduledPostsResult> {
+    // Telegram can publish a native scheduled message before our local state is
+    // refreshed. Reconcile first so a now-published post keeps its real message
+    // IDs and is excluded from the destructive scheduled-message reset below.
+    await this.remoteSync.syncManagedPosts(userId, channelId);
+
     const workspaceId = await this.support.workspace(userId);
     const channel = await this.prisma.telegramChannel.findFirst({
       where: { id: channelId, workspaceId, isActive: true },

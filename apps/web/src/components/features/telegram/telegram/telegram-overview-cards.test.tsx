@@ -226,7 +226,7 @@ describe("telegram overview cards", () => {
               name: "All",
               isSystem: true,
               systemKey: "ALL",
-              canEdit: false,
+              canEdit: true,
               canDelete: false,
               iconId: null,
               iconPresentation: {
@@ -256,9 +256,10 @@ describe("telegram overview cards", () => {
     expect(
       screen.queryByRole("button", { name: "Choose emoji for All" }),
     ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Actions for All" }));
     expect(
-      screen.queryByRole("button", { name: "Actions for All" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("menuitem", { name: "Configure included channels" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps the authoritative network icon when the update fails", async () => {

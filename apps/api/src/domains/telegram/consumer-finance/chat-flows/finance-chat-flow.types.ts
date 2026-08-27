@@ -15,6 +15,7 @@ export type FinanceFlowChoice = {
   label: string;
   key?: string | null;
   emoji?: string;
+  telegramCustomEmojiId?: string;
 };
 
 export type FinanceFlowInput = {

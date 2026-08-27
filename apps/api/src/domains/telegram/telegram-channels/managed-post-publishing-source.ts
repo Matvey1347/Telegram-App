@@ -7,6 +7,24 @@ type PublishSource = {
   accountLastCheckedAt?: Date | string | null;
 };
 
+export function managedPostRequiresBotApi(input: {
+  hasInlineButtons: boolean;
+  requiresRichMessage: boolean;
+  isAdvertisingPost: boolean;
+  existingSourceType?: TelegramSourceType | null;
+  hasExistingPublication?: boolean;
+}) {
+  return (
+    input.hasInlineButtons ||
+    input.requiresRichMessage ||
+    (input.isAdvertisingPost &&
+      !(
+        input.existingSourceType === TelegramSourceType.MTPROTO &&
+        input.hasExistingPublication
+      ))
+  );
+}
+
 function accountCheckTime(source: PublishSource) {
   if (!source.accountLastCheckedAt) return 0;
   const value = new Date(source.accountLastCheckedAt).getTime();

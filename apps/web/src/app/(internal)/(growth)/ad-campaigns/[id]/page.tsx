@@ -1,5 +1,7 @@
 'use client';
 
+import { formatDateTime as formatDisplayDateTime } from '@/lib/date-format';
+
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useParams } from 'next/navigation';
@@ -32,9 +34,7 @@ function formatPercent(value: unknown) {
 
 function formatDateTime(value?: string | null) {
   if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString();
+  return formatDisplayDateTime(value);
 }
 
 function statusClass(status?: string | null) {
