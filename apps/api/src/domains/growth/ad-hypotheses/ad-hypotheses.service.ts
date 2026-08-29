@@ -8,7 +8,10 @@ import {
   effectiveCampaignJoinedSubscribers,
   effectiveCampaignPendingSubscribers,
 } from '../../../common/analytics/channel-financial-summary';
-import { createPaginatedResponse, normalizePagination } from '../../../common/pagination/pagination.utils';
+import {
+  createPaginatedResponse,
+  normalizePagination,
+} from '../../../common/pagination/pagination.utils';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -17,6 +20,12 @@ import {
   AD_HYPOTHESIS_STATUSES,
   UpdateAdHypothesisDto,
 } from './dto/update-ad-hypothesis.dto';
+import {
+  AD_HYPOTHESIS_DETAIL_INCLUDE,
+  AD_HYPOTHESIS_LIST_SELECT,
+} from './ad-hypothesis-read-selects';
+import { buildAdHypothesisListWhere } from './ad-hypothesis-list-query';
+import { AdHypothesisQueryDto } from './dto/ad-hypothesis-query.dto';
 
 type KpiStatus = 'good' | 'acceptable' | 'bad' | 'unknown';
 type HypothesisStatus = (typeof AD_HYPOTHESIS_STATUSES)[number];
@@ -27,11 +36,9 @@ export class AdHypothesesService {
     private prisma: PrismaService,
     private workspaceService: WorkspaceService,
   ) {}
-
   private workspace(userId: string) {
     return this.workspaceService.resolveWorkspaceIdForUser(userId);
   }
-
   private normalizeStatus(status?: string | null): HypothesisStatus {
     const normalized = String(status || 'testing').trim() as HypothesisStatus;
     if (!AD_HYPOTHESIS_STATUSES.includes(normalized)) {
@@ -39,7 +46,6 @@ export class AdHypothesesService {
     }
     return normalized;
   }
-
   private dedupeCampaignIds(campaignIds: string[]) {
     const cleanIds = campaignIds
       .map((id) => String(id || '').trim())
@@ -49,16 +55,17 @@ export class AdHypothesesService {
       throw new BadRequestException('Ad campaign ids must be unique');
     }
     if (!uniqueIds.length) {
-      throw new BadRequestException('Hypothesis must contain at least 1 campaign');
+      throw new BadRequestException(
+        'Hypothesis must contain at least 1 campaign',
+      );
     }
     return uniqueIds;
   }
-
   private async validateCampaigns(workspaceId: string, campaignIds: string[]) {
     const uniqueIds = this.dedupeCampaignIds(campaignIds);
     const campaigns = await (this.prisma.adCampaign as any).findMany({
       where: { workspaceId, id: { in: uniqueIds } },
-      include: this.campaignInclude(),
+      select: { id: true, telegramChannelId: true },
       orderBy: { createdAt: 'desc' },
     });
     if (campaigns.length !== uniqueIds.length) {
@@ -68,7 +75,6 @@ export class AdHypothesesService {
     }
     return { uniqueIds, campaigns };
   }
-
   private async validateTelegramChannel(
     workspaceId: string,
     telegramChannelId?: string | null,
@@ -87,91 +93,25 @@ export class AdHypothesesService {
     }
     return channel;
   }
-
-  private campaignInclude() {
-    return {
-      assignedMember: WorkspaceService.assignedMemberInclude,
-      telegramChannel: {
-        include: {
-          inviteLinks: {
-            select: { id: true, joinedCount: true, requestedCount: true },
-          },
-        },
-      },
-      promo: { include: { icon: true, telegramChannel: true } },
-      promos: {
-        include: {
-          promo: { include: { icon: true, telegramChannel: true } },
-        },
-      },
-      inviteLinks: {
-        select: {
-          id: true,
-          telegramChannelId: true,
-          adCampaignId: true,
-          name: true,
-          url: true,
-          joinedCount: true,
-          requestedCount: true,
-          isRevoked: true,
-          lastSyncedAt: true,
-          createdAt: true,
-          updatedAt: true,
-          creatorTelegramUserId: true,
-          creatorUsername: true,
-          creatorFirstName: true,
-          creatorLastName: true,
-          creatorPhotoUrl: true,
-          creatorMatchSource: true,
-          creatorMember: WorkspaceService.assignedMemberInclude,
-        },
-      },
-      advertisingTelegramChannels: {
-        include: {
-          telegramChannel: {
-            include: { adminLinks: true },
-          },
-        },
-      },
-      advertisingChannels: { include: { advertisingSource: true } },
-    } as const;
-  }
-
   private includeHypothesisCampaigns() {
-    return {
-      assignedMember: WorkspaceService.assignedMemberInclude,
-      createdByUser: WorkspaceService.createdByUserInclude,
-      icon: true,
-      telegramChannel: true,
-      campaigns: {
-        include: {
-          adCampaign: {
-            include: this.campaignInclude(),
-          },
-        },
-        orderBy: { createdAt: 'asc' },
-      },
-    } as const;
+    return AD_HYPOTHESIS_DETAIL_INCLUDE;
   }
 
   private decimal(value: unknown) {
     const parsed = Number(value ?? 0);
     return Number.isFinite(parsed) ? parsed : 0;
   }
-
   private nullableNumber(value: unknown) {
     if (value == null) return null;
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
   }
-
   private inRange(value: number, from: number | null, to: number | null) {
     if (from == null && to == null) return false;
     if (from != null && value < from) return false;
     if (to != null && value > to) return false;
     return true;
   }
-
   private average(values: Array<number | null | undefined>) {
     const clean = values.filter((value): value is number => value != null);
     return clean.length
@@ -182,7 +122,9 @@ export class AdHypothesesService {
   private campaignJoined(campaign: any) {
     return this.decimal(
       effectiveCampaignJoinedSubscribers({
-        inviteLinks: Array.isArray(campaign.inviteLinks) ? campaign.inviteLinks : [],
+        inviteLinks: Array.isArray(campaign.inviteLinks)
+          ? campaign.inviteLinks
+          : [],
         joinedCount:
           this.nullableNumber(campaign.analytics?.joinedCount) ??
           campaign.joinedCount,
@@ -194,7 +136,9 @@ export class AdHypothesesService {
   private campaignPending(campaign: any) {
     return this.decimal(
       effectiveCampaignPendingSubscribers({
-        inviteLinks: Array.isArray(campaign.inviteLinks) ? campaign.inviteLinks : [],
+        inviteLinks: Array.isArray(campaign.inviteLinks)
+          ? campaign.inviteLinks
+          : [],
         requestedCount:
           this.nullableNumber(campaign.analytics?.requestedCount) ??
           campaign.requestedCount,
@@ -205,7 +149,9 @@ export class AdHypothesesService {
   private campaignAttributed(campaign: any) {
     return this.decimal(
       effectiveCampaignAttributedSubscribers({
-        inviteLinks: Array.isArray(campaign.inviteLinks) ? campaign.inviteLinks : [],
+        inviteLinks: Array.isArray(campaign.inviteLinks)
+          ? campaign.inviteLinks
+          : [],
         joinedCount:
           this.nullableNumber(campaign.analytics?.joinedCount) ??
           campaign.joinedCount,
@@ -224,7 +170,10 @@ export class AdHypothesesService {
 
   private sourceLabel(campaign: any) {
     const telegramSources = (campaign.advertisingTelegramChannels || [])
-      .map((link: any) => link.telegramChannel?.title || link.telegramChannel?.username)
+      .map(
+        (link: any) =>
+          link.telegramChannel?.title || link.telegramChannel?.username,
+      )
       .filter(Boolean);
     const peopleSources = (campaign.advertisingChannels || [])
       .map((link: any) => link.advertisingSource?.name)
@@ -240,14 +189,16 @@ export class AdHypothesesService {
     const acceptableFrom = this.nullableNumber(channel.acceptableCpaFrom);
     const acceptable = this.nullableNumber(channel.acceptableCpa);
     const stopFrom =
-      this.nullableNumber(channel.stopCpaFrom) ?? this.nullableNumber(channel.stopCpa);
+      this.nullableNumber(channel.stopCpaFrom) ??
+      this.nullableNumber(channel.stopCpa);
     if (
       targetFrom == null &&
       target == null &&
       acceptableFrom == null &&
       acceptable == null &&
       stopFrom == null
-    ) return 'unknown';
+    )
+      return 'unknown';
     if (this.inRange(cpa, targetFrom, target)) return 'good';
     if (this.inRange(cpa, acceptableFrom, acceptable)) return 'acceptable';
     if (this.inRange(cpa, stopFrom, null)) return 'bad';
@@ -280,14 +231,19 @@ export class AdHypothesesService {
 
     const channels = campaignSummaries
       .map((campaign) => campaign.targetChannel)
-      .filter((channel): channel is NonNullable<typeof campaignSummaries[number]['targetChannel']> => Boolean(channel?.id));
-    const uniqueChannelIds = [...new Set(channels.map((channel) => channel.id))];
+      .filter(
+        (
+          channel,
+        ): channel is NonNullable<
+          (typeof campaignSummaries)[number]['targetChannel']
+        > => Boolean(channel?.id),
+      );
+    const uniqueChannelIds = [
+      ...new Set(channels.map((channel) => channel.id)),
+    ];
 
     if (uniqueChannelIds.length === 1 && avgCpa != null) {
-      return this.campaignKpiStatus(
-        { telegramChannel: channels[0] },
-        avgCpa,
-      );
+      return this.campaignKpiStatus({ telegramChannel: channels[0] }, avgCpa);
     }
 
     return this.aggregateKpiStatus(
@@ -295,7 +251,10 @@ export class AdHypothesesService {
     );
   }
 
-  private effectiveKpiStatus(storedStatus: unknown, calculatedStatus: KpiStatus) {
+  private effectiveKpiStatus(
+    storedStatus: unknown,
+    calculatedStatus: KpiStatus,
+  ) {
     return calculatedStatus !== 'unknown'
       ? calculatedStatus
       : storedStatus && storedStatus !== 'unknown'
@@ -321,8 +280,10 @@ export class AdHypothesesService {
     const pendingSubscribers = this.campaignPending(campaign);
     const attributedSubscribers = joinedSubscribers + pendingSubscribers;
     const leftSubscribers = this.campaignLeft(campaign);
-    const cpa = attributedSubscribers > 0 ? spend / attributedSubscribers : null;
-    const nativeCpa = attributedSubscribers > 0 ? nativeSpend / attributedSubscribers : null;
+    const cpa =
+      attributedSubscribers > 0 ? spend / attributedSubscribers : null;
+    const nativeCpa =
+      attributedSubscribers > 0 ? nativeSpend / attributedSubscribers : null;
     const views = this.nullableNumber(campaign.sourcePostViews);
     const reactions = null;
     const engagementRate =
@@ -348,7 +309,9 @@ export class AdHypothesesService {
       views,
       reactions,
       engagementRate,
-      activeSubscribersEstimate: this.nullableNumber(campaign.activeSubscribersFromAd),
+      activeSubscribersEstimate: this.nullableNumber(
+        campaign.activeSubscribersFromAd,
+      ),
       activeCpa: this.nullableNumber(campaign.activeCpa),
       activeRate: this.nullableNumber(campaign.activeRate),
       retention7d: this.nullableNumber(campaign.retention7d),
@@ -382,7 +345,9 @@ export class AdHypothesesService {
       { nativeSpend: number; primarySpend: number }
     >();
     for (const campaign of campaignSummaries) {
-      const currency = String(campaign.currency || '').trim().toUpperCase();
+      const currency = String(campaign.currency || '')
+        .trim()
+        .toUpperCase();
       if (!currency) continue;
       const current = spendByCurrency.get(currency) ?? {
         nativeSpend: 0,
@@ -437,8 +402,10 @@ export class AdHypothesesService {
       totalAttributedSubscribers > 0
         ? totalSpend / totalAttributedSubscribers
         : null;
-    const avgCpaDisplay = totalAttributedSubscribers > 0 && totalSpendDisplay != null
-      ? totalSpendDisplay / totalAttributedSubscribers : null;
+    const avgCpaDisplay =
+      totalAttributedSubscribers > 0 && totalSpendDisplay != null
+        ? totalSpendDisplay / totalAttributedSubscribers
+        : null;
     const kpiStatus = this.hypothesisKpiStatus(
       campaignSummaries,
       avgCpaDisplay ?? avgCpa,
@@ -456,7 +423,9 @@ export class AdHypothesesService {
       avgCpaDisplay,
       activeSubscribersEstimate,
       activeCpa:
-        activeSubscribersEstimate > 0 ? totalSpend / activeSubscribersEstimate : null,
+        activeSubscribersEstimate > 0
+          ? totalSpend / activeSubscribersEstimate
+          : null,
       avgActiveRate: this.average(
         campaignSummaries.map((campaign) => campaign.activeRate),
       ),
@@ -476,9 +445,9 @@ export class AdHypothesesService {
     };
   }
 
-  private inviteLinkHistoryPoints<T extends { syncedAt: Date; joinedCount: number; requestedCount: number }>(
-    rows: T[],
-  ) {
+  private inviteLinkHistoryPoints<
+    T extends { syncedAt: Date; joinedCount: number; requestedCount: number },
+  >(rows: T[]) {
     let peakJoinedCount = 0;
     let peakTotalAttributed = 0;
     return rows.map((row) => {
@@ -487,7 +456,10 @@ export class AdHypothesesService {
       const totalAttributed = joinedCount + requestedCount;
       peakJoinedCount = Math.max(peakJoinedCount, joinedCount);
       peakTotalAttributed = Math.max(peakTotalAttributed, totalAttributed);
-      const drawdownFromPeak = Math.max(0, peakTotalAttributed - totalAttributed);
+      const drawdownFromPeak = Math.max(
+        0,
+        peakTotalAttributed - totalAttributed,
+      );
       const drawdownPercent =
         peakTotalAttributed > 0
           ? (drawdownFromPeak / peakTotalAttributed) * 100
@@ -531,7 +503,8 @@ export class AdHypothesesService {
       currentJoinedCount: Number(current?.joinedCount || 0),
       currentRequestedCount: Number(current?.requestedCount || 0),
       currentTotalAttributed:
-        Number(current?.joinedCount || 0) + Number(current?.requestedCount || 0),
+        Number(current?.joinedCount || 0) +
+        Number(current?.requestedCount || 0),
       peakJoinedCount,
       peakRequestedCount,
       peakTotalAttributed,
@@ -611,7 +584,12 @@ export class AdHypothesesService {
 
     const rowsByInviteLinkId = new Map<
       string,
-      Array<{ syncedAt: Date; joinedCount: number; requestedCount: number; isRevoked: boolean | null }>
+      Array<{
+        syncedAt: Date;
+        joinedCount: number;
+        requestedCount: number;
+        isRevoked: boolean | null;
+      }>
     >();
     for (const row of rowsAsc) {
       const list = rowsByInviteLinkId.get(row.inviteLinkId) ?? [];
@@ -687,7 +665,9 @@ export class AdHypothesesService {
       createdByUser: hypothesis.createdByUser,
       allCampaignsExcludedFromAnalytics:
         campaignRows.length > 0 &&
-        campaignRows.every((campaign: any) => Boolean(campaign.excludeFromAnalytics)),
+        campaignRows.every((campaign: any) =>
+          Boolean(campaign.excludeFromAnalytics),
+        ),
       excludedCampaignsCount: campaignRows.filter((campaign: any) =>
         Boolean(campaign.excludeFromAnalytics),
       ).length,
@@ -702,21 +682,19 @@ export class AdHypothesesService {
     };
   }
 
-  async list(
-    userId: string,
-    query: { page?: number; pageSize?: number } = {},
-  ) {
+  async list(userId: string, query: AdHypothesisQueryDto = {}) {
     const workspaceId = await this.workspace(userId);
     const pagination = normalizePagination(query);
+    const where = buildAdHypothesisListWhere(workspaceId, query);
     const [hypotheses, totalItems] = await Promise.all([
       (this.prisma.adHypothesis as any).findMany({
-        where: { workspaceId },
-        include: this.includeHypothesisCampaigns(),
+        where,
+        select: AD_HYPOTHESIS_LIST_SELECT,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip: pagination.skip,
         take: pagination.take,
       }),
-      this.prisma.adHypothesis.count({ where: { workspaceId } }),
+      this.prisma.adHypothesis.count({ where }),
     ]);
     const items = hypotheses.map((hypothesis: any) =>
       this.enrichHypothesis(hypothesis, false),
@@ -735,7 +713,11 @@ export class AdHypothesesService {
   }
 
   async create(userId: string, dto: CreateAdHypothesisDto) {
-    const { workspaceId, assignedMemberId } = await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId);
+    const { workspaceId, assignedMemberId } =
+      await this.workspaceService.resolveAssignedMemberId(
+        userId,
+        dto.assignedMemberId,
+      );
     const telegramChannel = await this.validateTelegramChannel(
       workspaceId,
       dto.telegramChannelId,
@@ -786,20 +768,29 @@ export class AdHypothesesService {
       select: { id: true, telegramChannelId: true },
     });
     if (!existing) throw new NotFoundException('Ad hypothesis not found');
-    const assignedMemberId = dto.assignedMemberId === undefined ? undefined : (
-      await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId)
-    ).assignedMemberId;
-
+    const assignedMemberId =
+      dto.assignedMemberId === undefined
+        ? undefined
+        : (
+            await this.workspaceService.resolveAssignedMemberId(
+              userId,
+              dto.assignedMemberId,
+            )
+          ).assignedMemberId;
     const nextTelegramChannelId =
       dto.telegramChannelId === undefined
         ? existing.telegramChannelId
-        : (await this.validateTelegramChannel(workspaceId, dto.telegramChannelId)).id;
+        : (
+            await this.validateTelegramChannel(
+              workspaceId,
+              dto.telegramChannelId,
+            )
+          ).id;
 
     const validatedCampaigns = dto.adCampaignIds
       ? await this.validateCampaigns(workspaceId, dto.adCampaignIds)
       : null;
     const uniqueIds = validatedCampaigns?.uniqueIds ?? null;
-
     if (
       validatedCampaigns?.campaigns.some(
         (campaign: any) => campaign.telegramChannelId !== nextTelegramChannelId,
@@ -820,7 +811,9 @@ export class AdHypothesesService {
               ? undefined
               : dto.description?.trim() || null,
           status:
-            dto.status === undefined ? undefined : this.normalizeStatus(dto.status),
+            dto.status === undefined
+              ? undefined
+              : this.normalizeStatus(dto.status),
           conclusion:
             dto.conclusion === undefined
               ? undefined
@@ -828,7 +821,9 @@ export class AdHypothesesService {
           iconId:
             dto.iconId === undefined ? undefined : dto.iconId?.trim() || null,
           telegramChannelId:
-            dto.telegramChannelId === undefined ? undefined : nextTelegramChannelId,
+            dto.telegramChannelId === undefined
+              ? undefined
+              : nextTelegramChannelId,
           assignedMemberId,
         },
       });
@@ -896,7 +891,9 @@ export class AdHypothesesService {
         campaigns: (hypothesis.campaigns || []).map((campaign: any) => ({
           id: campaign.id,
           telegramChannelId: campaign.telegramChannelId,
-          inviteLinks: Array.isArray(campaign.inviteLinks) ? campaign.inviteLinks : [],
+          inviteLinks: Array.isArray(campaign.inviteLinks)
+            ? campaign.inviteLinks
+            : [],
         })),
       },
       rowsAsc,

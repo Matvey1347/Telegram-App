@@ -20,6 +20,8 @@
 - Significant refactors use `docs/refactoring/PROJECT_REFACTOR_EXEC_PLAN.md` and update progress as work lands.
 - After implementation, the tech lead verifies integration, workspace isolation, query invalidation, tests and docs.
 - Architecture-foundation/refactor tasks start with Grace Explorer read-only analysis and finish with Turing Review read-only integration review. The main agent owns final boundary decisions.
+- Significant performance/refactor work follows this read/write lifecycle: Grace Explorer maps actual runtime paths; Knuth Performance audits cost and scaling; Parnas Structure checks existing file-size boundaries before edits; the main integrator fixes contracts and assigns non-overlapping backend/frontend files to Linus Backend and Ada Frontend; Parnas reruns the structural check; Turing Review performs the final read-only integration review.
+- Grace, Knuth, Parnas and Turing are development-only, read-only agents. They must not become application processes, add production telemetry, or create Neon/Railway work. Knuth recommendations remain subject to `docs/runtime-cost-efficiency.md` and `docs/frontend-cache-efficiency.md`; Parnas uses `scripts/check-architecture.mjs` and never raises a threshold or shrinking-only baseline.
 
 ## Product boundaries
 

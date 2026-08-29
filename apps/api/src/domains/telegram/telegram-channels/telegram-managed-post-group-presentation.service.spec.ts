@@ -45,5 +45,6 @@ describe('TelegramManagedPostGroupPresentationService system groups', () => {
       type: 'unicode',
       value: '💰',
     });
+    expect(prisma.icon.findFirst).not.toHaveBeenCalled();
   });
 });

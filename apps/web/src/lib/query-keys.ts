@@ -12,6 +12,7 @@ export const workspaceKeys = {
 export const currencyKeys = {
   settings: () => ["currency-settings"] as const,
   rates: () => ["currency-rates"] as const,
+  latestRates: () => ["currency-rates-latest"] as const,
 };
 
 export const accountKeys = {
@@ -97,8 +98,14 @@ export const telegramChannelKeys = {
 };
 
 export const telegramPostKeys = {
-  managed: (channelId: string) =>
-    ["telegram-managed-posts", channelId] as const,
+  managedLists: (channelId: string) =>
+    ["telegram-managed-posts", channelId, "list"] as const,
+  managedList: (
+    channelId: string,
+    params: { page: number; pageSize: number; status?: string; search?: string },
+  ) => [...telegramPostKeys.managedLists(channelId), params] as const,
+  managedDetail: (channelId: string, postId: string) =>
+    ["telegram-managed-posts", channelId, "detail", postId] as const,
   managedCalendar: (channelId: string) =>
     ["telegram-managed-posts-calendar", channelId] as const,
   managedHistories: (channelId: string) =>

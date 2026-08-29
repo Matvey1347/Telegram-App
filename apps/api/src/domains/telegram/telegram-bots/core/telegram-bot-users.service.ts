@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type TelegramBotUser } from '@prisma/client';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import type {
   TelegramBotUpdateActor,
@@ -34,6 +34,7 @@ export class TelegramBotUsersService {
     runtimeInstanceId: string;
     update: TelegramBotWebhookUpdate;
     trackProductionActivity?: boolean;
+    existingUser?: TelegramBotUser | null;
   }) {
     const actor = this.actorFromUpdate(input.update);
     if (!actor?.id) return null;
@@ -50,6 +51,7 @@ export class TelegramBotUsersService {
             ? new Date()
             : undefined,
       trackProductionActivity: input.trackProductionActivity,
+      existingUser: input.existingUser,
     });
   }
 
@@ -61,18 +63,31 @@ export class TelegramBotUsersService {
     telegramChatId?: string | null;
     startedAt?: Date;
     trackProductionActivity?: boolean;
+    existingUser?: TelegramBotUser | null;
   }) {
     if (!input.actor.id) return null;
     const now = new Date();
     const telegramUserId = String(input.actor.id);
-    let existing = await this.prisma.telegramBotUser.findUnique({
-      where: {
-        runtimeInstanceId_telegramUserId: {
-          runtimeInstanceId: input.runtimeInstanceId,
-          telegramUserId,
+    let existing = input.existingUser;
+    if (existing === undefined) {
+      existing = await this.prisma.telegramBotUser.findUnique({
+        where: {
+          runtimeInstanceId_telegramUserId: {
+            runtimeInstanceId: input.runtimeInstanceId,
+            telegramUserId,
+          },
         },
-      },
-    });
+      });
+    }
+    if (
+      input.existingUser &&
+      (input.existingUser.workspaceId !== input.workspaceId ||
+        input.existingUser.botIntegrationId !== input.botIntegrationId ||
+        input.existingUser.runtimeInstanceId !== input.runtimeInstanceId ||
+        input.existingUser.telegramUserId !== telegramUserId)
+    ) {
+      throw new Error('Preloaded Telegram bot user scope mismatch');
+    }
 
     if (!existing) {
       try {
@@ -125,7 +140,8 @@ export class TelegramBotUsersService {
     ) {
       data.telegramChatId = input.telegramChatId;
     }
-    if (input.startedAt && !existing.startedAt) data.startedAt = input.startedAt;
+    if (input.startedAt && !existing.startedAt)
+      data.startedAt = input.startedAt;
     if (
       input.trackProductionActivity !== false &&
       existing.lastInteractionAt.getTime() <=

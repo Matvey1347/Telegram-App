@@ -44,4 +44,22 @@ describe("resolveAdSalesPreferenceSelection", () => {
       selectedNetworkId: "network-1",
     });
   });
+
+  it("lets a valid channel deep link override persisted selection", () => {
+    expect(
+      resolveAdSalesPreferenceSelection({
+        preferences,
+        channelsReady: true,
+        networksReady: true,
+        saleableChannelIds: ["channel-1", "channel-2"],
+        networks: [
+          {
+            id: "network-1",
+            channels: [{ id: "channel-1" }, { id: "channel-2" }],
+          },
+        ],
+        requestedChannelId: "channel-2",
+      }),
+    ).toEqual({ selectedChannelIds: ["channel-2"], selectedNetworkId: "" });
+  });
 });

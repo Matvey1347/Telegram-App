@@ -8,6 +8,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { CreateFinanceCategoryDto, UpdateFinanceCategoryDto } from './dto';
+import { financeSystemCategoriesReady } from './finance-system-category-readiness';
 
 @Injectable()
 export class FinanceCategoriesService {
@@ -45,6 +46,18 @@ export class FinanceCategoriesService {
 
   async ensureSystemCategories(workspaceId: string, tx?: PrismaClient) {
     const client = tx ?? this.prisma;
+    const existingCategories = await (
+      client as any
+    ).transactionCategory.findMany({
+      where: { workspaceId },
+      select: {
+        key: true,
+        name: true,
+        isSystem: true,
+        icon: { select: { name: true, emoji: true } },
+      },
+    });
+    if (financeSystemCategoriesReady(existingCategories)) return;
     const channelAdvertisingRevenueIconId = await this.ensureEmojiIcon(
       workspaceId,
       'channel-advertising-revenue',

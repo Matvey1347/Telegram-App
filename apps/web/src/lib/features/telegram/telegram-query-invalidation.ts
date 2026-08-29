@@ -136,7 +136,7 @@ export async function invalidateTelegramChannelQueries(
       queryKey: telegramChannelKeys.audienceSnapshots(channelId),
     }),
     queryClient.invalidateQueries({
-      queryKey: telegramPostKeys.managed(channelId),
+      queryKey: telegramPostKeys.managedLists(channelId),
     }),
     queryClient.invalidateQueries({
       queryKey: telegramPostKeys.managedCalendar(channelId),

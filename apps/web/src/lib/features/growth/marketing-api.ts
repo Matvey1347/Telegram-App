@@ -20,7 +20,6 @@ import type {
 } from "../../api-types";
 
 type PaginatedGetter = <T>(path: string, params?: Record<string, unknown>) => Promise<PaginatedResponse<T>>;
-type AllPaginatedGetter = <T>(path: string, params?: Record<string, unknown>) => Promise<T[]>;
 type CrudFactory = <T>(path: string) => {
   list: () => Promise<T[]>;
   get: (id: string) => Promise<T>;
@@ -29,24 +28,22 @@ type CrudFactory = <T>(path: string) => {
   remove: (id: string) => Promise<T>;
 };
 
-export function createMarketingApi({ api, crud, quietCrud, getPaginated, getAllPaginatedItems, hasExplicitPagination, quietMutationConfig }: {
+export function createMarketingApi({ api, crud, quietCrud, getPaginated, quietMutationConfig }: {
   api: AxiosInstance;
   crud: CrudFactory;
   quietCrud: CrudFactory;
   getPaginated: PaginatedGetter;
-  getAllPaginatedItems: AllPaginatedGetter;
-  hasExplicitPagination: (params?: Record<string, unknown>) => boolean;
   quietMutationConfig: AxiosRequestConfig;
 }) {
+const promoCrud = quietCrud<Promo>("/promos");
 const promosApi = {
-  ...quietCrud<Promo>("/promos"),
+  get: promoCrud.get,
+  create: promoCrud.create,
+  update: promoCrud.update,
+  remove: promoCrud.remove,
   listPage: async (
-    params?: PaginationParams & { telegramChannelId?: string },
+    params?: PaginationParams & { telegramChannelId?: string; search?: string },
   ) => getPaginated<Promo>("/promos", params),
-  list: async (params?: PaginationParams & { telegramChannelId?: string }) =>
-    hasExplicitPagination(params)
-      ? (await getPaginated<Promo>("/promos", params)).items
-      : getAllPaginatedItems<Promo>("/promos", params),
   uploadImage: async (file: File) => {
     const formData = new FormData();
     formData.append("file", file);
@@ -60,23 +57,21 @@ const promosApi = {
 const advertisingChannelsApi = crud<AdvertisingChannel>(
   "/advertising-channels",
 );
+const campaignCrud = quietCrud<AdCampaign>("/ad-campaigns");
 const adCampaignsApi = {
-  ...quietCrud<AdCampaign>("/ad-campaigns"),
+  get: campaignCrud.get,
+  create: campaignCrud.create,
+  update: campaignCrud.update,
+  remove: campaignCrud.remove,
   listPage: async (
     params?: PaginationParams & {
       telegramChannelId?: string;
       search?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      sort?: "date_desc" | "date_asc" | "cost_desc" | "joined_desc";
     },
   ) => getPaginated<AdCampaign>("/ad-campaigns", params),
-  list: async (
-    params?: PaginationParams & {
-      telegramChannelId?: string;
-      search?: string;
-    },
-  ) =>
-    hasExplicitPagination(params)
-      ? (await getPaginated<AdCampaign>("/ad-campaigns", params)).items
-      : getAllPaginatedItems<AdCampaign>("/ad-campaigns", params),
   updateAnalyticsInput: async (id: string, payload: AdCampaignAnalyticsInput) =>
     (
       await api.patch<AdCampaign>(
@@ -141,11 +136,24 @@ const telegramSyncApi = {
     ).data,
 };
 const adHypothesesApi = {
-  listPage: async (params?: PaginationParams) =>
+  listPage: async (params?: PaginationParams & { search?: string }) =>
     getPaginated<AdHypothesis>("/ad-hypotheses", params),
-  list: async () => getAllPaginatedItems<AdHypothesis>("/ad-hypotheses"),
   get: async (id: string) =>
     (await api.get<AdHypothesisDetail>(`/ad-hypotheses/${id}`)).data,
+  updateCampaignAnalyticsInput: async (
+    id: string,
+    excludeFromAnalytics: boolean,
+  ) =>
+    (
+      await api.patch<{
+        hypothesisId: string;
+        campaignIds: string[];
+        updatedCount: number;
+        excludeFromAnalytics: boolean;
+      }>(`/ad-hypotheses/${id}/campaigns/analytics-input`, {
+        excludeFromAnalytics,
+      })
+    ).data,
   inviteLinkHistory: async (id: string) =>
     (
       await api.get<AdHypothesisInviteLinkHistory>(

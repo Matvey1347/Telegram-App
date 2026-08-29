@@ -9,21 +9,26 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { PaginationQueryDto } from '../../../common/pagination/pagination-query.dto';
 import { CurrentUser } from '../../../common/current-user.decorator';
 import type { JwtUser } from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { AdHypothesesService } from './ad-hypotheses.service';
 import { CreateAdHypothesisDto } from './dto/create-ad-hypothesis.dto';
 import { UpdateAdHypothesisDto } from './dto/update-ad-hypothesis.dto';
+import { AdHypothesisCampaignAnalyticsInputDto } from './dto/campaign-analytics-input.dto';
+import { AdHypothesisCampaignAnalyticsService } from './ad-hypothesis-campaign-analytics.service';
+import { AdHypothesisQueryDto } from './dto/ad-hypothesis-query.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('ad-hypotheses')
 export class AdHypothesesController {
-  constructor(private service: AdHypothesesService) {}
+  constructor(
+    private service: AdHypothesesService,
+    private readonly campaignAnalytics: AdHypothesisCampaignAnalyticsService,
+  ) {}
 
   @Get()
-  list(@CurrentUser() user: JwtUser, @Query() query: PaginationQueryDto) {
+  list(@CurrentUser() user: JwtUser, @Query() query: AdHypothesisQueryDto) {
     return this.service.list(user.sub, query);
   }
 
@@ -54,6 +59,15 @@ export class AdHypothesesController {
     @Body() dto: UpdateAdHypothesisDto,
   ) {
     return this.service.update(user.sub, id, dto);
+  }
+
+  @Patch(':id/campaigns/analytics-input')
+  updateCampaignAnalyticsInput(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: AdHypothesisCampaignAnalyticsInputDto,
+  ) {
+    return this.campaignAnalytics.update(user.sub, id, dto);
   }
 
   @Delete(':id')

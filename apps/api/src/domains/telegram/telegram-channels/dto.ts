@@ -1,5 +1,8 @@
 import { Transform, Type } from 'class-transformer';
-import { TelegramChannelAdAnalysisStatus } from '@prisma/client';
+import {
+  TelegramChannelAdAnalysisStatus,
+  TelegramManagedPostStatus,
+} from '@prisma/client';
 import type {
   ScheduleManagedPostsBatchItem,
   ScheduleManagedPostsBatchPayload,
@@ -11,6 +14,7 @@ import {
   ArrayMaxSize,
   IsBoolean,
   IsDateString,
+  IsEnum,
   IsIn,
   IsInt,
   IsNumber,
@@ -161,7 +165,12 @@ export class DeepSyncDto {
 
 export class SyncPostsMetricsDto {
   @IsOptional() @IsString() telegramUserAccountId?: string;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) postLimit?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  postLimit?: number;
 }
 
 export class SyncChannelStatsDto {
@@ -327,7 +336,17 @@ export class TelegramChannelInviteLinksQueryDto extends PaginationQueryDto {
   @IsOptional() @IsString() availableForCampaignId?: string;
 }
 
-export class TelegramManagedPostsQueryDto extends PaginationQueryDto {}
+export class TelegramManagedPostsQueryDto extends PaginationQueryDto {
+  @IsOptional()
+  @Transform(({ value }) => {
+    const values = Array.isArray(value) ? value : [value];
+    return values.flatMap((item) => String(item).split(',')).filter(Boolean);
+  })
+  @IsEnum(TelegramManagedPostStatus, { each: true })
+  status?: TelegramManagedPostStatus[];
+
+  @IsOptional() @IsString() search?: string;
+}
 
 export class PostIdsDto {
   @IsArray() @IsString({ each: true }) postIds!: string[];

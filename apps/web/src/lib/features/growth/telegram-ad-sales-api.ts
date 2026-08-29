@@ -35,6 +35,9 @@ import type {
   TelegramAdSaleCheckoutWorkflowResponse,
   TelegramAdCrmAdvertiserSortBy,
   TelegramAdCrmSortDirection,
+  TelegramAdQuotePreviewBatchRequest,
+  TelegramAdQuotePreviewBatchResponse,
+  TelegramAdSalesListResult,
 } from "@telegram-system/shared";
 import type { PaginatedResponse, PaginationParams } from "../../api-types";
 
@@ -244,8 +247,19 @@ export function createTelegramAdSalesApi({
         )
       ).data,
     listSalesPage: async (
-      params?: PaginationParams & { status?: string; advertiserId?: string },
-    ) => getPaginated<TelegramAdSale>("/telegram-ad-sales", params),
+      params?: PaginationParams & {
+        status?: string;
+        advertiserId?: string;
+        search?: string;
+      },
+      signal?: AbortSignal,
+    ) =>
+      (
+        await api.get<TelegramAdSalesListResult>(
+          "/telegram-ad-sales",
+          { params, signal },
+        )
+      ).data,
     getSale: async (id: string) =>
       (await api.get<TelegramAdSale>(`/telegram-ad-sales/${id}`)).data,
     createSale: async (payload: Record<string, unknown>, silent = false) =>
@@ -397,6 +411,17 @@ export function createTelegramAdSalesApi({
           "/telegram-ad-sales/quotes",
           payload,
           silent ? silentFeedbackConfig : undefined,
+        )
+      ).data,
+    previewQuotes: async (
+      payload: TelegramAdQuotePreviewBatchRequest,
+      signal?: AbortSignal,
+    ) =>
+      (
+        await api.post<TelegramAdQuotePreviewBatchResponse>(
+          "/telegram-ad-sales/quotes/preview",
+          payload,
+          { ...silentFeedbackConfig, signal },
         )
       ).data,
     priceHistory: async (

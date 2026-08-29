@@ -25,7 +25,7 @@ export function ClientOrdersModal({
   const [pageSize, setPageSize] = useState(10);
   const params = { page, pageSize, advertiserId: client?.id ?? "" };
   const ordersQuery = useQuery({
-    queryKey: telegramAdSalesKeys.sales(params),
+    queryKey: telegramAdSalesKeys.list(params),
     queryFn: () => telegramAdSalesApi.listSalesPage(params),
     enabled: Boolean(client),
     staleTime: 60_000,

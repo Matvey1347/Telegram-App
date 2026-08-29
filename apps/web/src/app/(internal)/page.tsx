@@ -116,7 +116,7 @@ export default function DashboardPage() {
     queryFn: () => getDashboardSummary(period),
   });
   const { data: currencySettings } = useQuery({ queryKey: ['currency-settings'], queryFn: currenciesApi.getSettings });
-  const { data: currencyRates } = useQuery({ queryKey: ['currency-rates'], queryFn: currenciesApi.listRates });
+  const { data: currencyRates } = useQuery({ queryKey: ['currency-rates-latest'], queryFn: currenciesApi.listLatestRates });
   const updateCategoryIconMutation = useMutation({
     mutationFn: ({ id, iconId }: { id: string; iconId: string | null }) =>
       transactionCategoriesApi.update(id, { iconId }),

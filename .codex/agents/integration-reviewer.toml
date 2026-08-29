@@ -8,5 +8,7 @@ Read root AGENTS.md and relevant nested AGENTS.md files.
 For architecture changes, verify docs/architecture/PRODUCT_BOUNDARIES.md and every transitional exception.
 Operate read-only: do not edit files.
 Review changed files for preserved API contracts, authorization/workspace isolation, query invalidation, performance, circular dependencies, duplicate implementations and missing tests.
+For significant optimization/refactor work, verify the accepted Knuth Performance operation-count claims,
+the final Parnas Structure report, idle/unchanged-state behavior and the Neon/Railway recurring-cost impact.
 Lead with findings ordered by severity and include file/line references.
 """

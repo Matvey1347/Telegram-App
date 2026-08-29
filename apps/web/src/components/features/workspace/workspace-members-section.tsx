@@ -83,7 +83,7 @@ export function WorkspaceMembersSection({ embedded = false }: { embedded?: boole
   const [error, setError] = useState('');
   const { data, isLoading, error: membersError } = useQuery({ queryKey: ['workspace-members'], queryFn: workspaceMembersApi.list });
   const { data: settings } = useQuery({ queryKey: ['currency-settings'], queryFn: currenciesApi.getSettings });
-  const { data: rates } = useQuery({ queryKey: ['currency-rates'], queryFn: currenciesApi.listRates });
+  const { data: rates } = useQuery({ queryKey: ['currency-rates-latest'], queryFn: currenciesApi.listLatestRates });
   const { data: telegramAccounts } = useQuery({ queryKey: ['telegram-user-accounts'], queryFn: telegramUserAccountsApi.list });
 
   const currentRole = workspace?.role;

@@ -52,7 +52,7 @@ export default function TransfersPage() {
   const [filters, setFilters] = useState({ dateFrom: '', dateTo: '', accountId: '', sort: 'date_desc' });
   const { data: accounts } = useQuery({ queryKey: ['accounts'], queryFn: accountsApi.list });
   const { data: settings } = useQuery({ queryKey: ['currency-settings'], queryFn: currenciesApi.getSettings });
-  const { data: rates } = useQuery({ queryKey: ['currency-rates'], queryFn: currenciesApi.listRates });
+  const { data: rates } = useQuery({ queryKey: ['currency-rates-latest'], queryFn: currenciesApi.listLatestRates });
   const { data, isLoading, error } = useQuery({
     queryKey: ['transfers', filters],
     queryFn: () => transfersApi.list(Object.fromEntries(Object.entries(filters).filter(([, value]) => value)) as TransferQuery),

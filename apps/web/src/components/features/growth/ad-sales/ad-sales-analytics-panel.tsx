@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { Info } from "lucide-react";
+import { TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS } from "@telegram-system/shared";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -72,7 +73,7 @@ export function AdSalesAnalyticsPanel({
     () => ({
       allTime: true,
       ...(selectedChannelIds.length
-        ? { channelIds: selectedChannelIds.slice(0, 6).join(",") }
+        ? { channelIds: selectedChannelIds.join(",") }
         : {}),
       ...(!selectedChannelIds.length && selectedNetworkId
         ? { networkId: selectedNetworkId }
@@ -83,8 +84,18 @@ export function AdSalesAnalyticsPanel({
   const overviewQuery = useQuery({
     queryKey: telegramAdSalesKeys.analyticsOverview(scopedParams),
     queryFn: () => telegramAdSalesApi.analyticsOverview(scopedParams),
+    enabled:
+      selectedChannelIds.length <= TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS,
     ...analyticsCacheOptions,
   });
+
+  if (selectedChannelIds.length > TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS) {
+    return (
+      <ErrorState
+        text={`Analytics supports up to ${TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS} channels. Open Inventory and reduce the selection.`}
+      />
+    );
+  }
 
   const summary = overviewQuery.data?.summary;
   const moneySettings = settings ?? {
@@ -136,8 +147,14 @@ export function AdSalesAnalyticsPanel({
   const channelRows = overviewQuery.data?.channels ?? [];
   const alerts = overviewQuery.data?.alerts.items ?? [];
   const loadingValue = <MetricValueSkeleton />;
-  const showInventoryPanel = overviewQuery.isLoading || Boolean(overviewQuery.error) || inventorySeries.length > 0;
-  const showAlertsPanel = overviewQuery.isLoading || Boolean(overviewQuery.error) || alerts.length > 0;
+  const showInventoryPanel =
+    overviewQuery.isLoading ||
+    Boolean(overviewQuery.error) ||
+    inventorySeries.length > 0;
+  const showAlertsPanel =
+    overviewQuery.isLoading ||
+    Boolean(overviewQuery.error) ||
+    alerts.length > 0;
 
   return (
     <div className="space-y-5">
@@ -163,7 +180,9 @@ export function AdSalesAnalyticsPanel({
           value={
             summary ? (
               <MetricNumberValue value={summary.upcomingPlacements} />
-            ) : loadingValue
+            ) : (
+              loadingValue
+            )
           }
         />
         <AnalyticsKpi
@@ -172,7 +191,9 @@ export function AdSalesAnalyticsPanel({
           value={
             summary ? (
               <MetricNumberValue value={`${summary.slotFillRate}%`} />
-            ) : loadingValue
+            ) : (
+              loadingValue
+            )
           }
         />
         <AnalyticsKpi
@@ -183,11 +204,15 @@ export function AdSalesAnalyticsPanel({
         <AnalyticsKpi
           label="Underpricing loss"
           tip={analyticsMetricTips["Underpricing loss"]}
-          value={summary ? moneyPreview(summary.underpricingLoss) : loadingValue}
+          value={
+            summary ? moneyPreview(summary.underpricingLoss) : loadingValue
+          }
         />
       </div>
 
-      <div className={`grid gap-5 ${showInventoryPanel ? "xl:grid-cols-2" : ""}`}>
+      <div
+        className={`grid gap-5 ${showInventoryPanel ? "xl:grid-cols-2" : ""}`}
+      >
         <Card className={analyticsPanelClass}>
           <div className="mb-4 flex items-center justify-between">
             <div>
@@ -239,7 +264,9 @@ export function AdSalesAnalyticsPanel({
           <Card className={analyticsPanelClass}>
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-white">Inventory fill rate</h3>
+                <h3 className="font-semibold text-white">
+                  Inventory fill rate
+                </h3>
                 <p className="text-sm text-neutral-500">
                   Booking vs published utilisation
                 </p>
@@ -277,7 +304,9 @@ export function AdSalesAnalyticsPanel({
         ) : null}
       </div>
 
-      <div className={`grid gap-5 ${showAlertsPanel ? "xl:grid-cols-[1.3fr_1fr]" : ""}`}>
+      <div
+        className={`grid gap-5 ${showAlertsPanel ? "xl:grid-cols-[1.3fr_1fr]" : ""}`}
+      >
         <Card className={analyticsPanelClass}>
           <div className="mb-4">
             <div>
@@ -325,10 +354,16 @@ export function AdSalesAnalyticsPanel({
                       </div>
                     </td>
                     <td className="px-3 py-2">
-                      {tableMoneyCompact(row.revenue.totalAgreedRevenue, row.revenue.currency)}
+                      {tableMoneyCompact(
+                        row.revenue.totalAgreedRevenue,
+                        row.revenue.currency,
+                      )}
                     </td>
                     <td className="px-3 py-2">
-                      {tableMoneyCompact(row.revenue.totalPaidRevenue, row.revenue.currency)}
+                      {tableMoneyCompact(
+                        row.revenue.totalPaidRevenue,
+                        row.revenue.currency,
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       <FillRateCell
@@ -416,7 +451,11 @@ function AnalyticsKpi({
         <UiTooltip
           side="bottom"
           align="center"
-          content={<span className="block max-w-56 text-xs leading-relaxed">{tip}</span>}
+          content={
+            <span className="block max-w-56 text-xs leading-relaxed">
+              {tip}
+            </span>
+          }
           className="relative z-10"
         >
           <button
@@ -446,7 +485,11 @@ function TableHeaderWithTooltip({
       <UiTooltip
         side="bottom"
         align="center"
-        content={<span className="block max-w-56 normal-case leading-relaxed">{tip}</span>}
+        content={
+          <span className="block max-w-56 normal-case leading-relaxed">
+            {tip}
+          </span>
+        }
       >
         <button
           type="button"

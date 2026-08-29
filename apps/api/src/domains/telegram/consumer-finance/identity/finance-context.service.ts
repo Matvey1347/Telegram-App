@@ -4,7 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, TelegramBotApplicationType } from '@prisma/client';
+import {
+  Prisma,
+  TelegramBotApplicationType,
+  type FinanceProfile,
+} from '@prisma/client';
 import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import { TokenEncryptionService } from '../../../../common/security/token-encryption.service';
 import { PrismaService } from '../../../../prisma/prisma.service';
@@ -150,16 +154,53 @@ export class FinanceContextService {
     return { bot, telegramUser, profile };
   }
 
-  async ensureProfile(botIntegrationId: string, telegramBotUserId: string) {
+  async findBotUpdateContext(input: {
+    workspaceId: string;
+    botIntegrationId: string;
+    runtimeInstanceId: string;
+    telegramUserId: string;
+  }) {
+    const existing = await this.prisma.telegramBotUser.findFirst({
+      where: {
+        workspaceId: input.workspaceId,
+        botIntegrationId: input.botIntegrationId,
+        runtimeInstanceId: input.runtimeInstanceId,
+        telegramUserId: input.telegramUserId,
+      },
+      include: {
+        financeProfiles: {
+          where: { botIntegrationId: input.botIntegrationId },
+          take: 1,
+        },
+      },
+    });
+    if (!existing) return { telegramUser: null, profile: null };
+    const { financeProfiles, ...telegramUser } = existing;
+    return { telegramUser, profile: financeProfiles[0] || null };
+  }
+
+  async ensureProfile(
+    botIntegrationId: string,
+    telegramBotUserId: string,
+    preloadedProfile?: FinanceProfile | null,
+  ) {
+    if (
+      preloadedProfile &&
+      (preloadedProfile.botIntegrationId !== botIntegrationId ||
+        preloadedProfile.telegramBotUserId !== telegramBotUserId)
+    ) {
+      throw new Error('Preloaded Finance profile scope mismatch');
+    }
     const where = {
       botIntegrationId_telegramBotUserId: {
         botIntegrationId,
         telegramBotUserId,
       },
     };
-    const existingProfile = await this.prisma.financeProfile.findUnique({
-      where,
-    });
+    const existingProfile =
+      preloadedProfile === undefined
+        ? await this.prisma.financeProfile.findUnique({ where })
+        : preloadedProfile;
     if (existingProfile) return existingProfile;
     try {
       // Nested defaults commit atomically with the new profile. Established

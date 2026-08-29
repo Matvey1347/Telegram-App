@@ -677,7 +677,7 @@ describe('TelegramChannelsService updateManagedPost', () => {
     });
 
     expect(botCall).toHaveBeenCalledWith('bot-token', 'sendRichMessage', {
-      chat_id: '@example',
+      chat_id: '-100123',
       rich_message: {
         html: '<h1>Quote</h1>\n\n<table bordered><tr><th>Header 1</th><th>Header 2</th></tr><tr><td>Cell 1</td><td>Cell 2</td></tr></table>',
       },
@@ -687,7 +687,7 @@ describe('TelegramChannelsService updateManagedPost', () => {
     );
     expect(botApiClient.getChatMember).toHaveBeenCalledWith(
       'bot-token',
-      '@example',
+      '-100123',
       '777',
     );
     expect(upsertAccess).toHaveBeenCalledWith(

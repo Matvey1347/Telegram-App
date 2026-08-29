@@ -19,6 +19,7 @@ import {
   transactionCategoriesApi,
   transactionsApi,
   transfersApi,
+  workspaceMembersApi,
   type Account,
   type ResolvedEmoji,
   type Transaction,
@@ -42,13 +43,15 @@ import { AccountPreview, CurrencyAmount } from "./finance-format";
 import {
   AccountModal,
   CategoryModal,
-  TransactionModal,
   TransferModal,
   type AccountFormValues,
   type CategoryFormValues,
-  type TransactionFormValues,
   type TransferFormValues,
 } from "./finance-overview-modals";
+import {
+  InternalTransactionModal,
+  type InternalTransactionValues,
+} from "./transaction-modal";
 import {
   AccountCardsSkeleton,
   CategoryCardsSkeleton,
@@ -136,6 +139,11 @@ export function InternalFinanceOverview() {
     queryFn: accountsApi.list,
     enabled: needsAllAccounts,
   });
+  const transactionMembers = useQuery({
+    queryKey: ["workspace-members", "select"],
+    queryFn: () => workspaceMembersApi.select(),
+    enabled: editor?.kind === "transaction",
+  });
 
   const refresh = () =>
     Promise.all([
@@ -158,9 +166,9 @@ export function InternalFinanceOverview() {
         return target.item
           ? transactionsApi.update(
               target.item.id,
-              value as TransactionFormValues,
+              value as InternalTransactionValues,
             )
-          : transactionsApi.create(value as TransactionFormValues);
+          : transactionsApi.create(value as InternalTransactionValues);
       if (target.kind === "category")
         return target.item
           ? transactionCategoriesApi.update(
@@ -487,11 +495,16 @@ export function InternalFinanceOverview() {
           })
         }
       />
-      <TransactionModal
+      <InternalTransactionModal
         open={editor?.kind === "transaction"}
+        title={
+          editor?.kind === "transaction" && editor.item
+            ? "Edit transaction"
+            : "Create transaction"
+        }
         initial={editor?.kind === "transaction" ? editor.item : undefined}
         accounts={allAccounts.data ?? accounts.data?.items ?? []}
-        categories={categories}
+        members={transactionMembers.data ?? []}
         onClose={() => setEditor(null)}
         onSubmit={(value) =>
           editor &&

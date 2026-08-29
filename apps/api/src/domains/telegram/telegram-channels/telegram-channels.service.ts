@@ -58,6 +58,7 @@ export class TelegramChannelsService {
   removePostFromGroup: TelegramPostGroupsService['removePostFromGroup'];
   reorderPostGroup: TelegramPostGroupsService['reorderPostGroup'];
   managedPosts: TelegramManagedPostQueryService['managedPosts'];
+  managedPost: TelegramManagedPostQueryService['managedPost'];
   managedPostsCalendar: TelegramManagedPostCalendarService['managedPostsCalendar'];
   setManagedPostTelegramUrl: TelegramManagedPostLinksService['setManagedPostTelegramUrl'];
   managedPostLinkTargets: TelegramManagedPostLinksService['managedPostLinkTargets'];
@@ -175,6 +176,7 @@ export class TelegramChannelsService {
     this.removePostFromGroup = groups.removePostFromGroup.bind(groups);
     this.reorderPostGroup = groups.reorderPostGroup.bind(groups);
     this.managedPosts = query.managedPosts.bind(query);
+    this.managedPost = query.managedPost.bind(query);
     this.managedPostsCalendar = calendar.managedPostsCalendar.bind(calendar);
     this.setManagedPostTelegramUrl =
       links.setManagedPostTelegramUrl.bind(links);
@@ -242,7 +244,8 @@ export class TelegramChannelsService {
     this.inviteLinkHistory = reads.inviteLinkHistory.bind(reads);
     this.promosByChannel = content.promosByChannel.bind(content);
     this.posts = content.posts.bind(content);
-    this.publishedPostsForSelect = content.publishedPostsForSelect.bind(content);
+    this.publishedPostsForSelect =
+      content.publishedPostsForSelect.bind(content);
     this.analytics = content.analytics.bind(content);
     this.attachInviteLinkCampaign =
       campaign.attachInviteLinkCampaign.bind(campaign);

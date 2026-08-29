@@ -29,7 +29,6 @@ import {
   CancelPlacementDto,
   CompletePermanentPlacementDto,
   CreateTelegramAdProductDto,
-  CreateTelegramAdQuoteDto,
   CreateTelegramAdvertiserActivityDto,
   CreateTelegramAdvertiserContactDto,
   CreateTelegramAdvertiserDto,
@@ -46,12 +45,10 @@ import {
   RetryPlacementDeletionDto,
   SchedulePlacementDto,
   ScheduleSaleDto,
-  TelegramAdAvailabilityQueryDto,
   TelegramAdPriceHistoryQueryDto,
   TelegramAdProductsQueryDto,
   TelegramAdProductsByChannelsQueryDto,
   TelegramAdSalesBulkCreateDto,
-  TelegramAdSalesQueryDto,
   TelegramAdvertiserActivitiesQueryDto,
   TelegramAdvertiserSearchDto,
   TelegramAdvertiserTasksQueryDto,
@@ -221,14 +218,6 @@ export class TelegramAdSalesController {
     return this.service.recommendPolicy(user.sub, channelId, dto);
   }
 
-  @Post('quotes')
-  createQuote(
-    @CurrentUser() user: JwtUser,
-    @Body() dto: CreateTelegramAdQuoteDto,
-  ) {
-    return this.service.createQuote(user.sub, dto);
-  }
-
   @Get('channels/:channelId/price-history')
   priceHistory(
     @CurrentUser() user: JwtUser,
@@ -236,14 +225,6 @@ export class TelegramAdSalesController {
     @Query() query: TelegramAdPriceHistoryQueryDto,
   ) {
     return this.service.priceHistory(user.sub, channelId, query);
-  }
-
-  @Post('availability')
-  availability(
-    @CurrentUser() user: JwtUser,
-    @Body() dto: TelegramAdAvailabilityQueryDto,
-  ) {
-    return this.service.availability(user.sub, dto);
   }
 
   @Post('bulk')
@@ -549,14 +530,6 @@ export class TelegramAdSalesController {
     @Body() dto: TelegramAdCrmMemberSettingsDto,
   ) {
     return this.crmSettingsService.updateCrmMemberSettings(user.sub, dto);
-  }
-
-  @Get()
-  listSales(
-    @CurrentUser() user: JwtUser,
-    @Query() query: TelegramAdSalesQueryDto,
-  ) {
-    return this.service.listSales(user.sub, query);
   }
 
   @Post('checkout')

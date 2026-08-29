@@ -14,16 +14,29 @@ import { CurrentUser } from '../../../common/current-user.decorator';
 import type { JwtUser } from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { CreateFinanceCategoryDto, UpdateFinanceCategoryDto } from './dto';
+import { FinanceCategoryStatisticsQueryDto } from './finance-category-statistics.dto';
+import { FinanceCategoryStatisticsService } from './finance-category-statistics.service';
 import { FinanceCategoriesService } from './finance-categories.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('finance/categories')
 export class FinanceCategoriesController {
-  constructor(private readonly service: FinanceCategoriesService) {}
+  constructor(
+    private readonly service: FinanceCategoriesService,
+    private readonly statisticsService: FinanceCategoryStatisticsService,
+  ) {}
 
   @Get()
   list(@CurrentUser() user: JwtUser, @Query('type') type?: TransactionType) {
     return this.service.list(user.sub, type);
+  }
+
+  @Get('statistics')
+  statistics(
+    @CurrentUser() user: JwtUser,
+    @Query() query: FinanceCategoryStatisticsQueryDto,
+  ) {
+    return this.statisticsService.statistics(user.sub, query.type);
   }
 
   @Post()

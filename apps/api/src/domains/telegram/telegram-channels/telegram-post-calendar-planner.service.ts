@@ -17,10 +17,7 @@ import type {
 import { randomUUID } from 'crypto';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import {
-  utcDateKey,
-  zonedDateTimeToUtc,
-} from '../telegram-ad-sales/domain/timezone';
+import { zonedDateTimeToUtc } from '../telegram-ad-sales/domain/timezone';
 import {
   CreatePostPlannerFormatDto,
   CreatePostPlannerSlotDto,
@@ -33,6 +30,14 @@ import {
 } from './dto';
 import { TelegramManagedPostBulkService } from './telegram-managed-post-bulk.service';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
+import {
+  plannerDateKeyFromInput,
+  plannerDateKeys,
+  plannerWeekday,
+  rotatePlannerItems,
+  serializePlannerFormat,
+  serializePlannerSlot,
+} from './telegram-post-calendar-planner-utils';
 
 type PlannerPost = {
   id: string;
@@ -79,39 +84,13 @@ export class TelegramPostCalendarPlannerService {
     }
   }
 
-  private serializeFormat(format: TelegramPostPlannerFormat) {
-    return {
-      id: format.id,
-      telegramChannelId: format.telegramChannelId,
-      name: format.name,
-      description: format.description,
-      icon: format.icon,
-      position: format.position,
-      isActive: format.isActive,
-    };
-  }
-
-  private serializeSlot(slot: TelegramPostPlannerSlot) {
-    return {
-      id: slot.id,
-      telegramChannelId: slot.telegramChannelId,
-      formatId: slot.formatId,
-      postGroupIds: slot.postGroupIds,
-      weekday: slot.weekday,
-      time: slot.time,
-      timezone: slot.timezone,
-      position: slot.position,
-      isActive: slot.isActive,
-    };
-  }
-
   async listFormats(userId: string, channelId: string) {
     const { workspaceId } = await this.channelContext(userId, channelId);
     const formats = await this.prisma.telegramPostPlannerFormat.findMany({
       where: { workspaceId, telegramChannelId: channelId },
       orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
     });
-    return formats.map((format) => this.serializeFormat(format));
+    return formats.map(serializePlannerFormat);
   }
 
   async createFormat(
@@ -133,7 +112,7 @@ export class TelegramPostCalendarPlannerService {
         isActive: dto.isActive ?? true,
       },
     });
-    return this.serializeFormat(created);
+    return serializePlannerFormat(created);
   }
 
   async updateFormat(
@@ -160,7 +139,7 @@ export class TelegramPostCalendarPlannerService {
         isActive: dto.isActive,
       },
     });
-    return this.serializeFormat(updated);
+    return serializePlannerFormat(updated);
   }
 
   async deleteFormat(userId: string, channelId: string, formatId: string) {
@@ -174,7 +153,7 @@ export class TelegramPostCalendarPlannerService {
         where: { id: formatId },
       });
     });
-    return this.serializeFormat(deleted);
+    return serializePlannerFormat(deleted);
   }
 
   async listSlots(userId: string, channelId: string) {
@@ -183,7 +162,7 @@ export class TelegramPostCalendarPlannerService {
       where: { workspaceId, telegramChannelId: channelId },
       orderBy: [{ weekday: 'asc' }, { position: 'asc' }, { time: 'asc' }],
     });
-    return slots.map((slot) => this.serializeSlot(slot));
+    return slots.map(serializePlannerSlot);
   }
 
   async createSlot(
@@ -218,7 +197,7 @@ export class TelegramPostCalendarPlannerService {
         isActive: dto.isActive ?? true,
       },
     });
-    return this.serializeSlot(created);
+    return serializePlannerSlot(created);
   }
 
   async updateSlot(
@@ -258,7 +237,7 @@ export class TelegramPostCalendarPlannerService {
         isActive: dto.isActive,
       },
     });
-    return this.serializeSlot(updated);
+    return serializePlannerSlot(updated);
   }
 
   async deleteSlot(userId: string, channelId: string, slotId: string) {
@@ -270,7 +249,7 @@ export class TelegramPostCalendarPlannerService {
     const deleted = await this.prisma.telegramPostPlannerSlot.delete({
       where: { id: slotId },
     });
-    return this.serializeSlot(deleted);
+    return serializePlannerSlot(deleted);
   }
 
   async mutateSlotsBatch(
@@ -414,9 +393,9 @@ export class TelegramPostCalendarPlannerService {
       await this.channelContext(userId, channelId);
     const timezone = dto.timezone?.trim() || workspaceTimezone;
     this.assertTimezone(timezone);
-    const day = this.dateKeyFromInput(dto.date, timezone);
+    const day = plannerDateKeyFromInput(dto.date, timezone);
     const dayStart = zonedDateTimeToUtc(day, '00:00', timezone);
-    const nextDay = this.dateKeys(day, day)[0];
+    const nextDay = plannerDateKeys(day, day)[0];
     const dayEndCursor = new Date(`${nextDay}T00:00:00.000Z`);
     dayEndCursor.setUTCDate(dayEndCursor.getUTCDate() + 1);
     const dayEnd = zonedDateTimeToUtc(
@@ -466,10 +445,10 @@ export class TelegramPostCalendarPlannerService {
   ): Promise<TelegramPostPlannerPreviewResult> {
     const timezone = dto.timezone?.trim() || workspaceTimezone;
     this.assertTimezone(timezone);
-    const from = this.dateKeyFromInput(dto.from, timezone);
-    const to = this.dateKeyFromInput(dto.to, timezone);
+    const from = plannerDateKeyFromInput(dto.from, timezone);
+    const to = plannerDateKeyFromInput(dto.to, timezone);
     if (to < from) throw new BadRequestException('Planner range is invalid');
-    const dateKeys = this.dateKeys(from, to);
+    const dateKeys = plannerDateKeys(from, to);
     if (dateKeys.length > 62) {
       throw new BadRequestException('Planner range is limited to 62 days');
     }
@@ -556,7 +535,7 @@ export class TelegramPostCalendarPlannerService {
       dto.excludePostIds ?? [],
       dto.limit ?? 50,
     );
-    const remainingPosts = this.rotate(posts, dto.rerollOffset ?? 0);
+    const remainingPosts = rotatePlannerItems(posts, dto.rerollOffset ?? 0);
     const assignments: TelegramPostPlannerAssignment[] = [];
     for (const slot of availableSlots) {
       const postIndex = this.pickPostForSlot(remainingPosts, slot);
@@ -720,7 +699,7 @@ export class TelegramPostCalendarPlannerService {
     formatIds: string[],
     timezone: string,
   ) {
-    const weekdays = [...new Set(dateKeys.map((date) => this.weekday(date)))];
+    const weekdays = [...new Set(dateKeys.map(plannerWeekday))];
     const slots = await this.prisma.telegramPostPlannerSlot.findMany({
       where: {
         workspaceId,
@@ -735,7 +714,7 @@ export class TelegramPostCalendarPlannerService {
       slots
         .filter(
           (slot) =>
-            slot.formatId != null || slot.weekday === this.weekday(date),
+            slot.formatId != null || slot.weekday === plannerWeekday(date),
         )
         .filter(
           (slot) =>
@@ -810,35 +789,5 @@ export class TelegramPostCalendarPlannerService {
     slot: TelegramPostPlannerSlot & { date: string },
   ) {
     return posts.findIndex((post) => this.postMatchesSlot(post, slot));
-  }
-
-  private dateKeyFromInput(value: string, timezone: string) {
-    if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) {
-      throw new BadRequestException('Planner date is invalid');
-    }
-    return utcDateKey(parsed, timezone);
-  }
-
-  private dateKeys(from: string, to: string) {
-    const dates: string[] = [];
-    let cursor = new Date(`${from}T00:00:00.000Z`);
-    const end = new Date(`${to}T00:00:00.000Z`);
-    while (cursor <= end) {
-      dates.push(cursor.toISOString().slice(0, 10));
-      cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
-    }
-    return dates;
-  }
-
-  private weekday(dateKey: string) {
-    return new Date(`${dateKey}T00:00:00.000Z`).getUTCDay();
-  }
-
-  private rotate<T>(items: T[], offset: number) {
-    if (!items.length) return [];
-    const normalized = offset % items.length;
-    return [...items.slice(normalized), ...items.slice(0, normalized)];
   }
 }

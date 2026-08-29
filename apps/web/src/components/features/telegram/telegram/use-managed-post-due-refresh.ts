@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { TelegramManagedPost } from "@/lib/api";
 import { telegramPostKeys } from "@/lib/query-keys";
+import { findManagedPostInPages } from "./managed-post-cache";
 
 const RETRY_DELAYS_MS = [0, 1_000, 2_000, 4_000, 8_000] as const;
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
@@ -39,14 +40,19 @@ export function useManagedPostDueRefresh({
 
     const refresh = async () => {
       if (stopped) return;
-      await queryClient.refetchQueries({
-        queryKey: telegramPostKeys.managed(channelId),
-        type: "active",
-      });
+      await Promise.all([
+        queryClient.refetchQueries({
+          queryKey: telegramPostKeys.managedLists(channelId),
+          type: "active",
+        }),
+        queryClient.refetchQueries({
+          queryKey: telegramPostKeys.managedDetail(channelId, postId),
+          type: "active",
+          exact: true,
+        }),
+      ]);
       if (stopped) return;
-      const current = queryClient
-        .getQueryData<TelegramManagedPost[]>(telegramPostKeys.managed(channelId))
-        ?.find((item) => item.id === postId);
+      const current = findManagedPostInPages(queryClient, channelId, postId);
       if (current && current.status !== "SCHEDULED" && current.status !== "PUBLISHING") {
         await Promise.all([
           queryClient.invalidateQueries({

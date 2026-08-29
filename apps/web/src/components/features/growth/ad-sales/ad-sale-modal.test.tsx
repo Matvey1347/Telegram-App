@@ -76,13 +76,23 @@ function renderModal(
     initialChannelId: "channel-1",
     onLoadAvailableSlots: vi.fn().mockResolvedValue([]),
     onLoadPublishedPosts: vi.fn().mockResolvedValue([]),
-    onRequestQuote: vi.fn().mockImplementation(({ productId }) =>
+    onRequestQuotePreview: vi.fn().mockImplementation((requests) =>
       Promise.resolve({
-        expectedViews: productId === "format-2" ? 2_500 : 1_250,
-        targetCpm: "100",
-        recommendedPrice: productId === "format-2" ? "250" : "125",
-        minimumPrice: productId === "format-2" ? "250" : "125",
-        warnings: [],
+        items: requests.map(
+          (request: { requestId: string; telegramAdProductId?: string }) => ({
+            requestId: request.requestId,
+            quote: {
+              expectedViews:
+                request.telegramAdProductId === "format-2" ? 2_500 : 1_250,
+              targetCpm: "100",
+              recommendedPrice:
+                request.telegramAdProductId === "format-2" ? "250" : "125",
+              minimumPrice:
+                request.telegramAdProductId === "format-2" ? "250" : "125",
+              warnings: [],
+            },
+          }),
+        ),
       }),
     ),
     onSearchAdvertisers: vi.fn().mockResolvedValue([]),
@@ -95,6 +105,10 @@ function renderModal(
       <AdSaleModal {...props} />
     </QueryClientProvider>,
   );
+}
+
+function futureScheduledAt() {
+  return new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString();
 }
 
 describe("AdSaleModal", () => {
@@ -425,6 +439,7 @@ describe("AdSaleModal", () => {
       },
     ]);
     renderModal({
+      initialScheduledAt: futureScheduledAt(),
       onLoadPublishedPosts,
     });
 
@@ -481,7 +496,10 @@ describe("AdSaleModal", () => {
     const onLoadPublishedPosts = vi
       .fn()
       .mockRejectedValue(new Error("Telegram unavailable"));
-    renderModal({ onLoadPublishedPosts });
+    renderModal({
+      initialScheduledAt: futureScheduledAt(),
+      onLoadPublishedPosts,
+    });
 
     fireEvent.click(
       screen.getByRole("button", { name: "Actions for Example channel" }),
@@ -508,13 +526,23 @@ describe("AdSaleModal", () => {
 
   it("splits one sold total by expected value and reuses one post across the network", async () => {
     const onSubmit = vi.fn().mockResolvedValue({});
-    const onRequestQuote = vi.fn().mockImplementation(({ channelId }) =>
+    const onRequestQuotePreview = vi.fn().mockImplementation((requests) =>
       Promise.resolve({
-        expectedViews: channelId === "channel-2" ? 2_000 : 1_000,
-        targetCpm: channelId === "channel-2" ? "200" : "100",
-        recommendedPrice: channelId === "channel-2" ? "400" : "100",
-        minimumPrice: "0",
-        warnings: [],
+        items: requests.map(
+          (request: { requestId: string; telegramChannelId: string }) => ({
+            requestId: request.requestId,
+            quote: {
+              expectedViews:
+                request.telegramChannelId === "channel-2" ? 2_000 : 1_000,
+              targetCpm:
+                request.telegramChannelId === "channel-2" ? "200" : "100",
+              recommendedPrice:
+                request.telegramChannelId === "channel-2" ? "400" : "100",
+              minimumPrice: "0",
+              warnings: [],
+            },
+          }),
+        ),
       }),
     );
     const product = {
@@ -532,6 +560,7 @@ describe("AdSaleModal", () => {
     };
     renderModal({
       initialChannelId: null,
+      initialScheduledAt: futureScheduledAt(),
       defaultCurrency: "USD",
       accounts: [
         {
@@ -568,7 +597,7 @@ describe("AdSaleModal", () => {
         "channel-1": [product],
         "channel-2": [{ ...product, id: "format-2" }],
       } as never,
-      onRequestQuote,
+      onRequestQuotePreview,
       onSubmit,
     });
 
@@ -582,10 +611,15 @@ describe("AdSaleModal", () => {
       ).toHaveLength(2),
     );
     await waitFor(() =>
-      expect(onRequestQuote).toHaveBeenCalledWith(
-        expect.objectContaining({ currency: "USD" }),
+      expect(onRequestQuotePreview).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ currency: "USD" }),
+        ]),
+        expect.any(AbortSignal),
       ),
     );
+    expect(onRequestQuotePreview).toHaveBeenCalledTimes(1);
+    expect(onRequestQuotePreview.mock.calls[0][0]).toHaveLength(2);
     const soldTotal = screen
       .getByText("Sold total")
       .parentElement?.querySelector("input");

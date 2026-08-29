@@ -1,4 +1,7 @@
-import type { TelegramAdSale } from "@telegram-system/shared";
+import type {
+  TelegramAdSale,
+  TelegramAdSaleListItem,
+} from "@telegram-system/shared";
 import { Eye, Forward, MessageCircle, Smile } from "lucide-react";
 
 type PostMetricKey =
@@ -8,7 +11,7 @@ type PostMetricKey =
   | "commentsCount";
 
 export function sumAdSalePostMetric(
-  sale: TelegramAdSale,
+  sale: TelegramAdSale | TelegramAdSaleListItem,
   key: PostMetricKey,
 ) {
   return sale.placements.reduce(
@@ -18,7 +21,7 @@ export function sumAdSalePostMetric(
 }
 
 export function AdSalePostMetrics(props: {
-  sale: TelegramAdSale;
+  sale: TelegramAdSale | TelegramAdSaleListItem;
   className?: string;
 }) {
   return (

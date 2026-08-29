@@ -88,11 +88,21 @@ describe('FinanceBotChatResponderService', () => {
     await responder.sendAccounts(
       context,
       'user-1',
-      'profile-1',
+      {
+        id: 'profile-1',
+        defaultCurrency: 'EUR',
+        workspaceId: 'workspace-1',
+      },
       'chat-1',
       'en',
     );
 
+    expect(ledger.accounts).toHaveBeenCalledTimes(1);
+    expect(ledger.accounts).toHaveBeenCalledWith(
+      'profile-1',
+      'EUR',
+      'workspace-1',
+    );
     const buttons = interactive.send.mock.calls[0][2].inlineButtons;
     expect(buttons.length).toBeLessThanOrEqual(6);
     expect(

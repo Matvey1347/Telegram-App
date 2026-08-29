@@ -41,6 +41,11 @@ export class CurrenciesController {
     return this.service.getRates(user.sub);
   }
 
+  @Get('rates/latest')
+  getLatestRates(@CurrentUser() user: JwtUser) {
+    return this.service.getLatestRates(user.sub);
+  }
+
   @Post('rates')
   createRate(@CurrentUser() user: JwtUser, @Body() dto: CreateCurrencyRateDto) {
     return this.service.createRate(user.sub, dto);

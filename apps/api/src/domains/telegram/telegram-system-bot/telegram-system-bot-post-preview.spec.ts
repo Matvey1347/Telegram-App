@@ -108,6 +108,9 @@ describe('System Bot managed-post preview', () => {
       channels: [{ id: 'channel-1', title: 'Channel' }],
     });
 
+    if (!('link_preview_options' in card)) {
+      throw new Error('Expected media preview options');
+    }
     expect(card.link_preview_options).toEqual({
       url: 'https://cdn.example/post.jpg',
       prefer_large_media: true,
@@ -136,7 +139,6 @@ describe('System Bot managed-post preview', () => {
         accounts: [],
         members: [],
         channels: [],
-        products: [],
       },
     });
 

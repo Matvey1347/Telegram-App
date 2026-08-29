@@ -1,13 +1,14 @@
 'use client';
 
 import type { MouseEventHandler } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { AdCampaignsTable } from '@/components/features/growth/ad-campaigns/campaigns-table';
 import { PromoPreviewModal } from '@/components/features/growth/ad-campaigns/promo-preview-modal';
+import { usePromoDeepLink } from '@/components/features/growth/ad-campaigns/use-promo-deep-link';
 import { IconAvatar } from '@/components/icons/icon-avatar';
 import { IconPicker } from '@/components/icons/icon-picker';
 import { AppShell } from '@/components/layout/app-shell';
@@ -46,6 +47,9 @@ import { useAppToast } from '@/providers/toast-provider';
 import { CircleHelp, TrendingUp } from 'lucide-react';
 import { accountDisplayName } from '@/lib/features/finance/account-display';
 import { NativeMoney } from '@/components/ui/native-money';
+import { formatAdCampaignLocalDate as formatLocalDate, isAdCampaignsViewMode, resolveInitialAdCampaignsView, toAdCampaignInputDate as toInputDate, type AdCampaignsViewMode } from '@/components/features/growth/ad-campaigns/ad-campaign-route-state';
+import { Pagination } from '@/components/ui/pagination';
+import { usePagination } from '@/hooks/use-pagination';
 
 type CampaignValues = {
   telegramChannelId: string;
@@ -70,34 +74,12 @@ type CampaignSelectOption = {
   searchText?: string;
 };
 
-type AdCampaignsViewMode = 'campaigns' | 'promos' | 'hypotheses';
-
 const AD_CAMPAIGNS_VIEW_MODE_STORAGE_KEY = 'ad-campaigns:view-mode';
 const AD_CAMPAIGNS_VIEW_OPTIONS = [
   { value: 'campaigns', label: 'Campaigns', iconEmoji: '🎯' },
   { value: 'promos', label: 'Promos', iconEmoji: '📣' },
   { value: 'hypotheses', label: 'Hypotheses', iconEmoji: '🧪' },
 ];
-const EMPTY_CAMPAIGNS: AdCampaign[] = [];
-
-function formatLocalDate(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function toInputDate(value?: string | Date | null) {
-  if (!value) return '';
-  if (typeof value === 'string') {
-    const m = value.match(/^(\d{4}-\d{2}-\d{2})/);
-    if (m) return m[1];
-  }
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '';
-  return formatLocalDate(d);
-}
-
 function accountSelectOption(account: Account) {
   return {
     value: account.id,
@@ -116,7 +98,14 @@ export default function AdCampaignsPage() {
   const [editing, setEditing] = useState<any | null>(null);
   const [deleting, setDeleting] = useState<any | null>(null);
   const [channelFilter, setChannelFilter] = useState('');
-  const [viewMode, setViewMode] = useState<AdCampaignsViewMode>('campaigns');
+  const [viewMode, setViewMode] = useState<AdCampaignsViewMode>(() =>
+    resolveInitialAdCampaignsView(
+      searchParams.get('view'),
+      typeof window === 'undefined'
+        ? null
+        : window.localStorage.getItem(AD_CAMPAIGNS_VIEW_MODE_STORAGE_KEY),
+    ),
+  );
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('date_desc');
   const [dateFrom, setDateFrom] = useState('');
@@ -130,54 +119,68 @@ export default function AdCampaignsPage() {
   const [editingPromo, setEditingPromo] = useState<Promo | null>(null);
   const [deletingPromo, setDeletingPromo] = useState<Promo | null>(null);
   const [previewPromo, setPreviewPromo] = useState<Promo | null>(null);
+  const deferredSearch = useDeferredValue(search.trim());
+  const campaignsPagination = usePagination({ initialPageSize: 50 });
+  const hypothesesPagination = usePagination({ initialPageSize: 50 });
+  const promosPagination = usePagination({ initialPageSize: 50 });
 
-  const { data: workspace } = useQuery({ queryKey: ['workspace-selected'], queryFn: workspacesApi.selected });
-  const { data: currencySettings } = useQuery({ queryKey: ['currency-settings'], queryFn: currenciesApi.getSettings });
-  const { data: rates } = useQuery({ queryKey: ['currency-rates'], queryFn: currenciesApi.listRates });
+  const financialViewVisible = viewMode !== 'promos' || createOpen || Boolean(editing) || hypothesisFormOpen;
+  const { data: workspace } = useQuery({ queryKey: ['workspace-selected'], queryFn: workspacesApi.selected, enabled: financialViewVisible });
+  const { data: currencySettings } = useQuery({ queryKey: ['currency-settings'], queryFn: currenciesApi.getSettings, enabled: financialViewVisible });
+  const { data: rates } = useQuery({ queryKey: ['currency-rates-latest'], queryFn: currenciesApi.listLatestRates, enabled: financialViewVisible });
   const moneySettings = currencySettings ?? {
     primaryCurrency: workspace?.primaryCurrency || '',
     secondaryCurrency: workspace?.secondaryCurrency || '',
     currencyDisplayMode: workspace?.currencyDisplayMode || 'code',
   };
-  const { data: channels } = useQuery({ queryKey: ['telegram-channels'], queryFn: telegramChannelsApi.list });
+  const { data: channels } = useQuery({ queryKey: ['telegram-channels'], queryFn: telegramChannelsApi.list, enabled: viewMode !== 'hypotheses' || hypothesisFormOpen });
   const { data, isLoading, error } = useQuery({
-    queryKey: ['ad-campaigns', channelFilter],
-    queryFn: () => adCampaignsApi.list(channelFilter ? { telegramChannelId: channelFilter } : undefined),
+    queryKey: ['ad-campaigns', 'list', { viewMode, page: campaignsPagination.page, pageSize: campaignsPagination.pageSize, search: deferredSearch, channelFilter, dateFrom, dateTo, sort }],
+    queryFn: () => adCampaignsApi.listPage({ page: campaignsPagination.page, pageSize: campaignsPagination.pageSize, search: deferredSearch || undefined, telegramChannelId: channelFilter || undefined, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, sort: sort as 'date_desc' | 'date_asc' | 'cost_desc' | 'joined_desc' }),
     enabled: viewMode === 'campaigns',
+    placeholderData: keepPreviousData,
   });
   const { data: performance } = useQuery({
     queryKey: ['ad-campaigns-performance', channelFilter],
     queryFn: () => adCampaignsApi.performanceSummary(channelFilter ? { channelId: channelFilter } : undefined),
     enabled: viewMode === 'campaigns',
   });
-  const { data: hypotheses = [], isLoading: hypothesesLoading, error: hypothesesError } = useQuery({
-    queryKey: ['ad-hypotheses'],
-    queryFn: adHypothesesApi.list,
+  const { data: hypothesesPage, isLoading: hypothesesLoading, error: hypothesesError } = useQuery({
+    queryKey: ['ad-hypotheses', 'list', { viewMode, page: hypothesesPagination.page, pageSize: hypothesesPagination.pageSize, search: deferredSearch }],
+    queryFn: () => adHypothesesApi.listPage({ page: hypothesesPagination.page, pageSize: hypothesesPagination.pageSize, search: deferredSearch || undefined }),
+    enabled: viewMode === 'hypotheses',
+    placeholderData: keepPreviousData,
   });
-  const { data: promos = [], isLoading: promosLoading, error: promosError } = useQuery({
-    queryKey: ['promos', channelFilter],
-    queryFn: () => promosApi.list(channelFilter ? { telegramChannelId: channelFilter } : undefined),
+  const { data: promosPage, isLoading: promosLoading, error: promosError } = useQuery({
+    queryKey: ['promos', 'list', { viewMode, page: promosPagination.page, pageSize: promosPagination.pageSize, search: deferredSearch, channelFilter }],
+    queryFn: () => promosApi.listPage({ page: promosPagination.page, pageSize: promosPagination.pageSize, search: deferredSearch || undefined, telegramChannelId: channelFilter || undefined }),
+    enabled: viewMode === 'promos',
+    placeholderData: keepPreviousData,
   });
+
+  const hypotheses = hypothesesPage?.items ?? [];
+  const promos = promosPage?.items ?? [];
+  const requestedPromoId = searchParams.get('promoId') || '';
+  const promoDeepLink = usePromoDeepLink(requestedPromoId, viewMode === 'promos', promos);
 
   useEffect(() => {
     const requestedViewMode = searchParams.get('view');
-    if (requestedViewMode === 'campaigns' || requestedViewMode === 'promos' || requestedViewMode === 'hypotheses') {
+    if (isAdCampaignsViewMode(requestedViewMode)) {
       setViewMode(requestedViewMode);
       return;
     }
     const savedViewMode = window.localStorage.getItem(AD_CAMPAIGNS_VIEW_MODE_STORAGE_KEY);
-    if (savedViewMode === 'campaigns' || savedViewMode === 'promos' || savedViewMode === 'hypotheses') {
+    if (isAdCampaignsViewMode(savedViewMode)) {
       setViewMode(savedViewMode);
     }
   }, [searchParams]);
 
   useEffect(() => {
-    const requestedPromoId = searchParams.get('promoId');
-    if (viewMode !== 'promos' || !requestedPromoId || !promos?.length) return;
-    const requestedPromo = promos.find((promo) => promo.id === requestedPromoId);
+    if (viewMode !== 'promos' || !requestedPromoId) return;
+    const requestedPromo = promos.find((promo) => promo.id === requestedPromoId) ?? promoDeepLink.data;
     if (!requestedPromo) return;
     setPreviewPromo((current) => current?.id === requestedPromo.id ? current : requestedPromo);
-  }, [promos, searchParams, viewMode]);
+  }, [promoDeepLink.data, promos, requestedPromoId, viewMode]);
 
   const createMutation = useMutation({
     mutationFn: adCampaignsApi.create,
@@ -231,24 +234,16 @@ export default function AdCampaignsPage() {
     },
   });
   const excludeHypothesisMutation = useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       id,
       excludeFromAnalytics,
     }: {
       id: string;
       excludeFromAnalytics: boolean;
-    }) => {
-      const detail = await adHypothesesApi.get(id);
-      await Promise.all(
-        detail.campaigns.map((campaign) =>
-          adCampaignsApi.updateAnalyticsInput(campaign.id, { excludeFromAnalytics }),
-        ),
-      );
-      return detail;
-    },
+    }) => adHypothesesApi.updateCampaignAnalyticsInput(id, excludeFromAnalytics),
     onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: adCampaignKeys.list() });
       qc.invalidateQueries({ queryKey: ['ad-hypotheses'] });
-      qc.invalidateQueries({ queryKey: ['ad-campaigns'] });
       qc.invalidateQueries({ queryKey: ['ad-campaigns-performance'] });
       pushToast('Hypothesis analytics flag updated for all linked campaigns.', 'success');
     },
@@ -276,7 +271,7 @@ export default function AdCampaignsPage() {
     },
   });
 
-  const campaigns = data ?? [];
+  const campaigns = data?.items ?? [];
   const ownTelegramChannels = useMemo(
     () => (channels ?? []).filter(isOwnTelegramChannel),
     [channels],
@@ -284,9 +279,9 @@ export default function AdCampaignsPage() {
   const showCampaignsInitialLoading = viewMode === 'campaigns' && isLoading && !data;
   const showHypothesesInitialLoading = hypothesesLoading && !hypotheses.length;
   const showPromosInitialLoading = promosLoading && !promos.length;
-  const visibleCampaigns = useMemo(() => sortCampaigns(filterCampaigns(campaigns, search, dateFrom, dateTo), sort), [campaigns, search, dateFrom, dateTo, sort]);
-  const visibleHypotheses = useMemo(() => filterHypotheses(hypotheses, search), [hypotheses, search]);
-  const visiblePromos = useMemo(() => filterPromos(promos, search), [promos, search]);
+  const visibleCampaigns = campaigns;
+  const visibleHypotheses = hypotheses;
+  const visiblePromos = promos;
   const handleViewModeChange = (nextViewMode: AdCampaignsViewMode) => {
     setViewMode(nextViewMode);
     window.localStorage.setItem(AD_CAMPAIGNS_VIEW_MODE_STORAGE_KEY, nextViewMode);
@@ -325,7 +320,11 @@ export default function AdCampaignsPage() {
           <FormField label="Channel">
             <CustomSelect
               value={channelFilter}
-              onChange={setChannelFilter}
+              onChange={(value) => {
+                setChannelFilter(value);
+                campaignsPagination.resetPage();
+                promosPagination.resetPage();
+              }}
               disabled={viewMode === 'hypotheses'}
               placeholder="All channels"
               options={[
@@ -342,7 +341,12 @@ export default function AdCampaignsPage() {
         </div>
         <div className="min-w-0">
           <FormField label="Search">
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={viewMode === 'campaigns' ? 'Campaign, source, channel' : viewMode === 'promos' ? 'Promo, text, channel' : 'Hypothesis'} />
+            <Input value={search} onChange={(e) => {
+              setSearch(e.target.value);
+              campaignsPagination.resetPage();
+              hypothesesPagination.resetPage();
+              promosPagination.resetPage();
+            }} placeholder={viewMode === 'campaigns' ? 'Campaign, source, channel' : viewMode === 'promos' ? 'Promo, text, channel' : 'Hypothesis'} />
           </FormField>
         </div>
         {viewMode === 'campaigns' ? <div className="min-w-0">
@@ -353,13 +357,17 @@ export default function AdCampaignsPage() {
               onChange={(range) => {
                 setDateFrom(range.from);
                 setDateTo(range.to);
+                campaignsPagination.resetPage();
               }}
             />
           </FormField>
         </div> : null}
         {viewMode === 'campaigns' ? <div className="min-w-0">
           <FormField label="Sort">
-            <Select value={sort} onChange={(e) => setSort(e.target.value)}>
+            <Select value={sort} onChange={(e) => {
+              setSort(e.target.value);
+              campaignsPagination.resetPage();
+            }}>
               <option value="date_desc">Newest</option>
               <option value="date_asc">Oldest</option>
               <option value="cost_desc">Highest spend</option>
@@ -377,13 +385,22 @@ export default function AdCampaignsPage() {
         campaigns={visibleCampaigns}
         moneySettings={moneySettings}
         rates={rates}
-        onEdit={setEditing}
+        onEdit={async (campaign) => {
+          try {
+            setEditing(await adCampaignsApi.get(campaign.id));
+          } catch (error) { pushToast(getErrorMessage(error, 'Failed to load campaign.'), 'error'); }
+        }}
         onDelete={setDeleting}
         onToggleExclude={(campaign, excludeFromAnalytics) => excludeMutation.mutate({ id: campaign.id, excludeFromAnalytics })}
-        onOpenPromo={setPreviewPromo}
+        onOpenPromo={async (promo) => {
+          try {
+            setPreviewPromo(await promosApi.get(promo.id));
+          } catch (error) { pushToast(getErrorMessage(error, 'Failed to load promo.'), 'error'); }
+        }}
       />
     ) : null}
     {viewMode === 'campaigns' && !showCampaignsInitialLoading && !error && !visibleCampaigns.length ? <EmptyState text="No campaigns" /> : null}
+    {viewMode === 'campaigns' && data ? <Pagination {...data.pagination} onPageChange={campaignsPagination.setPage} onPageSizeChange={campaignsPagination.setPageSize} loading={isLoading} /> : null}
 
     {viewMode === 'hypotheses' ? (
       <HypothesesSection
@@ -392,13 +409,23 @@ export default function AdCampaignsPage() {
         error={hypothesesError}
         moneySettings={moneySettings}
         rates={rates}
-        onEdit={(hypothesis) => {
-          setEditingHypothesis(hypothesis);
-          setHypothesisFormOpen(true);
+        onEdit={async (hypothesis) => {
+          try {
+            setEditingHypothesis(await adHypothesesApi.get(hypothesis.id));
+            setHypothesisFormOpen(true);
+          } catch (error) { pushToast(getErrorMessage(error, 'Failed to load hypothesis.'), 'error'); }
         }}
         onDelete={setDeletingHypothesis}
-        onOpenCampaigns={setPreviewHypothesis}
-        onOpenHistory={setHistoryHypothesis}
+        onOpenCampaigns={async (hypothesis) => {
+          try {
+            setPreviewHypothesis(await adHypothesesApi.get(hypothesis.id));
+          } catch (error) { pushToast(getErrorMessage(error, 'Failed to load hypothesis.'), 'error'); }
+        }}
+        onOpenHistory={async (hypothesis) => {
+          try {
+            setHistoryHypothesis(await adHypothesesApi.get(hypothesis.id));
+          } catch (error) { pushToast(getErrorMessage(error, 'Failed to load hypothesis.'), 'error'); }
+        }}
         onToggleExclude={(hypothesis, excludeFromAnalytics) =>
           excludeHypothesisMutation.mutate({
             id: hypothesis.id,
@@ -407,18 +434,22 @@ export default function AdCampaignsPage() {
         }
       />
     ) : null}
+    {viewMode === 'hypotheses' && hypothesesPage ? <Pagination {...hypothesesPage.pagination} onPageChange={hypothesesPagination.setPage} onPageSizeChange={hypothesesPagination.setPageSize} loading={hypothesesLoading} /> : null}
     {viewMode === 'promos' ? (
       <PromosSection
         promos={visiblePromos}
         loading={showPromosInitialLoading}
         error={promosError}
-        onEdit={(promo) => {
-          setEditingPromo(promo);
-          setPromoFormOpen(true);
+        onEdit={async (promo) => {
+          try {
+            setEditingPromo(await promosApi.get(promo.id));
+            setPromoFormOpen(true);
+          } catch (error) { pushToast(getErrorMessage(error, 'Failed to load promo.'), 'error'); }
         }}
         onDelete={setDeletingPromo}
       />
     ) : null}
+    {viewMode === 'promos' && promosPage ? <Pagination {...promosPage.pagination} onPageChange={promosPagination.setPage} onPageSizeChange={promosPagination.setPageSize} loading={promosLoading} /> : null}
 
     <CampaignModal
       open={createOpen}
@@ -720,66 +751,8 @@ function campaignAttributedCount(campaign: AdCampaign) {
   return campaignJoinedCount(campaign) + campaignPendingCount(campaign);
 }
 
-function campaignDateValue(campaign: any) {
-  const date = new Date(campaign?.placementDate || campaign?.startedAt || campaign?.createdAt || 0);
-  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
-}
-
-function campaignSearchText(campaign: any) {
-  return [
-    campaign?.title,
-    campaign?.telegramChannel?.title,
-    campaign?.promo?.title,
-    ...(campaign?.advertisingChannels || []).map((source: any) => source.title || source.name),
-    ...(campaign?.hypothesisLinks || []).map((link: any) => link.hypothesis?.name),
-  ].filter(Boolean).join(' ').toLowerCase();
-}
-
 function campaignDateInputValue(campaign: any) {
   return toInputDate(campaign?.placementDate || campaign?.startedAt || campaign?.createdAt);
-}
-
-function filterCampaigns(campaigns: any[], search: string, dateFrom: string, dateTo: string) {
-  const query = search.trim().toLowerCase();
-  return campaigns.filter((campaign) => {
-    const date = campaignDateInputValue(campaign);
-    if (dateFrom && (!date || date < dateFrom)) return false;
-    if (dateTo && (!date || date > dateTo)) return false;
-    if (query && !campaignSearchText(campaign).includes(query)) return false;
-    return true;
-  });
-}
-
-function sortCampaigns(campaigns: any[], sort: string) {
-  const rows = [...campaigns];
-  if (sort === 'date_asc') return rows.sort((a, b) => campaignDateValue(a) - campaignDateValue(b));
-  if (sort === 'cost_desc') return rows.sort((a, b) => Number(b.price || b.costAmount || 0) - Number(a.price || a.costAmount || 0));
-  if (sort === 'joined_desc') return rows.sort((a, b) => Number(b.analytics?.joinedCount ?? b.joinedCount ?? 0) - Number(a.analytics?.joinedCount ?? a.joinedCount ?? 0));
-  return rows.sort((a, b) => campaignDateValue(b) - campaignDateValue(a));
-}
-
-function filterHypotheses(hypotheses: AdHypothesis[], search: string) {
-  const query = search.trim().toLowerCase();
-  if (!query) return hypotheses;
-  return hypotheses.filter((hypothesis) => [
-    hypothesis.name,
-    hypothesis.description,
-    hypothesis.status,
-    hypothesis.summary?.decision,
-    hypothesis.telegramChannel?.title,
-    hypothesis.telegramChannel?.username,
-  ].filter(Boolean).join(' ').toLowerCase().includes(query));
-}
-
-function filterPromos(promos: Promo[], search: string) {
-  const query = search.trim().toLowerCase();
-  if (!query) return promos;
-  return promos.filter((promo) => [
-    promo.title,
-    promo.text,
-    promo.telegramChannel?.title,
-    promo.status,
-  ].filter(Boolean).join(' ').toLowerCase().includes(query));
 }
 
 function resolveCampaignCustomTitle(
@@ -1728,7 +1701,10 @@ function HypothesisFormModal({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [campaignSearch, setCampaignSearch] = useState('');
   const [error, setError] = useState('');
+  const campaignPagination = usePagination({ initialPageSize: 50 });
+  const deferredCampaignSearch = useDeferredValue(campaignSearch.trim());
 
   useEffect(() => {
     if (!open) return;
@@ -1738,6 +1714,8 @@ function HypothesisFormModal({
     setName(hypothesis?.name || '');
     setDescription(hypothesis?.description || '');
     setSelectedIds([]);
+    setCampaignSearch('');
+    campaignPagination.resetPage();
     setError('');
   }, [hypothesis, open]);
 
@@ -1750,34 +1728,13 @@ function HypothesisFormModal({
   }, [hypothesis, open]);
 
   const campaignsQuery = useQuery({
-    queryKey: ['ad-campaigns-hypothesis-form', telegramChannelId],
-    queryFn: () => adCampaignsApi.list({ telegramChannelId }),
+    queryKey: ['ad-campaigns-hypothesis-form', telegramChannelId, campaignPagination.page, campaignPagination.pageSize, deferredCampaignSearch],
+    queryFn: () => adCampaignsApi.listPage({ telegramChannelId, page: campaignPagination.page, pageSize: campaignPagination.pageSize, search: deferredCampaignSearch || undefined }),
     enabled: open && Boolean(telegramChannelId),
+    placeholderData: keepPreviousData,
   });
 
-  const availableCampaigns = campaignsQuery.data ?? EMPTY_CAMPAIGNS;
-  const visibleCampaigns = useMemo(
-    () =>
-      availableCampaigns.filter(
-        (campaign: AdCampaign) => campaign.telegramChannelId === telegramChannelId,
-      ),
-    [availableCampaigns, telegramChannelId],
-  );
-  const visibleCampaignIds = useMemo(
-    () => new Set(visibleCampaigns.map((campaign: AdCampaign) => campaign.id)),
-    [visibleCampaigns],
-  );
-
-  useEffect(() => {
-    if (!telegramChannelId) {
-      setSelectedIds((prev) => (prev.length ? [] : prev));
-      return;
-    }
-    setSelectedIds((prev) => {
-      const next = prev.filter((id) => visibleCampaignIds.has(id));
-      return next.length === prev.length ? prev : next;
-    });
-  }, [telegramChannelId, visibleCampaignIds]);
+  const visibleCampaigns = campaignsQuery.data?.items ?? [];
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const toggleCampaign = (id: string) => {
@@ -1831,7 +1788,10 @@ function HypothesisFormModal({
           <CustomSelect
             value={telegramChannelId}
             onChange={(value) => {
+              if (value !== telegramChannelId) setSelectedIds([]);
               setTelegramChannelId(value);
+              setCampaignSearch('');
+              campaignPagination.resetPage();
               setError('');
             }}
             placeholder="Select channel"
@@ -1850,7 +1810,20 @@ function HypothesisFormModal({
           <Textarea value={description} onChange={(event) => setDescription(event.target.value)} />
         </FormField>
         <div>
-          <p className="mb-2 text-sm font-medium text-slate-200">Campaigns</p>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="text-sm font-medium text-slate-200">Campaigns</p>
+            <span className="text-xs text-slate-400">{selectedIds.length} selected</span>
+          </div>
+          <Input
+            value={campaignSearch}
+            onChange={(event) => {
+              setCampaignSearch(event.target.value);
+              campaignPagination.resetPage();
+            }}
+            placeholder="Search campaigns"
+            disabled={!telegramChannelId}
+            className="mb-2"
+          />
           <div className="max-h-72 space-y-2 overflow-auto rounded-lg border border-slate-800 p-2">
             {campaignsQuery.isLoading && telegramChannelId ? (
               <p className="p-2 text-sm text-slate-400">Loading campaigns…</p>
@@ -1870,6 +1843,7 @@ function HypothesisFormModal({
             ))}
             {telegramChannelId && !campaignsQuery.isLoading && !visibleCampaigns.length ? <p className="p-2 text-sm text-slate-400">No campaigns available for this channel.</p> : null}
           </div>
+          {campaignsQuery.data ? <Pagination {...campaignsQuery.data.pagination} onPageChange={campaignPagination.setPage} onPageSizeChange={campaignPagination.setPageSize} loading={campaignsQuery.isLoading} /> : null}
           {error ? <p className="mt-2 text-sm text-rose-300">{error}</p> : null}
         </div>
         <div className="flex justify-end gap-2">
@@ -2298,7 +2272,7 @@ function CampaignModal({ open, onClose, onSubmit, title, initial, channels }: an
     setValue('advertisingChannelIds', selectedAdChannels.filter((id) => !ownChannelKeys.has(id)), { shouldValidate: true, shouldDirty: true });
   }, [selectedAdChannels, selectedChannelId, setValue]);
 
-  const { data: promos } = useQuery({ queryKey: ['channel-promos', selectedChannelId], queryFn: () => getTelegramChannelPromos(selectedChannelId), enabled: !!selectedChannelId });
+  const { data: promos } = useQuery({ queryKey: ['channel-promos', selectedChannelId], queryFn: () => getTelegramChannelPromos(selectedChannelId), enabled: open && !!selectedChannelId });
   const { data: inviteLinks } = useQuery({
     queryKey: [
       'channel-invite-links-select',
@@ -2309,10 +2283,10 @@ function CampaignModal({ open, onClose, onSubmit, title, initial, channels }: an
       getTelegramChannelInviteLinksForSelect(selectedChannelId, {
         availableForCampaignId: initial?.id || undefined,
       }),
-    enabled: !!selectedChannelId,
+    enabled: open && !!selectedChannelId,
   });
-  const { data: accounts } = useQuery({ queryKey: ['accounts'], queryFn: accountsApi.list });
-  const { data: people } = useQuery({ queryKey: ['advertising-people'], queryFn: advertisingChannelsApi.list });
+  const { data: accounts } = useQuery({ queryKey: ['accounts'], queryFn: accountsApi.list, enabled: open });
+  const { data: people } = useQuery({ queryKey: ['advertising-people'], queryFn: advertisingChannelsApi.list, enabled: open });
 
   const availablePromos = useMemo(() => promos ?? [], [promos]);
   const ownTelegramChannels = useMemo(() => (channels || []).filter(isOwnTelegramChannel), [channels]);

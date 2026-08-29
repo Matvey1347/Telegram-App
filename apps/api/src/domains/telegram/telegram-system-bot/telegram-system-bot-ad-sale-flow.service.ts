@@ -181,6 +181,8 @@ export class TelegramSystemBotAdSaleFlowService {
     }
     if (action.startsWith('placement.'))
       return this.choosePlacement(scope, workflow, Number(action.slice(10)));
+    if (action === 'member.change')
+      return this.transition(scope, workflow, 'CHOOSE_MEMBER', payload);
     if (action.startsWith('account.') || action.startsWith('member.'))
       return this.chooseBaseOption(scope, workflow, action);
     if (action === 'finance.skip')
@@ -189,8 +191,6 @@ export class TelegramSystemBotAdSaleFlowService {
         finance: undefined,
         financeSkipped: true,
       });
-    if (action === 'member.change')
-      return this.transition(scope, workflow, 'CHOOSE_MEMBER', payload);
     if (action.startsWith('target.'))
       return this.chooseTarget(scope, workflow, action);
     if (action === 'content.send')

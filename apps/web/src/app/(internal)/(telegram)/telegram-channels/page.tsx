@@ -17,6 +17,7 @@ import {
 import { Controller, useForm } from "react-hook-form";
 import { AppShell } from "@/components/layout/app-shell";
 import { ChannelPreview } from "@/components/features/telegram/telegram/channel-preview";
+import { ExternalChannelAdAnalysis } from "@/components/features/telegram/telegram/external-channel-ad-analysis";
 import { ChannelAutoSyncToggle } from "@/components/features/telegram/telegram/channel-auto-sync-toggle";
 import {
   ChannelEconomicsSummary,
@@ -100,10 +101,16 @@ import {
 } from "@/lib/features/telegram/telegram-channel-cache";
 import { invalidateTelegramChannelQueries } from "@/lib/features/telegram/telegram-query-invalidation";
 
-type TelegramTab = "channels" | "networks" | "accounts";
-type ChannelFilter = "own" | "external";
-type ChannelLifecycleTab = "active" | "archive";
-type AccountFilter = "mtproto" | "people";
+import {
+  parseTelegramAccountFilter as parseAccountFilter,
+  parseTelegramChannelLifecycle as parseChannelLifecycleTab,
+  parseTelegramChannelOwnership as parseChannelFilter,
+  parseTelegramChannelsTab as parseTelegramTab,
+  type TelegramAccountFilter as AccountFilter,
+  type TelegramChannelLifecycleFilter as ChannelLifecycleTab,
+  type TelegramChannelOwnershipFilter as ChannelFilter,
+  type TelegramChannelsTab as TelegramTab,
+} from "@/components/features/telegram/telegram/telegram-channels-route-state";
 
 function normalizeUsername(value?: string | null) {
   return String(value || "")
@@ -251,123 +258,10 @@ function isOwnChannel(channel: TelegramChannel) {
   return Array.isArray(channel.adminLinks) && channel.adminLinks.length > 0;
 }
 
-const adAnalysisStatusLabels: Record<TelegramChannelAdAnalysisStatus, string> =
-  {
-    NEW: "New",
-    APPROVED: "Approved",
-    REJECTED: "Rejected",
-    WATCH_LATER: "Watch later",
-    BLACKLIST: "Blacklist",
-    TESTED: "Tested",
-  };
-
-function ExternalChannelAdAnalysis({
-  channel,
-  onEdit,
-  onDelete,
-}: {
-  channel: TelegramChannel;
-  onEdit: (analysis?: TelegramChannelAdAnalysis) => void;
-  onDelete: (analysis: TelegramChannelAdAnalysis) => void;
-}) {
-  const summary = channel.preview?.adAnalysis;
-  const latest = summary?.latest;
-  if (!latest) {
-    return (
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed border-slate-700 bg-slate-950/40 px-3 py-2">
-        <span className="text-xs text-slate-400">No ad analysis yet</span>
-        <Button type="button" variant="secondary" onClick={() => onEdit()}>
-          Analyze
-        </Button>
-      </div>
-    );
-  }
-  const chip =
-    "rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200";
-  const hasPrice = latest.price != null;
-  const analysisTone =
-    latest.status === "APPROVED"
-      ? "border-emerald-700/80 bg-emerald-950/25"
-      : latest.status === "REJECTED"
-        ? "border-rose-700/80 bg-rose-950/25"
-        : "border-slate-800 bg-slate-950/50";
-  return (
-    <div
-      className={`mt-3 flex flex-wrap items-center gap-2 rounded-lg border p-2 ${analysisTone}`}
-    >
-      {hasPrice ? (
-        <>
-          <span className={chip}>
-            {latest.currency} {formatNumber(latest.price, 2)}
-          </span>
-          <span className={chip}>
-            CPM {latest.currency}{" "}
-            {latest.cpm == null ? "-" : formatNumber(latest.cpm, 2)}
-          </span>
-        </>
-      ) : null}
-      <span
-        className={`${chip} ${
-          latest.status === "APPROVED"
-            ? "border-emerald-700 text-emerald-300"
-            : latest.status === "REJECTED"
-              ? "border-rose-700 text-rose-300"
-              : ""
-        }`}
-      >
-        {adAnalysisStatusLabels[latest.status]}
-      </span>
-      {latest.notes ? (
-        <span className={`${chip} max-w-full truncate`}>{latest.notes}</span>
-      ) : null}
-      <span className="text-xs text-slate-500">
-        {formatLocalDate(latest.analyzedAt)}
-      </span>
-      <MemberBadge member={latest.assignedMember} />
-      <div className="ml-auto flex items-center gap-2">
-        <IconButton
-          type="button"
-          aria-label="Edit analysis"
-          title="Edit analysis"
-          onClick={() => onEdit(latest)}
-        />
-        <IconButton
-          type="button"
-          kind="delete"
-          aria-label="Delete analysis"
-          title="Delete analysis"
-          onClick={() => onDelete(latest)}
-        />
-      </div>
-      {(summary?.historyCount ?? 0) > 1 ? (
-        <span className="text-xs text-slate-500">
-          {summary?.historyCount} analyses
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
 function isPersonSource(
   source: ImportedTelegramSource,
 ): source is AdvertisingChannel {
   return "kind" in source && source.kind === "person";
-}
-
-function parseTelegramTab(value: string | null): TelegramTab {
-  return value === "networks" || value === "accounts" ? value : "channels";
-}
-
-function parseChannelFilter(value: string | null): ChannelFilter {
-  return value === "external" ? "external" : "own";
-}
-
-function parseChannelLifecycleTab(value: string | null): ChannelLifecycleTab {
-  return value === "archive" ? "archive" : "active";
-}
-
-function parseAccountFilter(value: string | null): AccountFilter {
-  return value === "people" ? "people" : "mtproto";
 }
 
 function ChannelSourcesSummary({
@@ -1739,6 +1633,7 @@ export default function TelegramChannelsPage() {
         channelFilter === "own" && lifecycleTab === "archive",
         channelFilter === "own",
       ),
+    enabled: tab === "channels" || networkFormOpen || Boolean(editingNetwork),
   });
   const channels = channelsResponse?.items;
   const {
@@ -1748,14 +1643,17 @@ export default function TelegramChannelsPage() {
   } = useQuery({
     queryKey: networkKeys.list(),
     queryFn: telegramChannelNetworksApi.list,
+    enabled: tab === "networks",
   });
   const { data: currencySettings } = useQuery({
     queryKey: ["currency-settings"],
     queryFn: currenciesApi.getSettings,
+    enabled: tab === "networks",
   });
   const { data: rates } = useQuery({
-    queryKey: ["currency-rates"],
-    queryFn: currenciesApi.listRates,
+    queryKey: ["currency-rates-latest"],
+    queryFn: currenciesApi.listLatestRates,
+    enabled: tab === "networks",
   });
   const {
     data: people,
@@ -1764,6 +1662,7 @@ export default function TelegramChannelsPage() {
   } = useQuery({
     queryKey: ["advertising-people"],
     queryFn: advertisingChannelsApi.list,
+    enabled: tab === "accounts" && accountFilter === "people",
   });
   const importMutation = useMutation({
     mutationFn: async ({
@@ -2613,261 +2512,6 @@ function MultiImageUpload({
         </div>
       ) : null}
     </FormField>
-  );
-}
-
-function TelegramPostComposerModal({
-  channel,
-  onClose,
-  onChanged,
-}: {
-  channel: TelegramChannel | null;
-  onClose: () => void;
-  onChanged: () => void;
-}) {
-  const queryClient = useQueryClient();
-  const [editing, setEditing] = useState<TelegramManagedPost | null>(null);
-  const [title, setTitle] = useState("");
-  const [text, setText] = useState("");
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const [mode, setMode] = useState<"draft" | "publish" | "schedule">("draft");
-  const [scheduleDate, setScheduleDate] = useState("");
-  const [scheduleTime, setScheduleTime] = useState("09:00");
-  const [busy, setBusy] = useState(false);
-  const [deletingPost, setDeletingPost] = useState<TelegramManagedPost | null>(
-    null,
-  );
-  const posts = useQuery({
-    queryKey: ["telegram-managed-posts", channel?.id],
-    queryFn: () => telegramChannelsApi.managedPosts(channel!.id),
-    enabled: !!channel,
-  });
-  useEffect(() => {
-    if (!channel) return;
-    void queryClient.invalidateQueries({
-      queryKey: ["telegram-managed-post-link-targets", channel.id],
-    });
-  }, [channel, posts.data, queryClient]);
-  useEffect(() => {
-    if (!channel) return;
-    setEditing(null);
-    setTitle("");
-    setText("");
-    setImageUrls([]);
-    setMode("draft");
-    setScheduleDate("");
-    setScheduleTime("09:00");
-  }, [channel]);
-  const persist = async () => {
-    if (!channel || !title.trim()) throw new Error("Title is required");
-    const payload = { title: title.trim(), text, imageUrls };
-    return editing
-      ? telegramChannelsApi.updateManagedPost(channel.id, editing.id, payload)
-      : telegramChannelsApi.createManagedPost(channel.id, payload);
-  };
-  const run = async (mode: "draft" | "publish" | "schedule") => {
-    if (!channel) return;
-    setBusy(true);
-    try {
-      const post = await persist();
-      if (mode === "publish")
-        await telegramChannelsApi.publishManagedPost(channel.id, post.id);
-      if (mode === "schedule") {
-        if (!scheduleDate || !scheduleTime)
-          throw new Error("Schedule date and time are required");
-        if (!isValidTimeInputValue(scheduleTime))
-          throw new Error("Schedule time must be in HH:MM format");
-        await telegramChannelsApi.scheduleManagedPost(
-          channel.id,
-          post.id,
-          new Date(`${scheduleDate}T${scheduleTime}`).toISOString(),
-        );
-      }
-      await posts.refetch();
-      onChanged();
-      if (mode !== "draft") onClose();
-      setEditing(post);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <>
-      <Modal
-        open={!!channel}
-        onClose={onClose}
-        title={`Posts · ${channel?.title || ""}`}
-        size="xl"
-      >
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.75fr)]">
-          <div className="min-w-0 space-y-4">
-            <FormField label="Internal title" required>
-              <Input
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-              />
-            </FormField>
-            <FormField label="Telegram text">
-              <TelegramTextEditor
-                rows={8}
-                value={text}
-                onChange={setText}
-                disabled={busy}
-                channelId={channel?.id}
-                currentPostId={editing?.id}
-                enableInternalPostLinks
-              />
-            </FormField>
-            <MultiImageUpload
-              value={imageUrls}
-              onChange={setImageUrls}
-              disabled={busy}
-              onUploadingChange={setBusy}
-            />
-            <FormField label="Publishing mode">
-              <CustomSelect
-                value={mode}
-                dropdownDirection="up"
-                searchable={false}
-                onChange={(value) =>
-                  setMode(value as "draft" | "publish" | "schedule")
-                }
-                options={[
-                  { value: "draft", label: "Save as draft", iconEmoji: "📝" },
-                  { value: "publish", label: "Publish now", iconEmoji: "🚀" },
-                  {
-                    value: "schedule",
-                    label: "Schedule in Telegram",
-                    iconEmoji: "🕒",
-                  },
-                ]}
-              />
-            </FormField>
-            {mode === "schedule" ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <FormField label="Publish date" required>
-                  <DateInput
-                    value={scheduleDate}
-                    onChange={(event) => setScheduleDate(event.target.value)}
-                    placeholder="Select date"
-                  />
-                </FormField>
-                <FormField label="Publish time" required>
-                  <TimeInput
-                    value={scheduleTime}
-                    onChange={(event) => setScheduleTime(event.target.value)}
-                  />
-                </FormField>
-              </div>
-            ) : null}
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button variant="secondary" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button
-                onClick={() => run(mode)}
-                disabled={
-                  busy ||
-                  !title.trim() ||
-                  (mode !== "draft" && !text.trim() && !imageUrls.length) ||
-                  (mode === "schedule" &&
-                    (!scheduleDate ||
-                      !scheduleTime ||
-                      !isValidTimeInputValue(scheduleTime)))
-                }
-              >
-                {mode === "draft"
-                  ? "Save draft"
-                  : mode === "publish"
-                    ? "Publish now"
-                    : editing?.status === "SCHEDULED"
-                      ? "Update scheduled post"
-                      : "Schedule post"}
-              </Button>
-            </div>
-          </div>
-          <div className="min-w-0 border-t border-neutral-800 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
-            <p className="mb-3 text-sm font-semibold">Drafts and posts</p>
-            {posts.isLoading ? <LoadingState /> : null}
-            {posts.data?.length ? (
-              <div className="max-h-[62vh] space-y-2 overflow-auto pr-1">
-                {posts.data.map((post) => (
-                  <div
-                    key={post.id}
-                    className="flex items-center gap-2 rounded-lg border border-neutral-800 p-1 hover:bg-neutral-900"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditing(post);
-                        setTitle(post.title);
-                        setText(post.text || "");
-                        setImageUrls(post.imageUrls);
-                        setMode(
-                          post.status === "SCHEDULED" ? "schedule" : "draft",
-                        );
-                        const scheduledLocalParts = localDateTimeParts(
-                          post.scheduledAt,
-                        );
-                        setScheduleDate(scheduledLocalParts.date);
-                        setScheduleTime(scheduledLocalParts.time || "09:00");
-                      }}
-                      className="flex min-w-0 flex-1 items-center justify-between px-2 py-1 text-left"
-                    >
-                      <span className="truncate">{post.title}</span>
-                      <span className="ml-2 text-xs text-neutral-500">
-                        {post.status}
-                      </span>
-                    </button>
-                    <IconButton
-                      type="button"
-                      kind="delete"
-                      aria-label={`Delete ${post.title}`}
-                      onClick={() => setDeletingPost(post)}
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : !posts.isLoading && !posts.error ? (
-              <EmptyState text="No posts yet" />
-            ) : null}
-          </div>
-        </div>
-      </Modal>
-      <ConfirmDeleteModal
-        open={!!deletingPost}
-        onClose={() => setDeletingPost(null)}
-        entityName={deletingPost?.title ?? ""}
-        label="Delete post"
-        description={
-          deletingPost?.status === "SCHEDULED"
-            ? "This will cancel the scheduled message in Telegram and delete it from this system."
-            : "This deletes the record only from this system. Published Telegram messages remain untouched."
-        }
-        onConfirm={async () => {
-          if (!channel || !deletingPost) return;
-          setBusy(true);
-          try {
-            await telegramChannelsApi.deleteManagedPost(
-              channel.id,
-              deletingPost.id,
-            );
-            if (editing?.id === deletingPost.id) {
-              setEditing(null);
-              setTitle("");
-              setText("");
-              setImageUrls([]);
-              setMode("draft");
-            }
-            setDeletingPost(null);
-            await posts.refetch();
-            onChanged();
-          } finally {
-            setBusy(false);
-          }
-        }}
-      />
-    </>
   );
 }
 

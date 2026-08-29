@@ -1,9 +1,10 @@
 import 'reflect-metadata';
-import { plainToInstance } from 'class-transformer';
+import { plainToInstance, type ClassConstructor } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import {
   CreateTelegramManagedPostDto,
   TelegramChannelListQueryDto,
+  TelegramManagedPostsQueryDto,
   UpdateTelegramManagedPostDto,
 } from './dto';
 
@@ -17,8 +18,17 @@ const buttonRows = [
   ],
 ];
 
+type ManagedPostDto =
+  | CreateTelegramManagedPostDto
+  | UpdateTelegramManagedPostDto;
+
+const managedPostDtoConstructors: Array<ClassConstructor<ManagedPostDto>> = [
+  CreateTelegramManagedPostDto,
+  UpdateTelegramManagedPostDto,
+];
+
 describe('managed post button DTOs', () => {
-  it.each([CreateTelegramManagedPostDto, UpdateTelegramManagedPostDto])(
+  it.each(managedPostDtoConstructors)(
     'accepts array-based inline button rows for %p',
     (Dto) => {
       const dto = plainToInstance(Dto, { title: 'Post', buttonRows });
@@ -40,5 +50,23 @@ describe('TelegramChannelListQueryDto', () => {
     expect(dto.archived).toBe(false);
     expect(dto.owned).toBe(true);
     expect(validateSync(dto)).toEqual([]);
+  });
+});
+
+describe('TelegramManagedPostsQueryDto', () => {
+  it('accepts repeated or comma-separated status filters and bounds page size', () => {
+    const dto = plainToInstance(TelegramManagedPostsQueryDto, {
+      status: ['DRAFT,SCHEDULED', 'FAILED'],
+      page: '2',
+      pageSize: '100',
+    });
+
+    expect(dto.status).toEqual(['DRAFT', 'SCHEDULED', 'FAILED']);
+    expect(validateSync(dto)).toEqual([]);
+
+    const oversized = plainToInstance(TelegramManagedPostsQueryDto, {
+      pageSize: '101',
+    });
+    expect(validateSync(oversized)).not.toEqual([]);
   });
 });

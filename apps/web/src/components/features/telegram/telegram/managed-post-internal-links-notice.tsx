@@ -4,18 +4,33 @@ import { AlertTriangle } from "lucide-react";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { TooltipBubble } from "@/components/ui/primitives";
 import type { TelegramManagedPost } from "@/lib/api";
+import type { TelegramManagedPostLookupItem } from "@/lib/features/telegram/telegram-managed-posts-api";
+
+type ManagedPostLinkTarget = Pick<
+  TelegramManagedPostLookupItem,
+  | "id"
+  | "title"
+  | "status"
+  | "telegramRemoteStatus"
+  | "telegramMessageIds"
+  | "telegramIdVerificationStatus"
+> & {
+  lastError?: string | null;
+  icon?: TelegramManagedPostLookupItem["icon"];
+  iconPresentation?: TelegramManagedPostLookupItem["iconPresentation"];
+};
 
 export type ManagedPostInternalLink = {
   targetId: string;
   labels: string[];
-  target?: TelegramManagedPost;
+  target?: ManagedPostLinkTarget;
 };
 
 const internalPostLinkPattern = /\[([^\]\n]+)\]\(tg-post:([a-zA-Z0-9_-]+)\)/g;
 
 export function buildManagedPostInternalLinks(
   text: string,
-  posts?: TelegramManagedPost[],
+  posts?: ManagedPostLinkTarget[],
 ): ManagedPostInternalLink[] {
   const grouped = new Map<string, ManagedPostInternalLink>();
 
@@ -38,7 +53,7 @@ export function buildManagedPostInternalLinks(
 }
 
 export function isManagedPostInternalLinkReady(
-  post: TelegramManagedPost | undefined,
+  post: ManagedPostLinkTarget | undefined,
   channelTelegramChatId?: string | null,
 ) {
   return Boolean(
@@ -73,7 +88,7 @@ export function canScheduleManagedPost(
   );
 }
 
-function postStatusLabel(post?: TelegramManagedPost) {
+function postStatusLabel(post?: ManagedPostLinkTarget) {
   if (!post) return null;
   if (
     post.status === "PUBLISHED" &&
@@ -96,7 +111,7 @@ export function ManagedPostInternalLinksNotice({
   links: ManagedPostInternalLink[];
   channelTelegramChatId?: string | null;
   onHighlightTarget?: (targetId: string) => void;
-  onOpenPostInNewTab?: (post: TelegramManagedPost) => void;
+  onOpenPostInNewTab?: (post: ManagedPostLinkTarget) => void;
   allowUnresolved?: boolean;
 }) {
   if (!links.length) return null;
@@ -110,7 +125,7 @@ export function ManagedPostInternalLinksNotice({
     .filter(
       (
         target,
-      ): target is { id: string; post: TelegramManagedPost | undefined } =>
+      ): target is { id: string; post: ManagedPostLinkTarget | undefined } =>
         Boolean(target),
     );
   const resolved = links.filter((link) =>
@@ -188,10 +203,10 @@ function ManagedPostInternalLinkPill({
   onOpenPostInNewTab,
 }: {
   id: string;
-  post?: TelegramManagedPost;
+  post?: ManagedPostLinkTarget;
   tone: "blocking" | "pending" | "ready";
   onHighlightTarget?: (targetId: string) => void;
-  onOpenPostInNewTab?: (post: TelegramManagedPost) => void;
+  onOpenPostInNewTab?: (post: ManagedPostLinkTarget) => void;
 }) {
   const ready = tone === "ready";
   const status = ready ? "published" : postStatusLabel(post);

@@ -183,7 +183,8 @@ export class TelegramManagedPostPublisherService {
       );
     }
     if (
-      post.status === TelegramManagedPostStatus.FAILED &&
+      (post.status === TelegramManagedPostStatus.FAILED ||
+        post.status === TelegramManagedPostStatus.PUBLISHING) &&
       post.telegramMessageIds.length
     ) {
       const journaledSource = sources.find(
@@ -483,7 +484,8 @@ export class TelegramManagedPostPublisherService {
           }
         }
         const journaledMessageIds =
-          post.status === TelegramManagedPostStatus.FAILED
+          post.status === TelegramManagedPostStatus.FAILED ||
+          post.status === TelegramManagedPostStatus.PUBLISHING
             ? post.telegramMessageIds
             : [];
         ids = await deliverTelegramManagedPostViaBot({
@@ -576,7 +578,11 @@ export class TelegramManagedPostPublisherService {
         if (!canonical) throw new NotFoundException('Managed post not found');
         return canonical;
       });
-      return this.notifyManagedPostSchedulePersisted(published, scheduleAt);
+      return this.notifyManagedPostSchedulePersisted(
+        published,
+        scheduleAt,
+        (_count?.adSalePlacements ?? 0) > 0,
+      );
     } catch (error) {
       const rawMessage =
         error instanceof Error ? error.message : 'Telegram publish failed';
@@ -633,9 +639,12 @@ export class TelegramManagedPostPublisherService {
   public notifyManagedPostSchedulePersisted<T>(
     persisted: T,
     scheduleAt?: Date,
+    hasAdSalePlacement = false,
   ) {
     if (scheduleAt) {
       notifyScheduledTaskDueWorkChanged('telegram.managed_posts.reconcile_due');
+    } else if (hasAdSalePlacement) {
+      notifyScheduledTaskDueWorkChanged('telegram_ad_sales.due_deletions');
     }
     return persisted;
   }

@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import type { CurrencyDisplayMode } from '@prisma/client';
+import { Prisma, type CurrencyDisplayMode } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
@@ -43,7 +43,9 @@ const SUPPORTED_CURRENCIES = [
 // writes depend on it; any future retention job must first protect the oldest
 // supported transaction-entry date and immutable valuation snapshots.
 const utcRateDay = (date: Date) =>
-  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
 
 const getSupportedCurrencies = () => {
   const intl = Intl as unknown as {
@@ -145,6 +147,23 @@ export class CurrenciesService {
       where: { workspaceId },
       orderBy: { date: 'desc' },
     });
+  }
+
+  async getLatestRates(userId: string) {
+    const workspaceId =
+      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    return this.prisma.$queryRaw(Prisma.sql`
+      SELECT DISTINCT ON (rate."baseCurrency", rate."targetCurrency")
+        rate.*
+      FROM "ExchangeRate" AS rate
+      WHERE rate."workspaceId" = ${workspaceId}
+        AND rate."date" <= NOW()
+      ORDER BY
+        rate."baseCurrency" ASC,
+        rate."targetCurrency" ASC,
+        rate."date" DESC,
+        rate."id" DESC
+    `);
   }
 
   async createRate(userId: string, dto: CreateCurrencyRateDto) {
@@ -319,7 +338,10 @@ export class CurrenciesService {
 
     // The schema unique key plus a UTC-day timestamp makes retries and repeated
     // same-day syncs idempotent without discarding historical observations.
-    await this.prisma.exchangeRate.createMany({ data: rows, skipDuplicates: true });
+    await this.prisma.exchangeRate.createMany({
+      data: rows,
+      skipDuplicates: true,
+    });
 
     return rows.length;
   }

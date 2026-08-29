@@ -32,19 +32,24 @@ import {
   financeAccountEmoji,
   financeIconPresentation,
 } from '../catalog/finance-entity-emoji';
-type ProfileContext = {
-  id: string;
-  defaultCurrency: string;
-  timezone?: string;
-  workspaceId?: string;
-};
+import {
+  currentFinancePresentationRate,
+  financeDefaultCurrencySnapshot,
+  financeValuationSnapshot,
+  prepareFinanceAccountRates,
+  prepareFinanceTransactionRates,
+  prepareFinanceTransactionWriteContext,
+  type FinanceProfileContext,
+  type FinanceTransactionRateSource,
+  type FinanceTransactionWriteContext,
+} from './finance-transaction-valuation';
 @Injectable()
 export class FinanceLedgerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly conversion?: CurrencyConversionService,
   ) {}
-  async profileContext(profileId: string): Promise<ProfileContext> {
+  async profileContext(profileId: string): Promise<FinanceProfileContext> {
     const profile = await this.prisma.financeProfile.findUnique({
       where: { id: profileId },
       select: {
@@ -97,35 +102,26 @@ export class FinanceLedgerService {
         _sum: { toAmount: true },
       }),
     ]);
+    const missingContext =
+      !profileCurrency || !workspaceId
+        ? await this.prisma.financeProfile.findUnique({
+            where: { id: profileId },
+            select: {
+              defaultCurrency: true,
+              botIntegration: { select: { workspaceId: true } },
+            },
+          })
+        : null;
     const defaultCurrency =
-      profileCurrency ||
-      (
-        await this.prisma.financeProfile.findUnique({
-          where: { id: profileId },
-          select: { defaultCurrency: true },
-        })
-      )?.defaultCurrency ||
-      'USD';
+      profileCurrency || missingContext?.defaultCurrency || 'USD';
     const resolvedWorkspaceId =
-      workspaceId || (await this.workspaceId(profileId));
-    const equivalents = new Map<
-      string,
-      Awaited<ReturnType<CurrencyConversionService['getRateMetadata']>>
-    >();
-    if (this.conversion && resolvedWorkspaceId)
-      for (const currency of new Set(
-        accounts
-          .map((account) => account.currency)
-          .filter((currency) => currency !== defaultCurrency),
-      ))
-        equivalents.set(
-          currency,
-          await this.conversion.getRateMetadata(
-            currency,
-            defaultCurrency,
-            resolvedWorkspaceId,
-          ),
-        );
+      workspaceId || missingContext?.botIntegration.workspaceId;
+    const equivalents = await prepareFinanceAccountRates({
+      conversion: this.conversion,
+      workspaceId: resolvedWorkspaceId,
+      currencies: accounts.map((account) => account.currency),
+      defaultCurrency,
+    });
     return accounts.map((account) => {
       let balance = new Prisma.Decimal(account.openingBalance);
       for (const row of transactions.filter(
@@ -184,8 +180,35 @@ export class FinanceLedgerService {
       accountId,
     );
   }
+
+  prepareTransactionRateSource(
+    profile: FinanceProfileContext,
+    operations: Array<{ currency: string; occurredAt: string }>,
+  ) {
+    return prepareFinanceTransactionRates({
+      profile,
+      operations,
+      conversion: this.conversion,
+      resolveWorkspaceId: (profileId) => this.workspaceId(profileId),
+    });
+  }
+
+  async prepareTransactionWriteContext(
+    tx: Prisma.TransactionClient,
+    profileId: string,
+    operations: CreateFinanceTransactionDto[],
+    rates: FinanceTransactionRateSource,
+  ): Promise<FinanceTransactionWriteContext> {
+    return prepareFinanceTransactionWriteContext({
+      tx,
+      profileId,
+      operations,
+      rates,
+    });
+  }
+
   async createTransaction(
-    profile: ProfileContext,
+    profile: FinanceProfileContext,
     dto: CreateFinanceTransactionDto,
     source: FinanceTransactionSource = 'MINI_APP',
     id?: string,
@@ -197,25 +220,34 @@ export class FinanceLedgerService {
 
   async createTransactionInTransaction(
     tx: Prisma.TransactionClient,
-    profile: ProfileContext,
+    profile: FinanceProfileContext,
     dto: CreateFinanceTransactionDto,
     source: FinanceTransactionSource = 'MINI_APP',
     id?: string,
+    writeContext?: FinanceTransactionWriteContext,
   ) {
     const amount = this.positive(dto.amount, 'amount');
-    const account = await tx.financeAccount.findFirst({
-      where: { id: dto.accountId, profileId: profile.id, archivedAt: null },
-    });
-    if (!account) throw new NotFoundException('Finance account not found');
-    const currency = account.currency;
-    const category = dto.categoryId
-      ? await tx.financeCategory.findFirst({
+    const account = writeContext
+      ? writeContext.accounts.get(dto.accountId)
+      : await tx.financeAccount.findFirst({
           where: {
-            id: dto.categoryId,
+            id: dto.accountId,
             profileId: profile.id,
             archivedAt: null,
           },
-        })
+        });
+    if (!account) throw new NotFoundException('Finance account not found');
+    const currency = account.currency;
+    const category = dto.categoryId
+      ? writeContext
+        ? writeContext.categories.get(dto.categoryId)
+        : await tx.financeCategory.findFirst({
+            where: {
+              id: dto.categoryId,
+              profileId: profile.id,
+              archivedAt: null,
+            },
+          })
       : null;
     if (dto.categoryId && !category)
       throw new NotFoundException('Finance category not found');
@@ -225,12 +257,30 @@ export class FinanceLedgerService {
       );
     const occurredAt = new Date(dto.occurredAt);
     const [valuation, defaultSnapshot] = await Promise.all([
-      this.valuation(profile, currency, occurredAt),
-      this.legacyDefaultSnapshot(profile, currency, occurredAt),
+      financeValuationSnapshot(
+        profile,
+        currency,
+        occurredAt,
+        this.rateDependencies(),
+        writeContext?.rates,
+      ),
+      financeDefaultCurrencySnapshot(
+        profile,
+        currency,
+        occurredAt,
+        this.rateDependencies(),
+        writeContext?.rates,
+      ),
     ]);
     const description = dto.description?.trim() || null;
     const merchantDisplay = dto.merchantDisplay?.trim() || null;
-    const items = await this.items(tx, profile.id, dto.type, dto.items);
+    const items = await this.items(
+      tx,
+      profile.id,
+      dto.type,
+      dto.items,
+      writeContext?.categories,
+    );
     const created = await tx.financeTransaction.create({
       data: {
         ...(id ? { id } : {}),
@@ -280,7 +330,7 @@ export class FinanceLedgerService {
   }
 
   async updateTransaction(
-    profile: ProfileContext,
+    profile: FinanceProfileContext,
     id: string,
     dto: UpdateFinanceTransactionDto,
   ) {
@@ -302,7 +352,7 @@ export class FinanceLedgerService {
 
   private async createReplacement(
     tx: Prisma.TransactionClient,
-    profile: ProfileContext,
+    profile: FinanceProfileContext,
     existing: {
       id: string;
       accountId: string;
@@ -340,8 +390,18 @@ export class FinanceLedgerService {
       );
     const occurredAt = new Date(dto.occurredAt);
     const [valuation, defaultSnapshot] = await Promise.all([
-      this.valuation(profile, currency, occurredAt),
-      this.legacyDefaultSnapshot(profile, currency, occurredAt),
+      financeValuationSnapshot(
+        profile,
+        currency,
+        occurredAt,
+        this.rateDependencies(),
+      ),
+      financeDefaultCurrencySnapshot(
+        profile,
+        currency,
+        occurredAt,
+        this.rateDependencies(),
+      ),
     ]);
     const description = dto.description?.trim() || null;
     const merchantDisplay =
@@ -508,16 +568,21 @@ export class FinanceLedgerService {
     profileId: string,
     type: CreateFinanceTransactionDto['type'],
     items: CreateFinanceTransactionDto['items'],
+    preparedCategories?: FinanceTransactionWriteContext['categories'],
   ) {
     if (!items?.length) return [];
     const categoryIds = [
       ...new Set(items.map((item) => item.categoryId).filter(Boolean)),
     ] as string[];
     if (categoryIds.length) {
-      const categories = await tx.financeCategory.findMany({
-        where: { id: { in: categoryIds }, profileId, archivedAt: null },
-        select: { id: true, type: true },
-      });
+      const categories = preparedCategories
+        ? categoryIds
+            .map((categoryId) => preparedCategories.get(categoryId))
+            .filter((category) => category !== undefined)
+        : await tx.financeCategory.findMany({
+            where: { id: { in: categoryIds }, profileId, archivedAt: null },
+            select: { id: true, type: true },
+          });
       if (
         categories.length !== categoryIds.length ||
         categories.some((category) => category.type !== type)
@@ -584,7 +649,7 @@ export class FinanceLedgerService {
   }
 
   async analytics(
-    profile: ProfileContext,
+    profile: FinanceProfileContext,
     input: {
       period: 'CURRENT_MONTH' | 'PREVIOUS_MONTH' | 'LAST_3_MONTHS' | 'CUSTOM';
       from?: string;
@@ -636,7 +701,7 @@ export class FinanceLedgerService {
         !new Prisma.Decimal(row.valuedAmount || 0).isZero(),
     );
     const rate = hasValuedAmount
-      ? await this.currentPresentationRate(profile)
+      ? await currentFinancePresentationRate(profile, this.rateDependencies())
       : new Prisma.Decimal(1);
     return financeAnalyticsView({
       rows,
@@ -646,89 +711,11 @@ export class FinanceLedgerService {
     });
   }
 
-  private async currentPresentationRate(profile: ProfileContext) {
-    if (profile.defaultCurrency === 'USD') return new Prisma.Decimal(1);
-    const workspaceId =
-      profile.workspaceId || (await this.workspaceId(profile.id));
-    if (!this.conversion || !workspaceId)
-      throw new BadRequestException({
-        code: 'RATE_UNAVAILABLE',
-        message: 'An exchange rate is unavailable. Please try again later.',
-      });
-    const result = await this.conversion.getRateMetadata(
-      'USD',
-      profile.defaultCurrency,
-      workspaceId,
-    );
-    if (!result.available)
-      throw new BadRequestException({
-        code: result.code,
-        message: result.message,
-      });
-    return new Prisma.Decimal(result.rate);
-  }
-
-  private async valuation(
-    profile: ProfileContext,
-    currency: string,
-    occurredAt: Date,
-  ) {
-    if (currency === 'USD')
-      return { rate: new Prisma.Decimal(1), rateAt: occurredAt };
-    const workspaceId =
-      profile.workspaceId || (await this.workspaceId(profile.id));
-    if (!this.conversion || !workspaceId)
-      throw new BadRequestException({
-        code: 'RATE_UNAVAILABLE',
-        message: 'An exchange rate is unavailable. Please try again later.',
-      });
-    const result = await this.conversion.getRateMetadata(
-      currency,
-      'USD',
-      workspaceId,
-      this.rateDateForWrite(occurredAt),
-    );
-    if (!result.available)
-      throw new BadRequestException({
-        code: result.code,
-        message: result.message,
-      });
-    return { rate: new Prisma.Decimal(result.rate), rateAt: result.rateAt };
-  }
-
-  private async legacyDefaultSnapshot(
-    profile: ProfileContext,
-    currency: string,
-    occurredAt: Date,
-  ) {
-    if (currency === profile.defaultCurrency)
-      return { rate: new Prisma.Decimal(1), rateAt: occurredAt };
-    const workspaceId =
-      profile.workspaceId || (await this.workspaceId(profile.id));
-    if (!this.conversion || !workspaceId)
-      throw new BadRequestException({
-        code: 'RATE_UNAVAILABLE',
-        message: 'An exchange rate is unavailable. Please try again later.',
-      });
-    const result = await this.conversion.getRateMetadata(
-      currency,
-      profile.defaultCurrency,
-      workspaceId,
-      this.rateDateForWrite(occurredAt),
-    );
-    if (!result.available)
-      throw new BadRequestException({
-        code: result.code,
-        message: result.message,
-      });
-    return { rate: new Prisma.Decimal(result.rate), rateAt: result.rateAt };
-  }
-
-  /** Today/future entries are current writes even when their timestamp is sent. */
-  private rateDateForWrite(occurredAt: Date) {
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-    return occurredAt < today ? occurredAt : undefined;
+  private rateDependencies() {
+    return {
+      conversion: this.conversion,
+      resolveWorkspaceId: (profileId: string) => this.workspaceId(profileId),
+    };
   }
 
   private async workspaceId(profileId: string) {

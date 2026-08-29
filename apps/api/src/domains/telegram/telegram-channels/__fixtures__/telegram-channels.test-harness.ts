@@ -61,10 +61,10 @@ import { TelegramManagedPostPresentationService } from '../telegram-managed-post
 import { TelegramManagedPostPublicationService } from '../telegram-managed-post-publication.service';
 import { TelegramManagedPostPublisherService } from '../telegram-managed-post-publisher.service';
 import { TelegramManagedPostQueryService } from '../telegram-managed-post-query.service';
+import { TelegramManagedPostSyntheticReadService } from '../telegram-managed-post-synthetic-read.service';
 import { TelegramManagedPostReconciliationService } from '../telegram-managed-post-reconciliation.service';
 import { TelegramManagedPostRemoteSyncService } from '../telegram-managed-post-remote-sync.service';
 import { TelegramManagedPostRemoteLoaderService } from '../telegram-managed-post-remote-loader.service';
-import { TelegramManagedPostAutoRepairService } from '../telegram-managed-post-auto-repair.service';
 import { TelegramManagedPostRevisionStore } from '../telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from '../telegram-post-groups.service';
 import { TelegramPostGroupStore } from '../telegram-post-group.store';
@@ -102,7 +102,7 @@ const narrowProviders: ProviderType[] = [
   TelegramRemoteScheduledPostImportService,
   TelegramManagedPostRemoteSyncService,
   TelegramManagedPostRemoteLoaderService,
-  TelegramManagedPostAutoRepairService,
+  TelegramManagedPostSyntheticReadService,
   TelegramManagedPostQueryService,
   TelegramManagedPostCommandService,
   TelegramManagedPostHistoryService,

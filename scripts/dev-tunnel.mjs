@@ -6,6 +6,7 @@ import {
 import { connect as connectToUpstream, createServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 import { randomBytes } from "node:crypto";
+import { assertPortAvailable } from "./dev-port-availability.mjs";
 import { localBotPublicEnvironment } from "./public-origin-environment.mjs";
 
 const withCloudflare = process.argv.includes("--cloudflare");
@@ -62,26 +63,6 @@ function terminate(child) {
     }
   }
   child.kill("SIGTERM");
-}
-
-async function assertPortAvailable(port, name) {
-  await new Promise((resolve, reject) => {
-    const server = createServer();
-    server.once("error", (error) => {
-      if (error.code === "EADDRINUSE") {
-        reject(
-          new Error(
-            `${name} cannot start because port ${port} is already in use. Stop the existing local process and run this command again.`,
-          ),
-        );
-        return;
-      }
-      reject(error);
-    });
-    server.listen(port, "127.0.0.1", () => {
-      server.close(resolve);
-    });
-  });
 }
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
@@ -339,13 +320,18 @@ start("Backend", "pnpm", ["--filter", "api", "dev"], {
       }
     : {}),
 });
-start("Frontend", "pnpm", ["--filter", "web", "dev"], {
-  // localhost:3000 talks directly to the configured local API. Any public
-  // HTTPS page receiving this loopback URL resolves API calls to same-origin
-  // /api, without a product-specific origin list or tunnel-vendor check.
-  NEXT_PUBLIC_API_URL: "http://localhost:4000/api",
-  NEXT_ALLOWED_DEV_ORIGIN: publicApiUrl || "",
-});
+start(
+  "Frontend",
+  "pnpm",
+  ["--filter", "web", "exec", "next", "dev", "--port", "3000"],
+  {
+    // localhost:3000 talks directly to the configured local API. Any public
+    // HTTPS page receiving this loopback URL resolves API calls to same-origin
+    // /api, without a product-specific origin list or tunnel-vendor check.
+    NEXT_PUBLIC_API_URL: "http://localhost:4000/api",
+    NEXT_ALLOWED_DEV_ORIGIN: publicApiUrl || "",
+  },
+);
 
 try {
   const backendStartup = waitFor(

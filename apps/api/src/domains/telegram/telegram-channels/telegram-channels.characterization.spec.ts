@@ -119,6 +119,7 @@ describe('TelegramChannelsService characterization seams', () => {
         imageUrls: [],
         buttonRows: [],
         status: TelegramManagedPostStatus.DRAFT,
+        telegramMessageIds: [],
         telegramScheduledMessageIds: [],
         groupId: null,
       };

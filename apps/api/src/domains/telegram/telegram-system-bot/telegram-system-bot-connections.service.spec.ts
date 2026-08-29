@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument -- focused connection test doubles */
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { TelegramSystemBotConnectionsService } from './telegram-system-bot-connections.service';
 
 describe('TelegramSystemBotConnectionsService', () => {
@@ -15,6 +20,7 @@ describe('TelegramSystemBotConnectionsService', () => {
     },
     telegramSystemBotConnection: {
       findUnique: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
       upsert: jest.fn(),
       findFirst: jest.fn(),
       update: jest.fn(),
@@ -25,7 +31,9 @@ describe('TelegramSystemBotConnectionsService', () => {
       findMany: jest.fn(),
       upsert: jest.fn(),
     },
-    $transaction: jest.fn(async (operations: unknown[]) => Promise.all(operations)),
+    $transaction: jest.fn(async (operations: unknown[]) =>
+      Promise.all(operations),
+    ),
   } as any;
   let service: TelegramSystemBotConnectionsService;
   const taskRegistry = {
@@ -39,6 +47,67 @@ describe('TelegramSystemBotConnectionsService', () => {
       prisma,
       config as any,
       taskRegistry as any,
+    );
+  });
+
+  it('reuses an authorized connection when resolving current workspace membership', async () => {
+    const connection = {
+      id: 'connection',
+      userId: 'user',
+      telegramUserId: '44',
+      currentWorkspaceId: 'workspace-a',
+    };
+    prisma.workspaceMember.findFirst.mockResolvedValue({
+      workspaceId: 'workspace-a',
+      role: 'admin',
+      workspace: {
+        name: 'Business',
+        timezone: 'Europe/Warsaw',
+        avatarIcon: null,
+      },
+    });
+
+    await expect(
+      service.requireCurrentWorkspace(connection),
+    ).resolves.toMatchObject({
+      workspaceId: 'workspace-a',
+      workspace: {
+        name: 'Business',
+        timezone: 'Europe/Warsaw',
+        avatarPresentation: null,
+      },
+    });
+
+    expect(
+      prisma.telegramSystemBotConnection.findUniqueOrThrow,
+    ).not.toHaveBeenCalled();
+    expect(prisma.workspaceMember.findFirst).toHaveBeenCalledTimes(1);
+    expect(prisma.workspaceMember.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: 'user', workspaceId: 'workspace-a' },
+      }),
+    );
+  });
+
+  it('rejects a stale current workspace membership while reusing the connection', async () => {
+    prisma.workspaceMember.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.requireCurrentWorkspace({
+        id: 'connection',
+        userId: 'user',
+        telegramUserId: '44',
+        currentWorkspaceId: 'removed-workspace',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(
+      prisma.telegramSystemBotConnection.findUniqueOrThrow,
+    ).not.toHaveBeenCalled();
+    expect(prisma.workspaceMember.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: 'user', workspaceId: 'removed-workspace' },
+      }),
     );
   });
 
@@ -134,15 +203,79 @@ describe('TelegramSystemBotConnectionsService', () => {
     });
   });
 
+  it('uses the website-selected workspace when connecting instead of the first membership', async () => {
+    const token = 'x'.repeat(32);
+    prisma.systemBotLinkToken.findUnique.mockResolvedValue({
+      id: 'link',
+      telegramUserId: '44',
+      telegramChatId: '55',
+      telegramMessageId: 7,
+      username: 'matvii',
+      firstName: 'Matvii',
+      usedAt: null,
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    prisma.workspaceMember.findMany.mockResolvedValue([
+      { workspaceId: 'test' },
+      { workspaceId: 'business' },
+    ]);
+    prisma.telegramSystemBotConnection.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        enabled: true,
+        username: 'matvii',
+        firstName: 'Matvii',
+        createdAt: new Date('2026-08-29T08:00:00.000Z'),
+        currentWorkspaceId: 'business',
+        currentWorkspace: { id: 'business', name: 'Business' },
+      });
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const upsert = jest.fn().mockResolvedValue({ id: 'connection' });
+    prisma.$transaction.mockImplementationOnce(
+      (callback: (tx: unknown) => unknown) =>
+        callback({
+          systemBotLinkToken: { updateMany },
+          telegramSystemBotConnection: { upsert },
+        }),
+    );
+
+    await service.confirmLink('user', token, 'business');
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ currentWorkspaceId: 'business' }),
+        update: expect.objectContaining({ currentWorkspaceId: 'business' }),
+      }),
+    );
+  });
+
   it('updates every notifiable task in a group atomically', async () => {
     prisma.telegramSystemBotConnection.findFirst.mockResolvedValue({
-      id: 'connection', userId: 'user',
+      id: 'connection',
+      userId: 'user',
     });
-    prisma.workspaceMember.findFirst.mockResolvedValue({ workspaceId: 'workspace-a' });
+    prisma.workspaceMember.findFirst.mockResolvedValue({
+      workspaceId: 'workspace-a',
+    });
     taskRegistry.definitions.mockReturnValue([
-      { key: 'telegram.channels.full_sync', scope: 'WORKSPACE_OPERATION', notificationSupported: true, group: { key: 'TELEGRAM' } },
-      { key: 'telegram.post_metrics.sync', scope: 'WORKSPACE_OPERATION', notificationSupported: true, group: { key: 'TELEGRAM' } },
-      { key: 'currencies.rates.sync', scope: 'WORKSPACE_OPERATION', notificationSupported: true },
+      {
+        key: 'telegram.channels.full_sync',
+        scope: 'WORKSPACE_OPERATION',
+        notificationSupported: true,
+        group: { key: 'TELEGRAM' },
+      },
+      {
+        key: 'telegram.post_metrics.sync',
+        scope: 'WORKSPACE_OPERATION',
+        notificationSupported: true,
+        group: { key: 'TELEGRAM' },
+      },
+      {
+        key: 'currencies.rates.sync',
+        scope: 'WORKSPACE_OPERATION',
+        notificationSupported: true,
+      },
     ]);
     prisma.telegramSystemBotTaskSubscription.upsert.mockResolvedValue({});
     prisma.telegramSystemBotTaskSubscription.findMany.mockResolvedValue([]);
@@ -155,11 +288,16 @@ describe('TelegramSystemBotConnectionsService', () => {
     });
 
     expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Array));
-    expect(prisma.telegramSystemBotTaskSubscription.upsert).toHaveBeenCalledTimes(2);
-    expect(prisma.telegramSystemBotTaskSubscription.upsert).toHaveBeenCalledWith(
+    expect(
+      prisma.telegramSystemBotTaskSubscription.upsert,
+    ).toHaveBeenCalledTimes(2);
+    expect(
+      prisma.telegramSystemBotTaskSubscription.upsert,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
-          taskKey: 'telegram.channels.full_sync', enabled: true,
+          taskKey: 'telegram.channels.full_sync',
+          enabled: true,
         }),
       }),
     );

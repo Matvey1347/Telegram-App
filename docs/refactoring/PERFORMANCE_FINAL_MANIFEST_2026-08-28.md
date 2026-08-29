@@ -1,0 +1,279 @@
+# Performance Program Final Working-Tree Manifest — 2026-08-28
+
+This is the exact `git status --short` scope at final verification. It includes
+the full current working-tree program and does not claim every pre-existing
+dirty path originated in the final frontend/read-model slice.
+
+Paths: 269 total — 151 tracked changes (1 deletion) and 118 untracked additions.
+
+```text
+ M .codex/agents/backend-architect.toml
+ M .codex/agents/codebase-explorer.toml
+ M .codex/agents/frontend-architect.toml
+ M .codex/agents/integration-reviewer.toml
+ M AGENTS.md
+ M apps/api/src/common/currency-conversion.service.spec.ts
+ M apps/api/src/common/currency-conversion.service.ts
+ M apps/api/src/domains/finance/currencies/currencies.controller.ts
+ M apps/api/src/domains/finance/currencies/currencies.service.ts
+ M apps/api/src/domains/finance/finance-categories/finance-categories.controller.ts
+ M apps/api/src/domains/finance/finance-categories/finance-categories.module.ts
+ M apps/api/src/domains/finance/finance-categories/finance-categories.service.spec.ts
+ M apps/api/src/domains/finance/finance-categories/finance-categories.service.ts
+ M apps/api/src/domains/finance/transactions/transactions.service.ts
+ M apps/api/src/domains/growth/ad-campaigns/ad-campaign-admission-analytics.service.spec.ts
+ M apps/api/src/domains/growth/ad-campaigns/ad-campaign-admission-analytics.service.ts
+ M apps/api/src/domains/growth/ad-campaigns/ad-campaigns.controller.ts
+ M apps/api/src/domains/growth/ad-campaigns/ad-campaigns.module.ts
+ M apps/api/src/domains/growth/ad-campaigns/ad-campaigns.service.ts
+ M apps/api/src/domains/growth/ad-campaigns/dto.ts
+ M apps/api/src/domains/growth/ad-hypotheses/ad-hypotheses.controller.ts
+ M apps/api/src/domains/growth/ad-hypotheses/ad-hypotheses.module.ts
+ M apps/api/src/domains/growth/ad-hypotheses/ad-hypotheses.service.spec.ts
+ M apps/api/src/domains/growth/ad-hypotheses/ad-hypotheses.service.ts
+ M apps/api/src/domains/growth/promos/dto.ts
+ M apps/api/src/domains/growth/promos/promos.service.ts
+ M apps/api/src/domains/operations/dashboard/dashboard.module.ts
+ M apps/api/src/domains/operations/dashboard/dashboard.service.ts
+ M apps/api/src/domains/operations/scheduled-tasks/scheduled-tasks.service.spec.ts
+ M apps/api/src/domains/operations/scheduled-tasks/scheduled-tasks.service.ts
+ M apps/api/src/domains/telegram/consumer-finance/chat-flows/finance-proposal.service.spec.ts
+ M apps/api/src/domains/telegram/consumer-finance/chat-flows/finance-proposal.service.ts
+ M apps/api/src/domains/telegram/consumer-finance/identity/finance-context.service.spec.ts
+ M apps/api/src/domains/telegram/consumer-finance/identity/finance-context.service.ts
+ M apps/api/src/domains/telegram/consumer-finance/ledger/finance-ledger.service.spec.ts
+ M apps/api/src/domains/telegram/consumer-finance/ledger/finance-ledger.service.ts
+ M apps/api/src/domains/telegram/telegram-ad-sales/dto.ts
+ M apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-bot-command.service.spec.ts
+ M apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-checkout.service.spec.ts
+ M apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-crm-advertisers.service.ts
+ M apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.controller.ts
+ M apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.module.ts
+ M apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.service.spec.ts
+ M apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.service.ts
+ M apps/api/src/domains/telegram/telegram-bots/core/telegram-bot-delivery.service.spec.ts
+ M apps/api/src/domains/telegram/telegram-bots/core/telegram-bot-delivery.service.ts
+ M apps/api/src/domains/telegram/telegram-bots/core/telegram-bot-users.service.spec.ts
+ M apps/api/src/domains/telegram/telegram-bots/core/telegram-bot-users.service.ts
+ M apps/api/src/domains/telegram/telegram-bots/finance/finance-bot-chat-responder.service.spec.ts
+ M apps/api/src/domains/telegram/telegram-bots/finance/finance-bot-chat-responder.service.ts
+ M apps/api/src/domains/telegram/telegram-bots/finance/finance-bot.service.spec.ts
+ M apps/api/src/domains/telegram/telegram-bots/finance/finance-bot.service.ts
+ M apps/api/src/domains/telegram/telegram-bots/greeter/greeter-broadcast.service.spec.ts
+ M apps/api/src/domains/telegram/telegram-bots/greeter/greeter-broadcast.service.ts
+ M apps/api/src/domains/telegram/telegram-channel-networks/telegram-channel-networks.service.spec.ts
+ M apps/api/src/domains/telegram/telegram-channel-networks/telegram-channel-networks.service.ts
+ M apps/api/src/domains/telegram/telegram-channels/__fixtures__/telegram-channels.test-harness.ts
+ M apps/api/src/domains/telegram/telegram-channels/dto.spec.ts
+ M apps/api/src/domains/telegram/telegram-channels/dto.ts
+ M apps/api/src/domains/telegram/telegram-channels/sync-managed-posts.spec.ts
+ M apps/api/src/domains/telegram/telegram-channels/telegram-channel-financial-read.service.spec.ts
+ M apps/api/src/domains/telegram/telegram-channels/telegram-channel-financial-read.service.ts
+ M apps/api/src/domains/telegram/telegram-channels/telegram-channels.characterization.spec.ts
+ M apps/api/src/domains/telegram/telegram-channels/telegram-channels.controller.ts
+ M apps/api/src/domains/telegram/telegram-channels/telegram-channels.module.ts
+ M apps/api/src/domains/telegram/telegram-channels/telegram-channels.service.ts
+ D apps/api/src/domains/telegram/telegram-channels/telegram-managed-post-auto-repair.service.ts
+ M apps/api/src/domains/telegram/telegram-channels/telegram-managed-post-calendar.service.ts
+ M apps/api/src/domains/telegram/telegram-channels/telegram-managed-post-group-presentation.service.spec.ts
+ M apps/api/src/domains/telegram/telegram-channels/telegram-managed-post-group-presentation.service.ts
+ M apps/api/src/domains/telegram/telegram-channels/telegram-managed-post-query.service.spec.ts
+ M apps/api/src/domains/telegram/telegram-channels/telegram-managed-post-query.service.ts
+ M apps/api/src/domains/telegram/telegram-channels/telegram-post-calendar-planner.service.ts
+ M apps/api/src/domains/telegram/telegram-sync/daily-analytics-sync.service.ts
+ M apps/api/src/domains/telegram/telegram-system-bot/telegram-system-bot-ad-sale-flow.service.spec.ts
+ M apps/api/src/domains/telegram/telegram-system-bot/telegram-system-bot-ad-sale-flow.service.ts
+ M apps/api/src/domains/telegram/telegram-system-bot/telegram-system-bot-connections.service.spec.ts
+ M apps/api/src/domains/telegram/telegram-system-bot/telegram-system-bot-connections.service.ts
+ M apps/api/src/domains/telegram/telegram-system-bot/telegram-system-bot-handler.service.spec.ts
+ M apps/api/src/domains/telegram/telegram-system-bot/telegram-system-bot-handler.service.ts
+ M apps/api/src/domains/telegram/telegram-system-bot/telegram-system-bot-option-layout.spec.ts
+ M apps/api/src/domains/telegram/telegram-system-bot/telegram-system-bot-post-preview.spec.ts
+ M apps/api/src/domains/telegram/telegram-system-bot/telegram-system-bot-runtime.service.spec.ts
+ M apps/api/src/domains/telegram/telegram-system-bot/telegram-system-bot-runtime.service.ts
+ M apps/api/src/telegram/shared/telegram-mtproto.client.ts
+ M apps/api/src/telegram/shared/telegram-source-access.service.spec.ts
+ M apps/api/src/telegram/shared/telegram-source-access.service.ts
+ M apps/web/src/app/(internal)/(finance)/categories/page.tsx
+ M apps/web/src/app/(internal)/(finance)/currencies/page.tsx
+ M apps/web/src/app/(internal)/(finance)/transactions/page.tsx
+ M apps/web/src/app/(internal)/(finance)/transfers/page.tsx
+ M apps/web/src/app/(internal)/(growth)/ad-campaigns/[id]/page.tsx
+ M apps/web/src/app/(internal)/(growth)/ad-campaigns/page.tsx
+ M apps/web/src/app/(internal)/(operations)/system-logs/page.tsx
+ M apps/web/src/app/(internal)/(telegram)/telegram-channels/page.tsx
+ M apps/web/src/app/(internal)/(telegram)/telegram-posts/page.tsx
+ M apps/web/src/app/(internal)/(telegram)/telegram/channels/[id]/page.tsx
+ M apps/web/src/app/(internal)/page.tsx
+ M apps/web/src/components/features/finance/consumer-finance/ui/finance-icon-picker.tsx
+ M apps/web/src/components/features/growth/ad-sales/ad-placement-lifecycle.ts
+ M apps/web/src/components/features/growth/ad-sales/ad-sale-modal.test.tsx
+ M apps/web/src/components/features/growth/ad-sales/ad-sale-modal.tsx
+ M apps/web/src/components/features/growth/ad-sales/ad-sale-native-payment.ts
+ M apps/web/src/components/features/growth/ad-sales/ad-sale-post-metrics.tsx
+ M apps/web/src/components/features/growth/ad-sales/ad-sales-analytics-panel.tsx
+ M apps/web/src/components/features/growth/ad-sales/ad-sales-calendar-tab.tsx
+ M apps/web/src/components/features/growth/ad-sales/ad-sales-dashboard-card.tsx
+ M apps/web/src/components/features/growth/ad-sales/ad-sales-inventory-modal.test.tsx
+ M apps/web/src/components/features/growth/ad-sales/ad-sales-inventory-modal.tsx
+ M apps/web/src/components/features/growth/ad-sales/ad-sales-page.tsx
+ M apps/web/src/components/features/growth/ad-sales/ad-sales-sale-details-modal.tsx
+ M apps/web/src/components/features/growth/ad-sales/ad-sales-sales-tab.tsx
+ M apps/web/src/components/features/growth/ad-sales/client-orders-modal.tsx
+ M apps/web/src/components/features/growth/ad-sales/telegram-channel-ad-sales-section.test.tsx
+ M apps/web/src/components/features/growth/ad-sales/telegram-channel-ad-sales-section.tsx
+ M apps/web/src/components/features/telegram/telegram-bots/greeter/greeter-actions.test.tsx
+ M apps/web/src/components/features/telegram/telegram/channel-economics-summary.test.tsx
+ M apps/web/src/components/features/telegram/telegram/channel-reimport-delete-modal.tsx
+ M apps/web/src/components/features/telegram/telegram/managed-post-cache.test.ts
+ M apps/web/src/components/features/telegram/telegram/managed-post-cache.ts
+ M apps/web/src/components/features/telegram/telegram/managed-post-internal-links-notice.tsx
+ M apps/web/src/components/features/telegram/telegram/managed-post-telegram-link.tsx
+ M apps/web/src/components/features/telegram/telegram/managed-posts-import-modal.tsx
+ M apps/web/src/components/features/telegram/telegram/managed-posts-import-workspace.test.tsx
+ M apps/web/src/components/features/telegram/telegram/managed-posts-import-workspace.tsx
+ M apps/web/src/components/features/telegram/telegram/reset-channel-scheduled-posts-button.test.tsx
+ M apps/web/src/components/features/telegram/telegram/reset-channel-scheduled-posts-button.tsx
+ M apps/web/src/components/features/telegram/telegram/use-managed-post-due-refresh.test.tsx
+ M apps/web/src/components/features/telegram/telegram/use-managed-post-due-refresh.ts
+ M apps/web/src/components/features/workspace/workspace-members-section.tsx
+ M apps/web/src/components/ui/primitives.tsx
+ M apps/web/src/lib/api.ts
+ M apps/web/src/lib/features/finance/finance-api.ts
+ M apps/web/src/lib/features/growth/ad-sales-preferences-hydration.test.ts
+ M apps/web/src/lib/features/growth/ad-sales-preferences-hydration.ts
+ M apps/web/src/lib/features/growth/marketing-api.ts
+ M apps/web/src/lib/features/growth/telegram-ad-sales-api.ts
+ M apps/web/src/lib/features/growth/telegram-ad-sales-query.test.ts
+ M apps/web/src/lib/features/growth/telegram-ad-sales-query.ts
+ M apps/web/src/lib/features/telegram/telegram-channels-api.ts
+ M apps/web/src/lib/features/telegram/telegram-query-invalidation.ts
+ M apps/web/src/lib/query-keys.ts
+ M apps/web/src/providers/query-provider.tsx
+ M docs/refactoring/PROJECT_REFACTOR_EXEC_PLAN.md
+ M package.json
+ M packages/shared/src/index.ts
+ M packages/shared/src/types/telegram-ad-sales.ts
+ M packages/shared/src/types/telegram-managed-posts.ts
+ M scripts/architecture-policy.mjs
+ M scripts/check-architecture.mjs
+ M scripts/dev-tunnel.mjs
+?? .codex/agents/file-size-guardian.toml
+?? .codex/agents/performance-optimizer.toml
+?? apps/api/src/domains/finance/currencies/currencies-latest-rates.service.spec.ts
+?? apps/api/src/domains/finance/finance-categories/finance-category-statistics.dto.ts
+?? apps/api/src/domains/finance/finance-categories/finance-category-statistics.service.spec.ts
+?? apps/api/src/domains/finance/finance-categories/finance-category-statistics.service.ts
+?? apps/api/src/domains/finance/finance-categories/finance-system-category-readiness.ts
+?? apps/api/src/domains/finance/transactions/transaction-presentation.ts
+?? apps/api/src/domains/growth/ad-campaigns/ad-campaign-admission-analytics-performance.spec.ts
+?? apps/api/src/domains/growth/ad-campaigns/ad-campaign-admission-events.ts
+?? apps/api/src/domains/growth/ad-campaigns/ad-campaign-list-query.spec.ts
+?? apps/api/src/domains/growth/ad-campaigns/ad-campaign-list-query.ts
+?? apps/api/src/domains/growth/ad-campaigns/ad-campaign-list-read.service.spec.ts
+?? apps/api/src/domains/growth/ad-campaigns/ad-campaign-list-read.service.ts
+?? apps/api/src/domains/growth/ad-hypotheses/ad-hypothesis-campaign-analytics.service.spec.ts
+?? apps/api/src/domains/growth/ad-hypotheses/ad-hypothesis-campaign-analytics.service.ts
+?? apps/api/src/domains/growth/ad-hypotheses/ad-hypothesis-list-query.ts
+?? apps/api/src/domains/growth/ad-hypotheses/ad-hypothesis-read-selects.ts
+?? apps/api/src/domains/growth/ad-hypotheses/dto/ad-hypothesis-query.dto.ts
+?? apps/api/src/domains/growth/ad-hypotheses/dto/campaign-analytics-input.dto.ts
+?? apps/api/src/domains/growth/promos/promos.service.spec.ts
+?? apps/api/src/domains/operations/dashboard/dashboard-period.ts
+?? apps/api/src/domains/operations/dashboard/dashboard-read.service.spec.ts
+?? apps/api/src/domains/operations/dashboard/dashboard-read.service.ts
+?? apps/api/src/domains/operations/dashboard/dashboard-trend.spec.ts
+?? apps/api/src/domains/operations/dashboard/dashboard-trend.ts
+?? apps/api/src/domains/operations/dashboard/dashboard.service.spec.ts
+?? apps/api/src/domains/operations/scheduled-tasks/scheduled-task-automatic-eligibility.ts
+?? apps/api/src/domains/telegram/consumer-finance/ledger/finance-transaction-valuation.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-analytics-dataset-reader.spec.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-analytics-dataset-reader.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-analytics-inventory-alerts.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-analytics-summary.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-analytics-utils.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-availability-builder.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-availability-reader.spec.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-availability-reader.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-bulk.dto.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-channel-analytics.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-crm-advertiser-metrics.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-default-products.spec.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-default-products.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-inventory-reader.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-performance.spec.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-pricing-reader.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-quote-preview.dto.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-quote-preview.service.spec.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-quote-preview.service.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-read.controller.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-sale-list-query.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-sale-read.service.spec.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-sale-read.service.ts
+?? apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales-workspace-settings.ts
+?? apps/api/src/domains/telegram/telegram-bots/core/telegram-bot-delivery-batch-enqueue.spec.ts
+?? apps/api/src/domains/telegram/telegram-bots/core/telegram-bot-delivery-batch-enqueue.ts
+?? apps/api/src/domains/telegram/telegram-bots/core/telegram-bot-delivery-broadcast-reconciliation.spec.ts
+?? apps/api/src/domains/telegram/telegram-bots/core/telegram-bot-delivery-broadcast-reconciliation.ts
+?? apps/api/src/domains/telegram/telegram-bots/core/telegram-bot-delivery-claim.spec.ts
+?? apps/api/src/domains/telegram/telegram-bots/core/telegram-bot-delivery-claim.ts
+?? apps/api/src/domains/telegram/telegram-bots/greeter/greeter-broadcast-batch-link.spec.ts
+?? apps/api/src/domains/telegram/telegram-bots/greeter/greeter-broadcast-batch-link.ts
+?? apps/api/src/domains/telegram/telegram-channel-networks/telegram-channel-network-presentation.ts
+?? apps/api/src/domains/telegram/telegram-channels/telegram-channel-bounded-read.dto.ts
+?? apps/api/src/domains/telegram/telegram-channels/telegram-channel-bounded-reads.controller.ts
+?? apps/api/src/domains/telegram/telegram-channels/telegram-channel-financial-summary-preparation.ts
+?? apps/api/src/domains/telegram/telegram-channels/telegram-managed-post-calendar.service.spec.ts
+?? apps/api/src/domains/telegram/telegram-channels/telegram-managed-post-lookup.service.spec.ts
+?? apps/api/src/domains/telegram/telegram-channels/telegram-managed-post-lookup.service.ts
+?? apps/api/src/domains/telegram/telegram-channels/telegram-managed-post-synthetic-read.service.spec.ts
+?? apps/api/src/domains/telegram/telegram-channels/telegram-managed-post-synthetic-read.service.ts
+?? apps/api/src/domains/telegram/telegram-channels/telegram-post-calendar-planner-utils.ts
+?? apps/api/src/domains/telegram/telegram-channels/telegram-post-calendar-planner.controller.ts
+?? apps/api/src/domains/telegram/telegram-channels/telegram-post-group-summary-read.service.spec.ts
+?? apps/api/src/domains/telegram/telegram-channels/telegram-post-group-summary-read.service.ts
+?? apps/api/src/domains/telegram/telegram-sync/daily-analytics-sync.service.spec.ts
+?? apps/api/src/domains/telegram/telegram-system-bot/telegram-system-bot-action-context.ts
+?? apps/api/src/domains/telegram/telegram-system-bot/telegram-system-bot-handler-performance.spec.ts
+?? apps/api/src/telegram/shared/telegram-mtproto-publish-image.ts
+?? apps/web/src/components/features/finance/consumer-finance/ui/finance-icon-picker-i18n.test.ts
+?? apps/web/src/components/features/finance/consumer-finance/ui/finance-icon-picker-i18n.ts
+?? apps/web/src/components/features/finance/internal/finance-category-statistics.test.ts
+?? apps/web/src/components/features/finance/internal/finance-category-statistics.ts
+?? apps/web/src/components/features/growth/ad-campaigns/ad-campaign-route-state.test.ts
+?? apps/web/src/components/features/growth/ad-campaigns/ad-campaign-route-state.ts
+?? apps/web/src/components/features/growth/ad-campaigns/use-promo-deep-link.ts
+?? apps/web/src/components/features/growth/ad-sales/ad-sale-modal-controller.ts
+?? apps/web/src/components/features/growth/ad-sales/ad-sale-modal-session.ts
+?? apps/web/src/components/features/growth/ad-sales/ad-sale-modal-types.ts
+?? apps/web/src/components/features/growth/ad-sales/ad-sale-quote-preview.test.ts
+?? apps/web/src/components/features/growth/ad-sales/ad-sale-quote-preview.ts
+?? apps/web/src/components/features/growth/ad-sales/ad-sales-calendar-range.ts
+?? apps/web/src/components/features/growth/ad-sales/ad-sales-checkout-dialogs.tsx
+?? apps/web/src/components/features/growth/ad-sales/ad-sales-post-link-dialogs.tsx
+?? apps/web/src/components/features/growth/ad-sales/ad-sales-sale-detail-editors.tsx
+?? apps/web/src/components/features/growth/ad-sales/ad-sales-sale-details-dialog.tsx
+?? apps/web/src/components/features/telegram/telegram/add-posts-to-group-modal.tsx
+?? apps/web/src/components/features/telegram/telegram/external-channel-ad-analysis.tsx
+?? apps/web/src/components/features/telegram/telegram/managed-post-page.test.ts
+?? apps/web/src/components/features/telegram/telegram/managed-post-page.ts
+?? apps/web/src/components/features/telegram/telegram/telegram-channel-graphs.tsx
+?? apps/web/src/components/features/telegram/telegram/telegram-channel-multi-select.tsx
+?? apps/web/src/components/features/telegram/telegram/telegram-channels-route-state.ts
+?? apps/web/src/components/features/telegram/telegram/telegram-posts-workspace-controls.tsx
+?? apps/web/src/components/features/telegram/telegram/use-managed-post-deep-link.ts
+?? apps/web/src/components/ui/date-inputs.tsx
+?? apps/web/src/lib/features/dashboard/
+?? apps/web/src/lib/features/operations/trash-api.ts
+?? apps/web/src/lib/features/telegram/telegram-managed-posts-api.ts
+?? apps/web/src/lib/features/telegram/telegram-stream-types.ts
+?? apps/web/src/providers/query-provider.test.ts
+?? docs/refactoring/PERFORMANCE_AUDIT_2026-08-27.md
+?? docs/refactoring/PERFORMANCE_FINAL_MANIFEST_2026-08-28.md
+?? packages/shared/src/types/finance-category-statistics.ts
+?? packages/shared/src/types/telegram-ad-sales-analytics.ts
+?? packages/shared/src/types/telegram-ad-sales-read-models.ts
+?? packages/shared/src/types/telegram-ad-sales-status.ts
+?? scripts/dev-port-availability.mjs
+?? scripts/dev-port-availability.test.mjs
+```

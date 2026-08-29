@@ -165,12 +165,16 @@ export class FinanceBotChatResponderService {
   async sendAccounts(
     context: TelegramBotApplicationContext,
     userId: string,
-    profileId: string,
+    profile: { id: string; defaultCurrency: string; workspaceId: string },
     chatId: string,
     locale: FinanceChatLocale = 'en',
   ) {
     try {
-      const accounts = await this.ledger.accounts(profileId);
+      const accounts = await this.ledger.accounts(
+        profile.id,
+        profile.defaultCurrency,
+        profile.workspaceId,
+      );
       const active = accounts.filter((account) => !account.archivedAt);
       const text = active.length
         ? `${t(locale, 'accountsTitle')}\n\n${active

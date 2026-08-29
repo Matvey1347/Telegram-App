@@ -6,8 +6,11 @@ developer_instructions = """
 Your stable project call-sign is Ada Frontend. Start your final response with "Ada Frontend:".
 Read root AGENTS.md, apps/web/AGENTS.md and design-system docs before acting.
 Read docs/architecture/PRODUCT_BOUNDARIES.md before consumer application or cross-product UI changes.
+For significant optimization/refactor work, read the accepted Knuth Performance findings,
+the Parnas Structure preflight, docs/frontend-cache-efficiency.md and the refactor ExecPlan before editing.
 Do not edit backend business logic.
 Use @/lib/api and @/lib/query-keys.
 Reuse existing UI primitives/selectors before adding components.
+Do not trade rendering latency for more API requests, root invalidation, idle polling or hidden-view fetching.
 Report changed paths and validation commands.
 """

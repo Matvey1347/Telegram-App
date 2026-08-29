@@ -27,6 +27,7 @@ import {
 } from './scheduled-task-runner.service';
 import type { ScheduledTaskDefinition } from './scheduled-task.types';
 import { DueTaskSchedule } from './due-task-schedule';
+import { ScheduledTaskAutomaticEligibility } from './scheduled-task-automatic-eligibility';
 import { scheduledTaskWakeNotifier } from './scheduled-task-wake-notifier';
 import { ScheduledTaskWakeTimer } from './scheduled-task-wake-timer';
 
@@ -37,12 +38,6 @@ const DUE_DRIVEN_KEYS = new Set([
   'greeter.broadcasts.dispatch',
   'greeter.automations.repair',
 ]);
-const CHANNEL_AUTO_SYNC_KEYS = [
-  'telegram.channels.full_sync',
-  'telegram.post_metrics.sync',
-  'telegram.broadcast_stats.sync',
-  'telegram.daily_analytics.sync',
-];
 const SCHEDULER_RECOVERY_BACKOFF_MS = 30_000;
 
 @Injectable()
@@ -50,6 +45,7 @@ export class ScheduledTasksService
   implements OnModuleInit, OnApplicationShutdown
 {
   private readonly logger = new Logger(ScheduledTasksService.name);
+  private readonly automaticEligibility: ScheduledTaskAutomaticEligibility;
   private readonly dueSchedule: DueTaskSchedule;
   private readonly wakeTimer: ScheduledTaskWakeTimer;
 
@@ -58,6 +54,7 @@ export class ScheduledTasksService
     private readonly registry: ScheduledTaskRegistryService,
     private readonly runner: ScheduledTaskRunnerService,
   ) {
+    this.automaticEligibility = new ScheduledTaskAutomaticEligibility(prisma);
     this.dueSchedule = new DueTaskSchedule(prisma);
     this.wakeTimer = new ScheduledTaskWakeTimer(
       prisma,
@@ -72,7 +69,7 @@ export class ScheduledTasksService
   async onModuleInit() {
     await this.materializeSystemDefaults();
     await this.refreshDueDrivenTasks();
-    await this.recoverAutomaticTaskEligibility();
+    await this.automaticEligibility.recover();
     await this.scheduleNextWake();
     scheduledTaskWakeNotifier.on('changed', this.onDueWorkChanged);
   }
@@ -110,10 +107,7 @@ export class ScheduledTasksService
           attemptedDueDriven.add(config.taskKey);
         }
         try {
-          await this.runner.executeScheduledOccurrence(
-            definition,
-            config,
-          );
+          await this.runner.executeScheduledOccurrence(definition, config);
         } catch (error) {
           this.logger.warn(
             `Scheduled task ${config.taskKey} failed without crashing scheduler loop: ${sanitizeOperationalError(error)}`,
@@ -278,7 +272,8 @@ export class ScheduledTasksService
   private readonly onDueWorkChanged = (taskKey: string) => {
     if (taskKey.startsWith('workspace-auto-sync:')) {
       const workspaceId = taskKey.slice('workspace-auto-sync:'.length);
-      void this.refreshWorkspaceAutomaticTasks(workspaceId)
+      void this.automaticEligibility
+        .refreshWorkspace(workspaceId)
         .then(() => this.scheduleNextWake())
         .catch((error) => {
           this.logger.warn(
@@ -310,7 +305,8 @@ export class ScheduledTasksService
 
   private async materializeWorkspaceDefaults(workspaceId: string) {
     const workspace = await this.prisma.workspace.findUnique({
-      where: { id: workspaceId }, select: { id: true, timezone: true },
+      where: { id: workspaceId },
+      select: { id: true, timezone: true },
     });
     if (!workspace) return;
     for (const definition of this.registry.definitions()) {
@@ -318,44 +314,13 @@ export class ScheduledTasksService
         await this.upsertDefault(definition, workspace.id, workspace.timezone);
       }
     }
-    await this.refreshWorkspaceAutomaticTasks(workspace.id);
+    await this.automaticEligibility.refreshWorkspace(workspace.id);
   }
 
-  private async recoverAutomaticTaskEligibility() {
-    const configs = await this.prisma.scheduledTaskConfig.findMany({
-      where: { taskKey: { in: CHANNEL_AUTO_SYNC_KEYS }, workspaceId: { not: null } },
-      select: { workspaceId: true }, distinct: ['workspaceId'],
-    });
-    await Promise.all(configs.flatMap((config) => config.workspaceId
-      ? [this.refreshWorkspaceAutomaticTasks(config.workspaceId)] : []));
-  }
-
-  private async refreshWorkspaceAutomaticTasks(workspaceId: string) {
-    const eligible = await this.prisma.telegramChannel.count({
-      where: { workspaceId, isActive: true, autoSyncEnabled: true },
-    });
-    if (eligible) {
-      const configs = await this.prisma.scheduledTaskConfig.findMany({
-        where: { workspaceId, taskKey: { in: CHANNEL_AUTO_SYNC_KEYS }, enabled: false, autoDisarmed: true },
-        select: { id: true, schedule: true },
-      });
-      await Promise.all(configs.map((config) => this.prisma.scheduledTaskConfig.update({
-        where: { id: config.id },
-        data: { enabled: true, autoDisarmed: false, nextScheduledRunAt: computeNextRunAt(config.schedule as ScheduledTaskSchedule, new Date()) },
-      })));
-      return;
-    }
-    await this.prisma.scheduledTaskConfig.updateMany({
-      where: { workspaceId, taskKey: { in: CHANNEL_AUTO_SYNC_KEYS }, enabled: true },
-      data: { enabled: false, autoDisarmed: true, nextScheduledRunAt: null, scheduledClaimOwner: null, scheduledClaimExpiresAt: null },
-    });
-  }
-
-  private async refreshDueDrivenTasks(attempted = new Set<string>()) {
+  private async refreshDueDrivenTasks(attempted?: Set<string>) {
+    const keys = attempted ? [...attempted] : [...DUE_DRIVEN_KEYS];
     await Promise.all(
-      [...DUE_DRIVEN_KEYS].map((key) =>
-        this.refreshDueDrivenTask(key, attempted.has(key)),
-      ),
+      keys.map((key) => this.refreshDueDrivenTask(key, attempted?.has(key))),
     );
   }
 
@@ -389,7 +354,9 @@ export class ScheduledTasksService
         notificationChannel: 'SYSTEM_TELEGRAM_BOT',
         notifyOnSuccess: false,
         notifyOnFailure: false,
-        nextScheduledRunAt: definition.dueDriven ? null : computeNextRunAt(schedule, now),
+        nextScheduledRunAt: definition.dueDriven
+          ? null
+          : computeNextRunAt(schedule, now),
       },
       update: {},
     });

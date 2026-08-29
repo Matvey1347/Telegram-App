@@ -17,6 +17,7 @@ import {
   ManagedPostsImportSource,
 } from "./managed-posts-import-source";
 import { ManagedPostsImportWorkspace } from "./managed-posts-import-workspace";
+import { buildManagedPostInternalLinks } from "./managed-post-internal-links-notice";
 import {
   ChannelImportNavigation,
   type ChannelImportMode,
@@ -109,14 +110,29 @@ export function ManagedPostsImportModal({
   const postGroups = useQuery({
     queryKey: telegramPostKeys.postGroups(channelId),
     queryFn: () =>
-      telegramChannelsApi.postGroups({ telegramChannelId: channelId }),
+      telegramChannelsApi.postGroupSummaries(channelId),
     enabled: open && Boolean(channelId) && editableRows.length > 0,
   });
 
-  const managedPosts = useQuery({
-    queryKey: telegramPostKeys.managed(channelId),
-    queryFn: () => telegramChannelsApi.managedPosts(channelId),
-    enabled: open && Boolean(channelId) && editableRows.length > 0,
+  const referencedPostIds = useMemo(
+    () => [
+      ...new Set(
+        editableRows.flatMap((row) =>
+          buildManagedPostInternalLinks(row.text).map((link) => link.targetId),
+        ),
+      ),
+    ],
+    [editableRows],
+  );
+  const referencedPosts = useQuery({
+    queryKey: ["telegram-managed-post-lookup", channelId, referencedPostIds],
+    queryFn: () =>
+      telegramChannelsApi.lookupManagedPosts(channelId, referencedPostIds),
+    enabled:
+      open &&
+      Boolean(channelId) &&
+      referencedPostIds.length > 0 &&
+      referencedPostIds.length <= 1_000,
   });
 
   const groupOptions = useMemo(
@@ -327,7 +343,7 @@ export function ManagedPostsImportModal({
       const summary = summarizeImportProgress([...progressByIndex.values()]);
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: telegramPostKeys.managed(channelId),
+          queryKey: telegramPostKeys.managedLists(channelId),
         }),
         queryClient.invalidateQueries({
           queryKey: telegramPostKeys.managedCalendar(channelId),
@@ -506,7 +522,7 @@ export function ManagedPostsImportModal({
             channelTelegramChatId={channelTelegramChatId}
             captionLengthMax={captionLengthMax}
             messageLengthMax={messageLengthMax}
-            managedPosts={managedPosts.data ?? []}
+            referencedPosts={referencedPosts.data?.items ?? []}
             groupOptions={groupOptions}
             onUpdateRow={updateEditableRow}
             onDeleteRow={deleteEditableRow}

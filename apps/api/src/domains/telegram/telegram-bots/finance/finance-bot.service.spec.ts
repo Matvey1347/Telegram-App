@@ -91,12 +91,24 @@ describe('FinanceBotService chat UX', () => {
   const profile = { id: 'profile-1', defaultCurrency: 'USD', timezone: 'UTC' };
 
   function service(overrides: Record<string, unknown> = {}) {
+    const telegramUser = {
+      id: 'telegram-user-1',
+      telegramChatId: 'chat-1',
+      languageCode: null,
+    };
     const users = {
+      actorFromUpdate: jest.fn().mockReturnValue({ id: 'telegram-id' }),
       upsertFromUpdate: jest
         .fn()
-        .mockResolvedValue({ id: 'telegram-user-1', telegramChatId: 'chat-1' }),
+        .mockResolvedValue(telegramUser),
     };
-    const contexts = { ensureProfile: jest.fn().mockResolvedValue(profile) };
+    const contexts = {
+      findBotUpdateContext: jest.fn().mockResolvedValue({
+        telegramUser,
+        profile,
+      }),
+      ensureProfile: jest.fn().mockResolvedValue(profile),
+    };
     const proposals = {
       confirm: jest.fn(),
       cancel: jest.fn(),
@@ -297,13 +309,21 @@ describe('FinanceBotService chat UX', () => {
     });
     expect(
       test.botApi.answerCallbackQuery.mock.invocationCallOrder[0],
-    ).toBeLessThan(test.users.upsertFromUpdate.mock.invocationCallOrder[0]);
+    ).toBeLessThan(
+      test.contexts.findBotUpdateContext.mock.invocationCallOrder[0],
+    );
+    expect(test.contexts.findBotUpdateContext).toHaveBeenCalledTimes(1);
+    expect(test.contexts.ensureProfile).toHaveBeenCalledWith(
+      'finance-bot',
+      'telegram-user-1',
+      profile,
+    );
     expect(test.proposals.confirm).toHaveBeenCalledWith(
       expect.objectContaining({
         token: 'proposal-1',
         botIntegrationId: 'finance-bot',
         telegramBotUserId: 'telegram-user-1',
-        profile,
+        profile: { ...profile, workspaceId: 'workspace-1' },
       }),
     );
     expect(test.delivery.send).toHaveBeenCalledWith(
@@ -402,6 +422,37 @@ describe('FinanceBotService chat UX', () => {
       'chat-1',
       'en',
     );
+  });
+
+  it('reuses one established context read for help', async () => {
+    const test = service();
+
+    await test.instance.handle({
+      bot,
+      runtime,
+      token: 'bot-token',
+      updateLogId: 'help-established',
+      update: {
+        message: {
+          text: '/help',
+          chat: { id: 'chat-1' },
+          from: { id: 'telegram-id' },
+        },
+      },
+    } as any);
+
+    expect(test.contexts.findBotUpdateContext).toHaveBeenCalledTimes(1);
+    expect(test.users.upsertFromUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        existingUser: expect.objectContaining({ id: 'telegram-user-1' }),
+      }),
+    );
+    expect(test.contexts.ensureProfile).toHaveBeenCalledWith(
+      'finance-bot',
+      'telegram-user-1',
+      profile,
+    );
+    expect(test.delivery.send).toHaveBeenCalledTimes(1);
   });
 
   it('does not let an active draft swallow commands or persistent menu actions', async () => {
@@ -657,7 +708,34 @@ describe('FinanceBotService chat UX', () => {
     expect(test.chat.sendAccounts).toHaveBeenCalledWith(
       expect.anything(),
       'telegram-user-1',
-      'profile-1',
+      { ...profile, workspaceId: 'workspace-1' },
+      'chat-1',
+      'en',
+    );
+  });
+
+  it('passes established profile currency and workspace into accounts rendering', async () => {
+    const test = service();
+
+    await test.instance.handle({
+      bot,
+      runtime,
+      token: 'bot-token',
+      updateLogId: 'accounts-established',
+      update: {
+        message: {
+          text: '/accounts',
+          chat: { id: 'chat-1' },
+          from: { id: 'telegram-id' },
+        },
+      },
+    } as any);
+
+    expect(test.contexts.findBotUpdateContext).toHaveBeenCalledTimes(1);
+    expect(test.chat.sendAccounts).toHaveBeenCalledWith(
+      expect.anything(),
+      'telegram-user-1',
+      { ...profile, workspaceId: 'workspace-1' },
       'chat-1',
       'en',
     );

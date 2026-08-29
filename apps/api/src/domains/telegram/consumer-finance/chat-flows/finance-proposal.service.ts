@@ -92,28 +92,41 @@ export class FinanceProposalService {
     token: string;
     botIntegrationId: string;
     telegramBotUserId: string;
-    profile: { id: string; defaultCurrency: string };
+    profile: { id: string; defaultCurrency: string; workspaceId?: string };
   }) {
+    const tokenHash = this.hash(input.token);
+    const candidate = await this.prisma.financePendingProposal.findUnique({
+      where: { tokenHash },
+    });
+    if (!candidate || !this.belongsToInput(candidate, input))
+      throw new NotFoundException('Finance proposal not found');
+    if (
+      candidate.status === FinanceProposalStatus.CONFIRMED &&
+      candidate.transactionId
+    )
+      return this.duplicateResult(candidate.transactionId);
+    if (
+      candidate.status !== FinanceProposalStatus.PENDING ||
+      candidate.expiresAt <= new Date()
+    )
+      throw new BadRequestException(
+        'Finance proposal has expired or was cancelled',
+      );
+    const rates = await this.ledger.prepareTransactionRateSource(
+      input.profile,
+      this.operations(candidate.payload as StoredProposal),
+    );
     return this.prisma.$transaction(async (tx) => {
       const proposal = await tx.financePendingProposal.findUnique({
-        where: { tokenHash: this.hash(input.token) },
+        where: { tokenHash },
       });
-      if (
-        !proposal ||
-        proposal.botIntegrationId !== input.botIntegrationId ||
-        proposal.telegramBotUserId !== input.telegramBotUserId ||
-        proposal.profileId !== input.profile.id
-      )
+      if (!proposal || !this.belongsToInput(proposal, input))
         throw new NotFoundException('Finance proposal not found');
       if (
         proposal.status === FinanceProposalStatus.CONFIRMED &&
         proposal.transactionId
       )
-        return {
-          transactionId: proposal.transactionId,
-          transactionIds: proposal.transactionId.split(','),
-          duplicate: true,
-        };
+        return this.duplicateResult(proposal.transactionId);
       if (
         proposal.status !== FinanceProposalStatus.PENDING ||
         proposal.expiresAt <= new Date()
@@ -138,31 +151,35 @@ export class FinanceProposalService {
           completed?.status === FinanceProposalStatus.CONFIRMED &&
           completed.transactionId
         )
-          return {
-            transactionId: completed.transactionId,
-            transactionIds: completed.transactionId.split(','),
-            duplicate: true,
-          };
+          return this.duplicateResult(completed.transactionId);
         throw new BadRequestException(
           'Finance proposal is no longer available',
         );
       }
       const payload = proposal.payload as StoredProposal;
-      const operations =
-        'operations' in payload ? payload.operations : [payload];
+      const operations = this.operations(payload);
+      const transactionInputs = operations.map((operation) => ({
+        ...operation,
+        categoryId: operation.categoryId || undefined,
+        description: operation.description || undefined,
+      }));
+      const writeContext = await this.ledger.prepareTransactionWriteContext(
+        tx,
+        input.profile.id,
+        transactionInputs,
+        rates,
+      );
       const transactions: Array<{ id: string }> = [];
       const source = 'operations' in payload ? payload.source || 'AI' : 'CHAT';
-      for (const operation of operations)
+      for (const operation of transactionInputs)
         transactions.push(
           await this.ledger.createTransactionInTransaction(
             tx,
             input.profile,
-            {
-              ...operation,
-              categoryId: operation.categoryId || undefined,
-              description: operation.description || undefined,
-            },
+            operation,
             source,
+            undefined,
+            writeContext,
           ),
         );
       const transactionId = transactions.map((item) => item.id).join(',');
@@ -176,6 +193,43 @@ export class FinanceProposalService {
         duplicate: false,
       };
     });
+  }
+
+  private belongsToInput(
+    proposal: {
+      botIntegrationId: string;
+      telegramBotUserId: string;
+      profileId: string;
+    } | null,
+    input: {
+      botIntegrationId: string;
+      telegramBotUserId: string;
+      profile: { id: string };
+    },
+  ) {
+    return Boolean(
+      proposal &&
+      proposal.botIntegrationId === input.botIntegrationId &&
+      proposal.telegramBotUserId === input.telegramBotUserId &&
+      proposal.profileId === input.profile.id,
+    );
+  }
+
+  private operations(payload: StoredProposal) {
+    const operations = 'operations' in payload ? payload.operations : [payload];
+    if (!operations.length || operations.length > 10)
+      throw new BadRequestException(
+        'A proposal must contain 1 to 10 operations',
+      );
+    return operations;
+  }
+
+  private duplicateResult(transactionId: string) {
+    return {
+      transactionId,
+      transactionIds: transactionId.split(','),
+      duplicate: true,
+    };
   }
 
   async createBatch(input: {

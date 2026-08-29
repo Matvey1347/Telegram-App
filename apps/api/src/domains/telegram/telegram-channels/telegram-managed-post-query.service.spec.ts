@@ -1,3 +1,4 @@
+import { TelegramManagedPostStatus } from '@prisma/client';
 import { TelegramManagedPostQueryService } from './telegram-managed-post-query.service';
 
 const telegramPost = {
@@ -24,8 +25,22 @@ function setup(
   telegramPosts = [telegramPost],
 ) {
   const prisma = {
+    $executeRaw: jest.fn(),
+    $transaction: jest.fn(),
     telegramManagedPost: {
-      findMany: jest.fn().mockResolvedValue(managedPosts),
+      findMany: jest
+        .fn()
+        .mockImplementation((args?: { skip?: number; take?: number }) => {
+          const skip = args?.skip ?? 0;
+          return Promise.resolve(
+            managedPosts.slice(
+              skip,
+              skip + (args?.take ?? managedPosts.length),
+            ),
+          );
+        }),
+      findFirst: jest.fn(),
+      count: jest.fn().mockResolvedValue(managedPosts.length),
     },
     telegramPost: { findMany: jest.fn().mockResolvedValue(telegramPosts) },
     workspaceMember: { findFirst: jest.fn() },
@@ -35,20 +50,20 @@ function setup(
       .fn()
       .mockImplementation((posts: unknown[]) => Promise.resolve(posts)),
   };
+  const syntheticRead = {
+    count: jest
+      .fn()
+      .mockResolvedValue(managedPosts.length ? 0 : telegramPosts.length),
+    findPage: jest
+      .fn()
+      .mockResolvedValue(managedPosts.length ? [] : telegramPosts),
+    findOne: jest.fn(),
+  };
   const service = new TelegramManagedPostQueryService(
     prisma as never,
-    {} as never,
     {
       workspace: jest.fn().mockResolvedValue('workspace-1'),
-      invalidateTelegramChannelReadCache: jest.fn(),
     } as never,
-    {
-      isMissingTelegramManagedPostOriginColumns: jest
-        .fn()
-        .mockReturnValue(false),
-    } as never,
-    {} as never,
-    {} as never,
     {
       findOne: jest.fn().mockResolvedValue({
         id: 'channel-1',
@@ -68,13 +83,9 @@ function setup(
       }),
     } as never,
     presentation as never,
-    { normalizeChannelPostGroupNumberingOnRead: jest.fn() } as never,
-    {
-      reconcileDueManagedPosts: jest.fn().mockResolvedValue({ checked: 0 }),
-    } as never,
-    { autoRepairImportedManagedPostsOnRead: jest.fn() } as never,
+    syntheticRead as never,
   );
-  return { service, prisma };
+  return { service, prisma, syntheticRead };
 }
 
 describe('TelegramManagedPostQueryService unified read model', () => {
@@ -93,8 +104,9 @@ describe('TelegramManagedPostQueryService unified read model', () => {
 
     const result = await service.managedPosts('user-1', 'channel-1');
 
-    expect(result).toHaveLength(1);
-    expect(result[0]).toEqual(
+    expect(result.pagination.totalItems).toBe(1);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toEqual(
       expect.objectContaining({
         id: 'managed-1',
         readOnlyTelegramPost: false,
@@ -112,6 +124,7 @@ describe('TelegramManagedPostQueryService unified read model', () => {
     expect(telegramPostRead?.where).toEqual({
       workspaceId: 'workspace-1',
       telegramChannelId: 'channel-1',
+      telegramMessageId: { in: ['42'] },
     });
     expect(telegramPostRead?.select).not.toHaveProperty('rawMessage');
   });
@@ -120,7 +133,7 @@ describe('TelegramManagedPostQueryService unified read model', () => {
     const { service } = setup([]);
     const result = await service.managedPosts('user-1', 'channel-1');
 
-    expect(result[0]).toEqual(
+    expect(result.items[0]).toEqual(
       expect.objectContaining({
         id: 'telegram-post:synced-1',
         telegramPostId: 'synced-1',
@@ -138,7 +151,17 @@ describe('TelegramManagedPostQueryService unified read model', () => {
   });
 
   it('propagates TelegramPost read failures and never retries them as schema repair', async () => {
-    const { service, prisma } = setup([]);
+    const { service, prisma } = setup([
+      {
+        id: 'managed-1',
+        workspaceId: 'workspace-1',
+        telegramChannelId: 'channel-1',
+        telegramMessageIds: ['42'],
+        telegramMessageUrls: [],
+        assignedMember: null,
+        group: null,
+      },
+    ]);
     prisma.telegramPost.findMany.mockRejectedValueOnce(
       new Error('database unavailable'),
     );
@@ -147,5 +170,64 @@ describe('TelegramManagedPostQueryService unified read model', () => {
       'database unavailable',
     );
     expect(prisma.telegramPost.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('bounds collection reads and pushes status filters into Prisma', async () => {
+    const managedPosts = Array.from({ length: 100 }, (_, index) => ({
+      id: `managed-${index}`,
+      workspaceId: 'workspace-1',
+      telegramChannelId: 'channel-1',
+      telegramMessageIds: [],
+      telegramMessageUrls: [],
+      assignedMember: null,
+      group: null,
+    }));
+    const { service, prisma } = setup(managedPosts, []);
+
+    const result = await service.managedPosts('user-1', 'channel-1', {
+      page: 2,
+      pageSize: 25,
+      status: [TelegramManagedPostStatus.DRAFT],
+    });
+
+    expect(result.items).toHaveLength(25);
+    expect(prisma.telegramManagedPost.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        skip: 25,
+        take: 25,
+        where: expect.objectContaining({ status: { in: ['DRAFT'] } }),
+      }),
+    );
+  });
+
+  it('keeps collection GET pure and performs no source work for non-published filters', async () => {
+    const { service, prisma, syntheticRead } = setup([], []);
+
+    await service.managedPosts('user-1', 'channel-1', {
+      status: [TelegramManagedPostStatus.DRAFT],
+    });
+
+    expect(syntheticRead.count).not.toHaveBeenCalled();
+    expect(syntheticRead.findPage).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.$executeRaw).not.toHaveBeenCalled();
+  });
+
+  it('scopes direct detail reads to the workspace and channel', async () => {
+    const { service, prisma } = setup([], []);
+
+    await expect(
+      service.managedPost('user-1', 'channel-1', 'post-other-workspace'),
+    ).rejects.toThrow('Managed post not found');
+
+    expect(prisma.telegramManagedPost.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'post-other-workspace',
+          workspaceId: 'workspace-1',
+          telegramChannelId: 'channel-1',
+        },
+      }),
+    );
   });
 });

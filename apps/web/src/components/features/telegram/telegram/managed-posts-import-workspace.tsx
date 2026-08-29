@@ -21,7 +21,7 @@ import {
   Textarea,
   TimeInput,
 } from "@/components/ui/primitives";
-import type { TelegramManagedPost } from "@/lib/api";
+import type { TelegramManagedPostLookupItem } from "@/lib/features/telegram/telegram-managed-posts-api";
 import { buildTelegramPostsUrl } from "@/lib/features/telegram/telegram-posts-url";
 import { ManagedPostsImportList } from "./managed-posts-import-list";
 import {
@@ -48,7 +48,7 @@ export function ManagedPostsImportWorkspace({
   channelTelegramChatId,
   captionLengthMax,
   messageLengthMax,
-  managedPosts,
+  referencedPosts,
   groupOptions,
   onUpdateRow,
   onDeleteRow,
@@ -67,7 +67,7 @@ export function ManagedPostsImportWorkspace({
   channelTelegramChatId?: string | null;
   captionLengthMax: number;
   messageLengthMax: number;
-  managedPosts: TelegramManagedPost[];
+  referencedPosts: TelegramManagedPostLookupItem[];
   groupOptions: ManagedPostsGroupOption[];
   onUpdateRow: (index: number, patch: Partial<EditableImportRow>) => void;
   onDeleteRow: (index: number) => void;
@@ -89,9 +89,9 @@ export function ManagedPostsImportWorkspace({
   const outgoingLinks = useMemo(
     () =>
       selectedRow
-        ? buildManagedPostInternalLinks(selectedRow.text, managedPosts)
+        ? buildManagedPostInternalLinks(selectedRow.text, referencedPosts)
         : [],
-    [managedPosts, selectedRow],
+    [referencedPosts, selectedRow],
   );
   const iconPresentation = importIconPresentation(selectedRow?.icon ?? "");
   const iconId =
@@ -239,7 +239,6 @@ export function ManagedPostsImportWorkspace({
                 internalLinkUsage="edit"
                 highlightInternalLinkTargetId={highlightedTargetId}
                 highlightRequestKey={highlightRequestKey}
-                availableInternalPosts={managedPosts}
                 onChange={(text) => onUpdateRow(selectedRowIndex, { text })}
               />
             </FormField>

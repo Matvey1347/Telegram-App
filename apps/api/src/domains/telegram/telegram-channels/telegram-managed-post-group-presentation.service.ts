@@ -41,9 +41,11 @@ export class TelegramManagedPostGroupPresentationService {
     });
   }
 
-  private systemGroupIconPresentation(group?: {
-    systemKey?: string | null;
-  } | null) {
+  private systemGroupIconPresentation(
+    group?: {
+      systemKey?: string | null;
+    } | null,
+  ) {
     if (group?.systemKey === SYSTEM_BOT_POSTS_GROUP_KEY) {
       return iconToResolvedEmoji({
         id: SYSTEM_BOT_POSTS_GROUP_ICON_NAME,
@@ -126,9 +128,10 @@ export class TelegramManagedPostGroupPresentationService {
   }
 
   public async resolveTelegramImportedSystemGroupIconPresentation() {
-    const iconId = await this.resolveTelegramImportedSystemGroupIconId();
     return iconToResolvedEmoji({
-      id: iconId || TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_FALLBACK_ID,
+      id:
+        this.telegramSystemGroupIconId ||
+        TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_FALLBACK_ID,
       type: 'image',
       name: TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_NAME,
       imageUrl: TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_IMAGE_URL,

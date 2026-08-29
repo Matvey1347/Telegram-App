@@ -6,6 +6,8 @@ import {
   TelegramAdSaleStatus,
   WorkspaceRole,
 } from '@prisma/client';
+import { TelegramAdSalesBotCommandExecutorService } from './telegram-ad-sales-bot-command-executor.service';
+import { TelegramAdSalesBotReservationService } from './telegram-ad-sales-bot-reservation.service';
 import { TelegramAdSalesBotCommandService } from './telegram-ad-sales-bot-command.service';
 
 const baseInput = {
@@ -61,6 +63,13 @@ function setup() {
       findFirst: jest
         .fn()
         .mockResolvedValue({ id: 'product-1', currency: 'UAH' }),
+      findMany: jest.fn().mockResolvedValue([
+        {
+          id: 'product-1',
+          telegramChannelId: 'channel-1',
+          currency: 'UAH',
+        },
+      ]),
     },
     telegramAdSale: { findFirst: jest.fn() },
     telegramAdSalePayment: { findFirst: jest.fn() },
@@ -88,6 +97,10 @@ function setup() {
       sale.status = dto.status;
       return sale;
     }),
+    confirmSale: jest.fn().mockImplementation(async () => {
+      sale.status = TelegramAdSaleStatus.CONFIRMED;
+      return sale;
+    }),
     createManagedPostFromPlacement: jest.fn().mockImplementation(async () => {
       placement.managedPostId = 'post-1';
       return { id: 'post-1' };
@@ -106,18 +119,43 @@ function setup() {
     }),
     listChannelProducts: jest.fn(),
   };
-  const postGroups = {
-    ensureAdvertiseSystemGroup: jest
-      .fn()
-      .mockResolvedValue({ id: 'advertise-group' }),
-    addPostsToGroup: jest.fn().mockResolvedValue(undefined),
+  const targets = {
+    resolve: jest.fn().mockResolvedValue({
+      workspaceId: 'workspace-1',
+      networkId: null,
+      networkName: null,
+      channelIds: ['channel-1'],
+      audienceWeightsByChannel: { 'channel-1': 0 },
+      formats: [
+        {
+          name: '1/24',
+          deleteAfterHours: 24,
+          isPermanent: false,
+          productIdsByChannel: { 'channel-1': 'product-1' },
+        },
+      ],
+    }),
   };
+  const deletionPreflight = { assertAvailable: jest.fn() };
+  const reservations = new TelegramAdSalesBotReservationService(
+    prisma as never,
+    checkout as never,
+    sales as never,
+  );
+  const executor = new TelegramAdSalesBotCommandExecutorService(
+    prisma as never,
+    workspaceService as never,
+    sales as never,
+    targets as never,
+    {} as never,
+    deletionPreflight as never,
+    reservations,
+  );
   const service = new TelegramAdSalesBotCommandService(
     prisma as never,
     workspaceService as never,
-    checkout as never,
     sales as never,
-    postGroups as never,
+    executor,
   );
   return {
     service,
@@ -127,7 +165,8 @@ function setup() {
     sales,
     sale,
     placement,
-    postGroups,
+    targets,
+    deletionPreflight,
   };
 }
 
@@ -294,16 +333,18 @@ describe('TelegramAdSalesBotCommandService', () => {
         ...baseInput,
         deliveryAction: 'SKIP_POST',
       }),
-    ).resolves.toEqual({
-      saleId: 'sale-1',
-      placementId: 'placement-1',
-      paymentId: 'payment-1',
-      transactionId: 'transaction-1',
-      managedPostId: null,
-      saleStatus: TelegramAdSaleStatus.CONFIRMED,
-      placementStatus: TelegramAdPlacementStatus.RESERVED,
-      deliveryAction: 'SKIP_POST',
-    });
+    ).resolves.toEqual(
+      expect.objectContaining({
+        saleId: 'sale-1',
+        placementId: 'placement-1',
+        paymentId: 'payment-1',
+        transactionId: 'transaction-1',
+        managedPostId: null,
+        saleStatus: TelegramAdSaleStatus.CONFIRMED,
+        placementStatus: TelegramAdPlacementStatus.RESERVED,
+        deliveryAction: 'SKIP_POST',
+      }),
+    );
 
     expect(checkout.create).toHaveBeenCalledWith(
       'user-1',
@@ -328,14 +369,12 @@ describe('TelegramAdSalesBotCommandService', () => {
         }),
       }),
     );
-    expect(sales.updateSale).toHaveBeenCalledWith('user-1', 'sale-1', {
-      status: TelegramAdSaleStatus.CONFIRMED,
-    });
+    expect(sales.confirmSale).toHaveBeenCalledWith('user-1', 'sale-1');
     expect(sales.createManagedPostFromPlacement).not.toHaveBeenCalled();
   });
 
   it('creates, attaches and schedules a managed post through canonical services', async () => {
-    const { service, sales, postGroups } = setup();
+    const { service, sales } = setup();
 
     const result = await service.commit('user-1', {
       ...baseInput,
@@ -357,15 +396,13 @@ describe('TelegramAdSalesBotCommandService', () => {
       expect.objectContaining({
         assignedMemberId: 'member-2',
         buttonRows: [
-          {
-            buttons: [
-              {
-                text: 'Open',
-                url: 'https://example.com',
-                style: 'default',
-              },
-            ],
-          },
+          [
+            {
+              text: 'Open',
+              url: 'https://example.com',
+              style: 'default',
+            },
+          ],
         ],
       }),
     );
@@ -374,16 +411,6 @@ describe('TelegramAdSalesBotCommandService', () => {
       'sale-1',
       'placement-1',
       expect.objectContaining({ scheduledAt: baseInput.scheduledAt }),
-    );
-    expect(postGroups.ensureAdvertiseSystemGroup).toHaveBeenCalledWith(
-      'workspace-1',
-      'channel-1',
-      'member-2',
-    );
-    expect(postGroups.addPostsToGroup).toHaveBeenCalledWith(
-      'user-1',
-      'advertise-group',
-      { postIds: ['post-1'] },
     );
     expect(result).toEqual(
       expect.objectContaining({
@@ -412,7 +439,7 @@ describe('TelegramAdSalesBotCommandService', () => {
   });
 
   it('resumes after delivery failure without duplicating checkout or post creation', async () => {
-    const { service, checkout, sales, sale, placement, postGroups } = setup();
+    const { service, checkout, sales, sale, placement } = setup();
     sales.schedulePlacement.mockRejectedValueOnce(new Error('Telegram down'));
 
     await expect(
@@ -442,7 +469,6 @@ describe('TelegramAdSalesBotCommandService', () => {
 
     expect(checkout.create).toHaveBeenCalledTimes(1);
     expect(sales.createManagedPostFromPlacement).toHaveBeenCalledTimes(1);
-    expect(postGroups.addPostsToGroup).toHaveBeenCalledTimes(2);
     expect(sales.schedulePlacement).toHaveBeenCalledTimes(2);
   });
 

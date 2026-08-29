@@ -5,18 +5,11 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import { execFile as execFileCallback } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { promisify } from 'node:util';
-import sharp from 'sharp';
 import { Api, TelegramClient } from 'telegram';
 import { returnBigInt } from 'telegram/Helpers';
 import { Logger as GramJsLogger, LogLevel } from 'telegram/extensions/Logger';
 import { HTMLParser } from 'telegram/extensions/html';
 import { normalizeTelegramChannelId } from './telegram-post-url';
-import { CustomFile } from 'telegram/client/uploads';
 import { StringSession } from 'telegram/sessions';
 import {
   telegramHtmlToGramJsAlbumHtml,
@@ -48,6 +41,10 @@ import {
   signInTelegramWithPassword,
   startTelegramPhoneLogin,
 } from './telegram-phone-login.adapter';
+import {
+  convertTelegramPublishImageWithSips,
+  downloadTelegramPublishImage,
+} from './telegram-mtproto-publish-image';
 
 type ApiCredentials = { apiId: string; apiHash: string };
 type SessionParams = ApiCredentials & { session?: string };
@@ -179,7 +176,6 @@ type InviteLinkLoadedCallback = (
   warnings: string[],
 ) => void | Promise<void>;
 
-const execFile = promisify(execFileCallback);
 const DEFAULT_MT_PROTO_CAPTION_LIMIT = 1024;
 const PREMIUM_MT_PROTO_CAPTION_LIMIT = 4096;
 const DEFAULT_TELEGRAM_MESSAGE_LIMIT = 4096;
@@ -200,16 +196,8 @@ export class TelegramMtprotoClient {
   private readonly inviteLinksPageSize = 100;
   private readonly maxInviteLinkPages = 200;
   private readonly defaultTelegramPaletteSize = 7;
-  private readonly maxPublishImageBytes = 10 * 1024 * 1024;
-  private readonly maxTelegramPhotoDimension = 4096;
-  private readonly maxTelegramPhotoDimensionSum = 10_000;
-  private readonly maxTelegramPhotoAspectRatio = 20;
   private readonly telegramResolveTimeoutMs = 20_000;
   private readonly telegramMetadataTimeoutMs = 10_000;
-  private readonly publishableTelegramPhotoTypes = new Set([
-    'image/jpeg',
-    'image/png',
-  ]);
   private readonly broadcastStatsGraphFields: Array<{
     normalized: BroadcastStatsGraphField;
     raw: string[];
@@ -3052,172 +3040,14 @@ export class TelegramMtprotoClient {
     }
   }
 
-  private async downloadPublishImage(url: string, index: number) {
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(url);
-    } catch {
-      throw new Error(`Image ${index + 1} has an invalid URL`);
-    }
-    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-      throw new Error(`Image ${index + 1} must use an HTTP or HTTPS URL`);
-    }
-
-    let response: Response;
-    try {
-      response = await fetch(parsedUrl, {
-        signal: AbortSignal.timeout(20_000),
-      });
-    } catch {
-      throw new Error(
-        `Could not download image ${index + 1} before publishing`,
-      );
-    }
-    if (!response.ok) {
-      throw new Error(
-        `Could not download image ${index + 1} (HTTP ${response.status})`,
-      );
-    }
-
-    const contentType = (response.headers.get('content-type') || '')
-      .split(';')[0]
-      .trim()
-      .toLowerCase();
-    if (!contentType.startsWith('image/')) {
-      throw new Error(`File ${index + 1} is not a valid image`);
-    }
-    const declaredSize = Number(response.headers.get('content-length') || 0);
-    if (declaredSize > this.maxPublishImageBytes) {
-      throw new Error(`Image ${index + 1} is larger than 10 MB`);
-    }
-
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (!buffer.length) throw new Error(`Image ${index + 1} is empty`);
-    if (buffer.length > this.maxPublishImageBytes) {
-      throw new Error(`Image ${index + 1} is larger than 10 MB`);
-    }
-
-    const normalized = await this.normalizePublishImageBuffer(
-      buffer,
-      contentType,
-      index,
-    );
-
-    const extensionByType: Record<string, string> = {
-      'image/jpeg': 'jpg',
-      'image/png': 'png',
-    };
-    const extension = extensionByType[normalized.contentType] || 'jpg';
-    return new CustomFile(
-      `telegram-post-${index + 1}.${extension}`,
-      normalized.buffer.length,
-      '',
-      normalized.buffer,
-    );
+  private convertImageBufferWithSips(buffer: Buffer, contentType: string) {
+    return convertTelegramPublishImageWithSips(buffer, contentType);
   }
 
-  private async normalizePublishImageBuffer(
-    buffer: Buffer,
-    contentType: string,
-    index: number,
-  ) {
-    if (this.publishableTelegramPhotoTypes.has(contentType)) {
-      try {
-        const metadata = await sharp(buffer).metadata();
-        const width = metadata.width ?? 0;
-        const height = metadata.height ?? 0;
-        const aspectRatio =
-          width > 0 && height > 0
-            ? Math.max(width / height, height / width)
-            : Number.POSITIVE_INFINITY;
-        if (
-          width > 0 &&
-          height > 0 &&
-          width + height <= this.maxTelegramPhotoDimensionSum &&
-          aspectRatio <= this.maxTelegramPhotoAspectRatio
-        ) {
-          return { buffer, contentType };
-        }
-      } catch {
-        // Re-encode below so corrupt metadata cannot reach Telegram unchanged.
-      }
-    }
-
-    try {
-      const converted = await sharp(buffer, { animated: true })
-        .rotate()
-        .resize({
-          width: this.maxTelegramPhotoDimension,
-          height: this.maxTelegramPhotoDimension,
-          fit: 'inside',
-          withoutEnlargement: true,
-        })
-        .jpeg({ quality: 92, mozjpeg: true })
-        .toBuffer();
-      if (!converted.length) {
-        throw new Error('empty_conversion');
-      }
-      if (converted.length > this.maxPublishImageBytes) {
-        throw new Error('converted_too_large');
-      }
-      return { buffer: converted, contentType: 'image/jpeg' as const };
-    } catch (error) {
-      const converted = await this.convertImageBufferWithSips(
-        buffer,
-        contentType,
-      ).catch(() => null);
-      if (converted) {
-        if (converted.length > this.maxPublishImageBytes) {
-          throw new Error(
-            `Image ${index + 1} could not be converted for Telegram (converted image is larger than 10 MB)`,
-          );
-        }
-        return { buffer: converted, contentType: 'image/jpeg' as const };
-      }
-      const reason =
-        error instanceof Error && error.message === 'converted_too_large'
-          ? 'converted image is larger than 10 MB'
-          : 'unsupported or corrupted format';
-      throw new Error(
-        `Image ${index + 1} could not be converted for Telegram (${reason})`,
-      );
-    }
-  }
-
-  private async convertImageBufferWithSips(
-    buffer: Buffer,
-    contentType: string,
-  ) {
-    const extensionByType: Record<string, string> = {
-      'image/avif': 'avif',
-      'image/heic': 'heic',
-      'image/heif': 'heif',
-      'image/webp': 'webp',
-      'image/gif': 'gif',
-      'image/bmp': 'bmp',
-      'image/tiff': 'tiff',
-    };
-    const extension = extensionByType[contentType] || 'img';
-    const tempDir = await mkdtemp(join(tmpdir(), 'telegram-publish-image-'));
-    const inputPath = join(tempDir, `input.${extension}`);
-    const outputPath = join(tempDir, 'output.jpg');
-
-    try {
-      await writeFile(inputPath, buffer);
-      await execFile('sips', [
-        '-s',
-        'format',
-        'jpeg',
-        inputPath,
-        '--out',
-        outputPath,
-      ]);
-      return await readFile(outputPath);
-    } finally {
-      await rm(tempDir, { recursive: true, force: true }).catch(
-        () => undefined,
-      );
-    }
+  private downloadPublishImage(url: string, index: number) {
+    return downloadTelegramPublishImage(url, index, (buffer, contentType) =>
+      this.convertImageBufferWithSips(buffer, contentType),
+    );
   }
 
   async deleteScheduledPost(params: {

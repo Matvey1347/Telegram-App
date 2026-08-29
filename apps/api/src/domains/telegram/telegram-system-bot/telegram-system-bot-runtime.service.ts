@@ -7,9 +7,31 @@ import {
   type TelegramSystemBotUpdate,
 } from './telegram-system-bot-handler.service';
 import { sanitizeOperationalError } from '../../../common/security/operational-error';
+import { SYSTEM_BOT_COMMANDS } from './telegram-system-bot-menu';
+
+const SYSTEM_BOT_UPDATE_RECLAIM_AFTER_MS = 5 * 60_000;
+const SYSTEM_BOT_COMMAND_LOCALES = ['en', 'ru', 'uk', 'pl'] as const;
+const SYSTEM_BOT_PRIVATE_CHAT_SCOPE = {
+  type: 'all_private_chats',
+} as const;
+
+type SystemBotUpdateResult = {
+  status: 'SKIPPED' | 'DUPLICATE' | 'PROCESSED';
+};
+
+type ClaimedSystemBotUpdateResult = {
+  status: 'DUPLICATE' | 'PROCESSED';
+};
 
 @Injectable()
 export class TelegramSystemBotRuntimeService implements OnModuleInit {
+  // A static registry covers every Nest service instance in this Node process
+  // without adding a timer or database heartbeat for active handlers.
+  private static readonly inFlightUpdates = new Map<
+    string,
+    Promise<ClaimedSystemBotUpdateResult>
+  >();
+
   private readonly logger = new Logger(TelegramSystemBotRuntimeService.name);
 
   constructor(
@@ -51,11 +73,26 @@ export class TelegramSystemBotRuntimeService implements OnModuleInit {
 
   private async configureMenu(token: string) {
     try {
-      // The System Bot uses a collapsible ReplyKeyboardMarkup. Clearing the
-      // slash-command menu lets Telegram expose that keyboard through its
-      // native square grid icon next to the input field.
-      await this.api.deleteMyCommands(token);
-      await this.api.setChatMenuButton(token, { type: 'default' });
+      const commands = [...SYSTEM_BOT_COMMANDS];
+      await Promise.all([
+        this.api.setMyCommands(token, commands),
+        this.api.setMyCommands(
+          token,
+          commands,
+          undefined,
+          SYSTEM_BOT_PRIVATE_CHAT_SCOPE,
+        ),
+        ...SYSTEM_BOT_COMMAND_LOCALES.flatMap((locale) => [
+          this.api.setMyCommands(token, commands, locale),
+          this.api.setMyCommands(
+            token,
+            commands,
+            locale,
+            SYSTEM_BOT_PRIVATE_CHAT_SCOPE,
+          ),
+        ]),
+      ]);
+      await this.api.setChatMenuButton(token, { type: 'commands' });
     } catch (error) {
       this.logger.warn(
         `Telegram System Bot command setup failed: ${sanitizeOperationalError(error)}`,
@@ -73,10 +110,35 @@ export class TelegramSystemBotRuntimeService implements OnModuleInit {
     return this.processUpdate(update);
   }
 
-  private async processUpdate(update: TelegramSystemBotUpdate) {
+  private processUpdate(
+    update: TelegramSystemBotUpdate,
+  ): Promise<SystemBotUpdateResult> {
     if (update.update_id === undefined || update.update_id === null)
-      return { status: 'SKIPPED' };
+      return Promise.resolve({ status: 'SKIPPED' });
     const updateId = String(update.update_id);
+    const environment = this.config.environment!;
+    const inFlightKey = `${environment}\u0000${updateId}`;
+    if (TelegramSystemBotRuntimeService.inFlightUpdates.has(inFlightKey)) {
+      return Promise.resolve({ status: 'DUPLICATE' });
+    }
+
+    const execution = this.processClaimedUpdate(update, environment, updateId);
+    TelegramSystemBotRuntimeService.inFlightUpdates.set(inFlightKey, execution);
+    return execution.finally(() => {
+      if (
+        TelegramSystemBotRuntimeService.inFlightUpdates.get(inFlightKey) ===
+        execution
+      ) {
+        TelegramSystemBotRuntimeService.inFlightUpdates.delete(inFlightKey);
+      }
+    });
+  }
+
+  private async processClaimedUpdate(
+    update: TelegramSystemBotUpdate,
+    environment: NonNullable<TelegramSystemBotConfigService['environment']>,
+    updateId: string,
+  ): Promise<ClaimedSystemBotUpdateResult> {
     const updateType = update.message
       ? 'message'
       : update.callback_query
@@ -84,39 +146,70 @@ export class TelegramSystemBotRuntimeService implements OnModuleInit {
         : update.my_chat_member
           ? 'my_chat_member'
           : 'other';
-    let log: { id: string; status: string };
+    let logId: string;
+    let attemptStartedAt = new Date(Date.now());
     try {
-      log = await this.prisma.telegramSystemBotUpdateLog.create({
-        data: { environment: this.config.environment!, updateId, updateType },
+      const log = await this.prisma.telegramSystemBotUpdateLog.create({
+        data: {
+          environment,
+          updateId,
+          updateType,
+          updatedAt: attemptStartedAt,
+        },
       });
+      logId = log.id;
     } catch (error) {
       if (this.isUniqueViolation(error)) {
         const existing =
           await this.prisma.telegramSystemBotUpdateLog.findUnique({
             where: {
               environment_updateId: {
-                environment: this.config.environment!,
+                environment,
                 updateId,
               },
             },
-            select: { id: true, status: true },
+            select: { id: true, status: true, updatedAt: true },
           });
         if (!existing) throw error;
-        return { status: 'DUPLICATE' };
+        if (existing.status !== 'PROCESSING') return { status: 'DUPLICATE' };
+        const reclaimStartedAt = new Date(Date.now());
+        if (
+          existing.updatedAt.getTime() >=
+          reclaimStartedAt.getTime() - SYSTEM_BOT_UPDATE_RECLAIM_AFTER_MS
+        ) {
+          return { status: 'DUPLICATE' };
+        }
+        attemptStartedAt = reclaimStartedAt;
+        // `updatedAt` is the attempt generation: reclaim and both terminal
+        // writes must still own the exact generation they observed or created.
+        const reclaimed =
+          await this.prisma.telegramSystemBotUpdateLog.updateMany({
+            where: {
+              id: existing.id,
+              status: 'PROCESSING',
+              updatedAt: existing.updatedAt,
+            },
+            data: {
+              processedAt: null,
+              error: null,
+              updatedAt: attemptStartedAt,
+            },
+          });
+        if (reclaimed.count !== 1) return { status: 'DUPLICATE' };
+        logId = existing.id;
       } else {
         throw error;
       }
     }
     try {
       await this.handler.handle(update);
-      await this.prisma.telegramSystemBotUpdateLog.update({
-        where: { id: log.id },
-        data: { status: 'PROCESSED', processedAt: new Date() },
-      });
-      return { status: 'PROCESSED' };
     } catch (error) {
-      await this.prisma.telegramSystemBotUpdateLog.update({
-        where: { id: log.id },
+      await this.prisma.telegramSystemBotUpdateLog.updateMany({
+        where: {
+          id: logId,
+          status: 'PROCESSING',
+          updatedAt: attemptStartedAt,
+        },
         data: {
           status: 'FAILED',
           error: sanitizeOperationalError(error, 'System bot handler failed'),
@@ -124,6 +217,17 @@ export class TelegramSystemBotRuntimeService implements OnModuleInit {
       });
       throw error;
     }
+    const finalized = await this.prisma.telegramSystemBotUpdateLog.updateMany({
+      where: {
+        id: logId,
+        status: 'PROCESSING',
+        updatedAt: attemptStartedAt,
+      },
+      data: { status: 'PROCESSED', processedAt: new Date() },
+    });
+    return {
+      status: finalized.count === 1 ? 'PROCESSED' : 'DUPLICATE',
+    };
   }
 
   private isUniqueViolation(error: unknown) {

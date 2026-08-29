@@ -73,14 +73,13 @@ describe('Telegram System Bot option layouts', () => {
           id: `channel-${index}`,
           title: `Channel ${index}`,
         })),
-        products: Array.from({ length: 5 }, (_, index) => ({
-          id: `product-${index}`,
-          name: `Product ${index}`,
-        })),
-        formats: Array.from({ length: 5 }, (_, index) => ({
-          id: `format-${index}`,
-          name: `Format ${index}`,
-        })),
+        formats: [
+          { name: '1/24' },
+          { name: '2/48' },
+          { name: '3/72' },
+          { name: 'No auto-delete' },
+          { name: '1/24' },
+        ],
       },
     });
 
@@ -110,7 +109,6 @@ describe('Telegram System Bot option layouts', () => {
         ],
         members: [],
         channels: [],
-        products: [],
       },
     });
 

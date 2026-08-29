@@ -1,20 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import {
-  calculateChannelAssetEconomics,
-  effectiveCampaignAttributedSubscribers,
-  effectiveCampaignJoinedSubscribers,
-  effectiveCampaignPendingSubscribers,
-  resolveChannelKpiLabel,
-  resolveChannelKpiStatus,
-} from '../../../common/analytics/channel-financial-summary';
 import { CurrencyConversionService } from '../../../common/currency-conversion.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import {
-  priceChannelAdFormatWindows,
-  resolveChannelCardExpectedViews,
-  TelegramChannelAdPricingReadService,
-} from './telegram-channel-ad-pricing-read.service';
+import { TelegramChannelAdPricingReadService } from './telegram-channel-ad-pricing-read.service';
 import type { TelegramChannelFinancialPreviewInput } from './telegram-channel-financial-read.types';
+import {
+  prepareTelegramChannelFinancialSummaries,
+  type PreparedTelegramChannelFinancialSummaries,
+  type TelegramChannelFinancialSummaryOptions,
+} from './telegram-channel-financial-summary-preparation';
 
 @Injectable()
 export class TelegramChannelFinancialReadService {
@@ -27,25 +20,30 @@ export class TelegramChannelFinancialReadService {
   public async buildChannelFinancialSummaryPreview(
     workspaceId: string,
     channels: TelegramChannelFinancialPreviewInput[],
-    options: {
-      normalizeToPrimaryCurrency?: boolean;
-      targetCurrency?: string;
-    } = {},
+    options: TelegramChannelFinancialSummaryOptions = {},
   ) {
-    if (!channels.length) {
-      return new Map<string, Record<string, unknown>>();
-    }
-    const channelIds = channels.map((channel) => channel.id);
-    const purchaseTransactionIds = channels
-      .map((channel) => channel.purchaseTransactionId)
-      .filter((id): id is string => Boolean(id));
-    const purchaseChannelIdByTransactionId = new Map(
-      channels.flatMap((channel) =>
-        channel.purchaseTransactionId
-          ? [[channel.purchaseTransactionId, channel.id] as const]
-          : [],
-      ),
+    const prepared = await this.prepareChannelFinancialSummaryPreview(
+      workspaceId,
+      channels,
     );
+    return prepared.build(channels, options);
+  }
+
+  public async prepareChannelFinancialSummaryPreview(
+    workspaceId: string,
+    channels: TelegramChannelFinancialPreviewInput[],
+  ): Promise<PreparedTelegramChannelFinancialSummaries> {
+    if (!channels.length) {
+      return { build: () => Promise.resolve(new Map()) };
+    }
+    const channelIds = [...new Set(channels.map((channel) => channel.id))];
+    const purchaseTransactionIds = [
+      ...new Set(
+        channels
+          .map((channel) => channel.purchaseTransactionId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
     const [
       campaigns,
       inviteLinks,
@@ -135,342 +133,26 @@ export class TelegramChannelFinancialReadService {
       }),
       this.adPricingReadService.windowsForChannels(workspaceId, channels),
     ]);
-
-    const inviteLinksByCampaignId = new Map<
-      string,
-      Array<{ joinedCount: number; requestedCount: number }>
-    >();
-    for (const inviteLink of inviteLinks) {
-      if (!inviteLink.adCampaignId) continue;
-      const list = inviteLinksByCampaignId.get(inviteLink.adCampaignId) ?? [];
-      list.push({
-        joinedCount: Number(inviteLink.joinedCount || 0),
-        requestedCount: Number(inviteLink.requestedCount || 0),
-      });
-      inviteLinksByCampaignId.set(inviteLink.adCampaignId, list);
-    }
-
-    const campaignsByChannelId = new Map<string, typeof campaigns>();
-    for (const campaign of campaigns) {
-      const list = campaignsByChannelId.get(campaign.telegramChannelId) ?? [];
-      list.push(campaign);
-      campaignsByChannelId.set(campaign.telegramChannelId, list);
-    }
-
-    const transactionsByChannelId = new Map<string, typeof transactions>();
-    for (const transaction of transactions) {
-      const channelId =
-        transaction.telegramChannelId ??
-        transaction.adCampaign?.telegramChannelId ??
-        purchaseChannelIdByTransactionId.get(transaction.id);
-      if (!channelId) continue;
-      const list = transactionsByChannelId.get(channelId) ?? [];
-      list.push(transaction);
-      transactionsByChannelId.set(channelId, list);
-    }
-    const adSaleAllocationsByChannelId = new Map<
-      string,
-      typeof adSaleAllocations
-    >();
-    for (const allocation of adSaleAllocations) {
-      const channelId = allocation.placement.telegramChannelId;
-      const list = adSaleAllocationsByChannelId.get(channelId) ?? [];
-      list.push(allocation);
-      adSaleAllocationsByChannelId.set(channelId, list);
-    }
-    const primaryCurrency = workspace?.primaryCurrency ?? 'USD';
-    const conversionCache = new Map<string, number | null>();
-    const pairConversionCache = new Map<string, Promise<number | null>>();
-    const convertAmount = async (
-      amount: number,
-      fromCurrency: string,
-      toCurrency: string,
-    ) => {
-      const from = fromCurrency.toUpperCase();
-      const to = toCurrency.toUpperCase();
-      if (from === to) return amount;
-      if (!this.currencyConversionService) return null;
-      const key = `${from}:${to}`;
-      if (!pairConversionCache.has(key)) {
-        pairConversionCache.set(
-          key,
-          this.currencyConversionService.getRate(from, to, workspaceId),
-        );
-      }
-      const rate = await pairConversionCache.get(key)!;
-      return rate == null ? null : amount * rate;
+    let rateSourcePromise: ReturnType<
+      CurrencyConversionService['prepareRateSource']
+    > | null = null;
+    const rateSource = {
+      getRate: async (fromCurrency: string, toCurrency: string) => {
+        rateSourcePromise ??=
+          this.currencyConversionService.prepareRateSource(workspaceId);
+        return (await rateSourcePromise).getRate(fromCurrency, toCurrency);
+      },
     };
-    const convertPrimary = async (amount: number, currency: string) => {
-      if (amount === 0) return 0;
-      const target = currency.toUpperCase();
-      if (target === primaryCurrency.toUpperCase()) return amount;
-      if (!this.currencyConversionService) return null;
-      if (!conversionCache.has(target)) {
-        conversionCache.set(
-          target,
-          await this.currencyConversionService.getRate(
-            primaryCurrency,
-            target,
-            workspaceId,
-          ),
-        );
-      }
-      const rate = conversionCache.get(target);
-      return rate == null ? null : amount * rate;
-    };
-    const sumInCurrency = async (
-      rows: Array<{
-        amount: unknown;
-        currency: string;
-        amountInPrimaryCurrency?: unknown;
-      }>,
-      targetCurrency: string,
-    ) => {
-      const converted = await Promise.all(
-        rows.map(async (row) => {
-          const sourceCurrency = String(row.currency).toUpperCase();
-          if (sourceCurrency === targetCurrency) return Number(row.amount);
-          const nativeValue = await convertAmount(
-            Number(row.amount),
-            sourceCurrency,
-            targetCurrency,
-          );
-          if (nativeValue != null) return nativeValue;
-          return row.amountInPrimaryCurrency == null
-            ? null
-            : convertPrimary(
-                Number(row.amountInPrimaryCurrency),
-                targetCurrency,
-              );
-        }),
-      );
-      return converted.some((value) => value == null)
-        ? null
-        : converted.reduce<number>((sum, value) => sum + Number(value ?? 0), 0);
-    };
-
-    const summaries = new Map<string, Record<string, unknown>>();
-
-    for (const channel of channels) {
-      const audience = channel.audienceSnapshots?.[0];
-      const channelCampaigns = campaignsByChannelId.get(channel.id) ?? [];
-      const channelTransactions = transactionsByChannelId.get(channel.id) ?? [];
-      const channelAdSaleAllocations =
-        adSaleAllocationsByChannelId.get(channel.id) ?? [];
-      const purchaseTransactions = channelTransactions.filter(
-        (transaction) =>
-          transaction.type === 'expense' &&
-          (transaction.id === channel.purchaseTransactionId ||
-            transaction.categoryRef?.key === 'buy_channels' ||
-            transaction.categoryRef?.name?.trim().toLowerCase() ===
-              'buy channels' ||
-            transaction.categoryRef?.name?.trim().toLowerCase() ===
-              'buy channels (legacy)'),
-      );
-      const revenueTransactions = channelTransactions.filter(
-        (transaction) =>
-          transaction.type === 'income' &&
-          !transaction.telegramAdSalePayment &&
-          (transaction.categoryRef?.key === 'channel_advertising_revenue' ||
-            transaction.categoryRef?.name?.trim().toLowerCase() ===
-              'channel advertising revenue'),
-      );
-      const advertisingExpenseTransactions = channelTransactions.filter(
-        (transaction) =>
-          transaction.type === 'expense' &&
-          (transaction.categoryRef?.key === 'advertising' ||
-            transaction.categoryRef?.name?.trim().toLowerCase() ===
-              'advertising'),
-      );
-      const kpiCurrency = String(
-        channel.kpiCurrency || primaryCurrency,
-      ).toUpperCase();
-      const [acquisitionCost, totalAdSpend] = await Promise.all([
-        sumInCurrency(purchaseTransactions, kpiCurrency),
-        sumInCurrency(advertisingExpenseTransactions, kpiCurrency),
-      ]);
-      const totalSpend =
-        acquisitionCost == null || totalAdSpend == null
-          ? null
-          : totalAdSpend + acquisitionCost;
-      const normalizedCampaigns = channelCampaigns.map((campaign) => ({
-        ...campaign,
-        inviteLinks: inviteLinksByCampaignId.get(campaign.id) ?? [],
-      }));
-      const totalJoinedSubscribers = normalizedCampaigns.reduce(
-        (sum, campaign) => sum + effectiveCampaignJoinedSubscribers(campaign),
-        0,
-      );
-      const totalPendingSubscribers = normalizedCampaigns.reduce(
-        (sum, campaign) => sum + effectiveCampaignPendingSubscribers(campaign),
-        0,
-      );
-      const totalAttributedSubscribers = normalizedCampaigns.reduce(
-        (sum, campaign) =>
-          sum + effectiveCampaignAttributedSubscribers(campaign),
-        0,
-      );
-      const avgCpa =
-        totalAdSpend != null && totalAttributedSubscribers > 0
-          ? totalAdSpend / totalAttributedSubscribers
-          : null;
-      const campaignActiveSubscribersEstimate = channelCampaigns.reduce(
-        (sum, campaign) =>
-          sum +
-          Number(
-            campaign.cappedActiveSubscribersFromAd ??
-              campaign.activeSubscribersFromAd ??
-              0,
-          ),
-        0,
-      );
-      const paidActiveSubscribersEstimate =
-        campaignActiveSubscribersEstimate > 0
-          ? campaignActiveSubscribersEstimate
-          : (audience?.activeSubscribersEstimate ?? null);
-      const activeCpa =
-        totalAdSpend != null &&
-        paidActiveSubscribersEstimate &&
-        paidActiveSubscribersEstimate > 0
-          ? totalAdSpend / paidActiveSubscribersEstimate
-          : null;
-      const activeRates = channelCampaigns
-        .map((campaign) => Number(campaign.activeRate))
-        .filter((value) => Number.isFinite(value));
-      const retentionRates = channelCampaigns
-        .map((campaign) => Number(campaign.retention7d))
-        .filter((value) => Number.isFinite(value));
-      const kpiStatus = resolveChannelKpiStatus({
-        avgCpa,
-        targetCpaFrom: channel.targetCpaFrom,
-        targetCpa: channel.targetCpa,
-        acceptableCpaFrom: channel.acceptableCpaFrom,
-        acceptableCpa: channel.acceptableCpa,
-        stopCpaFrom: channel.stopCpaFrom,
-        stopCpa: channel.stopCpa,
-      });
-      // Use the currency of costs, not revenue, for a channel's payback card.
-      // A UAH acquisition/ad spend must not turn into a mixed-currency view
-      // just because an ad sale was recorded in another currency.
-      const economicsTransactions = [
-        ...advertisingExpenseTransactions.map((transaction) => ({
-          currency: transaction.currency,
-        })),
-        ...purchaseTransactions.map((transaction) => ({
-          currency: transaction.currency,
-        })),
-      ];
-      const currencyCounts = new Map<string, number>();
-      for (const transaction of economicsTransactions) {
-        const currency = String(
-          transaction.currency || primaryCurrency,
-        ).toUpperCase();
-        currencyCounts.set(currency, (currencyCounts.get(currency) ?? 0) + 1);
-      }
-      const maxCount = Math.max(0, ...currencyCounts.values());
-      const tiedCurrencies = [...currencyCounts.entries()]
-        .filter(([, count]) => count === maxCount)
-        .map(([currency]) => currency)
-        .sort();
-      const requestedCurrency = options.targetCurrency?.trim().toUpperCase();
-      const dominantCurrency = requestedCurrency
-        ? requestedCurrency
-        : options.normalizeToPrimaryCurrency
-          ? primaryCurrency.toUpperCase()
-          : (tiedCurrencies.find((currency) => currency === kpiCurrency) ??
-            tiedCurrencies.find(
-              (currency) => currency === primaryCurrency.toUpperCase(),
-            ) ??
-            tiedCurrencies[0] ??
-            kpiCurrency);
-      const [purchasePrice, revenue, adSpend, cpm] = await Promise.all([
-        purchaseTransactions.length
-          ? sumInCurrency(purchaseTransactions, dominantCurrency)
-          : Promise.resolve(null),
-        sumInCurrency(
-          [...revenueTransactions, ...channelAdSaleAllocations],
-          dominantCurrency,
-        ),
-        sumInCurrency(advertisingExpenseTransactions, dominantCurrency),
-        channel.adBaseCpm == null
-          ? Promise.resolve(null)
-          : String(channel.adBaseCurrency || primaryCurrency).toUpperCase() ===
-              dominantCurrency
-            ? Promise.resolve(Number(channel.adBaseCpm))
-            : convertAmount(
-                Number(channel.adBaseCpm),
-                String(channel.adBaseCurrency || primaryCurrency),
-                dominantCurrency,
-              ),
-      ]);
-      const invested =
-        purchasePrice == null && purchaseTransactions.length
-          ? null
-          : adSpend == null
-            ? null
-            : (purchasePrice ?? 0) + adSpend;
-      const pricingWindows = pricingWindowsByChannel.get(channel.id);
-      const expectedViews = resolveChannelCardExpectedViews(
-        pricingWindows,
-        channel,
-        audience,
-      );
-      const formatPricing = priceChannelAdFormatWindows(
-        pricingWindows,
-        cpm,
-        dominantCurrency,
-      );
-      const economics = calculateChannelAssetEconomics({
-        currency: dominantCurrency,
-        invested,
-        purchasePrice,
-        revenue,
-        adSpend,
-        adsSold: channelCampaigns.filter(
-          (campaign) => campaign.status === 'finished',
-        ).length,
-        expectedViews,
-        cpm,
-        conversionUnavailable:
-          invested == null ||
-          revenue == null ||
-          adSpend == null ||
-          (channel.adBaseCpm != null && cpm == null),
-      });
-      summaries.set(channel.id, {
-        acquisitionCost,
-        totalSpend,
-        totalAdSpend,
-        campaignsCount: channelCampaigns.length,
-        totalJoinedSubscribers,
-        totalPendingSubscribers,
-        totalAttributedSubscribers,
-        avgCpa,
-        activeSubscribersEstimate: audience?.activeSubscribersEstimate ?? null,
-        paidActiveSubscribersEstimate,
-        activeCpa,
-        avgActiveRate: activeRates.length
-          ? activeRates.reduce((sum, value) => sum + value, 0) /
-            activeRates.length
-          : null,
-        avgRetention7d: retentionRates.length
-          ? retentionRates.reduce((sum, value) => sum + value, 0) /
-            retentionRates.length
-          : null,
-        dataQuality: audience?.dataQuality ?? null,
-        dataQualityReason: audience?.dataQualityReason ?? null,
-        dataQualityWarning: null,
-        hasExternalTrafficAnomaly: audience?.hasExternalTrafficAnomaly ?? false,
-        hasSubscriberBasePollution:
-          audience?.hasSubscriberBasePollution ?? false,
-        kpiStatus,
-        kpiLabel: resolveChannelKpiLabel(kpiStatus),
-        currency: kpiCurrency,
-        assetEconomics: { ...economics, formatPricing },
-      });
-    }
-
-    return summaries;
+    return prepareTelegramChannelFinancialSummaries({
+      channels,
+      campaigns,
+      inviteLinks,
+      transactions,
+      adSaleAllocations,
+      primaryCurrency: workspace?.primaryCurrency ?? 'USD',
+      pricingWindowsByChannel,
+      rateSource,
+    });
   }
 
   public async calculateAdAnalysisMetrics(

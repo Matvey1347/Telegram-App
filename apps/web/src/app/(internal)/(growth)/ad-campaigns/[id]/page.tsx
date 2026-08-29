@@ -65,7 +65,7 @@ export default function AdCampaignDetailPage() {
   const { pushToast } = useAppToast();
 
   const { data: currencySettings } = useQuery({ queryKey: ['currency-settings'], queryFn: currenciesApi.getSettings });
-  const { data: currencyRates } = useQuery({ queryKey: ['currency-rates'], queryFn: currenciesApi.listRates });
+  const { data: currencyRates } = useQuery({ queryKey: ['currency-rates-latest'], queryFn: currenciesApi.listLatestRates });
   const { data: campaign, isLoading, error } = useQuery({
     queryKey: ['ad-campaign', id],
     queryFn: () => adCampaignsApi.get(id),

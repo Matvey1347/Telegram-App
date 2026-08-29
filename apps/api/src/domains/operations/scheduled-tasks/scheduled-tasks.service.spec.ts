@@ -56,7 +56,9 @@ describe('ScheduledTasksService', () => {
     };
     const prisma = {
       workspace: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'workspace-1', timezone: 'Europe/Warsaw' }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'workspace-1', timezone: 'Europe/Warsaw' }),
         findMany: jest
           .fn()
           .mockResolvedValue([
@@ -68,8 +70,12 @@ describe('ScheduledTasksService', () => {
       telegramAdSalePlacement: { findFirst: jest.fn().mockResolvedValue(null) },
       greeterJoinRequest: { findFirst: jest.fn().mockResolvedValue(null) },
       greeterBroadcast: { findFirst: jest.fn().mockResolvedValue(null) },
-      greeterBroadcastRecipient: { findFirst: jest.fn().mockResolvedValue(null) },
-      greeterSequenceStepExecution: { findFirst: jest.fn().mockResolvedValue(null) },
+      greeterBroadcastRecipient: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      greeterSequenceStepExecution: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       scheduledTaskConfig: {
         upsert: jest.fn().mockResolvedValue(config),
         findMany: jest.fn().mockResolvedValue(config.enabled ? [config] : []),
@@ -141,6 +147,19 @@ describe('ScheduledTasksService', () => {
 
     expect(runner.executeScheduledOccurrence).toHaveBeenCalledTimes(1);
     expect(refresh).toHaveBeenCalledWith(definition.key, true);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not scan unrelated due families after a recurring task tick', async () => {
+    const { service } = setup();
+    const refresh = jest.fn().mockResolvedValue(undefined);
+    (
+      service as unknown as { dueSchedule: { refresh: jest.Mock } }
+    ).dueSchedule.refresh = refresh;
+
+    await service.tick();
+
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it('rearms after a due-query failure so overdue work recovers', async () => {
@@ -165,9 +184,12 @@ describe('ScheduledTasksService', () => {
     await service.onModuleInit();
 
     expect(prisma.scheduledTaskConfig.findFirst).toHaveBeenCalledTimes(2);
-    const configQueriesAfterBootstrap = prisma.scheduledTaskConfig.findMany.mock.calls.length;
+    const configQueriesAfterBootstrap =
+      prisma.scheduledTaskConfig.findMany.mock.calls.length;
     jest.advanceTimersByTime(24 * 60 * 60 * 1000);
-    expect(prisma.scheduledTaskConfig.findMany).toHaveBeenCalledTimes(configQueriesAfterBootstrap);
+    expect(prisma.scheduledTaskConfig.findMany).toHaveBeenCalledTimes(
+      configQueriesAfterBootstrap,
+    );
     expect(prisma.scheduledTaskRun.findMany).not.toHaveBeenCalled();
   });
 

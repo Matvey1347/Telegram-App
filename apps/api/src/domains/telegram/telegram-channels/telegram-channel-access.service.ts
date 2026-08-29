@@ -293,14 +293,14 @@ export class TelegramChannelAccessService {
     username: string | null;
     telegramChatId: string | null;
   }) {
-    const username = this.telegramChannelsSupportService.normalizeUsername(
-      channel.username,
-    );
-    if (username) return `@${username}`;
     const chatId = this.telegramChannelsSupportService.normalizeChatId(
       channel.telegramChatId,
     );
-    return chatId ? `-100${chatId}` : null;
+    if (chatId) return `-100${chatId}`;
+    const username = this.telegramChannelsSupportService.normalizeUsername(
+      channel.username,
+    );
+    return username ? `@${username}` : null;
   }
 
   public primaryTelegramMessageId(params: {

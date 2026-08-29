@@ -1,6 +1,11 @@
 import type { TelegramAdSale } from "@telegram-system/shared";
 
-export function nativeAdSalePayment(sale: TelegramAdSale) {
+type NativePaymentSale = Pick<
+  TelegramAdSale,
+  "payments" | "settlementCurrency" | "totalPaidAmount"
+>;
+
+export function nativeAdSalePayment(sale: Omit<NativePaymentSale, "payments"> & Partial<NativePaymentSale>) {
   const payments = (sale.payments ?? [])
     .filter((payment) => payment.status !== "VOIDED")
     .sort((left, right) => right.paidAt.localeCompare(left.paidAt));

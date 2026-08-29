@@ -2,6 +2,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import {
   AD_DELETION_RETRY_MS,
   MANAGED_POST_IDENTITY_RETRY_MS,
+  MANAGED_POST_LOCAL_PUBLISHING_STALE_MS,
   adDeletionReadyWhere,
   adPlacementLifecycleReadyWhere,
   greeterBroadcastDispatchableWhere,
@@ -129,12 +130,14 @@ export class DueTaskSchedule {
     const [local, ready, futureIdentity, backedOff] = await Promise.all([
       this.prisma.telegramManagedPost.findFirst({
         where: {
-          status: 'SCHEDULED',
           scheduleMode: 'LOCAL',
-          scheduledAt: { not: null },
+          OR: [
+            { status: 'SCHEDULED', scheduledAt: { not: null } },
+            { status: 'PUBLISHING' },
+          ],
         },
-        orderBy: { scheduledAt: 'asc' },
-        select: { scheduledAt: true },
+        orderBy: [{ scheduledAt: 'asc' }, { updatedAt: 'asc' }],
+        select: { status: true, scheduledAt: true, updatedAt: true },
       }),
       this.prisma.telegramManagedPost.findFirst({
         where: managedPostIdentityReadyWhere(now),
@@ -181,7 +184,11 @@ export class DueTaskSchedule {
         )
       : null;
     return earliest([
-      local?.scheduledAt,
+      local?.status === 'PUBLISHING'
+        ? new Date(
+            local.updatedAt.getTime() + MANAGED_POST_LOCAL_PUBLISHING_STALE_MS,
+          )
+        : local?.scheduledAt,
       readyAt,
       futureIdentity?.scheduledAt,
       backedOffAt,

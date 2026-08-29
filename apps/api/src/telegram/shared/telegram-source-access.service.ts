@@ -57,6 +57,19 @@ const BOT_API_MESSAGE_LIMIT = 4096;
 export const TELEGRAM_SYSTEM_BOT_SOURCE_ID = 'system-bot';
 export const TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID = 'system-bot-production';
 
+function isBuiltInSystemBotSource(sourceId: string) {
+  return (
+    sourceId === TELEGRAM_SYSTEM_BOT_SOURCE_ID ||
+    sourceId === TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID
+  );
+}
+
+function builtInSystemBotDisplayName(sourceId: string) {
+  return sourceId === TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID
+    ? 'Production system bot'
+    : 'System bot';
+}
+
 @Injectable()
 export class TelegramSourceAccessService {
   constructor(private readonly prisma: PrismaService) {}
@@ -100,7 +113,8 @@ export class TelegramSourceAccessService {
   }
 
   normalizeBotPermissions(raw: Record<string, unknown> | null | undefined) {
-    const status = String(raw?.status || '').toLowerCase();
+    const status =
+      typeof raw?.status === 'string' ? raw.status.toLowerCase() : '';
     const role =
       status === 'creator'
         ? TelegramChannelSourceRole.OWNER
@@ -288,8 +302,7 @@ export class TelegramSourceAccessService {
     return rows
       .filter((row) =>
         row.sourceType === TelegramSourceType.BOT
-          ? botById.has(row.sourceId) ||
-            row.sourceId === TELEGRAM_SYSTEM_BOT_SOURCE_ID
+          ? botById.has(row.sourceId) || isBuiltInSystemBotSource(row.sourceId)
           : accountById.has(row.sourceId),
       )
       .map((row) => {
@@ -303,8 +316,8 @@ export class TelegramSourceAccessService {
           sourceType: row.sourceType,
           displayName:
             row.sourceType === TelegramSourceType.BOT
-              ? row.sourceId === TELEGRAM_SYSTEM_BOT_SOURCE_ID
-                ? 'System bot'
+              ? isBuiltInSystemBotSource(row.sourceId)
+                ? builtInSystemBotDisplayName(row.sourceId)
                 : this.botDisplayName(botById.get(row.sourceId))
               : this.accountDisplayName(accountById.get(row.sourceId)),
           avatarUrl:
@@ -438,8 +451,7 @@ export class TelegramSourceAccessService {
           row.channelId === channelId &&
           row.sourceType === TelegramSourceType.BOT &&
           row.canPostMessages &&
-          (botById.has(row.sourceId) ||
-            row.sourceId === TELEGRAM_SYSTEM_BOT_SOURCE_ID),
+          (botById.has(row.sourceId) || isBuiltInSystemBotSource(row.sourceId)),
       );
       const preferredMtprotoSource = rows
         .filter(
@@ -462,7 +474,7 @@ export class TelegramSourceAccessService {
             row.sourceType === TelegramSourceType.BOT &&
             row.canPostMessages &&
             (botById.has(row.sourceId) ||
-              row.sourceId === TELEGRAM_SYSTEM_BOT_SOURCE_ID),
+              isBuiltInSystemBotSource(row.sourceId)),
         ) ??
         null;
 
@@ -486,10 +498,9 @@ export class TelegramSourceAccessService {
           source: {
             sourceId: preferredSource.sourceId,
             sourceType: 'BOT',
-            displayName:
-              preferredSource.sourceId === TELEGRAM_SYSTEM_BOT_SOURCE_ID
-                ? 'System bot'
-                : this.botDisplayName(bot),
+            displayName: isBuiltInSystemBotSource(preferredSource.sourceId)
+              ? builtInSystemBotDisplayName(preferredSource.sourceId)
+              : this.botDisplayName(bot),
             avatarUrl: null,
             isPremium: false,
           },

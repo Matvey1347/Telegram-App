@@ -1,6 +1,79 @@
 import { TelegramChannelFinancialReadService } from './telegram-channel-financial-read.service';
 
 describe('TelegramChannelFinancialReadService', () => {
+  it('loads every financial, pricing, and currency source once for repeated 100-channel derivations', async () => {
+    const prisma = {
+      adCampaign: { findMany: jest.fn().mockResolvedValue([]) },
+      telegramInviteLink: { findMany: jest.fn().mockResolvedValue([]) },
+      transaction: { findMany: jest.fn().mockResolvedValue([]) },
+      telegramAdSalePaymentAllocation: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      workspace: {
+        findUnique: jest.fn().mockResolvedValue({ primaryCurrency: 'USD' }),
+      },
+    };
+    const rateSource = {
+      getRateMetadata: jest.fn(),
+      getRate: jest.fn().mockResolvedValue(2),
+      convertCurrency: jest.fn(),
+    };
+    const currency = {
+      prepareRateSource: jest.fn().mockResolvedValue(rateSource),
+    };
+    const pricing = {
+      windowsForChannels: jest.fn().mockResolvedValue(new Map()),
+    };
+    const service = new TelegramChannelFinancialReadService(
+      prisma as never,
+      currency as never,
+      pricing as never,
+    );
+    const channels = Array.from({ length: 100 }, (_, index) => ({
+      id: `channel-${index}`,
+      currentSubscribersCount: index + 1,
+      kpiCurrency: 'USD',
+      adBaseCpm: 100,
+      adBaseCurrency: 'USD',
+      audienceSnapshots: [],
+    }));
+
+    const prepared = await service.prepareChannelFinancialSummaryPreview(
+      'workspace-1',
+      channels,
+    );
+    const usd = await prepared.build(channels, { targetCurrency: 'USD' });
+    const uah = await prepared.build(channels, { targetCurrency: 'UAH' });
+
+    expect(usd.size).toBe(100);
+    expect(uah.size).toBe(100);
+    expect(usd.get('channel-0')?.assetEconomics).toMatchObject({
+      currency: 'USD',
+    });
+    expect(uah.get('channel-0')?.assetEconomics).toMatchObject({
+      currency: 'UAH',
+    });
+    expect(prisma.adCampaign.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.telegramInviteLink.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.transaction.findMany).toHaveBeenCalledTimes(1);
+    expect(
+      prisma.telegramAdSalePaymentAllocation.findMany,
+    ).toHaveBeenCalledTimes(1);
+    expect(prisma.workspace.findUnique).toHaveBeenCalledTimes(1);
+    expect(pricing.windowsForChannels).toHaveBeenCalledTimes(1);
+    expect(currency.prepareRateSource).toHaveBeenCalledTimes(1);
+    expect(prisma.adCampaign.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          workspaceId: 'workspace-1',
+          telegramChannelId: {
+            in: channels.map((channel) => channel.id),
+          },
+        }),
+      }),
+    );
+  });
+
   it('uses linked ledger transactions for purchase price, ad spend, and revenue', async () => {
     const prisma = {
       adCampaign: {
@@ -79,9 +152,18 @@ describe('TelegramChannelFinancialReadService', () => {
       getRate: jest.fn(),
       convertCurrency: jest.fn(),
     };
+    const preparedRateSource = {
+      getRateMetadata: jest.fn(),
+      getRate: currency.getRate,
+      convertCurrency: currency.convertCurrency,
+    };
+    const currencyService = {
+      ...currency,
+      prepareRateSource: jest.fn().mockResolvedValue(preparedRateSource),
+    };
     const service = new TelegramChannelFinancialReadService(
       prisma as never,
-      currency as never,
+      currencyService as never,
       { windowsForChannels: jest.fn().mockResolvedValue(new Map()) } as never,
     );
 
@@ -198,7 +280,13 @@ describe('TelegramChannelFinancialReadService', () => {
     };
     const service = new TelegramChannelFinancialReadService(
       prisma as never,
-      { convertCurrency: jest.fn(), getRate: jest.fn() } as never,
+      {
+        prepareRateSource: jest.fn().mockResolvedValue({
+          convertCurrency: jest.fn(),
+          getRateMetadata: jest.fn(),
+          getRate: jest.fn(),
+        }),
+      } as never,
       {
         windowsForChannels: jest.fn().mockResolvedValue(
           new Map([

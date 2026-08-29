@@ -58,7 +58,14 @@ export class TelegramSystemBotController {
   @UseGuards(JwtAuthGuard)
   @Post('connect')
   async connect(@CurrentUser() user: JwtUser, @Body('token') token: string) {
-    const confirmed = await this.connections.confirmLink(user.sub, token);
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
+      user.sub,
+    );
+    const confirmed = await this.connections.confirmLink(
+      user.sub,
+      token,
+      workspaceId,
+    );
     await this.handler.completeConnection({
       chatId: confirmed.telegramChatId,
       messageId: confirmed.telegramMessageId,

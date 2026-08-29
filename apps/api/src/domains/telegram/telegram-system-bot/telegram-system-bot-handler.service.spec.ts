@@ -478,12 +478,18 @@ describe('TelegramSystemBotHandlerService', () => {
       editMessageText: jest.fn(),
       answerCallbackQuery: jest.fn(),
     } as any;
+    const connection = {
+      id: 'connection',
+      userId: 'user',
+      telegramUserId: '44',
+      currentWorkspaceId: 'workspace-a',
+    };
     const connections = {
-      requireEnabledConnection: jest.fn().mockResolvedValue({
-        id: 'connection',
-        userId: 'user',
+      requireEnabledConnection: jest.fn().mockResolvedValue(connection),
+      switchWorkspace: jest.fn().mockResolvedValue({
+        ...connection,
+        currentWorkspaceId: 'workspace-b',
       }),
-      switchWorkspace: jest.fn().mockResolvedValue(undefined),
       workspacesForConnection: jest.fn().mockResolvedValue([
         {
           id: 'workspace-a',
@@ -522,7 +528,7 @@ describe('TelegramSystemBotHandlerService', () => {
     });
 
     expect(connections.switchWorkspace).toHaveBeenCalledWith(
-      'connection',
+      connection,
       'workspace-b',
     );
     expect(api.editMessageText).toHaveBeenCalledWith(

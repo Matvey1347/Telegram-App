@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { createHash } from 'crypto';
 import {
   AdCampaignAdmissionBaselineMethod,
   AdCampaignAdmissionBatchStatus,
@@ -9,6 +8,12 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  admissionBatchFingerprint,
+  AdmissionEvent,
+  detectAdmissionEventsForCampaign,
+  loadAdmissionInviteSnapshotsByCampaign,
+} from './ad-campaign-admission-events';
 
 export type AdmissionAnalyticsStageResult = {
   status: 'processed' | 'skipped' | 'failed';
@@ -16,30 +21,6 @@ export type AdmissionAnalyticsStageResult = {
   createdBatches: number;
   createdPoints: number;
   reason?: string;
-};
-
-type SourceLinkDelta = {
-  telegramInviteLinkId: string;
-  inviteLink: string;
-  previousSnapshotAt: Date | null;
-  currentSnapshotAt: Date;
-  joinedBefore: number;
-  joinedAfter: number;
-  joinedDelta: number;
-  requestedBefore: number;
-  requestedAfter: number;
-  createsJoinRequest: boolean;
-};
-
-type AdmissionEvent = {
-  adCampaignId: string;
-  telegramChannelId: string;
-  detectionMode: AdCampaignAdmissionDetectionMode;
-  previousSnapshotAt: Date | null;
-  currentSnapshotAt: Date;
-  analysisStartedAt?: Date;
-  timeBoundarySource?: AdCampaignAdmissionTimeBoundarySource;
-  sourceLinks: SourceLinkDelta[];
 };
 
 type BatchCreateResult = {
@@ -50,7 +31,9 @@ type BatchCreateResult = {
 
 @Injectable()
 export class AdCampaignAdmissionAnalyticsService {
-  private readonly logger = new Logger(AdCampaignAdmissionAnalyticsService.name);
+  private readonly logger = new Logger(
+    AdCampaignAdmissionAnalyticsService.name,
+  );
 
   constructor(private prisma: PrismaService) {}
 
@@ -85,15 +68,17 @@ export class AdCampaignAdmissionAnalyticsService {
       createdBatches: 0,
       createdPoints: 0,
     };
-    const state = await this.prisma.adCampaignAdmissionBackfillState.findUnique({
-      where: {
-        workspaceId_telegramChannelId_version: {
-          workspaceId: params.workspaceId,
-          telegramChannelId: params.telegramChannelId,
-          version: 1,
+    const state = await this.prisma.adCampaignAdmissionBackfillState.findUnique(
+      {
+        where: {
+          workspaceId_telegramChannelId_version: {
+            workspaceId: params.workspaceId,
+            telegramChannelId: params.telegramChannelId,
+            version: 1,
+          },
         },
       },
-    });
+    );
     if (!state) {
       backfillResult = await params.backfill({
         workspaceId: params.workspaceId,
@@ -143,7 +128,9 @@ export class AdCampaignAdmissionAnalyticsService {
       where: {
         workspaceId: params.workspaceId,
         telegramChannelId: params.telegramChannelId,
-        ...(params.adCampaignIds?.length ? { id: { in: params.adCampaignIds } } : {}),
+        ...(params.adCampaignIds?.length
+          ? { id: { in: params.adCampaignIds } }
+          : {}),
         inviteLinks: { some: {} },
       },
       select: {
@@ -165,27 +152,25 @@ export class AdCampaignAdmissionAnalyticsService {
       },
     });
 
+    const snapshotsByCampaignId = campaigns.length
+      ? await loadAdmissionInviteSnapshotsByCampaign(this.prisma, {
+          workspaceId: params.workspaceId,
+          telegramChannelId: params.telegramChannelId,
+          campaignIds: campaigns.map((campaign) => campaign.id),
+          inviteLinkIds: campaigns.flatMap((campaign) =>
+            campaign.inviteLinks.map((link) => link.id),
+          ),
+          fromExclusive: params.fromExclusive,
+          toInclusive: params.toInclusive,
+        })
+      : new Map<string, never[]>();
+
     let createdBatches = 0;
     let createdPoints = 0;
     for (const campaign of campaigns) {
-      const snapshots = await this.prisma.telegramInviteLinkSnapshot.findMany({
-        where: {
-          workspaceId: params.workspaceId,
-          telegramChannelId: params.telegramChannelId,
-          adCampaignId: campaign.id,
-          ...(params.toInclusive ? { syncedAt: { lte: params.toInclusive } } : {}),
-        },
-        orderBy: [{ syncedAt: 'asc' }, { inviteLinkId: 'asc' }],
-        select: {
-          inviteLinkId: true,
-          syncedAt: true,
-          joinedCount: true,
-          requestedCount: true,
-        },
-      });
-      const events = this.detectEventsForCampaign({
+      const events = detectAdmissionEventsForCampaign({
         campaign,
-        snapshots,
+        snapshots: snapshotsByCampaignId.get(campaign.id) ?? [],
         fromExclusive: params.fromExclusive,
       });
       for (const event of events) {
@@ -208,215 +193,19 @@ export class AdCampaignAdmissionAnalyticsService {
       where: {
         workspaceId: params.workspaceId,
         telegramChannelId: params.telegramChannelId,
-        ...(params.adCampaignIds?.length ? { adCampaignId: { in: params.adCampaignIds } } : {}),
+        ...(params.adCampaignIds?.length
+          ? { adCampaignId: { in: params.adCampaignIds } }
+          : {}),
       },
       select: { id: true },
     });
     for (const batch of batches) {
       createdPoints += await this.createViewPointsForBatch(batch.id);
     }
-    return { createdBatches, createdPoints, processedCampaigns: campaigns.length };
-  }
-
-  private detectEventsForCampaign(params: {
-    campaign: {
-      id: string;
-      telegramChannelId: string;
-      startedAt: Date | null;
-      placementDate: Date | null;
-      createdAt: Date;
-      inviteLinks: Array<{
-        id: string;
-        url: string;
-        createsJoinRequest: boolean | null;
-        createdAt: Date;
-        telegramCreatedAt: Date | null;
-      }>;
-    };
-    snapshots: Array<{
-      inviteLinkId: string;
-      syncedAt: Date;
-      joinedCount: number;
-      requestedCount: number;
-    }>;
-    fromExclusive?: Date;
-  }) {
-    const linkById = new Map(params.campaign.inviteLinks.map((link) => [link.id, link]));
-    const groupedByLink = new Map<string, typeof params.snapshots>();
-    for (const snapshot of params.snapshots) {
-      const list = groupedByLink.get(snapshot.inviteLinkId) ?? [];
-      list.push(snapshot);
-      groupedByLink.set(snapshot.inviteLinkId, list);
-    }
-
-    const deltasByObservedAt = new Map<
-      string,
-      {
-        detectionMode: AdCampaignAdmissionDetectionMode;
-        previousSnapshotAt: Date | null;
-        currentSnapshotAt: Date;
-        sourceLinks: SourceLinkDelta[];
-      }
-    >();
-
-    for (const [inviteLinkId, rows] of groupedByLink.entries()) {
-      const link = linkById.get(inviteLinkId);
-      if (!link) continue;
-      const createsJoinRequest = Boolean(link.createsJoinRequest);
-      const first = rows[0];
-      if (
-        first &&
-        Number(first.joinedCount || 0) > 0 &&
-        createsJoinRequest &&
-        (!params.fromExclusive || first.syncedAt > params.fromExclusive)
-      ) {
-        this.addDelta(deltasByObservedAt, {
-          detectionMode: AdCampaignAdmissionDetectionMode.BOOTSTRAPPED_CUMULATIVE,
-          previousSnapshotAt: null,
-          currentSnapshotAt: first.syncedAt,
-          sourceLinks: [
-            {
-              telegramInviteLinkId: inviteLinkId,
-              inviteLink: link.url,
-              previousSnapshotAt: null,
-              currentSnapshotAt: first.syncedAt,
-              joinedBefore: 0,
-              joinedAfter: Number(first.joinedCount || 0),
-              joinedDelta: Number(first.joinedCount || 0),
-              requestedBefore: 0,
-              requestedAfter: Number(first.requestedCount || 0),
-              createsJoinRequest,
-            },
-          ],
-        });
-      }
-      for (let index = 1; index < rows.length; index += 1) {
-        const previous = rows[index - 1];
-        const current = rows[index];
-        if (params.fromExclusive && current.syncedAt <= params.fromExclusive) {
-          continue;
-        }
-        const joinedDelta =
-          Number(current.joinedCount || 0) - Number(previous.joinedCount || 0);
-        if (joinedDelta <= 0) continue;
-        if (!createsJoinRequest && Number(previous.requestedCount || 0) <= 0) {
-          continue;
-        }
-        this.addDelta(deltasByObservedAt, {
-          detectionMode: AdCampaignAdmissionDetectionMode.EXACT_DELTA,
-          previousSnapshotAt: previous.syncedAt,
-          currentSnapshotAt: current.syncedAt,
-          sourceLinks: [
-            {
-              telegramInviteLinkId: inviteLinkId,
-              inviteLink: link.url,
-              previousSnapshotAt: previous.syncedAt,
-              currentSnapshotAt: current.syncedAt,
-              joinedBefore: Number(previous.joinedCount || 0),
-              joinedAfter: Number(current.joinedCount || 0),
-              joinedDelta,
-              requestedBefore: Number(previous.requestedCount || 0),
-              requestedAfter: Number(current.requestedCount || 0),
-              createsJoinRequest,
-            },
-          ],
-        });
-      }
-    }
-
-    return [...deltasByObservedAt.values()]
-      .sort((a, b) => a.currentSnapshotAt.getTime() - b.currentSnapshotAt.getTime())
-      .map((event) => {
-        const bootstrapped =
-          event.detectionMode ===
-          AdCampaignAdmissionDetectionMode.BOOTSTRAPPED_CUMULATIVE;
-        const boundary = bootstrapped
-          ? this.resolveBootstrapBoundary(params.campaign, event.sourceLinks)
-          : {
-              analysisStartedAt: event.currentSnapshotAt,
-              timeBoundarySource:
-                AdCampaignAdmissionTimeBoundarySource.FIRST_INVITE_SNAPSHOT,
-            };
-        return {
-          adCampaignId: params.campaign.id,
-          telegramChannelId: params.campaign.telegramChannelId,
-          ...event,
-          ...boundary,
-        };
-      });
-  }
-
-  private addDelta(
-    target: Map<
-      string,
-      {
-        detectionMode: AdCampaignAdmissionDetectionMode;
-        previousSnapshotAt: Date | null;
-        currentSnapshotAt: Date;
-        sourceLinks: SourceLinkDelta[];
-      }
-    >,
-    event: {
-      detectionMode: AdCampaignAdmissionDetectionMode;
-      previousSnapshotAt: Date | null;
-      currentSnapshotAt: Date;
-      sourceLinks: SourceLinkDelta[];
-    },
-  ) {
-    const key = `${event.detectionMode}:${event.currentSnapshotAt.toISOString()}`;
-    const current = target.get(key);
-    if (current) {
-      current.sourceLinks.push(...event.sourceLinks);
-      if (
-        event.previousSnapshotAt &&
-        (!current.previousSnapshotAt ||
-          event.previousSnapshotAt < current.previousSnapshotAt)
-      ) {
-        current.previousSnapshotAt = event.previousSnapshotAt;
-      }
-      return;
-    }
-    target.set(key, { ...event, sourceLinks: [...event.sourceLinks] });
-  }
-
-  private resolveBootstrapBoundary(
-    campaign: {
-      startedAt: Date | null;
-      placementDate: Date | null;
-      createdAt: Date;
-      inviteLinks: Array<{ id: string; createdAt: Date; telegramCreatedAt: Date | null }>;
-    },
-    sourceLinks: SourceLinkDelta[],
-  ) {
-    if (campaign.startedAt) {
-      return {
-        analysisStartedAt: campaign.startedAt,
-        timeBoundarySource:
-          AdCampaignAdmissionTimeBoundarySource.CAMPAIGN_ACTUAL_START,
-      };
-    }
-    if (campaign.placementDate) {
-      return {
-        analysisStartedAt: campaign.placementDate,
-        timeBoundarySource: AdCampaignAdmissionTimeBoundarySource.CAMPAIGN_START,
-      };
-    }
-    const ids = new Set(sourceLinks.map((link) => link.telegramInviteLinkId));
-    const linkCreatedAt = campaign.inviteLinks
-      .filter((link) => ids.has(link.id))
-      .map((link) => link.telegramCreatedAt ?? link.createdAt)
-      .sort((a, b) => a.getTime() - b.getTime())[0];
-    if (linkCreatedAt) {
-      return {
-        analysisStartedAt: linkCreatedAt,
-        timeBoundarySource:
-          AdCampaignAdmissionTimeBoundarySource.INVITE_LINK_CREATED,
-      };
-    }
     return {
-      analysisStartedAt: sourceLinks[0].currentSnapshotAt,
-      timeBoundarySource:
-        AdCampaignAdmissionTimeBoundarySource.FIRST_INVITE_SNAPSHOT,
+      createdBatches,
+      createdPoints,
+      processedCampaigns: campaigns.length,
     };
   }
 
@@ -438,7 +227,10 @@ export class AdCampaignAdmissionAnalyticsService {
     if (releasedSubscribersCount <= 0) {
       return { batchId: null, created: false, pointsCreated: 0 };
     }
-    const fingerprint = this.batchFingerprint(params.campaign.id, params.event);
+    const fingerprint = admissionBatchFingerprint(
+      params.campaign.id,
+      params.event,
+    );
     const existing = await this.prisma.adCampaignAdmissionBatch.findUnique({
       where: { batchFingerprint: fingerprint },
       select: { id: true },
@@ -454,8 +246,8 @@ export class AdCampaignAdmissionAnalyticsService {
     const baselineCutoff =
       params.event.detectionMode ===
       AdCampaignAdmissionDetectionMode.EXACT_DELTA
-        ? params.event.previousSnapshotAt ?? params.event.currentSnapshotAt
-        : params.event.analysisStartedAt ?? params.event.currentSnapshotAt;
+        ? (params.event.previousSnapshotAt ?? params.event.currentSnapshotAt)
+        : (params.event.analysisStartedAt ?? params.event.currentSnapshotAt);
     const baseline = await this.buildBaseline({
       workspaceId: params.workspaceId,
       telegramChannelId: params.event.telegramChannelId,
@@ -474,15 +266,16 @@ export class AdCampaignAdmissionAnalyticsService {
         ? AdCampaignAdmissionDataQuality.PARTIAL
         : AdCampaignAdmissionDataQuality.GOOD,
     );
-    const dataQualityReason = [
-      params.event.detectionMode ===
-      AdCampaignAdmissionDetectionMode.BOOTSTRAPPED_CUMULATIVE
-        ? 'bootstrapped_from_first_snapshot'
-        : null,
-      baseline.dataQualityReason,
-    ]
-      .filter(Boolean)
-      .join('; ') || null;
+    const dataQualityReason =
+      [
+        params.event.detectionMode ===
+        AdCampaignAdmissionDetectionMode.BOOTSTRAPPED_CUMULATIVE
+          ? 'bootstrapped_from_first_snapshot'
+          : null,
+        baseline.dataQualityReason,
+      ]
+        .filter(Boolean)
+        .join('; ') || null;
 
     const created = await this.prisma.$transaction(async (tx) => {
       await tx.adCampaignAdmissionBatch.updateMany({
@@ -527,10 +320,10 @@ export class AdCampaignAdmissionAnalyticsService {
             (sum, link) => sum + link.requestedAfter,
             0,
           ),
-          sourceLinks: sourceLinks as unknown as Prisma.InputJsonValue,
+          sourceLinks,
           baselineSnapshotAt: baseline.baselineSnapshotAt,
           baselineMethod: baseline.baselineMethod,
-          trackedPosts: baseline.trackedPosts as unknown as Prisma.InputJsonValue,
+          trackedPosts: baseline.trackedPosts,
           trackedPostsCount: baseline.originalTrackedPostsCount,
           baselineAvgViews: baseline.baselineAvgViews,
           baselineAvgReactions: baseline.baselineAvgReactions,
@@ -573,7 +366,9 @@ export class AdCampaignAdmissionAnalyticsService {
     for (let index = 0; index < startedTimes.length; index += 1) {
       nextStartedByStartedAt.set(
         startedTimes[index],
-        startedTimes[index + 1] == null ? null : new Date(startedTimes[index + 1]),
+        startedTimes[index + 1] == null
+          ? null
+          : new Date(startedTimes[index + 1]),
       );
     }
     for (let index = 0; index < batches.length; index += 1) {
@@ -584,8 +379,7 @@ export class AdCampaignAdmissionAnalyticsService {
         ? AdCampaignAdmissionBatchStatus.CLOSED
         : AdCampaignAdmissionBatchStatus.ACTIVE;
       const endedChanged =
-        (batch.endedAt?.getTime() ?? null) !==
-        (nextEndedAt?.getTime() ?? null);
+        (batch.endedAt?.getTime() ?? null) !== (nextEndedAt?.getTime() ?? null);
       const statusChanged = batch.status !== nextStatus;
       if (endedChanged || statusChanged) {
         await this.prisma.adCampaignAdmissionBatch.update({
@@ -621,7 +415,10 @@ export class AdCampaignAdmissionAnalyticsService {
       },
       select: { activeSubscribersWindow: true },
     });
-    const take = Math.max(1, Math.min(50, Number(channel?.activeSubscribersWindow || 5)));
+    const take = Math.max(
+      1,
+      Math.min(50, Number(channel?.activeSubscribersWindow || 5)),
+    );
     const posts = await this.prisma.telegramPost.findMany({
       where: {
         workspaceId: params.workspaceId,
@@ -732,7 +529,9 @@ export class AdCampaignAdmissionAnalyticsService {
         : AdCampaignAdmissionBaselineMethod.PRE_ADMISSION,
       trackedPosts,
       originalTrackedPostsCount: posts.length,
-      baselineAvgViews: baselineViews.length ? this.average(baselineViews) : null,
+      baselineAvgViews: baselineViews.length
+        ? this.average(baselineViews)
+        : null,
       baselineAvgReactions: baselineReactions.length
         ? this.average(baselineReactions)
         : null,
@@ -769,9 +568,8 @@ export class AdCampaignAdmissionAnalyticsService {
         joinedBefore: true,
       },
     });
-    const attributionWindowBatches = this.selectAttributionWindowBatches(
-      windowBatches,
-    );
+    const attributionWindowBatches =
+      this.selectAttributionWindowBatches(windowBatches);
     const participatesInAttributionWindow = attributionWindowBatches.some(
       (item) => item.id === batch.id,
     );
@@ -808,7 +606,10 @@ export class AdCampaignAdmissionAnalyticsService {
     for (const row of timestampRows.filter(
       (item): item is { collectedAt: Date } => Boolean(item.collectedAt),
     )) {
-      const values = await this.currentTrackedPostValues(postIds, row.collectedAt);
+      const values = await this.currentTrackedPostValues(
+        postIds,
+        row.collectedAt,
+      );
       const views = values
         .map((value) => this.numberOrNull(value.viewsCount))
         .filter((value): value is number => value != null);
@@ -833,7 +634,8 @@ export class AdCampaignAdmissionAnalyticsService {
         attributedAvgViewsUplift == null
           ? null
           : Math.max(0, attributedAvgViewsUplift - Number(previousUplift || 0));
-      if (attributedAvgViewsUplift != null) previousUplift = attributedAvgViewsUplift;
+      if (attributedAvgViewsUplift != null)
+        previousUplift = attributedAvgViewsUplift;
       const estimatedActiveSubscribers =
         attributedAvgViewsUplift == null
           ? null
@@ -842,7 +644,8 @@ export class AdCampaignAdmissionAnalyticsService {
               Math.round(attributedAvgViewsUplift),
             );
       const activationRate =
-        estimatedActiveSubscribers == null || batch.releasedSubscribersCount <= 0
+        estimatedActiveSubscribers == null ||
+        batch.releasedSubscribersCount <= 0
           ? null
           : (estimatedActiveSubscribers / batch.releasedSubscribersCount) * 100;
       const quality =
@@ -927,28 +730,6 @@ export class AdCampaignAdmissionAnalyticsService {
         ORDER BY "telegramPostId" ASC, "collectedAt" DESC
       `,
     );
-  }
-
-  private batchFingerprint(campaignId: string, event: AdmissionEvent) {
-    const payload = JSON.stringify({
-      campaignId,
-      detectionMode: event.detectionMode,
-      previousSnapshotAt: event.previousSnapshotAt?.toISOString() ?? null,
-      currentSnapshotAt: event.currentSnapshotAt.toISOString(),
-      sourceLinks: event.sourceLinks
-        .map((link) => ({
-          telegramInviteLinkId: link.telegramInviteLinkId,
-          joinedDelta: link.joinedDelta,
-          joinedBefore: link.joinedBefore,
-          joinedAfter: link.joinedAfter,
-          requestedBefore: link.requestedBefore,
-          requestedAfter: link.requestedAfter,
-        }))
-        .sort((a, b) =>
-          a.telegramInviteLinkId.localeCompare(b.telegramInviteLinkId),
-        ),
-    });
-    return createHash('sha256').update(payload).digest('hex');
   }
 
   private combineDataQuality(

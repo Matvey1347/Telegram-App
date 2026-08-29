@@ -30,19 +30,40 @@ import {
   FINANCE_REMINDER_DELIVERY_PORT,
   type FinanceReminderDeliveryPort,
 } from './telegram-bot-delivery.ports';
+import { reconcileTerminalDeliveryBroadcasts } from './telegram-bot-delivery-broadcast-reconciliation';
+import {
+  claimDueDeliveryIds,
+  deliveryMatchesRuntimeScope,
+  failClosedUnhydratableDeliveries,
+} from './telegram-bot-delivery-claim';
+import {
+  earliestQueuedDeliveryAt,
+  enqueueTelegramBotSendMessageBatch,
+  type TelegramBotSendMessageInput,
+} from './telegram-bot-delivery-batch-enqueue';
 
 type SendMessagePayload = TelegramBotMessage;
 
-type ClaimedDelivery = Prisma.TelegramBotDeliveryGetPayload<{
+type HydratedDelivery = Prisma.TelegramBotDeliveryGetPayload<{
   include: {
     runtimeInstance: true;
     botIntegration: { include: { runtimeInstances: true } };
   };
-}> & {
+}>;
+
+type ClaimedDelivery = HydratedDelivery & {
   status: typeof TelegramBotDeliveryStatus.PROCESSING;
 };
 
 const DELIVERY_BATCH_SIZE = 25;
+const UNHYDRATABLE_DELIVERY_ERROR =
+  'Claimed Telegram bot delivery no longer matches its runtime environment';
+
+type ClaimedDeliveryBatch = {
+  environment: TelegramBotRuntimeEnvironment;
+  deliveries: ClaimedDelivery[];
+  terminalDeliveryIds: string[];
+};
 
 @Injectable()
 export class TelegramBotDeliveryService
@@ -80,27 +101,7 @@ export class TelegramBotDeliveryService
     this.scheduler.destroy();
   }
 
-  async enqueueSendMessage(input: {
-    workspaceId: string;
-    botIntegrationId: string;
-    telegramBotUserId?: string | null;
-    financeReminderId?: string | null;
-    runtimeInstanceId?: string | null;
-    chatId: string;
-    text: string;
-    parseMode?: string;
-    inlineButtons?: Array<
-      Array<{
-        text: string;
-        url?: string;
-        webAppUrl?: string;
-        callbackData?: string;
-      }>
-    >;
-    replyKeyboard?: Array<Array<{ text: string; webAppUrl?: string }>>;
-    scheduledAt?: Date;
-    idempotencyKey: string;
-  }) {
+  async enqueueSendMessage(input: TelegramBotSendMessageInput) {
     const runtimeInstanceId =
       input.runtimeInstanceId ?? this.executionContext.currentRuntimeId();
     const idempotencyKey = runtimeInstanceId
@@ -141,18 +142,34 @@ export class TelegramBotDeliveryService
     return queued;
   }
 
+  async enqueueSendMessageBatch(inputs: TelegramBotSendMessageInput[]) {
+    const queued = await enqueueTelegramBotSendMessageBatch(
+      this.prisma,
+      inputs,
+      this.executionContext.currentRuntimeId(),
+    );
+    const earliestDueAt = earliestQueuedDeliveryAt(queued);
+    if (earliestDueAt) this.scheduler.notify(earliestDueAt);
+    return queued;
+  }
+
   async processDue() {
-    const deliveries = await this.claimDueDeliveries(DELIVERY_BATCH_SIZE);
-    for (const delivery of deliveries) {
+    const batch = await this.claimDueDeliveryBatch(DELIVERY_BATCH_SIZE);
+    if (!batch) return 0;
+    const terminalDeliveryIds = [...batch.terminalDeliveryIds];
+    for (const delivery of batch.deliveries) {
       try {
-        await this.send(delivery);
+        if (await this.send(delivery, batch.environment)) {
+          terminalDeliveryIds.push(delivery.id);
+        }
       } catch (error) {
         this.logger.warn(
           `Telegram bot delivery ${delivery.id} failed: ${sanitizeOperationalError(error)}`,
         );
       }
     }
-    return deliveries.length;
+    await reconcileTerminalDeliveryBroadcasts(this.prisma, terminalDeliveryIds);
+    return batch.deliveries.length;
   }
 
   /** Recomputes the single persisted wake-up point after bootstrap or work. */
@@ -203,31 +220,50 @@ export class TelegramBotDeliveryService
   }
 
   async claimDueDeliveries(limit: number) {
-    const runtimeScope = this.runtimeScope();
-    if (!runtimeScope) return [];
+    return (await this.claimDueDeliveryBatch(limit))?.deliveries ?? [];
+  }
+
+  private async claimDueDeliveryBatch(
+    limit: number,
+  ): Promise<ClaimedDeliveryBatch | null> {
+    const environment = this.runtimeEnvironment.current();
+    if (!environment) return null;
     const now = new Date();
+    const lockedUntil = new Date(now.getTime() + 5 * 60 * 1000);
+    const claimedIds = await claimDueDeliveryIds(this.prisma, {
+      environment,
+      now,
+      lockedUntil,
+      limit,
+    });
+    if (!claimedIds.length) {
+      return {
+        environment,
+        deliveries: [],
+        terminalDeliveryIds: [],
+      };
+    }
+    const runtimeScope = this.runtimeScope(environment);
+    if (!runtimeScope) return null;
     const deliveries = await this.prisma.telegramBotDelivery.findMany({
       where: {
-        AND: [runtimeScope],
-        status: {
-          in: [
-            TelegramBotDeliveryStatus.PENDING,
-            TelegramBotDeliveryStatus.RETRY,
-            TelegramBotDeliveryStatus.PROCESSING,
-          ],
-        },
-        scheduledAt: { lte: now },
-        OR: [{ lockedUntil: null }, { lockedUntil: { lt: now } }],
+        AND: [
+          {
+            id: { in: claimedIds },
+            status: TelegramBotDeliveryStatus.PROCESSING,
+            lockedAt: now,
+            lockedUntil,
+          },
+          runtimeScope,
+        ],
       },
-      orderBy: { scheduledAt: 'asc' },
-      take: limit,
       include: {
         runtimeInstance: true,
         botIntegration: {
           include: {
             runtimeInstances: {
               where: {
-                environment: TelegramBotRuntimeEnvironment.PRODUCTION,
+                environment,
               },
               take: 1,
             },
@@ -235,45 +271,60 @@ export class TelegramBotDeliveryService
         },
       },
     });
-    const claimed: ClaimedDelivery[] = [];
-    for (const delivery of deliveries) {
-      const result = await this.prisma.telegramBotDelivery.updateMany({
-        where: {
-          id: delivery.id,
-          status: {
-            in: [
-              TelegramBotDeliveryStatus.PENDING,
-              TelegramBotDeliveryStatus.RETRY,
-              TelegramBotDeliveryStatus.PROCESSING,
-            ],
-          },
-          OR: [{ lockedUntil: null }, { lockedUntil: { lt: now } }],
-        },
-        data: {
-          status: TelegramBotDeliveryStatus.PROCESSING,
-          lockedAt: now,
-          lockedUntil: new Date(now.getTime() + 5 * 60 * 1000),
-        },
-      });
-      if (result.count === 1) {
-        claimed.push({
-          ...delivery,
-          status: TelegramBotDeliveryStatus.PROCESSING,
-        });
-      }
-    }
-    return claimed;
+    const byId = new Map(
+      deliveries
+        .filter((delivery) =>
+          deliveryMatchesRuntimeScope(delivery, environment),
+        )
+        .map((delivery) => [delivery.id, delivery]),
+    );
+    const unhydratableIds = claimedIds.filter((id) => !byId.has(id));
+    const terminalDeliveryIds = await failClosedUnhydratableDeliveries(
+      this.prisma,
+      {
+        ids: unhydratableIds,
+        environment,
+        claimedAt: now,
+        lockedUntil,
+        failedAt: new Date(),
+        error: UNHYDRATABLE_DELIVERY_ERROR,
+      },
+    );
+    const claimedDeliveries = claimedIds.flatMap((id): ClaimedDelivery[] => {
+      const delivery = byId.get(id);
+      return delivery
+        ? [{ ...delivery, status: TelegramBotDeliveryStatus.PROCESSING }]
+        : [];
+    });
+    return {
+      environment,
+      deliveries: claimedDeliveries,
+      terminalDeliveryIds,
+    };
   }
 
-  private async send(delivery: ClaimedDelivery) {
+  private async send(
+    delivery: ClaimedDelivery,
+    environment: TelegramBotRuntimeEnvironment,
+  ) {
     const runtime =
-      delivery.runtimeInstance ?? delivery.botIntegration.runtimeInstances[0];
-    if (!runtime || runtime.runtimeStatus !== TelegramBotRuntimeStatus.ACTIVE) {
-      await this.markFailedDelivery(
+      delivery.runtimeInstanceId === null &&
+      environment === TelegramBotRuntimeEnvironment.PRODUCTION
+        ? delivery.botIntegration.runtimeInstances[0]
+        : delivery.runtimeInstance;
+    if (
+      !runtime ||
+      runtime.environment !== environment ||
+      runtime.workspaceId !== delivery.workspaceId ||
+      runtime.botIntegrationId !== delivery.botIntegrationId ||
+      runtime.runtimeStatus !== TelegramBotRuntimeStatus.ACTIVE
+    ) {
+      return this.markFailedDelivery(
         delivery,
-        new Error('Active Telegram bot runtime is not configured'),
+        new Error(
+          `Active ${environment} Telegram bot runtime is not configured for this delivery`,
+        ),
       );
-      return;
     }
     const token = this.encryptionService.decrypt({
       encrypted: runtime.botTokenEncrypted,
@@ -331,17 +382,25 @@ export class TelegramBotDeliveryService
         });
         return true;
       });
-      if (!finalized) return;
-      await this.reconcileBroadcast(delivery.id);
-      if (delivery.financeReminderId)
-        await this.scheduleNextFinanceReminder(delivery.financeReminderId);
+      if (!finalized) return false;
     } catch (error) {
-      await this.markFailedDelivery(delivery, error);
+      return this.markFailedDelivery(delivery, error);
     }
+    if (delivery.financeReminderId) {
+      try {
+        await this.scheduleNextFinanceReminder(delivery.financeReminderId);
+      } catch (error) {
+        this.logger.warn(
+          `Finance reminder ${delivery.financeReminderId} could not schedule its next occurrence: ${sanitizeOperationalError(error)}`,
+        );
+      }
+    }
+    return true;
   }
 
-  private runtimeScope(): Prisma.TelegramBotDeliveryWhereInput | null {
-    const environment = this.runtimeEnvironment.current();
+  private runtimeScope(
+    environment = this.runtimeEnvironment.current(),
+  ): Prisma.TelegramBotDeliveryWhereInput | null {
     if (!environment) return null;
     return environment === TelegramBotRuntimeEnvironment.LOCAL
       ? {
@@ -416,8 +475,7 @@ export class TelegramBotDeliveryService
       }
       return true;
     });
-    if (!finalized) return;
-    if (!retry) await this.reconcileBroadcast(delivery.id);
+    return finalized && !retry;
   }
 
   private retryAfterSeconds(error: unknown) {
@@ -425,35 +483,6 @@ export class TelegramBotDeliveryService
     const match = message.match(/retry after\s+(\d+)/i);
     if (!match) return null;
     return Math.max(1, Math.min(3600, Number(match[1])));
-  }
-
-  private async reconcileBroadcast(deliveryId: string) {
-    const recipient = await this.prisma.greeterBroadcastRecipient.findUnique({
-      where: { deliveryId },
-      select: { broadcastId: true },
-    });
-    if (!recipient) return;
-    const recipients = await this.prisma.greeterBroadcastRecipient.findMany({
-      where: { broadcastId: recipient.broadcastId },
-      select: { status: true },
-    });
-    const terminal = new Set(['SENT', 'FAILED', 'BLOCKED', 'CANCELLED']);
-    if (
-      !recipients.length ||
-      recipients.some((item) => !terminal.has(item.status))
-    )
-      return;
-    const sent = recipients.filter((item) => item.status === 'SENT').length;
-    const status =
-      sent === recipients.length
-        ? 'COMPLETED'
-        : sent === 0
-          ? 'FAILED'
-          : 'PARTIALLY_FAILED';
-    await this.prisma.greeterBroadcast.updateMany({
-      where: { id: recipient.broadcastId, status: { not: 'CANCELLED' } },
-      data: { status, completedAt: new Date() },
-    });
   }
 
   private async scheduleNextFinanceReminder(reminderId: string) {

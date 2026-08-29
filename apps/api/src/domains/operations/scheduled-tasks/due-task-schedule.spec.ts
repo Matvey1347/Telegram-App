@@ -62,11 +62,7 @@ describe('DueTaskSchedule', () => {
     );
     expect(schedule.guardNoProgress('task', null, true)).toBeNull();
     expect(
-      schedule.guardNoProgress(
-        'task',
-        new Date(now.getTime() + 60_000),
-        false,
-      ),
+      schedule.guardNoProgress('task', new Date(now.getTime() + 60_000), false),
     ).toEqual(new Date(now.getTime() + 60_000));
   });
 
@@ -176,5 +172,23 @@ describe('DueTaskSchedule', () => {
     await expect(
       schedule.nextDueAt('telegram.managed_posts.reconcile_due'),
     ).resolves.toEqual(new Date(now.getTime() + 45_000));
+  });
+
+  it('reclaims a local post if publishing was abandoned', async () => {
+    const { schedule, prisma } = setup();
+    const claimedAt = new Date(now.getTime() - 4 * 60_000);
+    prisma.telegramManagedPost.findFirst
+      .mockResolvedValueOnce({
+        status: 'PUBLISHING',
+        scheduledAt: new Date(now.getTime() - 5 * 60_000),
+        updatedAt: claimedAt,
+      })
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      schedule.nextDueAt('telegram.managed_posts.reconcile_due'),
+    ).resolves.toEqual(new Date(claimedAt.getTime() + 10 * 60_000));
   });
 });

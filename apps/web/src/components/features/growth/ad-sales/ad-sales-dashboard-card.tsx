@@ -31,7 +31,7 @@ export function AdSalesDashboardCard() {
           <h2 className="text-lg font-semibold text-white">Ad Sales</h2>
           <p className="text-sm text-neutral-500">Business summary for the last 30 days</p>
         </div>
-        <Link href="/ad-sales?tab=analytics" className="text-sm text-blue-300 hover:text-blue-200">
+        <Link href="/ad-sales/analytics" className="text-sm text-blue-300 hover:text-blue-200">
           Open analytics
         </Link>
       </div>

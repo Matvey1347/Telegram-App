@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { AppShell } from '@/components/layout/app-shell';
 import { InlineIconPicker } from '@/components/icons/inline-icon-picker';
-import { currenciesApi, transactionCategoriesApi, transactionsApi, type ResolvedEmoji, type TransactionCategory, type TransactionType } from '@/lib/api';
+import { currenciesApi, transactionCategoriesApi, type ResolvedEmoji, type TransactionCategory, type TransactionType } from '@/lib/api';
 import { MoneyStack } from '@/components/ui/money-stack';
 import { getDominantMoneyAmount } from '@/lib/features/finance/money';
 import { Button, ConfirmDeleteModal, EmptyState, EntityCard, FormField, Input, LoadingState, MasonryGrid, Modal, PageHeader, Select } from '@/components/ui/primitives';
@@ -14,18 +14,9 @@ import { CircleMinus, CirclePlus } from 'lucide-react';
 import { useAppToast } from '@/providers/toast-provider';
 import { pushFinanceMutationToast } from '@/lib/features/finance/finance-mutation-toast';
 import { FinanceActionMenu } from '@/components/features/finance/internal/finance-action-menu';
+import { mapFinanceCategoryStatistics } from '@/components/features/finance/internal/finance-category-statistics';
 
 type CategoryFormValues = { name: string; type: TransactionType; iconId?: string | null };
-type CategoryStats = {
-  count: number;
-  totalPrimary: number;
-  transactions: Array<{
-    amount: number;
-    currency: string;
-    amountInPrimaryCurrency: number;
-  }>;
-};
-
 const CATEGORY_TYPE_KEY = 'telegram-system-category-type';
 
 function isTransactionType(value: string | null): value is TransactionType {
@@ -52,14 +43,14 @@ export default function CategoriesPage() {
   };
 
   const { data: settings } = useQuery({ queryKey: ['currency-settings'], queryFn: currenciesApi.getSettings });
-  const { data: rates } = useQuery({ queryKey: ['currency-rates'], queryFn: currenciesApi.listRates });
+  const { data: rates } = useQuery({ queryKey: ['currency-rates-latest'], queryFn: currenciesApi.listLatestRates });
   const { data, isLoading, error } = useQuery({
     queryKey: ['transaction-categories-admin', activeType],
     queryFn: () => transactionCategoriesApi.list(activeType),
   });
-  const { data: transactions, isLoading: transactionsLoading } = useQuery({
+  const { data: statistics } = useQuery({
     queryKey: ['transactions', 'categories-stats', activeType],
-    queryFn: () => transactionsApi.list({ type: activeType, sort: 'date_desc' }),
+    queryFn: () => transactionCategoriesApi.statistics(activeType),
   });
   const showInitialLoading = isLoading && !data;
 
@@ -111,23 +102,10 @@ export default function CategoriesPage() {
 
   const primaryCurrency = settings?.primaryCurrency ?? '';
 
-  const categoryStats = useMemo(() => {
-    const map = new Map<string, CategoryStats>();
-    for (const transaction of transactions ?? []) {
-      const key = transaction.categoryId ?? transaction.category ?? 'uncategorized';
-      const current = map.get(key) ?? { count: 0, totalPrimary: 0, transactions: [] };
-      const amountPrimary = Number(transaction.amountInPrimaryCurrency ?? 0);
-      current.count += 1;
-      current.totalPrimary += amountPrimary;
-      current.transactions.push({
-        amount: Number(transaction.amount ?? 0),
-        currency: transaction.currency,
-        amountInPrimaryCurrency: amountPrimary,
-      });
-      map.set(key, current);
-    }
-    return map;
-  }, [transactions]);
+  const categoryStats = useMemo(
+    () => mapFinanceCategoryStatistics(statistics),
+    [statistics],
+  );
 
   return <AppShell>
     <PageHeader

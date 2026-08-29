@@ -11,7 +11,7 @@ import { validateSync } from 'class-validator';
 import { CreateTelegramAdSaleCheckoutDto } from './dto';
 import { TelegramAdSalesCheckoutService } from './telegram-ad-sales-checkout.service';
 
-function checkoutDto() {
+function checkoutDto(): CreateTelegramAdSaleCheckoutDto {
   return {
     advertiserName: 'Advertiser',
     origin: TelegramAdSaleOrigin.DIRECT,
@@ -134,7 +134,7 @@ function setup(overrides?: { account?: unknown }) {
 
 describe('TelegramAdSalesCheckoutService', () => {
   it('transforms array-based checkout buttons into managed-post button rows', () => {
-    const raw: any = checkoutDto();
+    const raw = checkoutDto();
     raw.placements[0].managedPostDraft = {
       title: 'Campaign',
       buttonRows: [
@@ -278,7 +278,7 @@ describe('TelegramAdSalesCheckoutService', () => {
     salesService.getSale.mockResolvedValue(reserved);
     salesService.scheduleSale.mockResolvedValue({ results: [] });
 
-    await service.createWorkflow('user-1', dto as never, () => undefined);
+    await service.createWorkflow('user-1', dto, () => undefined);
 
     expect(salesService.createManagedPostFromPlacement).toHaveBeenCalledWith(
       'user-1',
@@ -442,7 +442,7 @@ describe('TelegramAdSalesCheckoutService', () => {
           status: 'PUBLISHED',
           telegramPostId: 'post-1',
           publishedAt: postDate,
-          plannedDeleteAt: new Date('2026-08-21T09:16:00.000Z'),
+          plannedDeleteAt: new Date('2026-08-21T10:16:00.000Z'),
         }),
       }),
     );

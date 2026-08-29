@@ -8,6 +8,7 @@ import { TelegramChannelsSupportService } from './telegram-channels-support.serv
 import { TelegramManagedPostGroupPresentationService } from './telegram-managed-post-group-presentation.service';
 import { TelegramManagedPostIdentityService } from './telegram-managed-post-identity.service';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
+import { MANAGED_POST_LOCAL_PUBLISHING_STALE_MS } from '../../operations/scheduled-tasks/due-work-predicates';
 
 @Injectable()
 export class TelegramManagedPostReconciliationService {
@@ -62,18 +63,30 @@ export class TelegramManagedPostReconciliationService {
 
   async reconcileAllDueManagedPosts() {
     const localDelivery = await this.publishDueLocallyScheduledManagedPosts();
-    const identity = await this.identityService.reconcilePendingWorkspaces((workspaceId) =>
-      this.reconcileDueManagedPosts(workspaceId),
+    const identity = await this.identityService.reconcilePendingWorkspaces(
+      (workspaceId) => this.reconcileDueManagedPosts(workspaceId),
     );
     return { ...identity, localDelivery };
   }
 
   public async publishDueLocallyScheduledManagedPosts() {
+    const now = new Date();
+    const stalePublishingCutoff = new Date(
+      now.getTime() - MANAGED_POST_LOCAL_PUBLISHING_STALE_MS,
+    );
     const duePosts = await this.prisma.telegramManagedPost.findMany({
       where: {
-        status: TelegramManagedPostStatus.SCHEDULED,
         scheduleMode: 'LOCAL',
-        scheduledAt: { lte: new Date() },
+        OR: [
+          {
+            status: TelegramManagedPostStatus.SCHEDULED,
+            scheduledAt: { lte: now },
+          },
+          {
+            status: TelegramManagedPostStatus.PUBLISHING,
+            updatedAt: { lte: stalePublishingCutoff },
+          },
+        ],
       },
       select: { id: true, workspaceId: true, telegramChannelId: true },
       orderBy: { scheduledAt: 'asc' },
@@ -85,9 +98,17 @@ export class TelegramManagedPostReconciliationService {
       const claim = await this.prisma.telegramManagedPost.updateMany({
         where: {
           id: due.id,
-          status: TelegramManagedPostStatus.SCHEDULED,
           scheduleMode: 'LOCAL',
-          scheduledAt: { lte: new Date() },
+          OR: [
+            {
+              status: TelegramManagedPostStatus.SCHEDULED,
+              scheduledAt: { lte: new Date() },
+            },
+            {
+              status: TelegramManagedPostStatus.PUBLISHING,
+              updatedAt: { lte: stalePublishingCutoff },
+            },
+          ],
         },
         data: { status: TelegramManagedPostStatus.PUBLISHING },
       });

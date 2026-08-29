@@ -19,7 +19,7 @@
     "lint": "pnpm --recursive lint",
     "typecheck": "pnpm --filter @telegram-system/shared typecheck && pnpm --filter api typecheck && pnpm --filter web typecheck",
     "test": "pnpm test:api && pnpm test:web",
-    "test:deployment": "node --test scripts/public-origin-environment.test.mjs scripts/environment-contract.test.mjs && node scripts/check-railway-build.mjs",
+    "test:deployment": "node --test scripts/public-origin-environment.test.mjs scripts/environment-contract.test.mjs scripts/dev-port-availability.test.mjs && node scripts/check-railway-build.mjs",
     "env:check": "node scripts/check-env-profile.mjs",
     "architecture:check": "node --test scripts/architecture-policy.test.mjs && node scripts/check-architecture.mjs",
     "test:api": "pnpm --filter api test -- --runInBand",

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { TelegramChannel, TelegramChannelNetwork } from "@/lib/api";
 import {
   Button,
@@ -27,6 +28,7 @@ export function AdSalesInventoryModal({
   onSelectionModeChange,
   onNetworkChange,
   onChannelsChange,
+  maxSelectedChannels,
 }: {
   open: boolean;
   loading: boolean;
@@ -40,7 +42,9 @@ export function AdSalesInventoryModal({
   onSelectionModeChange: (mode: AdSaleScopeMode) => void;
   onNetworkChange: (networkId: string) => void;
   onChannelsChange: (channelIds: string[]) => void;
+  maxSelectedChannels?: number;
 }) {
+  const [selectionLimitError, setSelectionLimitError] = useState(false);
   const allNetwork = networks.find((network) => network.systemKey === "ALL");
   const networkOptions = [
     ...(allNetwork
@@ -84,7 +88,15 @@ export function AdSalesInventoryModal({
               {selectionMode === "network" ? (
                 <CustomSelect
                   value={selectedNetworkId || allNetwork?.id || ""}
-                  onChange={onNetworkChange}
+                  onChange={(networkId) => {
+                    const count = networks.find((network) => network.id === networkId)?.channels.length ?? 0;
+                    if (maxSelectedChannels && count > maxSelectedChannels) {
+                      setSelectionLimitError(true);
+                      return;
+                    }
+                    setSelectionLimitError(false);
+                    onNetworkChange(networkId);
+                  }}
                   placeholder="All networks"
                   dropdownClassName="z-[70]"
                   options={networkOptions.map((network) => ({
@@ -104,7 +116,14 @@ export function AdSalesInventoryModal({
               ) : (
                 <MultiSelect
                   value={selectedChannelIds}
-                  onChange={onChannelsChange}
+                  onChange={(channelIds) => {
+                    if (maxSelectedChannels && channelIds.length > maxSelectedChannels) {
+                      setSelectionLimitError(true);
+                      return;
+                    }
+                    setSelectionLimitError(false);
+                    onChannelsChange(channelIds);
+                  }}
                   placeholder="Choose channels"
                   allSelectedLabel="All channels"
                   className="z-[60]"
@@ -118,6 +137,12 @@ export function AdSalesInventoryModal({
                 />
               )}
             </div>
+            {maxSelectedChannels ? (
+              <p className={`text-xs ${selectionLimitError ? "text-amber-300" : "text-neutral-500"}`}>
+                Analytics supports up to {maxSelectedChannels} channels. Remove a
+                channel before selecting another.
+              </p>
+            ) : null}
           </div>
         )}
 

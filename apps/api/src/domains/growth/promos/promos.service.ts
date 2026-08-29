@@ -4,11 +4,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createPaginatedResponse, normalizePagination } from '../../../common/pagination/pagination.utils';
+import {
+  createPaginatedResponse,
+  normalizePagination,
+} from '../../../common/pagination/pagination.utils';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { CreatePromoDto, PromoQueryDto, UpdatePromoDto } from './dto';
+import { Prisma, PromoStatus } from '@prisma/client';
 
 @Injectable()
 export class PromosService {
@@ -22,20 +26,56 @@ export class PromosService {
   }
   async findAll(userId: string, query: PromoQueryDto = {}) {
     const workspaceId = await this.workspace(userId);
-    const where = {
+    const search = query.search?.trim();
+    const matchingStatuses = search
+      ? Object.values(PromoStatus).filter((status) =>
+          status.toLowerCase().includes(search.toLowerCase()),
+        )
+      : [];
+    const where: Prisma.PromoWhereInput = {
       workspaceId,
       telegramChannelId: query.telegramChannelId || undefined,
       assignedMemberId: query.assignedMemberId || undefined,
+      ...(search
+        ? {
+            OR: [
+              { title: { contains: search, mode: 'insensitive' } },
+              { text: { contains: search, mode: 'insensitive' } },
+              ...(matchingStatuses.length
+                ? [{ status: { in: matchingStatuses } }]
+                : []),
+              {
+                telegramChannel: {
+                  workspaceId,
+                  OR: [
+                    { title: { contains: search, mode: 'insensitive' } },
+                    { username: { contains: search, mode: 'insensitive' } },
+                  ],
+                },
+              },
+            ],
+          }
+        : {}),
     };
     const pagination = normalizePagination(query);
     const [items, totalItems] = await this.prisma.$transaction([
       this.prisma.promo.findMany({
         where,
-        include: {
-          telegramChannel: true,
+        select: {
+          id: true,
+          workspaceId: true,
+          telegramChannelId: true,
+          iconId: true,
+          title: true,
+          status: true,
+          assignedMemberId: true,
+          createdAt: true,
+          updatedAt: true,
+          telegramChannel: {
+            select: { id: true, title: true, username: true, photoUrl: true },
+          },
           icon: true,
           assignedMember: WorkspaceService.assignedMemberInclude,
-          createdByUser: WorkspaceService.createdByUserInclude,
         },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip: pagination.skip,
@@ -56,25 +96,66 @@ export class PromosService {
     const workspaceId = await this.workspace(userId);
     const row = await this.prisma.promo.findFirst({
       where: { id, workspaceId },
-      include: { telegramChannel: true, icon: true, assignedMember: WorkspaceService.assignedMemberInclude, createdByUser: WorkspaceService.createdByUserInclude },
+      include: {
+        telegramChannel: true,
+        icon: true,
+        assignedMember: WorkspaceService.assignedMemberInclude,
+        createdByUser: WorkspaceService.createdByUserInclude,
+      },
     });
     if (!row) throw new NotFoundException('Promo not found');
     return { ...row, iconPresentation: iconToResolvedEmoji(row.icon) };
   }
   async create(userId: string, dto: CreatePromoDto) {
-    const { workspaceId, assignedMemberId } = await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId);
+    const { workspaceId, assignedMemberId } =
+      await this.workspaceService.resolveAssignedMemberId(
+        userId,
+        dto.assignedMemberId,
+      );
     const iconId = await this.resolveIconId(workspaceId, dto.iconId);
     const promo = await this.prisma.promo.create({
-      data: { workspaceId, ...dto, iconId, assignedMemberId, createdByUserId: userId, text: dto.text ?? '' },
-      include: { telegramChannel: true, icon: true, assignedMember: WorkspaceService.assignedMemberInclude, createdByUser: WorkspaceService.createdByUserInclude },
+      data: {
+        workspaceId,
+        ...dto,
+        iconId,
+        assignedMemberId,
+        createdByUserId: userId,
+        text: dto.text ?? '',
+      },
+      include: {
+        telegramChannel: true,
+        icon: true,
+        assignedMember: WorkspaceService.assignedMemberInclude,
+        createdByUser: WorkspaceService.createdByUserInclude,
+      },
     });
     return { ...promo, iconPresentation: iconToResolvedEmoji(promo.icon) };
   }
   async update(userId: string, id: string, dto: UpdatePromoDto) {
     const existing = await this.findOne(userId, id);
-    const assignedMemberId = dto.assignedMemberId === undefined ? undefined : (await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId)).assignedMemberId;
-    const iconId = dto.iconId === undefined ? undefined : await this.resolveIconId(existing.workspaceId, dto.iconId);
-    const promo = await this.prisma.promo.update({ where: { id }, data: { ...dto, iconId, assignedMemberId }, include: { telegramChannel: true, icon: true, assignedMember: WorkspaceService.assignedMemberInclude, createdByUser: WorkspaceService.createdByUserInclude } });
+    const assignedMemberId =
+      dto.assignedMemberId === undefined
+        ? undefined
+        : (
+            await this.workspaceService.resolveAssignedMemberId(
+              userId,
+              dto.assignedMemberId,
+            )
+          ).assignedMemberId;
+    const iconId =
+      dto.iconId === undefined
+        ? undefined
+        : await this.resolveIconId(existing.workspaceId, dto.iconId);
+    const promo = await this.prisma.promo.update({
+      where: { id },
+      data: { ...dto, iconId, assignedMemberId },
+      include: {
+        telegramChannel: true,
+        icon: true,
+        assignedMember: WorkspaceService.assignedMemberInclude,
+        createdByUser: WorkspaceService.createdByUserInclude,
+      },
+    });
     return { ...promo, iconPresentation: iconToResolvedEmoji(promo.icon) };
   }
   async remove(userId: string, id: string) {

@@ -1,18 +1,60 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsOptional, IsString, IsNumber, Min } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsDateString,
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { PaginationQueryDto } from '../../../common/pagination/pagination-query.dto';
 
 export class AdCampaignAnalyticsInputDto {
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) subscribersBefore?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subscribersBefore?: number;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) avgViewsBefore?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) avgReactionsBefore?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) subscribersAfter24h?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) subscribersAfter48h?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) subscribersAfter72h?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) subscribersAfter7d?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) subscribersAfter30d?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  avgReactionsBefore?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subscribersAfter24h?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subscribersAfter48h?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subscribersAfter72h?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subscribersAfter7d?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subscribersAfter30d?: number;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) avgViewsAfter?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) avgReactionsAfter?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  avgReactionsAfter?: number;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) clicksAfter?: number;
   @IsOptional() @IsString() analyticsNotes?: string;
   @IsOptional() @IsBoolean() excludeFromAnalytics?: boolean;
@@ -40,16 +82,48 @@ export class CreateAdCampaignDto {
   @IsString() accountId!: string;
   @IsOptional() @IsString() date?: string;
   @IsOptional() @IsString() notes?: string;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) subscribersBefore?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subscribersBefore?: number;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) avgViewsBefore?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) avgReactionsBefore?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) subscribersAfter24h?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) subscribersAfter48h?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) subscribersAfter72h?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) subscribersAfter7d?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) subscribersAfter30d?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  avgReactionsBefore?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subscribersAfter24h?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subscribersAfter48h?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subscribersAfter72h?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subscribersAfter7d?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subscribersAfter30d?: number;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) avgViewsAfter?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) avgReactionsAfter?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  avgReactionsAfter?: number;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) clicksAfter?: number;
   @IsOptional() @IsString() analyticsNotes?: string;
   @IsOptional() @IsBoolean() excludeFromAnalytics?: boolean;
@@ -77,16 +151,48 @@ export class UpdateAdCampaignDto {
   @IsOptional() @IsString() accountId?: string;
   @IsOptional() @IsString() date?: string;
   @IsOptional() @IsString() notes?: string;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) subscribersBefore?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subscribersBefore?: number;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) avgViewsBefore?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) avgReactionsBefore?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) subscribersAfter24h?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) subscribersAfter48h?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) subscribersAfter72h?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) subscribersAfter7d?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) subscribersAfter30d?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  avgReactionsBefore?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subscribersAfter24h?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subscribersAfter48h?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subscribersAfter72h?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subscribersAfter7d?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  subscribersAfter30d?: number;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) avgViewsAfter?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) avgReactionsAfter?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  avgReactionsAfter?: number;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) clicksAfter?: number;
   @IsOptional() @IsString() analyticsNotes?: string;
   @IsOptional() @IsBoolean() excludeFromAnalytics?: boolean;
@@ -95,5 +201,10 @@ export class UpdateAdCampaignDto {
 export class AdCampaignQueryDto extends PaginationQueryDto {
   @IsOptional() @IsString() assignedMemberId?: string;
   @IsOptional() @IsString() telegramChannelId?: string;
-  @IsOptional() @IsString() search?: string;
+  @IsOptional() @IsString() @MaxLength(120) search?: string;
+  @IsOptional() @IsDateString() dateFrom?: string;
+  @IsOptional() @IsDateString() dateTo?: string;
+  @IsOptional()
+  @IsIn(['date_desc', 'date_asc', 'cost_desc', 'joined_desc'])
+  sort?: 'date_desc' | 'date_asc' | 'cost_desc' | 'joined_desc';
 }

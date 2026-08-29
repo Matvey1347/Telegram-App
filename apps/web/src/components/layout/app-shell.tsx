@@ -23,6 +23,7 @@ import { CustomSelect } from "@/components/ui/primitives";
 import { IconPicker } from "@/components/icons/icon-picker";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { SystemBrandLogo } from "@/components/layout/system-brand-logo";
+import { useSystemBotWorkspaceSync } from "@/components/layout/use-system-bot-workspace-sync";
 import {
   Bug,
   Bot,
@@ -294,6 +295,10 @@ export function AppShell({ children }: PropsWithChildren) {
     pathname === "/settings" || pathname === "/workspace-members";
   const dashboardActive = pathname === "/";
   const activeWorkspaceId = selectedWorkspaceId || workspaces?.[0]?.id || "";
+  useSystemBotWorkspaceSync(activeWorkspaceId, (workspaceId) => {
+    if (workspaces?.some((workspace) => workspace.id === workspaceId))
+      void switchWorkspace(workspaceId);
+  });
   const activeWorkspace = (workspaces ?? []).find(
     (workspace) => workspace.id === activeWorkspaceId,
   );

@@ -12,56 +12,22 @@ import {
 import { TelegramSystemBotPostFlowService } from './telegram-system-bot-post-flow.service';
 import { TelegramSystemBotAdSaleFlowService } from './telegram-system-bot-ad-sale-flow.service';
 import { TelegramSystemBotPostsService } from './telegram-system-bot-posts.service';
-import type { TelegramSystemBotIncomingMessage } from './telegram-system-bot-forwarded-content.parser';
 import {
   SYSTEM_BOT_HELP_TEXT,
-  systemBotCommandFor,
   systemBotMenuPayload,
 } from './telegram-system-bot-menu';
 import { compactSystemBotInlineKeyboard } from './telegram-system-bot-inline-keyboard';
 import { TelegramSystemBotChannelAccessService } from './telegram-system-bot-channel-access.service';
 import { TelegramSystemBotWorkspaceFlowService } from './telegram-system-bot-workspace-flow.service';
+import {
+  resolveSystemBotAction,
+  systemBotWorkflowScope,
+  type SystemBotAuthorizedConnection,
+  type TelegramSystemBotAction,
+  type TelegramSystemBotUpdate,
+} from './telegram-system-bot-action-context';
 
-export type TelegramSystemBotUpdate = {
-  update_id?: number | string;
-  message?: TelegramSystemBotIncomingMessage & {
-    chat?: { id?: number | string; type?: string };
-    from?: {
-      id?: number | string;
-      username?: string;
-      first_name?: string;
-      last_name?: string;
-    };
-    text?: string;
-  };
-  callback_query?: {
-    id?: string;
-    data?: string;
-    from?: { id?: number | string };
-    message?: {
-      chat?: { id?: number | string; type?: string };
-      message_id?: number;
-    };
-  };
-  my_chat_member?: {
-    chat?: {
-      id?: number | string;
-      type?: string;
-      title?: string;
-      username?: string;
-    };
-    old_chat_member?: {
-      status?: string;
-      user?: { id?: number | string };
-      [key: string]: unknown;
-    };
-    new_chat_member?: {
-      status?: string;
-      user?: { id?: number | string };
-      [key: string]: unknown;
-    };
-  };
-};
+export type { TelegramSystemBotUpdate } from './telegram-system-bot-action-context';
 
 @Injectable()
 export class TelegramSystemBotHandlerService {
@@ -87,72 +53,51 @@ export class TelegramSystemBotHandlerService {
   async handle(update: TelegramSystemBotUpdate) {
     if (update.my_chat_member)
       return this.channelAccess?.handleMyChatMember(update.my_chat_member);
-    const actor = update.message?.from ?? update.callback_query?.from;
-    const chatId =
-      update.message?.chat?.id ?? update.callback_query?.message?.chat?.id;
-    if (!actor?.id || !chatId || !this.config.token) return;
-    const telegramUserId = String(actor.id);
-    const safeChatId = String(chatId);
-    const chatType =
-      update.message?.chat?.type ?? update.callback_query?.message?.chat?.type;
-    // Link tokens and workspace data must never be emitted into groups. Telegram
-    // private bot chats are bound to the actor's own user id.
-    if (chatType !== 'private' || safeChatId !== telegramUserId) return;
-    const command = systemBotCommandFor(update.message?.text?.trim());
-    const callback = update.callback_query?.data;
-    if (update.callback_query?.id) {
+    if (!this.config.token) return;
+    const action = resolveSystemBotAction(update);
+    if (!action) return;
+    const { actor, telegramUserId, chatId, command, callback } = action;
+    if (action.callbackQueryId) {
       await this.api.answerCallbackQuery(this.config.token, {
-        callback_query_id: update.callback_query.id,
+        callback_query_id: action.callbackQueryId,
       });
     }
+    if (command === '/help') return this.help(chatId);
     if (command?.startsWith('/start'))
-      return this.start(telegramUserId, safeChatId, actor, command);
+      return this.start(telegramUserId, chatId, actor, command);
+    this.sendTyping(chatId);
     try {
-      try {
-        await this.api.sendChatAction(this.config.token, safeChatId, 'typing');
-      } catch {
-        // Native feedback is best-effort and must not block the action.
-      }
       const connection =
         await this.connections.requireEnabledConnection(telegramUserId);
       if (
         callback?.startsWith('workspace:') &&
         !['workspace:new', 'workspace:edit'].includes(callback)
       ) {
-        await this.connections.switchWorkspace(
-          connection.id,
+        const switched = await this.connections.switchWorkspace(
+          connection,
           callback.slice('workspace:'.length),
         );
-        return this.workspaceMenu(
-          safeChatId,
-          connection.id,
-          update.callback_query?.message?.message_id,
-        );
+        return this.workspaceMenu(chatId, switched, action.callbackMessageId);
       }
-      const workspace = await this.connections.requireCurrentWorkspace(
-        connection.id,
-      );
-      const workflowScope = {
-        chatId: safeChatId,
-        connectionId: connection.id,
-        userId: connection.userId,
-        telegramUserId: connection.telegramUserId,
-        workspaceId: workspace.workspaceId,
-        timezone: workspace.workspace.timezone,
-      };
-      if (command === '/help') return this.help(safeChatId);
       if (command === '/workspace' || callback === 'workspace')
-        return this.workspaceMenu(safeChatId, connection.id);
+        return this.workspaceMenu(chatId, connection);
+      const workspace =
+        await this.connections.requireCurrentWorkspace(connection);
+      const workflowScope = systemBotWorkflowScope(
+        chatId,
+        connection,
+        workspace,
+      );
       if (callback === 'workspace:new')
         return this.workspaceFlow?.beginCreate(
           workflowScope,
-          update.callback_query?.message?.message_id,
+          action.callbackMessageId,
         );
       if (callback === 'workspace:edit')
         return this.workspaceFlow?.beginEdit(
           workflowScope,
           workspace.workspace.name,
-          update.callback_query?.message?.message_id,
+          action.callbackMessageId,
           workspace.workspace.avatarIcon?.type === 'image'
             ? workspace.workspace.avatarIcon.imageUrl
               ? `image:${workspace.workspace.avatarIcon.imageUrl}`
@@ -165,18 +110,14 @@ export class TelegramSystemBotHandlerService {
           callback,
         );
         if (this.workspaceFlow.isWorkspaceMenuNavigation(result))
-          return this.workspaceMenu(
-            safeChatId,
-            connection.id,
-            result.messageId,
-          );
+          return this.workspaceMenu(chatId, connection, result.messageId);
         return result;
       }
       if (command === '/sync' || callback === 'sync')
-        return this.sync(safeChatId, connection.userId, workspace.workspaceId);
+        return this.sync(chatId, connection.userId, workspace.workspaceId);
       if (callback?.startsWith('channel:sync:'))
         return this.syncChannel(
-          safeChatId,
+          chatId,
           connection.userId,
           workspace.workspaceId,
           connection.telegramUserId,
@@ -184,25 +125,25 @@ export class TelegramSystemBotHandlerService {
         );
       if (callback?.startsWith('channel:view:'))
         return this.channelAccess?.detail(
-          safeChatId,
+          chatId,
           workspace.workspaceId,
           callback.slice('channel:view:'.length),
           workspace.workspace.timezone,
         );
       if (callback?.startsWith('channel:access:'))
         return this.channelAccess?.auditAndSend(
-          safeChatId,
+          chatId,
           workspace.workspaceId,
           callback.slice('channel:access:'.length),
         );
       if (command === '/stats' || callback === 'stats')
         return this.stats(
-          safeChatId,
+          chatId,
           workspace.workspaceId,
           workspace.workspace.name,
         );
       if (command === '/finance' || callback === 'finance')
-        return this.finance.menu(safeChatId);
+        return this.finance.menu(chatId);
       if (command === '/posts') return this.posts?.open(workflowScope);
       if (command === '/post' || callback === 'post')
         return this.postFlow?.begin(workflowScope);
@@ -217,19 +158,19 @@ export class TelegramSystemBotHandlerService {
         return this.posts.callback(
           workflowScope,
           callback,
-          update.callback_query?.message?.message_id,
+          action.callbackMessageId,
         );
       if (callback?.startsWith('finance:'))
         return this.finance.callback({
-          chatId: safeChatId,
+          chatId,
           connectionId: connection.id,
           userId: connection.userId,
           workspaceId: workspace.workspaceId,
           callback,
-          messageId: update.callback_query?.message?.message_id,
+          messageId: action.callbackMessageId,
         });
       if (command === '/channels' || callback === 'channels')
-        return this.channelAccess?.list(safeChatId, workspace.workspaceId);
+        return this.channelAccess?.list(chatId, workspace.workspaceId);
       if (update.message) {
         const workspaceResult = await this.workspaceFlow?.input(
           workflowScope,
@@ -249,7 +190,7 @@ export class TelegramSystemBotHandlerService {
       }
       if (update.message?.text) {
         const financeResult = await this.finance.pendingInput({
-          chatId: safeChatId,
+          chatId,
           connectionId: connection.id,
           userId: connection.userId,
           workspaceId: workspace.workspaceId,
@@ -258,13 +199,13 @@ export class TelegramSystemBotHandlerService {
         });
         if (financeResult) return financeResult;
       }
-      return this.menu(safeChatId, connection.id);
+      return this.sendMenu(chatId, workspace.workspace);
     } catch (error) {
       this.logger.warn(
         `System bot action denied or failed: ${sanitizeOperationalError(error)}`,
       );
       return this.api.sendMessage(this.config.token, {
-        chat_id: safeChatId,
+        chat_id: chatId,
         text: '⚠️ This action is not available. Reconnect your account or select an accessible workspace.',
       });
     }
@@ -315,7 +256,7 @@ export class TelegramSystemBotHandlerService {
   private async start(
     telegramUserId: string,
     chatId: string,
-    actor: NonNullable<TelegramSystemBotUpdate['message']>['from'],
+    actor: TelegramSystemBotAction['actor'],
     command: string,
   ) {
     const connection = await this.connections
@@ -323,57 +264,36 @@ export class TelegramSystemBotHandlerService {
       .catch(() => null);
     if (connection) {
       if (command === '/start ad_sale' && this.adSaleFlow) {
-        const workspace = await this.connections.requireCurrentWorkspace(
-          connection.id,
+        const workspace =
+          await this.connections.requireCurrentWorkspace(connection);
+        return this.adSaleFlow.begin(
+          systemBotWorkflowScope(chatId, connection, workspace),
         );
-        return this.adSaleFlow.begin({
-          chatId,
-          connectionId: connection.id,
-          userId: connection.userId,
-          telegramUserId: connection.telegramUserId,
-          workspaceId: workspace.workspaceId,
-          timezone: workspace.workspace.timezone,
-        });
       }
       if (command === '/start post' && this.postFlow) {
-        const workspace = await this.connections.requireCurrentWorkspace(
-          connection.id,
+        const workspace =
+          await this.connections.requireCurrentWorkspace(connection);
+        return this.postFlow.begin(
+          systemBotWorkflowScope(chatId, connection, workspace),
         );
-        return this.postFlow.begin({
-          chatId,
-          connectionId: connection.id,
-          userId: connection.userId,
-          telegramUserId: connection.telegramUserId,
-          workspaceId: workspace.workspaceId,
-          timezone: workspace.workspace.timezone,
-        });
       }
       const adSalePostMatch = /^\/start ad_post_([A-Za-z0-9_-]+)$/.exec(
         command,
       );
       if (adSalePostMatch && this.postFlow) {
-        const workspace = await this.connections.requireCurrentWorkspace(
-          connection.id,
-        );
+        const workspace =
+          await this.connections.requireCurrentWorkspace(connection);
         return this.postFlow.resumeAdSaleImport(
-          {
-            chatId,
-            connectionId: connection.id,
-            userId: connection.userId,
-            telegramUserId: connection.telegramUserId,
-            workspaceId: workspace.workspaceId,
-            timezone: workspace.workspace.timezone,
-          },
+          systemBotWorkflowScope(chatId, connection, workspace),
           adSalePostMatch[1],
         );
       }
-      const workspaces = await this.connections.workspacesForConnection(
-        connection.id,
-      );
-      if (workspaces.length > 1) {
-        return this.workspaceMenu(chatId, connection.id);
-      }
-      return this.menu(chatId, connection.id);
+      const workspaces =
+        await this.connections.workspacesForConnection(connection);
+      if (workspaces.length > 1)
+        return this.workspaceMenu(chatId, connection, undefined, workspaces);
+      if (workspaces[0]?.selected) return this.sendMenu(chatId, workspaces[0]);
+      return this.menu(chatId, connection);
     }
     try {
       const link = await this.connections.createLink({
@@ -405,17 +325,33 @@ export class TelegramSystemBotHandlerService {
     }
   }
 
-  private async menu(chatId: string, connectionId: string) {
+  private async menu(
+    chatId: string,
+    connection: string | SystemBotAuthorizedConnection,
+  ) {
+    const workspace =
+      await this.connections.requireCurrentWorkspace(connection);
+    return this.sendMenu(chatId, workspace.workspace);
+  }
+
+  private sendMenu(
+    chatId: string,
+    workspace: Parameters<typeof systemBotMenuPayload>[0],
+  ) {
     return this.api.sendMessage(this.config.token!, {
       chat_id: chatId,
-      ...(await this.menuPayload(connectionId)),
+      ...systemBotMenuPayload(workspace),
     });
   }
 
-  private async menuPayload(connectionId: string) {
-    const workspace =
-      await this.connections.requireCurrentWorkspace(connectionId);
-    return systemBotMenuPayload(workspace.workspace);
+  private sendTyping(chatId: string) {
+    try {
+      void this.api
+        .sendChatAction(this.config.token!, chatId, 'typing')
+        .catch(() => undefined);
+    } catch {
+      // Telegram feedback is cosmetic; synchronous client failures are safe.
+    }
   }
 
   private async help(chatId: string) {
@@ -427,11 +363,15 @@ export class TelegramSystemBotHandlerService {
 
   private async workspaceMenu(
     chatId: string,
-    connectionId: string,
+    connection: string | SystemBotAuthorizedConnection,
     messageId?: number,
+    resolvedWorkspaces?: Awaited<
+      ReturnType<TelegramSystemBotConnectionsService['workspacesForConnection']>
+    >,
   ) {
     const workspaces =
-      await this.connections.workspacesForConnection(connectionId);
+      resolvedWorkspaces ??
+      (await this.connections.workspacesForConnection(connection));
     const payload = {
       chat_id: chatId,
       text: '🏢 Choose workspace:',

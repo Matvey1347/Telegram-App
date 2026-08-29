@@ -7,6 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { telegramPostKeys } from "@/lib/query-keys";
 import { ResetChannelScheduledPostsButton } from "./reset-channel-scheduled-posts-button";
 
 const { resetScheduled, pushToast } = vi.hoisted(() => ({
@@ -69,7 +70,7 @@ describe("ResetChannelScheduledPostsButton", () => {
     );
     await waitFor(() => expect(onCompleted).toHaveBeenCalled());
     expect(invalidate).toHaveBeenCalledWith({
-      queryKey: ["telegram-managed-posts", "channel-1"],
+      queryKey: telegramPostKeys.managedLists("channel-1"),
     });
     expect(pushToast).toHaveBeenCalledWith(
       "Deleted 3 scheduled Telegram messages and returned 2 posts to drafts.",

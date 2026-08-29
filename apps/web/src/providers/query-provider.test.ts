@@ -1,0 +1,25 @@
+import { describe, expect, it } from "vitest";
+import { isWorkspaceScopedQuery } from "./query-provider";
+
+describe("workspace query isolation", () => {
+  it.each([
+    "ad-campaign-admission-view-analytics",
+    "campaign-invite-link-history",
+    "telegram-bots",
+    "telegram-system-bot",
+    "telegram-source-channels",
+    "telegram-user-accounts",
+    "telegram-channel-custom-emoji-packs",
+    "telegram-managed-posts-calendar",
+    "telegram-managed-post-history",
+    "telegram-ad-baseline",
+    "icons",
+    "trash",
+  ])("marks %s as workspace scoped", (root) => {
+    expect(isWorkspaceScopedQuery([root, "detail"])).toBe(true);
+  });
+
+  it.each(["auth", "workspaces"])("keeps %s across a workspace switch", (root) => {
+    expect(isWorkspaceScopedQuery([root])).toBe(false);
+  });
+});

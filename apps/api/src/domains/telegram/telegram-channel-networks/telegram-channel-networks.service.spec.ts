@@ -32,8 +32,12 @@ function harness() {
         Array.isArray(action) ? Promise.all(action) : action(tx),
     ),
   };
+  const preparedBuild = jest.fn().mockResolvedValue(new Map());
   const financialRead = {
     buildChannelFinancialSummaryPreview: jest.fn().mockResolvedValue(new Map()),
+    prepareChannelFinancialSummaryPreview: jest
+      .fn()
+      .mockResolvedValue({ build: preparedBuild }),
   };
   const service = new TelegramChannelNetworksService(
     prisma as never,
@@ -42,7 +46,7 @@ function harness() {
     } as never,
     financialRead as never,
   );
-  return { service, prisma, tx, financialRead };
+  return { service, prisma, tx, financialRead, preparedBuild };
 }
 
 describe('TelegramChannelNetworksService icons', () => {
@@ -357,5 +361,181 @@ describe('TelegramChannelNetworksService system All network', () => {
         telegramChannelIds: ['channel-1', 'channel-2'],
       }),
     ).rejects.toThrow('All is reserved for the system network');
+  });
+});
+
+describe('TelegramChannelNetworksService financial source batching', () => {
+  const channel = (
+    id: string,
+    subscribers: number,
+    kpiCurrency = 'USD',
+    archivedAt: Date | null = null,
+  ) => ({
+    id,
+    title: id,
+    username: null,
+    photoUrl: null,
+    currentSubscribersCount: subscribers,
+    pendingJoinRequestsCount: 0,
+    activeSubscribersWindow: 5,
+    kpiCurrency,
+    archivedAt,
+    audienceSnapshots: [],
+  });
+
+  const finance = (currency: string) => ({
+    currency,
+    totalAdSpend: 0,
+    campaignsCount: 0,
+    totalJoinedSubscribers: 0,
+    totalPendingSubscribers: 0,
+    totalAttributedSubscribers: 0,
+    paidActiveSubscribersEstimate: null,
+    avgCpa: null,
+    activeCpa: null,
+    kpiStatus: 'unknown',
+    kpiLabel: '-',
+    assetEconomics: {
+      currency,
+      invested: 0,
+      purchasePrice: null,
+      revenue: 0,
+      adSpend: 0,
+      adsSold: 0,
+      conversionUnavailable: false,
+      formatPricing: null,
+    },
+  });
+
+  it('loads overlapping system/custom sources once while preserving archived membership and each network currency', async () => {
+    const test = harness();
+    const active = channel('active-usd', 10, 'USD');
+    const archivedOne = channel(
+      'archived-uah-1',
+      20,
+      'UAH',
+      new Date('2026-01-01T00:00:00.000Z'),
+    );
+    const archivedTwo = channel(
+      'archived-uah-2',
+      30,
+      'UAH',
+      new Date('2026-01-02T00:00:00.000Z'),
+    );
+    test.prisma.telegramChannel.findMany.mockResolvedValue([active]);
+    test.prisma.telegramChannelNetwork.findMany.mockResolvedValue([
+      {
+        id: 'custom-network',
+        workspaceId: 'workspace-1',
+        name: 'Custom',
+        channels: [active, archivedOne, archivedTwo].map((telegramChannel) => ({
+          telegramChannel,
+        })),
+      },
+    ]);
+    test.prisma.telegramChannelNetwork.count.mockResolvedValue(1);
+    test.preparedBuild.mockImplementation(
+      async (
+        channels: Array<{ id: string }>,
+        options: { targetCurrency: string },
+      ) =>
+        new Map(
+          channels.map((item) => [item.id, finance(options.targetCurrency)]),
+        ),
+    );
+
+    const result = await test.service.list('user-1', {
+      page: 1,
+      pageSize: 10,
+    });
+
+    expect(
+      test.financialRead.prepareChannelFinancialSummaryPreview,
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      test.financialRead.prepareChannelFinancialSummaryPreview,
+    ).toHaveBeenCalledWith(
+      'workspace-1',
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'active-usd' }),
+        expect.objectContaining({ id: 'archived-uah-1' }),
+        expect.objectContaining({ id: 'archived-uah-2' }),
+      ]),
+    );
+    expect(
+      test.financialRead.buildChannelFinancialSummaryPreview,
+    ).not.toHaveBeenCalled();
+    expect(test.preparedBuild.mock.calls.map((call) => call[1])).toEqual(
+      expect.arrayContaining([
+        { targetCurrency: 'USD' },
+        { targetCurrency: 'UAH' },
+      ]),
+    );
+    expect(result.items[0]).toMatchObject({
+      id: SYSTEM_ALL_NETWORK_ID,
+      channels: [{ id: 'active-usd' }],
+      summary: { channelsCount: 1, totalSubscribers: 10 },
+    });
+    expect(result.items[1]).toMatchObject({
+      id: 'custom-network',
+      channels: [
+        { id: 'active-usd' },
+        { id: 'archived-uah-1' },
+        { id: 'archived-uah-2' },
+      ],
+      summary: { channelsCount: 3, totalSubscribers: 60 },
+    });
+    expect(test.prisma.telegramChannelNetwork.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { workspaceId: 'workspace-1' } }),
+    );
+  });
+
+  it('keeps the financial source load constant for 100 overlapping networks', async () => {
+    const test = harness();
+    const sharedChannels = [channel('shared-1', 10), channel('shared-2', 20)];
+    test.prisma.telegramChannelNetwork.findMany.mockResolvedValue(
+      Array.from({ length: 100 }, (_, index) => ({
+        id: `network-${index}`,
+        workspaceId: 'workspace-1',
+        name: `Network ${index}`,
+        channels: sharedChannels.map((telegramChannel) => ({
+          telegramChannel,
+        })),
+      })),
+    );
+    test.prisma.telegramChannelNetwork.count.mockResolvedValue(100);
+    test.preparedBuild.mockImplementation(
+      async (
+        channels: Array<{ id: string }>,
+        options: { targetCurrency: string },
+      ) =>
+        new Map(
+          channels.map((item) => [item.id, finance(options.targetCurrency)]),
+        ),
+    );
+
+    const result = await test.service.list('user-1', {
+      page: 2,
+      pageSize: 100,
+    });
+
+    expect(result.items).toHaveLength(100);
+    expect(result.items[99].summary).toMatchObject({
+      channelsCount: 2,
+      totalSubscribers: 30,
+    });
+    expect(
+      test.financialRead.prepareChannelFinancialSummaryPreview,
+    ).toHaveBeenCalledTimes(1);
+    const preparedChannels =
+      test.financialRead.prepareChannelFinancialSummaryPreview.mock.calls[0][1];
+    expect(preparedChannels.map((item: { id: string }) => item.id)).toEqual([
+      'shared-1',
+      'shared-2',
+    ]);
+    expect(test.preparedBuild).toHaveBeenCalledTimes(100);
+    expect(
+      test.financialRead.buildChannelFinancialSummaryPreview,
+    ).not.toHaveBeenCalled();
   });
 });

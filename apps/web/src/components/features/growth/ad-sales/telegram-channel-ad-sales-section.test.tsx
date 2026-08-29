@@ -95,7 +95,10 @@ describe("TelegramChannelAdSalesSection", () => {
     expect(screen.getByText("No recent sales.")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Open full module" }),
-    ).toHaveAttribute("href", "/ad-sales?tab=analytics&channelId=channel-1");
+    ).toHaveAttribute(
+      "href",
+      "/ad-sales/analytics?channelId=channel-1",
+    );
     expect(
       screen.getByText("Recommended price").parentElement?.parentElement,
     ).toHaveClass(

@@ -25,7 +25,7 @@ export function Modal({
   title: ReactNode;
   headerAction?: ReactNode;
   leadingHeaderAction?: ReactNode;
-  size?: "md" | "sm" | "xl";
+  size?: "md" | "sm" | "xs" | "xl";
   allowOverflow?: boolean;
   loading?: boolean;
   closeLabel?: string;
@@ -102,7 +102,7 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`relative flex max-h-[calc(100dvh-1rem)] w-full flex-col rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl sm:max-h-[84vh] ${allowOverflow ? "overflow-visible" : "overflow-hidden"} ${size === "sm" ? "max-w-[560px]" : size === "xl" ? "max-w-[1280px]" : "max-w-[660px]"}`}
+        className={`relative flex max-h-[calc(100dvh-1rem)] w-full flex-col rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl sm:max-h-[84vh] ${allowOverflow ? "overflow-visible" : "overflow-hidden"} ${size === "xs" ? "max-w-[400px]" : size === "sm" ? "max-w-[560px]" : size === "xl" ? "max-w-[1280px]" : "max-w-[660px]"}`}
       >
         <div className="mb-1 flex items-center justify-between gap-3 p-4 pb-3 sm:p-5 sm:pb-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">

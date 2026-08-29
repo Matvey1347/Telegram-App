@@ -45,7 +45,10 @@ describe('AdHypothesesService', () => {
     ]);
     count.mockResolvedValue(1);
     transaction.mockRejectedValue(new Error('should not use transaction'));
-    service = new AdHypothesesService(prisma as never, workspaceService as never);
+    service = new AdHypothesesService(
+      prisma as never,
+      workspaceService as never,
+    );
   });
 
   it('lists hypotheses without wrapping read queries in a Prisma transaction', async () => {
@@ -70,13 +73,43 @@ describe('AdHypothesesService', () => {
     });
 
     expect(transaction).not.toHaveBeenCalled();
-    expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { workspaceId: 'ws-1' },
-        skip: 0,
-        take: 20,
-      }),
+    type ListOperation = {
+      where: unknown;
+      select: Record<string, unknown>;
+      skip: number;
+      take: number;
+    };
+    const listOperation = (
+      findMany.mock.calls as unknown as Array<[ListOperation]>
+    )[0][0];
+    expect(listOperation.where).toEqual({ workspaceId: 'ws-1' });
+    expect(listOperation.skip).toBe(0);
+    expect(listOperation.take).toBe(20);
+    expect(listOperation.select).not.toHaveProperty('createdByUser');
+    expect(JSON.stringify(listOperation.select)).toContain('"adCampaign"');
+    expect(JSON.stringify(listOperation.select)).not.toContain(
+      '"admissionAnalytics"',
     );
     expect(count).toHaveBeenCalledWith({ where: { workspaceId: 'ws-1' } });
+  });
+
+  it('uses one workspace-scoped search predicate for hypothesis data and count', async () => {
+    let findWhere: unknown;
+    let countWhere: unknown;
+    findMany.mockImplementation((query: { where: unknown }) => {
+      findWhere = query.where;
+      return Promise.resolve([]);
+    });
+    count.mockImplementation((query: { where: unknown }) => {
+      countWhere = query.where;
+      return Promise.resolve(0);
+    });
+    await service.list('user-1', { search: 'scale' });
+
+    expect(findWhere).toBe(countWhere);
+    expect(JSON.stringify(findWhere)).toContain('"workspaceId":"ws-1"');
+    expect(JSON.stringify(findWhere)).toContain('"conclusion"');
+    expect(JSON.stringify(findWhere)).toContain('"telegramChannel"');
+    expect(JSON.stringify(findWhere)).toContain('"campaigns"');
   });
 });

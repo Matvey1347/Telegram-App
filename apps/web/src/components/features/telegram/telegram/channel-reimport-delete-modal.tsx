@@ -104,17 +104,6 @@ export function ChannelReimportDeleteModal({
   const [content, setContent] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const posts = useQuery({
-    queryKey: telegramPostKeys.managed(channelId),
-    queryFn: () => telegramChannelsApi.managedPosts(channelId),
-    enabled: open,
-  });
-  const groups = useQuery({
-    queryKey: telegramPostKeys.postGroups(channelId),
-    queryFn: () =>
-      telegramChannelsApi.postGroups({ telegramChannelId: channelId }),
-    enabled: open,
-  });
   const parsed = useMemo(() => {
     if (!content.trim()) return { value: null, error: "" };
     try {
@@ -127,15 +116,34 @@ export function ChannelReimportDeleteModal({
       };
     }
   }, [content]);
-  const postById = new Map((posts.data || []).map((post) => [post.id, post]));
+  const posts = useQuery({
+    queryKey: ["telegram-managed-post-lookup", channelId, parsed.value?.postIds],
+    queryFn: () =>
+      telegramChannelsApi.lookupManagedPosts(
+        channelId,
+        parsed.value?.postIds ?? [],
+      ),
+    enabled: open && Boolean(parsed.value?.postIds.length),
+  });
+  const groups = useQuery({
+    queryKey: telegramPostKeys.postGroups(channelId),
+    queryFn: () =>
+      telegramChannelsApi.postGroupSummaries(channelId),
+    enabled: open && Boolean(parsed.value?.groupIds.length),
+  });
+  const postById = new Map(
+    (posts.data?.items || []).map((post) => [post.id, post]),
+  );
   const groupById = new Map(
     (groups.data || []).map((group) => [group.id, group]),
   );
-  const previewLoading = posts.isPending || groups.isPending;
+  const previewLoading =
+    (Boolean(parsed.value?.postIds.length) && posts.isPending) ||
+    (Boolean(parsed.value?.groupIds.length) && groups.isPending);
   const unknownIds =
     parsed.value && !previewLoading
       ? [
-          ...parsed.value.postIds.filter((id) => !postById.has(id)),
+          ...(posts.data?.missingIds ?? parsed.value.postIds.filter((id) => !postById.has(id))),
           ...parsed.value.groupIds.filter((id) => !groupById.has(id)),
         ]
       : [];
@@ -195,7 +203,7 @@ export function ChannelReimportDeleteModal({
       }
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: telegramPostKeys.managed(channelId),
+          queryKey: telegramPostKeys.managedLists(channelId),
         }),
         queryClient.invalidateQueries({
           queryKey: telegramPostKeys.managedCalendar(channelId),

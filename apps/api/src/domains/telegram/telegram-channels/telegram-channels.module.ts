@@ -56,10 +56,10 @@ import { TelegramManagedPostPresentationService } from './telegram-managed-post-
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
 import { TelegramManagedPostPublisherService } from './telegram-managed-post-publisher.service';
 import { TelegramManagedPostQueryService } from './telegram-managed-post-query.service';
+import { TelegramManagedPostSyntheticReadService } from './telegram-managed-post-synthetic-read.service';
 import { TelegramManagedPostReconciliationService } from './telegram-managed-post-reconciliation.service';
 import { TelegramManagedPostRemoteSyncService } from './telegram-managed-post-remote-sync.service';
 import { TelegramManagedPostRemoteLoaderService } from './telegram-managed-post-remote-loader.service';
-import { TelegramManagedPostAutoRepairService } from './telegram-managed-post-auto-repair.service';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 import { TelegramPostGroupStore } from './telegram-post-group.store';
@@ -70,12 +70,18 @@ import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-
 import { TelegramSystemPostGroupsService } from './telegram-system-post-groups.service';
 import { TelegramManagedPostRecoveryController } from './telegram-managed-post-recovery.controller';
 import { TelegramManagedPostScheduledResetService } from './telegram-managed-post-scheduled-reset.service';
+import { TelegramPostCalendarPlannerController } from './telegram-post-calendar-planner.controller';
+import { TelegramChannelBoundedReadsController } from './telegram-channel-bounded-reads.controller';
+import { TelegramManagedPostLookupService } from './telegram-managed-post-lookup.service';
+import { TelegramPostGroupSummaryReadService } from './telegram-post-group-summary-read.service';
 
 @Module({
   imports: [AdCampaignsModule],
   controllers: [
     TelegramChannelsController,
     TelegramManagedPostRecoveryController,
+    TelegramPostCalendarPlannerController,
+    TelegramChannelBoundedReadsController,
   ],
   providers: [
     TelegramChannelsService,
@@ -110,10 +116,10 @@ import { TelegramManagedPostScheduledResetService } from './telegram-managed-pos
     TelegramPostGroupStore,
     TelegramSystemPostGroupsService,
     TelegramManagedPostQueryService,
+    TelegramManagedPostSyntheticReadService,
     TelegramManagedPostReconciliationService,
     TelegramManagedPostRemoteSyncService,
     TelegramManagedPostRemoteLoaderService,
-    TelegramManagedPostAutoRepairService,
     TelegramRemoteScheduledPostImportService,
     TelegramPostMediaBackfillService,
     TelegramManagedPostMediaStorageService,
@@ -146,6 +152,8 @@ import { TelegramManagedPostScheduledResetService } from './telegram-managed-pos
     TelegramManagedPostLinksService,
     TelegramManagedPostImportService,
     TelegramManagedPostImportParserService,
+    TelegramManagedPostLookupService,
+    TelegramPostGroupSummaryReadService,
   ],
   exports: [
     TelegramChannelsService,

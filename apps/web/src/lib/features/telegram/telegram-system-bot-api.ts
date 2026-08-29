@@ -57,6 +57,8 @@ export function createTelegramSystemBotApi(api: AxiosInstance) {
       (
         await api.post<{ success: boolean }>(
           "/telegram/system-bot/connection/workspace",
+          undefined,
+          silentFeedback,
         )
       ).data,
     prepareAdSalePostImport: async () =>

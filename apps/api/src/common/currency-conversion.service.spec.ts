@@ -39,4 +39,26 @@ describe('CurrencyConversionService', () => {
       service(rates).getRateMetadata('USD', 'UAH', 'workspace', new Date()),
     ).resolves.toEqual(expect.objectContaining({ available: true, rate: 40 }));
   });
+
+  it('reuses one prepared graph across repeated request-scoped conversions', async () => {
+    const findMany = jest.fn().mockResolvedValue([
+      { baseCurrency: 'PLN', targetCurrency: 'USD', rate: 0.25, date: now },
+      { baseCurrency: 'PLN', targetCurrency: 'UAH', rate: 10, date: now },
+    ]);
+    const conversion = new CurrencyConversionService({
+      exchangeRate: { findMany },
+    } as any);
+
+    const source = await conversion.prepareRateSource('workspace');
+
+    await expect(source.getRate('USD', 'UAH')).resolves.toBe(40);
+    await expect(source.convertCurrency(2, 'UAH', 'USD')).resolves.toBeCloseTo(
+      0.05,
+    );
+    await expect(source.getRate('USD', 'USD')).resolves.toBe(1);
+    expect(findMany).toHaveBeenCalledTimes(1);
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { workspaceId: 'workspace' } }),
+    );
+  });
 });

@@ -128,6 +128,8 @@ describe("ChannelEconomicsSummary", () => {
   });
 
   it("shows combined spend with a detailed tooltip and format prices", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-23T10:00:00"));
     const { container } = render(
       <ChannelEconomicsSummary
         channel={
@@ -203,6 +205,7 @@ describe("ChannelEconomicsSummary", () => {
         }
       />,
     );
+    vi.useRealTimers();
 
     expect(screen.getByText("29.500 UAH")).toBeInTheDocument();
     expect(screen.queryByText("21.500 UAH remaining")).not.toBeInTheDocument();
@@ -278,8 +281,8 @@ describe("ChannelEconomicsSummary", () => {
       screen.queryByText("Currency for all economics"),
     ).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "USD" }));
-    expect(screen.getByRole("button", { name: "UAH" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /USD/ }));
+    expect(screen.getByRole("button", { name: /UAH/ })).toBeInTheDocument();
   });
 
   it("loads placement formats only inside economics and exposes compact management actions", async () => {

@@ -60,7 +60,7 @@ export function TelegramChannelAdSalesSection({
           </p>
         </div>
         <Link
-          href={`/ad-sales?tab=analytics&channelId=${channelId}`}
+          href={`/ad-sales/analytics?channelId=${encodeURIComponent(channelId)}`}
           className="inline-flex items-center rounded-lg border border-slate-700 bg-slate-900/30 px-3 py-1.5 text-xs font-medium text-blue-300 transition hover:border-slate-600 hover:bg-slate-900/60 hover:text-blue-200"
         >
           Open full module

@@ -26,6 +26,10 @@ export type TelegramBotCommand = {
   description: string;
 };
 
+export type TelegramBotCommandScope =
+  | { type: 'default' }
+  | { type: 'all_private_chats' };
+
 export type TelegramChatMenuButton =
   | { type: 'default' }
   | { type: 'commands' }
@@ -108,10 +112,12 @@ export class TelegramBotApiClient {
     token: string,
     commands: TelegramBotCommand[],
     languageCode?: string,
+    scope?: TelegramBotCommandScope,
   ) {
     return this.call<boolean>(token, 'setMyCommands', {
       commands,
       ...(languageCode ? { language_code: languageCode } : {}),
+      ...(scope ? { scope } : {}),
     });
   }
 

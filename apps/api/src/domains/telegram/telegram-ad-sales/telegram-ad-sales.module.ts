@@ -8,7 +8,10 @@ import { TelegramAdSalesCheckoutService } from './telegram-ad-sales-checkout.ser
 import { TelegramAdSalesCrmAdvertisersService } from './telegram-ad-sales-crm-advertisers.service';
 import { TelegramAdSalesCrmSettingsService } from './telegram-ad-sales-crm-settings.service';
 import { TelegramAdSalesController } from './telegram-ad-sales.controller';
+import { TelegramAdSalesReadController } from './telegram-ad-sales-read.controller';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
+import { TelegramAdSalesQuotePreviewService } from './telegram-ad-sales-quote-preview.service';
+import { TelegramAdSalesSaleReadService } from './telegram-ad-sales-sale-read.service';
 import { TelegramAdPlacementLifecycleService } from './telegram-ad-placement-lifecycle.service';
 import { TelegramAdSalesBotCommandService } from './telegram-ad-sales-bot-command.service';
 import { TelegramAdSalesBotCommandExecutorService } from './telegram-ad-sales-bot-command-executor.service';
@@ -26,9 +29,11 @@ import { TelegramAdSalesPlacementOptionsService } from './telegram-ad-sales-plac
     ApplicationLogsModule,
     FinanceCategoriesModule,
   ],
-  controllers: [TelegramAdSalesController],
+  controllers: [TelegramAdSalesReadController, TelegramAdSalesController],
   providers: [
     TelegramAdSalesService,
+    TelegramAdSalesQuotePreviewService,
+    TelegramAdSalesSaleReadService,
     TelegramAdSalesBulkService,
     TelegramAdSalesCheckoutService,
     TelegramAdSalesCrmAdvertisersService,

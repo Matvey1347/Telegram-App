@@ -54,6 +54,7 @@ import { IconPicker } from "@/components/icons/icon-picker";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageTabHead } from "@/components/layout/page-tab-head";
 import { ManagedPostsImportModal } from "@/components/features/telegram/telegram/managed-posts-import-modal";
+import { AddPostsModal } from "@/components/features/telegram/telegram/add-posts-to-group-modal";
 import { GptContextDownloadButton } from "@/components/features/telegram/telegram/gpt-context-download-button";
 import { PostGroupsImportModal } from "@/components/features/telegram/telegram/post-groups-import-modal";
 import { ChannelReimportDeleteModal } from "@/components/features/telegram/telegram/channel-reimport-delete-modal";
@@ -69,6 +70,8 @@ import { CalendarPostGroupSection } from "@/components/features/telegram/telegra
 import { AutoCalendarPlannerPreview } from "@/components/features/telegram/telegram/auto-calendar-planner-preview";
 import { CalendarPlanImport } from "@/components/features/telegram/telegram/calendar-plan-import";
 import { serializeCalendarPlanImport } from "@/components/features/telegram/telegram/calendar-plan-import-model";
+import { useManagedPostDeepLink } from "@/components/features/telegram/telegram/use-managed-post-deep-link";
+import { includeDeepLinkedManagedPost } from "@/components/features/telegram/telegram/managed-post-page";
 import {
   LongImageTextModePanel,
   PostStatusIcon,
@@ -98,7 +101,12 @@ import {
 } from "@/components/features/telegram/telegram/telegram-text-editor";
 import { TelegramPostPreview } from "@/components/features/telegram/telegram/telegram-post-preview";
 import { TelegramCustomEmojiPacksModal } from "@/components/features/telegram/telegram/telegram-custom-emoji-packs-modal";
-import { upsertManagedPostInCache } from "@/components/features/telegram/telegram/managed-post-cache";
+import {
+  mapManagedPostPages,
+  reconcileManagedPost,
+  restoreManagedPostPages,
+  snapshotManagedPostPages,
+} from "@/components/features/telegram/telegram/managed-post-cache";
 import { useManagedPostDueRefresh } from "@/components/features/telegram/telegram/use-managed-post-due-refresh";
 import { ManagedPostHistoryModal } from "@/components/features/telegram/telegram/managed-post-history-modal";
 import { ManagedPostExportButton } from "@/components/features/telegram/telegram/managed-post-export-button";
@@ -188,6 +196,7 @@ import {
 import { useAppToast } from "@/providers/toast-provider";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
+import { BulkProgressOverlay, CalendarSummaryCard, ChannelMultiSelect, PromptNotesButton, type ProgressState } from "@/components/features/telegram/telegram/telegram-posts-workspace-controls";
 type PublishingMode = "draft" | "publish" | "schedule";
 type PostStatusTab = ManagedPostStatusTab;
 type PostViewMode = Exclude<TelegramPostsRouteView, "groups">;
@@ -1050,7 +1059,6 @@ function TelegramPostWorkspace({
   const sidebarReorderVersionRef = useRef(0);
   const sidebarReorderQueueRef = useRef<Promise<void>>(Promise.resolve());
   const postOpenTimerRef = useRef<number | null>(null);
-  const calendarSyncRefreshKeyRef = useRef("");
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [deletingPost, setDeletingPost] = useState<TelegramManagedPost | null>(
     null,
@@ -1067,14 +1075,30 @@ function TelegramPostWorkspace({
   const [creatingPostId, setCreatingPostId] = useState<string | null>(null);
   const creatingPostIdRef = useRef<string | null>(null);
   const [savingPostIds, setSavingPostIds] = useState<string[]>([]);
-  const posts = useQuery({
-    queryKey: ["telegram-managed-posts", channelId],
-    queryFn: () => telegramChannelsApi.managedPosts(channelId),
+  const postsPagination = usePagination({ initialPageSize: 50 });
+  const postsPage = useQuery({
+    queryKey: telegramPostKeys.managedList(channelId, {
+      page: postsPagination.page,
+      pageSize: postsPagination.pageSize,
+    }),
+    queryFn: () => telegramChannelsApi.managedPostsPage(channelId, {
+      page: postsPagination.page, pageSize: postsPagination.pageSize,
+    }),
+    placeholderData: keepPreviousData,
   });
+  const deepLinkedPost = useManagedPostDeepLink({
+    channelId, postId: initialPostId, queryClient,
+  });
+  const pagePosts = postsPage.data?.items ?? [];
+  const posts = {
+    ...postsPage,
+    data: includeDeepLinkedManagedPost(pagePosts, deepLinkedPost.data),
+  };
   const customEmojiPacks = useQuery({
     queryKey: telegramChannelKeys.customEmojiPacks(channelId),
     queryFn: () => telegramChannelsApi.customEmojiPacks(channelId),
-    enabled: Boolean(channelId),
+    enabled:
+      Boolean(channelId) && workspaceView === "posts" && postView === "editor",
   });
   const refreshCustomEmojiPacks = useCallback(async () => {
     await queryClient.invalidateQueries({
@@ -1127,7 +1151,7 @@ function TelegramPostWorkspace({
   const postGroups = useQuery({
     queryKey: ["post-groups", channelId],
     queryFn: () =>
-      telegramChannelsApi.postGroups({ telegramChannelId: channelId }),
+      telegramChannelsApi.postGroupSummaries(channelId),
     enabled: workspaceView === "posts",
   });
   const plannerFormats = useQuery({
@@ -1143,42 +1167,27 @@ function TelegramPostWorkspace({
   const promptNotes = useQuery({
     queryKey: ["prompt-notes", { telegramChannelId: channelId }],
     queryFn: () => promptNotesApi.list({ telegramChannelId: channelId }),
+    enabled: workspaceView === "posts" && postView === "editor",
   });
   const members = useQuery({
     queryKey: memberKeys.membersSelect(),
     queryFn: () => workspaceMembersApi.select(),
+    enabled: workspaceView === "posts" && postView === "editor",
   });
 
   useEffect(() => {
+    if (workspaceView !== "posts" || postView !== "editor") return;
     void queryClient.invalidateQueries({
       queryKey: ["telegram-managed-post-link-targets", channelId],
     });
-  }, [channelId, postGroups.data, posts.data, queryClient]);
-
-  useEffect(() => {
-    if (workspaceView !== "posts" || postView !== "calendar") return;
-    if (!calendarData.data) return;
-    const refreshKey = JSON.stringify({
-      channelId,
-      from: calendarData.data.from,
-      to: calendarData.data.to,
-      items: calendarData.data.items.length,
-      scheduledInRange: calendarData.data.summary.scheduledInRange,
-      publishedInRange: calendarData.data.summary.publishedInRange,
-      futureScheduledTotal: calendarData.data.summary.futureScheduledTotal,
-      lastScheduledAt: calendarData.data.summary.lastScheduledAt,
-    });
-    if (calendarSyncRefreshKeyRef.current === refreshKey) return;
-    calendarSyncRefreshKeyRef.current = refreshKey;
-    void Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: ["telegram-managed-posts", channelId],
-      }),
-      queryClient.invalidateQueries({
-        queryKey: ["post-groups", channelId],
-      }),
-    ]);
-  }, [calendarData.data, channelId, postView, queryClient, workspaceView]);
+  }, [
+    channelId,
+    postGroups.data,
+    postView,
+    posts.data,
+    queryClient,
+    workspaceView,
+  ]);
 
   useEffect(
     () => () => {
@@ -1909,7 +1918,7 @@ function TelegramPostWorkspace({
   const invalidatePlannerCalendar = async () => {
     await Promise.all([
       queryClient.invalidateQueries({
-        queryKey: telegramPostKeys.managed(channelId),
+        queryKey: telegramPostKeys.managedLists(channelId),
       }),
       queryClient.invalidateQueries({
         queryKey: telegramPostKeys.managedCalendar(channelId),
@@ -2675,7 +2684,7 @@ function TelegramPostWorkspace({
       );
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: ["telegram-managed-posts", channelId],
+          queryKey: telegramPostKeys.managedLists(channelId),
         }),
         queryClient.invalidateQueries({
           queryKey: ["telegram-managed-posts-calendar", channelId],
@@ -2734,9 +2743,7 @@ function TelegramPostWorkspace({
       sidebarReorderQueueRef.current = sidebarReorderQueueRef.current
         .catch(() => undefined)
         .then(async () => {
-          const previousPosts = queryClient.getQueryData<TelegramManagedPost[]>(
-            ["telegram-managed-posts", channelId],
-          );
+          const previousPosts = snapshotManagedPostPages(queryClient, channelId);
           const previousGroups = queryClient.getQueryData<PostGroup[]>([
             "post-groups",
             channelId,
@@ -2744,10 +2751,9 @@ function TelegramPostWorkspace({
           const orderIndex = new Map(
             completeOrder.map((key, index) => [key, index]),
           );
-          queryClient.setQueryData<TelegramManagedPost[]>(
-            ["telegram-managed-posts", channelId],
-            (current) =>
-              current?.map((post) =>
+          mapManagedPostPages(queryClient, channelId, (current) => ({
+            ...current,
+            items: current.items.map((post) =>
                 post.groupId
                   ? post
                   : {
@@ -2757,7 +2763,7 @@ function TelegramPostWorkspace({
                         post.sidebarPosition,
                     },
               ),
-          );
+          }));
           queryClient.setQueryData<PostGroup[]>(
             ["post-groups", channelId],
             (current) =>
@@ -2776,7 +2782,7 @@ function TelegramPostWorkspace({
             if (version !== sidebarReorderVersionRef.current) return;
             await Promise.all([
               queryClient.invalidateQueries({
-                queryKey: ["telegram-managed-posts", channelId],
+                queryKey: telegramPostKeys.managedLists(channelId),
               }),
               queryClient.invalidateQueries({
                 queryKey: ["post-groups", channelId],
@@ -2786,10 +2792,7 @@ function TelegramPostWorkspace({
             pushToast("New sidebar order saved.", "success", 3000);
           } catch (reorderError) {
             if (version !== sidebarReorderVersionRef.current) return;
-            queryClient.setQueryData(
-              ["telegram-managed-posts", channelId],
-              previousPosts,
-            );
+            restoreManagedPostPages(queryClient, previousPosts);
             queryClient.setQueryData(
               ["post-groups", channelId],
               previousGroups,
@@ -3012,7 +3015,7 @@ function TelegramPostWorkspace({
     onSuccess: async (post) => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: ["telegram-managed-posts", channelId],
+          queryKey: telegramPostKeys.managedLists(channelId),
         }),
         queryClient.invalidateQueries({
           queryKey: ["telegram-managed-post-history", channelId, post.id],
@@ -3061,7 +3064,7 @@ function TelegramPostWorkspace({
       selectPost(post);
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: ["telegram-managed-posts", channelId],
+          queryKey: telegramPostKeys.managedLists(channelId),
         }),
         queryClient.invalidateQueries({
           queryKey: ["telegram-managed-posts-calendar", channelId],
@@ -3109,7 +3112,7 @@ function TelegramPostWorkspace({
     onPostSelect(post.id);
   };
 
-  const openPostInNewTab = (post: TelegramManagedPost) => {
+  const openPostInNewTab = (post: { id: string }) => {
     window.open(
       buildTelegramPostsUrl({
         channelId,
@@ -3225,7 +3228,7 @@ function TelegramPostWorkspace({
       );
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: ["telegram-managed-posts", channelId],
+          queryKey: telegramPostKeys.managedLists(channelId),
         }),
         queryClient.invalidateQueries({ queryKey: ["post-groups", channelId] }),
       ]);
@@ -3375,7 +3378,7 @@ function TelegramPostWorkspace({
     }
     changeStatusTab(nextStatusTab);
     void (async () => {
-      try {
+      let persisted = false; try {
         if (saveMode === "publish" || saveMode === "schedule") {
           if (!channelPublishingCapabilities?.source) {
             throw new Error(
@@ -3403,6 +3406,7 @@ function TelegramPostWorkspace({
               payload,
               true,
             );
+        persisted = true;
         if (saveGroupId && saveGroupId !== (editingPost?.groupId ?? null)) {
           const group = await telegramChannelsApi.addPostsToGroup(
             saveGroupId,
@@ -3458,10 +3462,10 @@ function TelegramPostWorkspace({
             true,
           );
         }
-        queryClient.setQueryData<TelegramManagedPost[]>(
-          telegramPostKeys.managed(channelId),
-          (current) => upsertManagedPostInCache(current, post),
-        );
+        reconcileManagedPost(queryClient, channelId, post);
+        if (!editingPost) {
+          await queryClient.invalidateQueries({ queryKey: telegramPostKeys.managedLists(channelId) });
+        }
         if (editingPost) {
           setEditing((current) => (current?.id === post.id ? post : current));
         } else if (creatingPostIdRef.current === pendingId) {
@@ -3501,6 +3505,13 @@ function TelegramPostWorkspace({
           toastIcon,
         );
       } catch (runError) {
+        if (persisted) {
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: telegramPostKeys.managedLists(channelId) }),
+            queryClient.invalidateQueries({ queryKey: telegramPostKeys.managedCalendar(channelId) }),
+            queryClient.invalidateQueries({ queryKey: telegramPostKeys.linkTargets(channelId) }),
+          ]);
+        }
         pushToast(
           apiErrorMessage(runError, `Could not save "${saveTitle}"`),
           "error",
@@ -6121,6 +6132,14 @@ function TelegramPostWorkspace({
                 }
               />
             ) : null}
+            {postsPage.data ? (
+              <Pagination
+                {...postsPage.data.pagination}
+                onPageChange={postsPagination.setPage}
+                onPageSizeChange={postsPagination.setPageSize}
+                loading={postsPage.isLoading || postsPage.isPlaceholderData}
+              />
+            ) : null}
           </Card>
         </div>
       )}
@@ -6152,7 +6171,7 @@ function TelegramPostWorkspace({
             setMovingPost(null);
             await Promise.all([
               queryClient.invalidateQueries({
-                queryKey: ["telegram-managed-posts", channelId],
+                queryKey: telegramPostKeys.managedLists(channelId),
               }),
               queryClient.invalidateQueries({
                 queryKey: ["post-groups", channelId],
@@ -6280,546 +6299,6 @@ function TelegramPostWorkspace({
         }}
       />
     </>
-  );
-}
-
-type ProgressState = {
-  title: string;
-  current: number;
-  total: number;
-  item?: BulkActionResult["results"][number];
-  result?: BulkActionResult;
-};
-
-function BulkProgressOverlay({ progress }: { progress: ProgressState | null }) {
-  if (!progress || typeof document === "undefined") return null;
-  return createPortal(
-    <div className="fixed inset-x-0 top-4 z-[150] flex justify-center px-4">
-      <div className="w-full max-w-xl rounded-xl border border-blue-600/70 bg-neutral-950 p-4 shadow-2xl">
-        <div className="flex items-center gap-3">
-          {!progress.result ? (
-            <LoaderCircle className="animate-spin text-blue-400" size={20} />
-          ) : progress.result.failedCount ? (
-            <AlertTriangle className="text-amber-400" size={20} />
-          ) : (
-            <CheckCircle2 className="text-emerald-400" size={20} />
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between gap-3">
-              <p className="font-medium text-white">{progress.title}</p>
-              <span className="text-sm text-neutral-300">
-                {progress.current}/{progress.total}
-              </span>
-            </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-neutral-800">
-              <div
-                className="h-full bg-blue-500 transition-all"
-                style={{
-                  width: `${progress.total ? (progress.current / progress.total) * 100 : 0}%`,
-                }}
-              />
-            </div>
-            {progress.item?.message ? (
-              <p className="mt-2 text-sm text-neutral-300">
-                {progress.item.message}
-              </p>
-            ) : (
-              <p className="mt-2 text-sm text-neutral-400">
-                Waiting for the server…
-              </p>
-            )}
-            {progress.result ? (
-              <p className="mt-1 text-xs text-neutral-400">
-                Completed: {progress.result.successCount} success,{" "}
-                {progress.result.failedCount} failed,{" "}
-                {progress.result.skippedCount} skipped
-              </p>
-            ) : null}
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-function promptNoteTitle(note: PromptNote) {
-  return note.title.trim() || "Untitled prompt";
-}
-
-function promptNoteDisplayTitle(note: PromptNote) {
-  return note.title.trim();
-}
-
-function CalendarSummaryCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-xl border border-neutral-800 bg-neutral-950/70 px-4 py-3">
-      <div className="text-xs uppercase tracking-[0.18em] text-neutral-500">
-        {label}
-      </div>
-      <div className="mt-2 text-2xl font-semibold text-white">{value}</div>
-    </div>
-  );
-}
-
-function PromptNotesButton({
-  channelId,
-  notes,
-  isLoading,
-  channels,
-  currentMemberId,
-  initialNoteId,
-}: {
-  channelId: string;
-  notes: PromptNote[];
-  isLoading: boolean;
-  channels: TelegramChannel[];
-  currentMemberId: string | null;
-  initialNoteId: string;
-}) {
-  const queryClient = useQueryClient();
-  const { pushToast } = useAppToast();
-  const clickTimerRef = useRef<number | null>(null);
-  const openedFromSearchRef = useRef("");
-  const [editing, setEditing] = useState<PromptNote | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
-
-  useEffect(
-    () => () => {
-      if (clickTimerRef.current) window.clearTimeout(clickTimerRef.current);
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (!initialNoteId) {
-      openedFromSearchRef.current = "";
-      return;
-    }
-    if (openedFromSearchRef.current === initialNoteId) return;
-    const note = notes.find((item) => item.id === initialNoteId);
-    if (!note) return;
-    setCreating(false);
-    setEditing(note);
-    setOpen(true);
-    openedFromSearchRef.current = initialNoteId;
-  }, [initialNoteId, notes]);
-
-  const invalidate = () =>
-    queryClient.invalidateQueries({
-      queryKey: ["prompt-notes", { telegramChannelId: channelId }],
-    });
-
-  const copyNote = async (note: PromptNote) => {
-    await navigator.clipboard.writeText(note.content);
-    setCopiedId(note.id);
-    pushToast(`Prompt “${promptNoteTitle(note)}” copied.`, "success", 1800);
-    window.setTimeout(
-      () => setCopiedId((current) => (current === note.id ? null : current)),
-      1400,
-    );
-  };
-
-  const openWithDelay = (note: PromptNote) => {
-    if (clickTimerRef.current) window.clearTimeout(clickTimerRef.current);
-    clickTimerRef.current = window.setTimeout(() => {
-      setEditing(note);
-      clickTimerRef.current = null;
-    }, POST_OPEN_CLICK_DELAY_MS);
-  };
-
-  const copyOnDoubleClick = (note: PromptNote) => {
-    if (clickTimerRef.current) {
-      window.clearTimeout(clickTimerRef.current);
-      clickTimerRef.current = null;
-    }
-    void copyNote(note);
-  };
-
-  const removeNote = useMutation({
-    mutationFn: promptNotesApi.remove,
-    onSuccess: async () => {
-      await invalidate();
-      pushToast("Prompt note deleted.", "success");
-      setEditing(null);
-      setOpen(false);
-    },
-  });
-
-  return (
-    <>
-      <Button
-        variant="secondary"
-        className="h-10 shrink-0 px-3 py-1.5"
-        onClick={() => setOpen(true)}
-      >
-        <span className="inline-flex items-center gap-2">
-          <span className="text-sm">✏️</span>
-          Notes
-        </span>
-      </Button>
-      <Modal
-        open={open}
-        title="Prompt notes"
-        onClose={() => {
-          setOpen(false);
-          setCreating(false);
-          setEditing(null);
-        }}
-      >
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-sm text-neutral-400">
-              Notes for this channel
-            </div>
-            <Button onClick={() => setCreating(true)}>
-              <span className="inline-flex items-center gap-1.5">
-                <Plus size={14} />
-                Add note
-              </span>
-            </Button>
-          </div>
-          {isLoading ? (
-            <div className="flex items-center gap-2 px-2 text-sm text-neutral-400">
-              <LoaderCircle size={14} className="animate-spin" />
-              Loading…
-            </div>
-          ) : notes.length ? (
-            <div className="grid gap-2 sm:grid-cols-2">
-              {notes.map((note) => {
-                const displayTitle = promptNoteDisplayTitle(note);
-                return (
-                  <button
-                    key={note.id}
-                    type="button"
-                    onClick={() => openWithDelay(note)}
-                    onDoubleClick={() => copyOnDoubleClick(note)}
-                    className="group flex min-h-16 items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-3 text-left transition hover:border-blue-700 hover:bg-blue-950/20"
-                  >
-                    {copiedId === note.id ? (
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-950/70 text-blue-200">
-                        <Check size={14} />
-                      </span>
-                    ) : note.iconPresentation ? (
-                      <IconAvatar
-                        icon={note.iconPresentation}
-                        label={displayTitle || "Prompt"}
-                        size="xs"
-                        className="!h-7 !w-7"
-                      />
-                    ) : (
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-950/70 text-sm">
-                        {note.emoji || "📝"}
-                      </span>
-                    )}
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-white">
-                        {displayTitle || "Untitled prompt"}
-                      </span>
-                    </span>
-                    <TooltipBubble
-                      side="bottom"
-                      align="center"
-                      className="max-w-64 px-2.5 py-1.5 text-neutral-200 opacity-0 transition-opacity group-hover:opacity-100"
-                    >
-                      Double-click to copy
-                    </TooltipBubble>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="rounded-lg border border-dashed border-neutral-800 px-4 py-6 text-center text-sm text-neutral-500">
-              No prompts for this channel
-            </div>
-          )}
-        </div>
-      </Modal>
-      <PromptNoteEditorModal
-        key={editing?.id || (creating ? "new" : "closed")}
-        open={creating || Boolean(editing)}
-        note={editing}
-        channelId={channelId}
-        channels={channels}
-        currentMemberId={currentMemberId}
-        onClose={() => {
-          setCreating(false);
-          setEditing(null);
-        }}
-        onSaved={invalidate}
-        onDelete={(note) => removeNote.mutate(note.id)}
-      />
-    </>
-  );
-}
-
-function PromptNoteEditorModal({
-  open,
-  note,
-  channelId,
-  channels,
-  currentMemberId,
-  onClose,
-  onSaved,
-  onDelete,
-}: {
-  open: boolean;
-  note: PromptNote | null;
-  channelId: string;
-  channels: TelegramChannel[];
-  currentMemberId: string | null;
-  onClose: () => void;
-  onSaved: () => Promise<unknown>;
-  onDelete: (note: PromptNote) => void;
-}) {
-  const { pushToast } = useAppToast();
-  const [iconId, setIconId] = useState<string | null>(note?.iconId || null);
-  const [title, setTitle] = useState(note?.title || "");
-  const [content, setContent] = useState(note?.content || "");
-  const [assignedMemberId, setAssignedMemberId] = useState<string | null>(
-    note?.assignedMemberId || currentMemberId,
-  );
-  const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>(
-    note
-      ? note.telegramChannelIds?.length
-        ? note.telegramChannelIds
-        : note.telegramChannelId
-          ? [note.telegramChannelId]
-          : []
-      : [],
-  );
-  const save = useMutation({
-    mutationFn: () =>
-      note
-        ? promptNotesApi.update(note.id, {
-            iconId,
-            title: title.trim(),
-            content,
-            assignedMemberId,
-            telegramChannelIds: selectedChannelIds,
-            postGroupId: null,
-          })
-        : promptNotesApi.create({
-            iconId,
-            title: title.trim(),
-            content,
-            assignedMemberId,
-            telegramChannelIds: selectedChannelIds,
-            postGroupId: null,
-          }),
-    onSuccess: async () => {
-      await onSaved();
-      pushToast(
-        note ? "Prompt note updated." : "Prompt note created.",
-        "success",
-      );
-    },
-  });
-
-  const close = () => {
-    onClose();
-  };
-
-  const submitSave = () => {
-    onClose();
-    void save.mutateAsync().catch(() => undefined);
-  };
-
-  return (
-    <Modal
-      open={open}
-      onClose={close}
-      title={note ? "Edit prompt note" : "Add prompt note"}
-      size="xl"
-    >
-      <div className="space-y-4">
-        <div className="grid gap-3 md:grid-cols-[auto_minmax(0,1fr)]">
-          <FormField label="Emoji">
-            <IconPicker
-              compact
-              iconId={iconId}
-              onChange={setIconId}
-              buttonLabel="Add emoji"
-            />
-          </FormField>
-          <FormField label="Title">
-            <Input
-              autoFocus
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Researcher prompt"
-            />
-          </FormField>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <FormField label="Member">
-            <MemberSelect
-              value={assignedMemberId}
-              onChange={(value) => setAssignedMemberId(value || null)}
-              defaultToCurrent
-            />
-          </FormField>
-          <FormField label="Show for">
-            <ChannelMultiSelect
-              channels={channels}
-              selectedIds={selectedChannelIds}
-              onChange={setSelectedChannelIds}
-            />
-          </FormField>
-        </div>
-        <FormField label="Prompt text">
-          <Textarea
-            rows={10}
-            value={content}
-            onChange={(event) => setContent(event.target.value)}
-            placeholder="Paste any amount of prompt text…"
-            className="min-h-[14rem] max-h-[calc(100dvh-28rem)] overflow-y-auto font-mono leading-6"
-          />
-        </FormField>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-xs text-neutral-500">
-            {content.length.toLocaleString()} characters
-          </span>
-          <div className="flex flex-wrap gap-2">
-            {note ? (
-              <Button variant="danger" onClick={() => onDelete(note)}>
-                <span className="inline-flex items-center gap-1.5">
-                  <Trash2 size={14} />
-                  Delete
-                </span>
-              </Button>
-            ) : null}
-            <Button
-              disabled={!title.trim() || !content.trim()}
-              onClick={submitSave}
-            >
-              {note ? "Save note" : "Create note"}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function ChannelMultiSelect({
-  channels,
-  selectedIds,
-  onChange,
-}: {
-  channels: TelegramChannel[];
-  selectedIds: string[];
-  onChange: (ids: string[]) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const selected = new Set(selectedIds);
-
-  useEffect(() => {
-    const onDocClick = (event: MouseEvent) => {
-      if (!rootRef.current) return;
-      if (!rootRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
-
-  const toggle = (channelId: string) => {
-    onChange(
-      selected.has(channelId)
-        ? selectedIds.filter((id) => id !== channelId)
-        : [...selectedIds, channelId],
-    );
-  };
-  const label = selectedIds.length
-    ? `${selectedIds.length} selected`
-    : "All channels";
-
-  return (
-    <div ref={rootRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white outline-none ring-blue-500 focus:ring"
-      >
-        <span className="min-w-0 truncate">{label}</span>
-        <ChevronDown
-          size={16}
-          className={`shrink-0 text-neutral-400 transition-transform ${
-            open ? "rotate-180" : ""
-          }`}
-        />
-      </button>
-      {open ? (
-        <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-xl">
-          <div className="flex items-center justify-between gap-2 border-b border-neutral-800 px-2 py-2">
-            <span className="truncate px-1 text-xs text-neutral-500">
-              Empty = visible in every channel
-            </span>
-            <div className="flex shrink-0 gap-1 text-xs">
-              <button
-                type="button"
-                onClick={() => onChange(channels.map((channel) => channel.id))}
-                className="rounded-md px-2 py-1 text-blue-300 hover:bg-blue-950/50"
-              >
-                Select all
-              </button>
-              <button
-                type="button"
-                onClick={() => onChange([])}
-                className="rounded-md px-2 py-1 text-neutral-400 hover:bg-neutral-800 hover:text-white"
-              >
-                All channels
-              </button>
-            </div>
-          </div>
-          <div className="max-h-60 overflow-y-auto p-1.5">
-            {channels.map((channel) => (
-              <button
-                key={channel.id}
-                type="button"
-                onClick={() => toggle(channel.id)}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-neutral-800"
-              >
-                <span
-                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                    selected.has(channel.id)
-                      ? "border-blue-500 bg-blue-600 text-white"
-                      : "border-neutral-600"
-                  }`}
-                >
-                  {selected.has(channel.id) ? <Check size={11} /> : null}
-                </span>
-                {channel.photoUrl ? (
-                  <span
-                    className="h-6 w-6 shrink-0 rounded-md bg-cover bg-center"
-                    style={{ backgroundImage: `url(${channel.photoUrl})` }}
-                    aria-hidden="true"
-                  />
-                ) : (
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-neutral-800 text-xs">
-                    {channel.title.trim()[0]?.toUpperCase() || "T"}
-                  </span>
-                )}
-                <span className="min-w-0 flex-1 truncate text-sm text-white">
-                  {channel.title}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </div>
   );
 }
 
@@ -7031,9 +6510,16 @@ function PostGroupsWorkspace({
     queryFn: () => telegramChannelsApi.postGroup(selectedGroupId as string),
     enabled: Boolean(selectedGroupId),
   });
+  const groupPostsPagination = usePagination({ initialPageSize: 50 });
   const posts = useQuery({
-    queryKey: ["telegram-managed-posts", channelId],
-    queryFn: () => telegramChannelsApi.managedPosts(channelId),
+    queryKey: ["telegram-managed-posts", channelId, "group-picker", {
+      page: groupPostsPagination.page, pageSize: groupPostsPagination.pageSize,
+    }],
+    queryFn: () => telegramChannelsApi.managedPostsPage(channelId, {
+      page: groupPostsPagination.page,
+      pageSize: groupPostsPagination.pageSize,
+    }),
+    placeholderData: keepPreviousData,
   });
   const [orderedPostIds, setOrderedPostIds] = useState<string[]>([]);
   const orderedPosts = useMemo(() => {
@@ -7138,9 +6624,7 @@ function PostGroupsWorkspace({
             "post-group",
             groupId,
           ]);
-          const previousPosts = queryClient.getQueryData<TelegramManagedPost[]>(
-            ["telegram-managed-posts", channelId],
-          );
+          const previousPosts = snapshotManagedPostPages(queryClient, channelId);
           const orderIndex = new Map(
             orderedPostIdsToSave.map((id, index) => [id, index]),
           );
@@ -7160,13 +6644,11 @@ function PostGroupsWorkspace({
                   }
                 : current,
           );
-          queryClient.setQueryData<TelegramManagedPost[]>(
-            ["telegram-managed-posts", channelId],
-            (current) =>
-              current
-                ? [
+          mapManagedPostPages(queryClient, channelId, (current) => ({
+            ...current,
+            items: [
                     ...normalizeManagedPostNumbering(
-                      current
+                      current.items
                         .filter((post) => orderIndex.has(post.id))
                         .map((post) => ({
                           ...post,
@@ -7174,10 +6656,9 @@ function PostGroupsWorkspace({
                             orderIndex.get(post.id) ?? post.groupPosition,
                         })),
                     ),
-                    ...current.filter((post) => !orderIndex.has(post.id)),
-                  ]
-                : current,
-          );
+                    ...current.items.filter((post) => !orderIndex.has(post.id)),
+                  ],
+          }));
           try {
             await telegramChannelsApi.reorderPostGroup(
               groupId,
@@ -7190,7 +6671,7 @@ function PostGroupsWorkspace({
                 queryKey: ["post-group", groupId],
               }),
               queryClient.invalidateQueries({
-                queryKey: ["telegram-managed-posts", channelId],
+                queryKey: telegramPostKeys.managedLists(channelId),
               }),
             ]);
             setOrderedPostIds([]);
@@ -7198,10 +6679,7 @@ function PostGroupsWorkspace({
           } catch (error) {
             if (version !== reorderVersionRef.current) return;
             queryClient.setQueryData(["post-group", groupId], previousDetail);
-            queryClient.setQueryData(
-              ["telegram-managed-posts", channelId],
-              previousPosts,
-            );
+            restoreManagedPostPages(queryClient, previousPosts);
             setOrderedPostIds([]);
             pushToast(
               apiErrorMessage(error, "Could not reorder posts"),
@@ -7532,7 +7010,11 @@ function PostGroupsWorkspace({
         {addPostsOpen ? (
           <AddPostsModal
             group={group}
-            posts={posts.data || []}
+            posts={posts.data?.items || []}
+            pagination={posts.data?.pagination}
+            onPageChange={groupPostsPagination.setPage}
+            onPageSizeChange={groupPostsPagination.setPageSize}
+            loading={posts.isLoading || posts.isPlaceholderData}
             onClose={() => setAddPostsOpen(false)}
             onAdded={async () => {
               setAddPostsOpen(false);
@@ -8116,79 +7598,6 @@ function GroupFormModal({
             }}
           >
             Save group
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function AddPostsModal({
-  group,
-  posts,
-  onClose,
-  onAdded,
-}: {
-  group?: PostGroup;
-  posts: TelegramManagedPost[];
-  onClose: () => void;
-  onAdded: () => Promise<void>;
-}) {
-  const [selected, setSelected] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-  const available = posts.filter((post) => post.groupId !== group?.id);
-  return (
-    <Modal open onClose={onClose} title="Add posts" loading={busy}>
-      <div className="space-y-3">
-        {available.length ? (
-          available.map((post) => (
-            <label
-              key={post.id}
-              className="flex items-center gap-3 rounded-lg border border-neutral-800 p-3"
-            >
-              <input
-                type="checkbox"
-                checked={selected.includes(post.id)}
-                onChange={() =>
-                  setSelected((current) =>
-                    current.includes(post.id)
-                      ? current.filter((id) => id !== post.id)
-                      : [...current, post.id],
-                  )
-                }
-              />
-              <PostIcon
-                iconId={post.icon}
-                icon={post.iconPresentation}
-                label={post.title}
-              />
-              <span className="min-w-0 flex-1 truncate text-sm">
-                {post.title}
-              </span>
-              <PostStatusIcon status={post.status} />
-            </label>
-          ))
-        ) : (
-          <EmptyState text="No posts available to add." />
-        )}
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            disabled={!group || !selected.length || busy}
-            onClick={async () => {
-              if (!group) return;
-              setBusy(true);
-              try {
-                await telegramChannelsApi.addPostsToGroup(group.id, selected);
-                await onAdded();
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            Add selected
           </Button>
         </div>
       </div>

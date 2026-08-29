@@ -6,6 +6,24 @@ type DeletionSource = {
   permissions: { canDeleteMessages: boolean };
 };
 
+export function resolveAdPlacementDeletionMessageIds(input: {
+  managedPost?: {
+    telegramMessageIds: string[];
+    telegramIdVerificationStatus: string;
+  } | null;
+  telegramPost?: { telegramMessageId: string } | null;
+}) {
+  const managedMessageIds = input.managedPost?.telegramMessageIds ?? [];
+  if (managedMessageIds.length) {
+    return input.managedPost?.telegramIdVerificationStatus === 'VERIFIED'
+      ? managedMessageIds
+      : [];
+  }
+  return input.telegramPost?.telegramMessageId
+    ? [input.telegramPost.telegramMessageId]
+    : [];
+}
+
 export function selectAdPlacementDeletionSource(
   sources: DeletionSource[],
   managedPost: {

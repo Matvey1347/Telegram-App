@@ -9,6 +9,7 @@ import {
 } from '@prisma/client';
 
 export const MANAGED_POST_IDENTITY_RETRY_MS = 45_000;
+export const MANAGED_POST_LOCAL_PUBLISHING_STALE_MS = 10 * 60_000;
 export const GREETER_BROADCAST_RETRY_MS = 5 * 60_000;
 export const GREETER_EXPIRY_RETRY_MS = 5 * 60_000;
 export const GREETER_AUTOMATION_RETRY_MS = 5 * 60_000;

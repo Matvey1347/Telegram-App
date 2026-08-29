@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { TelegramAdSale } from "@telegram-system/shared";
+import type { TelegramAdSaleListItem } from "@telegram-system/shared";
 import { Hourglass, MoreVertical, Pencil, Timer, Trash2 } from "lucide-react";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
@@ -20,14 +20,13 @@ import { formatDateTime } from "@/lib/date-format";
 import { nativeAdSalePayment } from "./ad-sale-native-payment";
 import {
   placementFormatLabel,
-  placementRunWindow,
   placementTimer,
 } from "./ad-placement-lifecycle";
 import { AdSalePostMetrics } from "./ad-sale-post-metrics";
 
 const panelClass = "rounded-[18px] border border-neutral-800 bg-[#111111]";
 
-function clientLabel(sale: TelegramAdSale) {
+function clientLabel(sale: TelegramAdSaleListItem) {
   return (
     sale.advertiserTelegramSnapshot ||
     sale.advertiserTelegram ||
@@ -38,7 +37,7 @@ function clientLabel(sale: TelegramAdSale) {
   );
 }
 
-function paymentLabel(sale: TelegramAdSale) {
+function paymentLabel(sale: TelegramAdSaleListItem) {
   const received = Number(sale.totalPaidAmount || 0);
   const outstanding = Number(sale.outstandingAmount || 0);
   if (received <= 0) return "Not paid";
@@ -46,7 +45,7 @@ function paymentLabel(sale: TelegramAdSale) {
   return "Money received";
 }
 
-type SalePlacement = TelegramAdSale["placements"][number];
+type SalePlacement = TelegramAdSaleListItem["placements"][number];
 
 function hasLinkedPlacementPost(placement: SalePlacement) {
   return Boolean(
@@ -60,15 +59,7 @@ function groupPlacementsByWindow(placements: SalePlacement[]) {
   return [
     ...placements
       .reduce((groups, placement) => {
-        const scheduledAt = new Date(placement.scheduledAt).getTime();
-        const publishedAt = placement.publishedAt
-          ? new Date(placement.publishedAt).getTime()
-          : null;
-        const startsAt =
-          publishedAt !== null && publishedAt > scheduledAt
-            ? publishedAt
-            : scheduledAt;
-        const key = `${startsAt}|${placement.plannedDeleteAt ?? ""}|${placement.publishedAt ? "published" : "scheduled"}`;
+        const key = String(new Date(placement.scheduledAt).getTime());
         const group = groups.get(key);
         if (group) group.push(placement);
         else groups.set(key, [placement]);
@@ -93,6 +84,23 @@ function placementScheduleRange(placements: SalePlacement[]) {
     .map((placement) => new Date(placement.scheduledAt).getTime())
     .sort((left, right) => left - right);
   return `Scheduled ${formatDateTime(new Date(scheduledTimes[0]).toISOString())} → ${formatDateTime(new Date(scheduledTimes.at(-1)!).toISOString())}`;
+}
+
+function placementLifecycleLabel(placements: SalePlacement[]) {
+  const published = placements
+    .map((placement) => placement.publishedAt)
+    .filter((value): value is string => Boolean(value))
+    .map((value) => new Date(value).getTime())
+    .sort((left, right) => left - right);
+  if (published.length === placements.length) {
+    const first = formatDateTime(new Date(published[0]).toISOString());
+    const last = formatDateTime(new Date(published.at(-1)!).toISOString());
+    return first === last ? `Published ${first}` : `Published ${first} → ${last}`;
+  }
+  if (published.length) {
+    return `${published.length}/${placements.length} published · ${placementScheduleRange(placements)}`;
+  }
+  return placementScheduleRange(placements);
 }
 
 function placementFormatsLabel(placements: SalePlacement[]) {
@@ -178,7 +186,7 @@ function PlacementChannelPreview(props: {
 }
 
 export function SalesTab(props: {
-  sales: TelegramAdSale[];
+  sales: TelegramAdSaleListItem[];
   channels: TelegramChannel[];
   loading: boolean;
   error: unknown;
@@ -197,13 +205,14 @@ export function SalesTab(props: {
   search: string;
   onSearchChange: (value: string) => void;
   settings: Awaited<ReturnType<typeof currenciesApi.getSettings>> | undefined;
-  rates: Awaited<ReturnType<typeof currenciesApi.listRates>> | undefined;
+  rates: Awaited<ReturnType<typeof currenciesApi.listLatestRates>> | undefined;
   onOpenSale: (saleId: string) => void;
-  onDeleteSale: (sale: TelegramAdSale) => Promise<void>;
+  onDeleteSale: (sale: TelegramAdSaleListItem) => Promise<void>;
   embedded?: boolean;
 }) {
   const [menuSaleId, setMenuSaleId] = useState<string | null>(null);
-  const [deleteSale, setDeleteSale] = useState<TelegramAdSale | null>(null);
+  const [deleteSale, setDeleteSale] =
+    useState<TelegramAdSaleListItem | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -354,7 +363,7 @@ export function SalesTab(props: {
                                   channelsById={channelsById}
                                 />
                                 <p className="mt-0.5 max-w-72 text-xs text-neutral-500">
-                                  {placementScheduleRange(sale.placements)}
+                                  {placementLifecycleLabel(sale.placements)}
                                   {placementFormatsLabel(sale.placements)
                                     ? ` · ${placementFormatsLabel(sale.placements)}`
                                     : ""}
@@ -380,8 +389,7 @@ export function SalesTab(props: {
                                         channelsById={channelsById}
                                       />
                                       <p className="mt-0.5 max-w-72 text-xs text-neutral-500">
-                                        {placementRunWindow(placement) ??
-                                          `Scheduled ${formatDateTime(placement.scheduledAt)}`}
+                                        {placementLifecycleLabel(placements)}
                                         {placementFormatsLabel(placements)
                                           ? ` · ${placementFormatsLabel(placements)}`
                                           : ""}

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { TelegramAdPlacementStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramPostMetricsService } from '../telegram-channels/telegram-post-metrics.service';
 import { TelegramBroadcastStatsService } from '../telegram-channels/telegram-broadcast-stats.service';
@@ -91,15 +92,34 @@ export class TelegramWorkspaceSyncTasksService {
   private async postMetricsChannelSelection(workspaceId: string) {
     const rows = await this.prisma.telegramChannel.findMany({
       where: { workspaceId, isActive: true, adminLinks: { some: {} } },
-      select: { id: true, autoSyncEnabled: true, syncIncludePostMetrics: true },
+      select: {
+        id: true,
+        autoSyncEnabled: true,
+        syncIncludePostMetrics: true,
+        _count: {
+          select: {
+            adSalePlacements: {
+              where: {
+                status: TelegramAdPlacementStatus.PUBLISHED,
+                deletedAt: null,
+              },
+            },
+          },
+        },
+      },
     });
     return {
       eligible: rows.filter(
-        (row) => row.autoSyncEnabled && row.syncIncludePostMetrics,
+        (row) =>
+          row.autoSyncEnabled &&
+          (row.syncIncludePostMetrics || row._count.adSalePlacements > 0),
       ),
       autoSyncDisabled: rows.filter((row) => !row.autoSyncEnabled).length,
       selectionDisabled: rows.filter(
-        (row) => row.autoSyncEnabled && !row.syncIncludePostMetrics,
+        (row) =>
+          row.autoSyncEnabled &&
+          !row.syncIncludePostMetrics &&
+          row._count.adSalePlacements === 0,
       ).length,
     };
   }

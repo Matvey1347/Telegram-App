@@ -26,7 +26,7 @@ export default function CurrenciesPage() {
     onSuccess: async () => {
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['currency-settings'] }),
-        qc.invalidateQueries({ queryKey: ['currency-rates'] }),
+        qc.invalidateQueries({ queryKey: ['currency-rates-latest'] }),
         qc.invalidateQueries({ queryKey: ['accounts'] }),
         qc.invalidateQueries({ queryKey: ['dashboard-summary'] }),
       ]);
@@ -36,14 +36,20 @@ export default function CurrenciesPage() {
     mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => currenciesApi.updateRate(id, payload),
     onSuccess: () => {
       setEditing(null);
-      qc.invalidateQueries({ queryKey: ['currency-rates'] });
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['currency-rates'] }),
+        qc.invalidateQueries({ queryKey: ['currency-rates-latest'] }),
+      ]);
     },
   });
   const deleteRate = useMutation({
     mutationFn: currenciesApi.removeRate,
     onSuccess: () => {
       setDeleting(null);
-      qc.invalidateQueries({ queryKey: ['currency-rates'] });
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['currency-rates'] }),
+        qc.invalidateQueries({ queryKey: ['currency-rates-latest'] }),
+      ]);
     },
   });
 

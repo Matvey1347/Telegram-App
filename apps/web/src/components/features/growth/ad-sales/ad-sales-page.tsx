@@ -1,19 +1,16 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus, SlidersHorizontal } from "lucide-react";
 import { formatDate } from "@/lib/date-format";
-import type {
-  TelegramAdAvailabilitySlot,
-  TelegramAdSale,
-} from "@telegram-system/shared";
+import { TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS, type TelegramAdAvailabilitySlot, type TelegramAdSale } from "@telegram-system/shared";
 import { AppShell } from "@/components/layout/app-shell";
 import {
   telegramChannelKeys,
@@ -40,6 +37,10 @@ import { AdSalesAnalyticsPanel } from "@/components/features/growth/ad-sales/ad-
 import { AdSalesClientsPanel } from "@/components/features/growth/ad-sales/ad-sales-clients-panel";
 import { SaleDetailsModal } from "@/components/features/growth/ad-sales/ad-sales-sale-details-modal";
 import { SalesTab } from "@/components/features/growth/ad-sales/ad-sales-sales-tab";
+import { AdSalesPostLinkDialogs } from "@/components/features/growth/ad-sales/ad-sales-post-link-dialogs";
+import { AdSalesCheckoutDialogs } from "@/components/features/growth/ad-sales/ad-sales-checkout-dialogs";
+import { AdSalesSaleDetailsDialog } from "@/components/features/growth/ad-sales/ad-sales-sale-details-dialog";
+import { addDays, dateKey, listDaysInRange, monthGridDays, monthGridDaysForRange, rangeForCalendarMode, routeTabFromPathname, sameStringArray, tabRouteMap } from "@/components/features/growth/ad-sales/ad-sales-calendar-range";
 import {
   accountsApi,
   authApi,
@@ -65,13 +66,13 @@ import {
   type TelegramAdSalesTab,
 } from "@/lib/features/growth/telegram-ad-sales";
 import {
-  invalidateTelegramAdSalesQueries,
+  invalidateTelegramAdSaleReads,
+  invalidateTelegramAdSalesDerivedQueries,
+  reconcileTelegramAdSaleCache,
   telegramAdSalesKeys,
-  upsertTelegramAdSaleInCache,
 } from "@/lib/features/growth/telegram-ad-sales-query";
 import { resolveAdSalesPreferenceSelection } from "@/lib/features/growth/ad-sales-preferences-hydration";
 import { useAppToast } from "@/providers/toast-provider";
-const calendarSalesPageSize = 100;
 const adSalesDataCacheOptions = {
   staleTime: 2 * 60 * 1000,
   gcTime: 15 * 60 * 1000,
@@ -79,118 +80,9 @@ const adSalesDataCacheOptions = {
   refetchOnWindowFocus: false,
 } as const;
 
-function startOfWeek(value: Date) {
-  const date = new Date(value);
-  const day = date.getDay() || 7;
-  date.setDate(date.getDate() - day + 1);
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
-
-function addDays(value: Date, days: number) {
-  const date = new Date(value);
-  date.setDate(date.getDate() + days);
-  return date;
-}
-
-function dateKey(value: Date) {
-  return channelLocalDateKey(value);
-}
-
-function startOfMonth(value: Date) {
-  return new Date(value.getFullYear(), value.getMonth(), 1);
-}
-
-function endOfMonth(value: Date) {
-  return new Date(
-    value.getFullYear(),
-    value.getMonth() + 1,
-    0,
-    23,
-    59,
-    59,
-    999,
-  );
-}
-
-function addMonths(value: Date, months: number) {
-  return new Date(value.getFullYear(), value.getMonth() + months, 1);
-}
-
-function monthGridDays(value: Date) {
-  const start = startOfWeek(startOfMonth(value));
-  return Array.from({ length: 42 }, (_, index) => addDays(start, index));
-}
-
-function monthGridDaysForRange(from: Date, to: Date) {
-  const start = startOfWeek(startOfMonth(from));
-  const lastVisibleWeekStart = startOfWeek(addDays(endOfMonth(to), 1));
-  const end = addDays(lastVisibleWeekStart, 6);
-  return listDaysInRange(start, end);
-}
-
-function rangeForCalendarMode(
-  view: TelegramAdSalesCalendarRangeMode,
-  cursor: Date,
-) {
-  if (view === "month") {
-    return {
-      from: startOfMonth(cursor),
-      to: endOfMonth(cursor),
-    };
-  }
-  if (view === "threeMonths") {
-    return {
-      from: startOfMonth(addMonths(cursor, -1)),
-      to: endOfMonth(addMonths(cursor, 1)),
-    };
-  }
-  return {
-    from: startOfWeek(cursor),
-    to: addDays(startOfWeek(cursor), 6),
-  };
-}
-
-function listDaysInRange(from: Date, to: Date) {
-  const days: Date[] = [];
-  const start = new Date(from);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(to);
-  end.setHours(0, 0, 0, 0);
-  for (
-    let cursor = new Date(start);
-    cursor <= end;
-    cursor = addDays(cursor, 1)
-  ) {
-    days.push(new Date(cursor));
-  }
-  return days;
-}
-
-function sameStringArray(left: string[], right: string[]) {
-  return (
-    left.length === right.length &&
-    left.every((value, index) => value === right[index])
-  );
-}
-
-const tabRouteMap: Record<TelegramAdSalesTab, string> = {
-  calendar: "/ad-sales/calendar",
-  sales: "/ad-sales/sales",
-  clients: "/ad-sales/clients",
-  analytics: "/ad-sales/analytics",
-  settings: "/ad-sales/calendar",
-};
-
-function routeTabFromPathname(pathname: string): TelegramAdSalesTab {
-  if (pathname.startsWith("/ad-sales/analytics")) return "analytics";
-  if (pathname.startsWith("/ad-sales/clients")) return "clients";
-  if (pathname.startsWith("/ad-sales/sales")) return "sales";
-  return "calendar";
-}
-
 export function AdSalesPage() {
   const pathname = usePathname();
+  const requestedChannelId = useSearchParams().get("channelId")?.trim() || null;
   const router = useRouter();
   const queryClient = useQueryClient();
   const { pushToast, startOperation } = useAppToast();
@@ -210,6 +102,7 @@ export function AdSalesPage() {
   const [salesPage, setSalesPage] = useState(1);
   const [salesPageSize, setSalesPageSize] = useState(25);
   const [saleSearch, setSaleSearch] = useState("");
+  const deferredSaleSearch = useDeferredValue(saleSearch.trim());
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [adSaleModalOpen, setAdSaleModalOpen] = useState(false);
   const adSaleCheckoutIdempotencyKeyRef = useRef<string | null>(null);
@@ -238,7 +131,6 @@ export function AdSalesPage() {
   const [postText, setPostText] = useState("");
   const [postImages, setPostImages] = useState("");
   const appliedPreferencesSignatureRef = useRef<string | null>(null);
-
   useLayoutEffect(() => {
     const storedView = readAdSalesCalendarRangeMode(window.localStorage);
     if (!storedView) return;
@@ -246,7 +138,6 @@ export function AdSalesPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCalendarRangeMode(storedView);
   }, []);
-
   useEffect(() => {
     if (
       pathname.startsWith("/ad-sales/settings") ||
@@ -255,7 +146,6 @@ export function AdSalesPage() {
       router.replace(tabRouteMap.calendar);
     }
   }, [pathname, router]);
-
   const { from, to } = useMemo(() => {
     if (calendarRangeSelection?.from) {
       return {
@@ -288,8 +178,8 @@ export function AdSalesPage() {
     staleTime: 5 * 60 * 1000,
   });
   const { data: rates } = useQuery({
-    queryKey: ["currency-rates"],
-    queryFn: currenciesApi.listRates,
+    queryKey: ["currency-rates-latest"],
+    queryFn: currenciesApi.listLatestRates,
     staleTime: 5 * 60 * 1000,
   });
   const channelsQuery = useQuery({
@@ -347,15 +237,20 @@ export function AdSalesPage() {
     },
   });
   const salesQuery = useQuery({
-    queryKey: telegramAdSalesKeys.sales({
+    queryKey: telegramAdSalesKeys.list({
       page: salesPage,
       pageSize: salesPageSize,
+      search: deferredSaleSearch,
     }),
-    queryFn: () =>
-      telegramAdSalesApi.listSalesPage({
-        page: salesPage,
-        pageSize: salesPageSize,
-      }),
+    queryFn: ({ signal }) =>
+      telegramAdSalesApi.listSalesPage(
+        {
+          page: salesPage,
+          pageSize: salesPageSize,
+          search: deferredSaleSearch || undefined,
+        },
+        signal,
+      ),
     enabled: tab === "sales",
     ...adSalesDataCacheOptions,
   });
@@ -392,23 +287,9 @@ export function AdSalesPage() {
     );
     return () => window.clearTimeout(timeout);
   }, [salesQuery.data?.items, salesQuery.refetch, tab]);
-  const calendarSalesQuery = useQuery({
-    queryKey: telegramAdSalesKeys.sales({
-      page: 1,
-      pageSize: calendarSalesPageSize,
-      scope: "calendar",
-    }),
-    queryFn: () =>
-      telegramAdSalesApi.listSalesPage({
-        page: 1,
-        pageSize: calendarSalesPageSize,
-      }),
-    enabled: tab === "calendar",
-    ...adSalesDataCacheOptions,
-  });
   const selectedSaleQuery = useQuery({
     queryKey: selectedSaleId
-      ? telegramAdSalesKeys.sale(selectedSaleId)
+      ? telegramAdSalesKeys.detail(selectedSaleId)
       : ["telegram-ad-sale", "none"],
     queryFn: () => telegramAdSalesApi.getSale(selectedSaleId!),
     enabled: Boolean(selectedSaleId),
@@ -468,6 +349,7 @@ export function AdSalesPage() {
       networksReady: networksQuery.isSuccess,
       saleableChannelIds: saleableChannelIdsList,
       networks: saleableNetworks,
+      requestedChannelId,
     });
     if (!preferences || !resolvedSelection) return;
     const nextNetworkId = resolvedSelection.selectedNetworkId;
@@ -536,6 +418,7 @@ export function AdSalesPage() {
     channelsQuery.isSuccess,
     networksQuery.isSuccess,
     preferencesQuery.data,
+    requestedChannelId,
     saleableChannelIdsList,
     saleableNetworks,
   ]);
@@ -681,64 +564,26 @@ export function AdSalesPage() {
   });
   const productsByChannelId = channelProductsQuery.data ?? {};
 
-  const filteredSales = useMemo(() => {
-    let items = salesQuery.data?.items ?? [];
-    const search = saleSearch.trim().toLowerCase();
-    if (search) {
-      items = items.filter((sale) =>
-        [
-          sale.title,
-          sale.advertiserNameSnapshot,
-          sale.advertiserTelegramSnapshot,
-          sale.advertiserName,
-          sale.advertiserTelegram,
-          sale.advertiserContact,
-        ]
-          .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(search)),
-      );
-    }
-    return items;
-  }, [saleSearch, salesQuery.data?.items]);
+  const filteredSales = salesQuery.data?.items ?? [];
 
-  const filteredSlots = useMemo(() => {
-    const channelIds = new Set(effectiveChannelIds);
-    const items = buildAdCalendarSlots(
-      (calendarSalesQuery.data?.items ?? []).flatMap((sale) =>
-        sale.placements
-          .filter((placement) => channelIds.has(placement.telegramChannelId))
-          .map(
-            (placement): TelegramAdAvailabilitySlot => ({
-              channelId: placement.telegramChannelId,
-              date: channelLocalDateKey(
-                placement.scheduledAt,
-                placement.timezone,
-              ),
-              inventoryOpportunityKey: placement.inventoryOpportunityKey,
-              scheduledAt: placement.scheduledAt,
-              timezone: placement.timezone || workspaceTimezone,
-              source: "sale",
-              state: "SOLD",
-              blockingReason: null,
-              nextOrganicPostAt: null,
-              productId: placement.telegramAdProductId,
-              expectedViews: placement.expectedViews,
-              recommendedPrice: placement.recommendedPrice,
-              minimumPrice: placement.minimumPrice,
-              currency: placement.currency,
-              existingPlacement: {
-                id: placement.id,
-                saleId: sale.id,
-                status: placement.status,
-              },
-              organicPostsCountForDay: 0,
-              adsCountForDay: 1,
-            }),
-          ),
-      ),
-    );
-    return items;
-  }, [effectiveChannelIds, calendarSalesQuery.data?.items, workspaceTimezone]);
+  const calendarAvailabilityParams = useMemo(
+    () => ({
+      from: from.toISOString(),
+      to: to.toISOString(),
+      channelIds: [...effectiveChannelIds].sort(),
+    }),
+    [effectiveChannelIds, from, to],
+  );
+  const calendarAvailabilityQuery = useQuery({
+    queryKey: telegramAdSalesKeys.availability(calendarAvailabilityParams),
+    queryFn: () => telegramAdSalesApi.availability(calendarAvailabilityParams),
+    enabled: tab === "calendar" && effectiveChannelIds.length > 0,
+    ...adSalesDataCacheOptions,
+  });
+  const filteredSlots = useMemo(
+    () => buildAdCalendarSlots(calendarAvailabilityQuery.data?.slots ?? []),
+    [calendarAvailabilityQuery.data?.slots],
+  );
 
   async function handleCreateSale(
     payload: Parameters<
@@ -800,9 +645,17 @@ export function AdSalesPage() {
         );
       }
       adSaleCheckoutIdempotencyKeyRef.current = null;
-      upsertTelegramAdSaleInCache(queryClient, reserved);
-      await invalidateTelegramAdSalesQueries(queryClient, {
-        saleId: reserved.id,
+      reconcileTelegramAdSaleCache(queryClient, {
+        type: "create",
+        sale: reserved,
+      });
+      await invalidateTelegramAdSalesDerivedQueries(queryClient, {
+        availability: true,
+        analytics: true,
+        finance: true,
+        dashboard: true,
+        managedPosts: true,
+        channelSummaries: true,
         channelIds: reserved.placements.map(
           (placement) => placement.telegramChannelId,
         ),
@@ -868,8 +721,17 @@ export function AdSalesPage() {
       }
       return { sale: reserved, workflowSummary: workflow.summary };
     } catch (error) {
-      await invalidateTelegramAdSalesQueries(queryClient, {
+      await invalidateTelegramAdSaleReads(queryClient, {
         saleId: reserved.id,
+        lists: true,
+      });
+      await invalidateTelegramAdSalesDerivedQueries(queryClient, {
+        availability: true,
+        analytics: true,
+        finance: true,
+        dashboard: true,
+        managedPosts: true,
+        channelSummaries: true,
         channelIds: reserved.placements.map(
           (placement) => placement.telegramChannelId,
         ),
@@ -933,9 +795,15 @@ export function AdSalesPage() {
     saleId: string,
     channelIds: string[],
   ) {
-    await invalidateTelegramAdSalesQueries(queryClient, { saleId, channelIds });
-    await queryClient.invalidateQueries({
-      queryKey: telegramAdSalesKeys.sales({}),
+    await invalidateTelegramAdSaleReads(queryClient, {
+      saleId,
+      lists: true,
+    });
+    await invalidateTelegramAdSalesDerivedQueries(queryClient, {
+      availability: true,
+      analytics: true,
+      channelSummaries: true,
+      channelIds,
     });
   }
 
@@ -1004,12 +872,17 @@ export function AdSalesPage() {
         onSelectionModeChange={handleInventorySelectionModeChange}
         onNetworkChange={handleSelectedNetworkIdChange}
         onChannelsChange={handleSelectedChannelIdsChange}
+        maxSelectedChannels={tab === "analytics" ? TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS : undefined}
       />
 
       {tab === "calendar" ? (
         <CalendarTab
-          loadingChannelIds={[]}
-          failedChannelIds={[]}
+          loadingChannelIds={
+            calendarAvailabilityQuery.isLoading ? effectiveChannelIds : []
+          }
+          failedChannelIds={
+            calendarAvailabilityQuery.isError ? effectiveChannelIds : []
+          }
           calendarRangeMode={calendarRangeMode}
           calendarCursor={calendarCursor}
           calendarFrom={from}
@@ -1018,8 +891,7 @@ export function AdSalesPage() {
           channels={saleableChannels}
           selectedChannelIds={selectedChannelIds}
           filteredSlots={filteredSlots}
-          sales={calendarSalesQuery.data?.items ?? []}
-          daySummaries={[]}
+          daySummaries={calendarAvailabilityQuery.data?.summaries ?? []}
           settings={settings}
           workspaceTimezone={workspaceTimezone}
           onCreateFromSlot={(slot) => {
@@ -1041,7 +913,10 @@ export function AdSalesPage() {
           onPageChange={setSalesPage}
           onPageSizeChange={setSalesPageSize}
           search={saleSearch}
-          onSearchChange={setSaleSearch}
+          onSearchChange={(value) => {
+            setSaleSearch(value);
+            setSalesPage(1);
+          }}
           channels={channels}
           settings={settings}
           rates={rates}
@@ -1049,8 +924,14 @@ export function AdSalesPage() {
           onDeleteSale={async (sale) => {
             const result = await telegramAdSalesApi.deleteSale(sale.id);
             if (selectedSaleId === sale.id) setSelectedSaleId(null);
-            await invalidateTelegramAdSalesQueries(queryClient, {
+            reconcileTelegramAdSaleCache(queryClient, {
+              type: "delete",
               saleId: sale.id,
+            });
+            await invalidateTelegramAdSalesDerivedQueries(queryClient, {
+              availability: true,
+              analytics: true,
+              channelSummaries: true,
               channelIds: result.channelIds,
             });
           }}
@@ -1068,542 +949,55 @@ export function AdSalesPage() {
         />
       ) : null}
 
-      <AdSaleModal
-        open={adSaleModalOpen}
-        onClose={() => setAdSaleModalOpen(false)}
+      <AdSalesCheckoutDialogs
+        adSaleModalOpen={adSaleModalOpen}
+        setAdSaleModalOpen={setAdSaleModalOpen}
         accounts={accounts as Account[]}
         channels={saleableChannels}
         networks={saleableNetworks as TelegramChannelNetwork[]}
         productsByChannelId={productsByChannelId}
-        defaultCurrency={settings?.primaryCurrency || "USD"}
+        settings={settings}
         workspaceTimezone={workspaceTimezone}
-        initialChannelId={adSaleSeedSlot?.channelId ?? null}
-        initialScheduledAt={adSaleSeedSlot?.scheduledAt ?? null}
-        initialInventoryOpportunityKey={
-          adSaleSeedSlot?.inventoryOpportunityKey ?? null
-        }
+        adSaleSeedSlot={adSaleSeedSlot}
         systemBotUsername={systemBotConnectionQuery.data?.botUsername}
-        onPrepareSystemBot={async () => {
-          const prepared = await telegramSystemBotApi.prepareAdSalePostImport();
-          return prepared.workflowId;
-        }}
-        onSendSystemBotPost={async (draft) => {
-          await telegramSystemBotApi.sendAdSalePostPreview({
-            title: draft.title,
-            text: draft.text,
-            imageUrls: draft.imageUrls,
-            buttonRows: draft.buttonRows,
-          });
-        }}
-        onSystemBotReturn={async (workflowId, channelIds) => {
-          const result =
-            await telegramSystemBotApi.adSalePostImportResult(workflowId);
-          if (!result.ready) return null;
-          await invalidateTelegramAdSalesQueries(queryClient, { channelIds });
-          return result.draft;
-        }}
-        onSearchAdvertisers={(query) =>
-          telegramAdSalesApi.searchAdvertisers({ q: query, limit: 5 })
-        }
-        onRequestQuote={async ({
-          channelId,
-          productId,
-          pricingMode,
-          currency,
-          scheduledAt,
-        }) =>
-          telegramAdSalesApi.createQuote(
-            {
-              telegramChannelId: channelId,
-              telegramAdProductId: productId,
-              pricingMode,
-              currency,
-              scheduledAt,
-            },
-            true,
-          )
-        }
-        onLoadAvailableSlots={async ({ channelId, productId, from, to }) => {
-          const result = await telegramAdSalesApi.availability({
-            from,
-            to,
-            channelIds: [channelId],
-            ...(productId ? { productIds: [productId] } : {}),
-          });
-          return result.slots.filter(
-            (slot) => slot.state === "AVAILABLE" || slot.state === "PAST",
-          );
-        }}
-        onLoadPublishedPosts={async ({
-          channelId,
-          date,
-          timezone,
-          telegramPostUrl,
-        }) => {
-          const from = zonedDateTimeToUtc(
-            date,
-            "00:00:00",
-            timezone,
-          ).toISOString();
-          const to = zonedDateTimeToUtc(
-            date,
-            "23:59:59",
-            timezone,
-          ).toISOString();
-          const telegramMessageId =
-            telegramPostUrl?.match(/\/(\d+)(?:[/?#].*)?$/)?.[1];
-          const params = {
-            page: 1,
-            pageSize: 100,
-            ...(telegramMessageId
-              ? { search: telegramMessageId }
-              : { from, to }),
-          };
-          let result = await getTelegramChannelPosts(channelId, params, true);
-          const hasRequestedPost = () =>
-            telegramMessageId
-              ? result.items.some(
-                  (post) =>
-                    String(post.telegramMessageId) === telegramMessageId,
-                )
-              : result.items.length > 0;
-          if (!hasRequestedPost()) {
-            try {
-              await syncTelegramChannelPostMetrics(
-                channelId,
-                {
-                  postLimit: 100,
-                },
-                true,
-              );
-              result = await getTelegramChannelPosts(channelId, params, true);
-            } catch {
-              // Keep the locally stored history available if live Telegram
-              // synchronization is unavailable for this connected account.
-            }
-          }
-          const items = telegramMessageId
-            ? result.items.filter(
-                (post) => String(post.telegramMessageId) === telegramMessageId,
-              )
-            : result.items;
-          return items.map((post) => ({
-            id: post.id,
-            title:
-              post.text?.trim().split("\n").find(Boolean)?.slice(0, 90) ||
-              "Telegram post",
-            publishedAt: post.postDate,
-          }));
-        }}
-        onSubmit={submitAdSale}
+        submitAdSale={submitAdSale}
+        paymentSale={paymentSale}
+        setPaymentSale={setPaymentSale}
+        refreshSaleAfterMutation={refreshSaleAfterMutation}
       />
 
-      {paymentSale ? (
-        <RegisterPaymentModal
-          key={paymentSale.id}
-          open
-          onClose={() => setPaymentSale(null)}
-          sale={paymentSale}
-          accounts={accounts as Account[]}
-          defaultCurrency={settings?.primaryCurrency || "USD"}
-          onSubmit={async (payload) => {
-            await telegramAdSalesApi.createPayment(paymentSale.id, payload);
-            await refreshSaleAfterMutation(
-              paymentSale.id,
-              paymentSale.placements.map(
-                (placement) => placement.telegramChannelId,
-              ),
-            );
-            setPaymentSale(null);
-          }}
-        />
-      ) : null}
-
-      <SaleDetailsModal
-        sale={selectedSale}
-        open={Boolean(selectedSaleId)}
-        loading={Boolean(selectedSaleId) && !selectedSale}
-        onClose={() => setSelectedSaleId(null)}
+      <AdSalesSaleDetailsDialog
+        selectedSale={selectedSale}
+        selectedSaleId={selectedSaleId}
+        setSelectedSaleId={setSelectedSaleId}
         accounts={accounts as Account[]}
         channels={channels}
         productsByChannelId={productsByChannelId}
         settings={settings}
         rates={rates}
-        onSave={async (sale, draft) => {
-          let feedbackStarted = false;
-          const silentAfterFirstMutation = () => {
-            const silent = feedbackStarted;
-            feedbackStarted = true;
-            return silent;
-          };
-          if (
-            draft.origin !== sale.origin ||
-            draft.assignedMemberId !== sale.assignedMemberId ||
-            draft.buyerContact !==
-              (sale.advertiserTelegramSnapshot ??
-                sale.advertiserTelegram ??
-                sale.advertiserContact ??
-                sale.advertiserNameSnapshot ??
-                sale.advertiserName ??
-                "")
-          ) {
-            const buyerChanged =
-              draft.buyerContact !==
-              (sale.advertiserTelegramSnapshot ??
-                sale.advertiserTelegram ??
-                sale.advertiserContact ??
-                sale.advertiserNameSnapshot ??
-                sale.advertiserName ??
-                "");
-            await telegramAdSalesApi.updateSale(
-              sale.id,
-              {
-                origin: draft.origin,
-                assignedMemberId: draft.assignedMemberId,
-                ...(buyerChanged
-                  ? {
-                      advertiserId: null,
-                      advertiserName:
-                        draft.buyerContact.replace(/^@/, "") || "Advertiser",
-                      advertiserContact: draft.buyerContact || null,
-                      advertiserTelegram: draft.buyerContact.startsWith("@")
-                        ? draft.buyerContact
-                        : null,
-                    }
-                  : {}),
-              },
-              silentAfterFirstMutation(),
-            );
-          }
-          const targetCurrency =
-            draft.payments[0]?.currency ?? sale.settlementCurrency;
-          if (targetCurrency !== sale.settlementCurrency) {
-            await telegramAdSalesApi.updateSale(
-              sale.id,
-              {
-                settlementCurrency: targetCurrency,
-              },
-              silentAfterFirstMutation(),
-            );
-          }
-          for (const placement of draft.placements) {
-            await telegramAdSalesApi.updatePlacement(
-              sale.id,
-              placement.id,
-              {
-                scheduledAt: placement.scheduledAt,
-                timezone: placement.timezone,
-                agreedPrice: placement.agreedPrice,
-                recommendedPrice: placement.recommendedPrice,
-                minimumPrice: placement.minimumPrice,
-                currency: placement.currency,
-                manualPriceReason: placement.manualPriceReason || null,
-                telegramAdProductId: placement.telegramAdProductId,
-                managedPostId: placement.managedPostId,
-              },
-              silentAfterFirstMutation(),
-            );
-          }
-          for (const payment of draft.payments) {
-            await telegramAdSalesApi.updatePayment(
-              sale.id,
-              payment.id,
-              {
-                accountId: payment.accountId,
-                amount: payment.amount,
-                currency: payment.currency,
-                paidAt: payment.paidAt,
-                notes: payment.notes || null,
-                allocations: payment.allocations,
-              },
-              silentAfterFirstMutation(),
-            );
-          }
-          await refreshSaleAfterMutation(
-            sale.id,
-            sale.placements.map((item) => item.telegramChannelId),
-          );
-          await queryClient.invalidateQueries({
-            queryKey: telegramAdSalesKeys.sale(sale.id),
-          });
-          await queryClient.invalidateQueries({ queryKey: ["transactions"] });
-        }}
-        onUpdateSharedPost={async (sale, draft) => {
-          const linkedPlacements = sale.placements.filter(
-            (placement) => placement.managedPostId,
-          );
-          if (linkedPlacements.length !== sale.placements.length) {
-            throw new Error(
-              "Every placement must have a configured post before the shared post can be updated.",
-            );
-          }
-          await Promise.all(
-            linkedPlacements.map((placement, index) =>
-              telegramChannelsApi.updateManagedPost(
-                placement.telegramChannelId,
-                placement.managedPostId!,
-                {
-                  title: draft.title,
-                  text: draft.text,
-                  imageUrls: draft.imageUrls,
-                  buttonRows: draft.buttonRows,
-                  inPlaceOnly: true,
-                },
-                index > 0,
-              ),
-            ),
-          );
-          await Promise.all([
-            refreshSaleAfterMutation(
-              sale.id,
-              linkedPlacements.map((placement) => placement.telegramChannelId),
-            ),
-            ...linkedPlacements.map((placement) =>
-              queryClient.invalidateQueries({
-                queryKey: telegramPostKeys.managed(placement.telegramChannelId),
-              }),
-            ),
-          ]);
-        }}
-        onRecreateSharedPostViaBot={async (sale) => {
-          await telegramAdSalesApi.recreateScheduledPostsViaBot(sale.id);
-          await Promise.all([
-            refreshSaleAfterMutation(
-              sale.id,
-              sale.placements.map((placement) => placement.telegramChannelId),
-            ),
-            ...sale.placements.map((placement) =>
-              queryClient.invalidateQueries({
-                queryKey: telegramPostKeys.managed(placement.telegramChannelId),
-              }),
-            ),
-          ]);
-        }}
-        onAction={async (sale, action, placement) => {
-          const placementId = placement?.id;
-          if (action === "confirm") {
-            await telegramAdSalesApi.confirmSale(sale.id);
-          } else if (action === "reserve") {
-            await telegramAdSalesApi.reserveSale(sale.id, {
-              placements: sale.placements.map((item) => ({
-                placementId: item.id,
-                scheduledAt: item.scheduledAt,
-              })),
-            });
-          } else if (action === "cancel") {
-            if (placementId) {
-              await telegramAdSalesApi.cancelPlacement(
-                sale.id,
-                placementId,
-                {},
-              );
-            } else {
-              await telegramAdSalesApi.cancelSale(sale.id);
-            }
-          } else if (action === "register-payment") {
-            setPaymentSale(sale);
-            setSelectedSaleId(null);
-            return;
-          } else if (action === "create-post" && placementId) {
-            setPostEditorPlacement({ saleId: sale.id, placementId });
-            setPostTitle(sale.title || sale.advertiserName);
-            setPostText("");
-            setPostImages("");
-            return;
-          } else if (action === "schedule" && placementId) {
-            await telegramAdSalesApi.schedulePlacement(
-              sale.id,
-              placementId,
-              {},
-            );
-          } else if (action === "publish" && placementId) {
-            await telegramAdSalesApi.publishPlacement(sale.id, placementId, {});
-          } else if (action === "reschedule" && placementId) {
-            await telegramAdSalesApi.reschedulePlacement(sale.id, placementId, {
-              scheduledAt: placement.scheduledAt,
-            });
-          } else if (action === "complete-permanent" && placementId) {
-            await telegramAdSalesApi.completePermanentPlacement(
-              sale.id,
-              placementId,
-              {},
-            );
-          }
-          await refreshSaleAfterMutation(
-            sale.id,
-            sale.placements.map((item) => item.telegramChannelId),
-          );
-          await queryClient.invalidateQueries({
-            queryKey: telegramAdSalesKeys.sale(sale.id),
-          });
-        }}
-        onLoadPlacementPosts={async (placement) => {
-          const posts = await getAllTelegramChannelPosts(
-            placement.telegramChannelId,
-          );
-          return posts.map((post) => ({
-            id: post.id,
-            title:
-              post.text?.trim().split("\n").find(Boolean)?.slice(0, 90) ||
-              `Post ${post.telegramMessageId}`,
-            publishedAt: post.postDate,
-          }));
-        }}
-        onAttachPost={async (sale, placement, post) => {
-          await telegramAdSalesApi.attachManagedPost(sale.id, placement.id, {
-            ...post,
-          });
-          await refreshSaleAfterMutation(
-            sale.id,
-            sale.placements.map((item) => item.telegramChannelId),
-          );
-          await queryClient.invalidateQueries({
-            queryKey: telegramAdSalesKeys.sale(sale.id),
-          });
-        }}
+        queryClient={queryClient}
+        setPaymentSale={setPaymentSale}
+        setPostEditorPlacement={setPostEditorPlacement}
+        setPostTitle={setPostTitle}
+        setPostText={setPostText}
+        setPostImages={setPostImages}
+        refreshSaleAfterMutation={refreshSaleAfterMutation}
       />
-
-      <Modal
-        open={Boolean(pastSlotAssignment)}
-        onClose={() => {
-          setPastSlotAssignment(null);
-          setSelectedPastPostId("");
-        }}
-        title="Link sold post"
-        size="md"
-      >
-        {pastSlotAssignment ? (
-          <div className="space-y-4">
-            <p className="text-sm text-neutral-400">
-              Choose the real ad post for {pastSlotAssignment.channelTitle} on{" "}
-              {pastSlotAssignment.slotDateLabel}.
-            </p>
-            <FormField label="Published post">
-              <Select
-                value={selectedPastPostId}
-                onChange={(event) => setSelectedPastPostId(event.target.value)}
-              >
-                {pastSlotAssignment.posts.map((post) => {
-                  const label = post.title?.trim() || "Untitled post";
-                  return (
-                    <option key={post.id} value={post.id}>
-                      {post.dateValue
-                        ? `${new Date(post.dateValue).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · `
-                        : ""}
-                      {post.kind === "telegram" ? "Post · " : "Managed · "}
-                      {label}
-                    </option>
-                  );
-                })}
-              </Select>
-            </FormField>
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setPastSlotAssignment(null);
-                  setSelectedPastPostId("");
-                }}
-              >
-                Skip for now
-              </Button>
-              <Button
-                disabled={!selectedPastPostId}
-                onClick={async () => {
-                  if (!pastSlotAssignment || !selectedPastPostId) return;
-                  const current = pastSlotAssignment;
-                  const selectedPost = current.posts.find(
-                    (post) => post.id === selectedPastPostId,
-                  );
-                  setPastSlotAssignment(null);
-                  setSelectedPastPostId("");
-                  await telegramAdSalesApi.attachManagedPost(
-                    current.saleId,
-                    current.placementId,
-                    {
-                      ...(selectedPost?.kind === "telegram"
-                        ? { telegramPostId: selectedPost.id }
-                        : { managedPostId: selectedPost?.id }),
-                    },
-                  );
-                  await telegramAdSalesApi.reconcileSale(current.saleId, true);
-                  await invalidateTelegramAdSalesQueries(queryClient, {
-                    saleId: current.saleId,
-                  });
-                }}
-              >
-                Save
-              </Button>
-            </div>
-          </div>
-        ) : null}
-      </Modal>
-
-      <Modal
-        open={Boolean(postEditorPlacement)}
-        onClose={() => setPostEditorPlacement(null)}
-        title="Create advertising post"
-        size="xl"
-      >
-        <div className="space-y-4">
-          <FormField label="Title">
-            <Input
-              value={postTitle}
-              onChange={(event) => setPostTitle(event.target.value)}
-            />
-          </FormField>
-          <FormField label="Text">
-            <Textarea
-              rows={8}
-              value={postText}
-              onChange={(event) => setPostText(event.target.value)}
-            />
-          </FormField>
-          <FormField label="Image URLs">
-            <Textarea
-              rows={4}
-              value={postImages}
-              onChange={(event) => setPostImages(event.target.value)}
-              placeholder="One URL per line"
-            />
-          </FormField>
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => setPostEditorPlacement(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={async () => {
-                if (!postEditorPlacement) return;
-                await telegramAdSalesApi.createManagedPostFromPlacement(
-                  postEditorPlacement.saleId,
-                  postEditorPlacement.placementId,
-                  {
-                    title: postTitle,
-                    text: postText,
-                    imageUrls: postImages
-                      .split("\n")
-                      .map((value) => value.trim())
-                      .filter(Boolean),
-                  },
-                );
-                const saleId = postEditorPlacement.saleId;
-                setPostEditorPlacement(null);
-                await queryClient.invalidateQueries({
-                  queryKey: telegramAdSalesKeys.sale(saleId),
-                });
-                await queryClient.invalidateQueries({
-                  queryKey: telegramAdSalesKeys.root,
-                });
-              }}
-            >
-              Create post
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      <AdSalesPostLinkDialogs
+        pastSlotAssignment={pastSlotAssignment}
+        setPastSlotAssignment={setPastSlotAssignment}
+        selectedPastPostId={selectedPastPostId}
+        setSelectedPastPostId={setSelectedPastPostId}
+        postEditorPlacement={postEditorPlacement}
+        setPostEditorPlacement={setPostEditorPlacement}
+        postTitle={postTitle}
+        setPostTitle={setPostTitle}
+        postText={postText}
+        setPostText={setPostText}
+        postImages={postImages}
+        setPostImages={setPostImages}
+        queryClient={queryClient}
+      />
     </AppShell>
   );
 }

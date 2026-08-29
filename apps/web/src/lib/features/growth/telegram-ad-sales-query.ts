@@ -1,29 +1,47 @@
 "use client";
 
-import type { QueryClient } from "@tanstack/react-query";
-import type { TelegramAdSale } from "@telegram-system/shared";
+import type { QueryClient, QueryKey } from "@tanstack/react-query";
+import type {
+  TelegramAdSale,
+  TelegramAdSaleListItem,
+} from "@telegram-system/shared";
 import type { PaginatedResponse } from "../../api-types";
 import {
   accountKeys,
-  currencyKeys,
   dashboardKeys,
   telegramChannelKeys,
   telegramPostKeys,
 } from "../../query-keys";
 
+type AdSalesListParams = {
+  page?: number;
+  pageSize?: number;
+  status?: string;
+  advertiserId?: string;
+  search?: string;
+  [key: string]: unknown;
+};
+
 export const telegramAdSalesKeys = {
-  root: ["telegram-ad-sales"] as const,
-  sales: (params?: Record<string, unknown>) =>
-    ["telegram-ad-sales", "sales", params ?? {}] as const,
-  sale: (saleId: string) => ["telegram-ad-sale", saleId] as const,
+  listRoot: () => ["telegram-ad-sales", "sales"] as const,
+  list: (params?: AdSalesListParams) =>
+    [...telegramAdSalesKeys.listRoot(), params ?? {}] as const,
+  detailRoot: () => ["telegram-ad-sale"] as const,
+  detail: (saleId: string) =>
+    [...telegramAdSalesKeys.detailRoot(), saleId] as const,
+  crmRoot: () => ["telegram-ad-sales", "crm"] as const,
   crmAdvertisersRoot: () =>
-    ["telegram-ad-sales", "crm", "advertisers"] as const,
+    [...telegramAdSalesKeys.crmRoot(), "advertisers"] as const,
   crmAdvertisers: (params?: Record<string, unknown>) =>
-    ["telegram-ad-sales", "crm", "advertisers", params ?? {}] as const,
-  workspaceSettings: () => ["telegram-ad-sales", "workspace-settings"] as const,
-  preferences: () => ["telegram-ad-sales", "preferences"] as const,
+    [...telegramAdSalesKeys.crmAdvertisersRoot(), params ?? {}] as const,
+  settingsRoot: () => ["telegram-ad-sales", "settings"] as const,
+  workspaceSettings: () =>
+    [...telegramAdSalesKeys.settingsRoot(), "workspace"] as const,
+  preferences: () =>
+    [...telegramAdSalesKeys.settingsRoot(), "preferences"] as const,
+  availabilityRoot: () => ["telegram-ad-availability"] as const,
   availability: (params: Record<string, unknown>) =>
-    ["telegram-ad-availability", params] as const,
+    [...telegramAdSalesKeys.availabilityRoot(), params] as const,
   products: (params?: Record<string, unknown>) =>
     ["telegram-ad-products", params ?? {}] as const,
   channelProducts: (channelId: string) =>
@@ -36,97 +54,212 @@ export const telegramAdSalesKeys = {
   baseline: (channelId: string) => ["telegram-ad-baseline", channelId] as const,
   priceHistory: (channelId: string, params?: Record<string, unknown>) =>
     ["telegram-ad-price-history", channelId, params ?? {}] as const,
-  analytics: (params?: Record<string, unknown>) =>
-    ["telegram-ad-analytics", params ?? {}] as const,
   analyticsRoot: () => ["telegram-ad-analytics"] as const,
+  analytics: (params?: Record<string, unknown>) =>
+    [...telegramAdSalesKeys.analyticsRoot(), params ?? {}] as const,
   analyticsOverview: (params?: Record<string, unknown>) =>
-    ["telegram-ad-analytics", "overview", params ?? {}] as const,
+    [...telegramAdSalesKeys.analyticsRoot(), "overview", params ?? {}] as const,
   analyticsSummary: (params?: Record<string, unknown>) =>
-    ["telegram-ad-analytics", "summary", params ?? {}] as const,
+    [...telegramAdSalesKeys.analyticsRoot(), "summary", params ?? {}] as const,
   channelAnalytics: (channelId: string, params?: Record<string, unknown>) =>
-    ["telegram-ad-analytics", "channel", channelId, params ?? {}] as const,
+    [
+      ...telegramAdSalesKeys.analyticsRoot(),
+      "channel",
+      channelId,
+      params ?? {},
+    ] as const,
   networkAnalytics: (networkId: string, params?: Record<string, unknown>) =>
-    ["telegram-ad-analytics", "network", networkId, params ?? {}] as const,
+    [
+      ...telegramAdSalesKeys.analyticsRoot(),
+      "network",
+      networkId,
+      params ?? {},
+    ] as const,
   revenueSeries: (params?: Record<string, unknown>) =>
-    ["telegram-ad-analytics", "revenue-series", params ?? {}] as const,
+    [
+      ...telegramAdSalesKeys.analyticsRoot(),
+      "revenue-series",
+      params ?? {},
+    ] as const,
   pricingSeries: (params?: Record<string, unknown>) =>
-    ["telegram-ad-analytics", "pricing-series", params ?? {}] as const,
+    [
+      ...telegramAdSalesKeys.analyticsRoot(),
+      "pricing-series",
+      params ?? {},
+    ] as const,
   inventory: (params?: Record<string, unknown>) =>
-    ["telegram-ad-analytics", "inventory", params ?? {}] as const,
+    [...telegramAdSalesKeys.analyticsRoot(), "inventory", params ?? {}] as const,
   alerts: (params?: Record<string, unknown>) =>
-    ["telegram-ad-analytics", "alerts", params ?? {}] as const,
+    [...telegramAdSalesKeys.analyticsRoot(), "alerts", params ?? {}] as const,
 } as const;
 
-export function upsertTelegramAdSaleInCache(
-  queryClient: QueryClient,
-  sale: TelegramAdSale,
-) {
-  queryClient.setQueryData(telegramAdSalesKeys.sale(sale.id), sale);
-  queryClient.setQueriesData<PaginatedResponse<TelegramAdSale>>(
-    { queryKey: ["telegram-ad-sales", "sales"] },
-    (current) => {
-      if (!current?.items) return current;
-      const existingIndex = current.items.findIndex(
-        (item) => item.id === sale.id,
-      );
-      const items =
-        existingIndex >= 0
-          ? current.items.map((item) => (item.id === sale.id ? sale : item))
-          : [sale, ...current.items].slice(0, current.pagination.pageSize);
-      return {
-        ...current,
-        items,
-        pagination: {
-          ...current.pagination,
-          totalItems:
-            existingIndex >= 0
-              ? current.pagination.totalItems
-              : current.pagination.totalItems + 1,
-        },
-      };
-    },
-  );
+function listParams(queryKey: QueryKey): AdSalesListParams {
+  const params = queryKey[2];
+  return params && typeof params === "object"
+    ? (params as AdSalesListParams)
+    : {};
 }
 
-export async function invalidateTelegramAdSalesQueries(
+function saleMatchesList(sale: TelegramAdSale, params: AdSalesListParams) {
+  if (params.status && sale.status !== params.status) return false;
+  if (params.advertiserId && sale.advertiserId !== params.advertiserId) {
+    return false;
+  }
+  return true;
+}
+
+function withTotalDelta(
+  current: PaginatedResponse<TelegramAdSaleListItem>,
+  delta: number,
+) {
+  const totalItems = Math.max(0, current.pagination.totalItems + delta);
+  const totalPages = Math.ceil(totalItems / current.pagination.pageSize);
+  return {
+    ...current.pagination,
+    totalItems,
+    totalPages,
+    hasNextPage: current.pagination.page < totalPages,
+    hasPreviousPage: current.pagination.page > 1,
+  };
+}
+
+export type TelegramAdSaleCacheChange =
+  | { type: "create"; sale: TelegramAdSale }
+  | { type: "update"; sale: TelegramAdSale }
+  | { type: "delete"; saleId: string };
+
+/** Reconciles only pages whose membership is knowable from the cached row. */
+export function reconcileTelegramAdSaleCache(
   queryClient: QueryClient,
-  params?: {
-    saleId?: string | null;
-    channelIds?: string[];
-  },
+  change: TelegramAdSaleCacheChange,
+) {
+  if (change.type === "delete") {
+    queryClient.removeQueries({
+      queryKey: telegramAdSalesKeys.detail(change.saleId),
+      exact: true,
+    });
+  } else {
+    queryClient.setQueryData(
+      telegramAdSalesKeys.detail(change.sale.id),
+      change.sale,
+    );
+  }
+
+  for (const [queryKey, current] of queryClient.getQueriesData<
+    PaginatedResponse<TelegramAdSaleListItem>
+  >({ queryKey: telegramAdSalesKeys.listRoot() })) {
+    if (!current?.items) continue;
+    const params = listParams(queryKey);
+    const saleId = change.type === "delete" ? change.saleId : change.sale.id;
+    const existingIndex = current.items.findIndex((item) => item.id === saleId);
+
+    if (change.type === "delete") {
+      if (existingIndex < 0) continue;
+      queryClient.setQueryData(queryKey, {
+        ...current,
+        items: current.items.filter((item) => item.id !== saleId),
+        pagination: withTotalDelta(current, -1),
+      });
+      continue;
+    }
+
+    if (params.search?.trim()) {
+      void queryClient.invalidateQueries({ queryKey, exact: true });
+      continue;
+    }
+
+    const matches = saleMatchesList(change.sale, params);
+    if (existingIndex >= 0) {
+      queryClient.setQueryData(queryKey, {
+        ...current,
+        items: matches
+          ? current.items.map((item) =>
+              item.id === change.sale.id ? change.sale : item,
+            )
+          : current.items.filter((item) => item.id !== change.sale.id),
+        pagination: matches
+          ? current.pagination
+          : withTotalDelta(current, -1),
+      });
+      continue;
+    }
+
+    if (change.type !== "create" || !matches || (params.page ?? 1) !== 1) {
+      continue;
+    }
+    queryClient.setQueryData(queryKey, {
+      ...current,
+      items: [change.sale, ...current.items].slice(
+        0,
+        current.pagination.pageSize,
+      ),
+      pagination: withTotalDelta(current, 1),
+    });
+  }
+}
+
+export type TelegramAdSalesDerivedEffects = {
+  availability?: boolean;
+  analytics?: boolean;
+  finance?: boolean;
+  dashboard?: boolean;
+  managedPosts?: boolean;
+  channelSummaries?: boolean;
+  channelIds?: string[];
+};
+
+export async function invalidateTelegramAdSaleReads(
+  queryClient: QueryClient,
+  options: { saleId?: string; lists?: boolean },
 ) {
   await Promise.all([
-    queryClient.invalidateQueries({ queryKey: telegramAdSalesKeys.root }),
-    queryClient.invalidateQueries({
-      queryKey: telegramAdSalesKeys.analyticsRoot(),
-    }),
-    queryClient.invalidateQueries({ queryKey: ["telegram-ad-availability"] }),
-    queryClient.invalidateQueries({ queryKey: dashboardKeys.summary() }),
-    queryClient.invalidateQueries({ queryKey: accountKeys.transactions() }),
-    queryClient.invalidateQueries({ queryKey: accountKeys.accounts() }),
-    queryClient.invalidateQueries({ queryKey: telegramChannelKeys.list() }),
-    queryClient.invalidateQueries({ queryKey: currencyKeys.settings() }),
-    queryClient.invalidateQueries({ queryKey: currencyKeys.rates() }),
-    ...(params?.saleId
+    ...(options.saleId
       ? [
           queryClient.invalidateQueries({
-            queryKey: telegramAdSalesKeys.sale(params.saleId),
+            queryKey: telegramAdSalesKeys.detail(options.saleId),
+            exact: true,
           }),
         ]
       : []),
-    ...(params?.channelIds ?? []).flatMap((channelId) => [
-      queryClient.invalidateQueries({
-        queryKey: telegramPostKeys.managedCalendar(channelId),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: telegramPostKeys.managed(channelId),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: telegramChannelKeys.financialSummary(channelId),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: telegramChannelKeys.analytics(channelId),
-      }),
-    ]),
+    ...(options.lists
+      ? [
+          queryClient.invalidateQueries({
+            queryKey: telegramAdSalesKeys.listRoot(),
+          }),
+        ]
+      : []),
   ]);
+}
+
+/** Invalidates server-derived read models only; list/detail rows are reconciled separately. */
+export async function invalidateTelegramAdSalesDerivedQueries(
+  queryClient: QueryClient,
+  effects: TelegramAdSalesDerivedEffects,
+) {
+  const channelIds = [...new Set(effects.channelIds ?? [])];
+  const invalidations = [
+    ...(effects.availability
+      ? [telegramAdSalesKeys.availabilityRoot()]
+      : []),
+    ...(effects.analytics ? [telegramAdSalesKeys.analyticsRoot()] : []),
+    ...(effects.dashboard ? [dashboardKeys.summary()] : []),
+    ...(effects.finance
+      ? [accountKeys.transactions(), accountKeys.accounts()]
+      : []),
+    ...(effects.managedPosts
+      ? channelIds.flatMap((channelId) => [
+          telegramPostKeys.managedCalendar(channelId),
+          telegramPostKeys.managedLists(channelId),
+        ])
+      : []),
+    ...(effects.channelSummaries
+      ? channelIds.flatMap((channelId) => [
+          telegramChannelKeys.financialSummary(channelId),
+          telegramChannelKeys.analytics(channelId),
+        ])
+      : []),
+  ];
+  await Promise.all(
+    invalidations.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+  );
 }

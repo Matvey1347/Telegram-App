@@ -1,5 +1,8 @@
 import type { AxiosInstance, AxiosRequestConfig } from "axios";
-import type { PaginatedResponse } from "@telegram-system/shared";
+import type {
+  FinanceCategoryStatisticsResponse,
+  PaginatedResponse,
+} from "@telegram-system/shared";
 import type {
   Account,
   Currency,
@@ -131,6 +134,13 @@ export function createFinanceApi({
   const transactionCategoriesApi = {
     list: async (type: TransactionType) =>
       (await api.get<TransactionCategory[]>("/finance/categories", { params: { type } })).data,
+    statistics: async (type: TransactionType) =>
+      (
+        await api.get<FinanceCategoryStatisticsResponse>(
+          "/finance/categories/statistics",
+          { params: { type } },
+        )
+      ).data,
     create: async (payload: {
       name: string;
       type: TransactionType;
@@ -167,6 +177,8 @@ export function createFinanceApi({
       currencyDisplayMode?: CurrencyDisplayMode;
     }) => (await api.patch<CurrencySettings>("/currencies/settings", payload)).data,
     listRates: async () => (await api.get<ExchangeRate[]>("/currencies/rates")).data,
+    listLatestRates: async () =>
+      (await api.get<ExchangeRate[]>("/currencies/rates/latest")).data,
     createRate: async (payload: Record<string, unknown>) =>
       (await api.post<ExchangeRate>("/currencies/rates", payload)).data,
     updateRate: async (id: string, payload: Record<string, unknown>) =>

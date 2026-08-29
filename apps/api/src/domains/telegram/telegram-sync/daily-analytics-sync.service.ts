@@ -33,9 +33,9 @@ export class DailyAnalyticsSyncService {
       event: 'daily_analytics.sync.started',
       message: `Daily analytics sync started from ${source}.`,
       workspaceId: options.workspaceId ?? null,
-      metadata: options as Record<string, unknown>,
+      metadata: options,
     });
-    const run = await (this.prisma as any).dailyAnalyticsSyncRun.create({
+    const run = await this.prisma.dailyAnalyticsSyncRun.create({
       data: {
         workspaceId: options.workspaceId || null,
         source,
@@ -67,6 +67,11 @@ export class DailyAnalyticsSyncService {
             syncIncludePostMetrics: true,
             syncIncludeChannelStats: true,
             syncIncludeAudienceSnapshot: true,
+            adminLinks: {
+              orderBy: { createdAt: 'asc' },
+              take: 1,
+              select: { telegramUserAccountIntegrationId: true },
+            },
           },
         });
 
@@ -80,14 +85,7 @@ export class DailyAnalyticsSyncService {
               );
             }
             if (channel.syncIncludeChannelStats) {
-              const adminLink =
-                await this.prisma.telegramChannelAdminLink.findFirst({
-                  where: {
-                    workspaceId: channel.workspaceId,
-                    telegramChannelId: channel.id,
-                  },
-                  orderBy: { createdAt: 'asc' },
-                });
+              const adminLink = channel.adminLinks[0];
               if (adminLink) {
                 await this.telegramBroadcastStatsService.syncBroadcastStatsForWorkspace(
                   channel.workspaceId,
@@ -117,7 +115,7 @@ export class DailyAnalyticsSyncService {
           }
         }
 
-        const campaigns = await (this.prisma.adCampaign as any).findMany({
+        const campaigns = await this.prisma.adCampaign.findMany({
           where: {
             workspaceId: workspace.id,
             excludeFromAnalytics: false,
@@ -139,7 +137,7 @@ export class DailyAnalyticsSyncService {
                 campaign.id,
               );
             if (recalculated.changed) {
-              await (this.prisma.adCampaign as any).update({
+              await this.prisma.adCampaign.update({
                 where: { id: campaign.id },
                 data:
                   source === 'manual'
@@ -160,7 +158,7 @@ export class DailyAnalyticsSyncService {
       }
 
       const status = errorsCount > 0 ? 'partial_failed' : 'success';
-      const result = await (this.prisma as any).dailyAnalyticsSyncRun.update({
+      const result = await this.prisma.dailyAnalyticsSyncRun.update({
         where: { id: run.id },
         data: {
           status,
@@ -179,13 +177,13 @@ export class DailyAnalyticsSyncService {
         message: `Daily analytics sync finished with status ${status}.`,
         workspaceId: options.workspaceId ?? null,
         durationMs: Date.now() - startedAt,
-        metadata: result as Record<string, unknown>,
+        metadata: result,
       });
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'unknown error';
       this.logger.error(`Daily analytics sync failed: ${message}`);
-      const result = await (this.prisma as any).dailyAnalyticsSyncRun.update({
+      const result = await this.prisma.dailyAnalyticsSyncRun.update({
         where: { id: run.id },
         data: {
           status: 'failed',
@@ -207,7 +205,7 @@ export class DailyAnalyticsSyncService {
         durationMs: Date.now() - startedAt,
         errorName: error instanceof Error ? error.name : 'Error',
         stack: error instanceof Error ? error.stack || null : null,
-        metadata: result as Record<string, unknown>,
+        metadata: result,
       });
       return result;
     }

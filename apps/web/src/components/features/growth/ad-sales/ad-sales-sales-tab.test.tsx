@@ -42,7 +42,7 @@ describe("SalesTab", () => {
         {
           id: "placement-1",
           telegramChannelId: "channel-1",
-          scheduledAt: "2026-08-22T10:00:00.000Z",
+          scheduledAt: "2026-08-28T11:30:00.000Z",
           telegramPostId: null,
           telegramPost: {
             viewsCount: 1200,
@@ -50,13 +50,13 @@ describe("SalesTab", () => {
             commentsCount: 6,
             forwardsCount: 18,
           },
-          publishedAt: "2026-08-22T09:00:00.000Z",
-          plannedDeleteAt: "2026-08-23T11:00:00.000Z",
+          publishedAt: "2026-08-28T11:49:20.075Z",
+          plannedDeleteAt: "2026-08-29T11:49:20.075Z",
         },
         {
           id: "placement-2",
           telegramChannelId: "channel-2",
-          scheduledAt: "2026-08-22T10:00:00.000Z",
+          scheduledAt: "2026-08-28T11:30:00.000Z",
           telegramPostId: null,
           telegramPost: {
             viewsCount: 800,
@@ -64,8 +64,8 @@ describe("SalesTab", () => {
             commentsCount: 4,
             forwardsCount: 12,
           },
-          publishedAt: "2026-08-22T09:00:00.000Z",
-          plannedDeleteAt: "2026-08-23T11:00:00.000Z",
+          publishedAt: "2026-08-28T11:49:42.408Z",
+          plannedDeleteAt: "2026-08-29T11:49:42.408Z",
         },
       ],
     } as unknown as TelegramAdSale;
@@ -103,6 +103,8 @@ describe("SalesTab", () => {
     expect(screen.getByText("@buyer")).toBeTruthy();
     expect(screen.getByText("Mentor Self-development")).toBeTruthy();
     expect(screen.getByText("Business Patterns")).toBeTruthy();
+    expect(screen.getByText(/Published .*28\/08\/2026/)).toBeTruthy();
+    expect(screen.queryByText(/28\/08\/2026.*→.*29\/08\/2026/)).toBeNull();
     const channelPreview = screen.getByLabelText("Show 2 placement channels");
     expect(channelPreview).toBeTruthy();
     fireEvent.click(channelPreview);
@@ -111,7 +113,6 @@ describe("SalesTab", () => {
     expect(screen.getByText("Matthew Kayden")).toBeTruthy();
     expect(screen.getByText("Money received")).toBeTruthy();
     expect(screen.getByText("2/2 posts linked")).toBeTruthy();
-    expect(screen.getByText("Automatic deletion pending")).toBeTruthy();
     expect(screen.queryByText("20/08/2026")).toBeNull();
     expect(screen.getByText("4,100.00 UAH")).toBeTruthy();
     expect(screen.getByLabelText("Views: 2000")).toBeTruthy();

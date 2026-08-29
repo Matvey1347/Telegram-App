@@ -11,16 +11,21 @@ export function resolveAdSalesPreferenceSelection({
   networksReady,
   saleableChannelIds,
   networks,
+  requestedChannelId,
 }: {
   preferences: TelegramAdSalesMemberPreferences | undefined;
   channelsReady: boolean;
   networksReady: boolean;
   saleableChannelIds: string[];
   networks: PreferenceNetwork[];
+  requestedChannelId?: string | null;
 }) {
   if (!preferences || !channelsReady || !networksReady) return null;
 
   const allowedIds = new Set(saleableChannelIds);
+  if (requestedChannelId && allowedIds.has(requestedChannelId)) {
+    return { selectedChannelIds: [requestedChannelId], selectedNetworkId: "" };
+  }
   const preferredChannelIds = preferences.selectedChannelIds.filter((channelId) =>
     allowedIds.has(channelId),
   );

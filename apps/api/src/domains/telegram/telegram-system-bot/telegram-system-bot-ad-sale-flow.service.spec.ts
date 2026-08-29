@@ -204,7 +204,18 @@ describe('TelegramSystemBotAdSaleFlowService', () => {
       scope,
       callback(state.current(), 'member.change'),
     );
+    expect(state.current()).toMatchObject({
+      step: 'CHOOSE_MEMBER',
+      payload: {
+        assignedMemberId: 'member-1',
+        memberLabel: 'Ada',
+      },
+    });
     await state.service.callback(scope, callback(state.current(), 'member.1'));
+    expect(state.current()).toMatchObject({
+      step: 'CHOOSE_ACCOUNT',
+      payload: { assignedMemberId: 'member-2', memberLabel: 'Bob' },
+    });
     await state.service.callback(
       scope,
       callback(state.current(), 'finance.skip'),

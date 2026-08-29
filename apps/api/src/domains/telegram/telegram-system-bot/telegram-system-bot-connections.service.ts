@@ -16,7 +16,13 @@ import { randomBytes } from 'crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import { ScheduledTaskRegistryService } from '../../operations/scheduled-tasks/scheduled-task-registry.service';
-import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
+import {
+  SYSTEM_BOT_AUTHORIZED_CONNECTION_SELECT,
+  SYSTEM_BOT_WORKSPACE_MEMBERSHIP_SELECT,
+  presentSystemBotWorkspace,
+  systemBotWorkspaceOption,
+  type SystemBotAuthorizedConnection,
+} from './telegram-system-bot-action-context';
 
 type TelegramIdentity = {
   telegramUserId: string;
@@ -99,6 +105,7 @@ export class TelegramSystemBotConnectionsService {
   async confirmLink(
     userId: string,
     plainToken: string,
+    selectedWorkspaceId: string,
   ): Promise<ConfirmedSystemBotLink> {
     const token = await this.requireUsableToken(plainToken);
     const memberships = await this.prisma.workspaceMember.findMany({
@@ -108,6 +115,13 @@ export class TelegramSystemBotConnectionsService {
     });
     if (!memberships.length)
       throw new BadRequestException('User has no workspace');
+    if (
+      !memberships.some(
+        (membership) => membership.workspaceId === selectedWorkspaceId,
+      )
+    ) {
+      throw new NotFoundException('Workspace is no longer available');
+    }
     const existing = await this.prisma.telegramSystemBotConnection.findUnique({
       where: { telegramUserId: token.telegramUserId },
     });
@@ -137,7 +151,7 @@ export class TelegramSystemBotConnectionsService {
           telegramChatId: token.telegramChatId,
           username: token.username,
           firstName: token.firstName,
-          currentWorkspaceId: memberships[0].workspaceId,
+          currentWorkspaceId: selectedWorkspaceId,
           enabled: true,
           disconnectedAt: null,
         },
@@ -148,8 +162,7 @@ export class TelegramSystemBotConnectionsService {
           firstName: token.firstName,
           enabled: true,
           disconnectedAt: null,
-          currentWorkspaceId:
-            existing?.currentWorkspaceId ?? memberships[0].workspaceId,
+          currentWorkspaceId: selectedWorkspaceId,
         },
       });
     });
@@ -204,50 +217,24 @@ export class TelegramSystemBotConnectionsService {
   }
 
   async workspacesForConnection(
-    connectionId: string,
+    connectionRef: string | SystemBotAuthorizedConnection,
   ): Promise<TelegramSystemBotWorkspace[]> {
-    const connection =
-      await this.prisma.telegramSystemBotConnection.findUniqueOrThrow({
-        where: { id: connectionId },
-        select: { userId: true, currentWorkspaceId: true },
-      });
+    const connection = await this.resolveAuthorizedConnection(connectionRef);
     const memberships = await this.prisma.workspaceMember.findMany({
       where: { userId: connection.userId },
       orderBy: { createdAt: 'asc' },
-      select: {
-        workspaceId: true,
-        role: true,
-        workspace: {
-          select: {
-            name: true,
-            timezone: true,
-            avatarIcon: {
-              select: {
-                id: true,
-                type: true,
-                name: true,
-                emoji: true,
-                imageUrl: true,
-              },
-            },
-          },
-        },
-      },
+      select: SYSTEM_BOT_WORKSPACE_MEMBERSHIP_SELECT,
     });
-    return memberships.map((membership) => ({
-      id: membership.workspaceId,
-      name: membership.workspace.name,
-      role: membership.role,
-      selected: membership.workspaceId === connection.currentWorkspaceId,
-      avatarPresentation: iconToResolvedEmoji(membership.workspace.avatarIcon),
-    }));
+    return memberships.map((membership) =>
+      systemBotWorkspaceOption(membership, connection.currentWorkspaceId),
+    );
   }
 
-  async switchWorkspace(connectionId: string, workspaceId: string) {
-    const connection =
-      await this.prisma.telegramSystemBotConnection.findUniqueOrThrow({
-        where: { id: connectionId },
-      });
+  async switchWorkspace(
+    connectionRef: string | SystemBotAuthorizedConnection,
+    workspaceId: string,
+  ) {
+    const connection = await this.resolveAuthorizedConnection(connectionRef);
     const membership = await this.prisma.workspaceMember.findFirst({
       where: { userId: connection.userId, workspaceId },
       select: { workspaceId: true },
@@ -255,9 +242,10 @@ export class TelegramSystemBotConnectionsService {
     if (!membership)
       throw new NotFoundException('Workspace is no longer available');
     await this.prisma.telegramSystemBotConnection.update({
-      where: { id: connectionId },
+      where: { id: connection.id },
       data: { currentWorkspaceId: workspaceId, lastInteractionAt: new Date() },
     });
+    return { ...connection, currentWorkspaceId: workspaceId };
   }
 
   async switchWorkspaceForUser(userId: string, workspaceId: string) {
@@ -413,11 +401,10 @@ export class TelegramSystemBotConnectionsService {
     return connection;
   }
 
-  async requireCurrentWorkspace(connectionId: string) {
-    const connection =
-      await this.prisma.telegramSystemBotConnection.findUniqueOrThrow({
-        where: { id: connectionId },
-      });
+  async requireCurrentWorkspace(
+    connectionRef: string | SystemBotAuthorizedConnection,
+  ) {
+    const connection = await this.resolveAuthorizedConnection(connectionRef);
     if (!connection.currentWorkspaceId)
       throw new NotFoundException('Select a workspace first');
     const membership = await this.prisma.workspaceMember.findFirst({
@@ -425,37 +412,21 @@ export class TelegramSystemBotConnectionsService {
         userId: connection.userId,
         workspaceId: connection.currentWorkspaceId,
       },
-      select: {
-        workspaceId: true,
-        role: true,
-        workspace: {
-          select: {
-            name: true,
-            timezone: true,
-            avatarIcon: {
-              select: {
-                id: true,
-                type: true,
-                name: true,
-                emoji: true,
-                imageUrl: true,
-              },
-            },
-          },
-        },
-      },
+      select: SYSTEM_BOT_WORKSPACE_MEMBERSHIP_SELECT,
     });
     if (!membership)
       throw new NotFoundException('Workspace is no longer available');
-    return {
-      ...membership,
-      workspace: {
-        ...membership.workspace,
-        avatarPresentation: iconToResolvedEmoji(
-          membership.workspace.avatarIcon,
-        ),
-      },
-    };
+    return presentSystemBotWorkspace(membership);
+  }
+
+  private resolveAuthorizedConnection(
+    connectionRef: string | SystemBotAuthorizedConnection,
+  ) {
+    if (typeof connectionRef !== 'string') return connectionRef;
+    return this.prisma.telegramSystemBotConnection.findUniqueOrThrow({
+      where: { id: connectionRef },
+      select: SYSTEM_BOT_AUTHORIZED_CONNECTION_SELECT,
+    });
   }
 
   private async requireEnabledConnectionForUser(userId: string) {

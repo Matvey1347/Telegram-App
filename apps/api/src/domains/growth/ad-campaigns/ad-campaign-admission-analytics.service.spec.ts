@@ -2,6 +2,7 @@ import {
   AdCampaignAdmissionDetectionMode,
   AdCampaignAdmissionTimeBoundarySource,
 } from '@prisma/client';
+import { detectAdmissionEventsForCampaign } from './ad-campaign-admission-events';
 import { AdCampaignAdmissionAnalyticsService } from './ad-campaign-admission-analytics.service';
 
 const date = (value: string) => new Date(value);
@@ -32,7 +33,7 @@ function campaign(overrides: Record<string, unknown> = {}) {
 
 describe('AdCampaignAdmissionAnalyticsService detection', () => {
   it('does not create a batch for the first zero snapshot', () => {
-    const events = service().detectEventsForCampaign({
+    const events = detectAdmissionEventsForCampaign({
       campaign: campaign(),
       snapshots: [
         {
@@ -48,7 +49,7 @@ describe('AdCampaignAdmissionAnalyticsService detection', () => {
   });
 
   it('creates a bootstrapped cumulative batch for first joined snapshot', () => {
-    const events = service().detectEventsForCampaign({
+    const events = detectAdmissionEventsForCampaign({
       campaign: campaign(),
       snapshots: [
         {
@@ -65,14 +66,16 @@ describe('AdCampaignAdmissionAnalyticsService detection', () => {
       AdCampaignAdmissionDetectionMode.BOOTSTRAPPED_CUMULATIVE,
     );
     expect(events[0].sourceLinks[0].joinedDelta).toBe(500);
-    expect(events[0].analysisStartedAt).toEqual(date('2026-01-01T00:00:00.000Z'));
+    expect(events[0].analysisStartedAt).toEqual(
+      date('2026-01-01T00:00:00.000Z'),
+    );
     expect(events[0].timeBoundarySource).toBe(
       AdCampaignAdmissionTimeBoundarySource.CAMPAIGN_START,
     );
   });
 
   it('restores historical positive joined deltas as exact batches', () => {
-    const events = service().detectEventsForCampaign({
+    const events = detectAdmissionEventsForCampaign({
       campaign: campaign(),
       snapshots: [
         {
@@ -100,14 +103,13 @@ describe('AdCampaignAdmissionAnalyticsService detection', () => {
       AdCampaignAdmissionDetectionMode.EXACT_DELTA,
       AdCampaignAdmissionDetectionMode.EXACT_DELTA,
     ]);
-    expect(events.map((event: any) => event.sourceLinks[0].joinedDelta)).toEqual([
-      500,
-      200,
-    ]);
+    expect(
+      events.map((event: any) => event.sourceLinks[0].joinedDelta),
+    ).toEqual([500, 200]);
   });
 
   it('uses joined delta rather than requested-count drop', () => {
-    const events = service().detectEventsForCampaign({
+    const events = detectAdmissionEventsForCampaign({
       campaign: campaign(),
       snapshots: [
         {
@@ -129,7 +131,7 @@ describe('AdCampaignAdmissionAnalyticsService detection', () => {
   });
 
   it('does not create a batch for requested-count decrease only', () => {
-    const events = service().detectEventsForCampaign({
+    const events = detectAdmissionEventsForCampaign({
       campaign: campaign(),
       snapshots: [
         {
@@ -151,7 +153,7 @@ describe('AdCampaignAdmissionAnalyticsService detection', () => {
   });
 
   it('ignores joined growth on a normal link without prior requests', () => {
-    const events = service().detectEventsForCampaign({
+    const events = detectAdmissionEventsForCampaign({
       campaign: campaign({
         inviteLinks: [
           {
@@ -183,7 +185,7 @@ describe('AdCampaignAdmissionAnalyticsService detection', () => {
   });
 
   it('aggregates multiple invite links observed in one sync into one batch', () => {
-    const events = service().detectEventsForCampaign({
+    const events = detectAdmissionEventsForCampaign({
       campaign: campaign({
         inviteLinks: [
           {
@@ -265,7 +267,8 @@ describe('AdCampaignAdmissionAnalyticsService detection', () => {
       { id: 'target', joinedBefore: 0, releasedSubscribersCount: 187 },
       { id: 'other', joinedBefore: 86, releasedSubscribersCount: 13 },
     ];
-    const attributionBatches = analytics.selectAttributionWindowBatches(batches);
+    const attributionBatches =
+      analytics.selectAttributionWindowBatches(batches);
 
     expect(attributionBatches).toEqual([
       { id: 'target', joinedBefore: 0, releasedSubscribersCount: 187 },

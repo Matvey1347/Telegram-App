@@ -49,7 +49,40 @@ describe("placementTimer", () => {
         } as never,
         new Date("2026-08-27T18:05:00.000Z").getTime(),
       ),
-    ).toEqual({ phase: "complete", label: "Post deleted" });
+    ).toEqual({ phase: "complete", label: "Automatically deleted" });
+  });
+
+  it("shows a retryable publication error instead of pending", () => {
+    expect(
+      placementTimer(
+        {
+          scheduledAt: "2026-08-25T13:30:00.000Z",
+          publishedAt: null,
+          plannedDeleteAt: null,
+          deletedAt: null,
+          managedPost: { status: "FAILED", lastError: "bot unavailable" },
+        } as never,
+        new Date("2026-08-25T14:05:00.000Z").getTime(),
+      ),
+    ).toEqual({
+      phase: "publication",
+      label: "Publication failed. Try again.",
+    });
+  });
+
+  it("prefers a confirmed publication over an old error message", () => {
+    expect(
+      placementTimer(
+        {
+          scheduledAt: "2026-08-25T13:30:00.000Z",
+          publishedAt: "2026-08-25T14:05:00.000Z",
+          plannedDeleteAt: null,
+          deletedAt: null,
+          managedPost: { status: "PUBLISHED", lastError: "old error" },
+        } as never,
+        new Date("2026-08-25T14:06:00.000Z").getTime(),
+      ),
+    ).toBeNull();
   });
 
   it("shows the actual deletion time when a post stayed longer than planned", () => {

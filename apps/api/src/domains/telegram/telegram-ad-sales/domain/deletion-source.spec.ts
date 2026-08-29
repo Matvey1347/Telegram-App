@@ -1,5 +1,6 @@
 import {
   isTelegramMessageAlreadyAbsent,
+  resolveAdPlacementDeletionMessageIds,
   selectAdPlacementDeletionSource,
 } from './deletion-source';
 
@@ -69,5 +70,31 @@ describe('isTelegramMessageAlreadyAbsent', () => {
     expect(
       isTelegramMessageAlreadyAbsent(new Error('CHAT_ADMIN_REQUIRED')),
     ).toBe(false);
+  });
+});
+
+describe('resolveAdPlacementDeletionMessageIds', () => {
+  it('uses the linked Telegram post for a legacy draft managed-post shell', () => {
+    expect(
+      resolveAdPlacementDeletionMessageIds({
+        managedPost: {
+          telegramMessageIds: [],
+          telegramIdVerificationStatus: 'UNVERIFIED',
+        },
+        telegramPost: { telegramMessageId: '8411' },
+      }),
+    ).toEqual(['8411']);
+  });
+
+  it('fails closed when unverified managed message ids conflict with identity', () => {
+    expect(
+      resolveAdPlacementDeletionMessageIds({
+        managedPost: {
+          telegramMessageIds: ['wrong-id'],
+          telegramIdVerificationStatus: 'MISMATCH',
+        },
+        telegramPost: { telegramMessageId: '8411' },
+      }),
+    ).toEqual([]);
   });
 });

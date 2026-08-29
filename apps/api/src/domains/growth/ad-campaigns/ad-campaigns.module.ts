@@ -5,12 +5,14 @@ import { AdCampaignAdmissionAnalyticsService } from './ad-campaign-admission-ana
 import { AdCampaignAdmissionBackfillService } from './ad-campaign-admission-backfill.service';
 import { AdCampaignsController } from './ad-campaigns.controller';
 import { AdCampaignsService } from './ad-campaigns.service';
+import { AdCampaignListReadService } from './ad-campaign-list-read.service';
 
 @Module({
   imports: [FinanceCategoriesModule],
   controllers: [AdCampaignsController],
   providers: [
     AdCampaignsService,
+    AdCampaignListReadService,
     AdCampaignAnalyticsService,
     AdCampaignAdmissionAnalyticsService,
     AdCampaignAdmissionBackfillService,

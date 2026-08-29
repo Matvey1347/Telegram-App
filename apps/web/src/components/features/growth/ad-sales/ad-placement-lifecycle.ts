@@ -1,5 +1,10 @@
-import type { TelegramAdSalePlacement } from "@telegram-system/shared";
+import type {
+  TelegramAdSaleListPlacement,
+  TelegramAdSalePlacement,
+} from "@telegram-system/shared";
 import { formatDateTime } from "@/lib/date-format";
+
+type LifecyclePlacement = TelegramAdSalePlacement | TelegramAdSaleListPlacement;
 
 function durationLabel(remaining: number) {
   const seconds = Math.floor(remaining / 1_000);
@@ -11,14 +16,24 @@ function durationLabel(remaining: number) {
 }
 
 export function placementTimer(
-  placement: TelegramAdSalePlacement,
+  placement: LifecyclePlacement,
   now: number,
 ): { phase: "publication" | "deletion" | "complete"; label: string } | null {
   if (placement.deletedAt) {
     return { phase: "complete", label: "Automatically deleted" };
   }
   if (placement.managedPost?.telegramRemoteStatus === "MISSING") {
-    return { phase: "complete", label: "Post deleted" };
+    return { phase: "complete", label: "Automatically deleted" };
+  }
+  if (
+    !placement.publishedAt &&
+    (placement.managedPost?.status === "FAILED" ||
+      placement.managedPost?.lastError)
+  ) {
+    return {
+      phase: "publication",
+      label: "Publication failed. Try again.",
+    };
   }
   if (!placement.publishedAt) {
     const remaining = new Date(placement.scheduledAt).getTime() - now;
@@ -42,7 +57,7 @@ export function placementTimer(
 }
 
 export function placementDeletionLabel(
-  placement: TelegramAdSalePlacement,
+  placement: LifecyclePlacement,
   now: number,
 ) {
   const timer = placementTimer(placement, now);
@@ -52,14 +67,14 @@ export function placementDeletionLabel(
     .replace(/^Auto-delete in /, "");
 }
 
-export function placementRunWindow(placement: TelegramAdSalePlacement) {
+export function placementRunWindow(placement: LifecyclePlacement) {
   if (!placement.publishedAt || !placement.plannedDeleteAt) return null;
   const lifecycleStartedAt = placement.publishedAt;
   const lifecycleEndedAt = placement.deletedAt ?? placement.plannedDeleteAt;
   return `${formatDateTime(lifecycleStartedAt)} → ${formatDateTime(lifecycleEndedAt)}`;
 }
 
-export function placementFormatLabel(placement: TelegramAdSalePlacement) {
+export function placementFormatLabel(placement: LifecyclePlacement) {
   const topMinutes = placement.topDurationMinutesSnapshot;
   const feedHours = placement.feedDurationHoursSnapshot;
   if (topMinutes == null && feedHours == null) {

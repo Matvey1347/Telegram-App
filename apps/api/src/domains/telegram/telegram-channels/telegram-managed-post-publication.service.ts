@@ -42,20 +42,51 @@ export class TelegramManagedPostPublicationService {
     private readonly telegramManagedPostPublisherService: TelegramManagedPostPublisherService,
   ) {}
 
-  publishManagedPost(
+  async publishManagedPost(
     workspaceId: string,
     channelId: string,
     postId: string,
     scheduleAt?: Date,
     longTextMode: 'IMAGES_THEN_TEXT' | 'CAPTION_THEN_TEXT' = 'IMAGES_THEN_TEXT',
   ) {
-    return this.telegramManagedPostPublisherService.publishManagedPost(
-      workspaceId,
-      channelId,
-      postId,
-      scheduleAt,
-      longTextMode,
-    );
+    try {
+      return await this.telegramManagedPostPublisherService.publishManagedPost(
+        workspaceId,
+        channelId,
+        postId,
+        scheduleAt,
+        longTextMode,
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Telegram publish failed';
+      // Publisher preflight can fail before its delivery journal is entered.
+      // Persist that failure for drafts/local deliveries so retries remain
+      // observable instead of leaving a claimed post stuck in PUBLISHING.
+      try {
+        await this.prisma.telegramManagedPost.updateMany({
+          where: {
+            id: postId,
+            workspaceId,
+            telegramChannelId: channelId,
+            OR: [
+              { status: TelegramManagedPostStatus.DRAFT },
+              { status: TelegramManagedPostStatus.FAILED },
+              { status: TelegramManagedPostStatus.PUBLISHING },
+              {
+                status: TelegramManagedPostStatus.SCHEDULED,
+                scheduleMode: 'LOCAL',
+              },
+            ],
+          },
+          data: { status: TelegramManagedPostStatus.FAILED, lastError: message },
+        });
+      } catch {
+        // Failure observability is best effort and must never replace the
+        // actionable Telegram/publisher error returned to the caller.
+      }
+      throw error;
+    }
   }
 
   private readonly iconSelect = {

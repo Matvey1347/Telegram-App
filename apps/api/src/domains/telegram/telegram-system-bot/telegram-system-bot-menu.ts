@@ -19,6 +19,18 @@ const SYSTEM_BOT_ACTIONS: Readonly<Record<string, string>> = {
   '🏢 Workspace': '/workspace',
 };
 
+export const SYSTEM_BOT_COMMANDS = [
+  { command: 'start', description: 'Start or reconnect the System Bot' },
+  { command: 'help', description: 'Show available commands' },
+  { command: 'posts', description: 'Browse and create channel posts' },
+  { command: 'post', description: 'Create a new channel post' },
+  { command: 'adsale', description: 'Record an advertising sale' },
+  { command: 'channels', description: 'Show managed channels' },
+  { command: 'stats', description: 'Show workspace statistics' },
+  { command: 'finance', description: 'Record income or expense' },
+  { command: 'workspace', description: 'Switch workspace' },
+] as const;
+
 export const SYSTEM_BOT_HELP_TEXT =
   '🤖 Use the square keyboard icon next to the message field. You can also type these commands:\n📝 /posts — browse and create channel posts\n➕ /post — directly create a new post\n💼 /adsale — quickly record an advertising sale\n📢 /channels — your managed channels\n📊 /stats — workspace statistics\n💰 /finance — record income or expense\n🏢 /workspace — switch workspace';
 

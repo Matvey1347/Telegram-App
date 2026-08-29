@@ -1,4 +1,38 @@
 import type { BulkActionResult } from "./post-groups";
+import type { ResolvedEmoji } from "./resolved-emoji";
+
+/** Maximum IDs accepted by one workspace- and channel-scoped lookup request. */
+export const TELEGRAM_MANAGED_POST_LOOKUP_MAX_IDS = 1_000;
+
+/** Maximum channel group summaries returned by the bounded sidebar contract. */
+export const TELEGRAM_POST_GROUP_SUMMARY_MAX_ITEMS = 1_000;
+
+export type TelegramManagedPostLookupItem = {
+  id: string;
+  title: string;
+  icon: string | null;
+  iconPresentation: ResolvedEmoji | null;
+  status: "DRAFT" | "SCHEDULED" | "PUBLISHING" | "PUBLISHED" | "FAILED";
+  scheduledAt: string | null;
+  publishedAt: string | null;
+  telegramRemoteStatus:
+    | "NONE"
+    | "SCHEDULED"
+    | "PUBLISHED"
+    | "BROKEN"
+    | "MISSING"
+    | "UNKNOWN";
+  telegramMessageIds: string[];
+  telegramIdVerificationStatus: TelegramManagedPostIdVerificationStatus;
+  lastError: string | null;
+};
+
+export type TelegramManagedPostLookupRequest = { ids: string[] };
+
+export type TelegramManagedPostLookupResponse = {
+  items: TelegramManagedPostLookupItem[];
+  missingIds: string[];
+};
 
 export type TelegramManagedPostOrigin = "SYSTEM" | "TELEGRAM";
 export type TelegramManagedPostIdVerificationStatus =

@@ -9,4 +9,7 @@ For architecture work, read docs/architecture/PRODUCT_BOUNDARIES.md and the refa
 Operate read-only: do not edit files.
 Return concrete paths, line counts, imports, exports, public methods, tests and risk notes.
 Focus on actual imports/usages, not filename guesses.
+For significant performance/refactor work, map browser/API/database, Telegram webhook,
+and scheduled-work execution paths so Knuth Performance and Parnas Structure can audit
+runtime cost and cohesive extraction seams before implementation.
 """

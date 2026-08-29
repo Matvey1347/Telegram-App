@@ -29,7 +29,7 @@ export function ResetChannelScheduledPostsButton({
     onSuccess: async (result) => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: telegramPostKeys.managed(channelId),
+          queryKey: telegramPostKeys.managedLists(channelId),
         }),
         queryClient.invalidateQueries({
           queryKey: telegramPostKeys.managedCalendar(channelId),

@@ -22,6 +22,8 @@ import type {
   TelegramPublishingCapabilities,
 } from "@telegram-system/shared";
 import { createApplicationLogsApi } from "./features/operations/application-logs-api";
+import { createDashboardApi } from "./features/dashboard/dashboard-api";
+import { createTrashApi } from "./features/operations/trash-api";
 import { createFinanceApi } from "./features/finance/finance-api";
 import { createTelegramChannelHelpers } from "./features/telegram/telegram-channel-helpers-api";
 import { createTelegramChannelsApi } from "./features/telegram/telegram-channels-api";
@@ -49,11 +51,8 @@ export type {
   UpdateScheduledTaskPayload,
 } from "@telegram-system/shared";
 
-function resolveApiBaseUrl() {
-  return resolveBrowserApiBase(publicWebEnvironment.apiUrl);
-}
-
-export const api = createHttpTransport({ baseURL: resolveApiBaseUrl });
+const apiBaseUrl = resolveBrowserApiBase(publicWebEnvironment.apiUrl);
+export const api = createHttpTransport({ baseURL: apiBaseUrl });
 
 let lastCorrelationId: string | null = null;
 let freshReadRequestsInFlight = 0;
@@ -238,7 +237,7 @@ async function streamAction<TResult, TItem = BulkActionResultItem>(
     const workspaceId = localStorage.getItem("selected-workspace-id");
     if (workspaceId) headers["X-Workspace-Id"] = workspaceId;
   }
-  const response = await fetch(`${resolveApiBaseUrl()}${path}`, {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
     method: "POST",
     headers,
     credentials: "include",
@@ -685,7 +684,6 @@ export const telegramChannelsApi = createTelegramChannelsApi({
   crud,
   getPaginated,
   getAllPaginatedItems,
-  hasExplicitPagination,
   streamBulkAction,
   streamProgressAction,
   silentFeedbackConfig,
@@ -711,8 +709,6 @@ const marketingApi = createMarketingApi({
   crud,
   quietCrud,
   getPaginated,
-  getAllPaginatedItems,
-  hasExplicitPagination,
   quietMutationConfig,
 });
 
@@ -757,26 +753,7 @@ export const telegramAdSalesApi = createTelegramAdSalesApi({
 
 export const scheduledTasksApi = createScheduledTasksApi(api);
 
-export type TrashItem = {
-  id: string;
-  kind: string;
-  name: string;
-  product: string;
-  deletedAt: string;
-  expiresAt: string;
-  daysRemaining: number;
-};
-export const trashApi = {
-  list: async (params: PaginationParams) =>
-    (await api.get<PaginatedResponse<TrashItem>>("/trash", { params })).data,
-  restore: async (kind: string, id: string) =>
-    (await api.patch(`/trash/${kind}/${id}/restore`)).data,
-};
+export type { TrashItem } from "./features/operations/trash-api";
+export const trashApi = createTrashApi(api);
 
-export async function getDashboardSummary(params?: {
-  dateFrom?: string;
-  dateTo?: string;
-}) {
-  return (await api.get<DashboardSummary>("/dashboard/summary", { params }))
-    .data;
-}
+export const getDashboardSummary = createDashboardApi(api).getSummary;

@@ -7,7 +7,6 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { ManagedPostsCalendarQueryDto } from './dto';
 import { TelegramChannelCatalogService } from './telegram-channel-catalog.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
-import { TelegramManagedPostReconciliationService } from './telegram-managed-post-reconciliation.service';
 
 @Injectable()
 export class TelegramManagedPostCalendarService {
@@ -16,7 +15,6 @@ export class TelegramManagedPostCalendarService {
     private readonly responseCache: ResponseCacheService,
     private readonly telegramChannelsSupportService: TelegramChannelsSupportService,
     private readonly telegramChannelCatalogService: TelegramChannelCatalogService,
-    private readonly telegramManagedPostReconciliationService: TelegramManagedPostReconciliationService,
   ) {}
 
   async managedPostsCalendar(
@@ -41,18 +39,6 @@ export class TelegramManagedPostCalendarService {
     }
     const now = new Date();
     const publishedRangeEnd = to < now ? to : now;
-
-    const reconciliation =
-      await this.telegramManagedPostReconciliationService.reconcileDueManagedPosts(
-        workspaceId,
-        channelId,
-      );
-    if (reconciliation.checked) {
-      this.telegramChannelsSupportService.invalidateTelegramChannelReadCache(
-        userId,
-        workspaceId,
-      );
-    }
 
     const fromIso = from.toISOString();
     const toIso = to.toISOString();

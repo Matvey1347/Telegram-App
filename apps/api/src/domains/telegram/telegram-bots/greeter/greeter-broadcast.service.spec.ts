@@ -202,17 +202,27 @@ describe('GreeterBroadcastService', () => {
       },
       greeterBroadcastRecipient: {
         createMany: jest.fn().mockResolvedValue({ count: 2 }),
+        findFirst: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue(recipients),
+        groupBy: jest.fn().mockResolvedValue([]),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
+      telegramBotDelivery: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValue([{ deliveryId: 'd-u1' }, { deliveryId: 'd-u2' }]),
     } as any;
     const audiences = { resolve: jest.fn().mockResolvedValue(audienceRows) };
     const deliveries = {
-      enqueueSendMessage: jest
-        .fn()
-        .mockImplementation(({ telegramBotUserId }) =>
-          Promise.resolve({ id: `d-${telegramBotUserId}` }),
+      enqueueSendMessageBatch: jest.fn().mockImplementation((inputs) =>
+        Promise.resolve(
+          inputs.map(({ telegramBotUserId }) => ({
+            id: `d-${telegramBotUserId}`,
+          })),
         ),
+      ),
     };
     await service(prisma, audiences, deliveries).dispatchBroadcast('broadcast');
     expect(prisma.greeterBroadcastRecipient.createMany).toHaveBeenCalledWith({
@@ -230,24 +240,20 @@ describe('GreeterBroadcastService', () => {
       ],
       skipDuplicates: true,
     });
-    expect(deliveries.enqueueSendMessage).toHaveBeenCalledTimes(2);
-    expect(deliveries.enqueueSendMessage).toHaveBeenNthCalledWith(
-      1,
+    expect(deliveries.enqueueSendMessageBatch).toHaveBeenCalledTimes(1);
+    expect(deliveries.enqueueSendMessageBatch).toHaveBeenCalledWith([
       expect.objectContaining({
         idempotencyKey: 'greeter-broadcast:broadcast:u1',
         chatId: '10',
       }),
-    );
-    expect(deliveries.enqueueSendMessage).toHaveBeenNthCalledWith(
-      2,
       expect.objectContaining({
         idempotencyKey: 'greeter-broadcast:broadcast:u2',
         chatId: '11',
       }),
-    );
+    ]);
   });
 
-  it('continues queuing recipient 2 when recipient 1 enqueue fails', async () => {
+  it('defers the whole idempotent page when batch enqueue fails', async () => {
     const audienceRows = [
       { telegramBotUserId: 'u1', channelId: 'c1' },
       { telegramBotUserId: 'u2', channelId: 'c2' },
@@ -275,15 +281,16 @@ describe('GreeterBroadcastService', () => {
       },
       greeterBroadcastRecipient: {
         createMany: jest.fn().mockResolvedValue({ count: 2 }),
+        findFirst: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue(recipients),
+        groupBy: jest.fn().mockResolvedValue([]),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
     } as any;
     const deliveries = {
-      enqueueSendMessage: jest
+      enqueueSendMessageBatch: jest
         .fn()
-        .mockRejectedValueOnce(new Error('queue unavailable'))
-        .mockResolvedValueOnce({ id: 'd-u2' }),
+        .mockRejectedValueOnce(new Error('queue unavailable')),
     };
 
     await expect(
@@ -294,34 +301,46 @@ describe('GreeterBroadcastService', () => {
       ).dispatchBroadcast('broadcast'),
     ).resolves.toBeUndefined();
 
-    expect(deliveries.enqueueSendMessage).toHaveBeenCalledTimes(2);
-    expect(deliveries.enqueueSendMessage).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        telegramBotUserId: 'u2',
-        idempotencyKey: 'greeter-broadcast:broadcast:u2',
-      }),
-    );
+    expect(deliveries.enqueueSendMessageBatch).toHaveBeenCalledTimes(1);
     expect(prisma.greeterBroadcastRecipient.updateMany).toHaveBeenCalledWith({
-      where: { id: 'r1', status: GreeterBroadcastRecipientStatus.PENDING },
+      where: {
+        id: { in: ['r1', 'r2'] },
+        status: GreeterBroadcastRecipientStatus.PENDING,
+      },
       data: {
         lastError: 'queue unavailable',
         nextQueueAttemptAt: expect.any(Date),
       },
     });
-    expect(prisma.greeterBroadcastRecipient.updateMany).toHaveBeenCalledWith({
-      where: {
-        id: 'r2',
-        status: GreeterBroadcastRecipientStatus.PENDING,
-        broadcast: { status: GreeterBroadcastStatus.PROCESSING },
+  });
+
+  it('does not rematerialize a processing broadcast audience', async () => {
+    const prisma = {
+      greeterBroadcast: {
+        findUnique: jest.fn().mockResolvedValue(
+          row(GreeterBroadcastStatus.PROCESSING, {
+            scheduledAt: new Date('2000-01-01T00:00:00Z'),
+          }),
+        ),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
-      data: {
-        status: GreeterBroadcastRecipientStatus.QUEUED,
-        deliveryId: 'd-u2',
-        lastError: null,
-        nextQueueAttemptAt: null,
+      greeterBroadcastRecipient: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValueOnce({ id: 'already-materialized' })
+          .mockResolvedValueOnce({ id: 'still-pending' }),
+        createMany: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+        groupBy: jest.fn(),
+        updateMany: jest.fn(),
       },
-    });
+    } as any;
+    const audiences = { resolve: jest.fn() };
+
+    await service(prisma, audiences).dispatchBroadcast('broadcast');
+
+    expect(audiences.resolve).not.toHaveBeenCalled();
+    expect(prisma.greeterBroadcastRecipient.createMany).not.toHaveBeenCalled();
   });
 
   it('reports sent, failed, blocked and pending recipient outcomes without overlap', async () => {

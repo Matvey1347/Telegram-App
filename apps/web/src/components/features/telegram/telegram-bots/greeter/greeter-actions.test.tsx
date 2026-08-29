@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
+  keepPreviousData: (previous: unknown) => previous,
   useQuery: (options: { queryKey: readonly unknown[] }) =>
     options.queryKey[0] === "auth"
       ? queryState({ user: { editorShortcuts: null } })

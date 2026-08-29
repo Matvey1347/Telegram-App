@@ -706,10 +706,7 @@ describe('TelegramChannelsService syncManagedPosts', () => {
       to: '2026-07-31T23:59:59.999Z',
     });
 
-    expect(service.reconcileDueManagedPosts).toHaveBeenCalledWith(
-      'workspace',
-      'channel',
-    );
+    expect(service.reconcileDueManagedPosts).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toEqual(
@@ -972,7 +969,7 @@ describe('TelegramChannelsService syncManagedPosts', () => {
     }
   });
 
-  it('repairs imported Telegram links automatically when loading managed posts', async () => {
+  it('does not repair imported Telegram links while loading managed posts', async () => {
     const repairedPost = {
       id: 'imported-failed',
       title: 'Не плутай зайнятість із продуктивністю',
@@ -1022,6 +1019,8 @@ describe('TelegramChannelsService syncManagedPosts', () => {
             },
           ])
           .mockResolvedValue([repairedPost]),
+        count: jest.fn().mockResolvedValue(1),
+        findFirst: jest.fn().mockResolvedValue(null),
         update,
       },
       telegramPost: {
@@ -1039,9 +1038,7 @@ describe('TelegramChannelsService syncManagedPosts', () => {
       workspaceMember: {
         findFirst: jest.fn().mockResolvedValue({ id: 'member-1' }),
       },
-      $queryRaw: jest
-        .fn()
-        .mockResolvedValue([{ exists: '"TelegramManagedPostRevision"' }]),
+      $queryRaw: jest.fn().mockResolvedValue([{ count: 0n }]),
       $transaction: jest
         .fn()
         .mockImplementation(async (callback) => callback(prisma)),
@@ -1086,25 +1083,13 @@ describe('TelegramChannelsService syncManagedPosts', () => {
 
     const result = await service.managedPosts('user', 'channel');
 
-    expect(mtprotoClient.getManagedPostMessages).toHaveBeenCalled();
-    expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'imported-failed' },
-        data: expect.objectContaining({
-          status: TelegramManagedPostStatus.PUBLISHED,
-          telegramRemoteStatus: TelegramManagedPostRemoteStatus.PUBLISHED,
-          telegramMessageIds: ['3001'],
-          telegramMessageUrls: ['https://t.me/c/1590085922/3001'],
-          lastError: null,
-        }),
-      }),
-    );
-    expect(result[0]).toEqual(
+    expect(mtprotoClient.getManagedPostMessages).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+    expect(result.items[0]).toEqual(
       expect.objectContaining({
         id: 'imported-failed',
-        status: TelegramManagedPostStatus.PUBLISHED,
-        telegramRemoteStatus: TelegramManagedPostRemoteStatus.PUBLISHED,
-        telegramMessageUrls: ['https://t.me/c/1590085922/3001'],
+        status: TelegramManagedPostStatus.FAILED,
+        telegramRemoteStatus: TelegramManagedPostRemoteStatus.MISSING,
       }),
     );
   });

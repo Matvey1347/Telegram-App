@@ -8,10 +8,6 @@ import {
   sumInviteLinkAttributedSubscribers,
   sumInviteLinkJoinedSubscribers,
 } from '../../../common/analytics/invite-link-metrics';
-import {
-  createPaginatedResponse,
-  normalizePagination,
-} from '../../../common/pagination/pagination.utils';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
@@ -27,6 +23,7 @@ import {
   buildCampaignInviteLinkHistoryPayload,
   type CampaignInviteLinkHistoryPayload,
 } from './invite-link-history';
+import { AdCampaignListReadService } from './ad-campaign-list-read.service';
 
 @Injectable()
 export class AdCampaignsService {
@@ -36,13 +33,19 @@ export class AdCampaignsService {
     'unknown';
   private admissionAnalyticsStorageState: 'unknown' | 'available' | 'missing' =
     'unknown';
+  private readonly listReadService: AdCampaignListReadService;
 
   constructor(
     private prisma: PrismaService,
     private workspaceService: WorkspaceService,
     private financeCategoriesService: FinanceCategoriesService,
     private campaignAnalyticsService: AdCampaignAnalyticsService,
-  ) {}
+  ) {
+    this.listReadService = new AdCampaignListReadService(
+      prisma,
+      workspaceService,
+    );
+  }
 
   private analyticsInputData(dto: Partial<AdCampaignAnalyticsInputDto>) {
     return {
@@ -299,8 +302,10 @@ export class AdCampaignsService {
             (sum, batch) => sum + Number(batch.releasedSubscribersCount || 0),
             0,
           );
-    const cumulativeAvgViewsUplift = latestPoint?.cumulativeAvgViewsUplift ?? null;
-    const incrementalAvgViewsUplift = latestPoint?.incrementalAvgViewsUplift ?? null;
+    const cumulativeAvgViewsUplift =
+      latestPoint?.cumulativeAvgViewsUplift ?? null;
+    const incrementalAvgViewsUplift =
+      latestPoint?.incrementalAvgViewsUplift ?? null;
     const estimatedActiveSubscribers = Math.min(
       releasedSubscribersCount,
       Math.round(Number(cumulativeAvgViewsUplift || 0)),
@@ -329,7 +334,9 @@ export class AdCampaignsService {
             cumulativeAvgViewsUplift,
             incrementalAvgViewsUplift,
             estimatedActiveSubscribers:
-              cumulativeAvgViewsUplift != null ? estimatedActiveSubscribers : null,
+              cumulativeAvgViewsUplift != null
+                ? estimatedActiveSubscribers
+                : null,
             activationRate,
             trackedPostsCount: latestPoint?.trackedPostsCount ?? 0,
             originalTrackedPostsCount: latestBatch.trackedPostsCount,
@@ -345,8 +352,10 @@ export class AdCampaignsService {
       if (!primary) return batch;
       const primarySize = Number(primary.releasedSubscribersCount || 0);
       const batchSize = Number(batch.releasedSubscribersCount || 0);
-      if (batchSize !== primarySize) return batchSize > primarySize ? batch : primary;
-      return new Date(batch.startedAt).getTime() < new Date(primary.startedAt).getTime()
+      if (batchSize !== primarySize)
+        return batchSize > primarySize ? batch : primary;
+      return new Date(batch.startedAt).getTime() <
+        new Date(primary.startedAt).getTime()
         ? batch
         : primary;
     }, null);
@@ -825,15 +834,25 @@ export class AdCampaignsService {
     );
   }
 
-  private async syncExpenseTransaction(tx: any, workspaceId: string, campaign: any, accountId?: string) {
-    const account = await tx.account.findFirst({ where: { id: accountId || campaign.accountId, workspaceId } });
+  private async syncExpenseTransaction(
+    tx: any,
+    workspaceId: string,
+    campaign: any,
+    accountId?: string,
+  ) {
+    const account = await tx.account.findFirst({
+      where: { id: accountId || campaign.accountId, workspaceId },
+    });
     if (!account) throw new NotFoundException('Account not found');
 
     const description = `Telegram ad campaign: ${campaign.title}`;
     const date = campaign.placementDate || campaign.startedAt || new Date();
     await this.financeCategoriesService.ensureSystemCategories(workspaceId, tx);
-    const advertisingCategory = await tx.transactionCategory.findFirst({ where: { workspaceId, type: 'expense', key: 'advertising' } });
-    if (!advertisingCategory) throw new NotFoundException('Advertising transaction category not found');
+    const advertisingCategory = await tx.transactionCategory.findFirst({
+      where: { workspaceId, type: 'expense', key: 'advertising' },
+    });
+    if (!advertisingCategory)
+      throw new NotFoundException('Advertising transaction category not found');
 
     const payload = {
       workspaceId,
@@ -853,7 +872,11 @@ export class AdCampaignsService {
     };
 
     // The unique relation is both provenance and the idempotency boundary.
-    await tx.transaction.upsert({ where: { adCampaignId: campaign.id }, update: payload, create: payload });
+    await tx.transaction.upsert({
+      where: { adCampaignId: campaign.id },
+      update: payload,
+      create: payload,
+    });
   }
 
   private async shapeCampaign(
@@ -887,11 +910,12 @@ export class AdCampaignsService {
       ...promo,
       iconPresentation: iconToResolvedEmoji(promo.icon),
     });
-    const inviteLinks = (Array.isArray(row.inviteLinks) ? row.inviteLinks : [])
-      .map((link: any) => ({
-        ...link,
-        creatorMember: presentMember(link.creatorMember),
-      }));
+    const inviteLinks = (
+      Array.isArray(row.inviteLinks) ? row.inviteLinks : []
+    ).map((link: any) => ({
+      ...link,
+      creatorMember: presentMember(link.creatorMember),
+    }));
     const normalizedLegacySources = await Promise.all(
       row.advertisingChannels.map(async (x: any) => {
         const source = x.advertisingSource;
@@ -924,7 +948,9 @@ export class AdCampaignsService {
     const telegramInviteLink =
       enrichedInviteLinks.find(
         (link: any) => link.id === row.telegramInviteLinkId,
-      ) || enrichedInviteLinks[0] || null;
+      ) ||
+      enrichedInviteLinks[0] ||
+      null;
     return {
       ...row,
       assignedMember: presentMember(row.assignedMember),
@@ -1019,109 +1045,7 @@ export class AdCampaignsService {
   }
 
   async findAll(userId: string, query: AdCampaignQueryDto = {}) {
-    const workspaceId = await this.workspace(userId);
-    const search = query.search?.trim();
-    const where: any = {
-      workspaceId,
-      telegramChannelId: query.telegramChannelId || undefined,
-      assignedMemberId: query.assignedMemberId || undefined,
-      ...(search
-        ? {
-            OR: [
-              { title: { contains: search, mode: 'insensitive' } },
-              { notes: { contains: search, mode: 'insensitive' } },
-              {
-                promo: {
-                  title: { contains: search, mode: 'insensitive' },
-                },
-              },
-              {
-                advertisingChannels: {
-                  some: {
-                    advertisingSource: {
-                      OR: [
-                        {
-                          title: {
-                            contains: search,
-                            mode: 'insensitive',
-                          },
-                        },
-                        {
-                          name: {
-                            contains: search,
-                            mode: 'insensitive',
-                          },
-                        },
-                      ],
-                    },
-                  },
-                },
-              },
-              {
-                hypothesisLinks: {
-                  some: {
-                    hypothesis: {
-                      name: { contains: search, mode: 'insensitive' },
-                    },
-                  },
-                },
-              },
-            ],
-          }
-        : {}),
-    };
-    const pagination = normalizePagination(query);
-    const loadRows = async (withCampaignPromos: boolean) => {
-      const [items, totalItems] = await Promise.all([
-        (this.prisma.adCampaign as any).findMany({
-          where,
-          include: this.adCampaignInclude(withCampaignPromos),
-          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-          skip: pagination.skip,
-          take: pagination.take,
-        }),
-        this.prisma.adCampaign.count({ where }),
-      ]);
-      return { items, totalItems };
-    };
-    let rows;
-    try {
-      rows = await loadRows(await this.hasCampaignPromoStorage());
-    } catch (error) {
-      if (!this.isCampaignPromoTableMissing(error)) throw error;
-      this.campaignPromoStorageState = 'missing';
-      rows = await loadRows(false);
-    }
-    const preloadedInviteLinkHistories =
-      await this.preloadCampaignInviteLinkHistories(workspaceId, rows.items);
-    const campaignJoinedCounts = new Map<string, number>(
-      rows.items.map((row: any) => [
-        row.id,
-        Array.isArray(row.inviteLinks)
-          ? row.inviteLinks.reduce(
-              (sum: number, link: any) => sum + Number(link.joinedCount || 0),
-              0,
-            )
-          : Number(row.joinedCount || row.analytics?.joinedCount || 0),
-      ]),
-    );
-    const preloadedAdmissionAnalytics =
-      await this.preloadAdmissionViewAnalytics(
-        workspaceId,
-        rows.items.map((row: any) => row.id),
-        30,
-        campaignJoinedCounts,
-      );
-    const items = await Promise.all(
-      rows.items.map((row) =>
-        this.shapeCampaign(
-          row,
-          preloadedInviteLinkHistories.get(row.id) ?? null,
-          preloadedAdmissionAnalytics.get(row.id) ?? null,
-        ),
-      ),
-    );
-    return createPaginatedResponse(items, rows.totalItems, pagination);
+    return this.listReadService.findAll(userId, query);
   }
 
   async findOne(userId: string, id: string) {
@@ -1342,103 +1266,106 @@ export class AdCampaignsService {
       dto.telegramChannelId,
     );
 
-    const campaign = await this.prisma.$transaction(async (tx) => {
-      const workspace = await tx.workspace.findUnique({
-        where: { id: workspaceId },
-      });
-      if (!workspace) throw new NotFoundException('Workspace not found');
-      const account = await tx.account.findFirst({
-        where: { id: dto.accountId, workspaceId },
-      });
-      if (!account) throw new NotFoundException('Account not found');
+    const campaign = await this.prisma.$transaction(
+      async (tx) => {
+        const workspace = await tx.workspace.findUnique({
+          where: { id: workspaceId },
+        });
+        if (!workspace) throw new NotFoundException('Workspace not found');
+        const account = await tx.account.findFirst({
+          where: { id: dto.accountId, workspaceId },
+        });
+        if (!account) throw new NotFoundException('Account not found');
 
-      await this.ensureInviteLinksBelongToChannel(
-        tx,
-        workspaceId,
-        inviteLinkIds,
-        dto.telegramChannelId,
-      );
-      const exchangeRateToPrimary = await this.resolveRateToPrimary(
-        tx,
-        workspaceId,
-        account.currency,
-        workspace.primaryCurrency,
-      );
-      const placementDate = dto.date ? new Date(dto.date) : new Date();
-      const advertisingSources = await this.ensureAdvertisingSources(
-        tx,
-        workspaceId,
-        dto.telegramChannelId,
-        dto.advertisingChannelIds || [],
-      );
-      const rawAdvertisingSourceIds = dto.advertisingChannelIds || [];
-      const generatedTitle = await this.generateCampaignTitle(
-        tx,
-        workspaceId,
-        placementDate,
-        promoIds,
-        rawAdvertisingSourceIds,
-      );
-      const customTitleTemplate = this.resolveCampaignCustomTitleTemplate(
-        dto.customTitle,
-      );
-      const row = await (tx.adCampaign as any).create({
-        data: {
+        await this.ensureInviteLinksBelongToChannel(
+          tx,
           workspaceId,
-          telegramChannelId: dto.telegramChannelId,
-          promoId: promoIds[0] || null,
-          telegramInviteLinkId: inviteLinkIds[0] || null,
-          title: customTitleTemplate
-            ? this.renderCampaignTitleTemplate(
-                customTitleTemplate,
-                placementDate,
-              )
-            : generatedTitle,
-          customTitleTemplate,
-          status: 'planned',
-          price: dto.price,
-          currency: account.currency,
-          exchangeRateToPrimary,
-          priceInPrimaryCurrency: dto.price * exchangeRateToPrimary,
-          accountId: account.id,
+          inviteLinkIds,
+          dto.telegramChannelId,
+        );
+        const exchangeRateToPrimary = await this.resolveRateToPrimary(
+          tx,
+          workspaceId,
+          account.currency,
+          workspace.primaryCurrency,
+        );
+        const placementDate = dto.date ? new Date(dto.date) : new Date();
+        const advertisingSources = await this.ensureAdvertisingSources(
+          tx,
+          workspaceId,
+          dto.telegramChannelId,
+          dto.advertisingChannelIds || [],
+        );
+        const rawAdvertisingSourceIds = dto.advertisingChannelIds || [];
+        const generatedTitle = await this.generateCampaignTitle(
+          tx,
+          workspaceId,
           placementDate,
-          notes: dto.notes,
-          assignedMemberId,
-          createdByUserId: userId,
-          ...this.analyticsInputData(dto),
-        },
-      });
-
-      await this.replaceCampaignPromos(tx, row.id, promoIds);
-      await this.replaceCampaignInviteLinks(
-        tx,
-        workspaceId,
-        row.id,
-        inviteLinkIds,
-      );
-
-      if (advertisingSources.channelIds.length) {
-        await (tx as any).adCampaignTelegramChannelPlacement.createMany({
-          data: advertisingSources.channelIds.map((id) => ({
-            adCampaignId: row.id,
-            telegramChannelId: id,
-          })),
-          skipDuplicates: true,
+          promoIds,
+          rawAdvertisingSourceIds,
+        );
+        const customTitleTemplate = this.resolveCampaignCustomTitleTemplate(
+          dto.customTitle,
+        );
+        const row = await (tx.adCampaign as any).create({
+          data: {
+            workspaceId,
+            telegramChannelId: dto.telegramChannelId,
+            promoId: promoIds[0] || null,
+            telegramInviteLinkId: inviteLinkIds[0] || null,
+            title: customTitleTemplate
+              ? this.renderCampaignTitleTemplate(
+                  customTitleTemplate,
+                  placementDate,
+                )
+              : generatedTitle,
+            customTitleTemplate,
+            status: 'planned',
+            price: dto.price,
+            currency: account.currency,
+            exchangeRateToPrimary,
+            priceInPrimaryCurrency: dto.price * exchangeRateToPrimary,
+            accountId: account.id,
+            placementDate,
+            notes: dto.notes,
+            assignedMemberId,
+            createdByUserId: userId,
+            ...this.analyticsInputData(dto),
+          },
         });
-      }
-      if (advertisingSources.sourceIds.length) {
-        await (tx as any).adCampaignAdvertisingChannel.createMany({
-          data: advertisingSources.sourceIds.map((id) => ({
-            adCampaignId: row.id,
-            advertisingSourceId: id,
-          })),
-          skipDuplicates: true,
-        });
-      }
 
-      await this.syncExpenseTransaction(tx, workspaceId, row, dto.accountId);
-      return row;
-    }, { timeout: 15_000 });
+        await this.replaceCampaignPromos(tx, row.id, promoIds);
+        await this.replaceCampaignInviteLinks(
+          tx,
+          workspaceId,
+          row.id,
+          inviteLinkIds,
+        );
+
+        if (advertisingSources.channelIds.length) {
+          await (tx as any).adCampaignTelegramChannelPlacement.createMany({
+            data: advertisingSources.channelIds.map((id) => ({
+              adCampaignId: row.id,
+              telegramChannelId: id,
+            })),
+            skipDuplicates: true,
+          });
+        }
+        if (advertisingSources.sourceIds.length) {
+          await (tx as any).adCampaignAdvertisingChannel.createMany({
+            data: advertisingSources.sourceIds.map((id) => ({
+              adCampaignId: row.id,
+              advertisingSourceId: id,
+            })),
+            skipDuplicates: true,
+          });
+        }
+
+        await this.syncExpenseTransaction(tx, workspaceId, row, dto.accountId);
+        return row;
+      },
+      { timeout: 15_000 },
+    );
 
     await this.campaignAnalyticsService.recalculateCampaignAnalytics(
       workspaceId,
@@ -1504,135 +1431,140 @@ export class AdCampaignsService {
       );
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      const price = dto.price ?? Number(existing.price);
-      const accountId = dto.accountId ?? existing.accountId;
-      const account = accountId
-        ? await tx.account.findFirst({ where: { id: accountId, workspaceId } })
-        : null;
-      if (!account) throw new NotFoundException('Account not found');
-      const workspace = await tx.workspace.findUnique({
-        where: { id: workspaceId },
-      });
-      if (!workspace) throw new NotFoundException('Workspace not found');
-      const exchangeRateToPrimary = await this.resolveRateToPrimary(
-        tx,
-        workspaceId,
-        account.currency,
-        workspace.primaryCurrency,
-      );
-      const nextPlacementDate = dto.date
-        ? new Date(dto.date)
-        : existing.placementDate || new Date();
-      await this.ensureInviteLinksBelongToChannel(
-        tx,
-        workspaceId,
-        nextInviteLinkIds,
-        nextOwnTelegramChannelId,
-        id,
-      );
-      const rawNextAdvertisingChannelIds = dto.advertisingChannelIds ?? [
-        ...(
-          await (tx as any).adCampaignTelegramChannelPlacement.findMany({
-            where: { adCampaignId: id },
-            select: { telegramChannelId: true },
-          })
-        ).map((x: any) => `channel:${x.telegramChannelId}`),
-        ...(
-          await (tx as any).adCampaignAdvertisingChannel.findMany({
-            where: { adCampaignId: id },
-            select: { advertisingSourceId: true },
-          })
-        ).map((x: any) => `source:${x.advertisingSourceId}`),
-      ];
-      const nextAdvertisingSources = await this.ensureAdvertisingSources(
-        tx,
-        workspaceId,
-        nextOwnTelegramChannelId,
-        rawNextAdvertisingChannelIds,
-      );
-      const generatedTitle = await this.generateCampaignTitle(
-        tx,
-        workspaceId,
-        nextPlacementDate,
-        nextPromoIds,
-        [
-          ...nextAdvertisingSources.channelIds.map(
-            (sourceId) => `channel:${sourceId}`,
-          ),
-          ...nextAdvertisingSources.sourceIds.map(
-            (sourceId) => `source:${sourceId}`,
-          ),
-        ],
-      );
-      const customTitleTemplate =
-        dto.customTitle === undefined
-          ? (existing as any).customTitleTemplate
-          : this.resolveCampaignCustomTitleTemplate(dto.customTitle);
-
-      const row = await (tx.adCampaign as any).update({
-        where: { id },
-        data: {
-          title: customTitleTemplate
-            ? this.renderCampaignTitleTemplate(
-                customTitleTemplate,
-                nextPlacementDate,
-              )
-            : generatedTitle,
-          customTitleTemplate,
-          telegramChannelId: dto.telegramChannelId,
-          promoId: nextPromoIds[0] || null,
-          telegramInviteLinkId: nextInviteLinkIds[0] || null,
-          price,
-          currency: account.currency,
-          exchangeRateToPrimary,
-          priceInPrimaryCurrency: price * exchangeRateToPrimary,
-          accountId: account.id,
-          placementDate: dto.date ? new Date(dto.date) : undefined,
-          notes: dto.notes,
-          assignedMemberId,
-          ...this.analyticsInputData(dto),
-        },
-      });
-
-      if (hasPromoSelection) {
-        await this.replaceCampaignPromos(tx, id, nextPromoIds);
-      }
-
-      if (hasInviteLinkSelection) {
-        await this.replaceCampaignInviteLinks(
+    await this.prisma.$transaction(
+      async (tx) => {
+        const price = dto.price ?? Number(existing.price);
+        const accountId = dto.accountId ?? existing.accountId;
+        const account = accountId
+          ? await tx.account.findFirst({
+              where: { id: accountId, workspaceId },
+            })
+          : null;
+        if (!account) throw new NotFoundException('Account not found');
+        const workspace = await tx.workspace.findUnique({
+          where: { id: workspaceId },
+        });
+        if (!workspace) throw new NotFoundException('Workspace not found');
+        const exchangeRateToPrimary = await this.resolveRateToPrimary(
           tx,
           workspaceId,
-          id,
-          nextInviteLinkIds,
+          account.currency,
+          workspace.primaryCurrency,
         );
-      }
+        const nextPlacementDate = dto.date
+          ? new Date(dto.date)
+          : existing.placementDate || new Date();
+        await this.ensureInviteLinksBelongToChannel(
+          tx,
+          workspaceId,
+          nextInviteLinkIds,
+          nextOwnTelegramChannelId,
+          id,
+        );
+        const rawNextAdvertisingChannelIds = dto.advertisingChannelIds ?? [
+          ...(
+            await (tx as any).adCampaignTelegramChannelPlacement.findMany({
+              where: { adCampaignId: id },
+              select: { telegramChannelId: true },
+            })
+          ).map((x: any) => `channel:${x.telegramChannelId}`),
+          ...(
+            await (tx as any).adCampaignAdvertisingChannel.findMany({
+              where: { adCampaignId: id },
+              select: { advertisingSourceId: true },
+            })
+          ).map((x: any) => `source:${x.advertisingSourceId}`),
+        ];
+        const nextAdvertisingSources = await this.ensureAdvertisingSources(
+          tx,
+          workspaceId,
+          nextOwnTelegramChannelId,
+          rawNextAdvertisingChannelIds,
+        );
+        const generatedTitle = await this.generateCampaignTitle(
+          tx,
+          workspaceId,
+          nextPlacementDate,
+          nextPromoIds,
+          [
+            ...nextAdvertisingSources.channelIds.map(
+              (sourceId) => `channel:${sourceId}`,
+            ),
+            ...nextAdvertisingSources.sourceIds.map(
+              (sourceId) => `source:${sourceId}`,
+            ),
+          ],
+        );
+        const customTitleTemplate =
+          dto.customTitle === undefined
+            ? (existing as any).customTitleTemplate
+            : this.resolveCampaignCustomTitleTemplate(dto.customTitle);
 
-      if (dto.advertisingChannelIds) {
-        await (tx as any).adCampaignTelegramChannelPlacement.deleteMany({
-          where: { adCampaignId: id },
+        const row = await (tx.adCampaign as any).update({
+          where: { id },
+          data: {
+            title: customTitleTemplate
+              ? this.renderCampaignTitleTemplate(
+                  customTitleTemplate,
+                  nextPlacementDate,
+                )
+              : generatedTitle,
+            customTitleTemplate,
+            telegramChannelId: dto.telegramChannelId,
+            promoId: nextPromoIds[0] || null,
+            telegramInviteLinkId: nextInviteLinkIds[0] || null,
+            price,
+            currency: account.currency,
+            exchangeRateToPrimary,
+            priceInPrimaryCurrency: price * exchangeRateToPrimary,
+            accountId: account.id,
+            placementDate: dto.date ? new Date(dto.date) : undefined,
+            notes: dto.notes,
+            assignedMemberId,
+            ...this.analyticsInputData(dto),
+          },
         });
-        await (tx as any).adCampaignAdvertisingChannel.deleteMany({
-          where: { adCampaignId: id },
-        });
-        await (tx as any).adCampaignTelegramChannelPlacement.createMany({
-          data: nextAdvertisingSources.channelIds.map((sourceId) => ({
-            adCampaignId: id,
-            telegramChannelId: sourceId,
-          })),
-          skipDuplicates: true,
-        });
-        await (tx as any).adCampaignAdvertisingChannel.createMany({
-          data: nextAdvertisingSources.sourceIds.map((sourceId) => ({
-            adCampaignId: id,
-            advertisingSourceId: sourceId,
-          })),
-          skipDuplicates: true,
-        });
-      }
 
-      await this.syncExpenseTransaction(tx, workspaceId, row, dto.accountId);
-    }, { timeout: 15_000 });
+        if (hasPromoSelection) {
+          await this.replaceCampaignPromos(tx, id, nextPromoIds);
+        }
+
+        if (hasInviteLinkSelection) {
+          await this.replaceCampaignInviteLinks(
+            tx,
+            workspaceId,
+            id,
+            nextInviteLinkIds,
+          );
+        }
+
+        if (dto.advertisingChannelIds) {
+          await (tx as any).adCampaignTelegramChannelPlacement.deleteMany({
+            where: { adCampaignId: id },
+          });
+          await (tx as any).adCampaignAdvertisingChannel.deleteMany({
+            where: { adCampaignId: id },
+          });
+          await (tx as any).adCampaignTelegramChannelPlacement.createMany({
+            data: nextAdvertisingSources.channelIds.map((sourceId) => ({
+              adCampaignId: id,
+              telegramChannelId: sourceId,
+            })),
+            skipDuplicates: true,
+          });
+          await (tx as any).adCampaignAdvertisingChannel.createMany({
+            data: nextAdvertisingSources.sourceIds.map((sourceId) => ({
+              adCampaignId: id,
+              advertisingSourceId: sourceId,
+            })),
+            skipDuplicates: true,
+          });
+        }
+
+        await this.syncExpenseTransaction(tx, workspaceId, row, dto.accountId);
+      },
+      { timeout: 15_000 },
+    );
 
     await this.campaignAnalyticsService.recalculateCampaignAnalytics(
       workspaceId,
@@ -1645,7 +1577,9 @@ export class AdCampaignsService {
     const campaign = await this.findOne(userId, id);
     return this.prisma.$transaction(async (tx) => {
       // This direct unique relation is assigned only to generated expenses.
-      await tx.transaction.deleteMany({ where: { workspaceId: campaign.workspaceId, adCampaignId: id } });
+      await tx.transaction.deleteMany({
+        where: { workspaceId: campaign.workspaceId, adCampaignId: id },
+      });
       return tx.adCampaign.delete({
         where: { id },
       });

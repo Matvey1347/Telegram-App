@@ -3,10 +3,7 @@
 import { formatDateWithWeekday } from "@/lib/date-format";
 
 import { useMemo } from "react";
-import type {
-  TelegramAdAvailabilitySlot,
-  TelegramAdSale,
-} from "@telegram-system/shared";
+import type { TelegramAdAvailabilitySlot } from "@telegram-system/shared";
 import { CalendarSlotCard } from "@/components/features/growth/ad-sales/calendar-slot-card";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import { Skeleton } from "@/components/ui/primitives";
@@ -60,7 +57,6 @@ export function CalendarTab(props: {
   channels: TelegramChannel[];
   selectedChannelIds: string[];
   filteredSlots: ReturnType<typeof buildAdCalendarSlots>;
-  sales: TelegramAdSale[];
   daySummaries: Array<{
     channelId: string;
     date: string;
@@ -120,29 +116,19 @@ export function CalendarTab(props: {
     [props.channels, props.selectedChannelIds],
   );
   const todayKey = channelLocalDateKey(new Date());
-  const saleById = useMemo(
-    () => new Map(props.sales.map((sale) => [sale.id, sale])),
-    [props.sales],
-  );
-
   const renderSlot = (
     slot: ReturnType<typeof buildAdCalendarSlots>[number],
   ) => {
-    const sale = slot.existingPlacement?.saleId
-      ? saleById.get(slot.existingPlacement.saleId)
-      : undefined;
-    const placement = sale?.placements.find(
-      (item) => item.id === slot.existingPlacement?.id,
-    );
+    const placement = slot.existingPlacement;
     return (
       <CalendarSlotCard
         key={slot.id}
         slot={slot}
-        advertiserName={sale?.advertiserName}
-        saleTitle={sale?.title}
-        paymentStatus={sale?.paymentStatus || "UNPAID"}
+        advertiserName={placement?.advertiserName}
+        saleTitle={placement?.title}
+        paymentStatus={placement?.paymentStatus || "UNPAID"}
         agreedPrice={placement?.agreedPrice}
-        agreedCurrency={sale?.settlementCurrency || placement?.currency}
+        agreedCurrency={placement?.currency}
         onClick={
           slot.existingPlacement?.saleId
             ? () => props.onOpenSale(slot.existingPlacement!.saleId)
@@ -157,18 +143,11 @@ export function CalendarTab(props: {
   const placementDetailsForSlot = (
     slot: ReturnType<typeof buildAdCalendarSlots>[number],
   ) => {
-    const sale = slot.existingPlacement?.saleId
-      ? saleById.get(slot.existingPlacement.saleId)
-      : undefined;
-    const placement = sale?.placements.find(
-      (item) => item.id === slot.existingPlacement?.id,
-    );
+    const placement = slot.existingPlacement;
     return {
-      sale,
       placement,
       price: toNumber(placement?.agreedPrice),
-      currency:
-        sale?.settlementCurrency || placement?.currency || slot.currency,
+      currency: placement?.currency || slot.currency,
     };
   };
   const summarizeRevenue = (slots: ReturnType<typeof buildAdCalendarSlots>) => {
@@ -308,8 +287,8 @@ export function CalendarTab(props: {
                           ).values(),
                         );
                         const dealLabel =
-                          details.sale?.advertiserName ||
-                          details.sale?.title ||
+                          details.placement?.advertiserName ||
+                          details.placement?.title ||
                           "Direct sale";
                         return (
                           <button

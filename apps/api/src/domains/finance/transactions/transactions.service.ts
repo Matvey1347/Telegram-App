@@ -10,7 +10,6 @@ import {
   normalizePagination,
 } from '../../../common/pagination/pagination.utils';
 import { WorkspaceService } from '../../../common/workspace.service';
-import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { CurrencyConversionService } from '../../../common/currency-conversion.service';
 import {
   CreateTransactionDto,
@@ -19,9 +18,10 @@ import {
 } from './dto';
 import { FinanceCategoriesService } from '../finance-categories/finance-categories.service';
 import {
-  withWorkspaceMemberAvatar,
-  type WorkspaceMemberAvatarSource,
-} from '../../../common/workspace-member-presentation';
+  isBuyChannelsCategory,
+  isChannelAdvertisingRevenueCategory,
+  withTransactionIconPresentation,
+} from './transaction-presentation';
 
 @Injectable()
 export class TransactionsService {
@@ -35,41 +35,6 @@ export class TransactionsService {
     private currencyConversionService: CurrencyConversionService,
     private financeCategoriesService: FinanceCategoriesService,
   ) {}
-
-  private withIconPresentation<
-    T extends {
-      icon?: Parameters<typeof iconToResolvedEmoji>[0];
-      account?: {
-        icon?: Parameters<typeof iconToResolvedEmoji>[0];
-        assignedMember?: WorkspaceMemberAvatarSource | null;
-      } | null;
-      categoryRef?: { icon?: Parameters<typeof iconToResolvedEmoji>[0] } | null;
-      member?: WorkspaceMemberAvatarSource | null;
-      assignedMember?: WorkspaceMemberAvatarSource | null;
-    },
-  >(transaction: T) {
-    return {
-      ...transaction,
-      iconPresentation: iconToResolvedEmoji(transaction.icon),
-      account: transaction.account
-        ? {
-            ...transaction.account,
-            iconPresentation: iconToResolvedEmoji(transaction.account.icon),
-            assignedMember: withWorkspaceMemberAvatar(
-              transaction.account.assignedMember,
-            ),
-          }
-        : transaction.account,
-      categoryRef: transaction.categoryRef
-        ? {
-            ...transaction.categoryRef,
-            iconPresentation: iconToResolvedEmoji(transaction.categoryRef.icon),
-          }
-        : transaction.categoryRef,
-      member: withWorkspaceMemberAvatar(transaction.member),
-      assignedMember: withWorkspaceMemberAvatar(transaction.assignedMember),
-    };
-  }
 
   private async resolveRateToPrimary(
     workspaceId: string,
@@ -89,37 +54,6 @@ export class TransactionsService {
 
     throw new BadRequestException(
       `No exchange rate from ${fromCurrency} to ${workspace.primaryCurrency}`,
-    );
-  }
-
-  private isBuyChannelsCategory(category: {
-    key?: string | null;
-    name?: string | null;
-    type: 'income' | 'expense';
-  }) {
-    const normalizedCategoryName = String(category.name ?? '')
-      .trim()
-      .toLowerCase();
-    return (
-      category.type === 'expense' &&
-      (category.key === 'buy_channels' ||
-        normalizedCategoryName === 'buy channels' ||
-        normalizedCategoryName === 'buy channels (legacy)')
-    );
-  }
-
-  private isChannelAdvertisingRevenueCategory(category: {
-    key?: string | null;
-    name?: string | null;
-    type: 'income' | 'expense';
-  }) {
-    const normalizedCategoryName = String(category.name ?? '')
-      .trim()
-      .toLowerCase();
-    return (
-      category.type === 'income' &&
-      (category.key === 'channel_advertising_revenue' ||
-        normalizedCategoryName === 'channel advertising revenue')
     );
   }
 
@@ -271,10 +205,10 @@ export class TransactionsService {
     telegramChannelId?: string | null;
     transactionId?: string;
   }) {
-    const isBuyChannelsCategory = this.isBuyChannelsCategory(params.category);
+    const isBuyChannels = isBuyChannelsCategory(params.category);
     const requestedChannelId = params.telegramChannelId ?? null;
 
-    if (!isBuyChannelsCategory) {
+    if (!isBuyChannels) {
       if (requestedChannelId) {
         throw new BadRequestException(
           'telegramChannelId is only allowed for Buy Channels expenses',
@@ -312,11 +246,12 @@ export class TransactionsService {
     };
     telegramChannelId?: string | null;
   }) {
-    const isChannelAdvertisingRevenueCategory =
-      this.isChannelAdvertisingRevenueCategory(params.category);
+    const isRevenueCategory = isChannelAdvertisingRevenueCategory(
+      params.category,
+    );
     const requestedChannelId = params.telegramChannelId ?? null;
 
-    if (!isChannelAdvertisingRevenueCategory) {
+    if (!isRevenueCategory) {
       if (requestedChannelId) {
         throw new BadRequestException(
           'telegramChannelId is only allowed for Channel Advertising Revenue income',
@@ -518,7 +453,7 @@ export class TransactionsService {
       items,
     );
     return createPaginatedResponse(
-      enrichedItems.map((item) => this.withIconPresentation(item)),
+      enrichedItems.map(withTransactionIconPresentation),
       totalItems,
       pagination,
     );
@@ -583,7 +518,7 @@ export class TransactionsService {
     const [enriched] = await this.attachPurchasedTelegramChannels(workspaceId, [
       row,
     ]);
-    return this.withIconPresentation(enriched);
+    return withTransactionIconPresentation(enriched);
   }
 
   async create(userId: string, dto: CreateTransactionDto) {
@@ -614,14 +549,14 @@ export class TransactionsService {
     const purchaseChannel = await this.resolvePurchaseChannelLink({
       workspaceId,
       category,
-      telegramChannelId: this.isBuyChannelsCategory(category)
+      telegramChannelId: isBuyChannelsCategory(category)
         ? dto.telegramChannelId
         : undefined,
     });
     const revenueChannel = await this.resolveRevenueChannelLink({
       workspaceId,
       category,
-      telegramChannelId: this.isChannelAdvertisingRevenueCategory(category)
+      telegramChannelId: isChannelAdvertisingRevenueCategory(category)
         ? dto.telegramChannelId
         : undefined,
     });
@@ -712,7 +647,7 @@ export class TransactionsService {
     const [enriched] = await this.attachPurchasedTelegramChannels(workspaceId, [
       created,
     ]);
-    return this.withIconPresentation(enriched);
+    return withTransactionIconPresentation(enriched);
   }
 
   async update(userId: string, id: string, dto: UpdateTransactionDto) {
@@ -768,15 +703,14 @@ export class TransactionsService {
       workspaceId,
       category,
       telegramChannelId:
-        this.isBuyChannelsCategory(category) &&
-        dto.telegramChannelId === undefined
+        isBuyChannelsCategory(category) && dto.telegramChannelId === undefined
           ? ((
               await this.findLinkedPurchaseChannelByTransaction(
                 workspaceId,
                 existing.id,
               )
             )?.id ?? null)
-          : this.isBuyChannelsCategory(category)
+          : isBuyChannelsCategory(category)
             ? dto.telegramChannelId
             : undefined,
       transactionId: existing.id,
@@ -785,10 +719,10 @@ export class TransactionsService {
       workspaceId,
       category,
       telegramChannelId:
-        this.isChannelAdvertisingRevenueCategory(category) &&
+        isChannelAdvertisingRevenueCategory(category) &&
         dto.telegramChannelId === undefined
           ? existing.telegramChannelId
-          : this.isChannelAdvertisingRevenueCategory(category)
+          : isChannelAdvertisingRevenueCategory(category)
             ? dto.telegramChannelId
             : undefined,
     });
@@ -872,7 +806,7 @@ export class TransactionsService {
     const [enriched] = await this.attachPurchasedTelegramChannels(workspaceId, [
       updated,
     ]);
-    return this.withIconPresentation(enriched);
+    return withTransactionIconPresentation(enriched);
   }
 
   async remove(userId: string, id: string) {

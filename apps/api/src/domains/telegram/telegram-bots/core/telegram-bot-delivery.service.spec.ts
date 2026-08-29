@@ -4,6 +4,7 @@
   @typescript-eslint/no-unsafe-member-access,
   @typescript-eslint/no-unsafe-return */
 import {
+  Prisma,
   TelegramBotDeliveryStatus,
   TelegramBotDeliveryType,
   TelegramBotRuntimeEnvironment,
@@ -37,6 +38,8 @@ const delivery = {
     runtimeInstances: [
       {
         id: 'runtime-prod',
+        workspaceId: 'workspace-1',
+        botIntegrationId: 'bot-1',
         environment: TelegramBotRuntimeEnvironment.PRODUCTION,
         runtimeStatus: TelegramBotRuntimeStatus.ACTIVE,
         botTokenEncrypted: 'token-enc',
@@ -56,6 +59,7 @@ function setup(
   const prisma = {
     telegramBotDelivery: {
       upsert: jest.fn().mockResolvedValue(delivery),
+      createMany: jest.fn().mockResolvedValue({ count: 1 }),
       findFirst: jest.fn().mockResolvedValue(null),
       findMany: jest.fn().mockResolvedValue([delivery]),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -69,12 +73,14 @@ function setup(
     },
     greeterBroadcastRecipient: {
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
-      findUnique: jest.fn().mockResolvedValue(null),
       findMany: jest.fn().mockResolvedValue([]),
+      findFirst: jest.fn().mockResolvedValue(null),
+      groupBy: jest.fn().mockResolvedValue([]),
     },
     greeterBroadcast: {
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
+    $queryRaw: jest.fn().mockResolvedValue([{ id: delivery.id }]),
     $transaction: jest.fn((operation) =>
       typeof operation === 'function'
         ? operation(prisma)
@@ -91,9 +97,9 @@ function setup(
     botApi as never,
     { current: () => environment } as never,
     { currentRuntimeId: () => runtimeId } as never,
-    financeReminders as never,
+    financeReminders,
   );
-  return { service, prisma, botApi, financeReminders };
+  return { service, prisma, botApi, encryption, financeReminders };
 }
 
 describe('TelegramBotDeliveryService', () => {
@@ -131,25 +137,131 @@ describe('TelegramBotDeliveryService', () => {
     );
   });
 
+  it('notifies one earliest wake after a batch enqueue', async () => {
+    const { service, prisma } = setup();
+    const later = new Date('2026-08-08T10:07:00.000Z');
+    const earlier = new Date('2026-08-08T10:06:00.000Z');
+    prisma.telegramBotDelivery.findMany.mockResolvedValue([
+      { ...delivery, id: 'later', idempotencyKey: 'later', scheduledAt: later },
+      {
+        ...delivery,
+        id: 'earlier',
+        idempotencyKey: 'earlier',
+        scheduledAt: earlier,
+      },
+    ]);
+    const notify = jest.spyOn((service as any).scheduler, 'notify');
+
+    await service.enqueueSendMessageBatch([
+      {
+        workspaceId: 'workspace-1',
+        botIntegrationId: 'bot-1',
+        chatId: '1',
+        text: 'Later',
+        scheduledAt: later,
+        idempotencyKey: 'later',
+      },
+      {
+        workspaceId: 'workspace-1',
+        botIntegrationId: 'bot-1',
+        chatId: '2',
+        text: 'Earlier',
+        scheduledAt: earlier,
+        idempotencyKey: 'earlier',
+      },
+    ]);
+
+    expect(prisma.telegramBotDelivery.createMany).toHaveBeenCalledTimes(1);
+    expect(prisma.telegramBotDelivery.findMany).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledWith(earlier);
+  });
+
   it('claims only LOCAL-pinned deliveries in a LOCAL process', async () => {
     const { service, prisma } = setup(
       undefined,
       TelegramBotRuntimeEnvironment.LOCAL,
     );
+    const localRuntime = {
+      ...delivery.botIntegration.runtimeInstances[0],
+      id: 'runtime-local',
+      environment: TelegramBotRuntimeEnvironment.LOCAL,
+    };
+    prisma.telegramBotDelivery.findMany.mockResolvedValue([
+      {
+        ...delivery,
+        runtimeInstanceId: localRuntime.id,
+        runtimeInstance: localRuntime,
+        botIntegration: { runtimeInstances: [localRuntime] },
+      },
+    ]);
 
     await service.claimDueDeliveries(25);
 
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
     expect(prisma.telegramBotDelivery.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({
+        where: {
           AND: [
+            {
+              id: { in: ['delivery-1'] },
+              status: TelegramBotDeliveryStatus.PROCESSING,
+              lockedAt: new Date('2026-08-08T10:05:00.000Z'),
+              lockedUntil: new Date('2026-08-08T10:10:00.000Z'),
+            },
             {
               runtimeInstance: {
                 is: { environment: TelegramBotRuntimeEnvironment.LOCAL },
               },
             },
           ],
-        }),
+        },
+      }),
+    );
+  });
+
+  it('fails closed when a LOCAL runtime disappears between claim and hydration', async () => {
+    const { service, prisma, botApi, encryption } = setup(
+      undefined,
+      TelegramBotRuntimeEnvironment.LOCAL,
+    );
+    prisma.$queryRaw
+      .mockResolvedValueOnce([{ id: delivery.id }])
+      .mockResolvedValueOnce([{ id: delivery.id }]);
+    prisma.telegramBotDelivery.findMany.mockResolvedValue([
+      {
+        ...delivery,
+        status: TelegramBotDeliveryStatus.PROCESSING,
+        runtimeInstanceId: null,
+        runtimeInstance: null,
+      },
+    ]);
+
+    await expect(service.processDue()).resolves.toBe(0);
+
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
+    const failClosedStatement = prisma.$queryRaw.mock.calls[1][0] as Prisma.Sql;
+    expect(failClosedStatement.sql).toContain(
+      `"status" = 'FAILED'::"TelegramBotDeliveryStatus"`,
+    );
+    expect(failClosedStatement.sql).toContain('AND NOT');
+    expect(failClosedStatement.sql).toContain('LOCAL');
+    expect(failClosedStatement.values).toEqual(
+      expect.arrayContaining([
+        delivery.id,
+        'Claimed Telegram bot delivery no longer matches its runtime environment',
+      ]),
+    );
+    expect(encryption.decrypt).not.toHaveBeenCalled();
+    expect(botApi.sendMessage).not.toHaveBeenCalled();
+    expect(prisma.greeterSequenceStepExecution.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'FAILED' }),
+      }),
+    );
+    expect(prisma.greeterBroadcastRecipient.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'FAILED' }),
       }),
     );
   });
@@ -244,15 +356,7 @@ describe('TelegramBotDeliveryService', () => {
 
     await service.processDue();
 
-    expect(prisma.telegramBotDelivery.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ id: 'delivery-1' }),
-        data: expect.objectContaining({
-          status: TelegramBotDeliveryStatus.PROCESSING,
-          lockedUntil: expect.any(Date),
-        }),
-      }),
-    );
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
     expect(botApi.sendMessage).toHaveBeenCalledWith('bot-token', {
       chat_id: '123',
       text: 'hello',
@@ -281,20 +385,7 @@ describe('TelegramBotDeliveryService', () => {
 
     await service.processDue();
 
-    expect(prisma.telegramBotDelivery.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          id: 'delivery-1',
-          status: {
-            in: [
-              TelegramBotDeliveryStatus.PENDING,
-              TelegramBotDeliveryStatus.RETRY,
-              TelegramBotDeliveryStatus.PROCESSING,
-            ],
-          },
-        }),
-      }),
-    );
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
   });
 
   it('retries transient Telegram API failures', async () => {
@@ -409,11 +500,11 @@ describe('TelegramBotDeliveryService', () => {
 
   it('reconciles successful sequence and broadcast delivery state', async () => {
     const { service, prisma } = setup();
-    prisma.greeterBroadcastRecipient.findUnique.mockResolvedValue({
-      broadcastId: 'broadcast-1',
-    });
     prisma.greeterBroadcastRecipient.findMany.mockResolvedValue([
-      { status: 'SENT' },
+      { broadcastId: 'broadcast-1' },
+    ]);
+    prisma.greeterBroadcastRecipient.groupBy.mockResolvedValue([
+      { status: 'SENT', _count: { _all: 1 } },
     ]);
 
     await service.processDue();
@@ -495,9 +586,7 @@ describe('TelegramBotDeliveryService', () => {
 
   it('does not resurrect work cancelled while Telegram send was in flight', async () => {
     const { service, prisma } = setup();
-    prisma.telegramBotDelivery.updateMany
-      .mockResolvedValueOnce({ count: 1 })
-      .mockResolvedValueOnce({ count: 0 });
+    prisma.telegramBotDelivery.updateMany.mockResolvedValueOnce({ count: 0 });
 
     await service.processDue();
 
@@ -512,12 +601,12 @@ describe('TelegramBotDeliveryService', () => {
 
   it('marks a completed mixed-result broadcast partially failed', async () => {
     const { service, prisma } = setup();
-    prisma.greeterBroadcastRecipient.findUnique.mockResolvedValue({
-      broadcastId: 'broadcast-1',
-    });
     prisma.greeterBroadcastRecipient.findMany.mockResolvedValue([
-      { status: 'SENT' },
-      { status: 'FAILED' },
+      { broadcastId: 'broadcast-1' },
+    ]);
+    prisma.greeterBroadcastRecipient.groupBy.mockResolvedValue([
+      { status: 'SENT', _count: { _all: 1 } },
+      { status: 'FAILED', _count: { _all: 1 } },
     ]);
     await service.processDue();
     expect(prisma.greeterBroadcast.updateMany).toHaveBeenCalledWith(
@@ -535,12 +624,12 @@ describe('TelegramBotDeliveryService', () => {
           new TelegramBotApiError('invalid target', 'PERMANENT'),
         ),
     );
-    prisma.greeterBroadcastRecipient.findUnique.mockResolvedValue({
-      broadcastId: 'broadcast-1',
-    });
     prisma.greeterBroadcastRecipient.findMany.mockResolvedValue([
-      { status: 'FAILED' },
-      { status: 'BLOCKED' },
+      { broadcastId: 'broadcast-1' },
+    ]);
+    prisma.greeterBroadcastRecipient.groupBy.mockResolvedValue([
+      { status: 'FAILED', _count: { _all: 1 } },
+      { status: 'BLOCKED', _count: { _all: 1 } },
     ]);
     await service.processDue();
     expect(prisma.greeterBroadcast.updateMany).toHaveBeenCalledWith(

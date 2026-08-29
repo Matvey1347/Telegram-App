@@ -13,6 +13,7 @@ import { CurrentUser } from '../../../common/current-user.decorator';
 import type { JwtUser } from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { AdCampaignsService } from './ad-campaigns.service';
+import { AdCampaignListReadService } from './ad-campaign-list-read.service';
 import {
   AdCampaignAnalyticsInputDto,
   CreateAdCampaignDto,
@@ -23,11 +24,14 @@ import {
 @UseGuards(JwtAuthGuard)
 @Controller('ad-campaigns')
 export class AdCampaignsController {
-  constructor(private service: AdCampaignsService) {}
+  constructor(
+    private service: AdCampaignsService,
+    private readonly listReadService: AdCampaignListReadService,
+  ) {}
 
   @Get()
   findAll(@CurrentUser() user: JwtUser, @Query() query: AdCampaignQueryDto) {
-    return this.service.findAll(user.sub, query);
+    return this.listReadService.findAll(user.sub, query);
   }
 
   @Post()

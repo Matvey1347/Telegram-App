@@ -66,11 +66,14 @@ describe('FinanceLedgerService tenant and money rules', () => {
           ]),
       },
     };
+    const preparedRateLookup = jest.fn().mockResolvedValue({
+      available: false,
+      code: 'RATE_UNAVAILABLE',
+      message: 'missing',
+    });
     const conversion = {
-      getRateMetadata: jest.fn().mockResolvedValue({
-        available: false,
-        code: 'RATE_UNAVAILABLE',
-        message: 'missing',
+      prepareRateSource: jest.fn().mockResolvedValue({
+        getRateMetadata: preparedRateLookup,
       }),
     };
 
@@ -87,11 +90,72 @@ describe('FinanceLedgerService tenant and money rules', () => {
         equivalentBalance: null,
       }),
     ]);
-    expect(conversion.getRateMetadata).toHaveBeenCalledWith(
-      'EUR',
-      'USD',
-      'workspace-a',
-    );
+    expect(conversion.prepareRateSource).toHaveBeenCalledWith('workspace-a');
+    expect(preparedRateLookup).toHaveBeenCalledWith('EUR', 'USD');
+  });
+  it('loads missing account currency and workspace context in one profile read', async () => {
+    const prisma: any = {
+      financeAccount: { findMany: jest.fn().mockResolvedValue([]) },
+      financeTransaction: { groupBy: jest.fn().mockResolvedValue([]) },
+      financeTransfer: { groupBy: jest.fn().mockResolvedValue([]) },
+      financeProfile: {
+        findUnique: jest.fn().mockResolvedValue({
+          defaultCurrency: 'UAH',
+          botIntegration: { workspaceId: 'workspace-a' },
+        }),
+      },
+    };
+
+    await expect(
+      new FinanceLedgerService(prisma).accounts('profile-a'),
+    ).resolves.toEqual([]);
+    expect(prisma.financeProfile.findUnique).toHaveBeenCalledTimes(1);
+    expect(prisma.financeProfile.findUnique).toHaveBeenCalledWith({
+      where: { id: 'profile-a' },
+      select: {
+        defaultCurrency: true,
+        botIntegration: { select: { workspaceId: true } },
+      },
+    });
+  });
+  it('uses one request-scoped rate graph for ten account currencies', async () => {
+    const prisma: any = {
+      financeAccount: {
+        findMany: jest.fn().mockResolvedValue(
+          Array.from({ length: 10 }, (_, index) => ({
+            id: `account-${index}`,
+            name: `Account ${index}`,
+            emoji: null,
+            type: 'OTHER',
+            currency: `X${String(index).padStart(2, '0')}`,
+            openingBalance: new Prisma.Decimal(1),
+            archivedAt: null,
+          })),
+        ),
+      },
+      financeTransaction: { groupBy: jest.fn().mockResolvedValue([]) },
+      financeTransfer: { groupBy: jest.fn().mockResolvedValue([]) },
+    };
+    const preparedRateLookup = jest.fn().mockResolvedValue({
+      available: true,
+      rate: 2,
+      rateAt: new Date('2026-08-27T00:00:00.000Z'),
+      stale: false,
+    });
+    const conversion = {
+      prepareRateSource: jest.fn().mockResolvedValue({
+        getRateMetadata: preparedRateLookup,
+      }),
+    };
+
+    const accounts = await new FinanceLedgerService(
+      prisma,
+      conversion as never,
+    ).accounts('profile-a', 'USD', 'workspace-a');
+
+    expect(accounts).toHaveLength(10);
+    expect(conversion.prepareRateSource).toHaveBeenCalledTimes(1);
+    expect(preparedRateLookup).toHaveBeenCalledTimes(10);
   });
   it('does not create a transaction against another profile account', async () => {
     const prisma: any = {
@@ -594,5 +658,150 @@ describe('FinanceLedgerService tenant and money rules', () => {
       prisma.financeTransaction.findMany.mock.calls[0][0].where.occurredAt;
     expect(occurredAt).toMatchObject({ lte: new Date(to) });
     expect(occurredAt).not.toHaveProperty('lt');
+  });
+
+  it('prepares and reuses immutable current/as-of USD and default-currency rates', async () => {
+    const historical = '2020-01-02T12:00:00.000Z';
+    const current = '2099-01-02T12:00:00.000Z';
+    const rateAt = new Date('2020-01-02T00:00:00.000Z');
+    const preparedRateLookup = jest.fn((from, to, asOf) =>
+      Promise.resolve({
+        available: true as const,
+        rate: to === 'USD' ? (asOf ? 1.2 : 1.3) : asOf ? 44 : 45,
+        rateAt,
+        stale: false as const,
+      }),
+    );
+    const conversion = {
+      prepareRateSource: jest.fn((_workspaceId, asOf) =>
+        Promise.resolve({
+          getRateMetadata: (from, to) => preparedRateLookup(from, to, asOf),
+        }),
+      ),
+    };
+    const prisma = { financeProfile: { findUnique: jest.fn() } };
+    const source = await new FinanceLedgerService(
+      prisma as never,
+      conversion as never,
+    ).prepareTransactionRateSource(
+      {
+        id: 'profile-a',
+        defaultCurrency: 'UAH',
+        workspaceId: 'workspace-a',
+      },
+      [
+        { currency: 'EUR', occurredAt: historical },
+        { currency: 'EUR', occurredAt: historical },
+        { currency: 'EUR', occurredAt: current },
+      ],
+    );
+
+    expect(conversion.prepareRateSource).toHaveBeenCalledTimes(2);
+    expect(conversion.prepareRateSource).toHaveBeenCalledWith(
+      'workspace-a',
+      new Date(historical),
+    );
+    expect(conversion.prepareRateSource).toHaveBeenCalledWith(
+      'workspace-a',
+      undefined,
+    );
+    expect(preparedRateLookup).toHaveBeenCalledTimes(4);
+    expect(preparedRateLookup).toHaveBeenCalledWith(
+      'EUR',
+      'USD',
+      new Date(historical),
+    );
+    expect(preparedRateLookup).toHaveBeenCalledWith(
+      'EUR',
+      'UAH',
+      undefined,
+    );
+    expect(prisma.financeProfile.findUnique).not.toHaveBeenCalled();
+    const first = source.resolve('EUR', 'USD', new Date(historical));
+    expect(first).toEqual({ rate: new Prisma.Decimal(1.2), rateAt });
+    first.rate = new Prisma.Decimal(99);
+    first.rateAt.setUTCFullYear(1999);
+    expect(source.resolve('EUR', 'USD', new Date(historical))).toEqual({
+      rate: new Prisma.Decimal(1.2),
+      rateAt,
+    });
+    expect(source.resolve('EUR', 'UAH', new Date(current)).rate).toEqual(
+      new Prisma.Decimal(45),
+    );
+  });
+
+  it('fails rate preparation before a financial transaction can open', async () => {
+    const conversion = {
+      prepareRateSource: jest.fn().mockResolvedValue({
+        getRateMetadata: jest.fn().mockResolvedValue({
+          available: false,
+          code: 'RATE_UNAVAILABLE',
+          message: 'missing EUR rate',
+        }),
+      }),
+    };
+    const prisma = {
+      financeProfile: { findUnique: jest.fn() },
+      $transaction: jest.fn(),
+    };
+    const service = new FinanceLedgerService(
+      prisma as never,
+      conversion as never,
+    );
+
+    await expect(
+      service.prepareTransactionRateSource(
+        {
+          id: 'profile-a',
+          defaultCurrency: 'USD',
+          workspaceId: 'workspace-a',
+        },
+        [{ currency: 'EUR', occurredAt: '2099-01-01T00:00:00.000Z' }],
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('bounds ten distinct dated operations to two requested rate pairs each', async () => {
+    const preparedRateLookup = jest.fn().mockResolvedValue({
+      available: true,
+      rate: 1,
+      rateAt: new Date('2020-01-01T00:00:00.000Z'),
+      stale: false,
+    });
+    const conversion = {
+      prepareRateSource: jest.fn().mockResolvedValue({
+        getRateMetadata: preparedRateLookup,
+      }),
+    };
+    const service = new FinanceLedgerService(
+      {} as never,
+      conversion as never,
+    );
+    const operations = Array.from({ length: 10 }, (_, index) => ({
+      currency: 'EUR',
+      occurredAt: `2020-01-${String(index + 1).padStart(2, '0')}T12:00:00.000Z`,
+    }));
+
+    await service.prepareTransactionRateSource(
+      {
+        id: 'profile-a',
+        defaultCurrency: 'UAH',
+        workspaceId: 'workspace-a',
+      },
+      operations,
+    );
+    expect(conversion.prepareRateSource).toHaveBeenCalledTimes(10);
+    expect(preparedRateLookup).toHaveBeenCalledTimes(20);
+    await expect(
+      service.prepareTransactionRateSource(
+        {
+          id: 'profile-a',
+          defaultCurrency: 'UAH',
+          workspaceId: 'workspace-a',
+        },
+        [...operations, operations[0]],
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

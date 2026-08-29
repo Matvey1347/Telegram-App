@@ -54,6 +54,8 @@ describe("telegramSystemBotApi subscriptions", () => {
     });
     expect(post).toHaveBeenCalledWith(
       "/telegram/system-bot/connection/workspace",
+      undefined,
+      { feedback: { mode: "silent" } },
     );
   });
 

@@ -109,6 +109,7 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
     const prisma = {
       telegramBotIntegration: { findFirst: jest.fn().mockResolvedValue(bot) },
       telegramBotUser: {
+        findFirst: jest.fn(),
         findUnique: jest.fn().mockResolvedValue(telegramUser),
         create: jest.fn(),
         update: jest.fn(({ data }) =>
@@ -130,6 +131,61 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
     });
     return { service, prisma };
   }
+
+  it('loads one exact-scope established bot user and profile context read', async () => {
+    const { service, prisma } = setup();
+    const profile = { id: 'profile-1', botIntegrationId: 'bot-1' };
+    prisma.telegramBotUser.findFirst.mockResolvedValue({
+      ...telegramUser,
+      workspaceId: 'workspace-1',
+      botIntegrationId: 'bot-1',
+      runtimeInstanceId: 'runtime-1',
+      telegramUserId: '12345',
+      financeProfiles: [profile],
+    });
+
+    await expect(service.findBotUpdateContext({
+      workspaceId: 'workspace-1',
+      botIntegrationId: 'bot-1',
+      runtimeInstanceId: 'runtime-1',
+      telegramUserId: '12345',
+    })).resolves.toEqual({
+      telegramUser: expect.objectContaining({ id: 'user-1' }),
+      profile,
+    });
+    expect(prisma.telegramBotUser.findFirst).toHaveBeenCalledTimes(1);
+    expect(prisma.telegramBotUser.findFirst).toHaveBeenCalledWith({
+      where: {
+        workspaceId: 'workspace-1',
+        botIntegrationId: 'bot-1',
+        runtimeInstanceId: 'runtime-1',
+        telegramUserId: '12345',
+      },
+      include: {
+        financeProfiles: {
+          where: { botIntegrationId: 'bot-1' },
+          take: 1,
+        },
+      },
+    });
+    expect(prisma.telegramBotUser.findUnique).not.toHaveBeenCalled();
+    expect(prisma.financeProfile.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('reuses a preloaded established profile without a duplicate profile read', async () => {
+    const { service, prisma } = setup();
+    const profile = {
+      id: 'profile-preloaded',
+      botIntegrationId: 'bot-1',
+      telegramBotUserId: 'user-1',
+    };
+
+    await expect(
+      service.ensureProfile('bot-1', 'user-1', profile as any),
+    ).resolves.toBe(profile);
+    expect(prisma.financeProfile.findUnique).not.toHaveBeenCalled();
+    expect(prisma.financeProfile.create).not.toHaveBeenCalled();
+  });
 
   it('does not update an unchanged established consumer identity or reinitialize its profile', async () => {
     const { service, prisma } = setup();
@@ -240,7 +296,7 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
       defaultCurrency: 'UAH',
     });
 
-    await service.ensureProfile('bot-1', 'user-1');
+    await service.ensureProfile('bot-1', 'user-1', null);
 
     expect(prisma.financeProfile.create).toHaveBeenCalledWith({
       data: {
@@ -256,6 +312,7 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
         accounts: { create: { name: 'Cash', type: 'CASH', currency: 'UAH' } },
       },
     });
+    expect(prisma.financeProfile.findUnique).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
@@ -277,5 +334,23 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
     );
     expect(prisma.financeProfile.create).toHaveBeenCalledTimes(1);
     expect(prisma.financeProfile.findUnique).toHaveBeenCalledTimes(2);
+  });
+
+  it('recovers a preloaded-missing profile race with one recovery read', async () => {
+    const { service, prisma } = setup();
+    const profile = { id: 'profile-concurrent' };
+    prisma.financeProfile.findUnique.mockResolvedValue(profile);
+    prisma.financeProfile.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('duplicate', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+
+    await expect(
+      service.ensureProfile('bot-1', 'user-1', null),
+    ).resolves.toBe(profile);
+    expect(prisma.financeProfile.create).toHaveBeenCalledTimes(1);
+    expect(prisma.financeProfile.findUnique).toHaveBeenCalledTimes(1);
   });
 });

@@ -27,6 +27,7 @@ import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramAdvertisersQueryDto } from './dto';
 import { decimal, decimalToString } from './domain/decimal';
+import * as crmMetrics from './telegram-ad-sales-crm-advertiser-metrics';
 
 @Injectable()
 export class TelegramAdSalesCrmAdvertisersService {
@@ -39,178 +40,15 @@ export class TelegramAdSalesCrmAdvertisersService {
     return this.workspaceService.resolveWorkspaceIdForUser(userId);
   }
 
-  private normalizeTelegramUsername(value: string | null | undefined) {
-    const cleaned = value?.trim().replace(/^@/, '').toLowerCase();
-    return cleaned || null;
-  }
-
-  private normalizePhone(value: string | null | undefined) {
-    const cleaned = value?.replace(/[^\d+]/g, '').trim();
-    return cleaned || null;
-  }
-
-  private normalizeEmail(value: string | null | undefined) {
-    const cleaned = value?.trim().toLowerCase();
-    return cleaned || null;
-  }
-
-  private daysSince(value: Date | null | undefined, now: Date) {
-    if (!value) return null;
-    return Math.max(
-      0,
-      Math.floor((now.getTime() - value.getTime()) / (24 * 60 * 60 * 1000)),
-    );
-  }
-
-  private recencyBucket(
-    lastPurchaseAt: Date | null | undefined,
-    now: Date,
-  ): TelegramAdCrmRecencyBucket {
-    const days = this.daysSince(lastPurchaseAt, now);
-    if (days === null) return 'NONE';
-    if (days <= 30) return 'RECENT';
-    if (days <= 90) return 'WARM';
-    if (days <= 180) return 'COLD';
-    return 'DORMANT';
+  private recencyBucket(value: Date | null | undefined, now: Date) {
+    return crmMetrics.recencyBucket(value, now);
   }
 
   private frequencyBucket(
     completedSalesCount: number,
     totalSalesCount: number,
-  ): TelegramAdCrmFrequencyBucket {
-    const count = Math.max(completedSalesCount, totalSalesCount);
-    if (count <= 0) return 'NONE';
-    if (count === 1) return 'ONE_TIME';
-    if (count >= 10) return 'POWER';
-    if (count >= 5) return 'LOYAL';
-    if (count >= 2) return 'REPEAT';
-    return 'POWER';
-  }
-
-  private completedPlacementsCount(
-    placements: Array<{ status?: string | null }>,
   ) {
-    return placements.filter((placement) =>
-      ['PUBLISHED', 'COMPLETED'].includes(String(placement.status)),
-    ).length;
-  }
-
-  private monetaryBucket(monetaryValue: number, highValueThreshold: number) {
-    if (highValueThreshold <= 0) return monetaryValue > 0 ? 'HIGH' : 'LOW';
-    if (monetaryValue >= highValueThreshold) return 'HIGH';
-    if (monetaryValue >= highValueThreshold / 2) return 'MID';
-    return 'LOW';
-  }
-
-  private rfmSegment(params: {
-    status: TelegramAdvertiserStatus;
-    completedSalesCount: number;
-    recencyBucket: TelegramAdCrmRecencyBucket;
-    frequencyBucket: TelegramAdCrmFrequencyBucket;
-    monetaryBucket: 'LOW' | 'MID' | 'HIGH';
-    lifecycleStage: TelegramAdvertiserLifecycleStage;
-  }): TelegramAdCrmRfmSegment {
-    if (params.status === TelegramAdvertiserStatus.LOST) return 'LOST';
-    if (params.completedSalesCount <= 0) return 'LEAD';
-    if (params.recencyBucket === 'DORMANT') return 'DORMANT';
-    if (params.recencyBucket === 'COLD') return 'AT_RISK';
-    if (
-      params.monetaryBucket === 'HIGH' &&
-      (params.frequencyBucket === 'POWER' ||
-        params.frequencyBucket === 'LOYAL') &&
-      (params.recencyBucket === 'RECENT' || params.recencyBucket === 'WARM')
-    ) {
-      return 'CHAMPION';
-    }
-    if (
-      params.frequencyBucket === 'POWER' ||
-      params.frequencyBucket === 'LOYAL' ||
-      params.frequencyBucket === 'REPEAT'
-    ) {
-      return 'LOYAL';
-    }
-    if (
-      params.frequencyBucket === 'ONE_TIME' &&
-      params.recencyBucket === 'RECENT'
-    ) {
-      return 'NEW';
-    }
-    if (
-      params.lifecycleStage === TelegramAdvertiserLifecycleStage.QUALIFIED ||
-      params.recencyBucket === 'WARM'
-    ) {
-      return 'PROMISING';
-    }
-    return 'LEAD';
-  }
-
-  private taskPriorityOffset(priority: TelegramAdvertiserTaskPriority) {
-    if (priority === TelegramAdvertiserTaskPriority.URGENT) return 0;
-    if (priority === TelegramAdvertiserTaskPriority.HIGH) return 2;
-    if (priority === TelegramAdvertiserTaskPriority.NORMAL) return 5;
-    return 8;
-  }
-
-  private crmPriority(params: {
-    segment: TelegramAdCrmRfmSegment;
-    nextOpenTask: {
-      dueAt: Date;
-      priority: TelegramAdvertiserTaskPriority;
-    } | null;
-    nextContactAt: Date | null;
-    now: Date;
-  }): { priorityRank: number; urgency: TelegramAdCrmUrgency } {
-    const taskDays = this.daysSince(params.nextOpenTask?.dueAt, params.now);
-    if (params.nextOpenTask && taskDays !== null) {
-      if (params.nextOpenTask.dueAt.getTime() <= params.now.getTime()) {
-        return {
-          priorityRank:
-            1 + this.taskPriorityOffset(params.nextOpenTask.priority),
-          urgency: 'HIGH',
-        };
-      }
-      const daysUntilTask = Math.ceil(
-        (params.nextOpenTask.dueAt.getTime() - params.now.getTime()) /
-          (24 * 60 * 60 * 1000),
-      );
-      if (daysUntilTask <= 3) {
-        return {
-          priorityRank:
-            10 + this.taskPriorityOffset(params.nextOpenTask.priority),
-          urgency: 'HIGH',
-        };
-      }
-      if (daysUntilTask <= 7) {
-        return {
-          priorityRank:
-            25 + this.taskPriorityOffset(params.nextOpenTask.priority),
-          urgency: 'MEDIUM',
-        };
-      }
-    }
-
-    if (params.nextContactAt) {
-      if (params.nextContactAt.getTime() <= params.now.getTime()) {
-        return { priorityRank: 15, urgency: 'HIGH' };
-      }
-      const daysUntilContact = Math.ceil(
-        (params.nextContactAt.getTime() - params.now.getTime()) /
-          (24 * 60 * 60 * 1000),
-      );
-      if (daysUntilContact <= 7) return { priorityRank: 35, urgency: 'MEDIUM' };
-    }
-
-    if (params.segment === 'DORMANT')
-      return { priorityRank: 45, urgency: 'HIGH' };
-    if (params.segment === 'AT_RISK')
-      return { priorityRank: 55, urgency: 'MEDIUM' };
-    if (params.segment === 'LEAD')
-      return { priorityRank: 65, urgency: 'MEDIUM' };
-    if (params.segment === 'PROMISING' || params.segment === 'NEW') {
-      return { priorityRank: 75, urgency: 'LOW' };
-    }
-    if (params.segment === 'LOST') return { priorityRank: 95, urgency: 'NONE' };
-    return { priorityRank: 85, urgency: 'LOW' };
+    return crmMetrics.frequencyBucket(completedSalesCount, totalSalesCount);
   }
 
   private crmAdvertiserSelect(): Prisma.TelegramAdvertiserSelect {
@@ -302,12 +140,15 @@ export class TelegramAdSalesCrmAdvertisersService {
     const safeMonetaryValue = Number.isFinite(monetaryValue)
       ? monetaryValue
       : 0;
-    const recencyBucket = this.recencyBucket(advertiser.lastPurchaseAt, now);
-    const frequencyBucket = this.frequencyBucket(
+    const recencyBucket = crmMetrics.recencyBucket(
+      advertiser.lastPurchaseAt,
+      now,
+    );
+    const frequencyBucket = crmMetrics.frequencyBucket(
       advertiser.completedSalesCount,
       advertiser.totalSalesCount,
     );
-    const monetaryBucket = this.monetaryBucket(
+    const monetaryBucket = crmMetrics.monetaryBucket(
       safeMonetaryValue,
       highValueThreshold,
     );
@@ -323,7 +164,7 @@ export class TelegramAdSalesCrmAdvertisersService {
       : advertiser.hasWaitingPlacement
         ? ('WAITING' as const)
         : ('LEAD' as const);
-    const rfmSegment = this.rfmSegment({
+    const rfmSegment = crmMetrics.rfmSegment({
       status: effectiveStatus,
       lifecycleStage: advertiser.lifecycleStage,
       completedSalesCount: advertiser.completedSalesCount,
@@ -331,7 +172,7 @@ export class TelegramAdSalesCrmAdvertisersService {
       frequencyBucket,
       monetaryBucket,
     });
-    const priority = this.crmPriority({
+    const priority = crmMetrics.crmPriority({
       segment: rfmSegment,
       nextOpenTask,
       nextContactAt: advertiser.nextContactAt ?? null,
@@ -394,7 +235,10 @@ export class TelegramAdSalesCrmAdvertisersService {
       lastPurchaseAt: advertiser.lastPurchaseAt?.toISOString() ?? null,
       lastContactAt: advertiser.lastContactAt?.toISOString() ?? null,
       nextContactAt: advertiser.nextContactAt?.toISOString() ?? null,
-      daysSinceLastPurchase: this.daysSince(advertiser.lastPurchaseAt, now),
+      daysSinceLastPurchase: crmMetrics.daysSince(
+        advertiser.lastPurchaseAt,
+        now,
+      ),
       recencyBucket,
       frequencyBucket,
       monetaryValue: safeMonetaryValue,
@@ -455,7 +299,7 @@ export class TelegramAdSalesCrmAdvertisersService {
     const advertiserIdByTelegram = new Map<string, string>();
     const ambiguousTelegramUsernames = new Set<string>();
     for (const advertiser of advertisers) {
-      const username = this.normalizeTelegramUsername(
+      const username = crmMetrics.normalizeTelegramUsername(
         advertiser.telegramUsername,
       );
       if (!username) continue;
@@ -578,7 +422,7 @@ export class TelegramAdSalesCrmAdvertisersService {
       }
     >();
     for (const sale of sales) {
-      const snapshotTelegram = this.normalizeTelegramUsername(
+      const snapshotTelegram = crmMetrics.normalizeTelegramUsername(
         sale.advertiserTelegramSnapshot ?? sale.advertiserTelegram,
       );
       const advertiserId =
@@ -652,7 +496,7 @@ export class TelegramAdSalesCrmAdvertisersService {
           ].map((channel) => [channel.id, channel] as const),
         ).values(),
       ].sort((left, right) => left.title.localeCompare(right.title));
-      current.completedPlacementsCount += this.completedPlacementsCount(
+      current.completedPlacementsCount += crmMetrics.completedPlacementsCount(
         sale.placements,
       );
       const completed =
@@ -793,19 +637,20 @@ export class TelegramAdSalesCrmAdvertisersService {
               { companyName: { contains: search, mode: 'insensitive' } },
               {
                 telegramUsername: {
-                  contains: this.normalizeTelegramUsername(search) ?? search,
+                  contains:
+                    crmMetrics.normalizeTelegramUsername(search) ?? search,
                   mode: 'insensitive',
                 },
               },
               {
                 phone: {
-                  contains: this.normalizePhone(search) ?? search,
+                  contains: crmMetrics.normalizePhone(search) ?? search,
                   mode: 'insensitive',
                 },
               },
               {
                 email: {
-                  contains: this.normalizeEmail(search) ?? search,
+                  contains: crmMetrics.normalizeEmail(search) ?? search,
                   mode: 'insensitive',
                 },
               },

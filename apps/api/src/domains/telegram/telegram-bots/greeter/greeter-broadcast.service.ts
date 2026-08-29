@@ -12,27 +12,18 @@ import {
   GreeterUserState,
   TelegramBotDeliveryStatus,
 } from '@prisma/client';
-import type {
-  GreeterBroadcastInput,
-  GreeterButtonRows,
-} from '@telegram-system/shared';
-import { sanitizeOperationalError } from '../../../../common/security/operational-error';
+import type { GreeterBroadcastInput } from '@telegram-system/shared';
 import { PrismaService } from '../../../../prisma/prisma.service';
-import { telegramMarkupToHtml } from '../../../../telegram/shared/telegram-markup';
 import { GreeterAdminService } from './greeter-admin.service';
 import { GreeterAutomationService } from './greeter-automation.service';
 import { GreeterBroadcastAudienceService } from './greeter-broadcast-audience.service';
 import { buildGreeterBroadcastView } from './greeter-broadcast-view';
-import {
-  assertValidGreeterTemplate,
-  renderGreeterTemplate,
-} from './greeter-template.renderer';
+import { assertValidGreeterTemplate } from './greeter-template.renderer';
 import { TelegramBotDeliveryService } from '../core/telegram-bot-delivery.service';
+import { TELEGRAM_BOT_DELIVERY_ENQUEUE_BATCH_SIZE } from '../core/telegram-bot-delivery-batch-enqueue';
 import { notifyScheduledTaskDueWorkChanged } from '../../../operations/scheduled-tasks/scheduled-task-wake-notifier';
-import {
-  GREETER_BROADCAST_RETRY_MS,
-  greeterBroadcastDispatchableWhere,
-} from '../../../operations/scheduled-tasks/due-work-predicates';
+import { greeterBroadcastDispatchableWhere } from '../../../operations/scheduled-tasks/due-work-predicates';
+import { queueGreeterBroadcastRecipientPage } from './greeter-broadcast-batch-link';
 
 @Injectable()
 export class GreeterBroadcastService {
@@ -276,138 +267,98 @@ export class GreeterBroadcastService {
       row.scheduledAt > new Date()
     )
       return;
-    await this.prisma.greeterBroadcast.updateMany({
+    const claimed = await this.prisma.greeterBroadcast.updateMany({
       where: { id: row.id, status: GreeterBroadcastStatus.SCHEDULED },
       data: {
         status: GreeterBroadcastStatus.PROCESSING,
         processingStartedAt: new Date(),
       },
     });
-    const audience = await this.audience(row);
-    await this.prisma.greeterBroadcastRecipient.createMany({
-      data: audience.map((item) => ({
-        broadcastId: row.id,
-        telegramBotUserId: item.telegramBotUserId,
-        acquiredChannelId: item.channelId,
-      })),
-      skipDuplicates: true,
+    if (
+      row.status === GreeterBroadcastStatus.SCHEDULED &&
+      claimed.count !== 1
+    ) {
+      return;
+    }
+    const materialized = await this.prisma.greeterBroadcastRecipient.findFirst({
+      where: { broadcastId: row.id },
+      select: { id: true },
     });
+    if (!materialized) {
+      const audience = await this.audience(row);
+      await this.prisma.greeterBroadcastRecipient.createMany({
+        data: audience.map((item) => ({
+          broadcastId: row.id,
+          telegramBotUserId: item.telegramBotUserId,
+          acquiredChannelId: item.channelId,
+        })),
+        skipDuplicates: true,
+      });
+    }
     const recipients = await this.prisma.greeterBroadcastRecipient.findMany({
       where: {
         broadcastId: row.id,
         status: GreeterBroadcastRecipientStatus.PENDING,
+        OR: [
+          { nextQueueAttemptAt: null },
+          { nextQueueAttemptAt: { lte: new Date() } },
+        ],
       },
-      include: { telegramUser: true, acquiredChannel: true },
-      take: 250,
+      orderBy: { id: 'asc' },
+      select: {
+        id: true,
+        telegramBotUserId: true,
+        telegramUser: {
+          select: {
+            telegramChatId: true,
+            blockedAt: true,
+            firstName: true,
+            lastName: true,
+            username: true,
+          },
+        },
+        acquiredChannel: {
+          select: { title: true, username: true },
+        },
+      },
+      take: TELEGRAM_BOT_DELIVERY_ENQUEUE_BATCH_SIZE,
     });
-    for (const recipient of recipients) {
-      const chatId = recipient.telegramUser.telegramChatId;
-      if (!chatId || recipient.telegramUser.blockedAt) {
-        await this.prisma.greeterBroadcastRecipient.updateMany({
-          where: {
-            id: recipient.id,
-            status: GreeterBroadcastRecipientStatus.PENDING,
-          },
-          data: {
-            status: recipient.telegramUser.blockedAt
-              ? GreeterBroadcastRecipientStatus.BLOCKED
-              : GreeterBroadcastRecipientStatus.FAILED,
-            completedAt: new Date(),
-            lastError: recipient.telegramUser.blockedAt
-              ? 'Telegram user is blocked or unreachable'
-              : 'Telegram user has no reachable private chat',
-          },
-        });
-        continue;
-      }
-      try {
-        const text = telegramMarkupToHtml(
-          renderGreeterTemplate(row.messageText, {
-            channel: recipient.acquiredChannel ||
-              row.channel || { title: 'Channel', username: null },
-            user: recipient.telegramUser,
-          }),
-        );
-        const delivery = await this.deliveries.enqueueSendMessage({
-          workspaceId: row.workspaceId,
-          botIntegrationId: row.botIntegrationId,
-          telegramBotUserId: recipient.telegramBotUserId,
-          chatId,
-          text,
-          parseMode: 'HTML',
-          inlineButtons: (row.buttons as GreeterButtonRows | null) || undefined,
-          scheduledAt: row.scheduledAt,
-          idempotencyKey: `greeter-broadcast:${row.id}:${recipient.telegramBotUserId}`,
-        });
-        const linked = await this.prisma.greeterBroadcastRecipient.updateMany({
-          where: {
-            id: recipient.id,
-            status: GreeterBroadcastRecipientStatus.PENDING,
-            broadcast: { status: GreeterBroadcastStatus.PROCESSING },
-          },
-          data: {
-            status: GreeterBroadcastRecipientStatus.QUEUED,
-            deliveryId: delivery.id,
-            lastError: null,
-            nextQueueAttemptAt: null,
-          },
-        });
-        if (linked.count !== 1) {
-          await this.prisma.telegramBotDelivery.updateMany({
-            where: {
-              id: delivery.id,
-              status: {
-                in: [
-                  TelegramBotDeliveryStatus.PENDING,
-                  TelegramBotDeliveryStatus.RETRY,
-                ],
-              },
-            },
-            data: { status: TelegramBotDeliveryStatus.CANCELLED },
-          });
-        }
-      } catch (error) {
-        const reason = sanitizeOperationalError(
-          error,
-          'Broadcast recipient could not be queued',
-        );
+    await queueGreeterBroadcastRecipientPage(this.prisma, this.deliveries, {
+      row: { ...row, scheduledAt: row.scheduledAt },
+      recipients,
+      now: new Date(),
+      onBatchError: (reason) =>
         this.logger.warn(
-          `Greeter broadcast recipient ${recipient.id} queue failed: ${reason}`,
-        );
-        await this.prisma.greeterBroadcastRecipient.updateMany({
-          where: {
-            id: recipient.id,
-            status: GreeterBroadcastRecipientStatus.PENDING,
-          },
-          data: {
-            lastError: reason,
-            nextQueueAttemptAt: new Date(
-              Date.now() + GREETER_BROADCAST_RETRY_MS,
-            ),
-          },
-        });
-      }
-    }
+          `Greeter broadcast ${row.id} queue batch failed: ${reason}`,
+        ),
+    });
     await this.finalizeIfTerminal(row.id);
   }
 
   private async finalizeIfTerminal(broadcastId: string) {
-    const recipients = await this.prisma.greeterBroadcastRecipient.findMany({
-      where: { broadcastId },
-      select: { status: true },
-    });
-    const terminal = new Set<GreeterBroadcastRecipientStatus>([
+    const terminal = [
       GreeterBroadcastRecipientStatus.SENT,
       GreeterBroadcastRecipientStatus.FAILED,
       GreeterBroadcastRecipientStatus.BLOCKED,
       GreeterBroadcastRecipientStatus.CANCELLED,
-    ]);
-    if (recipients.some((item) => !terminal.has(item.status))) return;
-    const sent = recipients.filter(
-      (item) => item.status === GreeterBroadcastRecipientStatus.SENT,
-    ).length;
+    ];
+    const nonTerminal = await this.prisma.greeterBroadcastRecipient.findFirst({
+      where: { broadcastId, status: { notIn: terminal } },
+      select: { id: true },
+    });
+    if (nonTerminal) return;
+    const grouped = await this.prisma.greeterBroadcastRecipient.groupBy({
+      by: ['status'],
+      where: { broadcastId },
+      _count: { _all: true },
+    });
+    const total = grouped.reduce((sum, item) => sum + item._count._all, 0);
+    const sent =
+      grouped.find(
+        (item) => item.status === GreeterBroadcastRecipientStatus.SENT,
+      )?._count._all ?? 0;
     const status =
-      recipients.length === 0 || sent === recipients.length
+      total === 0 || sent === total
         ? GreeterBroadcastStatus.COMPLETED
         : sent === 0
           ? GreeterBroadcastStatus.FAILED

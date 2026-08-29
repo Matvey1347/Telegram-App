@@ -19,13 +19,15 @@ describe("useManagedPostDueRefresh", () => {
       scheduleMode: "LOCAL",
       scheduledAt: "2026-08-24T20:22:00.000Z",
     } as TelegramManagedPost;
-    queryClient.setQueryData(telegramPostKeys.managed("channel"), [scheduled]);
+    const listKey = telegramPostKeys.managedList("channel", { page: 2, pageSize: 50 });
+    queryClient.setQueryData(listKey, page([scheduled], 2));
     const refetch = vi
       .spyOn(queryClient, "refetchQueries")
       .mockImplementation(async () => {
-        queryClient.setQueryData(telegramPostKeys.managed("channel"), [
-          { ...scheduled, status: "FAILED", lastError: "bot unavailable" },
-        ]);
+        queryClient.setQueryData(
+          listKey,
+          page([{ ...scheduled, status: "FAILED", lastError: "bot unavailable" }], 2),
+        );
         return undefined;
       });
     const wrapper = ({ children }: PropsWithChildren) => (
@@ -40,7 +42,7 @@ describe("useManagedPostDueRefresh", () => {
       refetch.mock.calls.filter(
         ([filters]) =>
           JSON.stringify(filters?.queryKey) ===
-          JSON.stringify(telegramPostKeys.managed("channel")),
+          JSON.stringify(telegramPostKeys.managedLists("channel")),
       ).length;
     await act(() => vi.advanceTimersByTimeAsync(999));
     expect(managedRefetchCount()).toBe(0);
@@ -84,13 +86,15 @@ describe("useManagedPostDueRefresh", () => {
       scheduleMode: "LOCAL",
       scheduledAt: "2026-08-24T20:22:00.000Z",
     } as TelegramManagedPost;
-    queryClient.setQueryData(telegramPostKeys.managed("channel"), [publishing]);
+    const listKey = telegramPostKeys.managedList("channel", { page: 1, pageSize: 50 });
+    queryClient.setQueryData(listKey, page([publishing]));
     const refetch = vi
       .spyOn(queryClient, "refetchQueries")
       .mockImplementation(async () => {
-        queryClient.setQueryData(telegramPostKeys.managed("channel"), [
-          { ...publishing, status: "PUBLISHED", scheduleMode: null },
-        ]);
+        queryClient.setQueryData(
+          listKey,
+          page([{ ...publishing, status: "PUBLISHED", scheduleMode: null }]),
+        );
         return undefined;
       });
     const wrapper = ({ children }: PropsWithChildren) => (
@@ -107,8 +111,70 @@ describe("useManagedPostDueRefresh", () => {
       refetch.mock.calls.filter(
         ([filters]) =>
           JSON.stringify(filters?.queryKey) ===
-          JSON.stringify(telegramPostKeys.managed("channel")),
+          JSON.stringify(telegramPostKeys.managedLists("channel")),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("converges a due deep link that exists only in the detail cache", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-24T20:22:00.000Z"));
+    const queryClient = new QueryClient();
+    const scheduled = {
+      id: "detail-only",
+      status: "SCHEDULED",
+      scheduleMode: "LOCAL",
+      scheduledAt: "2026-08-24T20:22:00.000Z",
+    } as TelegramManagedPost;
+    const detailKey = telegramPostKeys.managedDetail("channel", scheduled.id);
+    queryClient.setQueryData(detailKey, scheduled);
+    const refetch = vi
+      .spyOn(queryClient, "refetchQueries")
+      .mockImplementation(async (filters) => {
+        if (JSON.stringify(filters?.queryKey) === JSON.stringify(detailKey)) {
+          queryClient.setQueryData(detailKey, {
+            ...scheduled,
+            status: "PUBLISHED",
+            scheduleMode: null,
+          });
+        }
+        return undefined;
+      });
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    renderHook(
+      () => useManagedPostDueRefresh({ channelId: "channel", post: scheduled }),
+      { wrapper },
+    );
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    expect(refetch).toHaveBeenCalledWith({
+      queryKey: detailKey,
+      type: "active",
+      exact: true,
+    });
+    await act(() => vi.advanceTimersByTimeAsync(20_000));
+    expect(
+      refetch.mock.calls.filter(
+        ([filters]) =>
+          JSON.stringify(filters?.queryKey) === JSON.stringify(detailKey),
       ),
     ).toHaveLength(1);
   });
 });
+
+function page(items: TelegramManagedPost[], currentPage = 1) {
+  return {
+    items,
+    pagination: {
+      totalItems: items.length,
+      page: currentPage,
+      pageSize: 50,
+      totalPages: currentPage,
+      hasNextPage: false,
+      hasPreviousPage: currentPage > 1,
+    },
+  };
+}

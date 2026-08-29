@@ -36,9 +36,11 @@ import {
 import { financeBotProButtons } from './finance-bot-pro-buttons';
 import { warnSlowFinanceContext } from './finance-bot-observability';
 import { FinanceBotBrowserLogin } from './finance-bot-browser-login';
-import { financeBotIncomingFile } from './finance-bot-icon-input.service';
-import { financeBotFlowInput } from './finance-bot-icon-input.service';
-import { FinanceBotIconInputService } from './finance-bot-icon-input.service';
+import {
+  financeBotFlowInput,
+  financeBotIncomingFile,
+  FinanceBotIconInputService,
+} from './finance-bot-icon-input.service';
 @Injectable()
 export class FinanceBotService {
   private readonly flowMessages: FinanceBotFlowMessenger;
@@ -68,23 +70,35 @@ export class FinanceBotService {
   }
   async handle(context: TelegramBotApplicationContext) {
     const incomingCallback = context.update.callback_query;
-    if (incomingCallback?.id) {
+    if (incomingCallback?.id)
       await acknowledgeFinanceCallback(
         this.botApi,
         context.token,
         incomingCallback.id,
         '',
       );
-    }
+    const actor = this.users.actorFromUpdate(context.update);
+    if (!actor?.id) return;
     const contextStartedAt = Date.now();
+    const preloaded = await this.contexts.findBotUpdateContext({
+      workspaceId: context.bot.workspaceId,
+      botIntegrationId: context.bot.id,
+      runtimeInstanceId: context.runtime.id,
+      telegramUserId: String(actor.id),
+    });
     const user = await this.users.upsertFromUpdate({
       workspaceId: context.bot.workspaceId,
       botIntegrationId: context.bot.id,
       runtimeInstanceId: context.runtime.id,
       update: context.update,
+      existingUser: preloaded.telegramUser,
     });
     if (!user) return;
-    const profile = await this.contexts.ensureProfile(context.bot.id, user.id);
+    const profile = await this.contexts.ensureProfile(
+      context.bot.id,
+      user.id,
+      preloaded.profile,
+    );
     warnSlowFinanceContext(context.runtime.id, Date.now() - contextStartedAt);
     const locale = financeChatLocale(profile.locale, user.languageCode);
     const preCheckout = context.update.pre_checkout_query;
@@ -109,6 +123,14 @@ export class FinanceBotService {
     }
     const chatId = user.telegramChatId;
     if (!chatId) return;
+    const sendAccounts = () =>
+      this.chat.sendAccounts(
+        context,
+        user.id,
+        { ...profile, workspaceId: context.bot.workspaceId },
+        chatId,
+        locale,
+      );
     if (await this.browserLogin.handle(context, chatId, profile.id, locale))
       return;
     const successfulPayment = context.update.message?.successful_payment;
@@ -256,13 +278,7 @@ export class FinanceBotService {
           callback.message?.message_id,
         );
       else if (action === 'start-expense' || action === 'start-income')
-        await this.chat.sendAccounts(
-          context,
-          user.id,
-          profile.id,
-          chatId,
-          locale,
-        );
+        await sendAccounts();
       return;
     }
     if (callback?.data === 'fin:account:add') {
@@ -291,7 +307,7 @@ export class FinanceBotService {
             token,
             botIntegrationId: context.bot.id,
             telegramBotUserId: user.id,
-            profile,
+            profile: { ...profile, workspaceId: context.bot.workspaceId },
           });
         } catch {
           await this.interactive.send(context.token, chatId, {
@@ -559,13 +575,7 @@ export class FinanceBotService {
         type: 'INCOME',
       });
       if (!result) {
-        await this.chat.sendAccounts(
-          context,
-          user.id,
-          profile.id,
-          chatId,
-          locale,
-        );
+        await sendAccounts();
         return;
       }
       await this.flowMessages.send(
@@ -591,13 +601,7 @@ export class FinanceBotService {
         type: 'EXPENSE',
       });
       if (!result) {
-        await this.chat.sendAccounts(
-          context,
-          user.id,
-          profile.id,
-          chatId,
-          locale,
-        );
+        await sendAccounts();
         return;
       }
       await this.flowMessages.send(
@@ -641,13 +645,7 @@ export class FinanceBotService {
       text === t(locale, 'menuAccounts') ||
       text === 'Accounts'
     ) {
-      await this.chat.sendAccounts(
-        context,
-        user.id,
-        profile.id,
-        chatId,
-        locale,
-      );
+      await sendAccounts();
       return;
     }
     if (

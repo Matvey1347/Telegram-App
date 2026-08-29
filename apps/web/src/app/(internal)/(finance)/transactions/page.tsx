@@ -1,31 +1,19 @@
 'use client';
-
 import { formatDate } from '@/lib/date-format';
-
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
 import { useSearchParams } from 'next/navigation';
 import { AppShell } from '@/components/layout/app-shell';
 import { accountDisplayName } from '@/lib/features/finance/account-display';
-import { Account, TelegramChannelSelectOption as TelegramChannel, Transaction, TransactionCategory, TransactionQuery, WorkspaceMemberSelectOption as WorkspaceMember, accountsApi, currenciesApi, telegramChannelsApi, transactionCategoriesApi, transactionsApi, workspaceMembersApi } from '@/lib/api';
+import { Transaction, TransactionQuery, accountsApi, currenciesApi, transactionCategoriesApi, transactionsApi, workspaceMembersApi } from '@/lib/api';
 import { MoneyStack } from '@/components/ui/money-stack';
-import { Button, Card, ConfirmDeleteModal, DateInput, DateRangeInput, EmptyState, ErrorState, FormField, Input, Modal, PageHeader, Select, TableLoadingState } from '@/components/ui/primitives';
-import { IconPicker } from '@/components/icons/icon-picker';
+import { Button, Card, ConfirmDeleteModal, DateRangeInput, EmptyState, ErrorState, FormField, Input, PageHeader, Select, TableLoadingState } from '@/components/ui/primitives';
 import { InlineIconPicker } from '@/components/icons/inline-icon-picker';
 import { useAppToast } from '@/providers/toast-provider';
 import { useDeleteTransactionMutation } from '@/lib/features/finance/use-delete-transaction-mutation';
 import { accountKeys } from '@/lib/query-keys';
 import { FinanceActionMenu } from '@/components/features/finance/internal/finance-action-menu';
-
-type Values = { accountId: string; type: 'income' | 'expense'; amount: number; categoryId: string; memberId?: string; telegramChannelId?: string; description?: string; date: string; iconId?: string | null };
-
-function formatLocalDate(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
+import { InternalTransactionModal } from '@/components/features/finance/internal/transaction-modal';
 
 function iconOptionProps(item: { name: string; iconPresentation?: { type: 'image'; url: string } | { type: 'unicode'; value: string } | null }) {
   return {
@@ -33,46 +21,6 @@ function iconOptionProps(item: { name: string; iconPresentation?: { type: 'image
     'data-icon-emoji': item.iconPresentation?.type === 'unicode' ? item.iconPresentation.value : undefined,
     'data-icon-fallback': item.name,
   };
-}
-
-function memberOptionProps(member: WorkspaceMember) {
-  return {
-    'data-icon-url': member.avatarPresentation?.type === 'image' ? member.avatarPresentation.url : undefined,
-    'data-icon-emoji': member.avatarPresentation?.type === 'unicode' ? member.avatarPresentation.value : undefined,
-    'data-icon-fallback': member.user.name,
-  };
-}
-
-function channelOptionProps(channel: TelegramChannel) {
-  return {
-    'data-icon-url': channel.photoUrl ?? undefined,
-    'data-icon-fallback': channel.title,
-  };
-}
-
-function isBuyChannelsCategory(category?: TransactionCategory | null) {
-  if (!category) return false;
-  return (
-    category.type === 'expense' &&
-    (
-      category.key === 'buy_channels' ||
-      category.name.trim().toLowerCase() === 'buy channels (legacy)' ||
-      category.name.trim().toLowerCase() === 'buy channels'
-    )
-  );
-}
-
-function isChannelAdvertisingRevenueCategory(
-  category?: TransactionCategory | null,
-) {
-  if (!category) return false;
-  return (
-    category.type === 'income' &&
-    (
-      category.key === 'channel_advertising_revenue' ||
-      category.name.trim().toLowerCase() === 'channel advertising revenue'
-    )
-  );
 }
 
 export default function TransactionsPage() {
@@ -85,7 +33,7 @@ export default function TransactionsPage() {
   const [filters, setFilters] = useState({ type: 'all', sort: 'date_desc', dateFrom: '', dateTo: '', categoryId: '', accountId: '', search: '' });
   const { data: accounts } = useQuery({ queryKey: accountKeys.accounts(), queryFn: accountsApi.list });
   const { data: settings } = useQuery({ queryKey: ['currency-settings'], queryFn: currenciesApi.getSettings });
-  const { data: rates } = useQuery({ queryKey: ['currency-rates'], queryFn: currenciesApi.listRates });
+  const { data: rates } = useQuery({ queryKey: ['currency-rates-latest'], queryFn: currenciesApi.listLatestRates });
   const { data, isLoading, error } = useQuery({
     queryKey: [...accountKeys.transactions(), filters],
     queryFn: () => transactionsApi.list(Object.fromEntries(Object.entries(filters).filter(([, value]) => value)) as TransactionQuery),
@@ -188,7 +136,7 @@ export default function TransactionsPage() {
       </div>
     ) : null}
     {!isLoading && !error && !data?.length ? <EmptyState text="No transactions" /> : null}
-    <TransactionModal
+    <InternalTransactionModal
       open={createOpen}
       title="Create Transaction"
       onClose={() => setCreateOpen(false)}
@@ -216,7 +164,7 @@ export default function TransactionsPage() {
         }
       }}
     />
-    <TransactionModal
+    <InternalTransactionModal
       open={!!editing}
       title="Edit Transaction"
       onClose={() => setEditing(null)}
@@ -288,181 +236,4 @@ function getTransactionTitle(transaction: Transaction) {
     || transaction.categoryRef?.name
     || transaction.category
     || 'Transaction';
-}
-
-function transactionDefaults(initial?: Transaction): Values {
-  return initial
-    ? {
-        accountId: initial.accountId,
-        type: initial.type,
-        amount: Number(initial.amount),
-        categoryId: initial.categoryId ?? initial.categoryRef?.id ?? '',
-        memberId: initial.memberId ?? '',
-        telegramChannelId:
-          initial.telegramChannel?.id ??
-          initial.purchasedTelegramChannel?.id ??
-          '',
-        description: initial.description ?? '',
-        date: formatLocalDate(new Date(initial.date)),
-        iconId: initial.iconId ?? null,
-      }
-    : { accountId: '', type: 'expense', amount: 0, categoryId: '', memberId: '', telegramChannelId: '', description: '', date: formatLocalDate(new Date()), iconId: null };
-}
-
-function TransactionModal({ open, onClose, onSubmit, title, accounts, members, initial }: { open: boolean; onClose: () => void; onSubmit: (v: Values) => void; title: string; accounts: Account[]; members: WorkspaceMember[]; initial?: Transaction }) {
-  const { register, handleSubmit, reset, watch, setValue, getValues, formState: { errors } } = useForm<Values>({ defaultValues: transactionDefaults(initial) });
-  const lastAutoMemberIdRef = useRef('');
-  const type = watch('type');
-  const accountId = watch('accountId');
-  const categoryId = watch('categoryId');
-  const memberId = watch('memberId') ?? '';
-  const telegramChannelId = watch('telegramChannelId') ?? '';
-  const { data: categories } = useQuery({ queryKey: ['transaction-categories', type], queryFn: () => transactionCategoriesApi.list(type), enabled: open && !!type });
-  const { data: telegramChannels } = useQuery({ queryKey: ['telegram-channels', 'select', 'transactions-modal'], queryFn: () => telegramChannelsApi.select(), enabled: open });
-  const selectedCategory = useMemo(() => categories?.find((c) => c.id === categoryId), [categories, categoryId]);
-  const isInvestment = type === 'income' && selectedCategory?.key === 'investment';
-  const isBuyChannels = isBuyChannelsCategory(selectedCategory);
-  const isChannelAdvertisingRevenue = isChannelAdvertisingRevenueCategory(selectedCategory);
-  const requiresTelegramChannel = isBuyChannels || isChannelAdvertisingRevenue;
-  const ownChannels = useMemo(
-    () => (telegramChannels ?? []).filter((channel) => channel.isActive !== false),
-    [telegramChannels],
-  );
-  const selectedAccount = useMemo(() => accounts.find((account) => account.id === accountId), [accounts, accountId]);
-
-  useEffect(() => {
-    if (!open) return;
-    lastAutoMemberIdRef.current = '';
-    reset(transactionDefaults(initial));
-  }, [open, initial, reset]);
-
-  useEffect(() => {
-    if (!isInvestment) {
-      lastAutoMemberIdRef.current = '';
-      setValue('memberId', '');
-    }
-  }, [isInvestment, setValue]);
-
-  useEffect(() => {
-    if (!requiresTelegramChannel) {
-      setValue('telegramChannelId', '');
-    }
-  }, [requiresTelegramChannel, setValue]);
-
-  useEffect(() => {
-    if (!isInvestment) return;
-    const autoMemberId = selectedAccount?.assignedMemberId ?? '';
-    const currentMemberId = getValues('memberId') ?? '';
-    const lastAutoMemberId = lastAutoMemberIdRef.current;
-
-    if (!autoMemberId) {
-      if (currentMemberId && currentMemberId === lastAutoMemberId) {
-        setValue('memberId', '');
-      }
-      lastAutoMemberIdRef.current = '';
-      return;
-    }
-
-    if (!currentMemberId || currentMemberId === lastAutoMemberId) {
-      setValue('memberId', autoMemberId, { shouldDirty: true, shouldValidate: true });
-      lastAutoMemberIdRef.current = autoMemberId;
-    }
-  }, [getValues, isInvestment, selectedAccount, setValue]);
-
-  useEffect(() => {
-    const selected = getValues('categoryId');
-    if (!selected) return;
-    if (!categories?.some((c) => c.id === selected)) {
-      setValue('categoryId', '');
-      setValue('memberId', '');
-    }
-  }, [categories, getValues, setValue, type]);
-
-  return (
-    <Modal open={open} onClose={onClose} title={title}>
-      <form className="space-y-3" onSubmit={handleSubmit(onSubmit)}>
-        <IconPicker iconId={watch('iconId') ?? null} icon={initial?.iconPresentation} onChange={(iconId) => setValue('iconId', iconId, { shouldDirty: true, shouldValidate: true })} />
-        <FormField label="Type">
-          <Select
-            {...register('type')}
-            value={type}
-            onChange={(event) => setValue('type', event.target.value as Values['type'], { shouldDirty: true, shouldValidate: true })}
-          >
-            <option value="income">Income</option>
-            <option value="expense">Expense</option>
-          </Select>
-        </FormField>
-        <FormField label="Account" required error={errors.accountId ? 'Required field' : undefined}>
-          <Select
-            {...register('accountId', { required: true })}
-            value={accountId}
-            onChange={(event) => setValue('accountId', event.target.value, { shouldDirty: true, shouldValidate: true })}
-          >
-            <option value="" disabled hidden>Select account</option>
-            {accounts.map((a) => <option key={a.id} value={a.id} {...iconOptionProps(a)}>{accountDisplayName(a)} ({a.currency})</option>)}
-          </Select>
-        </FormField>
-        <FormField label="Amount">
-          <Input type="number" step="0.01" {...register('amount', { valueAsNumber: true })} />
-        </FormField>
-        <FormField label="Category" required error={errors.categoryId ? 'Required field' : undefined}>
-          <Select
-            {...register('categoryId', { required: true })}
-            value={categoryId}
-            onChange={(event) => setValue('categoryId', event.target.value, { shouldDirty: true, shouldValidate: true })}
-          >
-            <option value="" disabled hidden>Select category</option>
-            {categories?.map((c: TransactionCategory) => <option key={c.id} value={c.id} {...iconOptionProps(c)}>{c.name}</option>)}
-          </Select>
-        </FormField>
-        {isInvestment ? (
-          <FormField label="Member" required error={errors.memberId ? 'Required field' : undefined}>
-            <Select
-              {...register('memberId', { required: true })}
-              value={memberId}
-              onChange={(event) => setValue('memberId', event.target.value, { shouldDirty: true, shouldValidate: true })}
-            >
-              <option value="" disabled hidden>Select member</option>
-              {members.map((m) => <option key={m.id} value={m.id} {...memberOptionProps(m)}>{m.user.name}</option>)}
-            </Select>
-          </FormField>
-        ) : null}
-        {requiresTelegramChannel ? (
-          <FormField
-            label={isChannelAdvertisingRevenue ? 'Revenue channel' : 'Channel'}
-            required={isChannelAdvertisingRevenue}
-            error={errors.telegramChannelId ? 'Required field' : undefined}
-          >
-            <Select
-              {...register('telegramChannelId', {
-                validate: (value) =>
-                  !isChannelAdvertisingRevenue || Boolean(value) || 'required',
-              })}
-              value={telegramChannelId}
-              onChange={(event) => setValue('telegramChannelId', event.target.value, { shouldDirty: true, shouldValidate: true })}
-            >
-              <option value="">No channel</option>
-              {ownChannels.map((channel: TelegramChannel) => (
-                <option
-                  key={channel.id}
-                  value={channel.id}
-                  {...channelOptionProps(channel)}
-                >
-                  {channel.title}{channel.username ? ` (@${channel.username})` : ''}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-        ) : null}
-        <FormField label="Description"><Input {...register('description')} /></FormField>
-        <FormField label="Date" required error={errors.date ? 'Required field' : undefined}>
-          <DateInput {...register('date', { required: true })} value={watch('date')} />
-        </FormField>
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" type="button" onClick={onClose}>Cancel</Button>
-          <Button type="submit">Save</Button>
-        </div>
-      </form>
-    </Modal>
-  );
 }
