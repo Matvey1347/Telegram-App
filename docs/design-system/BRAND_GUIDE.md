@@ -1,5 +1,9 @@
 # Brand Guide
 
+For the concrete cross-project implementation contract, responsive behavior,
+navigation information architecture and accessibility acceptance criteria, see
+[Service Design Rules](SERVICE_DESIGN_RULES.md).
+
 ## Product Character
 
 Telegram System is an internal operational product for Telegram channel management, advertising, finance and analytics. The interface should feel dense, calm and work-focused. Prefer scannable dashboards, compact forms, clear tables and predictable navigation over marketing-style composition.

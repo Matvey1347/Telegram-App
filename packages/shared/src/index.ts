@@ -27,3 +27,4 @@ export * from "./types/editor-shortcuts";
 export * from "./telegram-spoilers";
 export * from "./telegram-table-markup";
 export * from "./pagination";
+export * from "./permissions";

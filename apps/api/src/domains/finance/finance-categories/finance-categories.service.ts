@@ -9,12 +9,15 @@ import { WorkspaceService } from '../../../common/workspace.service';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { CreateFinanceCategoryDto, UpdateFinanceCategoryDto } from './dto';
 import { financeSystemCategoriesReady } from './finance-system-category-readiness';
+import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
+import { financeAuthorizationTestFallback } from '../finance-authorization-test-fallback';
 
 @Injectable()
 export class FinanceCategoriesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
+    private readonly authorization: WorkspaceAuthorizationService = financeAuthorizationTestFallback(workspaceService),
   ) {}
 
   private async ensureEmojiIcon(
@@ -254,8 +257,7 @@ export class FinanceCategoriesService {
   }
 
   async list(userId: string, type?: 'income' | 'expense') {
-    const workspaceId =
-      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const { workspaceId } = await this.authorization.require(userId, 'finance.view');
     await this.ensureSystemCategories(workspaceId);
 
     const categories = await (this.prisma as any).transactionCategory.findMany({
@@ -282,6 +284,7 @@ export class FinanceCategoriesService {
   }
 
   async create(userId: string, dto: CreateFinanceCategoryDto) {
+    await this.authorization.require(userId, 'finance.manage');
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
     await this.ensureSystemCategories(workspaceId);
@@ -311,6 +314,7 @@ export class FinanceCategoriesService {
   }
 
   async update(userId: string, id: string, dto: UpdateFinanceCategoryDto) {
+    await this.authorization.require(userId, 'finance.manage');
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
     const category = await (this.prisma as any).transactionCategory.findFirst({
@@ -358,6 +362,7 @@ export class FinanceCategoriesService {
   }
 
   async remove(userId: string, id: string) {
+    await this.authorization.require(userId, 'finance.manage');
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
     const category = await (this.prisma as any).transactionCategory.findFirst({

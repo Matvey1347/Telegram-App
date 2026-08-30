@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
+import Link from "next/link";
 import {
   keepPreviousData,
   useMutation,
@@ -235,6 +236,7 @@ export function InternalFinanceOverview() {
       <PageHeader
         title="Finance"
         subtitle="Manage accounts, transactions, categories and transfers in one place"
+        action={<Link href="/currencies" className="inline-flex min-h-9 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-2 text-sm font-medium text-neutral-100 transition hover:bg-neutral-800">Currencies</Link>}
       />
       <Card className="mb-5">
         <div className="max-w-md">
@@ -251,6 +253,7 @@ export function InternalFinanceOverview() {
       </Card>
       <div className="space-y-6">
         <Section
+          id="accounts"
           title="Accounts"
           hint="Balances in each account currency"
           create={() => setEditor({ kind: "account" })}
@@ -297,6 +300,7 @@ export function InternalFinanceOverview() {
           )}
         </Section>
         <Section
+          id="transactions"
           title="Transactions"
           hint="Browse all transactions page by page"
           create={() => setEditor({ kind: "transaction" })}
@@ -359,6 +363,7 @@ export function InternalFinanceOverview() {
           )}
         </Section>
         <Section
+          id="categories"
           title="Categories"
           hint="Create and edit here"
           create={() => setEditor({ kind: "category" })}
@@ -419,6 +424,7 @@ export function InternalFinanceOverview() {
           </div>
         </Section>
         <Section
+          id="transfers"
           title="Transfers"
           hint="Browse all transfers page by page"
           create={() => setEditor({ kind: "transfer" })}
@@ -548,6 +554,7 @@ export function InternalFinanceOverview() {
 }
 
 function Section({
+  id,
   title,
   hint,
   create,
@@ -557,6 +564,7 @@ function Section({
   footer,
   children,
 }: {
+  id: string;
   title: string;
   hint: string;
   create: () => void;
@@ -568,14 +576,14 @@ function Section({
 }) {
   const loading = query.isLoading || query.isPlaceholderData;
   return (
-    <section aria-busy={loading}>
-      <div className="mb-3 flex items-end justify-between gap-3">
-        <div>
+    <section id={id} aria-busy={loading} className="scroll-mt-6">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold text-white">{title}</h2>
-          <p className="text-sm text-neutral-500">{hint}</p>
+          <p className="mt-0.5 text-sm leading-5 text-neutral-500">{hint}</p>
         </div>
-        <Button variant="secondary" onClick={create}>
-          <Plus size={16} /> Create
+        <Button variant="secondary" onClick={create} className="shrink-0 px-3 sm:px-4">
+          <Plus size={16} /> <span className="hidden sm:inline">Create</span>
         </Button>
       </div>
       {toolbar}

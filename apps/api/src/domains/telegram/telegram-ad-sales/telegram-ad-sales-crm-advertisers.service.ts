@@ -28,12 +28,15 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramAdvertisersQueryDto } from './dto';
 import { decimal, decimalToString } from './domain/decimal';
 import * as crmMetrics from './telegram-ad-sales-crm-advertiser-metrics';
+import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
+import { adSalesAuthorizationTestFallback } from './telegram-ad-sales-authorization-test-fallback';
 
 @Injectable()
 export class TelegramAdSalesCrmAdvertisersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
+    private readonly authorization: WorkspaceAuthorizationService = adSalesAuthorizationTestFallback(workspaceService),
   ) {}
 
   private async workspace(userId: string) {
@@ -617,7 +620,8 @@ export class TelegramAdSalesCrmAdvertisersService {
     userId: string,
     query: TelegramAdvertisersQueryDto,
   ): Promise<TelegramAdCrmAdvertisersListResult> {
-    const workspaceId = await this.workspace(userId);
+    const access = await this.authorization.require(userId, 'adSales.crm.view');
+    const workspaceId = access.workspaceId;
     const pagination = normalizePagination(query);
     const search = query.search?.trim();
     const where: Prisma.TelegramAdvertiserWhereInput = {
@@ -668,6 +672,10 @@ export class TelegramAdSalesCrmAdvertisersService {
           }
         : {}),
     };
+    if (
+      (await this.authorization.can(userId, 'adSales.crm.editOwn')) &&
+      !(await this.authorization.can(userId, 'adSales.crm.editAny'))
+    ) where.ownerMemberId = access.memberId;
     const crmSettings =
       await this.prisma.telegramAdCrmWorkspaceSettings.findUnique({
         where: { workspaceId },

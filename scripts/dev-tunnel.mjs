@@ -149,7 +149,14 @@ async function activateLocalBots() {
     },
   );
   if (!response.ok) {
-    throw new Error(`LOCAL bot activation returned HTTP ${response.status}`);
+    const detail = await response.text().catch(() => "");
+    const message = detail
+      .replace(/\s+/g, " ")
+      .replace(/[\r\n]/g, " ")
+      .slice(0, 240);
+    throw new Error(
+      `LOCAL bot activation returned HTTP ${response.status}${message ? `: ${message}` : ""}`,
+    );
   }
   status("Bot activation", "LOCAL webhooks and Mini App links reconciled");
 }

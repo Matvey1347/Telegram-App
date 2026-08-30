@@ -105,11 +105,7 @@ allowPattern(
 const pageSlice =
   "Frontend page decomposition: move queries, mutations and API access into a feature container.";
 const pageHookAllowances = [
-  ["(finance)/accounts/page.tsx", 6],
-  ["(finance)/categories/page.tsx", 9],
   ["(finance)/currencies/page.tsx", 6],
-  ["(finance)/transactions/page.tsx", 12],
-  ["(finance)/transfers/page.tsx", 9],
   ["(growth)/ad-campaigns/[id]/page.tsx", 5],
   ["(growth)/ad-campaigns/page.tsx", 27],
   ["(operations)/system-logs/page.tsx", 4],
@@ -118,7 +114,6 @@ const pageHookAllowances = [
   ["(telegram)/telegram-channels/page.tsx", 18],
   ["(telegram)/telegram-posts/page.tsx", 18],
   ["(telegram)/telegram/channels/[id]/page.tsx", 14],
-  ["(workspace)/account/page.tsx", 5],
   ["(workspace)/settings/page.tsx", 7],
   ["page.tsx", 6],
 ];
@@ -133,22 +128,15 @@ for (const [suffix, count] of pageHookAllowances) {
 }
 
 const pageApiAllowances = [
-  ["(finance)/accounts/page.tsx", 2],
-  ["(finance)/categories/page.tsx", 3],
   ["(finance)/currencies/page.tsx", 2],
-  ["(finance)/transactions/page.tsx", 3],
-  ["(finance)/transfers/page.tsx", 3],
   ["(growth)/ad-campaigns/[id]/page.tsx", 1],
   ["(growth)/ad-campaigns/page.tsx", 3],
-  ["(identity)/login/page.tsx", 2],
-  ["(identity)/register/page.tsx", 2],
   ["(operations)/system-logs/page.tsx", 1],
   ["(telegram)/system-bot/connect/page.tsx", 1],
   ["(telegram)/telegram-channel-networks/[id]/page.tsx", 1],
   ["(telegram)/telegram-channels/page.tsx", 4],
   ["(telegram)/telegram-posts/page.tsx", 6],
   ["(telegram)/telegram/channels/[id]/page.tsx", 2],
-  ["(workspace)/account/page.tsx", 1],
   ["(workspace)/settings/page.tsx", 1],
   ["page.tsx", 3],
 ];

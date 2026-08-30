@@ -1,10 +1,31 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, RefreshCw, ShieldCheck, Unlink } from "lucide-react";
-import { Button, Card, LoadingState } from "@/components/ui/primitives";
+import {
+  AlertTriangle,
+  Check,
+  ExternalLink,
+  Laptop,
+  RefreshCw,
+  Server,
+  ShieldCheck,
+  Unlink,
+} from "lucide-react";
+import { Button, Card, Skeleton } from "@/components/ui/primitives";
+import { ActionMenu, ActionMenuItem } from "@/components/ui/action-menu";
 import { telegramSystemBotApi } from "@/lib/api";
 import { telegramSystemBotKeys } from "@/lib/query-keys";
+
+const ENVIRONMENTS = [
+  {
+    id: "PRODUCTION" as const,
+    icon: Server,
+  },
+  {
+    id: "LOCAL" as const,
+    icon: Laptop,
+  },
+];
 
 export function TelegramSystemBotSettings() {
   const queryClient = useQueryClient();
@@ -19,25 +40,61 @@ export function TelegramSystemBotSettings() {
         queryKey: telegramSystemBotKeys.connection(),
       }),
   });
+  const data = connection.data;
+  const botUsername = data?.botUsername?.replace(/^@/, "") ?? null;
+  const botAvatarUrl = botUsername
+    ? `https://t.me/i/userpic/320/${encodeURIComponent(botUsername)}.jpg`
+    : null;
+
   return (
-    <Card>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-lg font-semibold">Telegram System Bot</h3>
-          <p className="mt-1 text-sm text-neutral-400">
-            Secure connection for workspace actions and task notifications.
-          </p>
+    <Card className="overflow-visible p-0">
+      <div className="flex flex-col gap-3 p-3.5 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-sky-900/80 bg-sky-950/50 text-sky-300">
+            {botAvatarUrl ? (
+              <img
+                src={botAvatarUrl}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <ShieldCheck size={18} aria-hidden="true" />
+            )}
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-semibold text-neutral-100">
+                Nexeloq Bot
+              </h2>
+              {data ? (
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${data.runtimeEnvironment ? "border-emerald-900 bg-emerald-950/70 text-emerald-300" : "border-neutral-700 bg-neutral-900 text-neutral-400"}`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${data.runtimeEnvironment ? "bg-emerald-400" : "bg-neutral-500"}`}
+                    aria-hidden="true"
+                  />
+                  {data.runtimeEnvironment ? "Bot active" : "Bot unavailable"}
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-0.5 max-w-2xl text-xs leading-5 text-neutral-400">
+              {botUsername ? `@${botUsername} · ` : ""}Commands and
+              notifications. Publishing uses the bot permissions in each
+              channel.
+            </p>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {connection.data && !connection.data.connected ? (
-            connection.data.botUsername ? (
+        <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
+          {data && !data.connected ? (
+            data.botUsername ? (
               <a
-                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
-                href={`https://t.me/${connection.data.botUsername}?start=connect`}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
+                href={`https://t.me/${data.botUsername}?start=connect`}
                 target="_blank"
                 rel="noreferrer"
               >
-                <ExternalLink size={15} />
+                <ExternalLink size={15} aria-hidden="true" />
                 Connect
               </a>
             ) : (
@@ -50,117 +107,143 @@ export function TelegramSystemBotSettings() {
               </Button>
             )
           ) : null}
-          {connection.data?.connected ? (
-            <span className="rounded-md bg-emerald-950 px-2 py-1 text-xs text-emerald-300">
-              Connected
-            </span>
-          ) : connection.data ? (
-            <span className="rounded-md bg-neutral-800 px-2 py-1 text-xs text-neutral-300">
-              Not connected
-            </span>
-          ) : null}
-          <Button
-            type="button"
-            variant="secondary"
-            className="inline-flex items-center gap-2"
-            onClick={() => void connection.refetch()}
-            disabled={connection.isFetching}
-          >
-            <RefreshCw size={15} aria-hidden="true" />
-            {connection.isFetching ? "Refreshing…" : "Refresh connection"}
-          </Button>
-        </div>
-      </div>
-      <div className="mt-4 grid gap-2 border-y border-neutral-800 py-3 text-xs sm:grid-cols-2">
-        {(["PRODUCTION", "LOCAL"] as const).map((environment) => {
-          const selected = connection.data?.runtimeEnvironment === environment;
-          return (
-            <div
-              className="flex items-center justify-between gap-2 rounded-md bg-neutral-900/70 px-3 py-2"
-              key={environment}
+          <ActionMenu label="Telegram System Bot actions">
+            <ActionMenuItem
+              icon={
+                <RefreshCw
+                  size={15}
+                  className={connection.isFetching ? "animate-spin" : ""}
+                />
+              }
+              onClick={() => void connection.refetch()}
+              disabled={connection.isFetching}
             >
-              <span className="font-medium text-neutral-200">
-                {environment} System Bot
-              </span>
-              <span
-                className={
-                  selected
-                    ? "rounded bg-sky-950 px-2 py-0.5 font-medium text-sky-200"
-                    : "text-neutral-500"
+              {connection.isFetching ? "Refreshing…" : "Refresh connection"}
+            </ActionMenuItem>
+            {data?.connected && data.botUsername ? (
+              <ActionMenuItem
+                icon={<ExternalLink size={15} />}
+                onClick={() =>
+                  window.open(
+                    `https://t.me/${data.botUsername}`,
+                    "_blank",
+                    "noopener,noreferrer",
+                  )
                 }
               >
-                {selected ? "Current process" : "Environment-managed"}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-3 flex gap-2 text-xs text-neutral-500">
-        <ShieldCheck className="mt-0.5 shrink-0 text-neutral-400" size={15} aria-hidden="true" />
-        <p>
-          {connection.data?.runtimeEnvironment
-            ? `This API process is configured for ${connection.data.runtimeEnvironment}. BotFather tokens and webhook secrets are environment-managed and cannot be viewed or edited here.`
-            : "The API process has not selected a System Bot environment. BotFather tokens and webhook secrets are environment-managed and cannot be viewed or edited here."}
-        </p>
-      </div>
-      {connection.isLoading ? <LoadingState /> : null}
-      {connection.isError ? (
-        <div className="mt-4 text-sm text-rose-300">
-          <p>Could not load the Telegram System Bot connection.</p>
-          <Button
-            className="mt-2"
-            variant="secondary"
-            onClick={() => void connection.refetch()}
-          >
-            Try again
-          </Button>
-        </div>
-      ) : null}
-      {connection.data?.connected ? (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-neutral-800 pt-4">
-          <div className="text-sm text-neutral-300">
-            <p>
-              {connection.data.username
-                ? `@${connection.data.username}`
-                : (connection.data.firstName ?? "Telegram account")}
-            </p>
-            <p className="text-xs text-neutral-500">
-              Current workspace:{" "}
-              {connection.data.currentWorkspaceName ?? "Not selected"}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            {connection.data.botUsername ? (
-              <a
-                className="inline-flex items-center gap-2 rounded-md border border-neutral-700 px-3 py-2 text-sm text-neutral-100 hover:bg-neutral-800"
-                href={`https://t.me/${connection.data.botUsername}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <ExternalLink size={15} />
                 Open bot
-              </a>
+              </ActionMenuItem>
             ) : null}
+            {data?.connected ? (
+              <ActionMenuItem
+                danger
+                icon={<Unlink size={15} />}
+                onClick={() => disconnect.mutate()}
+                disabled={disconnect.isPending}
+              >
+                Disconnect
+              </ActionMenuItem>
+            ) : null}
+          </ActionMenu>
+        </div>
+      </div>
+
+      <div className="rounded-b-lg border-t border-neutral-800 bg-neutral-950/45 p-3.5 sm:p-4">
+        {connection.isLoading ? (
+          <div className="grid gap-3 md:grid-cols-2">
+            <Skeleton className="h-14" />
+            <Skeleton className="h-14" />
+          </div>
+        ) : null}
+        {connection.isError ? (
+          <div className="flex flex-col gap-3 rounded-lg border border-rose-900/70 bg-rose-950/25 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex gap-3">
+              <AlertTriangle
+                className="mt-0.5 shrink-0 text-rose-300"
+                size={18}
+                aria-hidden="true"
+              />
+              <div>
+                <p className="text-sm font-medium text-rose-200">
+                  Connection status is unavailable
+                </p>
+                <p className="mt-1 text-xs leading-5 text-rose-200/70">
+                  The API could not load the Telegram System Bot connection.
+                  Check the API process and try again.
+                </p>
+              </div>
+            </div>
             <Button
-              className="inline-flex items-center gap-2 whitespace-nowrap"
-              variant="danger"
-              onClick={() => disconnect.mutate()}
-              disabled={disconnect.isPending}
+              className="shrink-0 justify-center"
+              variant="secondary"
+              onClick={() => void connection.refetch()}
             >
-              <Unlink size={15} />
-              Disconnect
+              Try again
             </Button>
           </div>
-        </div>
-      ) : connection.data ? (
-        <div className="mt-4 text-sm text-neutral-500">
-          <p>
-            Click Connect, then send /start in Telegram to securely link your
-            account. Return here and refresh the connection status when you are
-            done.
-          </p>
-        </div>
-      ) : null}
+        ) : null}
+
+        {data ? (
+          <>
+            <div className="grid gap-3 md:grid-cols-2">
+              {ENVIRONMENTS.map((environment) => {
+                const selected = data.runtimeEnvironment === environment.id;
+                const Icon = environment.icon;
+                return (
+                  <div
+                    className={`flex items-center gap-2.5 rounded-lg border p-2.5 ${selected ? "border-sky-800 bg-sky-950/25" : "border-neutral-800 bg-neutral-900/55"}`}
+                    key={environment.id}
+                  >
+                    <div
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${selected ? "bg-sky-900/60 text-sky-200" : "bg-neutral-800 text-neutral-400"}`}
+                    >
+                      <Icon size={17} aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-neutral-200">
+                          {environment.id === "LOCAL"
+                            ? "Local development"
+                            : "Production"}
+                        </p>
+                        <span
+                          className={`inline-flex items-center gap-1 text-xs ${selected ? "text-sky-300" : "text-neutral-500"}`}
+                        >
+                          {selected ? (
+                            <Check size={13} aria-hidden="true" />
+                          ) : null}
+                          {selected ? "Current process" : "Environment-managed"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-3 flex items-start gap-2 text-xs leading-5 text-neutral-500">
+              <ShieldCheck
+                className="mt-0.5 shrink-0 text-neutral-400"
+                size={15}
+                aria-hidden="true"
+              />
+              <p>
+                {data.runtimeEnvironment
+                  ? `${data.runtimeEnvironment} is active for this API process. Credentials are managed through the environment.`
+                  : "No System Bot environment is selected. Credentials are managed through the environment."}
+              </p>
+            </div>
+
+            {!data.connected ? (
+              <p className="mt-3 border-t border-neutral-800 pt-3 text-sm leading-5 text-neutral-400">
+                Open the bot, send{" "}
+                <span className="font-medium text-neutral-200">/start</span>,
+                then return here and refresh. This personal connection is only
+                needed for commands and notifications.
+              </p>
+            ) : null}
+          </>
+        ) : null}
+      </div>
     </Card>
   );
 }

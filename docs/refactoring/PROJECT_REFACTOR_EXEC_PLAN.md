@@ -187,6 +187,14 @@ Pre-existing results before implementation:
 
 ## Progress By Milestone
 
+- Workspace RBAC foundation (2026-08-29): canonical shared feature/permission
+  registry and ownership semantics defined; custom role persistence, request-
+  scoped authorization, Role API/editor, permission-aware surfaces and bounded
+  domain enforcement are being implemented as separate non-overlapping slices.
+  The design stores role permission deltas rather than copying effective rights
+  onto members and adds no polling or recurring runtime work. See
+  `docs/architecture/WORKSPACE_RBAC.md`.
+
 - 2026-08-28 regression closure: extracted the internal transaction editor from
   the Finance transactions App Router page, reducing that page below the
   300-line policy while restoring category-driven Member/Channel fields and a

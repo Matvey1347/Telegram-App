@@ -46,7 +46,7 @@ Prefer existing primitives, `apps/web/src/lib/query-keys.ts`, shared contracts a
 
 ## Required reading
 
-- Frontend tasks: `apps/web/AGENTS.md`, `docs/design-system/BRAND_GUIDE.md`, `docs/design-system/COMPONENT_CATALOG.md`, `docs/frontend-cache-efficiency.md`.
+- Frontend tasks: `apps/web/AGENTS.md`, `docs/design-system/BRAND_GUIDE.md`, `docs/design-system/SERVICE_DESIGN_RULES.md`, `docs/design-system/COMPONENT_CATALOG.md`, `docs/frontend-cache-efficiency.md`.
 - Backend tasks: `apps/api/AGENTS.md`, the relevant domain module, Prisma schema and existing tests.
 - Shared contract tasks: `packages/shared/AGENTS.md`, backend DTO/controller and frontend API client usage.
 - Cross-stack tasks: shared contracts, frontend API client, controller/DTO, relevant query keys and invalidation paths.

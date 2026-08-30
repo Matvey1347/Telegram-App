@@ -1,5 +1,8 @@
 # Component Catalog
 
+All components must follow the tokens, responsive behavior and accessibility
+contract in [Service Design Rules](SERVICE_DESIGN_RULES.md).
+
 ## UI Primitives
 
 Shared UI primitives should be organized by component family instead of growing one large file. Keep family modules focused, for example controls, overlays, tables, cards, states and page chrome. Barrels may re-export stable primitives for compatibility, but shared UI barrels should stay small and should not become the implementation home for unrelated components.

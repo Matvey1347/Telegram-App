@@ -7,12 +7,14 @@ import {
   TelegramAdCrmWorkspaceSettingsDto,
 } from './dto';
 import { decimalToString } from './domain/decimal';
+import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 
 @Injectable()
 export class TelegramAdSalesCrmSettingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
+    private readonly authorization: WorkspaceAuthorizationService,
   ) {}
 
   private async workspace(userId: string) {
@@ -39,7 +41,7 @@ export class TelegramAdSalesCrmSettingsService {
   }
 
   async getCrmWorkspaceSettings(userId: string) {
-    const workspaceId = await this.workspace(userId);
+    const { workspaceId } = await this.authorization.require(userId, 'adSales.crm.view');
     const settings =
       (await this.prisma.telegramAdCrmWorkspaceSettings.findUnique({
         where: { workspaceId },
@@ -54,7 +56,7 @@ export class TelegramAdSalesCrmSettingsService {
     userId: string,
     dto: TelegramAdCrmWorkspaceSettingsDto,
   ) {
-    const workspaceId = await this.workspace(userId);
+    const { workspaceId } = await this.authorization.require(userId, 'adSales.crm.manageAutomation');
     const settings = await this.prisma.telegramAdCrmWorkspaceSettings.upsert({
       where: { workspaceId },
       create: { workspaceId, ...(dto as Record<string, unknown>) },
@@ -64,6 +66,7 @@ export class TelegramAdSalesCrmSettingsService {
   }
 
   async getCrmMemberSettings(userId: string) {
+    await this.authorization.require(userId, 'adSales.crm.view');
     const membership = await this.workspaceService.requireWorkspaceRole(
       userId,
       [
@@ -90,6 +93,7 @@ export class TelegramAdSalesCrmSettingsService {
     userId: string,
     dto: TelegramAdCrmMemberSettingsDto,
   ) {
+    await this.authorization.require(userId, 'adSales.crm.editOwn');
     const membership = await this.workspaceService.requireWorkspaceRole(
       userId,
       [

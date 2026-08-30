@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
@@ -11,29 +7,26 @@ import {
 } from '../../../common/pagination/pagination.utils';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { CurrencyConversionService } from '../../../common/currency-conversion.service';
-import {
-  CreateTransactionDto,
-  TransactionQueryDto,
-  UpdateTransactionDto,
-} from './dto';
+import { CreateTransactionDto, TransactionQueryDto, UpdateTransactionDto } from './dto';
 import { FinanceCategoriesService } from '../finance-categories/finance-categories.service';
 import {
   isBuyChannelsCategory,
   isChannelAdvertisingRevenueCategory,
   withTransactionIconPresentation,
 } from './transaction-presentation';
-
+import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
+import { financeAuthorizationTestFallback } from '../finance-authorization-test-fallback';
 @Injectable()
 export class TransactionsService {
   private telegramChannelPurchaseColumnsAvailable: boolean | null = null;
-  private ensureTelegramChannelPurchaseColumnsPromise: Promise<boolean> | null =
-    null;
+  private ensureTelegramChannelPurchaseColumnsPromise: Promise<boolean> | null = null;
 
   constructor(
     private prisma: PrismaService,
     private workspaceService: WorkspaceService,
     private currencyConversionService: CurrencyConversionService,
     private financeCategoriesService: FinanceCategoriesService,
+    private authorization: WorkspaceAuthorizationService = financeAuthorizationTestFallback(workspaceService),
   ) {}
 
   private async resolveRateToPrimary(
@@ -359,8 +352,7 @@ export class TransactionsService {
   }
 
   async findAll(userId: string, query: TransactionQueryDto = {}) {
-    const workspaceId =
-      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const { workspaceId, memberId } = await this.authorization.require(userId, 'finance.view');
     await this.financeCategoriesService.ensureSystemCategories(workspaceId);
     const where: Prisma.TransactionWhereInput = {
       workspaceId,
@@ -379,6 +371,10 @@ export class TransactionsService {
     if (query.type && query.type !== 'all') where.type = query.type;
     if (query.accountId) where.accountId = query.accountId;
     if (query.assignedMemberId) where.assignedMemberId = query.assignedMemberId;
+    if (
+      (await this.authorization.can(userId, 'finance.editOwn')) &&
+      !(await this.authorization.can(userId, 'finance.editAny'))
+    ) where.assignedMemberId = memberId;
     if (query.search?.trim()) {
       where.OR = [
         { description: { contains: query.search.trim(), mode: 'insensitive' } },
@@ -460,8 +456,7 @@ export class TransactionsService {
   }
 
   async findOne(userId: string, id: string) {
-    const workspaceId =
-      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const { workspaceId } = await this.authorization.require(userId, 'finance.view');
     const row = await this.prisma.transaction.findFirst({
       where: { id, workspaceId, deletedAt: null },
       include: {
@@ -515,6 +510,8 @@ export class TransactionsService {
       },
     });
     if (!row) throw new NotFoundException('Transaction not found');
+    if (await this.authorization.can(userId, 'finance.editOwn'))
+      await this.authorization.requireOwnOrAny(userId, row, 'finance.editOwn', 'finance.editAny');
     const [enriched] = await this.attachPurchasedTelegramChannels(workspaceId, [
       row,
     ]);
@@ -522,6 +519,7 @@ export class TransactionsService {
   }
 
   async create(userId: string, dto: CreateTransactionDto) {
+    await this.authorization.require(userId, 'finance.create');
     const { workspaceId, assignedMemberId } =
       await this.workspaceService.resolveAssignedMemberId(
         userId,
@@ -659,6 +657,7 @@ export class TransactionsService {
       where: { id, workspaceId, deletedAt: null },
     });
     if (!existing) throw new NotFoundException('Transaction not found');
+    await this.authorization.requireOwnOrAny(userId, existing, 'finance.editOwn', 'finance.editAny');
     const assignedMemberId =
       dto.assignedMemberId === undefined
         ? undefined
@@ -816,6 +815,7 @@ export class TransactionsService {
       where: { id, workspaceId, deletedAt: null },
     });
     if (!existing) throw new NotFoundException('Transaction not found');
+    await this.authorization.requireOwnOrAny(userId, existing, 'finance.deleteOwn', 'finance.deleteAny');
     return this.prisma.transaction.update({
       where: { id },
       data: { deletedAt: new Date() },

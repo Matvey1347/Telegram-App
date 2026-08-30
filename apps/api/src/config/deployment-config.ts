@@ -111,3 +111,17 @@ export function apiPort(environment: DeploymentEnvironment = process.env) {
   const configured = Number(environment.PORT || environment.API_PORT);
   return Number.isFinite(configured) && configured > 0 ? configured : 4000;
 }
+
+/**
+ * Number of ingress hops allowed to supply the client IP. Production defaults
+ * to Railway's single reverse-proxy hop; direct local development trusts none.
+ */
+export function trustedProxyHops(
+  environment: DeploymentEnvironment = process.env,
+) {
+  const configured = Number(environment.TRUST_PROXY_HOPS);
+  if (Number.isInteger(configured) && configured >= 0 && configured <= 5) {
+    return configured;
+  }
+  return isProductionEnvironment(environment) ? 1 : 0;
+}

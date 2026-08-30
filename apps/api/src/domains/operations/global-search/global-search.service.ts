@@ -1,7 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { WorkspaceService } from '../../../common/workspace.service';
+import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
+import {
+  canSearchFeature,
+  relationTextMatches,
+  searchText,
+  textMatches,
+} from './global-search-query-plan';
 
 type SearchResult = {
   id: string;
@@ -18,42 +24,8 @@ type SearchResult = {
 export class GlobalSearchService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly workspaceService: WorkspaceService,
+    private readonly authorization: WorkspaceAuthorizationService,
   ) {}
-
-  private text(value: unknown) {
-    return String(value ?? '').trim();
-  }
-
-  private contains(query: string) {
-    return { contains: query, mode: 'insensitive' as const };
-  }
-
-  private queryVariants(query: string) {
-    return Array.from(
-      new Set(
-        [query, query.toLocaleLowerCase(), query.toLocaleUpperCase()].filter(
-          Boolean,
-        ),
-      ),
-    );
-  }
-
-  private textMatches(field: string, query: string) {
-    return this.queryVariants(query).map((variant) => ({
-      [field]: this.contains(variant),
-    }));
-  }
-
-  private relationTextMatches(relation: string, field: string, query: string) {
-    return this.queryVariants(query).map((variant) => ({
-      [relation]: {
-        is: {
-          [field]: this.contains(variant),
-        },
-      },
-    }));
-  }
 
   private iconResult(icon?: Parameters<typeof iconToResolvedEmoji>[0] | null) {
     const resolved = iconToResolvedEmoji(icon);
@@ -68,11 +40,13 @@ export class GlobalSearchService {
   }
 
   async search(userId: string, rawQuery?: string): Promise<SearchResult[]> {
-    const query = this.text(rawQuery);
+    const query = searchText(rawQuery);
     if (query.length < 2) return [];
 
-    const workspaceId =
-      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const access = await this.authorization.context(userId);
+    const workspaceId = access.workspaceId;
+    const allowed = (featureId: string) =>
+      canSearchFeature(access.featureIds, featureId, access.permissionKeys);
     const numeric = Number(query.replace(',', '.'));
     const hasNumber = Number.isFinite(numeric);
 
@@ -90,244 +64,272 @@ export class GlobalSearchService {
       postGroups,
       promptNotes,
     ] = await Promise.all([
-      this.prisma.transaction.findMany({
-        where: {
-          workspaceId,
-          deletedAt: null,
-          OR: [
-            ...this.textMatches('description', query),
-            ...this.textMatches('category', query),
-            ...(hasNumber
-              ? [{ amount: numeric }, { amountInPrimaryCurrency: numeric }]
-              : []),
-          ],
-        },
-        include: {
-          account: { select: { name: true, currency: true } },
-          categoryRef: { select: { name: true, icon: true } },
-          icon: true,
-        },
-        take: 8,
-        orderBy: { date: 'desc' },
-      }),
-      this.prisma.workspaceMember.findMany({
-        where: {
-          workspaceId,
-          user: {
-            OR: [
-              ...this.textMatches('name', query),
-              ...this.textMatches('email', query),
-            ],
-          },
-        },
-        include: { user: true, avatarIcon: true },
-        take: 6,
-        orderBy: { updatedAt: 'desc' },
-      }),
-      this.prisma.telegramChannel.findMany({
-        where: {
-          workspaceId,
-          OR: [
-            ...this.textMatches('title', query),
-            ...this.textMatches('username', query),
-            ...this.textMatches('description', query),
-            ...this.textMatches('niche', query),
-            ...this.textMatches('language', query),
-          ],
-        },
-        select: {
-          id: true,
-          title: true,
-          username: true,
-          photoUrl: true,
-          adminLinks: { select: { id: true }, take: 1 },
-        },
-        take: 8,
-        orderBy: { updatedAt: 'desc' },
-      }),
-      this.prisma.telegramUserAccountIntegration.findMany({
-        where: {
-          workspaceId,
-          OR: [
-            ...this.textMatches('label', query),
-            ...this.textMatches('username', query),
-            ...this.textMatches('firstName', query),
-            ...this.textMatches('lastName', query),
-            ...this.textMatches('phoneMasked', query),
-          ],
-        },
-        select: {
-          id: true,
-          label: true,
-          username: true,
-          firstName: true,
-          phoneMasked: true,
-          photoUrl: true,
-          status: true,
-        },
-        take: 6,
-        orderBy: { updatedAt: 'desc' },
-      }),
-      this.prisma.telegramBotIntegration.findMany({
-        where: {
-          workspaceId,
-          OR: [
-            ...this.textMatches('label', query),
-            {
-              runtimeInstances: {
-                some: {
-                  OR: [
-                    ...this.textMatches('username', query),
-                    ...this.textMatches('firstName', query),
-                    ...this.textMatches('botTokenMasked', query),
-                  ],
-                },
+      allowed('finance')
+        ? this.prisma.transaction.findMany({
+            where: {
+              workspaceId,
+              deletedAt: null,
+              OR: [
+                ...textMatches('description', query),
+                ...textMatches('category', query),
+                ...(hasNumber
+                  ? [{ amount: numeric }, { amountInPrimaryCurrency: numeric }]
+                  : []),
+              ],
+            },
+            include: {
+              account: { select: { name: true, currency: true } },
+              categoryRef: { select: { name: true, icon: true } },
+              icon: true,
+            },
+            take: 8,
+            orderBy: { date: 'desc' },
+          })
+        : Promise.resolve([] as any[]),
+      allowed('members')
+        ? this.prisma.workspaceMember.findMany({
+            where: {
+              workspaceId,
+              user: {
+                OR: [
+                  ...textMatches('name', query),
+                  ...textMatches('email', query),
+                ],
               },
             },
-          ],
-        },
-        select: {
-          id: true,
-          label: true,
-          isActive: true,
-          runtimeInstances: {
-            select: { username: true, firstName: true, botTokenMasked: true },
-            orderBy: { environment: 'desc' },
-            take: 1,
-          },
-        },
-        take: 6,
-        orderBy: { updatedAt: 'desc' },
-      }),
-      this.prisma.promo.findMany({
-        where: {
-          workspaceId,
-          OR: [
-            ...this.textMatches('title', query),
-            ...this.textMatches('text', query),
-            ...this.textMatches('angle', query),
-          ],
-        },
-        include: {
-          telegramChannel: { select: { title: true, photoUrl: true } },
-        },
-        take: 8,
-        orderBy: { updatedAt: 'desc' },
-      }),
-      this.prisma.advertisingSource.findMany({
-        where: {
-          workspaceId,
-          type: { not: 'telegram_channel' },
-          OR: [
-            ...this.textMatches('name', query),
-            ...this.textMatches('telegramUsername', query),
-            ...this.textMatches('url', query),
-            ...this.textMatches('description', query),
-            ...this.textMatches('contactInfo', query),
-            ...this.textMatches('notes', query),
-          ],
-        },
-        take: 8,
-        orderBy: { updatedAt: 'desc' },
-      }),
-      this.prisma.adCampaign.findMany({
-        where: {
-          workspaceId,
-          OR: [
-            ...this.textMatches('title', query),
-            ...this.textMatches('notes', query),
-            ...this.textMatches('sourcePostUrl', query),
-          ],
-        },
-        include: {
-          telegramChannel: { select: { title: true, photoUrl: true } },
-          promo: { select: { title: true } },
-        },
-        take: 8,
-        orderBy: { updatedAt: 'desc' },
-      }),
-      this.prisma.adHypothesis.findMany({
-        where: {
-          workspaceId,
-          OR: [
-            ...this.textMatches('name', query),
-            ...this.textMatches('description', query),
-            ...this.textMatches('conclusion', query),
-            ...this.textMatches('status', query),
-          ],
-        },
-        take: 6,
-        orderBy: { updatedAt: 'desc' },
-      }),
-      this.prisma.telegramManagedPost.findMany({
-        where: {
-          workspaceId,
-          OR: [
-            ...this.textMatches('title', query),
-            ...this.textMatches('text', query),
-            ...this.textMatches('lastError', query),
-            ...this.textMatches('lastTelegramSyncNote', query),
-            ...this.relationTextMatches('group', 'title', query),
-            ...this.relationTextMatches('group', 'description', query),
-          ],
-        },
-        include: {
-          telegramChannel: {
-            select: { id: true, title: true, photoUrl: true },
-          },
-          group: { select: { id: true, title: true } },
-        },
-        take: 10,
-        orderBy: { updatedAt: 'desc' },
-      }),
-      this.prisma.postGroup.findMany({
-        where: {
-          workspaceId,
-          OR: [
-            ...this.textMatches('title', query),
-            ...this.textMatches('description', query),
-          ],
-        },
-        include: {
-          telegramChannel: {
-            select: { id: true, title: true, photoUrl: true },
-          },
-          _count: { select: { posts: true, promptNotes: true } },
-        },
-        take: 8,
-        orderBy: { updatedAt: 'desc' },
-      }),
-      this.prisma.promptNote.findMany({
-        where: {
-          workspaceId,
-          OR: [
-            ...this.textMatches('title', query),
-            ...this.textMatches('content', query),
-            ...this.textMatches('emoji', query),
-            ...this.relationTextMatches('postGroup', 'title', query),
-            ...this.relationTextMatches('postGroup', 'description', query),
-          ],
-        },
-        include: {
-          icon: {
+            include: { user: true, avatarIcon: true },
+            take: 6,
+            orderBy: { updatedAt: 'desc' },
+          })
+        : Promise.resolve([] as any[]),
+      allowed('channels')
+        ? this.prisma.telegramChannel.findMany({
+            where: {
+              workspaceId,
+              OR: [
+                ...textMatches('title', query),
+                ...textMatches('username', query),
+                ...textMatches('description', query),
+                ...textMatches('niche', query),
+                ...textMatches('language', query),
+              ],
+            },
             select: {
               id: true,
-              type: true,
-              name: true,
-              imageUrl: true,
-              emoji: true,
+              title: true,
+              username: true,
+              photoUrl: true,
+              adminLinks: { select: { id: true }, take: 1 },
             },
-          },
-          telegramChannel: {
-            select: { id: true, title: true, photoUrl: true },
-          },
-          postGroup: {
-            select: { id: true, title: true, telegramChannelId: true },
-          },
-        },
-        take: 10,
-        orderBy: { updatedAt: 'desc' },
-      }),
+            take: 8,
+            orderBy: { updatedAt: 'desc' },
+          })
+        : Promise.resolve([] as any[]),
+      allowed('channels')
+        ? this.prisma.telegramUserAccountIntegration.findMany({
+            where: {
+              workspaceId,
+              OR: [
+                ...textMatches('label', query),
+                ...textMatches('username', query),
+                ...textMatches('firstName', query),
+                ...textMatches('lastName', query),
+                ...textMatches('phoneMasked', query),
+              ],
+            },
+            select: {
+              id: true,
+              label: true,
+              username: true,
+              firstName: true,
+              phoneMasked: true,
+              photoUrl: true,
+              status: true,
+            },
+            take: 6,
+            orderBy: { updatedAt: 'desc' },
+          })
+        : Promise.resolve([] as any[]),
+      allowed('bots')
+        ? this.prisma.telegramBotIntegration.findMany({
+            where: {
+              workspaceId,
+              OR: [
+                ...textMatches('label', query),
+                {
+                  runtimeInstances: {
+                    some: {
+                      OR: [
+                        ...textMatches('username', query),
+                        ...textMatches('firstName', query),
+                        ...textMatches('botTokenMasked', query),
+                      ],
+                    },
+                  },
+                },
+              ],
+            },
+            select: {
+              id: true,
+              label: true,
+              isActive: true,
+              runtimeInstances: {
+                select: {
+                  username: true,
+                  firstName: true,
+                  botTokenMasked: true,
+                },
+                orderBy: { environment: 'desc' },
+                take: 1,
+              },
+            },
+            take: 6,
+            orderBy: { updatedAt: 'desc' },
+          })
+        : Promise.resolve([] as any[]),
+      allowed('advertising')
+        ? this.prisma.promo.findMany({
+            where: {
+              workspaceId,
+              OR: [
+                ...textMatches('title', query),
+                ...textMatches('text', query),
+                ...textMatches('angle', query),
+              ],
+            },
+            include: {
+              telegramChannel: { select: { title: true, photoUrl: true } },
+            },
+            take: 8,
+            orderBy: { updatedAt: 'desc' },
+          })
+        : Promise.resolve([] as any[]),
+      allowed('advertising')
+        ? this.prisma.advertisingSource.findMany({
+            where: {
+              workspaceId,
+              type: { not: 'telegram_channel' },
+              OR: [
+                ...textMatches('name', query),
+                ...textMatches('telegramUsername', query),
+                ...textMatches('url', query),
+                ...textMatches('description', query),
+                ...textMatches('contactInfo', query),
+                ...textMatches('notes', query),
+              ],
+            },
+            take: 8,
+            orderBy: { updatedAt: 'desc' },
+          })
+        : Promise.resolve([] as any[]),
+      allowed('advertising')
+        ? this.prisma.adCampaign.findMany({
+            where: {
+              workspaceId,
+              OR: [
+                ...textMatches('title', query),
+                ...textMatches('notes', query),
+                ...textMatches('sourcePostUrl', query),
+              ],
+            },
+            include: {
+              telegramChannel: { select: { title: true, photoUrl: true } },
+              promo: { select: { title: true } },
+            },
+            take: 8,
+            orderBy: { updatedAt: 'desc' },
+          })
+        : Promise.resolve([] as any[]),
+      allowed('advertising')
+        ? this.prisma.adHypothesis.findMany({
+            where: {
+              workspaceId,
+              OR: [
+                ...textMatches('name', query),
+                ...textMatches('description', query),
+                ...textMatches('conclusion', query),
+                ...textMatches('status', query),
+              ],
+            },
+            take: 6,
+            orderBy: { updatedAt: 'desc' },
+          })
+        : Promise.resolve([] as any[]),
+      allowed('posts')
+        ? this.prisma.telegramManagedPost.findMany({
+            where: {
+              workspaceId,
+              OR: [
+                ...textMatches('title', query),
+                ...textMatches('text', query),
+                ...textMatches('lastError', query),
+                ...textMatches('lastTelegramSyncNote', query),
+                ...relationTextMatches('group', 'title', query),
+                ...relationTextMatches('group', 'description', query),
+              ],
+            },
+            include: {
+              telegramChannel: {
+                select: { id: true, title: true, photoUrl: true },
+              },
+              group: { select: { id: true, title: true } },
+            },
+            take: 10,
+            orderBy: { updatedAt: 'desc' },
+          })
+        : Promise.resolve([] as any[]),
+      allowed('posts')
+        ? this.prisma.postGroup.findMany({
+            where: {
+              workspaceId,
+              OR: [
+                ...textMatches('title', query),
+                ...textMatches('description', query),
+              ],
+            },
+            include: {
+              telegramChannel: {
+                select: { id: true, title: true, photoUrl: true },
+              },
+              _count: { select: { posts: true, promptNotes: true } },
+            },
+            take: 8,
+            orderBy: { updatedAt: 'desc' },
+          })
+        : Promise.resolve([] as any[]),
+      allowed('posts')
+        ? this.prisma.promptNote.findMany({
+            where: {
+              workspaceId,
+              OR: [
+                ...textMatches('title', query),
+                ...textMatches('content', query),
+                ...textMatches('emoji', query),
+                ...relationTextMatches('postGroup', 'title', query),
+                ...relationTextMatches('postGroup', 'description', query),
+              ],
+            },
+            include: {
+              icon: {
+                select: {
+                  id: true,
+                  type: true,
+                  name: true,
+                  imageUrl: true,
+                  emoji: true,
+                },
+              },
+              telegramChannel: {
+                select: { id: true, title: true, photoUrl: true },
+              },
+              postGroup: {
+                select: { id: true, title: true, telegramChannelId: true },
+              },
+            },
+            take: 10,
+            orderBy: { updatedAt: 'desc' },
+          })
+        : Promise.resolve([] as any[]),
     ]);
 
     const iconIds = [

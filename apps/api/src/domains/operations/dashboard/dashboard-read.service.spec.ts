@@ -154,4 +154,30 @@ describe('DashboardReadService', () => {
       }),
     );
   });
+
+  it('does not execute queries for denied dashboard features', async () => {
+    const prisma = prismaFixture(2);
+    await new DashboardReadService(prisma as never).load(
+      'workspace-1',
+      from,
+      to,
+      { finance: false, advertising: false, channels: true, members: false },
+    );
+
+    expect(prisma.workspace.findUniqueOrThrow).not.toHaveBeenCalled();
+    expect(prisma.account.findMany).not.toHaveBeenCalled();
+    expect(prisma.transaction.findMany).not.toHaveBeenCalled();
+    expect(prisma.transaction.groupBy).not.toHaveBeenCalled();
+    expect(prisma.transaction.aggregate).not.toHaveBeenCalled();
+    expect(prisma.transfer.groupBy).not.toHaveBeenCalled();
+    expect(prisma.investment.findMany).not.toHaveBeenCalled();
+    expect(prisma.adCampaign.findMany).not.toHaveBeenCalled();
+    expect(prisma.adHypothesis.groupBy).not.toHaveBeenCalled();
+    expect(prisma.workspaceMember.count).not.toHaveBeenCalled();
+    expect(prisma.telegramChannel.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ purchaseTransaction: false }),
+      }),
+    );
+  });
 });

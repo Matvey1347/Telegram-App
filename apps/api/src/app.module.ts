@@ -21,6 +21,7 @@ import { TransfersModule } from './domains/finance/transfers/transfers.module';
 import { FinanceCategoriesModule } from './domains/finance/finance-categories/finance-categories.module';
 import { GlobalSearchModule } from './domains/operations/global-search/global-search.module';
 import { WorkspaceMembersModule } from './domains/workspace/workspace-members/workspace-members.module';
+import { WorkspaceRolesModule } from './domains/workspace/workspace-roles/workspace-roles.module';
 import { AccountModule } from './domains/identity/account/account.module';
 import { TelegramSyncModule } from './domains/telegram/telegram-sync/telegram-sync.module';
 import { TelegramUserAccountsModule } from './domains/telegram/telegram-user-accounts/telegram-user-accounts.module';
@@ -68,6 +69,7 @@ import { TrashModule } from './domains/operations/trash/trash.module';
     GlobalSearchModule,
     FinanceCategoriesModule,
     WorkspaceMembersModule,
+    WorkspaceRolesModule,
     AccountModule,
     TelegramSyncModule,
     TelegramUserAccountsModule,

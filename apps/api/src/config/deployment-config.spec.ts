@@ -1,4 +1,9 @@
-import { apiPort, publicApiOrigin, publicWebOrigin } from './deployment-config';
+import {
+  apiPort,
+  publicApiOrigin,
+  publicWebOrigin,
+  trustedProxyHops,
+} from './deployment-config';
 
 describe('deployment config', () => {
   it('uses FRONTEND_URL as the single public web origin', () => {
@@ -48,5 +53,16 @@ describe('deployment config', () => {
     expect(apiPort({ PORT: '8080', API_PORT: '4000' })).toBe(8080);
     expect(apiPort({ API_PORT: '4100' })).toBe(4100);
     expect(apiPort({})).toBe(4000);
+  });
+
+  it('trusts one ingress hop in production and no proxy in local development', () => {
+    expect(trustedProxyHops({ NODE_ENV: 'production' })).toBe(1);
+    expect(trustedProxyHops({ NODE_ENV: 'development' })).toBe(0);
+    expect(
+      trustedProxyHops({ NODE_ENV: 'production', TRUST_PROXY_HOPS: '2' }),
+    ).toBe(2);
+    expect(
+      trustedProxyHops({ NODE_ENV: 'production', TRUST_PROXY_HOPS: '99' }),
+    ).toBe(1);
   });
 });

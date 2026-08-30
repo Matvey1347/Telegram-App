@@ -3,11 +3,20 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ApplicationLoggerService } from './domains/operations/application-logs/application-logger.service';
 import { corsOrigins, webCorsOrigins } from './common/http/cors-origins';
-import { apiPort, publicWebOrigin } from './config/deployment-config';
+import {
+  apiPort,
+  publicWebOrigin,
+  trustedProxyHops,
+} from './config/deployment-config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
   app.useLogger(app.get(ApplicationLoggerService));
+
+  const proxyHops = trustedProxyHops();
+  if (proxyHops > 0) {
+    app.getHttpAdapter().getInstance().set('trust proxy', proxyHops);
+  }
 
   const port = apiPort();
   const frontendUrl = publicWebOrigin();

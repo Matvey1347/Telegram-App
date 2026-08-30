@@ -80,11 +80,11 @@ export default function SettingsPage() {
     <AppShell>
       <PageHeader title="Settings" />
       {me.isLoading ? <LoadingState /> : null}
-      <div className="space-y-6">
+      <div className="space-y-4">
         <TelegramSystemBotSettings />
-        <Card>
+        <section>
           <WorkspaceMembersSection embedded />
-        </Card>
+        </section>
         <Card>
           <h3 className="text-lg font-semibold">Workspace</h3>
           <div className="mt-4 space-y-3">

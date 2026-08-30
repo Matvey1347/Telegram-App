@@ -8,6 +8,7 @@ import {
   consumeAuthReturnTo,
   getAuthRedirectParam,
   getAuthRedirectPath,
+  isAuthPath,
   rememberAuthReturnTo,
 } from '@/lib/features/identity/auth';
 import { useAppToast } from '@/providers/toast-provider';
@@ -25,7 +26,8 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
     error,
   } = useAuth();
   const { pushToast } = useAppToast();
-  const isAuthPage = pathname === '/login' || pathname === '/register';
+  const isAuthPage = isAuthPath(pathname);
+  const isEntryAuthPage = pathname === '/login' || pathname === '/register';
   const [mounted, setMounted] = useState(false);
   const hasShownConnectionAlertRef = useRef(false);
   const hasConnectionIssue = Boolean(token && isApiNetworkError(error));
@@ -53,7 +55,7 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
     if (!mounted) return;
 
     if (isAuthPage) {
-      if (!isLoading && token && isAuthenticated) {
+      if (isEntryAuthPage && !isLoading && token && isAuthenticated) {
         router.replace(consumeAuthReturnTo(getAuthRedirectParam()));
       }
       return;
@@ -75,14 +77,14 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
       rememberAuthReturnTo();
       router.replace(getAuthRedirectPath());
     }
-  }, [mounted, isTokenReady, isAuthResolved, token, isLoading, isAuthenticated, isAuthPage, router, pathname, hasConnectionIssue]);
+  }, [mounted, isTokenReady, isAuthResolved, token, isLoading, isAuthenticated, isAuthPage, isEntryAuthPage, router, pathname, hasConnectionIssue]);
 
   if (!mounted || !isTokenReady) {
     return <FullScreenLoader />;
   }
 
   if (isAuthPage) {
-    if (token && (isLoading || isAuthenticated) && !hasConnectionIssue) {
+    if (isEntryAuthPage && token && (isLoading || isAuthenticated) && !hasConnectionIssue) {
       return <FullScreenLoader />;
     }
     return <>{children}</>;

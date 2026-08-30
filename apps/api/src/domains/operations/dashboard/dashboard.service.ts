@@ -11,6 +11,7 @@ import {
 import { resolveChannelKpiStatus } from '../../../common/analytics/channel-financial-summary';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { WorkspaceService } from '../../../common/workspace.service';
+import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 import {
   dashboardDateRange,
   dashboardIsoDay,
@@ -18,6 +19,12 @@ import {
 } from './dashboard-period';
 import { DashboardReadService } from './dashboard-read.service';
 import { buildDashboardTrend } from './dashboard-trend';
+import {
+  dashboardReadAccess,
+  dashboardCategoryKey,
+  filterDashboardSurface,
+  type DashboardReadAccess,
+} from './dashboard-surface';
 
 const dec = (v: unknown) => Number(v ?? 0);
 type DashboardCampaign = Awaited<
@@ -28,35 +35,39 @@ type DatedDashboardCampaign = Pick<
   'placementDate' | 'startedAt' | 'createdAt'
 >;
 
-function categoryKey(transaction: {
-  categoryRef?: { key?: string | null; name?: string | null } | null;
-  category?: string | null;
-}) {
-  return (
-    transaction.categoryRef?.key ??
-    String(transaction.categoryRef?.name ?? transaction.category ?? '')
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, '_')
-  );
-}
-
 @Injectable()
 export class DashboardService {
   constructor(
     private readonly workspaceService: WorkspaceService,
     private readonly conversionService: CurrencyConversionService,
     private readonly reads: DashboardReadService,
+    private readonly authorization?: WorkspaceAuthorizationService,
   ) {}
 
   async summary(
     userId: string,
     input?: { dateFrom?: string; dateTo?: string },
   ) {
-    const workspaceId =
-      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const authorization = this.authorization;
+    if (!authorization) {
+      const workspaceId =
+        await this.workspaceService.resolveWorkspaceIdForUser(userId);
+      const { from, to } = dashboardDateRange(input);
+      return this.buildSummary(workspaceId, from, to);
+    }
+    const context = await authorization.require(userId, 'dashboard.view');
     const { from, to } = dashboardDateRange(input);
-    return this.buildSummary(workspaceId, from, to);
+    const access = dashboardReadAccess(
+      context.featureIds,
+      context.permissionKeys,
+    );
+    const summary = await this.buildSummary(
+      context.workspaceId,
+      from,
+      to,
+      access,
+    );
+    return filterDashboardSurface(summary, access, context.featureIds);
   }
 
   async summaryForWorkspace(workspaceId: string) {
@@ -64,7 +75,12 @@ export class DashboardService {
     return this.buildSummary(workspaceId, from, to);
   }
 
-  private async buildSummary(workspaceId: string, from: Date, to: Date) {
+  private async buildSummary(
+    workspaceId: string,
+    from: Date,
+    to: Date,
+    access?: DashboardReadAccess,
+  ) {
     const {
       workspace,
       periodTransactions,
@@ -80,11 +96,13 @@ export class DashboardService {
       operatingProfitAllTime,
       cumulativeBeforePeriod,
       revenueByChannel,
-    } = await this.reads.load(workspaceId, from, to);
+    } = access
+      ? await this.reads.load(workspaceId, from, to, access)
+      : await this.reads.load(workspaceId, from, to);
 
     const periodRevenueTransactions = periodTransactions.filter(
       (transaction) =>
-        categoryKey(transaction) === 'channel_advertising_revenue',
+        dashboardCategoryKey(transaction) === 'channel_advertising_revenue',
     );
     const periodExpenseTransactions = periodTransactions.filter(
       (transaction) => transaction.type === 'expense',

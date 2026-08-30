@@ -7,12 +7,14 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { createPaginatedResponse, normalizePagination } from '../../../common/pagination/pagination.utils';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { CreateInvestmentDto, UpdateInvestmentDto } from './dto';
+import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 
 @Injectable()
 export class InvestmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
+    private readonly authorization: WorkspaceAuthorizationService,
   ) {}
 
   private async workspace(userId: string) {
@@ -23,8 +25,15 @@ export class InvestmentsService {
     userId: string,
     query: { page?: number; pageSize?: number } = {},
   ) {
-    const workspaceId = await this.workspace(userId);
-    const where = { workspaceId };
+    const access = await this.authorization.require(userId, 'finance.view');
+    const workspaceId = access.workspaceId;
+    const where = {
+      workspaceId,
+      ...((await this.authorization.can(userId, 'finance.editOwn')) &&
+      !(await this.authorization.can(userId, 'finance.editAny'))
+        ? { assignedMemberId: access.memberId }
+        : {}),
+    };
     const pagination = normalizePagination(query);
     const [items, totalItems] = await this.prisma.$transaction([
       this.prisma.investment.findMany({
@@ -50,7 +59,8 @@ export class InvestmentsService {
   }
 
   async findOne(userId: string, id: string) {
-    const workspaceId = await this.workspace(userId);
+    const access = await this.authorization.require(userId, 'finance.view');
+    const workspaceId = access.workspaceId;
     const row = await this.prisma.investment.findFirst({
       where: { id, workspaceId },
       include: {
@@ -64,6 +74,8 @@ export class InvestmentsService {
       },
     });
     if (!row) throw new NotFoundException('Investment not found');
+    if (await this.authorization.can(userId, 'finance.editOwn'))
+      await this.authorization.requireOwnOrAny(userId, row, 'finance.editOwn', 'finance.editAny');
     return row;
   }
 
@@ -81,6 +93,7 @@ export class InvestmentsService {
   }
 
   async create(userId: string, dto: CreateInvestmentDto) {
+    await this.authorization.require(userId, 'finance.create');
     const { workspaceId, assignedMemberId } = await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId);
     const [workspace, workspaceMember, account] = await Promise.all([
       this.prisma.workspace.findFirst({ where: { id: workspaceId } }),
@@ -160,6 +173,7 @@ export class InvestmentsService {
       include: { workspaceMember: { include: { user: true } } },
     });
     if (!existing) throw new NotFoundException('Investment not found');
+    await this.authorization.requireOwnOrAny(userId, existing, 'finance.editOwn', 'finance.editAny');
     const assignedMemberId = dto.assignedMemberId === undefined ? undefined : (
       await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId)
     ).assignedMemberId;
@@ -243,6 +257,7 @@ export class InvestmentsService {
       where: { id, workspaceId },
     });
     if (!existing) throw new NotFoundException('Investment not found');
+    await this.authorization.requireOwnOrAny(userId, existing, 'finance.deleteOwn', 'finance.deleteAny');
 
     return this.prisma.$transaction(async (tx) => {
       if (existing.transactionId) {

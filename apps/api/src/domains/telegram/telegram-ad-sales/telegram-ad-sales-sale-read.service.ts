@@ -16,6 +16,8 @@ import { decimal, decimalToString } from './domain/decimal';
 import { calculateAdPlacementDeleteAt } from './domain/sales-text';
 import { TelegramAdSalesQueryDto } from './dto';
 import { buildTelegramAdSaleListWhere } from './telegram-ad-sales-sale-list-query';
+import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
+import { adSalesAuthorizationTestFallback } from './telegram-ad-sales-authorization-test-fallback';
 
 const SALE_LIST_SELECT = {
   id: true,
@@ -157,11 +159,12 @@ export class TelegramAdSalesSaleReadService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
+    private readonly authorization: WorkspaceAuthorizationService = adSalesAuthorizationTestFallback(workspaceService),
   ) {}
 
   async listSales(userId: string, query: TelegramAdSalesQueryDto) {
-    const workspaceId =
-      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const access = await this.authorization.require(userId, 'adSales.sales.view');
+    const workspaceId = access.workspaceId;
     const pagination = normalizePagination(query);
     const advertiser = query.advertiserId
       ? await this.prisma.telegramAdvertiser.findFirst({
@@ -169,11 +172,15 @@ export class TelegramAdSalesSaleReadService {
           select: { telegramUsername: true },
         })
       : null;
-    const where = buildTelegramAdSaleListWhere(
+    const where: Prisma.TelegramAdSaleWhereInput = buildTelegramAdSaleListWhere(
       workspaceId,
       query,
       advertiser?.telegramUsername,
     );
+    if (
+      (await this.authorization.can(userId, 'adSales.sales.editOwn')) &&
+      !(await this.authorization.can(userId, 'adSales.sales.editAny'))
+    ) where.assignedMemberId = access.memberId;
     const [sales, totalItems] = await this.prisma.$transaction([
       this.prisma.telegramAdSale.findMany({
         where,

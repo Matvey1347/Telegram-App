@@ -7,6 +7,9 @@ export const workspaceKeys = {
   workspaces: () => ["workspaces"] as const,
   members: () => ["workspace-members"] as const,
   membersSelect: () => ["workspace-members", "select"] as const,
+  roles: () => ["workspace-roles"] as const,
+  role: (roleId: string) => ["workspace-roles", roleId] as const,
+  roleRegistry: () => ["workspace-roles", "registry"] as const,
 };
 
 export const currencyKeys = {

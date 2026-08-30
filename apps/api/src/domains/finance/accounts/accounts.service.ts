@@ -13,6 +13,7 @@ import {
   withWorkspaceMemberAvatar,
   type WorkspaceMemberAvatarSource,
 } from '../../../common/workspace-member-presentation';
+import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 
 const dec = (value: unknown) => Number(value ?? 0);
 
@@ -23,6 +24,7 @@ export class AccountsService {
     private readonly workspaceService: WorkspaceService,
     private readonly conversionService: CurrencyConversionService,
     private readonly currenciesService: CurrenciesService,
+    private readonly authorization: WorkspaceAuthorizationService,
   ) {}
 
   private async withBalances(
@@ -150,13 +152,19 @@ export class AccountsService {
   }
 
   async findAll(userId: string, query: AccountQueryDto = {}) {
-    const workspaceId =
-      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const access = await this.authorization.require(userId, 'finance.view');
+    const workspaceId = access.workspaceId;
+    const ownershipScope =
+      (await this.authorization.can(userId, 'finance.editOwn')) &&
+      !(await this.authorization.can(userId, 'finance.editAny'))
+        ? { assignedMemberId: access.memberId }
+        : {};
     const where = {
       workspaceId,
       deletedAt: null,
       assignedMemberId: query.assignedMemberId || undefined,
       OR: [{ assignedMemberId: null }, { assignedMember: { isHidden: false } }],
+      ...ownershipScope,
     };
     const pagination = normalizePagination(query);
     const [accounts, totalItems] = await this.prisma.$transaction([
@@ -186,8 +194,8 @@ export class AccountsService {
   }
 
   async findOne(userId: string, id: string) {
-    const workspaceId =
-      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const access = await this.authorization.require(userId, 'finance.view');
+    const workspaceId = access.workspaceId;
     const account = await this.prisma.account.findFirst({
       where: { id, workspaceId, deletedAt: null },
       include: {
@@ -205,10 +213,19 @@ export class AccountsService {
       },
     });
     if (!account) throw new NotFoundException('Account not found');
+    if (await this.authorization.can(userId, 'finance.editOwn')) {
+      await this.authorization.requireOwnOrAny(
+        userId,
+        account,
+        'finance.editOwn',
+        'finance.editAny',
+      );
+    }
     return (await this.withBalances(workspaceId, [account]))[0];
   }
 
   async create(userId: string, dto: CreateAccountDto) {
+    await this.authorization.require(userId, 'finance.create');
     const { workspaceId, assignedMemberId } =
       await this.workspaceService.resolveAssignedMemberId(
         userId,
@@ -256,6 +273,12 @@ export class AccountsService {
       where: { id, workspaceId, deletedAt: null },
     });
     if (!account) throw new NotFoundException('Account not found');
+    await this.authorization.requireOwnOrAny(
+      userId,
+      account,
+      'finance.editOwn',
+      'finance.editAny',
+    );
     const assignedMemberId =
       dto.assignedMemberId === undefined
         ? undefined
@@ -308,6 +331,12 @@ export class AccountsService {
       where: { id, workspaceId },
     });
     if (!account) throw new NotFoundException('Account not found');
+    await this.authorization.requireOwnOrAny(
+      userId,
+      account,
+      'finance.deleteOwn',
+      'finance.deleteAny',
+    );
 
     return this.prisma.account.update({
       where: { id },

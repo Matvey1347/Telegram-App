@@ -12,6 +12,7 @@ import {
   withWorkspaceMemberAvatar,
   type WorkspaceMemberAvatarSource,
 } from '../../../common/workspace-member-presentation';
+import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 
 const dec = (value: unknown) => Number(value ?? 0);
 
@@ -20,6 +21,7 @@ export class TransfersService {
   constructor(
     private prisma: PrismaService,
     private workspaceService: WorkspaceService,
+    private authorization: WorkspaceAuthorizationService,
   ) {}
 
   private rateKey(fromCurrency: string, toCurrency: string) {
@@ -110,8 +112,8 @@ export class TransfersService {
   }
 
   async findAll(userId: string, query: TransferQueryDto = {}) {
-    const workspaceId =
-      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const access = await this.authorization.require(userId, 'finance.view');
+    const workspaceId = access.workspaceId;
     const where: Prisma.TransferWhereInput = { workspaceId, deletedAt: null };
     if (query.assignedMemberId) where.assignedMemberId = query.assignedMemberId;
     if (query.dateFrom || query.dateTo) {
@@ -129,6 +131,10 @@ export class TransfersService {
         { toAccountId: query.accountId },
       ];
     }
+    if (
+      (await this.authorization.can(userId, 'finance.editOwn')) &&
+      !(await this.authorization.can(userId, 'finance.editAny'))
+    ) where.assignedMemberId = access.memberId;
     const pagination = normalizePagination(query);
     const orderDirection = query.sort === 'date_asc' ? 'asc' : 'desc';
     const [transfers, totalItems] = await this.prisma.$transaction([
@@ -160,8 +166,8 @@ export class TransfersService {
     return createPaginatedResponse(items, totalItems, pagination);
   }
   async findOne(userId: string, id: string) {
-    const workspaceId =
-      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const access = await this.authorization.require(userId, 'finance.view');
+    const workspaceId = access.workspaceId;
     const row = await this.prisma.transfer.findFirst({
       where: { id, workspaceId, deletedAt: null },
       include: {
@@ -176,10 +182,13 @@ export class TransfersService {
       },
     });
     if (!row) throw new NotFoundException('Transfer not found');
+    if (await this.authorization.can(userId, 'finance.editOwn'))
+      await this.authorization.requireOwnOrAny(userId, row, 'finance.editOwn', 'finance.editAny');
     const [transfer] = await this.withLosses(workspaceId, [row]);
     return transfer;
   }
   async create(userId: string, dto: CreateTransferDto) {
+    await this.authorization.require(userId, 'finance.create');
     const { workspaceId, assignedMemberId } =
       await this.workspaceService.resolveAssignedMemberId(
         userId,
@@ -234,6 +243,7 @@ export class TransfersService {
       where: { id, workspaceId, deletedAt: null },
     });
     if (!existing) throw new NotFoundException('Transfer not found');
+    await this.authorization.requireOwnOrAny(userId, existing, 'finance.editOwn', 'finance.editAny');
     const assignedMemberId =
       dto.assignedMemberId === undefined
         ? undefined
@@ -295,6 +305,7 @@ export class TransfersService {
       where: { id, workspaceId, deletedAt: null },
     });
     if (!existing) throw new NotFoundException('Transfer not found');
+    await this.authorization.requireOwnOrAny(userId, existing, 'finance.deleteOwn', 'finance.deleteAny');
     return this.prisma.transfer.update({
       where: { id },
       data: { deletedAt: new Date() },

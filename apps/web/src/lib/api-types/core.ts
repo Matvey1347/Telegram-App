@@ -7,6 +7,7 @@ import type {
   SyncOperationResult,
   TelegramChannelAccessMode,
   EditorShortcutPreferences,
+  EffectiveWorkspaceAccess,
   ResolvedEmoji,
 } from "@telegram-system/shared";
 
@@ -51,6 +52,7 @@ export type WorkspaceInfo = {
   currencyDisplayMode?: CurrencyDisplayMode;
   avatarIcon?: Icon | null;
   avatarPresentation?: ResolvedEmoji | null;
+  access?: EffectiveWorkspaceAccess;
 };
 export type User = {
   id: string;

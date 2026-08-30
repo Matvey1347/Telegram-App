@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { telegramSystemBotApi } from "@/lib/api";
 import { TelegramSystemBotSettings } from "./telegram-system-bot-settings";
@@ -64,7 +64,7 @@ describe("TelegramSystemBotSettings", () => {
     ).toBeDisabled();
   });
 
-  it("keeps the Disconnect icon and label on one line", async () => {
+  it("moves connected account actions into the overflow menu", async () => {
     vi.mocked(telegramSystemBotApi.connection).mockResolvedValue({
       connected: true,
       username: "matviikpr",
@@ -73,12 +73,24 @@ describe("TelegramSystemBotSettings", () => {
       currentWorkspaceId: "workspace-1",
       currentWorkspaceName: "Business",
       botUsername: "TgBusinessSystemAn_bot",
+      runtimeEnvironment: "LOCAL",
     });
 
     renderSettings();
 
-    const button = await screen.findByRole("button", { name: "Disconnect" });
-    expect(button).toHaveClass("inline-flex", "items-center", "whitespace-nowrap");
+    expect(await screen.findByText("Bot active")).toBeInTheDocument();
+    expect(screen.getByText("Nexeloq Bot")).toBeInTheDocument();
+    expect(screen.getByText(/@TgBusinessSystemAn_bot/)).toBeInTheDocument();
+    expect(screen.queryByText("@matviikpr")).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Telegram System Bot actions" }),
+    );
+    expect(
+      screen.getByRole("menuitem", { name: "Open bot" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Disconnect" }),
+    ).toBeInTheDocument();
   });
 
   it("does not poll an unconnected status and offers an explicit refresh", async () => {
@@ -100,17 +112,20 @@ describe("TelegramSystemBotSettings", () => {
         currentWorkspaceId: "workspace-1",
         currentWorkspaceName: "Business",
         botUsername: "TgBusinessSystemAn_bot",
-    });
+      });
 
     renderSettings();
-    expect(await screen.findByText("Not connected")).toBeInTheDocument();
+    expect(await screen.findByText("Bot unavailable")).toBeInTheDocument();
 
     expect(telegramSystemBotApi.connection).toHaveBeenCalledTimes(1);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Telegram System Bot actions" }),
+    );
     expect(
-      screen.getByRole("button", { name: "Refresh connection" }),
+      screen.getByRole("menuitem", { name: "Refresh connection" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/return here and refresh the connection status/i),
+      screen.getByText(/personal connection is only needed/i),
     ).toBeInTheDocument();
   });
 
@@ -127,10 +142,12 @@ describe("TelegramSystemBotSettings", () => {
 
     renderSettings();
 
-    expect(await screen.findByText("PRODUCTION System Bot")).toBeInTheDocument();
-    expect(screen.getByText("LOCAL System Bot")).toBeInTheDocument();
     expect(
-      screen.getByText(/tokens and webhook secrets are environment-managed and cannot be viewed or edited here/i),
+      await screen.findByText("Production"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Local development")).toBeInTheDocument();
+    expect(
+      screen.getByText(/credentials are managed through the environment/i),
     ).toBeInTheDocument();
   });
 
@@ -149,7 +166,23 @@ describe("TelegramSystemBotSettings", () => {
     renderSettings();
     expect(await screen.findByText("Current process")).toBeInTheDocument();
     expect(
-      screen.getByText(/this api process is configured for local/i),
+      screen.getByText(/local is active for this api process/i),
     ).toBeInTheDocument();
+  });
+
+  it("shows a compact actionable error state without rendering environment placeholders", async () => {
+    vi.mocked(telegramSystemBotApi.connection).mockRejectedValue(
+      new Error("API unavailable"),
+    );
+
+    renderSettings();
+
+    expect(
+      await screen.findByText("Connection status is unavailable"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Try again" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Production")).not.toBeInTheDocument();
   });
 });

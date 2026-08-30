@@ -45,6 +45,10 @@ export function createWorkspaceApi({
       name: string;
       workspaceName?: string;
     }) => (await api.post<AuthResponse>("/auth/register", payload)).data,
+    forgotPassword: async (email: string) =>
+      (await api.post<{ message: string }>("/auth/forgot-password", { email })).data,
+    resetPassword: async (token: string, password: string) =>
+      (await api.post<{ message: string }>("/auth/reset-password", { token, password })).data,
     me: async () => (await api.get<MeResponse>("/auth/me")).data,
   };
 

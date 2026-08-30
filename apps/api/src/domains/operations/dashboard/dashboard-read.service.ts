@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, TransactionType } from '@prisma/client';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
+import type { DashboardReadAccess } from './dashboard-surface';
 
 const dec = (value: unknown) => Number(value ?? 0);
 const REVENUE_CATEGORY_KEY = 'channel_advertising_revenue';
@@ -33,7 +34,17 @@ function campaignPeriodWhere(
 export class DashboardReadService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async load(workspaceId: string, from: Date, to: Date) {
+  async load(
+    workspaceId: string,
+    from: Date,
+    to: Date,
+    access: DashboardReadAccess = {
+      finance: true,
+      advertising: true,
+      channels: true,
+      members: true,
+    },
+  ) {
     const period = { gte: from, lte: to };
     const [
       workspace,
@@ -53,11 +64,11 @@ export class DashboardReadService {
       totalInvestments,
       investmentsBeforePeriod,
     ] = await Promise.all([
-      this.prisma.workspace.findUniqueOrThrow({
+      access.finance ? this.prisma.workspace.findUniqueOrThrow({
         where: { id: workspaceId },
         select: { primaryCurrency: true, secondaryCurrency: true },
-      }),
-      this.prisma.account.findMany({
+      }) : Promise.resolve({ primaryCurrency: '', secondaryCurrency: '' }),
+      access.finance ? this.prisma.account.findMany({
         where: {
           workspaceId,
           isActive: true,
@@ -78,8 +89,8 @@ export class DashboardReadService {
             },
           },
         },
-      }),
-      this.prisma.transaction.findMany({
+      }) : Promise.resolve([] as any[]),
+      access.finance ? this.prisma.transaction.findMany({
         where: { workspaceId, deletedAt: null, date: period },
         select: {
           date: true,
@@ -105,8 +116,8 @@ export class DashboardReadService {
             },
           },
         },
-      }),
-      this.prisma.adCampaign.findMany({
+      }) : Promise.resolve([] as any[]),
+      access.advertising ? this.prisma.adCampaign.findMany({
         where: campaignPeriodWhere(workspaceId, from, to),
         include: {
           inviteLinks: { select: { joinedCount: true, requestedCount: true } },
@@ -127,13 +138,13 @@ export class DashboardReadService {
           },
           promo: { select: { title: true } },
         },
-      }),
-      this.prisma.adCampaign.groupBy({
+      }) : Promise.resolve([] as any[]),
+      access.advertising ? this.prisma.adCampaign.groupBy({
         by: ['status'],
         where: { workspaceId },
         _count: { _all: true },
-      }),
-      this.prisma.telegramChannel.findMany({
+      }) : Promise.resolve([] as any[]),
+      access.channels ? this.prisma.telegramChannel.findMany({
         where: { workspaceId, archivedAt: null },
         select: {
           id: true,
@@ -142,9 +153,9 @@ export class DashboardReadService {
           photoUrl: true,
           currentSubscribersCount: true,
           isActive: true,
-          purchaseTransaction: {
-            select: { id: true, amountInPrimaryCurrency: true, date: true },
-          },
+          purchaseTransaction: access.finance
+            ? { select: { id: true, amountInPrimaryCurrency: true, date: true } }
+            : false,
           adminLinks: { select: { id: true }, take: 1 },
           audienceSnapshots: {
             orderBy: { collectedAt: 'desc' },
@@ -158,48 +169,48 @@ export class DashboardReadService {
             },
           },
         },
-      }),
-      this.prisma.adHypothesis.groupBy({
+      }) : Promise.resolve([] as any[]),
+      access.advertising ? this.prisma.adHypothesis.groupBy({
         by: ['status'],
         where: { workspaceId },
         _count: { _all: true },
-      }),
-      this.prisma.workspaceMember.count({ where: { workspaceId } }),
-      this.prisma.investment.findMany({
+      }) : Promise.resolve([] as any[]),
+      access.members ? this.prisma.workspaceMember.count({ where: { workspaceId } }) : Promise.resolve(0),
+      access.finance ? this.prisma.investment.findMany({
         where: { workspaceId, date: period },
         select: { id: true, amountInPrimaryCurrency: true, date: true },
-      }),
-      this.prisma.transactionCategory.findMany({
+      }) : Promise.resolve([] as any[]),
+      access.finance ? this.prisma.transactionCategory.findMany({
         where: { workspaceId },
         select: { id: true, key: true, name: true },
-      }),
-      this.prisma.transaction.groupBy({
+      }) : Promise.resolve([] as any[]),
+      access.finance ? this.prisma.transaction.groupBy({
         by: ['category'],
         where: { workspaceId, deletedAt: null, categoryId: null },
-      }),
-      this.prisma.transaction.groupBy({
+      }) : Promise.resolve([] as any[]),
+      access.finance ? this.prisma.transaction.groupBy({
         by: ['accountId', 'type'],
         where: { workspaceId, deletedAt: null },
         _sum: { amount: true },
-      }),
-      this.prisma.transfer.groupBy({
+      }) : Promise.resolve([] as any[]),
+      access.finance ? this.prisma.transfer.groupBy({
         by: ['fromAccountId'],
         where: { workspaceId, deletedAt: null },
         _sum: { fromAmount: true },
-      }),
-      this.prisma.transfer.groupBy({
+      }) : Promise.resolve([] as any[]),
+      access.finance ? this.prisma.transfer.groupBy({
         by: ['toAccountId'],
         where: { workspaceId, deletedAt: null },
         _sum: { toAmount: true },
-      }),
-      this.prisma.investment.aggregate({
+      }) : Promise.resolve([] as any[]),
+      access.finance ? this.prisma.investment.aggregate({
         where: { workspaceId },
         _sum: { amountInPrimaryCurrency: true },
-      }),
-      this.prisma.investment.aggregate({
+      }) : Promise.resolve({ _sum: { amountInPrimaryCurrency: null } }),
+      access.finance ? this.prisma.investment.aggregate({
         where: { workspaceId, date: { lt: from } },
         _sum: { amountInPrimaryCurrency: true },
-      }),
+      }) : Promise.resolve({ _sum: { amountInPrimaryCurrency: null } }),
     ]);
 
     const revenueCategoryIds = categories
@@ -233,24 +244,24 @@ export class DashboardReadService {
       expenseTotals,
       expensesBeforePeriod,
     ] = await Promise.all([
-      this.prisma.transaction.groupBy({
+      access.finance ? this.prisma.transaction.groupBy({
         by: ['telegramChannelId'],
         where: revenueWhere,
         _sum: { amountInPrimaryCurrency: true },
-      }),
-      this.prisma.transaction.aggregate({
+      }) : Promise.resolve([] as any[]),
+      access.finance ? this.prisma.transaction.aggregate({
         where: { ...revenueWhere, date: { lt: from } },
         _sum: { amountInPrimaryCurrency: true },
-      }),
-      this.prisma.transaction.aggregate({
+      }) : Promise.resolve({ _sum: { amountInPrimaryCurrency: null } }),
+      access.finance ? this.prisma.transaction.aggregate({
         where: {
           workspaceId,
           deletedAt: null,
           type: TransactionType.expense,
         },
         _sum: { amountInPrimaryCurrency: true },
-      }),
-      this.prisma.transaction.aggregate({
+      }) : Promise.resolve({ _sum: { amountInPrimaryCurrency: null } }),
+      access.finance ? this.prisma.transaction.aggregate({
         where: {
           workspaceId,
           deletedAt: null,
@@ -258,7 +269,7 @@ export class DashboardReadService {
           date: { lt: from },
         },
         _sum: { amountInPrimaryCurrency: true },
-      }),
+      }) : Promise.resolve({ _sum: { amountInPrimaryCurrency: null } }),
     ]);
 
     const campaignStatusCounts = Object.fromEntries(

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { PropsWithChildren, useEffect, useMemo, useState } from "react";
+import { PropsWithChildren, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { logout } from "@/lib/features/identity/auth";
@@ -23,36 +23,17 @@ import { CustomSelect } from "@/components/ui/primitives";
 import { IconPicker } from "@/components/icons/icon-picker";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { SystemBrandLogo } from "@/components/layout/system-brand-logo";
+import { AppNavigation } from "@/components/layout/app-navigation";
 import { useSystemBotWorkspaceSync } from "@/components/layout/use-system-bot-workspace-sync";
 import {
-  Bug,
-  Bot,
-  BriefcaseBusiness,
-  ArrowRightLeft,
-  ChevronDown,
   ChevronRight,
-  Coins,
-  CreditCard,
-  FolderTree,
-  Gauge,
-  Landmark,
   LogOut,
   Menu,
   Plus,
   Search,
   RefreshCw,
-  MessageCircle,
-  Send,
-  RadioTower,
-  ReceiptText,
-  Settings,
-  Clock3,
-  Target,
-  Trash2,
   X,
 } from "lucide-react";
-
-const dashboardItem = { label: "Dashboard", href: "/", icon: Gauge } as const;
 
 export function AppShell({ children }: PropsWithChildren) {
   const pathname = usePathname();
@@ -139,7 +120,7 @@ export function AppShell({ children }: PropsWithChildren) {
     },
   });
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
-    const defaults = { finance: false, telegram: false };
+    const defaults = { telegram: true, growth: true, operations: false };
     if (typeof window === "undefined") return defaults;
     try {
       const raw = localStorage.getItem("sidebar-open-groups");
@@ -291,9 +272,6 @@ export function AppShell({ children }: PropsWithChildren) {
       return next;
     });
   };
-  const settingsActive =
-    pathname === "/settings" || pathname === "/workspace-members";
-  const dashboardActive = pathname === "/";
   const activeWorkspaceId = selectedWorkspaceId || workspaces?.[0]?.id || "";
   useSystemBotWorkspaceSync(activeWorkspaceId, (workspaceId) => {
     if (workspaces?.some((workspace) => workspace.id === workspaceId))
@@ -303,50 +281,10 @@ export function AppShell({ children }: PropsWithChildren) {
     (workspace) => workspace.id === activeWorkspaceId,
   );
   const canViewSystemLogs =
-    activeWorkspace?.role === "owner" || activeWorkspace?.role === "admin";
-  const groups = useMemo(
-    () =>
-      [
-        {
-          key: "finance",
-          label: "Finance",
-          icon: Landmark,
-          children: [
-            { label: "Accounts", href: "/accounts", icon: CreditCard },
-            { label: "Transactions", href: "/transactions", icon: ReceiptText },
-            { label: "Categories", href: "/categories", icon: FolderTree },
-            { label: "Transfers", href: "/transfers", icon: ArrowRightLeft },
-            { label: "Currencies", href: "/currencies", icon: Coins },
-          ],
-        },
-        {
-          key: "telegram",
-          label: "Telegram",
-          icon: MessageCircle,
-          children: [
-            { label: "Telegram", href: "/telegram-channels", icon: RadioTower },
-            { label: "Bots", href: "/telegram-bots", icon: Bot },
-            { label: "Posts", href: "/telegram-posts", icon: Send },
-            { label: "Ads", href: "/ad-campaigns", icon: Target },
-            { label: "Ad sales", href: "/ad-sales", icon: BriefcaseBusiness },
-          ],
-        },
-      ] as const,
-    [],
-  );
-
-  const groupActiveMap = useMemo(() => {
-    const map: Record<string, boolean> = {};
-    for (const group of groups) {
-      map[group.key] =
-        group.key === "finance"
-          ? pathname === "/finance" ||
-            group.children.some((item) => pathname === item.href)
-          : group.children.some((item) => pathname === item.href);
-    }
-    return map;
-  }, [pathname]);
-
+    activeWorkspace?.access?.permissionKeys.includes(
+      "operations.viewSystemLogs",
+    ) ??
+    (activeWorkspace?.role === "owner" || activeWorkspace?.role === "admin");
   return (
     <div className="min-h-screen overflow-x-hidden bg-neutral-950 text-neutral-100">
       <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-neutral-800 bg-neutral-950/95 px-3 backdrop-blur lg:hidden">
@@ -355,6 +293,8 @@ export function AppShell({ children }: PropsWithChildren) {
           onClick={() => setMobileMenuOpen(true)}
           className="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-800 text-neutral-200 hover:bg-neutral-900"
           aria-label="Open navigation"
+          aria-expanded={mobileMenuOpen}
+          aria-controls="app-sidebar"
         >
           <Menu size={20} />
         </button>
@@ -378,6 +318,8 @@ export function AppShell({ children }: PropsWithChildren) {
         />
       ) : null}
       <aside
+        id="app-sidebar"
+        aria-label="Application sidebar"
         className={`fixed left-0 top-0 z-40 flex h-[100dvh] w-[min(19rem,calc(100vw-1.25rem))] -translate-x-full flex-col border-r border-neutral-800 bg-neutral-950 p-4 shadow-2xl transition-transform duration-200 lg:z-30 lg:h-screen lg:w-64 lg:translate-x-0 lg:p-5 lg:shadow-none ${mobileMenuOpen ? "translate-x-0" : ""}`}
         onClickCapture={(event) => {
           if ((event.target as HTMLElement).closest("a"))
@@ -392,7 +334,7 @@ export function AppShell({ children }: PropsWithChildren) {
         >
           <X size={18} />
         </button>
-        <div className="mb-8">
+        <div className="mb-4">
           <div className="flex items-center justify-between gap-2 pr-10 lg:pr-0">
             <SystemBrandLogo />
             <button
@@ -408,9 +350,6 @@ export function AppShell({ children }: PropsWithChildren) {
               />
             </button>
           </div>
-          <p className="mt-1 text-sm text-neutral-400">
-            Finance, ads and analytics
-          </p>
         </div>
 
         <GlobalSearchBox
@@ -422,42 +361,49 @@ export function AppShell({ children }: PropsWithChildren) {
           isFetching={searchFetching}
         />
 
-        <div className="mb-5 space-y-2 rounded-lg border border-neutral-800 bg-neutral-900/40 p-3">
-          <div className="flex items-center justify-between gap-2 text-xs uppercase text-neutral-500">
-            <span>Workspace</span>
+        <div className="mb-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1" aria-label="Workspace">
+              <CustomSelect
+                value={activeWorkspaceId}
+                onChange={switchWorkspace}
+                placeholder="Select workspace"
+                options={(workspaces ?? []).map((workspace) => ({
+                  value: workspace.id,
+                  label: `${workspace.name} (${workspace.role})`,
+                  iconPresentation: workspace.avatarPresentation ?? undefined,
+                  iconUrl:
+                    workspace.avatarPresentation?.type === "image"
+                      ? workspace.avatarPresentation.url
+                      : undefined,
+                  iconEmoji:
+                    workspace.avatarPresentation?.type === "unicode"
+                      ? workspace.avatarPresentation.value
+                      : undefined,
+                  iconPremium:
+                    workspace.avatarPresentation?.type === "unicode" &&
+                    Boolean(workspace.avatarPresentation.telegramCustomEmojiId),
+                }))}
+              />
+            </div>
             <button
               type="button"
               onClick={() => setCreatingWorkspace((v) => !v)}
-              className="rounded p-1 text-neutral-300 hover:bg-neutral-800"
+              aria-expanded={creatingWorkspace}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition ${
+                creatingWorkspace
+                  ? "border-blue-700 bg-blue-950/40 text-blue-200"
+                  : "border-neutral-800 bg-neutral-900/60 text-neutral-400 hover:border-neutral-700 hover:text-white"
+              }`}
               aria-label="Create workspace"
+              title="Create workspace"
             >
-              <Plus size={14} />
+              <Plus size={17} />
             </button>
           </div>
-          <CustomSelect
-            value={activeWorkspaceId}
-            onChange={switchWorkspace}
-            placeholder="Select workspace"
-            options={(workspaces ?? []).map((workspace) => ({
-              value: workspace.id,
-              label: `${workspace.name} (${workspace.role})`,
-              iconPresentation: workspace.avatarPresentation ?? undefined,
-              iconUrl:
-                workspace.avatarPresentation?.type === "image"
-                  ? workspace.avatarPresentation.url
-                  : undefined,
-              iconEmoji:
-                workspace.avatarPresentation?.type === "unicode"
-                  ? workspace.avatarPresentation.value
-                  : undefined,
-              iconPremium:
-                workspace.avatarPresentation?.type === "unicode" &&
-                Boolean(workspace.avatarPresentation.telegramCustomEmojiId),
-            }))}
-          />
           {creatingWorkspace ? (
             <form
-              className="flex gap-2"
+              className="flex gap-2 rounded-xl border border-neutral-800 bg-neutral-900/40 p-2"
               onSubmit={(e) => {
                 e.preventDefault();
                 const name = workspaceName.trim();
@@ -478,12 +424,12 @@ export function AppShell({ children }: PropsWithChildren) {
                   value={workspaceName}
                   onChange={(e) => setWorkspaceName(e.target.value)}
                   placeholder="Workspace name"
-                  className="min-w-0 flex-1 rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1 text-sm outline-none focus:border-neutral-500"
+                  className="h-9 min-w-0 flex-1 rounded-lg border border-neutral-700 bg-neutral-950 px-2 text-sm outline-none focus:border-blue-600"
                 />
               </div>
               <button
                 type="submit"
-                className="rounded-md border border-neutral-700 px-2 text-sm text-neutral-200 hover:bg-neutral-800"
+                className="rounded-lg border border-neutral-700 px-3 text-sm text-neutral-200 hover:bg-neutral-800"
               >
                 Add
               </button>
@@ -491,152 +437,53 @@ export function AppShell({ children }: PropsWithChildren) {
           ) : null}
         </div>
 
-        <nav className="app-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-          <Link
-            href={dashboardItem.href}
-            className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm ${dashboardActive ? "bg-neutral-800 text-white" : "text-neutral-300 hover:bg-neutral-900 hover:text-white"}`}
-          >
-            <dashboardItem.icon size={16} />
-            {dashboardItem.label}
-          </Link>
+        <AppNavigation
+          pathname={pathname}
+          openGroups={openGroups}
+          onToggleGroup={toggleGroup}
+          canViewAdmin={canViewSystemLogs}
+          effectiveFeatureIds={activeWorkspace?.access?.featureIds}
+          effectivePermissionKeys={activeWorkspace?.access?.permissionKeys}
+        />
 
-          {groups.map((group) => {
-            const groupActive = groupActiveMap[group.key];
-            const GroupIcon = group.icon;
-            const isOpen = openGroups[group.key];
-
-            return (
-              <div
-                key={group.label}
-                className="space-y-1 border-b border-neutral-900 pb-3 last:border-b-0"
-              >
-                <div className="flex items-center gap-1 rounded-md px-1 py-1 hover:bg-neutral-900">
-                  {group.key === "finance" ? (
-                    <Link
-                      href="/finance"
-                      className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-xs uppercase tracking-wide ${groupActive ? "text-neutral-200" : "text-neutral-500"} hover:text-white`}
-                    >
-                      <GroupIcon size={14} />
-                      <span className="truncate">{group.label}</span>
-                    </Link>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => toggleGroup(group.key)}
-                      className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-xs uppercase tracking-wide ${groupActive ? "text-neutral-200" : "text-neutral-500"} hover:text-white`}
-                    >
-                      <GroupIcon size={14} />
-                      <span className="truncate">{group.label}</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(group.key)}
-                    className={`rounded-md p-1 ${groupActive ? "text-neutral-200" : "text-neutral-500"} hover:bg-neutral-800 hover:text-white`}
-                    aria-label={`Toggle ${group.label}`}
-                  >
-                    {isOpen ? (
-                      <ChevronDown size={14} />
-                    ) : (
-                      <ChevronRight size={14} />
-                    )}
-                  </button>
-                </div>
-                {isOpen
-                  ? group.children.map((item) => {
-                      const ItemIcon = item.icon;
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          className={`ml-1 flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm ${pathname === item.href ? "bg-neutral-800 text-white" : "text-neutral-300 hover:bg-neutral-900 hover:text-white"}`}
-                        >
-                          <ItemIcon size={16} />
-                          {item.label}
-                        </Link>
-                      );
-                    })
-                  : null}
-              </div>
-            );
-          })}
-
-          <Link
-            href="/scheduled-tasks"
-            className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm ${
-              pathname === "/scheduled-tasks"
-                ? "bg-neutral-800 text-white"
-                : "text-neutral-300 hover:bg-neutral-900 hover:text-white"
-            }`}
-          >
-            <Clock3 size={16} />
-            Scheduled Tasks
-          </Link>
-
-          {canViewSystemLogs ? (
-            <Link
-              href="/trash"
-              className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm ${pathname === "/trash" ? "bg-neutral-800 text-white" : "text-neutral-300 hover:bg-neutral-900 hover:text-white"}`}
-            >
-              <Trash2 size={16} />
-              Trash
-            </Link>
-          ) : null}
-
-          {canViewSystemLogs ? (
-            <Link
-              href="/system-logs"
-              className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm ${
-                pathname === "/system-logs"
-                  ? "bg-neutral-800 text-white"
-                  : "text-neutral-300 hover:bg-neutral-900 hover:text-white"
-              }`}
-            >
-              <Bug size={16} />
-              System Logs
-            </Link>
-          ) : null}
-
-          <Link
-            href="/settings"
-            className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm ${settingsActive ? "bg-neutral-800 text-white" : "text-neutral-300 hover:bg-neutral-900 hover:text-white"}`}
-          >
-            <Settings size={16} />
-            Settings
-          </Link>
-        </nav>
-
-        <div className="mt-5 border-t border-neutral-800 pt-4">
-          <Link
-            href="/account"
-            className={`flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2.5 transition ${
+        <div className="mt-3 border-t border-neutral-800 pt-3">
+          <div
+            className={`flex min-w-0 items-stretch overflow-hidden rounded-xl border transition ${
               pathname === "/account"
                 ? "border-blue-700/70 bg-blue-950/30"
                 : "border-neutral-800 bg-neutral-900/50 hover:border-neutral-700 hover:bg-neutral-900"
             }`}
           >
-            <IconAvatar
-              icon={currentAccount?.avatarPresentation}
-              label={currentAccount?.name || currentAccount?.email || "User"}
-              size="md"
-              className="!rounded-full"
-            />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium text-white">
-                {currentAccount?.name || "My profile"}
+            <Link
+              href="/account"
+              className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2.5"
+            >
+              <IconAvatar
+                icon={currentAccount?.avatarPresentation}
+                label={currentAccount?.name || currentAccount?.email || "User"}
+                size="md"
+                className="!rounded-full"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-white">
+                  {currentAccount?.name || "My profile"}
+                </span>
+                <span className="block truncate text-xs text-neutral-500">
+                  {currentAccount?.email || "Account settings"}
+                </span>
               </span>
-              <span className="block truncate text-xs text-neutral-500">
-                {currentAccount?.email || "Account settings"}
-              </span>
-            </span>
-            <ChevronRight size={16} className="shrink-0 text-neutral-500" />
-          </Link>
-          <button
-            onClick={handleLogout}
-            className="mt-2 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-neutral-800 px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-900 hover:text-white"
-          >
-            <LogOut size={16} /> Logout
-          </button>
+              <ChevronRight size={15} className="shrink-0 text-neutral-600" />
+            </Link>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex w-11 shrink-0 items-center justify-center border-l border-neutral-800 text-neutral-500 transition hover:bg-rose-950/30 hover:text-rose-300"
+              aria-label="Log out"
+              title="Log out"
+            >
+              <LogOut size={17} />
+            </button>
+          </div>
         </div>
       </aside>
       <main className="min-h-[calc(100dvh-3.5rem)] min-w-0 px-3 py-4 sm:px-4 sm:py-5 lg:ml-64 lg:min-h-screen lg:w-[calc(100%-16rem)] 2xl:px-5">
@@ -690,7 +537,7 @@ function GlobalSearchBox({
 }) {
   const showResults = focused && query.trim().length >= 2;
   return (
-    <div className="relative mb-4">
+    <div className="relative mb-3">
       <div className="relative">
         <Search
           size={15}
@@ -704,7 +551,7 @@ function GlobalSearchBox({
             if (event.key === "Escape") onFocusedChange(false);
           }}
           placeholder="Search everything"
-          className="w-full rounded-lg border border-neutral-800 bg-neutral-900/60 py-2 pl-9 pr-3 text-sm text-neutral-100 outline-none transition placeholder:text-neutral-500 focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+          className="h-10 w-full rounded-xl border border-neutral-800 bg-neutral-900/45 pl-9 pr-3 text-sm text-neutral-100 outline-none transition placeholder:text-neutral-600 focus:border-blue-600 focus:bg-neutral-900/70 focus:ring-1 focus:ring-blue-600"
         />
       </div>
       {showResults ? (

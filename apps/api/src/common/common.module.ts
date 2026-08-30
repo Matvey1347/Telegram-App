@@ -7,6 +7,7 @@ import { ResponseCacheService } from './response-cache.service';
 import { RequestContextModule } from './request-context/request-context.module';
 import { MemoryMonitorService } from './observability/memory-monitor.service';
 import { B2ObjectStorageService } from './object-storage/b2-object-storage.service';
+import { WorkspaceAuthorizationService } from '../domains/workspace/workspace-authorization/workspace-authorization.service';
 
 @Global()
 @Module({
@@ -19,6 +20,7 @@ import { B2ObjectStorageService } from './object-storage/b2-object-storage.servi
     ResponseCacheService,
     MemoryMonitorService,
     B2ObjectStorageService,
+    WorkspaceAuthorizationService,
   ],
   exports: [
     WorkspaceService,
@@ -27,6 +29,7 @@ import { B2ObjectStorageService } from './object-storage/b2-object-storage.servi
     ResponseCacheService,
     MemoryMonitorService,
     B2ObjectStorageService,
+    WorkspaceAuthorizationService,
   ],
 })
 export class CommonModule {}

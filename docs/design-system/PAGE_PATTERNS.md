@@ -1,5 +1,8 @@
 # Page Patterns
 
+Apply these structures together with the responsive and visual contract in
+[Service Design Rules](SERVICE_DESIGN_RULES.md).
+
 ## App Router Pages
 
 Page files should primarily:

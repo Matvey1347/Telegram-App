@@ -9,6 +9,10 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { CreateWorkspaceDto, UpdateWorkspaceDto } from './dto';
+import {
+  accessibleWorkspaceFeatureIds,
+  effectiveWorkspacePermissionKeys,
+} from '@telegram-system/shared';
 
 @Injectable()
 export class WorkspacesService {
@@ -22,6 +26,12 @@ export class WorkspacesService {
       id: string;
       workspaceId: string;
       role: WorkspaceRole;
+      roleDefinition?: {
+        id: string;
+        version: number;
+        mode: 'ALLOWLIST' | 'DENYLIST';
+        permissions: Array<{ permissionKey: string }>;
+      } | null;
       workspace: {
         id: string;
         name: string;
@@ -44,6 +54,25 @@ export class WorkspacesService {
       renderAssetUrl: string | null;
     } | null,
   ) {
+    const permissionKeys = effectiveWorkspacePermissionKeys(
+      row.roleDefinition
+        ? {
+            mode: row.roleDefinition.mode,
+            permissionKeys: row.roleDefinition.permissions.map(
+              ({ permissionKey }) => permissionKey,
+            ),
+          }
+        : { mode: 'ALLOWLIST', permissionKeys: [] },
+      row.role === WorkspaceRole.owner,
+    );
+    const access = {
+      roleId: row.roleDefinition?.id ?? null,
+      roleVersion: row.roleDefinition?.version ?? 0,
+      isOwner: row.role === WorkspaceRole.owner,
+      permissionKeys,
+      featureIds: [] as string[],
+    };
+    access.featureIds = accessibleWorkspaceFeatureIds(access);
     return {
       id: row.workspace.id,
       name: row.workspace.name,
@@ -57,6 +86,7 @@ export class WorkspacesService {
         row.workspace.avatarIcon,
         telegramAsset,
       ),
+      access,
     };
   }
 
@@ -126,6 +156,14 @@ export class WorkspacesService {
         id: true,
         workspaceId: true,
         role: true,
+        roleDefinition: {
+          select: {
+            id: true,
+            version: true,
+            mode: true,
+            permissions: { select: { permissionKey: true } },
+          },
+        },
         workspace: {
           select: {
             id: true,
@@ -175,6 +213,14 @@ export class WorkspacesService {
         id: true,
         workspaceId: true,
         role: true,
+        roleDefinition: {
+          select: {
+            id: true,
+            version: true,
+            mode: true,
+            permissions: { select: { permissionKey: true } },
+          },
+        },
         workspace: {
           select: {
             id: true,

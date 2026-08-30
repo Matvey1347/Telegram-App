@@ -1,5 +1,2 @@
 import { redirect } from 'next/navigation';
-
-export default function InvestmentsPage() {
-  redirect('/transactions');
-}
+export default function InvestmentsPage() { redirect('/finance#transactions'); }

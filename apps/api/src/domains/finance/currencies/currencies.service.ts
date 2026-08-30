@@ -14,6 +14,8 @@ import {
   UpdateCurrencySettingsDto,
   UpdateCurrencyRateDto,
 } from './dto';
+import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
+import { financeAuthorizationTestFallback } from '../finance-authorization-test-fallback';
 
 const SUPPORTED_CURRENCIES = [
   'USD',
@@ -71,6 +73,7 @@ export class CurrenciesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
+    private readonly authorization: WorkspaceAuthorizationService = financeAuthorizationTestFallback(workspaceService),
     private readonly applicationLogger: ApplicationLoggerService = {
       info: () => undefined,
       writeStructured: () => undefined,
@@ -78,8 +81,7 @@ export class CurrenciesService {
   ) {}
 
   async getSettings(userId: string) {
-    const workspaceId =
-      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const { workspaceId } = await this.authorization.require(userId, 'finance.view');
     const [workspace] = await this.prisma.$queryRaw<
       WorkspaceCurrencySettingsRow[]
     >`
@@ -100,13 +102,13 @@ export class CurrenciesService {
   }
 
   async updateSettings(userId: string, dto: UpdateCurrencySettingsDto) {
+    const access = await this.authorization.require(userId, 'finance.manageCurrencies');
     if (dto.primaryCurrency === dto.secondaryCurrency) {
       throw new BadRequestException(
         'Primary and secondary currencies must be different',
       );
     }
-    const workspaceId =
-      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const workspaceId = access.workspaceId;
     const [workspace] = await this.prisma.$queryRaw<
       WorkspaceCurrencySettingsRow[]
     >`
@@ -141,8 +143,7 @@ export class CurrenciesService {
   }
 
   async getRates(userId: string) {
-    const workspaceId =
-      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const { workspaceId } = await this.authorization.require(userId, 'finance.view');
     return this.prisma.exchangeRate.findMany({
       where: { workspaceId },
       orderBy: { date: 'desc' },
@@ -150,8 +151,7 @@ export class CurrenciesService {
   }
 
   async getLatestRates(userId: string) {
-    const workspaceId =
-      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const { workspaceId } = await this.authorization.require(userId, 'finance.view');
     return this.prisma.$queryRaw(Prisma.sql`
       SELECT DISTINCT ON (rate."baseCurrency", rate."targetCurrency")
         rate.*
@@ -167,8 +167,7 @@ export class CurrenciesService {
   }
 
   async createRate(userId: string, dto: CreateCurrencyRateDto) {
-    const workspaceId =
-      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const { workspaceId } = await this.authorization.require(userId, 'finance.manageCurrencies');
     return this.prisma.exchangeRate.create({
       data: {
         ...dto,
@@ -181,8 +180,7 @@ export class CurrenciesService {
   }
 
   async updateRate(userId: string, id: string, dto: UpdateCurrencyRateDto) {
-    const workspaceId =
-      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const { workspaceId } = await this.authorization.require(userId, 'finance.manageCurrencies');
     const row = await this.prisma.exchangeRate.findFirst({
       where: { id, workspaceId },
     });
@@ -194,8 +192,7 @@ export class CurrenciesService {
   }
 
   async removeRate(userId: string, id: string) {
-    const workspaceId =
-      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const { workspaceId } = await this.authorization.require(userId, 'finance.manageCurrencies');
     const row = await this.prisma.exchangeRate.findFirst({
       where: { id, workspaceId },
     });
@@ -204,8 +201,7 @@ export class CurrenciesService {
   }
 
   async syncRates(userId: string) {
-    const workspaceId =
-      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const { workspaceId } = await this.authorization.require(userId, 'finance.manageCurrencies');
     const workspace = await this.prisma.workspace.findUniqueOrThrow({
       where: { id: workspaceId },
       select: { primaryCurrency: true },

@@ -69,6 +69,14 @@ export class WorkspaceService {
           id: true,
           workspaceId: true,
           role: true,
+          roleDefinition: {
+            select: {
+              id: true,
+              version: true,
+              mode: true,
+              permissions: { select: { permissionKey: true } },
+            },
+          },
           telegramUsername: true,
           avatarIconId: true,
           avatarIcon: true,
@@ -91,6 +99,14 @@ export class WorkspaceService {
         id: true,
         workspaceId: true,
         role: true,
+        roleDefinition: {
+          select: {
+            id: true,
+            version: true,
+            mode: true,
+            permissions: { select: { permissionKey: true } },
+          },
+        },
         telegramUsername: true,
         avatarIconId: true,
         avatarIcon: true,

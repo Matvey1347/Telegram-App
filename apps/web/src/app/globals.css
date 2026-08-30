@@ -1,8 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a0a0a;
+  --foreground: #f5f5f5;
+  --canvas: #0a0a0a;
+  --surface: #171717;
+  --surface-elevated: #262626;
+  --surface-inset: #0f0f0f;
+  --border: #262626;
+  --text-primary: #f5f5f5;
+  --text-secondary: #d4d4d4;
+  --text-muted: #737373;
+  --action: #2563eb;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #f43f5e;
+  --focus: #3b82f6;
+  --radius-control: 0.625rem;
+  --radius-card: 0.75rem;
 }
 
 @theme inline {
@@ -22,8 +37,24 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   overflow-x: hidden;
+}
+
+:where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 button:not(:disabled),

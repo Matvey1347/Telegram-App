@@ -62,23 +62,32 @@ export function Pagination({
   const pageItems = buildPageItems(page, totalPages);
 
   return (
-    <div className="mt-4 flex flex-col gap-3 rounded-xl border border-slate-800 bg-slate-950/30 px-4 py-3 text-sm text-slate-300 lg:flex-row lg:items-center lg:justify-between">
-      <div className="flex flex-wrap items-center gap-3 text-slate-400">
-        <span>
+    <nav aria-label="Pagination" className="mt-4 flex flex-col gap-3 rounded-xl border border-neutral-800 bg-neutral-950/40 px-3 py-3 text-sm text-neutral-300 sm:px-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
+        <div className="inline-flex overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900/70">
+          <Button type="button" variant="secondary" aria-label="Previous page" disabled={isDisabled || !hasPreviousPage} onClick={() => onPageChange(page - 1)} className="rounded-none border-0 bg-transparent px-3 text-neutral-300 hover:bg-neutral-800 disabled:opacity-40"><ChevronLeft size={16} /></Button>
+          <span aria-live="polite" className="flex min-w-24 items-center justify-center border-l border-neutral-800 px-3 py-2 font-medium sm:hidden">Page {page} of {totalPages}</span>
+          <div className="hidden sm:flex">
+            {pageItems.map((item) => typeof item === "number" ? <button key={item} type="button" aria-label={`Go to page ${item}`} aria-current={item === page ? "page" : undefined} disabled={isDisabled} onClick={() => onPageChange(item)} className={`min-w-10 border-l border-neutral-800 px-3 py-2 text-sm font-medium transition ${item === page ? "bg-blue-600 text-white" : "text-neutral-300 hover:bg-neutral-800"} disabled:opacity-50`}>{item}</button> : <span key={item} aria-hidden="true" className="min-w-10 border-l border-neutral-800 px-3 py-2 text-center text-neutral-500">…</span>)}
+          </div>
+          <Button type="button" variant="secondary" aria-label="Next page" disabled={isDisabled || !hasNextPage} onClick={() => onPageChange(page + 1)} className="rounded-none border-0 border-l border-neutral-800 bg-transparent px-3 text-neutral-300 hover:bg-neutral-800 disabled:opacity-40"><ChevronRight size={16} /></Button>
+        </div>
+        <span className="text-neutral-400" aria-live="polite">
           Showing{" "}
-          <span className="text-slate-200">
+          <span className="text-neutral-200">
             {(page - 1) * pageSize + 1}
           </span>
           {" "}to{" "}
-          <span className="text-slate-200">
+          <span className="text-neutral-200">
             {Math.min(page * pageSize, totalItems)}
           </span>
           {" "}of{" "}
-          <span className="text-slate-200">{totalItems.toLocaleString()}</span>
+          <span className="text-neutral-200">{totalItems.toLocaleString()}</span>
           {" "}results
         </span>
       </div>
-      <div className="flex flex-wrap items-center justify-end gap-3">
+      <div className="flex items-center justify-between gap-3 border-t border-neutral-800 pt-3 lg:border-0 lg:pt-0">
+        <span className="text-neutral-500">Rows per page</span>
         <CustomSelect
           value={String(pageSize)}
           onChange={(value) => onPageSizeChange(Number(value))}
@@ -86,54 +95,10 @@ export function Pagination({
           searchable={false}
           options={[10, 25, 50, 100].map((size) => ({
             value: String(size),
-            label: `${size} / page`,
+            label: String(size),
           }))}
         />
-        <div className="inline-flex overflow-hidden rounded-xl border border-slate-800 bg-slate-900/70">
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={isDisabled || !hasPreviousPage}
-            onClick={() => onPageChange(page - 1)}
-            className="rounded-none border-0 bg-transparent px-3 text-slate-300 hover:bg-slate-800 disabled:opacity-40"
-          >
-            <ChevronLeft size={16} />
-          </Button>
-          {pageItems.map((item) =>
-            typeof item === "number" ? (
-              <button
-                key={item}
-                type="button"
-                disabled={isDisabled}
-                onClick={() => onPageChange(item)}
-                className={`min-w-12 border-l border-slate-800 px-4 py-2 text-sm font-medium transition ${
-                  item === page
-                    ? "bg-blue-600 text-white"
-                    : "text-slate-300 hover:bg-slate-800"
-                } disabled:opacity-50`}
-              >
-                {item}
-              </button>
-            ) : (
-              <span
-                key={item}
-                className="min-w-12 border-l border-slate-800 px-4 py-2 text-center text-slate-500"
-              >
-                ...
-              </span>
-            ),
-          )}
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={isDisabled || !hasNextPage}
-            onClick={() => onPageChange(page + 1)}
-            className="rounded-none border-l border-0 border-slate-800 bg-transparent px-3 text-slate-300 hover:bg-slate-800 disabled:opacity-40"
-          >
-            <ChevronRight size={16} />
-          </Button>
-        </div>
       </div>
-    </div>
+    </nav>
   );
 }

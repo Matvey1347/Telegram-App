@@ -54,6 +54,13 @@ and operational switches that may legitimately differ between deployments:
   LOCAL/PRODUCTION System Bot username,
   token and webhook-secret keys.
 - Object storage: `B2_KEY_ID`, `B2_APP_KEY`, `B2_BUCKET_NAME`, and `B2_ENDPOINT`.
+- Password reset email: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`,
+  and `SMTP_FROM`. SMTP may be omitted locally (reset email is suppressed and
+  tokens are never printed); configure all fields in production.
+  Password-reset abuse limits are process-local and memory-bounded; a
+  multi-instance deployment should add an ingress or shared-store rate limit.
+  `TRUST_PROXY_HOPS` defaults to one in production (Railway's ingress) and zero
+  locally; set it to the exact trusted ingress hop count for other topologies.
 - Operational switches: `APP_LOG_MIN_LEVEL`, `APP_CONSOLE_LOG_LEVEL`,
   `APP_LOG_HTTP_ENABLED`, `APP_LOG_HTTP_SUCCESS_ENABLED`,
   `MEMORY_MONITOR_ENABLED`, `MEMORY_MONITOR_WARN_RSS_MB`, and

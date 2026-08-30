@@ -192,4 +192,20 @@ describe('DashboardService', () => {
       expect.objectContaining({ joinedCount: 7, cpa: 200 / 7 }),
     );
   });
+
+  it('requires dashboard access before executing dashboard reads', async () => {
+    const denied = new Error('denied');
+    const authorization = { require: jest.fn().mockRejectedValue(denied) };
+    const reads = { load: jest.fn() };
+    const service = new DashboardService(
+      {} as never,
+      {} as never,
+      reads as never,
+      authorization as never,
+    );
+
+    await expect(service.summary('user-1')).rejects.toBe(denied);
+    expect(authorization.require).toHaveBeenCalledWith('user-1', 'dashboard.view');
+    expect(reads.load).not.toHaveBeenCalled();
+  });
 });

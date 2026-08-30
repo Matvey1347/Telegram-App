@@ -37,7 +37,7 @@
 
 ## Design System
 
-- Read `docs/design-system/BRAND_GUIDE.md`, `COMPONENT_CATALOG.md`, `PAGE_PATTERNS.md` and `FORM_PATTERNS.md`.
+- Read `docs/design-system/BRAND_GUIDE.md`, `SERVICE_DESIGN_RULES.md`, `COMPONENT_CATALOG.md`, `PAGE_PATTERNS.md` and `FORM_PATTERNS.md`.
 - Use existing primitives before adding new controls.
 - Do not create local copies of selectors, date pickers, modals, tables, page headers or metric cards without searching first.
 - Keep UI dense, operational and consistent with existing dark dashboard screens.

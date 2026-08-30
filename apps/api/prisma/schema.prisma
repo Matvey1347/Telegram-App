@@ -13,6 +13,16 @@ enum WorkspaceRole {
   member
 }
 
+enum WorkspaceRoleMode {
+  ALLOWLIST
+  DENYLIST
+}
+
+enum WorkspaceRolePermissionEffect {
+  ALLOW
+  DENY
+}
+
 enum TransactionType {
   income
   expense
@@ -642,6 +652,7 @@ model User {
   email                                     String                                @unique
   seedKey                                   String?                               @unique
   passwordHash                              String
+  authVersion                               Int                                   @default(0)
   name                                      String
   editorShortcuts                           Json?
   memberships                               WorkspaceMember[]
@@ -667,8 +678,21 @@ model User {
   createdTelegramPlacementAdvertiserResults TelegramAdPlacementAdvertiserResult[] @relation("TelegramAdPlacementAdvertiserResultCreatedBy")
   applicationLogs                           ApplicationLog[]
   telegramSystemBotConnection               TelegramSystemBotConnection?
+  passwordResetToken                        PasswordResetToken?
   createdAt                                 DateTime                              @default(now())
   updatedAt                                 DateTime                              @updatedAt
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
 }
 
 model Workspace {
@@ -683,6 +707,7 @@ model Workspace {
   systemNetworkExcludedChannelIds String[] @default([])
 
   members                                WorkspaceMember[]
+  roleDefinitions                       WorkspaceRoleDefinition[]
   accounts                               Account[]
   transactions                           Transaction[]
   transfers                              Transfer[]
@@ -926,11 +951,13 @@ model WorkspaceMember {
   workspaceId      String
   userId           String
   role             WorkspaceRole @default(admin)
+  roleDefinitionId String?
   isHidden         Boolean       @default(false)
   avatarIconId     String?
   telegramUsername String?
 
   workspace                                 Workspace                          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  roleDefinition                            WorkspaceRoleDefinition?           @relation(fields: [roleDefinitionId, workspaceId], references: [id, workspaceId], onDelete: Restrict)
   user                                      User                               @relation(fields: [userId], references: [id], onDelete: Cascade)
   avatarIcon                                Icon?                              @relation(fields: [avatarIconId], references: [id], onDelete: SetNull)
   investments                               Investment[]
@@ -967,6 +994,45 @@ model WorkspaceMember {
   @@unique([workspaceId, userId])
   @@unique([workspaceId, telegramUsername])
   @@unique([id, workspaceId])
+  @@index([workspaceId, roleDefinitionId])
+}
+
+model WorkspaceRoleDefinition {
+  id          String            @id @default(cuid())
+  workspaceId String
+  name        String
+  description String            @default("")
+  emoji       String?
+  iconId      String?
+  mode        WorkspaceRoleMode @default(ALLOWLIST)
+  version     Int               @default(1)
+  systemKey   String?
+
+  workspace   Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  permissions WorkspaceRolePermission[]
+  members     WorkspaceMember[]
+  icon        Icon?                     @relation("WorkspaceRoleIcon", fields: [iconId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, name])
+  @@unique([workspaceId, systemKey])
+  @@unique([id, workspaceId])
+  @@index([workspaceId, updatedAt])
+  @@index([workspaceId, iconId])
+}
+
+model WorkspaceRolePermission {
+  id            String                        @id @default(cuid())
+  roleId        String
+  permissionKey String
+  effect        WorkspaceRolePermissionEffect
+
+  role WorkspaceRoleDefinition @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionKey])
+  @@index([permissionKey])
 }
 
 model Account {
@@ -4205,6 +4271,7 @@ model Icon {
   createdByUser                User?                         @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   workspaceAvatars             Workspace[]                   @relation("WorkspaceAvatarIcon")
   workspaceMembers             WorkspaceMember[]
+  workspaceRoles               WorkspaceRoleDefinition[]        @relation("WorkspaceRoleIcon")
   accounts                     Account[]
   transactions                 Transaction[]
   transactionCategories        TransactionCategory[]

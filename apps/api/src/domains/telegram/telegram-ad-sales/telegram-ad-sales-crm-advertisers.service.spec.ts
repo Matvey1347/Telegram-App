@@ -64,7 +64,7 @@ function makeCrmAdvertiser(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function createService() {
+function createService(authorization?: any) {
   const prisma: any = {
     telegramAdCrmWorkspaceSettings: { findUnique: jest.fn() },
     telegramAdvertiser: { findMany: jest.fn(), count: jest.fn() },
@@ -77,6 +77,7 @@ function createService() {
   const service = new TelegramAdSalesCrmAdvertisersService(
     prisma,
     workspaceService as any,
+    authorization,
   );
   return { service, prisma, workspaceService };
 }
@@ -654,6 +655,27 @@ describe('TelegramAdSalesCrmAdvertisersService', () => {
         hasNextPage: false,
         hasPreviousPage: false,
       },
+    });
+  });
+
+  it('forces own CRM lists to the current member in the Prisma query', async () => {
+    const authorization = {
+      require: jest.fn().mockResolvedValue({ workspaceId: 'ws-1', memberId: 'member-1' }),
+      can: jest.fn(async (_userId: string, key: string) => key === 'adSales.crm.editOwn'),
+    };
+    const { service, prisma } = createService(authorization);
+    prisma.telegramAdCrmWorkspaceSettings.findUnique.mockResolvedValue(null);
+    prisma.telegramAdvertiser.findMany.mockReturnValue('advertisers-query');
+    prisma.telegramAdvertiser.count.mockReturnValue('count-query');
+    prisma.$transaction.mockResolvedValue([[], 0]);
+
+    await service.listCrmAdvertisers('user-1', { page: 1, pageSize: 25 });
+
+    expect(prisma.telegramAdvertiser.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ ownerMemberId: 'member-1' }) }),
+    );
+    expect(prisma.telegramAdvertiser.count).toHaveBeenCalledWith({
+      where: expect.objectContaining({ ownerMemberId: 'member-1' }),
     });
   });
 

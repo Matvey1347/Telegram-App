@@ -1,7 +1,11 @@
 export const AUTH_TOKEN_KEY = 'telegram_system_access_token';
 export const AUTH_RETURN_TO_KEY = 'telegram_system_auth_return_to';
 export const AUTH_TOKEN_CHANGED_EVENT = 'telegram-system-auth-token-changed';
-const AUTH_PATHS = new Set(['/login', '/register']);
+const AUTH_PATHS = new Set(['/login', '/register', '/forgot-password', '/reset-password']);
+
+export function isAuthPath(pathname: string): boolean {
+  return AUTH_PATHS.has(pathname);
+}
 
 export function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -57,7 +61,7 @@ export function normalizeAuthReturnTo(path?: string | null): string | null {
   if (!path || !path.startsWith('/')) return null;
   if (path.startsWith('//')) return null;
   const pathname = path.split(/[?#]/, 1)[0] || '/';
-  if (AUTH_PATHS.has(pathname)) return null;
+  if (isAuthPath(pathname)) return null;
   return path;
 }
 

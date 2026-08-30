@@ -11,7 +11,12 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { LoginDto, RegisterDto } from './dto';
-import type { EditorShortcutPreferences } from '@telegram-system/shared';
+import {
+  accessibleWorkspaceFeatureIds,
+  effectiveWorkspacePermissionKeys,
+  type EditorShortcutPreferences,
+} from '@telegram-system/shared';
+import { WorkspaceRole } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -24,7 +29,13 @@ export class AuthService {
   private async authResponse(userId: string) {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
-      select: { id: true, email: true, name: true, editorShortcuts: true },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        editorShortcuts: true,
+        authVersion: true,
+      },
     });
 
     const membership =
@@ -32,12 +43,34 @@ export class AuthService {
     const accessToken = await this.jwtService.signAsync({
       sub: user.id,
       email: user.email,
+      ver: user.authVersion,
     });
+    const permissionKeys = effectiveWorkspacePermissionKeys(
+      membership.roleDefinition
+        ? {
+            mode: membership.roleDefinition.mode,
+            permissionKeys: membership.roleDefinition.permissions.map(
+              ({ permissionKey }) => permissionKey,
+            ),
+          }
+        : { mode: 'ALLOWLIST', permissionKeys: [] },
+      membership.role === WorkspaceRole.owner,
+    );
+    const access = {
+      roleId: membership.roleDefinition?.id ?? null,
+      roleVersion: membership.roleDefinition?.version ?? 0,
+      isOwner: membership.role === WorkspaceRole.owner,
+      permissionKeys,
+      featureIds: [] as string[],
+    };
+    access.featureIds = accessibleWorkspaceFeatureIds(access);
 
     return {
       accessToken,
       user: {
-        ...user,
+        id: user.id,
+        email: user.email,
+        name: user.name,
         editorShortcuts:
           (user.editorShortcuts as EditorShortcutPreferences | null) ?? {},
       },
@@ -47,7 +80,10 @@ export class AuthService {
         timezone: membership.workspace.timezone,
         role: membership.role,
         avatarIcon: membership.workspace.avatarIcon ?? null,
-        avatarPresentation: iconToResolvedEmoji(membership.workspace.avatarIcon),
+        avatarPresentation: iconToResolvedEmoji(
+          membership.workspace.avatarIcon,
+        ),
+        access,
       },
     };
   }
