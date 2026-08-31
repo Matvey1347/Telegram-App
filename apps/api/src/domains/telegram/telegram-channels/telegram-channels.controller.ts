@@ -93,6 +93,13 @@ export class TelegramChannelsController {
   ) {
     return this.service.checkInlineButtonPublishingAccess(user.sub, id);
   }
+  @Post(':id/system-bot-access/check')
+  checkProductionSystemBotPublishingAccess(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+  ) {
+    return this.service.checkProductionSystemBotPublishingAccess(user.sub, id);
+  }
   @Post() create(
     @CurrentUser() user: JwtUser,
     @Body() dto: CreateTelegramChannelDto,

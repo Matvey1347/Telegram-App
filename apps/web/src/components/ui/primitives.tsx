@@ -883,7 +883,7 @@ export function CustomSelect({
   const showSearch = searchable && options.length > 5;
   const filteredOptions = showSearch
     ? options.filter((option) =>
-        option.label
+        `${option.label} ${option.meta ?? ""} ${option.value}`
           .toLocaleLowerCase()
           .includes(search.trim().toLocaleLowerCase()),
       )

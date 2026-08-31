@@ -71,7 +71,7 @@ import { AutoCalendarPlannerPreview } from "@/components/features/telegram/teleg
 import { CalendarPlanImport } from "@/components/features/telegram/telegram/calendar-plan-import";
 import { serializeCalendarPlanImport } from "@/components/features/telegram/telegram/calendar-plan-import-model";
 import { useManagedPostDeepLink } from "@/components/features/telegram/telegram/use-managed-post-deep-link";
-import { includeDeepLinkedManagedPost } from "@/components/features/telegram/telegram/managed-post-page";
+import { useManagedPostPageItems } from "@/components/features/telegram/telegram/managed-post-page";
 import {
   LongImageTextModePanel,
   PostStatusIcon,
@@ -124,14 +124,12 @@ import { MemberBadge } from "@/components/features/workspace/member-badge";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 import {
   iconsApi,
-  promptNotesApi,
   telegramAdSalesApi,
   telegramChannelsApi,
   workspaceMembersApi,
   type BulkActionResult,
   type BulkActionResultItem,
   type PostGroup,
-  type PromptNote,
   type ResolvedEmoji,
   type TelegramChannelSelectOption as TelegramChannel,
   type TelegramManagedPost,
@@ -196,7 +194,10 @@ import {
 import { useAppToast } from "@/providers/toast-provider";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
-import { BulkProgressOverlay, CalendarSummaryCard, ChannelMultiSelect, PromptNotesButton, type ProgressState } from "@/components/features/telegram/telegram/telegram-posts-workspace-controls";
+import {
+  BulkProgressOverlay,
+  type ProgressState,
+} from "@/components/features/telegram/telegram/telegram-posts-workspace-controls";
 type PublishingMode = "draft" | "publish" | "schedule";
 type PostStatusTab = ManagedPostStatusTab;
 type PostViewMode = Exclude<TelegramPostsRouteView, "groups">;
@@ -558,7 +559,6 @@ export function TelegramPostsPageClient({
   const [pageWorkspaceView, setPageWorkspaceView] = useState<
     "posts" | "groups"
   >(routePostView === "groups" || groupId ? "groups" : "posts");
-  const noteId = searchParams.get("noteId") || "";
   const initialPostView = (() => {
     if (routePostView) return routePostView;
     const value = searchParams.get("postView");
@@ -652,7 +652,6 @@ export function TelegramPostsPageClient({
       buildTelegramPostsUrl({
         channelId,
         postId: postId || null,
-        noteId: noteId || null,
         postView: "editor",
       }),
     );
@@ -660,7 +659,6 @@ export function TelegramPostsPageClient({
     channelId,
     groupId,
     initialPostView,
-    noteId,
     postId,
     routeChannelIdValue,
     router,
@@ -832,7 +830,6 @@ export function TelegramPostsPageClient({
             onImportModeChange={setImportMode}
             initialPostId={postId}
             initialGroupId={groupId}
-            initialNoteId={noteId}
             initialPostView={initialPostView}
             channels={availableChannels}
             onWorkspaceViewChange={setPageWorkspaceView}
@@ -869,7 +866,6 @@ function TelegramPostWorkspace({
   onImportModeChange,
   initialPostId,
   initialGroupId,
-  initialNoteId,
   initialPostView,
   channels,
   onWorkspaceViewChange,
@@ -894,7 +890,6 @@ function TelegramPostWorkspace({
   onImportModeChange: (mode: ChannelImportMode | null) => void;
   initialPostId: string;
   initialGroupId: string;
-  initialNoteId: string;
   initialPostView: InitialPostView;
   channels: TelegramChannel[];
   onWorkspaceViewChange: (view: "posts" | "groups") => void;
@@ -1089,10 +1084,10 @@ function TelegramPostWorkspace({
   const deepLinkedPost = useManagedPostDeepLink({
     channelId, postId: initialPostId, queryClient,
   });
-  const pagePosts = postsPage.data?.items ?? [];
+  const postsData = useManagedPostPageItems(postsPage.data?.items, deepLinkedPost.data);
   const posts = {
     ...postsPage,
-    data: includeDeepLinkedManagedPost(pagePosts, deepLinkedPost.data),
+    data: postsData,
   };
   const customEmojiPacks = useQuery({
     queryKey: telegramChannelKeys.customEmojiPacks(channelId),
@@ -1163,11 +1158,6 @@ function TelegramPostWorkspace({
     queryKey: telegramPostKeys.plannerSlots(channelId),
     queryFn: () => telegramChannelsApi.postPlannerSlots(channelId),
     enabled: false,
-  });
-  const promptNotes = useQuery({
-    queryKey: ["prompt-notes", { telegramChannelId: channelId }],
-    queryFn: () => promptNotesApi.list({ telegramChannelId: channelId }),
-    enabled: workspaceView === "posts" && postView === "editor",
   });
   const members = useQuery({
     queryKey: memberKeys.membersSelect(),
@@ -1909,7 +1899,6 @@ function TelegramPostWorkspace({
       buildTelegramPostsUrl({
         channelId,
         postId: editing?.id || initialPostId || null,
-        noteId: initialNoteId || null,
         postView: next,
       }),
     );
@@ -3668,18 +3657,6 @@ function TelegramPostWorkspace({
               <Clock3 size={15} />
               Calendar
             </button>
-          </div>
-        ) : null}
-        {workspaceView === "posts" ? (
-          <div className="ml-auto">
-            <PromptNotesButton
-              channelId={channelId}
-              notes={promptNotes.data || []}
-              isLoading={promptNotes.isLoading}
-              channels={channels}
-              currentMemberId={currentMemberId}
-              initialNoteId={initialNoteId}
-            />
           </div>
         ) : null}
       </div>

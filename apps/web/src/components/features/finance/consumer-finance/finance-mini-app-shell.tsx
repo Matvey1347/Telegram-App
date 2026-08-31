@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import type { FinanceCopy } from "./finance-i18n";
+import type { FinanceLocale } from "./finance-i18n";
 import type { ConsumerFinanceScreen } from "./consumer-finance-screens";
 import {
   isMoreScreen,
@@ -23,6 +24,7 @@ import {
   type ConsumerFinanceAction,
 } from "./consumer-finance-navigation";
 import { ConsumerFinanceActionLauncher } from "./consumer-finance-action-launcher";
+import { FinanceLanguageSelect } from "./ui/finance-language-select";
 
 const PRIMARY = [
   { id: "home", key: "overview", Icon: Landmark },
@@ -42,6 +44,10 @@ export function FinanceMiniAppShell({
   logoUrl,
   screen,
   copy,
+  locale,
+  onLocaleChange,
+  localeChanging = false,
+  localeDisabled = false,
   children,
   onNavigate,
   onAction,
@@ -52,6 +58,10 @@ export function FinanceMiniAppShell({
   logoUrl?: string;
   screen: ConsumerFinanceScreen;
   copy: FinanceCopy;
+  locale: FinanceLocale;
+  onLocaleChange: (locale: FinanceLocale) => void;
+  localeChanging?: boolean;
+  localeDisabled?: boolean;
   children: React.ReactNode;
   onNavigate: (screen: ConsumerFinanceScreen) => void;
   onAction: (action: ConsumerFinanceAction) => void;
@@ -73,7 +83,7 @@ export function FinanceMiniAppShell({
       <div className="mx-auto flex min-h-dvh w-full max-w-2xl">
         <div className="min-w-0 flex-1">
           <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between border-b border-neutral-800 bg-neutral-950/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur">
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
               <img
                 src={logoUrl || "/brand/finance.png"}
                 alt=""
@@ -82,28 +92,37 @@ export function FinanceMiniAppShell({
                   event.currentTarget.src = "/brand/finance.png";
                 }}
               />
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs uppercase tracking-[0.18em] text-sky-300">
                   {copy.personalFinance}
                 </p>
-                <h1 className="text-lg font-semibold">
+                <h1 className="truncate text-lg font-semibold">
                   {financeScreenLabel(copy, screen)}
                 </h1>
               </div>
             </div>
-            {onOpenBrowser ? (
-              <button
-                type="button"
-                disabled={openingBrowser}
-                onClick={onOpenBrowser}
-                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-neutral-700 px-3 text-sm text-neutral-200 outline-none focus-visible:ring-2 focus-visible:ring-sky-300 disabled:opacity-50"
-              >
-                <ExternalLink size={17} aria-hidden="true" />
-                <span className="hidden sm:inline">
-                  {openingBrowser ? copy.openingBrowser : copy.openBrowser}
-                </span>
-              </button>
-            ) : null}
+            <div className="flex shrink-0 items-center gap-2">
+              <FinanceLanguageSelect
+                compact
+                copy={copy}
+                value={locale}
+                onChange={onLocaleChange}
+                disabled={localeChanging || localeDisabled}
+              />
+              {onOpenBrowser ? (
+                <button
+                  type="button"
+                  disabled={openingBrowser}
+                  onClick={onOpenBrowser}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-neutral-700 px-3 text-sm text-neutral-200 outline-none focus-visible:ring-2 focus-visible:ring-sky-300 disabled:opacity-50"
+                >
+                  <ExternalLink size={17} aria-hidden="true" />
+                  <span className="hidden sm:inline">
+                    {openingBrowser ? copy.openingBrowser : copy.openBrowser}
+                  </span>
+                </button>
+              ) : null}
+            </div>
           </header>
           {browserOpenError ? (
             <p role="alert" className="px-4 pt-3 text-sm text-rose-300">

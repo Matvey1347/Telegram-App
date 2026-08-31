@@ -12,6 +12,22 @@ export type TelegramSystemBotConnectionStatus = {
   runtimeEnvironment?: "LOCAL" | "PRODUCTION" | null;
 };
 
+export type TelegramChannelSystemBotConnectionStatus =
+  | "CONNECTED"
+  | "NOT_CONNECTED"
+  | "MISSING_POST_PERMISSION"
+  | "UNVERIFIED"
+  | "NOT_CONFIGURED";
+
+/** Last known publishing access for the workspace System Bot in one channel. */
+export type TelegramChannelSystemBotConnection = {
+  connected: boolean;
+  status: TelegramChannelSystemBotConnectionStatus;
+  botUsername: string | null;
+  lastCheckedAt: string | null;
+  requiredPermission: "POST_MESSAGES";
+};
+
 export type TelegramSystemBotLinkPreview = {
   expiresAt: string;
   telegramUsername: string | null;

@@ -6,7 +6,6 @@ type TelegramPostsUrlInput = {
   channelId?: string | null;
   postId?: string | null;
   groupId?: string | null;
-  noteId?: string | null;
   postView?: TelegramPostsRouteView | null;
   extraParams?: URLSearchParams | string | null;
 };
@@ -15,7 +14,6 @@ const ownedTelegramPostsParams = [
   "channelId",
   "postId",
   "groupId",
-  "noteId",
   "postView",
 ];
 
@@ -32,7 +30,6 @@ export function buildTelegramPostsUrl({
   channelId,
   postId,
   groupId,
-  noteId,
   postView,
   extraParams,
 }: TelegramPostsUrlInput) {
@@ -44,10 +41,8 @@ export function buildTelegramPostsUrl({
   const normalizedChannelId = trimValue(channelId);
   const normalizedPostId = trimValue(postId);
   const normalizedGroupId = trimValue(groupId);
-  const normalizedNoteId = trimValue(noteId);
 
   if (normalizedPostId) params.set("postId", normalizedPostId);
-  if (normalizedNoteId) params.set("noteId", normalizedNoteId);
 
   if (normalizedChannelId && (postView === "groups" || normalizedGroupId)) {
     if (normalizedGroupId) params.set("groupId", normalizedGroupId);
@@ -86,7 +81,6 @@ export function buildTelegramPostsLegacyRedirectUrl(
   return buildTelegramPostsUrl({
     channelId,
     postId: searchParams.get("postId"),
-    noteId: searchParams.get("noteId"),
     postView,
     extraParams: searchParams.toString(),
   });

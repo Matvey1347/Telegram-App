@@ -34,6 +34,7 @@ import { TelegramPostMetricsService } from './telegram-post-metrics.service';
 @Injectable()
 export class TelegramChannelsService {
   checkInlineButtonPublishingAccess: TelegramChannelAccessService['checkInlineButtonPublishingAccess'];
+  checkProductionSystemBotPublishingAccess: TelegramChannelAccessService['checkProductionSystemBotPublishingAccess'];
   ensureTelegramChannelImportPolicyColumnsAvailable: TelegramChannelSchemaCompatibilityService['ensureTelegramChannelImportPolicyColumnsAvailable'];
   resolveChannelImportPolicy: TelegramChannelImportPolicyService['resolveChannelImportPolicy'];
   reattributeWorkspaceInviteLinks: TelegramInviteAttributionService['reattributeWorkspaceInviteLinks'];
@@ -149,6 +150,8 @@ export class TelegramChannelsService {
   ) {
     this.checkInlineButtonPublishingAccess =
       access.checkInlineButtonPublishingAccess.bind(access);
+    this.checkProductionSystemBotPublishingAccess =
+      access.checkProductionSystemBotPublishingAccess.bind(access);
     this.ensureTelegramChannelImportPolicyColumnsAvailable =
       schema.ensureTelegramChannelImportPolicyColumnsAvailable.bind(schema);
     this.resolveChannelImportPolicy =

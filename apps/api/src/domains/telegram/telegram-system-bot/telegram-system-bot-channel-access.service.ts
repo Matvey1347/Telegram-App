@@ -4,6 +4,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { sanitizeOperationalError } from '../../../common/security/operational-error';
 import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
 import {
+  TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID,
   TELEGRAM_SYSTEM_BOT_SOURCE_ID,
   TelegramSourceAccessService,
   type TelegramSourcePermissions,
@@ -248,7 +249,10 @@ export class TelegramSystemBotChannelAccessService {
     return this.sourceAccess.upsertAccess({
       workspaceId: channel.workspaceId,
       channelId: channel.id,
-      sourceId: TELEGRAM_SYSTEM_BOT_SOURCE_ID,
+      sourceId:
+        this.config.environment === 'PRODUCTION'
+          ? TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID
+          : TELEGRAM_SYSTEM_BOT_SOURCE_ID,
       sourceType: TelegramSourceType.BOT,
       role: access.role,
       permissions: access.permissions,

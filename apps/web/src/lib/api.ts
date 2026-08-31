@@ -28,7 +28,6 @@ import { createFinanceApi } from "./features/finance/finance-api";
 import { createTelegramChannelHelpers } from "./features/telegram/telegram-channel-helpers-api";
 import { createTelegramChannelsApi } from "./features/telegram/telegram-channels-api";
 import { createMarketingApi } from "./features/growth/marketing-api";
-import { createPromptNotesApi } from "./features/operations/prompt-notes-api";
 import { createTelegramSourcesApi } from "./features/telegram/telegram-sources-api";
 import { createTelegramAdSalesApi } from "./features/growth/telegram-ad-sales-api";
 import { createScheduledTasksApi } from "./features/operations/scheduled-tasks-api";
@@ -498,7 +497,6 @@ export type {
   PostGroup,
   PostGroupStatusSummary,
   Promo,
-  PromptNote,
   ResolvedEmoji,
   TelegramAccountChannelImportItem,
   TelegramAnalyticsSources,
@@ -645,14 +643,6 @@ export const {
 
 export const telegramSystemBotApi = createTelegramSystemBotApi(api);
 export const greeterApi = createGreeterApi(api);
-
-export const promptNotesApi = createPromptNotesApi({
-  api,
-  getPaginated,
-  getAllPaginatedItems,
-  hasExplicitPagination,
-  silentFeedbackConfig,
-});
 
 const financeApi = createFinanceApi({
   api,

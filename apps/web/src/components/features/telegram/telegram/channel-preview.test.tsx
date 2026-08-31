@@ -14,6 +14,7 @@ describe("ChannelPreview", () => {
             bookingSchedule: { pendingJoinRequests: 302 },
           },
         }}
+        status={<span>Bot connected</span>}
       />,
     );
 
@@ -26,13 +27,12 @@ describe("ChannelPreview", () => {
     expect(screen.getByLabelText("Pending join requests")).toBeInTheDocument();
     expect(screen.getByText("302")).toBeInTheDocument();
     expect(screen.queryByText("pending")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Subscribers").parentElement).toBe(
+    const requestRow = screen.getByLabelText("Pending join requests")
+      .parentElement?.parentElement;
+    expect(screen.getByText("Bot connected").parentElement).toBe(requestRow);
+    expect(screen.getByLabelText("Subscribers").parentElement).not.toBe(
       screen.getByLabelText("Pending join requests").parentElement,
     );
-    expect(screen.getByLabelText("Subscribers").parentElement).toHaveClass(
-      "grid-cols-[max-content_14px]",
-    );
-    expect(screen.getByText("302")).toHaveClass("justify-self-end");
   });
 
   it("does not show a zero view rate when audience data is missing", () => {

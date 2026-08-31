@@ -2,8 +2,19 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { WorkspaceRoleContract } from "@telegram-system/shared";
-import { Copy, Pencil, Plus, ShieldCheck, Trash2, Users } from "lucide-react";
+import type {
+  FeatureDefinition,
+  WorkspaceRoleContract,
+} from "@telegram-system/shared";
+import {
+  CalendarClock,
+  Copy,
+  Pencil,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { ActionMenu, ActionMenuItem } from "@/components/ui/action-menu";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import {
@@ -22,10 +33,76 @@ import {
   type WorkspaceRoleInput,
 } from "@/lib/features/workspace/workspace-roles-api";
 import { RoleEditor } from "./role-editor";
+import { permissionIsEnabled } from "./role-copy";
 
 type AssignableMember = Awaited<
   ReturnType<typeof workspaceMembersApi.select>
 >[number];
+
+function RoleCapabilityBadges({
+  role,
+  features,
+}: {
+  role: WorkspaceRoleContract;
+  features: readonly FeatureDefinition[];
+}) {
+  const configured = new Set(role.permissionKeys);
+  const enabled = features.flatMap((feature) =>
+    feature.permissions.filter(
+      (permission) =>
+        role.systemKey === "OWNER" ||
+        permissionIsEnabled(role.mode, configured, permission.id),
+    ),
+  );
+  const badges = [
+    {
+      label: "Full access",
+      visible:
+        role.systemKey === "OWNER" ||
+        role.summaries.some((summary) => summary.level === "manage"),
+      Icon: ShieldCheck,
+      tone: "text-blue-300",
+    },
+    {
+      label: "Edit",
+      visible: enabled.some((item) =>
+        ["editOwn", "editAny"].includes(item.capability),
+      ),
+      Icon: Pencil,
+      tone: "text-emerald-300",
+    },
+    {
+      label: "Delete",
+      visible: enabled.some((item) =>
+        ["deleteOwn", "deleteAny", "delete"].includes(item.capability),
+      ),
+      Icon: Trash2,
+      tone: "text-rose-300",
+    },
+    {
+      label: "Schedule",
+      visible: enabled.some((item) => item.capability === "schedule"),
+      Icon: CalendarClock,
+      tone: "text-amber-300",
+    },
+  ].filter((badge) => badge.visible);
+
+  if (!badges.length) return null;
+  return (
+    <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Role capabilities">
+      {badges.map(({ label, Icon, tone }) => (
+        <span
+          key={label}
+          title={label}
+          className={`inline-flex h-7 w-7 items-center justify-center rounded-md border border-neutral-800 bg-neutral-950 ${tone}`}
+        >
+          <Icon size={14} aria-hidden="true" />
+          <span className="sr-only">{label}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
 
 export function RolesWorkspace() {
   const qc = useQueryClient();
@@ -140,11 +217,18 @@ export function RolesWorkspace() {
                     className="!h-10 !w-10 rounded-lg bg-neutral-950"
                   />
                 ) : role.emoji ? (
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-950 text-xl" aria-hidden="true">
+                  <span
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-950 text-xl"
+                    aria-hidden="true"
+                  >
                     {role.emoji}
                   </span>
                 ) : (
-                  <IconAvatar label={role.name} size="md" className="!h-10 !w-10 rounded-lg bg-neutral-950" />
+                  <IconAvatar
+                    label={role.name}
+                    size="md"
+                    className="!h-10 !w-10 rounded-lg bg-neutral-950"
+                  />
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -208,15 +292,10 @@ export function RolesWorkspace() {
                   features
                 </span>
               </div>
-              <p className="mt-2 line-clamp-2 text-xs leading-5 text-neutral-500">
-                {role.systemKey === "OWNER"
-                  ? "Full protected access to every current and future workspace feature."
-                  : role.mode === "DENYLIST"
-                    ? "Broad access with explicit exceptions."
-                    : visible.length
-                      ? `Access to ${visible.map((item) => item.featureId).join(", ")}.`
-                      : "No feature access configured."}
-              </p>
+              <RoleCapabilityBadges
+                role={role}
+                features={registry.data?.features ?? []}
+              />
             </Card>
           );
         })}
@@ -261,6 +340,12 @@ export function RolesWorkspace() {
                     return next;
                   })
                 }
+              />
+              <IconAvatar
+                icon={member.avatarPresentation}
+                label={member.user.name}
+                size="sm"
+                className="!h-9 !w-9 shrink-0 rounded-lg bg-neutral-950"
               />
               <span className="min-w-0">
                 <span className="block truncate text-sm text-white">

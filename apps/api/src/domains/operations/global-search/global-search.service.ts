@@ -62,7 +62,6 @@ export class GlobalSearchService {
       hypotheses,
       managedPosts,
       postGroups,
-      promptNotes,
     ] = await Promise.all([
       allowed('finance')
         ? this.prisma.transaction.findMany({
@@ -291,42 +290,9 @@ export class GlobalSearchService {
               telegramChannel: {
                 select: { id: true, title: true, photoUrl: true },
               },
-              _count: { select: { posts: true, promptNotes: true } },
+              _count: { select: { posts: true } },
             },
             take: 8,
-            orderBy: { updatedAt: 'desc' },
-          })
-        : Promise.resolve([] as any[]),
-      allowed('posts')
-        ? this.prisma.promptNote.findMany({
-            where: {
-              workspaceId,
-              OR: [
-                ...textMatches('title', query),
-                ...textMatches('content', query),
-                ...textMatches('emoji', query),
-                ...relationTextMatches('postGroup', 'title', query),
-                ...relationTextMatches('postGroup', 'description', query),
-              ],
-            },
-            include: {
-              icon: {
-                select: {
-                  id: true,
-                  type: true,
-                  name: true,
-                  imageUrl: true,
-                  emoji: true,
-                },
-              },
-              telegramChannel: {
-                select: { id: true, title: true, photoUrl: true },
-              },
-              postGroup: {
-                select: { id: true, title: true, telegramChannelId: true },
-              },
-            },
-            take: 10,
             orderBy: { updatedAt: 'desc' },
           })
         : Promise.resolve([] as any[]),
@@ -497,40 +463,10 @@ export class GlobalSearchService {
           subtitle: [
             group.telegramChannel.title,
             `${group._count.posts} post${group._count.posts === 1 ? '' : 's'}`,
-            `${group._count.promptNotes} note${group._count.promptNotes === 1 ? '' : 's'}`,
           ].join(' · '),
           href: `/telegram-posts?channelId=${encodeURIComponent(group.telegramChannelId)}&groupId=${encodeURIComponent(group.id)}`,
           iconUrl: icon?.imageUrl || group.telegramChannel.photoUrl,
           iconEmoji: icon?.emoji,
-        };
-      }),
-      ...promptNotes.map((note): SearchResult => {
-        const targetChannelId =
-          note.telegramChannelId ||
-          note.postGroup?.telegramChannelId ||
-          note.telegramChannelIds[0] ||
-          '';
-        const title =
-          note.title.trim() ||
-          note.content.trim().split('\n')[0] ||
-          'Prompt note';
-        const channelSubtitle =
-          note.telegramChannel?.title ||
-          note.postGroup?.title ||
-          (note.telegramChannelIds.length > 1
-            ? `${note.telegramChannelIds.length} channels`
-            : null);
-        return {
-          id: note.id,
-          type: 'prompt-note',
-          label: 'Prompt note',
-          title,
-          subtitle: channelSubtitle,
-          href: targetChannelId
-            ? `/telegram-posts/${encodeURIComponent(targetChannelId)}/editor?noteId=${encodeURIComponent(note.id)}`
-            : '/telegram-posts',
-          ...this.iconResult(note.icon),
-          iconEmoji: this.iconResult(note.icon).iconEmoji || note.emoji,
         };
       }),
     ]);

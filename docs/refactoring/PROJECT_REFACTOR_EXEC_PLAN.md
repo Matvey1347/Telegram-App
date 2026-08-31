@@ -1,6 +1,25 @@
 # Project Refactor ExecPlan
 
-Updated: 2026-08-28
+Updated: 2026-08-30
+
+## 2026-08-30 Cross-stack operations slice
+
+The workspace members, Ad Sales, Telegram channel sync, and Internal Finance
+flows were extended together while reducing transitional file debt:
+
+- the workspace member modal was extracted from the members section and its
+  redundant nested framed surfaces were removed;
+- Ad Sales client selection and placement lifecycle presentation were extracted
+  into focused components, and publication refresh is bounded to an active due
+  event instead of idle polling;
+- workspace-wide manual channel sync reuses the canonical channel orchestrator
+  through one server request and sequential per-channel execution;
+- transaction category/member validation was extracted from the transactions
+  service while adding the system Salary expense category.
+
+The slice adds no production cron, recurring idle work, schema migration, or
+per-entity browser joins. Shrinking-only architecture baselines are lowered in
+the same change after the final measured scan.
 
 ## Current State
 

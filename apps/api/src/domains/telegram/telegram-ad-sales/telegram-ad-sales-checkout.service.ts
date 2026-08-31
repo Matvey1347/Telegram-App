@@ -11,8 +11,6 @@ import {
   TelegramAdSalePaymentStatus,
   TelegramAdSaleStatus,
   TelegramAdvertiserActivityType,
-  TelegramAdvertiserLifecycleStage,
-  TelegramAdvertiserStatus,
   TransactionType,
 } from '@prisma/client';
 import {
@@ -35,6 +33,7 @@ import {
   CreateTelegramAdSaleCheckoutPaymentDto,
 } from './dto';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
+import { TelegramAdvertiserCheckoutResolverService } from './telegram-advertiser-checkout-resolver.service';
 
 type CheckoutProduct = Prisma.TelegramAdProductGetPayload<
   Record<string, never>
@@ -80,6 +79,7 @@ export class TelegramAdSalesCheckoutService {
     private readonly logger: ApplicationLoggerService,
     private readonly responseCache: ResponseCacheService,
     private readonly salesService: TelegramAdSalesService,
+    private readonly advertiserResolver: TelegramAdvertiserCheckoutResolverService = new TelegramAdvertiserCheckoutResolverService(),
   ) {}
 
   async create(
@@ -485,26 +485,17 @@ export class TelegramAdSalesCheckoutService {
       throw new NotFoundException('Advertising revenue category not found');
 
     const saleId = await this.prisma.$transaction(async (tx) => {
-      let advertiserId = advertiser?.id ?? null;
-      if (!advertiserId && dto.createAdvertiser) {
-        const createdAdvertiser = await tx.telegramAdvertiser.create({
-          data: {
-            workspaceId,
-            displayName: dto.advertiserName.trim(),
-            companyName: dto.advertiserCompanyName?.trim() || null,
-            telegramUsername: this.normalizeTelegramUsername(
-              dto.advertiserTelegram,
-            ),
-            phone: this.normalizePhone(dto.advertiserContact),
-            email: this.normalizeEmail(dto.advertiserContact),
-            ownerMemberId: assignedMemberId,
-            createdByUserId: userId,
-            status: TelegramAdvertiserStatus.LEAD,
-            lifecycleStage: TelegramAdvertiserLifecycleStage.NEW,
-          },
-        });
-        advertiserId = createdAdvertiser.id;
-      }
+      const resolvedAdvertiser = await this.advertiserResolver.resolve(
+        tx,
+        dto,
+        {
+          workspaceId,
+          userId,
+          ownerMemberId: assignedMemberId,
+          selected: advertiser,
+        },
+      );
+      const advertiserId = resolvedAdvertiser?.id ?? null;
       const sale = await tx.telegramAdSale.create({
         data: {
           workspaceId,
@@ -513,12 +504,12 @@ export class TelegramAdSalesCheckoutService {
           advertiserTelegram: dto.advertiserTelegram?.trim() || null,
           advertiserContact: dto.advertiserContact?.trim() || null,
           advertiserNameSnapshot:
-            advertiser?.displayName ?? dto.advertiserName.trim(),
+            resolvedAdvertiser?.displayName ?? dto.advertiserName.trim(),
           advertiserTelegramSnapshot:
-            advertiser?.telegramUsername ??
+            resolvedAdvertiser?.telegramUsername ??
             this.normalizeTelegramUsername(dto.advertiserTelegram),
           advertiserCompanySnapshot:
-            advertiser?.companyName ??
+            resolvedAdvertiser?.companyName ??
             (dto.advertiserCompanyName?.trim() || null),
           origin: dto.origin,
           settlementCurrency: dto.settlementCurrency,
@@ -685,14 +676,5 @@ export class TelegramAdSalesCheckoutService {
 
   private normalizeTelegramUsername(value?: string | null) {
     return value?.trim().replace(/^@+/, '').toLowerCase() || null;
-  }
-
-  private normalizePhone(value?: string | null) {
-    if (!value || value.includes('@')) return null;
-    return value.trim().replace(/[^\d+]/g, '') || null;
-  }
-
-  private normalizeEmail(value?: string | null) {
-    return value?.includes('@') ? value.trim().toLowerCase() : null;
   }
 }

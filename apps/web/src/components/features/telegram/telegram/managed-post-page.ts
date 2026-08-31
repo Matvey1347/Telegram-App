@@ -1,11 +1,28 @@
 import type { TelegramManagedPost } from "@/lib/api";
+import { useMemo } from "react";
+
+const EMPTY_MANAGED_POSTS: TelegramManagedPost[] = [];
 
 export function includeDeepLinkedManagedPost(
-  pageItems: TelegramManagedPost[],
+  pageItems: TelegramManagedPost[] | undefined,
   deepLinkedPost?: TelegramManagedPost | null,
 ) {
-  if (!deepLinkedPost || pageItems.some((post) => post.id === deepLinkedPost.id)) {
-    return pageItems;
+  const resolvedPageItems = pageItems ?? EMPTY_MANAGED_POSTS;
+  if (
+    !deepLinkedPost ||
+    resolvedPageItems.some((post) => post.id === deepLinkedPost.id)
+  ) {
+    return resolvedPageItems;
   }
-  return [...pageItems, deepLinkedPost];
+  return [...resolvedPageItems, deepLinkedPost];
+}
+
+export function useManagedPostPageItems(
+  pageItems: TelegramManagedPost[] | undefined,
+  deepLinkedPost?: TelegramManagedPost | null,
+) {
+  return useMemo(
+    () => includeDeepLinkedManagedPost(pageItems, deepLinkedPost),
+    [deepLinkedPost, pageItems],
+  );
 }

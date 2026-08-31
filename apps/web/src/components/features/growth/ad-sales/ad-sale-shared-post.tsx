@@ -21,6 +21,7 @@ export function AdSaleSharedPost({
   placements,
   channels,
   mode,
+  systemBotConnected,
   systemBotUsername,
   onSystemBotReturn,
   onPrepareSystemBot,
@@ -31,6 +32,7 @@ export function AdSaleSharedPost({
   placements: SalePlacementDraft[];
   channels: TelegramChannel[];
   mode: "shared" | "individual";
+  systemBotConnected?: boolean;
   systemBotUsername?: string | null;
   onSystemBotReturn?: (
     workflowId: string,
@@ -115,41 +117,52 @@ export function AdSaleSharedPost({
     (placement) =>
       placement.date >= channelLocalDateKey(new Date(), placement.timezone),
   );
-  if (placements.length < 2) return null;
+  if (!placements.length) return null;
+  const isSinglePlacement = placements.length === 1;
+  const normalizedSystemBotUsername = systemBotUsername
+    ?.trim()
+    .replace(/^@+/, "");
+  const systemBotConnectUrl = normalizedSystemBotUsername
+    ? `https://t.me/${encodeURIComponent(normalizedSystemBotUsername)}?start=connect`
+    : null;
   return (
     <section className="rounded-xl border border-blue-900/70 bg-blue-950/20 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium text-white">Advertising post</p>
-            <Tooltip
-              align="left"
-              content="Turn on to create one post from scratch for all channels. You can edit an individual channel copy later."
-            >
-              <button
-                type="button"
-                role="switch"
-                aria-checked={mode === "shared"}
-                aria-label="Use one advertising post for all channels"
-                onClick={() =>
-                  onModeChange(mode === "shared" ? "individual" : "shared")
-                }
-                className={`relative inline-flex h-5 w-9 items-center rounded-full border transition ${mode === "shared" ? "border-blue-500/70 bg-blue-500/30" : "border-neutral-700 bg-neutral-900"}`}
+            {!isSinglePlacement ? (
+              <Tooltip
+                align="left"
+                content="Turn on to create one post from scratch for all channels. You can edit an individual channel copy later."
               >
-                <span
-                  className={`absolute h-3.5 w-3.5 rounded-full bg-white transition ${mode === "shared" ? "left-[17px]" : "left-1"}`}
-                />
-              </button>
-            </Tooltip>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={mode === "shared"}
+                  aria-label="Use one advertising post for all channels"
+                  onClick={() =>
+                    onModeChange(mode === "shared" ? "individual" : "shared")
+                  }
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full border transition ${mode === "shared" ? "border-blue-500/70 bg-blue-500/30" : "border-neutral-700 bg-neutral-900"}`}
+                >
+                  <span
+                    className={`absolute h-3.5 w-3.5 rounded-full bg-white transition ${mode === "shared" ? "left-[17px]" : "left-1"}`}
+                  />
+                </button>
+              </Tooltip>
+            ) : null}
           </div>
           <p className="text-xs text-neutral-400">
-            {mode === "shared"
-              ? "One post for every channel; each copy can be edited later."
-              : "Configure every channel separately."}
+            {isSinglePlacement
+              ? "Create or import the post that will be published in this channel."
+              : mode === "shared"
+                ? "One post for every channel; each copy can be edited later."
+                : "Configure every channel separately."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {mode === "shared" && systemBotUsername ? (
+          {mode === "shared" && systemBotConnected === true ? (
             draftHasContent && draft && onSendSystemBotPost ? (
               <Button
                 type="button"
@@ -184,7 +197,7 @@ export function AdSaleSharedPost({
               </Button>
             ) : null
           ) : null}
-          {mode === "shared" && systemBotUsername ? (
+          {mode === "shared" && systemBotConnected === true ? (
             <Button
               type="button"
               variant="secondary"
@@ -230,6 +243,18 @@ export function AdSaleSharedPost({
                 "Add new post from bot"
               )}
             </Button>
+          ) : null}
+          {mode === "shared" &&
+          systemBotConnected !== true &&
+          systemBotConnectUrl ? (
+            <a
+              href={systemBotConnectUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-8 items-center rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-xs font-medium text-neutral-100 transition hover:border-neutral-600 hover:bg-neutral-800"
+            >
+              Connect bot
+            </a>
           ) : null}
           {mode === "shared" ? (
             <Button

@@ -5,9 +5,11 @@ import {
 } from '@nestjs/common';
 import {
   TelegramChannelDataType,
+  TelegramChannelSourceRole,
   TelegramSourceType,
   TelegramUserAccountStatus,
 } from '@prisma/client';
+import type { TelegramChannelSystemBotConnection } from '@telegram-system/shared';
 import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
 import {
   isProductionEnvironment,
@@ -58,6 +60,122 @@ export class TelegramChannelAccessService {
       workspaceId,
       channelId,
     );
+  }
+
+  async checkProductionSystemBotPublishingAccess(
+    userId: string,
+    channelId: string,
+  ): Promise<TelegramChannelSystemBotConnection> {
+    const workspaceId =
+      await this.telegramChannelsSupportService.workspace(userId);
+    const channel = await this.prisma.telegramChannel.findFirst({
+      where: { id: channelId, workspaceId, isActive: true },
+      select: { id: true, username: true, telegramChatId: true },
+    });
+    if (!channel) throw new NotFoundException('Telegram channel not found');
+
+    const token = this.systemBotConfig.productionToken;
+    if (!token) {
+      return this.systemBotConnectionResult({ status: 'NOT_CONFIGURED' });
+    }
+
+    const bot = await this.botApiClient.getMe(token);
+    const botUsername = bot.username || this.systemBotConfig.productionUsername;
+    const chatId = this.botChatId(channel);
+    if (!chatId) {
+      await this.recordMissingProductionSystemBotAccess(
+        workspaceId,
+        channel.id,
+        {
+          status: 'channel_reference_missing',
+        },
+      );
+      return this.systemBotConnectionResult({
+        status: 'NOT_CONNECTED',
+        botUsername,
+        checked: true,
+      });
+    }
+
+    let member: Record<string, unknown>;
+    try {
+      member = await this.botApiClient.getChatMember(
+        token,
+        chatId,
+        String(bot.id),
+      );
+    } catch (error) {
+      if (
+        !(error instanceof TelegramBotApiError) ||
+        error.kind === 'TRANSIENT'
+      ) {
+        throw error;
+      }
+      await this.recordMissingProductionSystemBotAccess(
+        workspaceId,
+        channel.id,
+        {
+          status: 'not_connected',
+        },
+      );
+      return this.systemBotConnectionResult({
+        status: 'NOT_CONNECTED',
+        botUsername,
+        checked: true,
+      });
+    }
+
+    const normalized = this.sourceAccessService.normalizeBotPermissions(member);
+    await this.sourceAccessService.upsertAccess({
+      workspaceId,
+      channelId: channel.id,
+      sourceId: TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID,
+      sourceType: TelegramSourceType.BOT,
+      role: normalized.role,
+      permissions: normalized.permissions,
+      rawPermissions: member,
+    });
+    return this.systemBotConnectionResult({
+      status: normalized.permissions.canPostMessages
+        ? 'CONNECTED'
+        : 'MISSING_POST_PERMISSION',
+      botUsername,
+      checked: true,
+    });
+  }
+
+  private recordMissingProductionSystemBotAccess(
+    workspaceId: string,
+    channelId: string,
+    rawPermissions: Record<string, unknown>,
+  ) {
+    return this.sourceAccessService.upsertAccess({
+      workspaceId,
+      channelId,
+      sourceId: TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID,
+      sourceType: TelegramSourceType.BOT,
+      role: TelegramChannelSourceRole.UNKNOWN,
+      permissions: this.sourceAccessService.emptyPermissions(),
+      rawPermissions,
+    });
+  }
+
+  private systemBotConnectionResult({
+    status,
+    botUsername = null,
+    checked = false,
+  }: {
+    status: TelegramChannelSystemBotConnection['status'];
+    botUsername?: string | null;
+    checked?: boolean;
+  }): TelegramChannelSystemBotConnection {
+    return {
+      connected: status === 'CONNECTED',
+      status,
+      botUsername: botUsername?.replace(/^@/, '') || null,
+      lastCheckedAt: checked ? new Date().toISOString() : null,
+      requiredPermission: 'POST_MESSAGES',
+    };
   }
 
   async checkProductionBotPublishingAccess(userId: string, channelId: string) {

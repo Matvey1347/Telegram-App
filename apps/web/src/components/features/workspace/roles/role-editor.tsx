@@ -6,6 +6,7 @@ import type {
   WorkspaceRoleContract,
   WorkspaceRoleMode,
 } from "@telegram-system/shared";
+import { Eye, EyeOff, ShieldCheck, UserRound } from "lucide-react";
 import {
   Button,
   FormField,
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/primitives";
 import { IconPicker } from "@/components/icons/icon-picker";
 import type { WorkspaceRoleInput } from "@/lib/features/workspace/workspace-roles-api";
+import { workspaceFeatureIcons } from "@/lib/features/workspace/workspace-feature-icons";
 import {
   capabilityLabel,
   featureCopy,
@@ -32,16 +34,23 @@ type Props = {
 };
 
 const LEVELS = [
-  { id: "none", label: "No access", capabilities: [] },
-  { id: "view", label: "View", capabilities: ["view"] },
+  {
+    id: "none",
+    label: "No access",
+    Icon: EyeOff,
+    capabilities: [],
+  },
+  { id: "view", label: "View", Icon: Eye, capabilities: ["view"] },
   {
     id: "own",
     label: "Own data",
+    Icon: UserRound,
     capabilities: ["view", "create", "editOwn", "deleteOwn"],
   },
   {
     id: "manage",
     label: "Full access",
+    Icon: ShieldCheck,
     capabilities: [
       "view",
       "create",
@@ -71,6 +80,8 @@ export function RoleEditor({
 
   useEffect(() => {
     if (!open) return;
+    // Opening the modal hydrates one isolated editable draft.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setName(role?.name ?? "");
     setIconId(role?.iconId ?? null);
     setDescription(role?.description ?? "");
@@ -143,7 +154,7 @@ export function RoleEditor({
           });
         }}
       >
-        <div className="grid gap-3 sm:grid-cols-[72px_1fr]">
+        <div className="grid gap-3 sm:grid-cols-[44px_1fr]">
           <FormField label="Icon">
             <IconPicker
               compact
@@ -205,6 +216,8 @@ export function RoleEditor({
         <div className="space-y-3">
           {features.map((feature) => {
             const copy = featureCopy(feature);
+            const FeatureIcon =
+              workspaceFeatureIcons[feature.id] ?? ShieldCheck;
             const standard = feature.permissions.filter(
               (item) => item.sensitivity === "standard",
             );
@@ -226,23 +239,39 @@ export function RoleEditor({
                 className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4"
               >
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-medium text-white">{copy.label}</h3>
-                    <p className="text-xs text-neutral-400">
-                      {copy.description}
-                    </p>
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-300">
+                      <FeatureIcon size={17} aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="font-medium text-white">{copy.label}</h3>
+                      <p className="text-xs text-neutral-400">
+                        {copy.description}
+                      </p>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-1 sm:flex">
-                    {LEVELS.map((level) => (
-                      <button
-                        key={level.id}
-                        type="button"
-                        onClick={() => setLevel(feature, level.capabilities)}
-                        className={`rounded-lg px-3 py-2 text-xs ${current === level.id ? "bg-blue-600 text-white" : "bg-neutral-800 text-neutral-300 hover:bg-neutral-700"}`}
-                      >
-                        {level.label}
-                      </button>
-                    ))}
+                    {LEVELS.map((level) => {
+                      const LevelIcon = level.Icon;
+                      return (
+                        <button
+                          key={level.id}
+                          type="button"
+                          onClick={() =>
+                            setLevel(
+                              feature,
+                              level.id === "manage"
+                                ? standard.map((item) => item.capability)
+                                : level.capabilities,
+                            )
+                          }
+                          className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs ${current === level.id ? "bg-blue-600 text-white" : "bg-neutral-800 text-neutral-300 hover:bg-neutral-700"}`}
+                        >
+                          <LevelIcon size={14} aria-hidden="true" />
+                          {level.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 {sensitive.length ? (

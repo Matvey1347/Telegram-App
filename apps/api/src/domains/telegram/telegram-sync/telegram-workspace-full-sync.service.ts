@@ -1,23 +1,21 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { ContextIdFactory, ModuleRef } from '@nestjs/core';
+import type {
+  TelegramWorkspaceFullSyncResult,
+  TelegramWorkspaceSyncSelection,
+} from '@telegram-system/shared';
 import { sanitizeOperationalError } from '../../../common/security/operational-error';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramChannelSyncOrchestrator } from '../telegram-channels/telegram-channel-sync.orchestrator';
 
 export type TelegramWorkspaceFullSyncActor =
   | { type: 'SYSTEM_BOT'; userId: string }
+  | { type: 'MANUAL'; userId: string }
   | { type: 'SCHEDULED_TASK' };
-
-export type TelegramWorkspaceFullSyncResult = {
-  workspaceName: string;
-  total: number;
-  successful: number;
-  failed: number;
-  skipped: number;
-  durationMs: number;
-  summary: string;
-  failures: Array<{ channelId: string; channelTitle: string; reason: string }>;
-};
 
 @Injectable()
 export class TelegramWorkspaceFullSyncService {
@@ -29,7 +27,11 @@ export class TelegramWorkspaceFullSyncService {
   async syncWorkspace(input: {
     workspaceId: string;
     actor: TelegramWorkspaceFullSyncActor;
+    selection?: TelegramWorkspaceSyncSelection;
   }): Promise<TelegramWorkspaceFullSyncResult> {
+    if (input.selection && !Object.values(input.selection).some(Boolean)) {
+      throw new BadRequestException('Select at least one sync section');
+    }
     const startedAt = Date.now();
     const [workspace, channels, actorUserId] = await Promise.all([
       this.prisma.workspace.findUniqueOrThrow({
@@ -40,7 +42,8 @@ export class TelegramWorkspaceFullSyncService {
         where: {
           workspaceId: input.workspaceId,
           isActive: true,
-          autoSyncEnabled: true,
+          archivedAt: null,
+          ...(input.actor.type !== 'MANUAL' ? { autoSyncEnabled: true } : {}),
         },
         orderBy: { title: 'asc' },
         select: {
@@ -75,22 +78,30 @@ export class TelegramWorkspaceFullSyncService {
     const failures: TelegramWorkspaceFullSyncResult['failures'] = [];
 
     for (const channel of channels) {
-      const hasSelection = [
-        channel.syncIncludePublicInfo,
-        channel.syncIncludeInviteLinks,
-        channel.syncIncludeHistoricalPosts,
-        channel.syncIncludePostMetrics,
-        channel.syncIncludeOlderPosts,
-        channel.syncIncludeChannelStats,
-        channel.syncIncludeManagedPosts,
-        channel.syncIncludeAudienceSnapshot,
-      ].some(Boolean);
+      const hasSelection = input.selection
+        ? Object.values(input.selection).some(Boolean)
+        : [
+            channel.syncIncludePublicInfo,
+            channel.syncIncludeInviteLinks,
+            channel.syncIncludeHistoricalPosts,
+            channel.syncIncludePostMetrics,
+            channel.syncIncludeOlderPosts,
+            channel.syncIncludeChannelStats,
+            channel.syncIncludeManagedPosts,
+            channel.syncIncludeAudienceSnapshot,
+          ].some(Boolean);
       if (!hasSelection) {
         skipped += 1;
         continue;
       }
       try {
-        const outcome = await channelService.syncNow(actorUserId, channel.id);
+        const outcome = await channelService.syncNow(
+          actorUserId,
+          channel.id,
+          input.selection
+            ? { ...input.selection, saveSelection: false }
+            : undefined,
+        );
         if (outcome.status !== 'success') {
           failed += 1;
           failures.push({
@@ -151,7 +162,9 @@ export class TelegramWorkspaceFullSyncService {
     const membership = await this.prisma.workspaceMember.findFirst({
       where: {
         workspaceId,
-        ...(actor.type === 'SYSTEM_BOT' ? { userId: actor.userId } : {}),
+        ...(actor.type === 'SYSTEM_BOT' || actor.type === 'MANUAL'
+          ? { userId: actor.userId }
+          : {}),
       },
       orderBy: { createdAt: 'asc' },
       select: { userId: true },

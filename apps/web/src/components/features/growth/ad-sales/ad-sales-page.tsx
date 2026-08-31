@@ -1,6 +1,13 @@
 "use client";
 
-import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   keepPreviousData,
   useMutation,
@@ -10,7 +17,11 @@ import {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus, SlidersHorizontal } from "lucide-react";
 import { formatDate } from "@/lib/date-format";
-import { TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS, type TelegramAdAvailabilitySlot, type TelegramAdSale } from "@telegram-system/shared";
+import {
+  TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS,
+  type TelegramAdAvailabilitySlot,
+  type TelegramAdSale,
+} from "@telegram-system/shared";
 import { AppShell } from "@/components/layout/app-shell";
 import {
   telegramChannelKeys,
@@ -37,10 +48,21 @@ import { AdSalesAnalyticsPanel } from "@/components/features/growth/ad-sales/ad-
 import { AdSalesClientsPanel } from "@/components/features/growth/ad-sales/ad-sales-clients-panel";
 import { SaleDetailsModal } from "@/components/features/growth/ad-sales/ad-sales-sale-details-modal";
 import { SalesTab } from "@/components/features/growth/ad-sales/ad-sales-sales-tab";
+import { useAdSalesLifecycleRefresh } from "@/components/features/growth/ad-sales/use-ad-sales-publication-refresh";
 import { AdSalesPostLinkDialogs } from "@/components/features/growth/ad-sales/ad-sales-post-link-dialogs";
 import { AdSalesCheckoutDialogs } from "@/components/features/growth/ad-sales/ad-sales-checkout-dialogs";
 import { AdSalesSaleDetailsDialog } from "@/components/features/growth/ad-sales/ad-sales-sale-details-dialog";
-import { addDays, dateKey, listDaysInRange, monthGridDays, monthGridDaysForRange, rangeForCalendarMode, routeTabFromPathname, sameStringArray, tabRouteMap } from "@/components/features/growth/ad-sales/ad-sales-calendar-range";
+import {
+  addDays,
+  dateKey,
+  listDaysInRange,
+  monthGridDays,
+  monthGridDaysForRange,
+  rangeForCalendarMode,
+  routeTabFromPathname,
+  sameStringArray,
+  tabRouteMap,
+} from "@/components/features/growth/ad-sales/ad-sales-calendar-range";
 import {
   accountsApi,
   authApi,
@@ -215,8 +237,8 @@ export function AdSalesPage() {
   const systemBotConnectionQuery = useQuery({
     queryKey: telegramSystemBotKeys.connection(),
     queryFn: telegramSystemBotApi.connection,
-    enabled: adSaleModalOpen,
-    staleTime: 60 * 1000,
+    enabled: adSaleModalOpen, staleTime: 60 * 1000,
+    refetchOnWindowFocus: "always",
   });
   const workspaceTimezone = me?.workspace.timezone || "Europe/Warsaw";
   const preferencesQuery = useQuery({
@@ -254,39 +276,11 @@ export function AdSalesPage() {
     enabled: tab === "sales",
     ...adSalesDataCacheOptions,
   });
-  const refreshedDeletionDeadlinesRef = useRef(new Set<string>());
-  useEffect(() => {
-    if (tab !== "sales") return;
-    const pendingDeadlines = (salesQuery.data?.items ?? [])
-      .flatMap((sale) => sale.placements)
-      .filter(
-        (placement) =>
-          placement.publishedAt &&
-          placement.plannedDeleteAt &&
-          !placement.deletedAt &&
-          placement.managedPost?.telegramRemoteStatus !== "MISSING",
-      )
-      .map((placement) => ({
-        key: `${placement.id}:${placement.plannedDeleteAt}`,
-        dueAt: new Date(placement.plannedDeleteAt!).getTime(),
-      }))
-      .filter(
-        ({ key, dueAt }) =>
-          Number.isFinite(dueAt) &&
-          !refreshedDeletionDeadlinesRef.current.has(key),
-      )
-      .sort((left, right) => left.dueAt - right.dueAt);
-    const next = pendingDeadlines[0];
-    if (!next) return;
-    const timeout = window.setTimeout(
-      () => {
-        refreshedDeletionDeadlinesRef.current.add(next.key);
-        void salesQuery.refetch();
-      },
-      Math.min(Math.max(0, next.dueAt - Date.now()) + 3_000, 2_147_483_647),
-    );
-    return () => window.clearTimeout(timeout);
-  }, [salesQuery.data?.items, salesQuery.refetch, tab]);
+  useAdSalesLifecycleRefresh({
+    active: tab === "sales",
+    sales: salesQuery.data?.items ?? [],
+    refetch: salesQuery.refetch,
+  });
   const selectedSaleQuery = useQuery({
     queryKey: selectedSaleId
       ? telegramAdSalesKeys.detail(selectedSaleId)
@@ -872,7 +866,11 @@ export function AdSalesPage() {
         onSelectionModeChange={handleInventorySelectionModeChange}
         onNetworkChange={handleSelectedNetworkIdChange}
         onChannelsChange={handleSelectedChannelIdsChange}
-        maxSelectedChannels={tab === "analytics" ? TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS : undefined}
+        maxSelectedChannels={
+          tab === "analytics"
+            ? TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS
+            : undefined
+        }
       />
 
       {tab === "calendar" ? (
@@ -948,7 +946,6 @@ export function AdSalesPage() {
           rates={rates}
         />
       ) : null}
-
       <AdSalesCheckoutDialogs
         adSaleModalOpen={adSaleModalOpen}
         setAdSaleModalOpen={setAdSaleModalOpen}
@@ -959,6 +956,7 @@ export function AdSalesPage() {
         settings={settings}
         workspaceTimezone={workspaceTimezone}
         adSaleSeedSlot={adSaleSeedSlot}
+        systemBotConnected={systemBotConnectionQuery.data?.connected}
         systemBotUsername={systemBotConnectionQuery.data?.botUsername}
         submitAdSale={submitAdSale}
         paymentSale={paymentSale}

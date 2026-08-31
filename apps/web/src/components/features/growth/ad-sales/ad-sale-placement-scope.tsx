@@ -10,6 +10,7 @@ import {
   Select,
   TimeInput,
 } from "@/components/ui/primitives";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 
 export type AdSaleScopeMode = "network" | "channels";
 
@@ -21,26 +22,15 @@ export function AdSaleScopeModeToggle({
   onChange: (mode: AdSaleScopeMode) => void;
 }) {
   return (
-    <div className="inline-grid shrink-0 grid-cols-2 rounded-md border border-neutral-700 bg-neutral-950 p-px">
-      {(["network", "channels"] as const).map((option) => {
-        const selected = mode === option;
-        return (
-          <button
-            key={option}
-            type="button"
-            aria-pressed={selected}
-            onClick={() => onChange(option)}
-            className={`h-6 rounded-[5px] px-2 text-[11px] font-medium leading-none transition ${
-              selected
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
-            }`}
-          >
-            {option === "network" ? "Network" : "Channels"}
-          </button>
-        );
-      })}
-    </div>
+    <SegmentedControl
+      value={mode}
+      onChange={onChange}
+      ariaLabel="Placement source"
+      options={[
+        { value: "network", label: "Network" },
+        { value: "channels", label: "Channels" },
+      ]}
+    />
   );
 }
 

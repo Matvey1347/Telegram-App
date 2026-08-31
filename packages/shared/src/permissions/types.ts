@@ -70,3 +70,10 @@ export type WorkspaceRoleContract = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type WorkspaceMemberRoleSummary = {
+  id: string;
+  name: string;
+  systemKey: "OWNER" | null;
+  iconPresentation: ResolvedEmoji | null;
+};

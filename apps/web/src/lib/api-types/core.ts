@@ -9,6 +9,7 @@ import type {
   EditorShortcutPreferences,
   EffectiveWorkspaceAccess,
   ResolvedEmoji,
+  WorkspaceMemberRoleSummary,
 } from "@telegram-system/shared";
 
 export type {
@@ -129,6 +130,8 @@ export type WorkspaceMember = {
   workspaceId: string;
   userId: string;
   role: WorkspaceRole;
+  roleDefinitionId?: string | null;
+  roleDefinition?: WorkspaceMemberRoleSummary | null;
   isHidden?: boolean;
   avatarIconId?: string | null;
   avatarIcon?: Icon | null;

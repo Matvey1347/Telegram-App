@@ -30,11 +30,13 @@ export function defaultAdSaleAccountId(
 ) {
   const activeAccounts = accounts.filter((account) => account.isActive);
   return (
-    activeAccounts.find(
-      (account) =>
-        assignedMemberId && account.assignedMemberId === assignedMemberId,
-    ) ?? activeAccounts[0]
-  )?.id ?? "";
+    (
+      activeAccounts.find(
+        (account) =>
+          assignedMemberId && account.assignedMemberId === assignedMemberId,
+      ) ?? activeAccounts[0]
+    )?.id ?? ""
+  );
 }
 
 type AdSalePlacementSession = {
@@ -52,7 +54,6 @@ export function useAdSaleModalSession(
     productsByChannelId,
     defaultCurrency,
     workspaceTimezone,
-    onSearchAdvertisers,
     initialChannelId,
     initialScheduledAt,
     initialInventoryOpportunityKey,
@@ -70,8 +71,9 @@ export function useAdSaleModalSession(
   const [advertiserContact, setAdvertiserContact] = useState("");
   const [selectedAdvertiser, setSelectedAdvertiser] =
     useState<TelegramAdvertiser | null>(null);
-  const [selectedAdvertiserId, setSelectedAdvertiserId] =
-    useState<string | null>(null);
+  const [selectedAdvertiserId, setSelectedAdvertiserId] = useState<
+    string | null
+  >(null);
   const [advertiserMatches, setAdvertiserMatches] = useState<
     TelegramAdvertiser[]
   >([]);
@@ -274,38 +276,52 @@ export function useAdSaleModalSession(
     );
   }, [accounts, assignedMemberId, open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const search = advertiserContact.trim();
-    if (search.length < 2 || selectedAdvertiserId) {
-      return;
-    }
-    let cancelled = false;
-    const timeout = window.setTimeout(async () => {
-      const matches = await onSearchAdvertisers(search);
-      if (!cancelled) {
-        setAdvertiserMatches(matches);
-      }
-    }, 250);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeout);
-    };
-  }, [advertiserContact, onSearchAdvertisers, open, selectedAdvertiserId]);
-
   return {
-    advertiserTelegram, setAdvertiserTelegram, advertiserContact, setAdvertiserContact,
-    selectedAdvertiser, setSelectedAdvertiser, selectedAdvertiserId, setSelectedAdvertiserId,
-    advertiserMatches, setAdvertiserMatches, assignedMemberId, setAssignedMemberId,
-    saleOrigin, setSaleOrigin, accountId, setAccountId, accountManuallySelectedRef,
-    channelSelectionMode, setChannelSelectionMode, selectedNetworkId, setSelectedNetworkId,
-    selectedChannelIds, setSelectedChannelIds, placementDateRange, setPlacementDateRange,
-    submissionError, setSubmissionError,
-    pendingDrafts, slotPickerPlacementKey, setSlotPickerPlacementKey,
-    slotPickerSlots, setSlotPickerSlots, slotPickerLoading, setSlotPickerLoading,
-    slotPickerError, setSlotPickerError, publishedPostsByPlacement,
-    setPublishedPostsByPlacement, postsLoadingByPlacement, setPostsLoadingByPlacement,
-    persistedDraftJsonRef, draftReadyRef, currentDraft,
-    continueDraft, deleteDraft, createNewDraft
+    advertiserTelegram,
+    setAdvertiserTelegram,
+    advertiserContact,
+    setAdvertiserContact,
+    selectedAdvertiser,
+    setSelectedAdvertiser,
+    selectedAdvertiserId,
+    setSelectedAdvertiserId,
+    advertiserMatches,
+    setAdvertiserMatches,
+    assignedMemberId,
+    setAssignedMemberId,
+    saleOrigin,
+    setSaleOrigin,
+    accountId,
+    setAccountId,
+    accountManuallySelectedRef,
+    channelSelectionMode,
+    setChannelSelectionMode,
+    selectedNetworkId,
+    setSelectedNetworkId,
+    selectedChannelIds,
+    setSelectedChannelIds,
+    placementDateRange,
+    setPlacementDateRange,
+    submissionError,
+    setSubmissionError,
+    pendingDrafts,
+    slotPickerPlacementKey,
+    setSlotPickerPlacementKey,
+    slotPickerSlots,
+    setSlotPickerSlots,
+    slotPickerLoading,
+    setSlotPickerLoading,
+    slotPickerError,
+    setSlotPickerError,
+    publishedPostsByPlacement,
+    setPublishedPostsByPlacement,
+    postsLoadingByPlacement,
+    setPostsLoadingByPlacement,
+    persistedDraftJsonRef,
+    draftReadyRef,
+    currentDraft,
+    continueDraft,
+    deleteDraft,
+    createNewDraft,
   };
 }

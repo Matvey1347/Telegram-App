@@ -789,7 +789,6 @@ model Workspace {
   investments                            Investment[]
   transactionCategories                  TransactionCategory[]
   icons                                  Icon[]
-  promptNotes                            PromptNote[]
   applicationLogs                        ApplicationLog[]
   scheduledTaskConfigs                   ScheduledTaskConfig[]
   scheduledTaskRuns                      ScheduledTaskRun[]
@@ -798,34 +797,6 @@ model Workspace {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-}
-
-model PromptNote {
-  id                 String   @id @default(cuid())
-  workspaceId        String
-  title              String
-  content            String
-  emoji              String?
-  iconId             String?
-  assignedMemberId   String?
-  telegramChannelId  String?
-  telegramChannelIds String[] @default([])
-  postGroupId        String?
-
-  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  icon            Icon?            @relation(fields: [iconId], references: [id], onDelete: SetNull)
-  assignedMember  WorkspaceMember? @relation("PromptNoteAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
-  telegramChannel TelegramChannel? @relation(fields: [telegramChannelId], references: [id], onDelete: SetNull)
-  postGroup       PostGroup?       @relation(fields: [postGroupId], references: [id], onDelete: SetNull)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([workspaceId, updatedAt])
-  @@index([workspaceId, telegramChannelId])
-  @@index([workspaceId, postGroupId])
-  @@index([workspaceId, assignedMemberId])
-  @@index([workspaceId, iconId])
 }
 
 model TelegramUserAccountIntegration {
@@ -986,7 +957,6 @@ model WorkspaceMember {
   specificTelegramAdvertiserAutomationRules TelegramAdvertiserAutomationRule[] @relation("TelegramAdvertiserAutomationSpecificMember")
   createdPostGroups                         PostGroup[]                        @relation("PostGroupCreatedByMember")
   createdTelegramInviteLinks                TelegramInviteLink[]               @relation("TelegramInviteLinkCreatorMember")
-  promptNotes                               PromptNote[]                       @relation("PromptNoteAssignedMember")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1274,7 +1244,6 @@ model TelegramChannel {
   postPlannerFormats         TelegramPostPlannerFormat[]
   postPlannerSlots           TelegramPostPlannerSlot[]
   postGroups                 PostGroup[]
-  promptNotes                PromptNote[]
   statsSnapshots             TelegramChannelStatsSnapshot[]
   audienceSnapshots          TelegramChannelAudienceSnapshot[]
   networkMembers             TelegramChannelNetworkMember[]
@@ -4214,7 +4183,6 @@ model PostGroup {
   createdByMember      WorkspaceMember               @relation("PostGroupCreatedByMember", fields: [createdByMemberId, workspaceId], references: [id, workspaceId], onDelete: Restrict)
   posts                TelegramManagedPost[]
   managedPostRevisions TelegramManagedPostRevision[]
-  promptNotes          PromptNote[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4275,7 +4243,6 @@ model Icon {
   accounts                     Account[]
   transactions                 Transaction[]
   transactionCategories        TransactionCategory[]
-  promptNotes                  PromptNote[]
   promos                       Promo[]
   adHypotheses                 AdHypothesis[]
   telegramChannelTimePosts     TelegramChannelTimePost[]

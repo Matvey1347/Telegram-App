@@ -21,6 +21,7 @@ import { TelegramAdSalesBotReservationService } from './telegram-ad-sales-bot-re
 import { TelegramAdSalesBotTargetsService } from './telegram-ad-sales-bot-targets.service';
 import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
 import { TelegramAdSalesPlacementOptionsService } from './telegram-ad-sales-placement-options.service';
+import { TelegramAdvertiserCheckoutResolverService } from './telegram-advertiser-checkout-resolver.service';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { TelegramAdSalesPlacementOptionsService } from './telegram-ad-sales-plac
     TelegramAdSalesBotReservationService,
     TelegramAdSalesBotTargetsService,
     TelegramAdSalesPlacementOptionsService,
+    TelegramAdvertiserCheckoutResolverService,
     TelegramBotApiClient,
   ],
   exports: [

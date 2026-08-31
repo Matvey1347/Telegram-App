@@ -7,9 +7,10 @@ import {
   type MouseEventHandler,
   type ReactNode,
 } from "react";
-import { Archive, RotateCcw, Settings2, Trash2 } from "lucide-react";
+import { Archive, Bot, RotateCcw, Settings2, Trash2 } from "lucide-react";
 import type { CurrencySettings, TelegramChannel } from "@/lib/api";
 import { ChannelEconomicsEditor } from "./channel-economics-editor";
+import { ChannelSystemBotAccessModal } from "./channel-system-bot-access-modal";
 import {
   TelegramCardActionsMenu,
   TelegramCardMenuAction,
@@ -69,6 +70,7 @@ export function ChannelActionsMenu({
   children: ReactNode;
 }) {
   const [editingEconomics, setEditingEconomics] = useState(false);
+  const [systemBotAccessOpen, setSystemBotAccessOpen] = useState(false);
   const menuChildren = Children.toArray(children);
   const postsIndex = menuChildren.findIndex(
     (child) =>
@@ -87,6 +89,13 @@ export function ChannelActionsMenu({
           icon={<Settings2 size={17} />}
           onClick={() => setEditingEconomics(true)}
         />
+        {canArchive ? (
+          <ChannelMenuAction
+            label="Bot connection"
+            icon={<Bot size={17} />}
+            onClick={() => setSystemBotAccessOpen(true)}
+          />
+        ) : null}
         {menuChildren.slice(editEconomicsIndex)}
         <div className="my-1 border-t border-neutral-800" />
         {archived ? (
@@ -114,6 +123,12 @@ export function ChannelActionsMenu({
           channel={channel}
           currencySettings={currencySettings}
           onClose={() => setEditingEconomics(false)}
+        />
+      ) : null}
+      {systemBotAccessOpen ? (
+        <ChannelSystemBotAccessModal
+          channel={channel}
+          onClose={() => setSystemBotAccessOpen(false)}
         />
       ) : null}
     </>

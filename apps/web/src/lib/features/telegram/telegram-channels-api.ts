@@ -8,6 +8,7 @@ import type {
   ResetChannelScheduledPostsResult,
   ScheduleManagedPostsBatchPayload,
   TelegramChannelSyncProgressItem,
+  TelegramChannelSystemBotConnection,
   TelegramManagedPostCalendarResult,
   TelegramPostPlannerApplyResult,
   TelegramPostPlannerFormat,
@@ -18,6 +19,8 @@ import type {
   TelegramPostButtonRows,
   TelegramCustomEmojiPackSummary,
   TelegramChannelCustomEmojiPacksResponse,
+  TelegramWorkspaceFullSyncResult,
+  TelegramWorkspaceManualSyncRequest,
   ImportTelegramCustomEmojiPackInput,
   TelegramCustomEmojiPackTarget,
   SyncOperationResult,
@@ -50,6 +53,7 @@ import type {
   Promo,
   TelegramChannelAnalyticsResponse,
   TelegramChannelSyncNowPayload,
+  TelegramChannelSyncSelection,
 } from "../../api-types";
 import type {
   BulkProgressHandler,
@@ -128,6 +132,20 @@ export function createTelegramChannelsApi({
       ).data,
     list: async () =>
       getAllPaginatedItems<TelegramChannel>("/telegram-channels"),
+    syncWorkspaceChannels: async (selection: TelegramChannelSyncSelection) =>
+      (
+        await api.post<TelegramWorkspaceFullSyncResult>(
+          "/telegram-sync/workspace-channels/run",
+          { selection } satisfies TelegramWorkspaceManualSyncRequest,
+          quietMutationConfig,
+        )
+      ).data,
+    checkSystemBotAccess: async (channelId: string) =>
+      (
+        await api.post<TelegramChannelSystemBotConnection>(
+          `/telegram-channels/${channelId}/system-bot-access/check`,
+        )
+      ).data,
     archive: async (id: string) =>
       (await api.post<TelegramChannel>(`/telegram-channels/${id}/archive`))
         .data,

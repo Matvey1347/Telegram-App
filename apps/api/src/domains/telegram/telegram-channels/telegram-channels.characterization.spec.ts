@@ -106,6 +106,82 @@ describe('TelegramChannelsService characterization seams', () => {
       expect(service['syncManagedPosts']).not.toHaveBeenCalled();
       expect(clearByPrefix).not.toHaveBeenCalled();
     });
+
+    it('does not duplicate an audience snapshot created by post metrics', async () => {
+      const { service } = setupSync();
+      service['resolveSyncSelection'].mockReturnValue({
+        syncIncludePublicInfo: false,
+        syncIncludeInviteLinks: false,
+        syncIncludeHistoricalPosts: false,
+        syncIncludePostMetrics: true,
+        syncIncludeOlderPosts: false,
+        syncIncludeChannelStats: false,
+        syncIncludeManagedPosts: false,
+        syncIncludeAudienceSnapshot: true,
+      });
+      service['syncSelectionTotalSteps'].mockReturnValue(2);
+      service['syncPostsMetrics'] = jest.fn().mockResolvedValue({
+        syncedPosts: 1,
+        audienceSnapshot: { id: 'snapshot-from-metrics' },
+      });
+      service['createAudienceSnapshotSafely'] = jest.fn();
+
+      await service.syncNow('user', 'channel');
+
+      expect(service['syncPostsMetrics']).toHaveBeenCalledTimes(1);
+      expect(service['createAudienceSnapshotSafely']).not.toHaveBeenCalled();
+    });
+
+    it('runs the selected audience snapshot when post metrics are unchanged', async () => {
+      const { service } = setupSync();
+      service['resolveSyncSelection'].mockReturnValue({
+        syncIncludePublicInfo: false,
+        syncIncludeInviteLinks: false,
+        syncIncludeHistoricalPosts: false,
+        syncIncludePostMetrics: true,
+        syncIncludeOlderPosts: false,
+        syncIncludeChannelStats: false,
+        syncIncludeManagedPosts: false,
+        syncIncludeAudienceSnapshot: true,
+      });
+      service['syncSelectionTotalSteps'].mockReturnValue(2);
+      service['syncPostsMetrics'] = jest
+        .fn()
+        .mockResolvedValue({ syncedPosts: 0, audienceSnapshot: null });
+      service['createAudienceSnapshotSafely'] = jest
+        .fn()
+        .mockResolvedValue({ id: 'snapshot' });
+
+      await service.syncNow('user', 'channel');
+
+      expect(service['createAudienceSnapshotSafely']).toHaveBeenCalledTimes(1);
+    });
+
+    it('still runs the selected audience snapshot after post metrics fail', async () => {
+      const { service } = setupSync();
+      service['resolveSyncSelection'].mockReturnValue({
+        syncIncludePublicInfo: false,
+        syncIncludeInviteLinks: false,
+        syncIncludeHistoricalPosts: false,
+        syncIncludePostMetrics: true,
+        syncIncludeOlderPosts: false,
+        syncIncludeChannelStats: false,
+        syncIncludeManagedPosts: false,
+        syncIncludeAudienceSnapshot: true,
+      });
+      service['syncSelectionTotalSteps'].mockReturnValue(2);
+      service['syncPostsMetrics'] = jest
+        .fn()
+        .mockRejectedValue(new Error('metrics unavailable'));
+      service['createAudienceSnapshotSafely'] = jest
+        .fn()
+        .mockResolvedValue({ id: 'snapshot' });
+
+      const result = await service.syncNow('user', 'channel');
+
+      expect(service['createAudienceSnapshotSafely']).toHaveBeenCalledTimes(1);
+      expect(result.status).not.toBe('success');
+    });
   });
 
   describe('managed publication failure semantics', () => {

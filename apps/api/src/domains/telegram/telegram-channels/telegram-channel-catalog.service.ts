@@ -7,13 +7,17 @@ import {
 } from '../../../common/pagination/pagination.utils';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
+import {
+  TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID,
+  TelegramSourceAccessService,
+} from '../../../telegram/shared/telegram-source-access.service';
 import {
   TelegramChannelListQueryDto,
   TelegramChannelSelectQueryDto,
 } from './dto';
 import { TelegramChannelBookingReadService } from './telegram-channel-booking-read.service';
 import { TelegramChannelFinancialReadService } from './telegram-channel-financial-read.service';
+import { TelegramSystemBotConfigService } from '../telegram-system-bot/telegram-system-bot-config.service';
 
 type TelegramChannelImportPolicyRow = {
   id: string;
@@ -34,6 +38,7 @@ export class TelegramChannelCatalogService {
     private readonly telegramChannelSchemaCompatibilityService: TelegramChannelSchemaCompatibilityService,
     private readonly telegramChannelFinancialReadService: TelegramChannelFinancialReadService,
     private readonly telegramChannelBookingReadService: TelegramChannelBookingReadService,
+    private readonly telegramSystemBotConfig: TelegramSystemBotConfigService,
   ) {}
 
   private readonly defaultPostSyncLimit = 50;
@@ -153,7 +158,15 @@ export class TelegramChannelCatalogService {
             },
             _count: { select: { adAnalyses: true } },
             adminLinks: { include: { telegramUserAccountIntegration: true } },
-            sourceAccesses: { select: { id: true, canPostMessages: true } },
+            sourceAccesses: {
+              select: {
+                id: true,
+                sourceId: true,
+                sourceType: true,
+                canPostMessages: true,
+                lastCheckedAt: true,
+              },
+            },
             audienceSnapshots: {
               orderBy: { collectedAt: 'desc' },
               take: 1,
@@ -245,6 +258,11 @@ export class TelegramChannelCatalogService {
         ...channelData
       } = channel;
       const snapshot = audienceSnapshots[0];
+      const systemBotAccess = sourceAccesses.find(
+        (source) =>
+          source.sourceType === 'BOT' &&
+          source.sourceId === TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID,
+      );
       const reactionRate =
         snapshot?.avgViewsAdjusted != null && snapshot.avgViewsAdjusted > 0
           ? ((snapshot.avgReactionsAdjusted ?? 0) / snapshot.avgViewsAdjusted) *
@@ -299,6 +317,22 @@ export class TelegramChannelCatalogService {
           canPostMessages: sourceAccesses.some(
             (source) => source.canPostMessages,
           ),
+          systemBotConnection: {
+            connected: Boolean(systemBotAccess?.canPostMessages),
+            status: systemBotAccess
+              ? systemBotAccess.canPostMessages
+                ? ('CONNECTED' as const)
+                : ('NOT_CONNECTED' as const)
+              : ('UNVERIFIED' as const),
+            botUsername:
+              this.telegramSystemBotConfig.productionUsername?.replace(
+                /^@/,
+                '',
+              ) ?? null,
+            lastCheckedAt:
+              systemBotAccess?.lastCheckedAt?.toISOString() ?? null,
+            requiredPermission: 'POST_MESSAGES' as const,
+          },
           adAnalysis: {
             latest: adAnalyses[0] ?? null,
             historyCount: _count.adAnalyses,

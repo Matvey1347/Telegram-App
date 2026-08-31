@@ -1,13 +1,11 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  Prisma,
-  WorkspaceRole,
-} from '@prisma/client';
+import { Prisma, WorkspaceRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -29,6 +27,15 @@ export class WorkspaceMembersService {
     role: true,
     avatarIconId: true,
     avatarIcon: true,
+    roleDefinitionId: true,
+    roleDefinition: {
+      select: {
+        id: true,
+        name: true,
+        systemKey: true,
+        icon: true,
+      },
+    },
     user: { select: { id: true, email: true, name: true } },
   } satisfies Prisma.WorkspaceMemberSelect;
 
@@ -48,6 +55,14 @@ export class WorkspaceMembersService {
       },
       orderBy: { createdAt: 'asc' },
     },
+    roleDefinition: {
+      select: {
+        id: true,
+        name: true,
+        systemKey: true,
+        icon: true,
+      },
+    },
   } satisfies Prisma.WorkspaceMemberInclude;
 
   constructor(
@@ -66,12 +81,44 @@ export class WorkspaceMembersService {
     row: T,
     currentUserId: string,
   ) {
-    const avatarIcon = (row as { avatarIcon?: Parameters<typeof iconToResolvedEmoji>[0] }).avatarIcon;
+    const avatarIcon = (
+      row as { avatarIcon?: Parameters<typeof iconToResolvedEmoji>[0] }
+    ).avatarIcon;
+    const roleDefinition = (
+      row as {
+        roleDefinition?: {
+          id: string;
+          name: string;
+          systemKey: string | null;
+          icon: Parameters<typeof iconToResolvedEmoji>[0];
+        } | null;
+      }
+    ).roleDefinition;
     return {
       ...row,
       avatarPresentation: iconToResolvedEmoji(avatarIcon),
+      roleDefinition: roleDefinition
+        ? {
+            id: roleDefinition.id,
+            name: roleDefinition.name,
+            systemKey: roleDefinition.systemKey === 'OWNER' ? 'OWNER' : null,
+            iconPresentation: iconToResolvedEmoji(roleDefinition.icon),
+          }
+        : null,
       isCurrentUser: row.userId === currentUserId,
     };
+  }
+
+  private async roleDefinitionInWorkspace(
+    workspaceId: string,
+    roleDefinitionId: string,
+  ) {
+    const role = await this.prisma.workspaceRoleDefinition.findFirst({
+      where: { id: roleDefinitionId, workspaceId },
+      select: { id: true, systemKey: true },
+    });
+    if (!role) throw new NotFoundException('Workspace role not found');
+    return role;
   }
 
   private normalizeMemberUsername(input: string | null | undefined) {
@@ -115,7 +162,11 @@ export class WorkspaceMembersService {
       }),
       tx.telegramUserAccountIntegration.findMany({
         where: { workspaceId },
-        select: { telegramUserId: true, username: true, assignedMemberId: true },
+        select: {
+          telegramUserId: true,
+          username: true,
+          assignedMemberId: true,
+        },
       }),
       tx.telegramInviteLink.findMany({
         where: { workspaceId },
@@ -167,13 +218,16 @@ export class WorkspaceMembersService {
     byCurrency: Map<string, { amount: number; primary: number }>;
   }) {
     if (!totals) return null;
-    return [...totals.byCurrency.entries()]
-      .sort(
-        ([leftCurrency, left], [rightCurrency, right]) =>
-          Math.abs(right.primary) - Math.abs(left.primary) ||
-          leftCurrency.localeCompare(rightCurrency),
-      )
-      .map(([currency, value]) => ({ currency, amount: value.amount }))[0] ?? null;
+    return (
+      [...totals.byCurrency.entries()]
+        .sort(
+          ([leftCurrency, left], [rightCurrency, right]) =>
+            Math.abs(right.primary) - Math.abs(left.primary) ||
+            leftCurrency.localeCompare(rightCurrency),
+        )
+        .map(([currency, value]) => ({ currency, amount: value.amount }))[0] ??
+      null
+    );
   }
 
   private buildInvestmentSummary(
@@ -205,12 +259,15 @@ export class WorkspaceMembersService {
       displayCurrency: display?.currency ?? null,
       totalInvestedDisplay: display?.amount ?? null,
       investmentSharePercent:
-        workspaceTotal > 0 ? (((totals?.total ?? 0) / workspaceTotal) * 100) : 0,
+        workspaceTotal > 0 ? ((totals?.total ?? 0) / workspaceTotal) * 100 : 0,
       investmentsCount: totals?.count ?? 0,
     };
   }
 
-  private async assertAvatarIcon(workspaceId: string, avatarIconId?: string | null) {
+  private async assertAvatarIcon(
+    workspaceId: string,
+    avatarIconId?: string | null,
+  ) {
     if (avatarIconId === undefined || avatarIconId === null) return;
     const icon = await this.prisma.icon.findFirst({
       where: { id: avatarIconId, workspaceId },
@@ -248,7 +305,10 @@ export class WorkspaceMembersService {
       };
       const primary = Number(tx.amountInPrimaryCurrency ?? 0);
       const currency = String(tx.currency || '').toUpperCase();
-      const byCurrency = prev.byCurrency.get(currency) ?? { amount: 0, primary: 0 };
+      const byCurrency = prev.byCurrency.get(currency) ?? {
+        amount: 0,
+        primary: 0,
+      };
       byCurrency.amount += Number(tx.amount ?? 0);
       byCurrency.primary += primary;
       prev.byCurrency.set(currency, byCurrency);
@@ -260,7 +320,8 @@ export class WorkspaceMembersService {
       rows.filter((row) => !row.isHidden).map((row) => row.id),
     );
     const workspaceTotal = [...byMember.entries()].reduce(
-      (acc, [memberId, v]) => (visibleMemberIds.has(memberId) ? acc + v.total : acc),
+      (acc, [memberId, v]) =>
+        visibleMemberIds.has(memberId) ? acc + v.total : acc,
       0,
     );
 
@@ -335,7 +396,10 @@ export class WorkspaceMembersService {
       };
       const primary = Number(tx.amountInPrimaryCurrency ?? 0);
       const currency = String(tx.currency || '').toUpperCase();
-      const byCurrency = prev.byCurrency.get(currency) ?? { amount: 0, primary: 0 };
+      const byCurrency = prev.byCurrency.get(currency) ?? {
+        amount: 0,
+        primary: 0,
+      };
       byCurrency.amount += Number(tx.amount ?? 0);
       byCurrency.primary += primary;
       prev.byCurrency.set(currency, byCurrency);
@@ -347,7 +411,8 @@ export class WorkspaceMembersService {
     const visibleMembers = members.filter((member) => !member.isHidden);
     const visibleMemberIds = new Set(visibleMembers.map((member) => member.id));
     const total = [...byMember.entries()].reduce(
-      (acc, [memberId, item]) => (visibleMemberIds.has(memberId) ? acc + item.total : acc),
+      (acc, [memberId, item]) =>
+        visibleMemberIds.has(memberId) ? acc + item.total : acc,
       0,
     );
 
@@ -358,8 +423,10 @@ export class WorkspaceMembersService {
         return {
           member,
           totalInvestedPrimary: item.total,
-          displayCurrency: this.investmentCurrencyDisplay(item)?.currency ?? null,
-          totalInvestedDisplay: this.investmentCurrencyDisplay(item)?.amount ?? null,
+          displayCurrency:
+            this.investmentCurrencyDisplay(item)?.currency ?? null,
+          totalInvestedDisplay:
+            this.investmentCurrencyDisplay(item)?.amount ?? null,
           investmentsCount: item.count,
           investmentSharePercent: total > 0 ? (item.total / total) * 100 : 0,
         };
@@ -369,8 +436,25 @@ export class WorkspaceMembersService {
   async create(userId: string, dto: CreateWorkspaceMemberDto) {
     const current = await this.requireManager(userId);
     const email = dto.email.toLowerCase().trim();
-    const role = dto.role ?? WorkspaceRole.member;
+    const roleDefinition = dto.roleDefinitionId
+      ? await this.roleDefinitionInWorkspace(
+          current.workspaceId,
+          dto.roleDefinitionId,
+        )
+      : null;
+    const role = roleDefinition
+      ? roleDefinition.systemKey === 'OWNER'
+        ? WorkspaceRole.owner
+        : WorkspaceRole.member
+      : (dto.role ?? WorkspaceRole.member);
     const telegramUsername = this.normalizeMemberUsername(dto.telegramUsername);
+    const requestedAccountIds = [...new Set(dto.telegramUserAccountIds ?? [])];
+
+    if (telegramUsername && requestedAccountIds.length) {
+      throw new BadRequestException(
+        'Choose either a Telegram username or a connected Telegram account',
+      );
+    }
 
     if (current.role === WorkspaceRole.admin && role !== WorkspaceRole.member) {
       throw new ForbiddenException('Admin can only add member role');
@@ -408,21 +492,69 @@ export class WorkspaceMembersService {
     });
     if (already)
       throw new ConflictException('User is already a member of this workspace');
-    await this.assertTelegramUsernameAvailable(
-      this.prisma,
-      current.workspaceId,
-      telegramUsername,
-    );
-
-    const created = await this.prisma.workspaceMember.create({
-      data: {
-        workspaceId: current.workspaceId,
-        userId: user.id,
-        role,
-        avatarIconId: dto.avatarIconId ?? null,
+    const created = await this.prisma.$transaction(async (tx) => {
+      await this.assertTelegramUsernameAvailable(
+        tx,
+        current.workspaceId,
         telegramUsername,
-      },
-      include: this.memberInclude,
+      );
+      if (requestedAccountIds.length) {
+        const accounts = await tx.telegramUserAccountIntegration.findMany({
+          where: {
+            workspaceId: current.workspaceId,
+            id: { in: requestedAccountIds },
+          },
+          select: { id: true, assignedMemberId: true },
+        });
+        if (accounts.length !== requestedAccountIds.length) {
+          throw new NotFoundException(
+            'One or more Telegram accounts were not found in this workspace',
+          );
+        }
+        if (accounts.some((account) => account.assignedMemberId)) {
+          throw new ConflictException(
+            'One or more Telegram accounts are already linked to another workspace member',
+          );
+        }
+      }
+
+      const member = await tx.workspaceMember.create({
+        data: {
+          workspaceId: current.workspaceId,
+          userId: user.id,
+          role,
+          roleDefinitionId: roleDefinition?.id,
+          avatarIconId: dto.avatarIconId ?? null,
+          telegramUsername,
+        },
+        include: this.memberInclude,
+      });
+
+      if (requestedAccountIds.length) {
+        const assignment = await tx.telegramUserAccountIntegration.updateMany({
+          where: {
+            workspaceId: current.workspaceId,
+            id: { in: requestedAccountIds },
+            assignedMemberId: null,
+          },
+          data: { assignedMemberId: member.id },
+        });
+        if (assignment.count !== requestedAccountIds.length) {
+          throw new ConflictException(
+            'One or more Telegram accounts are already linked to another workspace member',
+          );
+        }
+      }
+
+      if (telegramUsername || requestedAccountIds.length) {
+        await this.reattributeWorkspaceInviteLinksTx(tx, current.workspaceId);
+      }
+      return requestedAccountIds.length
+        ? tx.workspaceMember.findUniqueOrThrow({
+            where: { id: member.id },
+            include: this.memberInclude,
+          })
+        : member;
     });
 
     return {
@@ -441,6 +573,17 @@ export class WorkspaceMembersService {
       where: { id: memberId, workspaceId: current.workspaceId },
     });
     if (!member) throw new NotFoundException('Workspace member not found');
+    const roleDefinition = dto.roleDefinitionId
+      ? await this.roleDefinitionInWorkspace(
+          current.workspaceId,
+          dto.roleDefinitionId,
+        )
+      : null;
+    const nextRole = roleDefinition
+      ? roleDefinition.systemKey === 'OWNER'
+        ? WorkspaceRole.owner
+        : WorkspaceRole.member
+      : dto.role;
     const nextTelegramUsername = this.normalizeMemberUsername(
       dto.telegramUsername,
     );
@@ -449,22 +592,22 @@ export class WorkspaceMembersService {
       if (member.role !== WorkspaceRole.member) {
         throw new ForbiddenException('Admin cannot edit owner/admin');
       }
-      if (dto.role !== undefined && dto.role !== WorkspaceRole.member) {
+      if (nextRole !== undefined && nextRole !== WorkspaceRole.member) {
         throw new ForbiddenException('Admin can only assign member role');
       }
     }
 
     if (
-      dto.role === WorkspaceRole.owner &&
+      nextRole === WorkspaceRole.owner &&
       current.role !== WorkspaceRole.owner
     ) {
       throw new ForbiddenException('Only owner can promote to owner');
     }
 
     if (
-      dto.role !== undefined &&
+      nextRole !== undefined &&
       member.role === WorkspaceRole.owner &&
-      dto.role !== WorkspaceRole.owner
+      nextRole !== WorkspaceRole.owner
     ) {
       const ownersCount = await this.prisma.workspaceMember.count({
         where: { workspaceId: current.workspaceId, role: WorkspaceRole.owner },
@@ -484,13 +627,22 @@ export class WorkspaceMembersService {
       const requestedAccountIds = dto.telegramUserAccountIds
         ? [...new Set(dto.telegramUserAccountIds)]
         : undefined;
-      const currentAssignedAccounts = await tx.telegramUserAccountIntegration.findMany({
-        where: {
-          workspaceId: current.workspaceId,
-          assignedMemberId: member.id,
-        },
-        select: { id: true },
-      });
+      const currentAssignedAccounts =
+        await tx.telegramUserAccountIntegration.findMany({
+          where: {
+            workspaceId: current.workspaceId,
+            assignedMemberId: member.id,
+          },
+          select: { id: true },
+        });
+      const effectiveAccountIds =
+        requestedAccountIds ??
+        currentAssignedAccounts.map((account) => account.id);
+      if (nextTelegramUsername && effectiveAccountIds.length) {
+        throw new BadRequestException(
+          'Choose either a Telegram username or a connected Telegram account',
+        );
+      }
 
       if (requestedAccountIds) {
         const accounts = requestedAccountIds.length
@@ -520,7 +672,9 @@ export class WorkspaceMembersService {
           currentAssignedAccounts.map((account) => account.id),
         );
         const requestedSet = new Set(requestedAccountIds);
-        const toAssign = requestedAccountIds.filter((id) => !currentAssignedIds.has(id));
+        const toAssign = requestedAccountIds.filter(
+          (id) => !currentAssignedIds.has(id),
+        );
         const toUnassign = currentAssignedAccounts
           .map((account) => account.id)
           .filter((id) => !requestedSet.has(id));
@@ -547,18 +701,33 @@ export class WorkspaceMembersService {
         }
       }
 
-      const saved = await tx.workspaceMember.update({
+      let saved = await tx.workspaceMember.update({
         where: { id: memberId },
         data: {
-          role: dto.role,
+          role: nextRole,
+          roleDefinitionId: roleDefinition?.id,
           isHidden: dto.isHidden,
           avatarIconId:
             dto.avatarIconId === undefined ? undefined : dto.avatarIconId,
           telegramUsername:
-            nextTelegramUsername === undefined ? undefined : nextTelegramUsername,
+            nextTelegramUsername === undefined
+              ? undefined
+              : nextTelegramUsername,
         },
         include: this.memberInclude,
       });
+
+      if (
+        member.role === WorkspaceRole.owner &&
+        nextRole === WorkspaceRole.member &&
+        roleDefinition
+      ) {
+        saved = await tx.workspaceMember.update({
+          where: { id: memberId },
+          data: { roleDefinitionId: roleDefinition.id },
+          include: this.memberInclude,
+        });
+      }
 
       if (
         nextTelegramUsername !== undefined ||

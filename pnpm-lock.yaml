@@ -204,6 +204,9 @@ importers:
       '@telegram-system/shared':
         specifier: workspace:^
         version: link:../../packages/shared
+      '@vvo/tzdb':
+        specifier: ^6.176.0
+        version: 6.198.0
       axios:
         specifier: ^1.16.1
         version: 1.16.1
@@ -2332,6 +2335,9 @@ packages:
 
   '@vitest/utils@3.2.7':
     resolution: {integrity: sha512-x6BDOd7dyo3PFLY3I9/HJ25X/6OurhGXk2/B9gOZNPF7XDVjeBK4k01lQE5uvDpbuheErh91qYuE1E2OEjK3Rw==}
+
+  '@vvo/tzdb@6.198.0':
+    resolution: {integrity: sha512-bNRWBhWYl0edVgyX6AYbhoCM2tk2lXJjGCyO2VDc2xn6Dw8dLd7WGj2DDXkVOkmOIQTNjEAcxrEpIzz5pWVwFg==}
 
   '@webassemblyjs/ast@1.14.1':
     resolution: {integrity: sha512-nuBEDgQfm1ccRp/8bCQrx1frohyufl4JlbMMZ4P1wpeOfDhF6FQkxZJ1b/e+PLwr6X1Nhw6OLme5usuBWYBvuQ==}
@@ -8218,6 +8224,8 @@ snapshots:
       '@vitest/pretty-format': 3.2.7
       loupe: 3.2.1
       tinyrainbow: 2.0.0
+
+  '@vvo/tzdb@6.198.0': {}
 
   '@webassemblyjs/ast@1.14.1':
     dependencies:

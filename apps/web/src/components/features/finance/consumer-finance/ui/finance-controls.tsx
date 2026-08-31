@@ -155,7 +155,7 @@ export function Select(
   const showSearch = menuOptions.length > 5;
   const filtered = showSearch
     ? menuOptions.filter((option) =>
-        option.label
+        `${option.label} ${option.meta ?? ""} ${option.value}`
           .toLocaleLowerCase()
           .includes(search.trim().toLocaleLowerCase()),
       )

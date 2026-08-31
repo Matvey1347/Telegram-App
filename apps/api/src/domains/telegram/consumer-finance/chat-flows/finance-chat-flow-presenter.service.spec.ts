@@ -120,6 +120,23 @@ describe('FinanceChatFlowPresenterService', () => {
     ]);
   });
 
+  it('shows country flags in the language keyboard', async () => {
+    const result = await presenter.present('profile', 'en', {
+      kind: 'prompt',
+      flow: 'SETTINGS_LANGUAGE',
+      step: 'SETTINGS_LANGUAGE',
+      payload: {},
+    });
+
+    expect(result.inlineButtons.flat()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ text: '🇺🇦 Українська' }),
+        expect.objectContaining({ text: '🇷🇺 Русский' }),
+        expect.objectContaining({ text: '🇬🇧 English' }),
+      ]),
+    );
+  });
+
   it('keeps localized category choices paginated and bounded', async () => {
     flows.choices.mockResolvedValue(
       Array.from({ length: 11 }, (_, index) => ({

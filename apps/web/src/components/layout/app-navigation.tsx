@@ -3,22 +3,15 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
-  Bot,
-  BriefcaseBusiness,
   Bug,
   ChevronDown,
   ChevronRight,
-  Clock3,
-  Gauge,
-  Landmark,
   Megaphone,
   MessageCircle,
-  RadioTower,
-  Send,
   Settings,
-  ShieldCheck,
   Trash2,
 } from "lucide-react";
+import { workspaceFeatureIcons } from "@/lib/features/workspace/workspace-feature-icons";
 
 type NavigationItem = {
   label: string;
@@ -37,8 +30,18 @@ type NavigationGroup = {
 };
 
 const primaryItems: readonly NavigationItem[] = [
-  { label: "Overview", href: "/", icon: Gauge, featureId: "dashboard" },
-  { label: "Finance", href: "/finance", icon: Landmark, featureId: "finance" },
+  {
+    label: "Overview",
+    href: "/",
+    icon: workspaceFeatureIcons.dashboard,
+    featureId: "dashboard",
+  },
+  {
+    label: "Finance",
+    href: "/finance",
+    icon: workspaceFeatureIcons.finance,
+    featureId: "finance",
+  },
 ];
 
 const groups: readonly NavigationGroup[] = [
@@ -50,16 +53,21 @@ const groups: readonly NavigationGroup[] = [
       {
         label: "Channels",
         href: "/telegram-channels",
-        icon: RadioTower,
+        icon: workspaceFeatureIcons.channels,
         featureId: "channels",
       },
       {
         label: "Posts",
         href: "/telegram-posts",
-        icon: Send,
+        icon: workspaceFeatureIcons.posts,
         featureId: "posts",
       },
-      { label: "Bots", href: "/telegram-bots", icon: Bot, featureId: "bots" },
+      {
+        label: "Bots",
+        href: "/telegram-bots",
+        icon: workspaceFeatureIcons.bots,
+        featureId: "bots",
+      },
     ],
   },
   {
@@ -70,13 +78,13 @@ const groups: readonly NavigationGroup[] = [
       {
         label: "Ad sales",
         href: "/ad-sales",
-        icon: BriefcaseBusiness,
+        icon: workspaceFeatureIcons["adSales.sales"],
         featureId: "adSales.sales",
       },
       {
         label: "Ad campaigns",
         href: "/ad-campaigns",
-        icon: Megaphone,
+        icon: workspaceFeatureIcons.advertising,
         featureId: "advertising",
       },
     ],
@@ -89,7 +97,7 @@ const groups: readonly NavigationGroup[] = [
       {
         label: "Scheduled tasks",
         href: "/scheduled-tasks",
-        icon: Clock3,
+        icon: workspaceFeatureIcons.operations,
         featureId: "operations",
       },
       {
@@ -109,13 +117,13 @@ const groups: readonly NavigationGroup[] = [
       {
         label: "Workspace settings",
         href: "/settings",
-        icon: Settings,
+        icon: workspaceFeatureIcons.workspace,
         featureId: "workspace",
       },
       {
         label: "Roles & access",
         href: "/roles",
-        icon: ShieldCheck,
+        icon: workspaceFeatureIcons.members,
         permissionId: "members.assignRoles",
         featureId: "members",
       },
@@ -182,60 +190,88 @@ export function AppNavigation({
     (effectivePermissionKeys
       ? effectivePermissionKeys.includes(item.permissionId)
       : canViewAdmin);
+  const visiblePrimaryItems = primaryItems.filter(featureAllowed);
+  const visibleGroups = groups
+    .map((group) => ({
+      ...group,
+      children: group.children.filter(
+        (item) =>
+          featureAllowed(item) &&
+          permissionAllowed(item) &&
+          (!item.adminOnly || canViewAdmin),
+      ),
+    }))
+    .filter((group) => group.children.length > 0);
+  const visibleItemCount =
+    visiblePrimaryItems.length +
+    visibleGroups.reduce((total, group) => total + group.children.length, 0);
+  const onlyVisibleItem =
+    visibleItemCount === 1
+      ? (visiblePrimaryItems[0] ?? visibleGroups[0]?.children[0])
+      : null;
+
   return (
     <nav
       aria-label="Primary navigation"
       className="app-scrollbar min-h-0 flex-1 space-y-1 overflow-y-auto pr-1"
     >
-      {primaryItems.filter(featureAllowed).map((item) => (
-        <ItemLink key={item.href} item={item} pathname={pathname} />
-      ))}
+      {onlyVisibleItem ? (
+        <ItemLink item={onlyVisibleItem} pathname={pathname} />
+      ) : (
+        visiblePrimaryItems.map((item) => (
+          <ItemLink key={item.href} item={item} pathname={pathname} />
+        ))
+      )}
 
-      <div className="space-y-2 pt-3">
-        {groups.map((group) => {
-          const visibleChildren = group.children.filter(
-            (item) =>
-              featureAllowed(item) &&
-              permissionAllowed(item) &&
-              (!item.adminOnly || canViewAdmin),
-          );
-          const active = visibleChildren.some((item) =>
-            routeIsActive(pathname, item.href),
-          );
-          const open = openGroups[group.key] ?? active;
-          const GroupIcon = group.icon;
-          const panelId = `sidebar-group-${group.key}`;
-          return (
-            <section
-              key={group.key}
-              className="border-t border-neutral-900 pt-2"
-            >
-              <button
-                type="button"
-                onClick={() => onToggleGroup(group.key)}
-                aria-expanded={open}
-                aria-controls={panelId}
-                className={`flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium uppercase tracking-wide transition hover:bg-neutral-900 hover:text-white ${
-                  active ? "text-neutral-200" : "text-neutral-500"
-                }`}
+      {!onlyVisibleItem && visibleGroups.length ? (
+        <div className="space-y-2 pt-3">
+          {visibleGroups.map((group) => {
+            const active = group.children.some((item) =>
+              routeIsActive(pathname, item.href),
+            );
+            const open = openGroups[group.key] ?? active;
+            const GroupIcon = group.icon;
+            const panelId = `sidebar-group-${group.key}`;
+            return (
+              <section
+                key={group.key}
+                className="border-t border-neutral-900 pt-2"
               >
-                <GroupIcon size={15} aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate text-left">
-                  {group.label}
-                </span>
-                {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-              </button>
-              {open ? (
-                <div id={panelId} className="mt-1 space-y-1 pl-2">
-                  {visibleChildren.map((item) => (
-                    <ItemLink key={item.href} item={item} pathname={pathname} />
-                  ))}
-                </div>
-              ) : null}
-            </section>
-          );
-        })}
-      </div>
+                <button
+                  type="button"
+                  onClick={() => onToggleGroup(group.key)}
+                  aria-expanded={open}
+                  aria-controls={panelId}
+                  className={`flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium uppercase tracking-wide transition hover:bg-neutral-900 hover:text-white ${
+                    active ? "text-neutral-200" : "text-neutral-500"
+                  }`}
+                >
+                  <GroupIcon size={15} aria-hidden="true" />
+                  <span className="min-w-0 flex-1 truncate text-left">
+                    {group.label}
+                  </span>
+                  {open ? (
+                    <ChevronDown size={15} />
+                  ) : (
+                    <ChevronRight size={15} />
+                  )}
+                </button>
+                {open ? (
+                  <div id={panelId} className="mt-1 space-y-1 pl-2">
+                    {group.children.map((item) => (
+                      <ItemLink
+                        key={item.href}
+                        item={item}
+                        pathname={pathname}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+            );
+          })}
+        </div>
+      ) : null}
     </nav>
   );
 }

@@ -1,4 +1,4 @@
-import type { Icon, MemberSummary, ResolvedEmoji } from "../core";
+import type { MemberSummary, ResolvedEmoji } from "../core";
 import type { TelegramChannel } from "./telegram-channels";
 import type {
   TelegramPostButtonRows,
@@ -207,25 +207,6 @@ export type TelegramManagedPostLinkTarget = {
   telegramChannelTitle: string;
   publishedAt?: string | null;
   primaryTelegramMessageUrl?: string | null;
-};
-export type PromptNote = {
-  id: string;
-  workspaceId: string;
-  title: string;
-  content: string;
-  emoji?: string | null;
-  iconId?: string | null;
-  icon?: Icon | null;
-  iconPresentation?: ResolvedEmoji | null;
-  assignedMemberId?: string | null;
-  telegramChannelId?: string | null;
-  telegramChannelIds: string[];
-  postGroupId?: string | null;
-  assignedMember?: MemberSummary | null;
-  telegramChannel?: TelegramChannel | null;
-  postGroup?: PostGroup | null;
-  createdAt: string;
-  updatedAt: string;
 };
 export type PostGroupStatusSummary = {
   totalPosts: number;

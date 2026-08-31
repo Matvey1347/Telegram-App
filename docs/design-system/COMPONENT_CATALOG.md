@@ -29,6 +29,13 @@ Before adding a primitive or domain wrapper, search for an existing selector, da
 - Use when native select is not enough for visual option metadata or multiple selection.
 - Do not create local multi-selects before checking these.
 
+### `TimezoneSelect`
+
+- Import: `@/components/ui/timezone-select`
+- Use for internal workspace and product settings that store an IANA timezone.
+- Shows the region flag and current UTC offset, and supports search by timezone or offset.
+- Consumer products keep their own visual wrapper and may reuse only the neutral presentation data from `@/lib/timezones`.
+
 ### `DateInput`, `DateRangeInput`
 
 - Import: `@/components/ui/primitives`

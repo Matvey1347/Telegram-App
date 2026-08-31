@@ -52,6 +52,7 @@ import {
   type AdSalePriceAllocation,
 } from "./ad-sale-network-pricing";
 import { AdSaleSharedPost } from "./ad-sale-shared-post";
+import { AdSaleClientField } from "./ad-sale-client-field";
 import {
   applyProductToPlacement,
   commonAdSaleFormats,
@@ -67,7 +68,10 @@ import {
   writeAdSaleModalDraft,
   type AdSaleModalDraft,
 } from "./ad-sale-modal-draft";
-import { useAdSaleModalController, type AdSaleModalProps } from "./ad-sale-modal-controller";
+import {
+  useAdSaleModalController,
+  type AdSaleModalProps,
+} from "./ad-sale-modal-controller";
 
 export type { SalePlacementDraft } from "./ad-sale-types";
 
@@ -75,45 +79,89 @@ export { defaultAdSaleAccountId } from "./ad-sale-modal-controller";
 
 export function AdSaleModal(props: AdSaleModalProps) {
   const {
-  open,
-  onClose,
-  accounts,
-  channels,
-  networks,
-  productsByChannelId,
-  defaultCurrency,
-  workspaceTimezone,
-  onLoadAvailableSlots,
-  onLoadPublishedPosts,
-  onRequestQuotePreview,
-  onSearchAdvertisers,
-  onSubmit,
-  busy = false,
-  initialChannelId,
-  initialScheduledAt,
-  initialInventoryOpportunityKey,
-  headerAction,
-  sessionOpen,
-  systemBotUsername,
-  onSystemBotReturn,
-  onPrepareSystemBot,
-  onSendSystemBotPost,
-} = props;
+    open,
+    onClose,
+    accounts,
+    channels,
+    networks,
+    productsByChannelId,
+    defaultCurrency,
+    workspaceTimezone,
+    onLoadAvailableSlots,
+    onLoadPublishedPosts,
+    onRequestQuotePreview,
+    onSearchAdvertisers,
+    onSubmit,
+    busy = false,
+    initialChannelId,
+    initialScheduledAt,
+    initialInventoryOpportunityKey,
+    headerAction,
+    sessionOpen,
+    systemBotConnected,
+    systemBotUsername,
+    onSystemBotReturn,
+    onPrepareSystemBot,
+    onSendSystemBotPost,
+  } = props;
   const {
-    advertiserTelegram, setAdvertiserTelegram, advertiserContact, setAdvertiserContact,
-    selectedAdvertiser, setSelectedAdvertiser, selectedAdvertiserId, setSelectedAdvertiserId,
-    advertiserMatches, setAdvertiserMatches, assignedMemberId, setAssignedMemberId,
-    saleOrigin, setSaleOrigin, accountId, setAccountId, accountManuallySelectedRef,
-    channelSelectionMode, setChannelSelectionMode, selectedNetworkId, setSelectedNetworkId,
-    selectedChannelIds, setSelectedChannelIds, placementDateRange, setPlacementDateRange,
-    postMode, setPostMode, placements, setPlacements, submissionError, pendingDrafts,
-    slotPickerPlacementKey, setSlotPickerPlacementKey, slotPickerLoading, slotPickerError,
-    publishedPostsByPlacement, postsLoadingByPlacement, paymentAmount, networkPricing,
+    advertiserTelegram,
+    setAdvertiserTelegram,
+    advertiserContact,
+    setAdvertiserContact,
+    selectedAdvertiser,
+    setSelectedAdvertiser,
+    selectedAdvertiserId,
+    setSelectedAdvertiserId,
+    advertiserMatches,
+    setAdvertiserMatches,
+    assignedMemberId,
+    setAssignedMemberId,
+    saleOrigin,
+    setSaleOrigin,
+    accountId,
+    setAccountId,
+    accountManuallySelectedRef,
+    channelSelectionMode,
+    setChannelSelectionMode,
+    selectedNetworkId,
+    setSelectedNetworkId,
+    selectedChannelIds,
+    setSelectedChannelIds,
+    placementDateRange,
+    setPlacementDateRange,
+    postMode,
+    setPostMode,
+    placements,
+    setPlacements,
+    submissionError,
+    pendingDrafts,
+    slotPickerPlacementKey,
+    setSlotPickerPlacementKey,
+    slotPickerLoading,
+    slotPickerError,
+    publishedPostsByPlacement,
+    postsLoadingByPlacement,
+    paymentAmount,
+    networkPricing,
     quotePreview,
-    effectiveChannelIds, paymentCurrency, commonTime, commonFormats, commonFormatName,
-    loadPublishedPosts, canSubmit, openSlotPicker, applySlot, submit, slotPickerPlacement,
-    slotsByDate, sharedPostActive, pendingDraftSummaries, continueDraft, deleteDraft,
-    createNewDraft
+    effectiveChannelIds,
+    paymentCurrency,
+    commonTime,
+    commonFormats,
+    commonFormatName,
+    loadPublishedPosts,
+    canSubmit,
+    openSlotPicker,
+    applySlot,
+    submit,
+    slotPickerPlacement,
+    slotsByDate,
+    sharedPostActive,
+    pendingDraftSummaries,
+    continueDraft,
+    deleteDraft,
+    createNewDraft,
   } = useAdSaleModalController(props);
   return (
     <>
@@ -205,79 +253,19 @@ export function AdSaleModal(props: AdSaleModalProps) {
             <div className="space-y-4 pr-1">
               <section className="space-y-3">
                 <div className="grid gap-3 xl:grid-cols-4 xl:items-start">
-                  <FormField label="Contact">
-                    <div className="space-y-2">
-                      <Input
-                        value={advertiserContact}
-                        onChange={(event) => {
-                          setAdvertiserContact(event.target.value);
-                          setSelectedAdvertiser(null);
-                          setSelectedAdvertiserId(null);
-                          setAdvertiserMatches([]);
-                        }}
-                        placeholder="@username, phone, email"
-                      />
-                      {selectedAdvertiserId ? (
-                        <div className="rounded-lg border border-emerald-700 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-200">
-                          Linked to existing advertiser.
-                          <button
-                            type="button"
-                            className="ml-2 text-emerald-100 underline"
-                            onClick={() => {
-                              setSelectedAdvertiser(null);
-                              setSelectedAdvertiserId(null);
-                            }}
-                          >
-                            Unlink
-                          </button>
-                        </div>
-                      ) : null}
-                      {!selectedAdvertiserId && advertiserMatches.length ? (
-                        <div className="rounded-lg border border-neutral-800 bg-neutral-950">
-                          {advertiserMatches.slice(0, 5).map((advertiser) => (
-                            <button
-                              key={advertiser.id}
-                              type="button"
-                              className="flex w-full items-start justify-between gap-3 border-b border-neutral-800 px-3 py-2 text-left last:border-b-0 hover:bg-neutral-900"
-                              onClick={() => {
-                                setSelectedAdvertiser(advertiser);
-                                setSelectedAdvertiserId(advertiser.id);
-                                setAdvertiserTelegram(
-                                  advertiser.telegramUsername ?? "",
-                                );
-                                setAdvertiserContact(
-                                  advertiser.telegramUsername ??
-                                    advertiser.email ??
-                                    advertiser.phone ??
-                                    advertiser.contacts?.find(
-                                      (item) => item.isPrimary,
-                                    )?.value ??
-                                    "",
-                                );
-                                setAdvertiserMatches([]);
-                              }}
-                            >
-                              <span>
-                                <span className="block text-sm text-white">
-                                  {advertiser.displayName}
-                                </span>
-                                <span className="block text-xs text-neutral-400">
-                                  {advertiser.companyName ||
-                                    advertiser.telegramUsername ||
-                                    advertiser.email ||
-                                    advertiser.phone ||
-                                    "Existing advertiser"}
-                                </span>
-                              </span>
-                              <span className="text-xs text-neutral-500">
-                                {advertiser.totalSalesCount} sales
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  </FormField>
+                  <AdSaleClientField
+                    key={open ? "open" : "closed"}
+                    contact={advertiserContact}
+                    selectedAdvertiserId={selectedAdvertiserId}
+                    onContactChange={setAdvertiserContact}
+                    onTelegramChange={setAdvertiserTelegram}
+                    onSearchAdvertisers={onSearchAdvertisers}
+                    onSelect={(advertiser) => {
+                      setSelectedAdvertiser(advertiser);
+                      setSelectedAdvertiserId(advertiser?.id ?? null);
+                      setAdvertiserMatches([]);
+                    }}
+                  />
 
                   <FormField label="Financial account" required>
                     <CustomSelect
@@ -386,6 +374,7 @@ export function AdSaleModal(props: AdSaleModalProps) {
                 placements={placements}
                 channels={channels}
                 mode={postMode}
+                systemBotConnected={systemBotConnected}
                 systemBotUsername={systemBotUsername}
                 onSystemBotReturn={onSystemBotReturn}
                 onPrepareSystemBot={onPrepareSystemBot}
@@ -466,8 +455,9 @@ export function AdSaleModal(props: AdSaleModalProps) {
             ) : null}
             {quotePreview.limitExceeded ? (
               <p className="mt-4 rounded-lg border border-amber-700 bg-amber-950/30 px-3 py-2 text-sm text-amber-200">
-                This selection requires {quotePreview.requestCount.toLocaleString()} price
-                quotes. Reduce the channels or dates to 10,000 placements or fewer.
+                This selection requires{" "}
+                {quotePreview.requestCount.toLocaleString()} price quotes.
+                Reduce the channels or dates to 10,000 placements or fewer.
               </p>
             ) : null}
 

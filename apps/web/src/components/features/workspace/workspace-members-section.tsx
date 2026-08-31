@@ -1,41 +1,33 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Camera, Eye, EyeOff, Pencil, ShieldCheck, Trash2 } from "lucide-react";
-import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import {
   telegramUserAccountsApi,
   workspaceMembersApi,
-  type TelegramUserAccount,
   type WorkspaceMember,
   type WorkspaceRole,
 } from "@/lib/api";
 import { IconPicker } from "@/components/icons/icon-picker";
+import { IconAvatar } from "@/components/icons/icon-avatar";
 import { ActionMenu, ActionMenuItem } from "@/components/ui/action-menu";
 import {
   Button,
   Card,
   EmptyState,
   FormError,
-  FormField,
-  Input,
   LoadingState,
-  Modal,
   PageHeader,
-  Select,
 } from "@/components/ui/primitives";
+import { workspaceRolesApi } from "@/lib/features/workspace/workspace-roles-api";
+import { workspaceKeys } from "@/lib/query-keys";
 
-type MemberFormValues = {
-  email: string;
-  name?: string;
-  password?: string;
-  role: WorkspaceRole;
-  avatarIconId?: string | null;
-  telegramUsername?: string | null;
-  telegramUserAccountIds: string[];
-};
+import {
+  WorkspaceMemberModal,
+  type MemberFormValues,
+} from "./workspace-member-modal";
 
 const ROLE_LABELS: Record<WorkspaceRole, string> = {
   owner: "Owner",
@@ -44,15 +36,9 @@ const ROLE_LABELS: Record<WorkspaceRole, string> = {
   member: "Member",
 };
 
-function roleOptionsFor(currentRole: WorkspaceRole) {
-  if (currentRole === "owner") {
-    return ["owner", "admin", "MEDIA_BUYER", "member"] as WorkspaceRole[];
-  }
-  if (currentRole === "admin") return ["member"] as WorkspaceRole[];
-  return [] as WorkspaceRole[];
-}
-
-function RoleBadge({ role }: { role: WorkspaceRole }) {
+function RoleBadge({ member }: { member: WorkspaceMember }) {
+  const role = member.role;
+  const definition = member.roleDefinition;
   const tone =
     role === "owner"
       ? "border-amber-400/20 bg-amber-500/15 text-amber-200"
@@ -65,10 +51,27 @@ function RoleBadge({ role }: { role: WorkspaceRole }) {
     <span
       className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${tone}`}
     >
-      {role === "owner" ? <ShieldCheck size={12} /> : null}
-      {ROLE_LABELS[role]}
+      {definition?.iconPresentation ? (
+        <IconAvatar
+          icon={definition.iconPresentation}
+          label={definition.name}
+          size="xs"
+          bordered={false}
+          className="!h-3.5 !w-3.5 !bg-transparent text-xs"
+        />
+      ) : role === "owner" ? (
+        <ShieldCheck size={12} />
+      ) : null}
+      {definition?.name ?? ROLE_LABELS[role]}
     </span>
   );
+}
+
+function apiErrorMessage(error: unknown, fallback: string) {
+  const response = error as {
+    response?: { data?: { message?: string } };
+  };
+  return response.response?.data?.message || fallback;
 }
 
 export function WorkspaceMembersSection({
@@ -78,6 +81,8 @@ export function WorkspaceMembersSection({
 }) {
   const qc = useQueryClient();
   const { workspace } = useAuth();
+  const currentRole = workspace?.role;
+  const canAdd = currentRole === "owner" || currentRole === "admin";
   const [open, setOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<WorkspaceMember | null>(
     null,
@@ -96,13 +101,16 @@ export function WorkspaceMembersSection({
     queryKey: ["telegram-user-accounts"],
     queryFn: telegramUserAccountsApi.list,
   });
+  const roles = useQuery({
+    queryKey: workspaceKeys.roles(),
+    queryFn: workspaceRolesApi.list,
+    enabled: canAdd,
+  });
 
-  const currentRole = workspace?.role;
   const ownersCount = useMemo(
     () => (data || []).filter((member) => member.role === "owner").length,
     [data],
   );
-  const canAdd = currentRole === "owner" || currentRole === "admin";
 
   const accountOwnerById = useMemo(() => {
     const map = new Map<string, WorkspaceMember>();
@@ -115,16 +123,17 @@ export function WorkspaceMembersSection({
   }, [data]);
 
   const createMutation = useMutation({
-    mutationFn: (payload: Omit<MemberFormValues, "telegramUserAccountIds">) =>
+    mutationFn: (payload: MemberFormValues) =>
       workspaceMembersApi.create(payload),
     onSuccess: (res: WorkspaceMember & { temporaryPassword?: string }) => {
       setError("");
       qc.invalidateQueries({ queryKey: ["workspace-members"] });
+      qc.invalidateQueries({ queryKey: workspaceKeys.roles() });
       setOpen(false);
       setTempPassword(res?.temporaryPassword || "");
     },
-    onError: (e: any) =>
-      setError(e?.response?.data?.message || "Failed to add member"),
+    onError: (error: unknown) =>
+      setError(apiErrorMessage(error, "Failed to add member")),
   });
 
   const updateMutation = useMutation({
@@ -135,6 +144,7 @@ export function WorkspaceMembersSection({
       id: string;
       payload: {
         role?: WorkspaceRole;
+        roleDefinitionId?: string;
         isHidden?: boolean;
         avatarIconId?: string | null;
         telegramUsername?: string | null;
@@ -145,10 +155,11 @@ export function WorkspaceMembersSection({
       setError("");
       qc.invalidateQueries({ queryKey: ["workspace-members"] });
       qc.invalidateQueries({ queryKey: ["telegram-user-accounts"] });
+      qc.invalidateQueries({ queryKey: workspaceKeys.roles() });
       setEditingMember(null);
     },
-    onError: (e: any) =>
-      setError(e?.response?.data?.message || "Failed to update member"),
+    onError: (error: unknown) =>
+      setError(apiErrorMessage(error, "Failed to update member")),
   });
 
   const removeMutation = useMutation({
@@ -156,9 +167,10 @@ export function WorkspaceMembersSection({
     onSuccess: () => {
       setError("");
       qc.invalidateQueries({ queryKey: ["workspace-members"] });
+      qc.invalidateQueries({ queryKey: workspaceKeys.roles() });
     },
-    onError: (e: any) =>
-      setError(e?.response?.data?.message || "Failed to remove member"),
+    onError: (error: unknown) =>
+      setError(apiErrorMessage(error, "Failed to remove member")),
   });
 
   const canRemove = (member: WorkspaceMember) => {
@@ -209,7 +221,7 @@ export function WorkspaceMembersSection({
       <FormError message={error} />
       {isLoading ? <LoadingState /> : null}
 
-      <div className="grid grid-cols-1 items-start gap-2.5 md:grid-cols-2 2xl:grid-cols-4">
+      <div className="columns-1 gap-4 md:columns-2 xl:columns-3">
         {data?.map((member: WorkspaceMember) => {
           const hasInvestments =
             Number(member.investmentSummary?.totalInvestedPrimary ?? 0) > 0;
@@ -220,9 +232,9 @@ export function WorkspaceMembersSection({
           return (
             <Card
               key={member.id}
-              className="relative self-start overflow-visible border-neutral-800 bg-neutral-900/60 p-0"
+              className="relative mb-4 inline-block w-full break-inside-avoid overflow-visible border-neutral-800 bg-neutral-900/60 align-top !p-0"
             >
-              <div className="p-2.5">
+              <div className="p-4">
                 <div className="flex items-start gap-2.5">
                   <div className="relative shrink-0">
                     <IconPicker
@@ -264,7 +276,7 @@ export function WorkspaceMembersSection({
                       {member.user.email}
                     </p>
                     <div className="mt-1 flex min-w-0 items-center gap-1.5">
-                      <RoleBadge role={member.role} />
+                      <RoleBadge member={member} />
                       {member.isHidden ? (
                         <span className="truncate rounded-full border border-neutral-700 bg-neutral-950/70 px-2 py-0.5 text-xs text-neutral-400">
                           Finance hidden
@@ -348,7 +360,7 @@ export function WorkspaceMembersSection({
         <EmptyState text="No members" />
       ) : null}
 
-      <MemberModal
+      <WorkspaceMemberModal
         open={open}
         mode="create"
         onClose={() => setOpen(false)}
@@ -356,18 +368,21 @@ export function WorkspaceMembersSection({
           createMutation.mutate({
             email: values.email,
             name: values.name,
-            password: values.password,
-            role: values.role,
+            ...(values.password?.trim() ? { password: values.password } : {}),
+            roleDefinitionId: values.roleDefinitionId,
             avatarIconId: values.avatarIconId,
             telegramUsername: values.telegramUsername?.trim() || null,
+            telegramUserAccountIds: values.telegramUserAccountIds,
           })
         }
         currentRole={currentRole || "member"}
         telegramAccounts={telegramAccounts ?? []}
-        members={data ?? []}
         accountOwnerById={accountOwnerById}
+        roles={roles.data ?? []}
+        rolesLoading={roles.isLoading}
+        rolesError={!!roles.error}
       />
-      <MemberModal
+      <WorkspaceMemberModal
         open={!!editingMember}
         mode="edit"
         member={editingMember}
@@ -377,7 +392,7 @@ export function WorkspaceMembersSection({
           updateMutation.mutate({
             id: editingMember.id,
             payload: {
-              role: values.role,
+              roleDefinitionId: values.roleDefinitionId,
               avatarIconId: values.avatarIconId,
               telegramUsername: values.telegramUsername?.trim() || null,
               telegramUserAccountIds: values.telegramUserAccountIds,
@@ -386,220 +401,11 @@ export function WorkspaceMembersSection({
         }}
         currentRole={currentRole || "member"}
         telegramAccounts={telegramAccounts ?? []}
-        members={data ?? []}
         accountOwnerById={accountOwnerById}
+        roles={roles.data ?? []}
+        rolesLoading={roles.isLoading}
+        rolesError={!!roles.error}
       />
     </>
-  );
-}
-
-function MemberModal({
-  open,
-  mode,
-  member,
-  onClose,
-  onSubmit,
-  currentRole,
-  telegramAccounts,
-  accountOwnerById,
-}: {
-  open: boolean;
-  mode: "create" | "edit";
-  member?: WorkspaceMember | null;
-  onClose: () => void;
-  onSubmit: (v: MemberFormValues) => void;
-  currentRole: WorkspaceRole;
-  telegramAccounts: TelegramUserAccount[];
-  members: WorkspaceMember[];
-  accountOwnerById: Map<string, WorkspaceMember>;
-}) {
-  const allowedRoles = useMemo(
-    () => roleOptionsFor(currentRole),
-    [currentRole],
-  );
-  const initialAssignedIds = useMemo(
-    () =>
-      member?.assignedTelegramUserAccounts?.map((account) => account.id) ?? [],
-    [member],
-  );
-  const {
-    register,
-    handleSubmit,
-    reset,
-    setValue,
-    watch,
-    formState: { errors },
-  } = useForm<MemberFormValues>({
-    defaultValues: {
-      email: "",
-      name: "",
-      password: "",
-      role: allowedRoles[0] ?? "member",
-      avatarIconId: null,
-      telegramUsername: "",
-      telegramUserAccountIds: [],
-    },
-  });
-
-  useEffect(() => {
-    if (!open) return;
-    reset({
-      email: mode === "create" ? "" : (member?.user.email ?? ""),
-      name: mode === "create" ? "" : (member?.user.name ?? ""),
-      password: "",
-      role:
-        mode === "create"
-          ? (allowedRoles[0] ?? "member")
-          : (member?.role ?? "member"),
-      avatarIconId: member?.avatarIconId ?? null,
-      telegramUsername: member?.telegramUsername ?? "",
-      telegramUserAccountIds: initialAssignedIds,
-    });
-  }, [allowedRoles, initialAssignedIds, member, mode, open, reset]);
-
-  const selectedAccountIds = watch("telegramUserAccountIds") ?? [];
-
-  const toggleAccount = (accountId: string, checked: boolean) => {
-    const next = checked
-      ? [...new Set([...selectedAccountIds, accountId])]
-      : selectedAccountIds.filter((id) => id !== accountId);
-    setValue("telegramUserAccountIds", next, { shouldDirty: true });
-  };
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={
-        mode === "create"
-          ? "Add Member"
-          : `Edit ${member?.user.name ?? "member"}`
-      }
-    >
-      <form
-        className="space-y-4"
-        onSubmit={handleSubmit((values) => onSubmit(values))}
-      >
-        <FormField label="Avatar image">
-          <IconPicker
-            iconId={watch("avatarIconId") ?? null}
-            icon={member?.avatarPresentation}
-            onChange={(avatarIconId) =>
-              setValue("avatarIconId", avatarIconId, { shouldDirty: true })
-            }
-            buttonLabel="Upload avatar"
-          />
-        </FormField>
-
-        <div className="rounded-xl border border-neutral-800 bg-neutral-950/40 p-4">
-          <p className="text-sm font-medium text-white">Role</p>
-          <div className="mt-3 space-y-3">
-            {mode === "create" ? (
-              <>
-                <FormField
-                  label="Email"
-                  required
-                  error={errors.email ? "Required field" : undefined}
-                >
-                  <Input {...register("email", { required: true })} />
-                </FormField>
-                <FormField label="Name">
-                  <Input {...register("name")} />
-                </FormField>
-                <FormField label="Password (optional)">
-                  <Input type="password" {...register("password")} />
-                </FormField>
-              </>
-            ) : null}
-            <FormField label="Role">
-              <Select {...register("role")}>
-                {allowedRoles.map((role) => (
-                  <option key={role} value={role}>
-                    {ROLE_LABELS[role]}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-neutral-800 bg-neutral-950/40 p-4">
-          <p className="text-sm font-medium text-white">Telegram identity</p>
-          <div className="mt-3 space-y-3">
-            <FormField label="Telegram username">
-              <Input placeholder="@matvey" {...register("telegramUsername")} />
-              <p className="mt-2 text-xs text-neutral-500">
-                Used to match invite links when this person's MTProto account is
-                not connected.
-              </p>
-            </FormField>
-
-            {mode === "edit" ? (
-              <div>
-                <p className="text-sm text-neutral-200">Telegram accounts</p>
-                <div className="mt-2 space-y-2">
-                  {telegramAccounts.length ? (
-                    telegramAccounts.map((account) => {
-                      const owner = accountOwnerById.get(account.id);
-                      const isTakenByOther = owner && owner.id !== member?.id;
-                      const checked = selectedAccountIds.includes(account.id);
-                      const title =
-                        [account.firstName, account.lastName]
-                          .filter(Boolean)
-                          .join(" ") || account.label;
-                      return (
-                        <label
-                          key={account.id}
-                          className={`flex items-start gap-3 rounded-lg border px-3 py-2 text-sm ${isTakenByOther ? "border-neutral-800 bg-neutral-900/30 text-neutral-500" : "border-neutral-700 bg-neutral-900 text-neutral-200"}`}
-                        >
-                          <input
-                            type="checkbox"
-                            className="mt-1"
-                            checked={checked}
-                            disabled={Boolean(isTakenByOther)}
-                            onChange={(event) =>
-                              toggleAccount(account.id, event.target.checked)
-                            }
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate font-medium text-white">
-                              {title}
-                            </p>
-                            <p className="truncate text-xs text-neutral-400">
-                              {account.username
-                                ? `@${account.username}`
-                                : account.label}
-                            </p>
-                            <p className="mt-1 text-xs text-neutral-500">
-                              {account.status}
-                            </p>
-                            {isTakenByOther ? (
-                              <p className="mt-1 text-xs text-amber-300">
-                                Already linked to {owner.user.name}
-                              </p>
-                            ) : null}
-                          </div>
-                        </label>
-                      );
-                    })
-                  ) : (
-                    <p className="text-sm text-neutral-500">
-                      No MTProto accounts connected yet.
-                    </p>
-                  )}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" type="button" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit">{mode === "create" ? "Add" : "Save"}</Button>
-        </div>
-      </form>
-    </Modal>
   );
 }

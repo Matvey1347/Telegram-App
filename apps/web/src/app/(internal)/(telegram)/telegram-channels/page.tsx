@@ -28,6 +28,13 @@ import {
   ChannelMenuAction,
   ChannelMenuLink,
 } from "@/components/features/telegram/telegram/channel-card-actions";
+import { ChannelStatusBadges } from "@/components/features/telegram/telegram/channel-system-bot-access-modal";
+import {
+  ChannelSyncScopeModal,
+  DEFAULT_CHANNEL_SYNC_SELECTION,
+  WorkspaceChannelSyncModal,
+  syncSelectionFromChannel,
+} from "@/components/features/telegram/telegram/channel-sync-scope-modal";
 import { telegramChannelAccessLabel } from "@/components/features/telegram/telegram/channel-access-badge";
 import { MtprotoAccountsPanel } from "@/components/features/telegram/telegram/telegram-account-panels";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
@@ -100,7 +107,6 @@ import {
   removeTelegramChannelFromCaches,
 } from "@/lib/features/telegram/telegram-channel-cache";
 import { invalidateTelegramChannelQueries } from "@/lib/features/telegram/telegram-query-invalidation";
-
 import {
   parseTelegramAccountFilter as parseAccountFilter,
   parseTelegramChannelLifecycle as parseChannelLifecycleTab,
@@ -111,7 +117,6 @@ import {
   type TelegramChannelOwnershipFilter as ChannelFilter,
   type TelegramChannelsTab as TelegramTab,
 } from "@/components/features/telegram/telegram/telegram-channels-route-state";
-
 function normalizeUsername(value?: string | null) {
   return String(value || "")
     .replace(/^@/, "")
@@ -153,48 +158,6 @@ function kpiBadgeClass(status?: TelegramChannelFinancialSummary["kpiStatus"]) {
   if (status === "acceptable") return "border-yellow-700 text-yellow-200";
   if (status === "bad") return "border-rose-700 text-rose-200";
   return "border-slate-700 text-slate-300";
-}
-
-const DEFAULT_SYNC_SELECTION: TelegramChannelSyncSelection = {
-  syncIncludePublicInfo: true,
-  syncIncludeInviteLinks: true,
-  syncIncludeHistoricalPosts: true,
-  syncIncludePostMetrics: true,
-  syncIncludeOlderPosts: true,
-  syncIncludeChannelStats: true,
-  syncIncludeManagedPosts: true,
-  syncIncludeAudienceSnapshot: true,
-};
-
-function syncSelectionFromChannel(
-  channel?: TelegramChannel | null,
-): TelegramChannelSyncSelection {
-  return {
-    syncIncludePublicInfo:
-      channel?.syncIncludePublicInfo ??
-      DEFAULT_SYNC_SELECTION.syncIncludePublicInfo,
-    syncIncludeInviteLinks:
-      channel?.syncIncludeInviteLinks ??
-      DEFAULT_SYNC_SELECTION.syncIncludeInviteLinks,
-    syncIncludeHistoricalPosts:
-      channel?.syncIncludeHistoricalPosts ??
-      DEFAULT_SYNC_SELECTION.syncIncludeHistoricalPosts,
-    syncIncludePostMetrics:
-      channel?.syncIncludePostMetrics ??
-      DEFAULT_SYNC_SELECTION.syncIncludePostMetrics,
-    syncIncludeOlderPosts:
-      channel?.syncIncludeOlderPosts ??
-      DEFAULT_SYNC_SELECTION.syncIncludeOlderPosts,
-    syncIncludeChannelStats:
-      channel?.syncIncludeChannelStats ??
-      DEFAULT_SYNC_SELECTION.syncIncludeChannelStats,
-    syncIncludeManagedPosts:
-      channel?.syncIncludeManagedPosts ??
-      DEFAULT_SYNC_SELECTION.syncIncludeManagedPosts,
-    syncIncludeAudienceSnapshot:
-      channel?.syncIncludeAudienceSnapshot ??
-      DEFAULT_SYNC_SELECTION.syncIncludeAudienceSnapshot,
-  };
 }
 
 function formatLocalDate(value?: string | Date | null) {
@@ -525,139 +488,6 @@ function SourceAccessModal({
               </p>
             ))}
           </div>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function ChannelSyncScopeModal({
-  channel,
-  selection,
-  isSyncing,
-  onClose,
-  onSelectionChange,
-  onSyncAll,
-  onSyncSelected,
-}: {
-  channel: TelegramChannel | null;
-  selection: TelegramChannelSyncSelection;
-  isSyncing: boolean;
-  onClose: () => void;
-  onSelectionChange: (selection: TelegramChannelSyncSelection) => void;
-  onSyncAll: () => void;
-  onSyncSelected: () => void;
-}) {
-  const syncOptions: Array<{
-    key: keyof TelegramChannelSyncSelection;
-    title: string;
-    description: string;
-  }> = [
-    {
-      key: "syncIncludePublicInfo",
-      title: "Public info",
-      description: "Channel identity, title and subscribers.",
-    },
-    {
-      key: "syncIncludeInviteLinks",
-      title: "Invite links",
-      description: "Joined and pending requests attribution.",
-    },
-    {
-      key: "syncIncludeHistoricalPosts",
-      title: "Historical daily rows",
-      description: "Daily aggregated historical post rows.",
-    },
-    {
-      key: "syncIncludePostMetrics",
-      title: "Post metrics",
-      description: "Views, reactions and post-level metrics.",
-    },
-    {
-      key: "syncIncludeOlderPosts",
-      title: "Older posts backfill",
-      description: "Extra metrics pass for older posts.",
-    },
-    {
-      key: "syncIncludeChannelStats",
-      title: "Channel stats",
-      description: "Broadcast analytics graphs and snapshots.",
-    },
-    {
-      key: "syncIncludeManagedPosts",
-      title: "Managed posts",
-      description: "Managed post sync and remote status check.",
-    },
-    {
-      key: "syncIncludeAudienceSnapshot",
-      title: "Audience snapshot",
-      description: "Save the latest audience estimate.",
-    },
-  ];
-  const selectedCount = syncOptions.filter(
-    (option) => selection[option.key],
-  ).length;
-
-  return (
-    <Modal
-      open={!!channel}
-      onClose={onClose}
-      title={channel ? `Sync ${channel.title}` : "Sync channel"}
-    >
-      <div className="space-y-4">
-        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3 text-sm text-slate-300">
-          <p>Choose what to sync for this channel.</p>
-          <p className="mt-1 text-xs text-slate-500">
-            Sync selected saves this scope to the channel. Sync all runs the
-            full sync without changing the saved scope.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-          {syncOptions.map((option) => (
-            <label
-              key={option.key}
-              className="flex cursor-pointer items-start gap-3 rounded-md border border-slate-800 bg-slate-900/40 p-3"
-            >
-              <input
-                type="checkbox"
-                className="mt-1 h-4 w-4 rounded border-slate-600 bg-slate-950 text-blue-500"
-                checked={selection[option.key]}
-                onChange={(event) =>
-                  onSelectionChange({
-                    ...selection,
-                    [option.key]: event.target.checked,
-                  })
-                }
-              />
-              <div>
-                <p className="text-sm font-medium text-white">{option.title}</p>
-                <p className="mt-1 text-xs text-slate-400">
-                  {option.description}
-                </p>
-              </div>
-            </label>
-          ))}
-        </div>
-        <div className="flex items-center justify-between gap-3 text-xs text-slate-400">
-          <span>
-            Selected: {selectedCount}/{syncOptions.length}
-          </span>
-          <span>Last saved scope is preselected when the modal opens.</span>
-        </div>
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="secondary" onClick={onClose} disabled={isSyncing}>
-            Close
-          </Button>
-          <Button variant="secondary" onClick={onSyncAll} disabled={isSyncing}>
-            Sync all
-          </Button>
-          <Button
-            variant="primary"
-            onClick={onSyncSelected}
-            disabled={isSyncing || selectedCount === 0}
-          >
-            Sync selected
-          </Button>
         </div>
       </div>
     </Modal>
@@ -1600,7 +1430,8 @@ export default function TelegramChannelsPage() {
   const [syncTargetChannel, setSyncTargetChannel] =
     useState<TelegramChannel | null>(null);
   const [syncSelection, setSyncSelection] =
-    useState<TelegramChannelSyncSelection>(DEFAULT_SYNC_SELECTION);
+    useState<TelegramChannelSyncSelection>(DEFAULT_CHANNEL_SYNC_SELECTION);
+  const [workspaceSyncOpen, setWorkspaceSyncOpen] = useState(false);
   const [deletingAnalysis, setDeletingAnalysis] = useState<{
     channel: TelegramChannel;
     analysis: TelegramChannelAdAnalysis;
@@ -2058,6 +1889,15 @@ export default function TelegramChannelsPage() {
         <Button
           type="button"
           variant="secondary"
+          onClick={() => setWorkspaceSyncOpen(true)}
+          className="inline-flex items-center gap-2"
+        >
+          <RefreshCw size={16} />
+          Sync all channels
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
           onClick={() => setExportOpen(true)}
           disabled={!channels?.length}
           className="inline-flex items-center gap-2"
@@ -2143,11 +1983,12 @@ export default function TelegramChannelsPage() {
                 >
                   <ChannelPreview
                     channel={channel}
-                    badges={
-                      hasAdminLink && channel.archivedAt ? (
-                        <span className="inline-flex rounded border border-amber-700/70 bg-amber-950/25 px-2 py-0.5 text-xs text-amber-200">
-                          Archived
-                        </span>
+                    status={
+                      hasAdminLink ? (
+                        <ChannelStatusBadges
+                          connection={channel.preview?.systemBotConnection}
+                          archived={Boolean(channel.archivedAt)}
+                        />
                       ) : undefined
                     }
                     rightAction={
@@ -2322,20 +2163,26 @@ export default function TelegramChannelsPage() {
         onSubmit={handleExport}
       />
       <ChannelSyncScopeModal
-        channel={syncTargetChannel}
+        open={!!syncTargetChannel}
+        title={
+          syncTargetChannel ? `Sync ${syncTargetChannel.title}` : "Sync channel"
+        }
+        description="Choose what to sync for this channel."
+        helperText="Sync selected saves this scope to the channel. Sync all runs the full sync without changing the saved scope."
         selection={syncSelection}
         isSyncing={syncNowMutation.isPending}
+        submitLabel="Sync selected"
         onClose={() => setSyncTargetChannel(null)}
         onSelectionChange={setSyncSelection}
         onSyncAll={() =>
           syncTargetChannel
             ? syncNowMutation.mutate({
                 channel: syncTargetChannel,
-                payload: { ...DEFAULT_SYNC_SELECTION },
+                payload: { ...DEFAULT_CHANNEL_SYNC_SELECTION },
               })
             : undefined
         }
-        onSyncSelected={() =>
+        onSubmit={() =>
           syncTargetChannel
             ? syncNowMutation.mutate({
                 channel: syncTargetChannel,
@@ -2343,6 +2190,10 @@ export default function TelegramChannelsPage() {
               })
             : undefined
         }
+      />
+      <WorkspaceChannelSyncModal
+        open={workspaceSyncOpen}
+        onClose={() => setWorkspaceSyncOpen(false)}
       />
       <ConfirmDeleteModal
         open={!!deleting}

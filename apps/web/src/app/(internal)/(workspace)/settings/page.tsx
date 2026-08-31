@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppShell } from '@/components/layout/app-shell';
 import { InlineIconPicker } from '@/components/icons/inline-icon-picker';
-import { Button, Card, ConfirmDeleteModal, Input, LoadingState, PageHeader, Select } from '@/components/ui/primitives';
+import { Button, Card, ConfirmDeleteModal, Input, LoadingState, PageHeader } from '@/components/ui/primitives';
+import { TimezoneSelect } from '@/components/ui/timezone-select';
 import { accountApi, authApi, telegramAdSalesApi, workspacesApi } from '@/lib/api';
 import { WorkspaceMembersSection } from '@/components/features/workspace/workspace-members-section';
-import { TelegramSystemBotSettings } from '@/components/features/telegram/telegram-system-bot/telegram-system-bot-settings';
 
 export default function SettingsPage() {
   const qc = useQueryClient();
@@ -20,15 +20,10 @@ export default function SettingsPage() {
   const [workspaceName, setWorkspaceName] = useState('');
   const [workspaceTimezone, setWorkspaceTimezone] = useState('Europe/Warsaw');
   const [workspaceIconId, setWorkspaceIconId] = useState<string | null>(null);
-  const [defaultOrganicPostsPerAdSlot, setDefaultOrganicPostsPerAdSlot] = useState('3');
+  const [defaultOrganicPostsPerAdSlotDraft, setDefaultOrganicPostsPerAdSlot] = useState<string | null>(null);
+  const defaultOrganicPostsPerAdSlot = defaultOrganicPostsPerAdSlotDraft
+    ?? String(adSalesWorkspaceSettings.data?.defaultOrganicPostsPerAdSlot ?? 3);
   const [workspaceDeleteOpen, setWorkspaceDeleteOpen] = useState(false);
-  const timezoneOptions = useMemo(() => {
-    const fallback = ['Europe/Warsaw', 'UTC', 'Europe/London', 'Europe/Berlin', 'Europe/Kyiv', 'America/New_York'];
-    if (typeof Intl.supportedValuesOf !== 'function') {
-      return fallback;
-    }
-    return Intl.supportedValuesOf('timeZone');
-  }, []);
   const workspaceMutation = useMutation({
     mutationFn: accountApi.updateWorkspace,
     onSuccess: () => me.refetch(),
@@ -56,6 +51,7 @@ export default function SettingsPage() {
   const adSalesWorkspaceMutation = useMutation({
     mutationFn: telegramAdSalesApi.updateWorkspaceSettings,
     onSuccess: async () => {
+      setDefaultOrganicPostsPerAdSlot(null);
       await qc.invalidateQueries({ queryKey: ['telegram-ad-sales', 'workspace-settings'] });
     },
   });
@@ -69,48 +65,30 @@ export default function SettingsPage() {
     setWorkspaceIconId(me.data.workspace.avatarIcon?.id ?? null);
   }, [me.data]);
 
-  useEffect(() => {
-    if (!adSalesWorkspaceSettings.data) return;
-    setDefaultOrganicPostsPerAdSlot(
-      String(adSalesWorkspaceSettings.data.defaultOrganicPostsPerAdSlot ?? 3),
-    );
-  }, [adSalesWorkspaceSettings.data]);
-
   return (
     <AppShell>
       <PageHeader title="Settings" />
       {me.isLoading ? <LoadingState /> : null}
       <div className="space-y-4">
-        <TelegramSystemBotSettings />
         <section>
           <WorkspaceMembersSection embedded />
         </section>
         <Card>
           <h3 className="text-lg font-semibold">Workspace</h3>
           <div className="mt-4 space-y-3">
-            <div className="flex items-center gap-3">
-              <InlineIconPicker iconId={workspaceIconId} icon={me.data?.workspace.avatarPresentation} onChange={setWorkspaceIconId} className="text-2xl" />
-              <div>
-                <p className="text-sm font-medium">{me.data?.workspace.name}</p>
-                <p className="text-xs text-neutral-400">Workspace avatar and name</p>
+            <div className="flex items-end gap-3">
+              <InlineIconPicker iconId={workspaceIconId} icon={me.data?.workspace.avatarPresentation} onChange={setWorkspaceIconId} className="mb-0.5 shrink-0 text-2xl" />
+              <div className="min-w-0 flex-1">
+                <label className="mb-1 block text-sm text-neutral-300">Workspace name</label>
+                <Input value={workspaceName} onChange={(e) => setWorkspaceName(e.target.value)} />
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-sm text-neutral-300">Workspace name</label>
-              <Input value={workspaceName} onChange={(e) => setWorkspaceName(e.target.value)} />
-            </div>
-            <div>
               <label className="mb-1 block text-sm text-neutral-300">Workspace timezone</label>
-              <Select
+              <TimezoneSelect
                 value={workspaceTimezone}
-                onChange={(event) => setWorkspaceTimezone(event.target.value)}
-              >
-                {timezoneOptions.map((timezone) => (
-                  <option key={timezone} value={timezone}>
-                    {timezone}
-                  </option>
-                ))}
-              </Select>
+                onChange={setWorkspaceTimezone}
+              />
             </div>
             <div className="flex justify-end gap-3">
               <div className="flex items-center gap-2">

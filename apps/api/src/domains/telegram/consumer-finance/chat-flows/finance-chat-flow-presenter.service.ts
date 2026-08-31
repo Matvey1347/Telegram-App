@@ -78,10 +78,10 @@ export class FinanceChatFlowPresenterService {
       } else if (action === 'language') {
         buttons.push(
           [
-            { text: 'Українська', callbackData: callback('language', 'uk') },
-            { text: 'Русский', callbackData: callback('language', 'ru') },
+            { text: '🇺🇦 Українська', callbackData: callback('language', 'uk') },
+            { text: '🇷🇺 Русский', callbackData: callback('language', 'ru') },
           ],
-          [{ text: 'English', callbackData: callback('language', 'en') }],
+          [{ text: '🇬🇧 English', callbackData: callback('language', 'en') }],
         );
       } else if (action && action !== 'emoji') {
         const page = result.page || 0;

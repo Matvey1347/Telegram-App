@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   session: vi.fn(),
   createBrowserTransfer: vi.fn(),
   browserTransferUrl: vi.fn(),
+  updateSettings: vi.fn(),
 }));
 
 vi.mock("./use-telegram-mini-app-bootstrap", () => ({
@@ -32,6 +33,7 @@ vi.mock("@/lib/features/finance/consumer-finance-api", () => ({
     session: mocks.session,
     createBrowserTransfer: mocks.createBrowserTransfer,
     browserTransferUrl: mocks.browserTransferUrl,
+    updateSettings: mocks.updateSettings,
   },
 }));
 vi.mock("./consumer-finance-screens", () => ({
@@ -63,9 +65,7 @@ vi.mock("./consumer-finance-login", () => ({
   }: {
     onRetry: () => void;
     locale?: string;
-  }) => (
-    <button onClick={onRetry}>Bootstrap retry {locale}</button>
-  ),
+  }) => <button onClick={onRetry}>Bootstrap retry {locale}</button>,
 }));
 
 const profile: ConsumerFinanceProfile = {
@@ -102,6 +102,8 @@ beforeEach(() => {
   mocks.session.mockResolvedValue({ authenticated: false });
   mocks.createBrowserTransfer.mockReset();
   mocks.browserTransferUrl.mockReset();
+  mocks.updateSettings.mockReset();
+  mocks.updateSettings.mockResolvedValue(profile);
   window.localStorage.clear();
   window.history.replaceState({}, "", "/finance/bot-1");
 });
@@ -281,6 +283,26 @@ describe("ConsumerFinanceApp bootstrap", () => {
     expect(
       within(mobileNav as HTMLElement).getAllByRole("button"),
     ).toHaveLength(4);
+  });
+
+  it("changes the Finance language from the Mini App header", async () => {
+    mocks.bootstrap = { status: "ready", initData: "signed-init-data" };
+    mocks.auth.mockResolvedValue({ authenticated: true, profile });
+    mocks.updateSettings.mockResolvedValue({ ...profile, locale: "uk" });
+
+    renderApp();
+
+    await screen.findByText(/Finance profile profile-1/);
+    expect(screen.getByText("🇬🇧")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /EN/u }));
+    fireEvent.click(screen.getByRole("button", { name: /UA/u }));
+    await waitFor(() =>
+      expect(mocks.updateSettings).toHaveBeenCalledWith("bot-1", {
+        defaultCurrency: "USD",
+        timezone: "UTC",
+        locale: "uk",
+      }),
+    );
   });
 
   it("keeps browser-session transfer failure recoverable", async () => {

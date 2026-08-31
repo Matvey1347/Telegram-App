@@ -17,7 +17,9 @@ export class FinanceCategoriesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
-    private readonly authorization: WorkspaceAuthorizationService = financeAuthorizationTestFallback(workspaceService),
+    private readonly authorization: WorkspaceAuthorizationService = financeAuthorizationTestFallback(
+      workspaceService,
+    ),
   ) {}
 
   private async ensureEmojiIcon(
@@ -73,6 +75,12 @@ export class FinanceCategoriesService {
       '↩️',
       client,
     );
+    const salaryIconId = await this.ensureEmojiIcon(
+      workspaceId,
+      'salary',
+      '💼',
+      client,
+    );
     const buyChannelsCandidates = await (
       client as any
     ).transactionCategory.findMany({
@@ -90,6 +98,29 @@ export class FinanceCategoriesService {
       buyChannelsCandidates.find(
         (category: { key?: string | null }) => category.key === 'buy_channels',
       ) ?? buyChannelsCandidates[0];
+
+    await (client as any).transactionCategory.upsert({
+      where: {
+        workspaceId_type_key: {
+          workspaceId,
+          type: 'expense',
+          key: 'salary',
+        },
+      },
+      update: {
+        isSystem: true,
+        name: 'Salary',
+        iconId: salaryIconId,
+      },
+      create: {
+        workspaceId,
+        type: 'expense',
+        key: 'salary',
+        isSystem: true,
+        name: 'Salary',
+        iconId: salaryIconId,
+      },
+    });
 
     await (client as any).transactionCategory.upsert({
       where: {
@@ -257,7 +288,10 @@ export class FinanceCategoriesService {
   }
 
   async list(userId: string, type?: 'income' | 'expense') {
-    const { workspaceId } = await this.authorization.require(userId, 'finance.view');
+    const { workspaceId } = await this.authorization.require(
+      userId,
+      'finance.view',
+    );
     await this.ensureSystemCategories(workspaceId);
 
     const categories = await (this.prisma as any).transactionCategory.findMany({

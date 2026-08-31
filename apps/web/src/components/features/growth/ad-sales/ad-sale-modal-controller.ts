@@ -9,6 +9,7 @@ import {
 } from "@/lib/features/growth/telegram-ad-sales";
 import { expandAdSaleDateRange } from "@/lib/features/growth/ad-sales-bulk-date-builder";
 import { hasPlacementPostContent } from "./placement-post/placement-post-content";
+// prettier-ignore
 import type { PublishedPostOption, QuoteRequestDraft, SalePlacementDraft } from "./ad-sale-types";
 import {
   commonAdSaleFormats,
@@ -23,6 +24,7 @@ import {
   useAdSaleModalSession,
 } from "./ad-sale-modal-session";
 import { useAdSaleNetworkPricing } from "./ad-sale-network-pricing";
+import { isValidTelegramUsernameInput } from "./ad-sale-client-field";
 function channelKey(channelId: string, date: string) {
   return `placement:${channelId}:${date}`;
 }
@@ -30,6 +32,7 @@ export { defaultAdSaleAccountId };
 export type { AdSaleModalProps } from "./ad-sale-modal-types";
 import type { AdSaleModalProps } from "./ad-sale-modal-types";
 export function useAdSaleModalController(options: AdSaleModalProps) {
+  // prettier-ignore
   const {
     open, onClose, accounts, channels, networks, productsByChannelId,
     defaultCurrency, workspaceTimezone, onLoadAvailableSlots,
@@ -50,6 +53,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     placements,
     setPlacements,
   });
+  // prettier-ignore
   const {
     advertiserTelegram, setAdvertiserTelegram, advertiserContact, setAdvertiserContact,
     selectedAdvertiser, setSelectedAdvertiser, selectedAdvertiserId, setSelectedAdvertiserId,
@@ -63,7 +67,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     slotPickerError, setSlotPickerError, publishedPostsByPlacement,
     setPublishedPostsByPlacement, postsLoadingByPlacement, setPostsLoadingByPlacement,
     persistedDraftJsonRef, draftReadyRef, currentDraft,
-    continueDraft, deleteDraft, createNewDraft
+    continueDraft, deleteDraft, createNewDraft,
   } = useAdSaleModalSession(options, {
     postMode,
     setPostMode,
@@ -280,6 +284,9 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     placements.every((placement) =>
       isValidZonedDateTimeInput(placement.date, placement.time),
     ) &&
+    (Boolean(selectedAdvertiserId) ||
+      !advertiserContact.trim() ||
+      isValidTelegramUsernameInput(advertiserContact)) &&
     (!networkPricing.allocation ||
       Math.round(paymentAmount * 100) ===
         Math.round(networkPricing.allocation.totalAmount * 100));
@@ -427,7 +434,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
   ).sort(([left], [right]) => left.localeCompare(right));
   const sharedPostActive =
     postMode === "shared" &&
-    placements.length >= 2 &&
+    placements.length >= 1 &&
     placements.every((placement) =>
       hasPlacementPostContent(placement.managedPostDraft),
     );
@@ -470,6 +477,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     [accounts, channels, defaultCurrency, pendingDrafts, productsByChannelId],
   );
 
+  // prettier-ignore
   return {
     advertiserTelegram, setAdvertiserTelegram, advertiserContact, setAdvertiserContact,
     selectedAdvertiser, setSelectedAdvertiser, selectedAdvertiserId, setSelectedAdvertiserId,
@@ -484,6 +492,6 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     effectiveChannelIds, paymentCurrency, commonTime, commonFormats, commonFormatName,
     loadPublishedPosts, canSubmit, openSlotPicker, applySlot, submit, slotPickerPlacement,
     slotsByDate, sharedPostActive, pendingDraftSummaries, continueDraft, deleteDraft,
-    createNewDraft
+    createNewDraft,
   };
 }

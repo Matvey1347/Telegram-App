@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LoadingState } from "./ui";
 import {
   ConsumerFinanceScreens,
@@ -32,6 +32,7 @@ import { useFinanceBotBranding } from "./use-finance-bot-branding";
 const subscribeToStaticBrowserState = () => () => undefined;
 
 export function ConsumerFinanceApp({ botId }: { botId: string }) {
+  const queryClient = useQueryClient();
   const branding = useFinanceBotBranding(botId);
   const localeStorageKey = `consumer-finance-locale:${botId}`;
   const bootstrap = useTelegramMiniAppBootstrap();
@@ -74,6 +75,25 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
     ?.authenticated
     ? session.data.profile
     : undefined;
+  const changeLocale = useMutation({
+    mutationFn: (nextLocale: "uk" | "ru" | "en") => {
+      if (!profile) throw new Error("Finance profile is unavailable");
+      return consumerFinanceApi.updateSettings(botId, {
+        defaultCurrency: profile.defaultCurrency,
+        timezone: profile.timezone,
+        locale: nextLocale,
+      });
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(consumerFinanceKeys.session(botId), {
+        authenticated: true,
+        profile: updated,
+      });
+      void queryClient.invalidateQueries({
+        queryKey: consumerFinanceKeys.dashboard(botId),
+      });
+    },
+  });
   const rememberedLocale = useSyncExternalStore(
     subscribeToStaticBrowserState,
     () => window.localStorage.getItem(localeStorageKey) || navigator.language,
@@ -149,6 +169,10 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
         logoUrl={branding.logoUrl}
         screen={screen}
         copy={t}
+        locale={locale}
+        onLocaleChange={(nextLocale) => changeLocale.mutate(nextLocale)}
+        localeChanging={changeLocale.isPending}
+        localeDisabled={!profile}
         onNavigate={navigate}
         onAction={launchAction}
         openingBrowser={browserTransfer.isPending}

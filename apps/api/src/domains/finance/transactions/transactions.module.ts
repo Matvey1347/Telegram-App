@@ -2,10 +2,11 @@ import { Module } from '@nestjs/common';
 import { FinanceCategoriesModule } from '../finance-categories/finance-categories.module';
 import { TransactionsController } from './transactions.controller';
 import { TransactionsService } from './transactions.service';
+import { TransactionCategoryMemberPolicyService } from './transaction-category-member-policy.service';
 
 @Module({
   imports: [FinanceCategoriesModule],
   controllers: [TransactionsController],
-  providers: [TransactionsService],
+  providers: [TransactionsService, TransactionCategoryMemberPolicyService],
 })
 export class TransactionsModule {}

@@ -38,6 +38,7 @@ describe("AdSaleSharedPost", () => {
         }
         channels={[{ id: "channel-1", title: "Main" }] as never}
         mode="shared"
+        systemBotConnected
         systemBotUsername="@system_bot"
         onSendSystemBotPost={onSendSystemBotPost}
         onModeChange={vi.fn()}
@@ -72,6 +73,7 @@ describe("AdSaleSharedPost", () => {
         placements={placements}
         channels={[{ id: "channel-1", title: "Main" }] as never}
         mode="shared"
+        systemBotConnected
         systemBotUsername="@system_bot"
         onPrepareSystemBot={onPrepareSystemBot}
         onModeChange={vi.fn()}
@@ -96,12 +98,39 @@ describe("AdSaleSharedPost", () => {
     ).toHaveTextContent("✅ Added from bot");
   });
 
+  it("keeps bot import and the editor available for one placement without the shared toggle", () => {
+    render(
+      <AdSaleSharedPost
+        placements={[placements[0]]}
+        channels={[{ id: "channel-1", title: "Main" }] as never}
+        mode="shared"
+        systemBotConnected
+        systemBotUsername="@system_bot"
+        onPrepareSystemBot={vi.fn().mockResolvedValue("workflow-1")}
+        onModeChange={vi.fn()}
+        setPlacements={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Add new post from bot" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Create shared post" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("switch", {
+        name: "Use one advertising post for all channels",
+      }),
+    ).toBeNull();
+  });
+
   it("keeps the user in the modal when the bot workspace cannot be prepared", async () => {
     render(
       <AdSaleSharedPost
         placements={placements}
         channels={[{ id: "channel-1", title: "Main" }] as never}
         mode="shared"
+        systemBotConnected
         systemBotUsername="@system_bot"
         onPrepareSystemBot={vi.fn().mockRejectedValue(new Error("denied"))}
         onModeChange={vi.fn()}
@@ -129,6 +158,7 @@ describe("AdSaleSharedPost", () => {
         placements={placements}
         channels={[{ id: "channel-1", title: "Main" }] as never}
         mode="shared"
+        systemBotConnected
         systemBotUsername="@system_bot"
         onPrepareSystemBot={vi.fn().mockResolvedValue("workflow-1")}
         onSystemBotReturn={vi.fn().mockResolvedValue({
@@ -176,6 +206,31 @@ describe("AdSaleSharedPost", () => {
       }),
     );
     expect(onModeChange).toHaveBeenCalledWith("individual");
+  });
+
+  it("offers bot connection without preparing an import when disconnected", () => {
+    const onPrepareSystemBot = vi.fn().mockResolvedValue("workflow-1");
+    render(
+      <AdSaleSharedPost
+        placements={placements}
+        channels={[{ id: "channel-1", title: "Main" }] as never}
+        mode="shared"
+        systemBotConnected={false}
+        systemBotUsername="@system_bot"
+        onPrepareSystemBot={onPrepareSystemBot}
+        onModeChange={vi.fn()}
+        setPlacements={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Add new post from bot" }),
+    ).toBeNull();
+    expect(screen.getByRole("link", { name: "Connect bot" })).toHaveAttribute(
+      "href",
+      "https://t.me/system_bot?start=connect",
+    );
+    expect(onPrepareSystemBot).not.toHaveBeenCalled();
   });
 
   it("does not mark an empty draft as a completed shared post", () => {

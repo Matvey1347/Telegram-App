@@ -22,6 +22,7 @@ type ChannelPreviewProps = {
   subtitle?: string;
   avatarKind?: "channel" | "mtproto" | "person";
   className?: string;
+  status?: React.ReactNode;
   badges?: React.ReactNode;
 };
 
@@ -31,6 +32,7 @@ export function ChannelPreview({
   subtitle,
   avatarKind = "channel",
   className = "",
+  status,
   badges,
 }: ChannelPreviewProps) {
   const title = String(channel?.title || "-");
@@ -81,27 +83,13 @@ export function ChannelPreview({
               {!subtitle &&
               subscribers != null &&
               Number.isFinite(subscribers) ? (
-                <span className="grid grid-cols-[max-content_14px] items-center gap-x-1.5 gap-y-1">
+                <span className="inline-flex items-center gap-1.5">
                   <span>{fallbackSubtitle}</span>
                   <Users
                     size={14}
                     className="shrink-0 text-violet-300"
                     aria-label="Subscribers"
                   />
-                  {showPendingJoinRequests ? (
-                    <>
-                      <strong className="justify-self-end font-semibold text-white">
-                        {pendingJoinRequests
-                          .toLocaleString("en-US")
-                          .replace(/,/g, " ")}
-                      </strong>
-                      <UserPlus
-                        size={14}
-                        className="text-amber-300"
-                        aria-label="Pending join requests"
-                      />
-                    </>
-                  ) : null}
                 </span>
               ) : (
                 <p className="truncate">{subtitle || fallbackSubtitle}</p>
@@ -136,6 +124,25 @@ export function ChannelPreview({
                   %
                 </span>
               ) : null}
+            </div>
+          ) : null}
+          {showPendingJoinRequests || status ? (
+            <div className="mt-1.5 flex min-h-5 flex-wrap items-center gap-2">
+              {showPendingJoinRequests ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <strong className="font-semibold text-white">
+                    {pendingJoinRequests
+                      .toLocaleString("en-US")
+                      .replace(/,/g, " ")}
+                  </strong>
+                  <UserPlus
+                    size={14}
+                    className="text-amber-300"
+                    aria-label="Pending join requests"
+                  />
+                </span>
+              ) : null}
+              {status}
             </div>
           ) : null}
           {badges ? (

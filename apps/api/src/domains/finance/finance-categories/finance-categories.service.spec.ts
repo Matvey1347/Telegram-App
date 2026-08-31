@@ -7,7 +7,8 @@ describe('FinanceCategoriesService', () => {
         upsert: jest
           .fn()
           .mockResolvedValueOnce({ id: 'icon-channel' })
-          .mockResolvedValueOnce({ id: 'icon-reversal' }),
+          .mockResolvedValueOnce({ id: 'icon-reversal' })
+          .mockResolvedValueOnce({ id: 'icon-salary' }),
       },
       transactionCategory: {
         findMany: jest
@@ -23,6 +24,10 @@ describe('FinanceCategoriesService', () => {
           ]),
         upsert: jest
           .fn()
+          .mockResolvedValueOnce({
+            id: 'salary-category',
+            name: 'Salary',
+          })
           .mockResolvedValueOnce({
             id: 'investment-category',
             name: 'Investment',
@@ -71,6 +76,28 @@ describe('FinanceCategoriesService', () => {
     expect(prisma.transactionCategory.deleteMany).toHaveBeenCalledWith({
       where: { id: { in: ['legacy-category'] } },
     });
+    expect(prisma.icon.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: { emoji: '💼' },
+        create: expect.objectContaining({ name: 'salary', emoji: '💼' }),
+      }),
+    );
+    expect(prisma.transactionCategory.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          workspaceId_type_key: {
+            workspaceId: 'ws-1',
+            type: 'expense',
+            key: 'salary',
+          },
+        },
+        update: {
+          isSystem: true,
+          name: 'Salary',
+          iconId: 'icon-salary',
+        },
+      }),
+    );
   });
 
   it('performs one read and zero writes for an established workspace', async () => {
@@ -102,6 +129,12 @@ describe('FinanceCategoriesService', () => {
             name: 'Buy Channels',
             isSystem: true,
             icon: null,
+          },
+          {
+            key: 'salary',
+            name: 'Salary',
+            isSystem: true,
+            icon: { name: 'salary', emoji: '💼' },
           },
         ]),
         upsert: jest.fn(),

@@ -19,7 +19,7 @@ describe("FinanceOnboarding", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    const timezone = screen.getByRole("button", { name: "UTC" });
+    const timezone = screen.getByRole("button", { name: /UTC/u });
     fireEvent.click(timezone);
     expect(screen.getByPlaceholderText("Search…")).toBeInTheDocument();
     fireEvent.click(timezone);

@@ -1,10 +1,21 @@
 "use client";
 
 import type { ComponentProps, Dispatch, SetStateAction } from "react";
-import type { TelegramAdAvailabilitySlot, TelegramAdProduct, TelegramAdSale } from "@telegram-system/shared";
-import type { Account, TelegramChannel, TelegramChannelNetwork } from "@/lib/api";
+import type {
+  TelegramAdAvailabilitySlot,
+  TelegramAdProduct,
+  TelegramAdSale,
+} from "@telegram-system/shared";
+import type {
+  Account,
+  TelegramChannel,
+  TelegramChannelNetwork,
+} from "@/lib/api";
 import { telegramAdSalesApi, telegramSystemBotApi } from "@/lib/api";
-import { getTelegramChannelPosts, syncTelegramChannelPostMetrics } from "@/lib/api";
+import {
+  getTelegramChannelPosts,
+  syncTelegramChannelPostMetrics,
+} from "@/lib/api";
 import { zonedDateTimeToUtc } from "@/lib/features/growth/telegram-ad-sales";
 import { AdSaleModal } from "./ad-sale-modal";
 import { RegisterPaymentModal } from "./register-payment-modal";
@@ -19,6 +30,7 @@ export function AdSalesCheckoutDialogs({
   settings,
   workspaceTimezone,
   adSaleSeedSlot,
+  systemBotConnected,
   systemBotUsername,
   submitAdSale,
   paymentSale,
@@ -36,11 +48,15 @@ export function AdSalesCheckoutDialogs({
     : never;
   workspaceTimezone: string;
   adSaleSeedSlot: TelegramAdAvailabilitySlot | null;
+  systemBotConnected?: boolean;
   systemBotUsername?: string | null;
   submitAdSale: ComponentProps<typeof AdSaleModal>["onSubmit"];
   paymentSale: TelegramAdSale | null;
   setPaymentSale: Dispatch<SetStateAction<TelegramAdSale | null>>;
-  refreshSaleAfterMutation: (saleId: string, channelIds: string[]) => Promise<void>;
+  refreshSaleAfterMutation: (
+    saleId: string,
+    channelIds: string[],
+  ) => Promise<void>;
 }) {
   return (
     <>
@@ -58,6 +74,7 @@ export function AdSalesCheckoutDialogs({
         initialInventoryOpportunityKey={
           adSaleSeedSlot?.inventoryOpportunityKey ?? null
         }
+        systemBotConnected={systemBotConnected}
         systemBotUsername={systemBotUsername}
         onPrepareSystemBot={async () => {
           const prepared = await telegramSystemBotApi.prepareAdSalePostImport();
@@ -78,7 +95,7 @@ export function AdSalesCheckoutDialogs({
           return result.draft;
         }}
         onSearchAdvertisers={(query) =>
-          telegramAdSalesApi.searchAdvertisers({ q: query, limit: 5 })
+          telegramAdSalesApi.searchAdvertisers({ q: query, limit: 20 })
         }
         onRequestQuotePreview={(requests, signal) =>
           telegramAdSalesApi.previewQuotes({ requests }, signal)
@@ -178,7 +195,6 @@ export function AdSalesCheckoutDialogs({
           }}
         />
       ) : null}
-
     </>
   );
 }

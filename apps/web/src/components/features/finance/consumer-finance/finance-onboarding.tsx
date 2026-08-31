@@ -2,17 +2,14 @@
 
 import { useState } from "react";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
-import { Button, Card, FormField, Select } from "./ui";
+import { Button, Card, FormField } from "./ui";
 import {
   financeCopy,
   normalizeFinanceLocale,
-  supportedFinanceLocales,
   type FinanceLocale,
 } from "./finance-i18n";
-import {
-  financeTimezoneLabel,
-  financeTimezoneOptions,
-} from "./finance-timezones";
+import { FinanceLanguageSelect } from "./ui/finance-language-select";
+import { FinanceTimezoneSelect } from "./ui/finance-timezone-select";
 import { FinanceCurrencySelect } from "./ui/finance-currency-select";
 
 export function FinanceOnboarding({
@@ -76,23 +73,11 @@ export function FinanceOnboarding({
           <h1 className="text-xl font-semibold">{t.onboardingCurrency}</h1>
           <p className="text-sm text-neutral-400">{t.onboardingCurrencyHelp}</p>
           <FormField label={t.language}>
-            <Select
-              uiLocale={locale}
+            <FinanceLanguageSelect
+              copy={t}
               value={locale}
-              onChange={(event) =>
-                setLocale(event.target.value as FinanceLocale)
-              }
-            >
-              {supportedFinanceLocales.map((item) => (
-                <option key={item} value={item}>
-                  {item === "uk"
-                    ? t.languageUkrainian
-                    : item === "ru"
-                      ? t.languageRussian
-                      : t.languageEnglish}
-                </option>
-              ))}
-            </Select>
+              onChange={setLocale}
+            />
           </FormField>
           <FormField label={t.mainCurrency}>
             <FinanceCurrencySelect
@@ -102,18 +87,12 @@ export function FinanceOnboarding({
             />
           </FormField>
           <FormField label={t.onboardingTimezone}>
-            <Select
-              uiLocale={locale}
-              aria-label={t.onboardingTimezone}
+            <FinanceTimezoneSelect
+              locale={locale}
+              label={t.onboardingTimezone}
               value={timezone}
-              onChange={(event) => setTimezone(event.target.value)}
-            >
-              {financeTimezoneOptions(timezone).map((item) => (
-                <option key={item} value={item}>
-                  {financeTimezoneLabel(item)}
-                </option>
-              ))}
-            </Select>
+              onChange={setTimezone}
+            />
           </FormField>
           <Button className="w-full" onClick={() => setStep(2)}>
             {t.continue}

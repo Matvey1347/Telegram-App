@@ -27,6 +27,7 @@ describe('TelegramSystemBotChannelAccessService', () => {
       getChatMember: jest.fn(),
     } as any;
     const config = {
+      environment: 'LOCAL',
       token: 'local-token',
       auditCredentials: jest.fn().mockReturnValue([
         {
@@ -62,6 +63,7 @@ describe('TelegramSystemBotChannelAccessService', () => {
       ),
       prisma,
       api,
+      config,
       sourceAccess,
     };
   }
@@ -209,6 +211,34 @@ describe('TelegramSystemBotChannelAccessService', () => {
     expect(api.sendMessage).toHaveBeenCalledWith(
       'local-token',
       expect.objectContaining({ chat_id: '44' }),
+    );
+  });
+
+  it('stores production membership updates under the production source only', async () => {
+    const { service, prisma, api, config, sourceAccess } = harness();
+    config.environment = 'PRODUCTION';
+    config.token = 'production-token';
+    api.getMe.mockResolvedValue({ id: 8, username: 'production_bot' });
+    prisma.telegramChannel.findMany.mockResolvedValue([
+      { id: 'channel-1', workspaceId: 'workspace-1', title: 'News' },
+    ]);
+    prisma.telegramSystemBotConnection.findMany.mockResolvedValue([]);
+
+    await service.handleMyChatMember({
+      chat: { id: -1001, type: 'channel', title: 'News' },
+      old_chat_member: { status: 'member', user: { id: 8 } },
+      new_chat_member: {
+        status: 'administrator',
+        user: { id: 8 },
+        can_post_messages: true,
+      },
+    });
+
+    expect(sourceAccess.upsertAccess).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceId: 'system-bot-production' }),
+    );
+    expect(sourceAccess.upsertAccess).not.toHaveBeenCalledWith(
+      expect.objectContaining({ sourceId: 'system-bot' }),
     );
   });
 

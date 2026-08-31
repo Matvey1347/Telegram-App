@@ -10,7 +10,10 @@ import type {
   TelegramChannelAudience,
   TelegramChannelFinancialSummary,
 } from "./telegram-channel-analytics";
-import type { TelegramPublishingCapabilities } from "@telegram-system/shared";
+import type {
+  TelegramChannelSystemBotConnection,
+  TelegramPublishingCapabilities,
+} from "@telegram-system/shared";
 
 export type TelegramChannelAdAnalysisStatus =
   | "NEW"
@@ -161,6 +164,7 @@ export type TelegramChannel = EntityAssignment & {
     };
     sourcesCount: number;
     canPostMessages?: boolean;
+    systemBotConnection?: TelegramChannelSystemBotConnection;
     adAnalysis?: {
       latest?: TelegramChannelAdAnalysis | null;
       historyCount: number;

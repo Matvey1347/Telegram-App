@@ -3,20 +3,12 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
-import {
-  Button,
-  Card,
-  FormField,
-  LoadingState,
-  ErrorState,
-  Select,
-} from "./ui";
+import { Button, Card, FormField, LoadingState, ErrorState } from "./ui";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
 import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
 import {
   financeCopy,
   financeIntlLocale,
-  supportedFinanceLocales,
   type FinanceLocale,
 } from "./finance-i18n";
 import { FinancePrivacy } from "./finance-privacy";
@@ -26,11 +18,9 @@ import {
   consumerFinanceUsageLabel,
   consumerFinanceUsageValue,
 } from "./finance-consumer-billing-format";
-import {
-  financeTimezoneLabel,
-  financeTimezoneOptions,
-} from "./finance-timezones";
 import { FinanceCurrencySelect } from "./ui/finance-currency-select";
+import { FinanceLanguageSelect } from "./ui/finance-language-select";
+import { FinanceTimezoneSelect } from "./ui/finance-timezone-select";
 
 export function FinanceSettings({
   botId,
@@ -174,23 +164,11 @@ export function FinanceSettings({
             <h2 className="font-medium">{t.general}</h2>
             <div className="mt-3 space-y-3">
               <FormField label={t.language}>
-                <Select
-                  uiLocale={locale}
+                <FinanceLanguageSelect
+                  copy={t}
                   value={nextLocale}
-                  onChange={(event) =>
-                    setNextLocale(event.target.value as FinanceLocale)
-                  }
-                >
-                  {supportedFinanceLocales.map((item) => (
-                    <option key={item} value={item}>
-                      {item === "uk"
-                        ? t.languageUkrainian
-                        : item === "ru"
-                          ? t.languageRussian
-                          : t.languageEnglish}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={setNextLocale}
+                />
               </FormField>
               <div>
                 <FormField label={t.mainCurrency}>
@@ -205,18 +183,12 @@ export function FinanceSettings({
                 </p>
               </div>
               <FormField label={t.timezone}>
-                <Select
-                  uiLocale={locale}
-                  aria-label={t.timezone}
+                <FinanceTimezoneSelect
+                  locale={locale}
+                  label={t.timezone}
                   value={timezone}
-                  onChange={(event) => setTimezone(event.target.value)}
-                >
-                  {financeTimezoneOptions(timezone).map((item) => (
-                    <option key={item} value={item}>
-                      {financeTimezoneLabel(item)}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={setTimezone}
+                />
               </FormField>
               <Button
                 className="w-full"

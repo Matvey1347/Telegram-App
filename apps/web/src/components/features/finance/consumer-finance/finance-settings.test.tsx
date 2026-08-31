@@ -66,7 +66,7 @@ describe("FinanceSettings billing state", () => {
   it("uses a timezone selector instead of a free-form input", () => {
     renderSettings("profile");
 
-    const timezone = screen.getByRole("button", { name: "UTC" });
+    const timezone = screen.getByRole("button", { name: /UTC/u });
     fireEvent.click(timezone);
     expect(screen.getByPlaceholderText("Search…")).toBeInTheDocument();
   });
@@ -74,7 +74,7 @@ describe("FinanceSettings billing state", () => {
   it("localizes the shared timezone search for Russian", () => {
     renderSettings("profile", "ru");
 
-    fireEvent.click(screen.getByRole("button", { name: "UTC" }));
+    fireEvent.click(screen.getByRole("button", { name: /UTC/u }));
     expect(screen.getByPlaceholderText("Поиск…")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Search…")).not.toBeInTheDocument();
   });

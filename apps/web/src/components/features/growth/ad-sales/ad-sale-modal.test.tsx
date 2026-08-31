@@ -304,11 +304,11 @@ describe("AdSaleModal", () => {
     expect(screen.queryByText(/Fill contact and payment once/)).toBeNull();
     const member = screen.getByText("Member");
     const detailsRow = member.parentElement?.parentElement;
-    expect(detailsRow?.textContent).toContain("Contact");
+    expect(detailsRow?.textContent).toContain("Client");
     expect(detailsRow?.textContent).toContain("Financial account");
     expect(detailsRow?.textContent).toContain("Sale origin");
-    expect(screen.getByText("Contact").parentElement?.textContent).toBe(
-      "Contact",
+    expect(screen.getByText("Client").parentElement?.textContent).toContain(
+      "New client",
     );
     expect(screen.queryByText(/Currency is taken automatically/)).toBeNull();
     expect(screen.queryByText("Network sale price")).toBeNull();
@@ -332,6 +332,46 @@ describe("AdSaleModal", () => {
     expect(screen.queryByText(/Expected views:/)).toBeNull();
     expect(screen.queryByText(/Minimum:/)).toBeNull();
     expect(screen.queryByText(/Warning:/)).toBeNull();
+  });
+
+  it("submits a managed post draft for a single-channel deal", async () => {
+    const onSubmit = vi.fn().mockResolvedValue({});
+    renderModal({ onSubmit, initialScheduledAt: futureScheduledAt() });
+    await screen.findByText(/1\/24 · 125 UAH/);
+    expect(
+      screen.queryByRole("switch", {
+        name: "Use one advertising post for all channels",
+      }),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Create shared post" }));
+    fireEvent.change(screen.getByPlaceholderText(/Write your Telegram post/), {
+      target: { value: "Single channel creative" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create sale" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0].placements[0].managedPostDraft).toEqual(
+      expect.objectContaining({ text: "Single channel creative" }),
+    );
+  });
+
+  it("submits a new client username in canonical Telegram form", async () => {
+    const onSubmit = vi.fn().mockResolvedValue({});
+    renderModal({ onSubmit });
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Telegram username" }),
+      {
+        target: { value: "Buyer_Name" },
+      },
+    );
+    await screen.findByText(/1\/24 · 125 UAH/);
+    fireEvent.click(screen.getByRole("button", { name: "Create sale" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        advertiserTelegram: "@buyer_name",
+        createAdvertiser: true,
+      }),
+    );
   });
 
   it("keeps network channels and placement settings when switching to channel selection", async () => {
@@ -612,9 +652,7 @@ describe("AdSaleModal", () => {
     );
     await waitFor(() =>
       expect(onRequestQuotePreview).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({ currency: "USD" }),
-        ]),
+        expect.arrayContaining([expect.objectContaining({ currency: "USD" })]),
         expect.any(AbortSignal),
       ),
     );

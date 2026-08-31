@@ -78,6 +78,7 @@ export type AdSaleModalProps = {
   initialInventoryOpportunityKey?: string | null;
   headerAction?: ReactNode;
   sessionOpen?: boolean;
+  systemBotConnected?: boolean;
   systemBotUsername?: string | null;
   onSystemBotReturn?: (
     workflowId: string,

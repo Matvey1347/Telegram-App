@@ -61,7 +61,19 @@ function setup(overrides?: { account?: unknown }) {
     telegramAdSalePayment: {
       create: jest.fn().mockResolvedValue({ id: 'payment-1' }),
     },
-    telegramAdvertiser: { create: jest.fn() },
+    telegramAdvertiser: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockResolvedValue({
+        id: 'advertiser-1',
+        displayName: 'same_client',
+        telegramUsername: 'same_client',
+        companyName: null,
+      }),
+    },
+    telegramAdvertiserContact: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      create: jest.fn(),
+    },
     telegramAdvertiserActivity: { create: jest.fn() },
     $executeRaw: jest.fn().mockResolvedValue(1),
   };
@@ -387,6 +399,28 @@ describe('TelegramAdSalesCheckoutService', () => {
         },
       }),
     });
+  });
+
+  it('links a first-time normalized Telegram client during checkout', async () => {
+    const { service, tx } = setup();
+    const dto = checkoutDto();
+    dto.advertiserName = 'same_client';
+    dto.advertiserContact = '@same_client';
+    dto.createAdvertiser = true;
+
+    await service.create('user-1', dto);
+
+    expect(tx.telegramAdvertiserContact.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        normalizedValue: 'same_client',
+        advertiserId: 'advertiser-1',
+      }),
+    });
+    expect(tx.telegramAdSale.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ advertiserId: 'advertiser-1' }),
+      }),
+    );
   });
 
   it('allows another ad placement at an already used channel time', async () => {

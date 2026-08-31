@@ -16,6 +16,7 @@ import {
 } from './transaction-presentation';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 import { financeAuthorizationTestFallback } from '../finance-authorization-test-fallback';
+import { TransactionCategoryMemberPolicyService } from './transaction-category-member-policy.service';
 @Injectable()
 export class TransactionsService {
   private telegramChannelPurchaseColumnsAvailable: boolean | null = null;
@@ -27,6 +28,9 @@ export class TransactionsService {
     private currencyConversionService: CurrencyConversionService,
     private financeCategoriesService: FinanceCategoriesService,
     private authorization: WorkspaceAuthorizationService = financeAuthorizationTestFallback(workspaceService),
+    private transactionCategoryMemberPolicy: TransactionCategoryMemberPolicyService = new TransactionCategoryMemberPolicyService(
+      prisma,
+    ),
   ) {}
 
   private async resolveRateToPrimary(
@@ -48,38 +52,6 @@ export class TransactionsService {
     throw new BadRequestException(
       `No exchange rate from ${fromCurrency} to ${workspace.primaryCurrency}`,
     );
-  }
-
-  private async validateCategoryAndMember(
-    workspaceId: string,
-    type: 'income' | 'expense',
-    categoryId: string,
-    memberId?: string,
-  ) {
-    const category = await this.prisma.transactionCategory.findFirst({
-      where: { id: categoryId, workspaceId },
-    });
-    if (!category) throw new NotFoundException('Category not found');
-    if (category.type !== type) {
-      throw new BadRequestException(
-        `Category type mismatch. Expected ${type} category.`,
-      );
-    }
-
-    if (type === 'income' && category.key === 'investment' && !memberId) {
-      throw new BadRequestException(
-        'memberId is required for Investment income category',
-      );
-    }
-
-    if (memberId) {
-      const member = await this.prisma.workspaceMember.findFirst({
-        where: { id: memberId, workspaceId },
-      });
-      if (!member) throw new NotFoundException('Member not found');
-    }
-
-    return category;
   }
 
   private async ensureTelegramChannelPurchaseColumnsAvailable() {
@@ -532,12 +504,12 @@ export class TransactionsService {
     });
     if (!account) throw new NotFoundException('Account not found');
 
-    const category = await this.validateCategoryAndMember(
+    const category = await this.transactionCategoryMemberPolicy.validate({
       workspaceId,
-      dto.type,
-      dto.categoryId,
-      dto.memberId,
-    );
+      type: dto.type,
+      categoryId: dto.categoryId,
+      memberId: dto.memberId,
+    });
     if (dto.iconId !== undefined && dto.iconId !== null) {
       const icon = await this.prisma.icon.findFirst({
         where: { id: dto.iconId, workspaceId },
@@ -679,12 +651,12 @@ export class TransactionsService {
       throw new BadRequestException('categoryId is required');
     }
 
-    const category = await this.validateCategoryAndMember(
+    const category = await this.transactionCategoryMemberPolicy.validate({
       workspaceId,
       type,
       categoryId,
       memberId,
-    );
+    });
 
     const amount = dto.amount ?? Number(existing.amount);
     const targetAccountId = dto.accountId ?? existing.accountId;

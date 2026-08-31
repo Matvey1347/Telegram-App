@@ -26,7 +26,6 @@ describe('GlobalSearchService permissions', () => {
       adHypothesis: repository(),
       telegramManagedPost: repository(),
       postGroup: repository(),
-      promptNote: repository(),
       icon: repository(),
     };
     const authorization = {
@@ -44,7 +43,9 @@ describe('GlobalSearchService permissions', () => {
       expect.objectContaining({ id: 'channel-1', type: 'telegram-channel' }),
     ]);
     expect(prisma.telegramChannel.findMany).toHaveBeenCalledTimes(1);
-    expect(prisma.telegramUserAccountIntegration.findMany).toHaveBeenCalledTimes(1);
+    expect(
+      prisma.telegramUserAccountIntegration.findMany,
+    ).toHaveBeenCalledTimes(1);
     expect(prisma.transaction.findMany).not.toHaveBeenCalled();
     expect(prisma.workspaceMember.findMany).not.toHaveBeenCalled();
     expect(prisma.telegramBotIntegration.findMany).not.toHaveBeenCalled();
@@ -62,5 +63,61 @@ describe('GlobalSearchService permissions', () => {
     expect(result).toEqual([]);
     expect(authorization.context).not.toHaveBeenCalled();
     expect(prisma.transaction.findMany).not.toHaveBeenCalled();
+  });
+
+  it('returns post groups without the removed prompt-note count', async () => {
+    const prisma = {
+      transaction: repository(),
+      workspaceMember: repository(),
+      telegramChannel: repository(),
+      telegramUserAccountIntegration: repository(),
+      telegramBotIntegration: repository(),
+      promo: repository(),
+      advertisingSource: repository(),
+      adCampaign: repository(),
+      adHypothesis: repository(),
+      telegramManagedPost: repository(),
+      postGroup: repository([
+        {
+          id: 'group-1',
+          telegramChannelId: 'channel-1',
+          title: 'Content plan',
+          icon: null,
+          telegramChannel: {
+            id: 'channel-1',
+            title: 'Allowed channel',
+            photoUrl: null,
+          },
+          _count: { posts: 2 },
+        },
+      ]),
+      icon: repository(),
+    };
+    const authorization = {
+      context: jest.fn().mockResolvedValue({
+        workspaceId: 'workspace-1',
+        featureIds: ['posts'],
+      }),
+    };
+
+    const result = await new GlobalSearchService(
+      prisma as never,
+      authorization as never,
+    ).search('user-1', 'content');
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: 'group-1',
+        type: 'post-group',
+        subtitle: 'Allowed channel · 2 posts',
+      }),
+    ]);
+    expect(prisma.postGroup.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          _count: { select: { posts: true } },
+        }),
+      }),
+    );
   });
 });

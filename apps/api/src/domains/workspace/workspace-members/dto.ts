@@ -1,6 +1,8 @@
 import { WorkspaceRole } from '@prisma/client';
+import { Transform } from 'class-transformer';
 import {
   IsArray,
+  ArrayMaxSize,
   IsBoolean,
   IsEmail,
   IsEnum,
@@ -20,6 +22,9 @@ export class CreateWorkspaceMemberDto {
   name?: string;
 
   @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' && value.trim() === '' ? undefined : value,
+  )
   @IsString()
   @MinLength(8)
   password?: string;
@@ -30,17 +35,32 @@ export class CreateWorkspaceMemberDto {
 
   @IsOptional()
   @IsString()
+  roleDefinitionId?: string;
+
+  @IsOptional()
+  @IsString()
   avatarIconId?: string | null;
 
   @IsOptional()
   @IsString()
   telegramUsername?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(1)
+  @ArrayUnique()
+  @IsString({ each: true })
+  telegramUserAccountIds?: string[];
 }
 
 export class UpdateWorkspaceMemberDto {
   @IsOptional()
   @IsEnum(WorkspaceRole)
   role?: WorkspaceRole;
+
+  @IsOptional()
+  @IsString()
+  roleDefinitionId?: string;
 
   @IsOptional()
   @IsBoolean()
@@ -56,6 +76,7 @@ export class UpdateWorkspaceMemberDto {
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(1)
   @ArrayUnique()
   @IsString({ each: true })
   telegramUserAccountIds?: string[];

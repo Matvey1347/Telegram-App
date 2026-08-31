@@ -65,6 +65,8 @@ describe('TelegramSystemBotConfigService', () => {
     expect(local.environment).toBe('LOCAL');
     expect(local.token).toBe('local-token');
     expect(local.username).toBe('local_bot');
+    expect(local.productionToken).toBe('production-token');
+    expect(local.productionUsername).toBe('production_bot');
     expect(production.environment).toBe('PRODUCTION');
     expect(production.token).toBe('production-token');
     expect(production.username).toBe('production_bot');

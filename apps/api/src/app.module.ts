@@ -29,7 +29,6 @@ import { TelegramBotsModule } from './domains/telegram/telegram-bots/telegram-bo
 import { WorkspacesModule } from './domains/workspace/workspaces/workspaces.module';
 import { IconsModule } from './domains/operations/icons/icons.module';
 import { ResponseCacheInterceptor } from './common/response-cache.interceptor';
-import { PromptNotesModule } from './domains/operations/prompt-notes/prompt-notes.module';
 import { RequestContextModule } from './common/request-context/request-context.module';
 import { RequestContextMiddleware } from './common/request-context/request-context.middleware';
 import { ApplicationLogsModule } from './domains/operations/application-logs/application-logs.module';
@@ -76,7 +75,6 @@ import { TrashModule } from './domains/operations/trash/trash.module';
     TelegramBotsModule,
     WorkspacesModule,
     IconsModule,
-    PromptNotesModule,
     TelegramAdSalesModule,
     ScheduledTasksModule,
     TelegramSystemBotModule,

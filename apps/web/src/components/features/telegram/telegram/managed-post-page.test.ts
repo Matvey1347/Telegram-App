@@ -9,6 +9,12 @@ describe("managed post paginated page", () => {
     expect(includeDeepLinkedManagedPost(page)).toBe(page);
   });
 
+  it("keeps the loading-state page reference stable between renders", () => {
+    expect(includeDeepLinkedManagedPost(undefined)).toBe(
+      includeDeepLinkedManagedPost(undefined),
+    );
+  });
+
   it("adds a separately fetched deep link without duplicating a page row", () => {
     expect(includeDeepLinkedManagedPost([post("page-1")], post("linked"))).toEqual([
       post("page-1"), post("linked"),

@@ -260,7 +260,10 @@ export class TelegramChannelSyncOrchestrator {
             'Failed to sync post metrics',
           ),
         );
-        throw error;
+        // A separately selected audience snapshot can still succeed when the
+        // post-metrics transport is unavailable. Preserve the old fail-fast
+        // behavior when no independent follow-up was requested.
+        if (!selection.syncIncludeAudienceSnapshot) throw error;
       }
     }
     if (selection.syncIncludeOlderPosts) {
@@ -398,14 +401,17 @@ export class TelegramChannelSyncOrchestrator {
         onProgress,
         currentStep,
         totalSteps,
-        'Saving audience snapshot',
+        postsMetricsSync?.audienceSnapshot
+          ? 'Audience snapshot already saved with post metrics'
+          : 'Saving audience snapshot',
       );
       const audienceStartedAt = Date.now();
       audienceSnapshot =
-        await this.telegramChannelsSupportService.createAudienceSnapshotSafely(
+        postsMetricsSync?.audienceSnapshot ??
+        (await this.telegramChannelsSupportService.createAudienceSnapshotSafely(
           channelId,
           'sync',
-        );
+        ));
       steps.push(
         audienceSnapshot
           ? this.telegramChannelsSupportService.syncStepSuccess(

@@ -49,6 +49,7 @@ describe("ChannelActionsMenu", () => {
     );
     expect(screen.getByText("Sync channel")).toBeInTheDocument();
     expect(screen.getByText("Edit economics")).toBeInTheDocument();
+    expect(screen.getByText("Bot connection")).toBeInTheDocument();
     expect(screen.getByText("Archive channel")).toBeInTheDocument();
     expect(screen.getByText("Delete channel")).toBeInTheDocument();
     const menu = screen.getByRole("menu");

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { TelegramAdSaleListItem } from "@telegram-system/shared";
-import { Hourglass, MoreVertical, Pencil, Timer, Trash2 } from "lucide-react";
+import { MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import { AdSaleOriginPreview } from "./ad-sale-origin";
@@ -16,13 +16,9 @@ import {
   TableLoadingState,
 } from "@/components/ui/primitives";
 import { currenciesApi, type TelegramChannel } from "@/lib/api";
-import { formatDateTime } from "@/lib/date-format";
 import { nativeAdSalePayment } from "./ad-sale-native-payment";
-import {
-  placementFormatLabel,
-  placementTimer,
-} from "./ad-placement-lifecycle";
 import { AdSalePostMetrics } from "./ad-sale-post-metrics";
+import { AdSalePlacementLifecyclePreview } from "./ad-sale-placement-lifecycle-preview";
 
 const panelClass = "rounded-[18px] border border-neutral-800 bg-[#111111]";
 
@@ -55,136 +51,6 @@ function hasLinkedPlacementPost(placement: SalePlacement) {
   );
 }
 
-function groupPlacementsByWindow(placements: SalePlacement[]) {
-  return [
-    ...placements
-      .reduce((groups, placement) => {
-        const key = String(new Date(placement.scheduledAt).getTime());
-        const group = groups.get(key);
-        if (group) group.push(placement);
-        else groups.set(key, [placement]);
-        return groups;
-      }, new Map<string, SalePlacement[]>())
-      .values(),
-  ];
-}
-
-function placementsShareChannel(placements: SalePlacement[]) {
-  return (
-    placements.length > 1 &&
-    placements.every(
-      (placement) =>
-        placement.telegramChannelId === placements[0].telegramChannelId,
-    )
-  );
-}
-
-function placementScheduleRange(placements: SalePlacement[]) {
-  const scheduledTimes = placements
-    .map((placement) => new Date(placement.scheduledAt).getTime())
-    .sort((left, right) => left - right);
-  return `Scheduled ${formatDateTime(new Date(scheduledTimes[0]).toISOString())} → ${formatDateTime(new Date(scheduledTimes.at(-1)!).toISOString())}`;
-}
-
-function placementLifecycleLabel(placements: SalePlacement[]) {
-  const published = placements
-    .map((placement) => placement.publishedAt)
-    .filter((value): value is string => Boolean(value))
-    .map((value) => new Date(value).getTime())
-    .sort((left, right) => left - right);
-  if (published.length === placements.length) {
-    const first = formatDateTime(new Date(published[0]).toISOString());
-    const last = formatDateTime(new Date(published.at(-1)!).toISOString());
-    return first === last ? `Published ${first}` : `Published ${first} → ${last}`;
-  }
-  if (published.length) {
-    return `${published.length}/${placements.length} published · ${placementScheduleRange(placements)}`;
-  }
-  return placementScheduleRange(placements);
-}
-
-function placementFormatsLabel(placements: SalePlacement[]) {
-  const formats = [
-    ...new Set(placements.map(placementFormatLabel).filter(Boolean)),
-  ];
-  return formats.join(", ");
-}
-
-function PlacementChannelPreview(props: {
-  placements: SalePlacement[];
-  channelsById: Map<string, TelegramChannel>;
-}) {
-  const channels = props.placements.map((placement) => {
-    const channel = props.channelsById.get(placement.telegramChannelId);
-    return {
-      id: placement.telegramChannelId,
-      title: channel?.title ?? "Telegram channel",
-      photoUrl: channel?.photoUrl ?? null,
-    };
-  });
-  if (channels.length === 1) {
-    const channel = channels[0];
-    return (
-      <div className="flex min-w-0 items-center gap-2">
-        <TelegramEntityAvatar
-          imageUrl={channel.photoUrl}
-          kind="channel"
-          alt={channel.title}
-          size="xs"
-        />
-        <span className="truncate text-xs font-medium text-neutral-300">
-          {channel.title}
-        </span>
-      </div>
-    );
-  }
-  return (
-    <details
-      className="group relative w-fit"
-      onClick={(event) => event.stopPropagation()}
-    >
-      <summary
-        aria-label={`Show ${channels.length} placement channels`}
-        className="flex cursor-pointer list-none items-center gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-blue-500 [&::-webkit-details-marker]:hidden"
-      >
-        <span className="flex -space-x-2">
-          {channels.slice(0, 3).map((channel) => (
-            <span
-              key={channel.id}
-              className="rounded-full ring-2 ring-[#111111]"
-            >
-              <TelegramEntityAvatar
-                imageUrl={channel.photoUrl}
-                kind="channel"
-                alt={channel.title}
-                size="xs"
-              />
-            </span>
-          ))}
-        </span>
-        <span className="text-xs font-medium text-neutral-300">
-          {channels.length} channels
-        </span>
-      </summary>
-      <div className="absolute left-0 top-full z-30 mt-2 min-w-56 space-y-1 rounded-lg border border-neutral-700 bg-neutral-950 p-2 shadow-xl">
-        {channels.map((channel) => (
-          <div key={channel.id} className="flex items-center gap-2 px-1 py-1">
-            <TelegramEntityAvatar
-              imageUrl={channel.photoUrl}
-              kind="channel"
-              alt={channel.title}
-              size="xs"
-            />
-            <span className="whitespace-nowrap text-xs text-neutral-200">
-              {channel.title}
-            </span>
-          </div>
-        ))}
-      </div>
-    </details>
-  );
-}
-
 export function SalesTab(props: {
   sales: TelegramAdSaleListItem[];
   channels: TelegramChannel[];
@@ -211,8 +77,9 @@ export function SalesTab(props: {
   embedded?: boolean;
 }) {
   const [menuSaleId, setMenuSaleId] = useState<string | null>(null);
-  const [deleteSale, setDeleteSale] =
-    useState<TelegramAdSaleListItem | null>(null);
+  const [deleteSale, setDeleteSale] = useState<TelegramAdSaleListItem | null>(
+    null,
+  );
   const [now, setNow] = useState(() => Date.now());
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -234,8 +101,9 @@ export function SalesTab(props: {
     const hasCountdown = props.sales.some((sale) =>
       sale.placements.some(
         (placement) =>
-          (!placement.publishedAt &&
-            new Date(placement.scheduledAt).getTime() > Date.now()) ||
+          !placement.publishedAt ||
+          (placement.publishedAt &&
+            Date.now() - new Date(placement.publishedAt).getTime() < 3_000) ||
           (placement.publishedAt &&
             placement.plannedDeleteAt &&
             !placement.deletedAt &&
@@ -300,8 +168,9 @@ export function SalesTab(props: {
                     hasLinkedPlacementPost,
                   ).length;
                   const hasMultiplePlacementOutputs =
-                    !placementsShareChannel(sale.placements) &&
-                    groupPlacementsByWindow(sale.placements).length > 1;
+                    new Set(
+                      sale.placements.map((item) => item.telegramChannelId),
+                    ).size > 1;
                   return (
                     <tr
                       key={sale.id}
@@ -355,74 +224,11 @@ export function SalesTab(props: {
                       </td>
                       <td className="px-4 py-3 text-neutral-300">
                         {sale.placements.length ? (
-                          <div className="space-y-2">
-                            {placementsShareChannel(sale.placements) ? (
-                              <div className="min-w-0">
-                                <PlacementChannelPreview
-                                  placements={[sale.placements[0]]}
-                                  channelsById={channelsById}
-                                />
-                                <p className="mt-0.5 max-w-72 text-xs text-neutral-500">
-                                  {placementLifecycleLabel(sale.placements)}
-                                  {placementFormatsLabel(sale.placements)
-                                    ? ` · ${placementFormatsLabel(sale.placements)}`
-                                    : ""}
-                                </p>
-                                <p className="mt-0.5 text-xs text-neutral-500">
-                                  {sale.placements.length} placements
-                                </p>
-                              </div>
-                            ) : (
-                              groupPlacementsByWindow(sale.placements).map(
-                                (placements) => {
-                                  const placement = placements[0];
-                                  const timer = placementTimer(placement, now);
-                                  return (
-                                    <div
-                                      key={placements
-                                        .map(({ id }) => id)
-                                        .join("-")}
-                                      className="min-w-0"
-                                    >
-                                      <PlacementChannelPreview
-                                        placements={placements}
-                                        channelsById={channelsById}
-                                      />
-                                      <p className="mt-0.5 max-w-72 text-xs text-neutral-500">
-                                        {placementLifecycleLabel(placements)}
-                                        {placementFormatsLabel(placements)
-                                          ? ` · ${placementFormatsLabel(placements)}`
-                                          : ""}
-                                      </p>
-                                      {timer ? (
-                                        <p
-                                          className={`mt-0.5 inline-flex items-center gap-1.5 font-mono text-xs tabular-nums ${timer.phase === "deletion" ? "text-amber-300" : "text-neutral-500"}`}
-                                        >
-                                          {timer.phase === "complete" ? (
-                                            <Trash2
-                                              size={13}
-                                              aria-hidden="true"
-                                            />
-                                          ) : timer.phase === "deletion" ? (
-                                            <Timer
-                                              size={13}
-                                              aria-hidden="true"
-                                            />
-                                          ) : (
-                                            <Hourglass
-                                              size={13}
-                                              aria-hidden="true"
-                                            />
-                                          )}
-                                          {timer.label}
-                                        </p>
-                                      ) : null}
-                                    </div>
-                                  );
-                                },
-                              )
-                            )}
-                          </div>
+                          <AdSalePlacementLifecyclePreview
+                            placements={sale.placements}
+                            channelsById={channelsById}
+                            now={now}
+                          />
                         ) : (
                           "—"
                         )}

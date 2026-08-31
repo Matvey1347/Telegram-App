@@ -21,6 +21,12 @@ const EXPECTED = [
   },
   { key: 'advertising', name: 'Advertising' },
   { key: 'buy_channels', name: 'Buy Channels' },
+  {
+    key: 'salary',
+    name: 'Salary',
+    iconName: 'salary',
+    emoji: '💼',
+  },
 ] as const;
 
 export function financeSystemCategoriesReady(

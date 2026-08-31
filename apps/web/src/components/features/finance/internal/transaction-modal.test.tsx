@@ -3,10 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TransactionCategory } from "@/lib/api";
-import {
-  telegramChannelsApi,
-  transactionCategoriesApi,
-} from "@/lib/api";
+import { telegramChannelsApi, transactionCategoriesApi } from "@/lib/api";
 import {
   InternalTransactionModal,
   transactionCategoryPurpose,
@@ -44,6 +41,13 @@ const categories: TransactionCategory[] = [
     type: "expense",
     isSystem: false,
     key: null,
+  },
+  {
+    id: "salary",
+    name: "Salaries",
+    type: "expense",
+    isSystem: true,
+    key: "salary",
   },
 ];
 
@@ -121,8 +125,8 @@ describe("internal transaction modal category fields", () => {
   });
 
   it("pairs Category with Member and Account with Amount for Investment", async () => {
-    vi.spyOn(transactionCategoriesApi, "list").mockImplementation(async (type) =>
-      categories.filter((category) => category.type === type),
+    vi.spyOn(transactionCategoriesApi, "list").mockImplementation(
+      async (type) => categories.filter((category) => category.type === type),
     );
     vi.spyOn(telegramChannelsApi, "select").mockResolvedValue([]);
     const user = userEvent.setup();
@@ -134,9 +138,7 @@ describe("internal transaction modal category fields", () => {
       expect(transactionCategoriesApi.list).toHaveBeenCalledWith("income"),
     );
     await user.click(screen.getByRole("button", { name: "Select category" }));
-    await user.click(
-      await screen.findByRole("button", { name: /Investment/ }),
-    );
+    await user.click(await screen.findByRole("button", { name: /Investment/ }));
 
     expect(screen.getByText("Member")).toBeInTheDocument();
     expect(primaryFieldLabels()).toEqual([
@@ -146,17 +148,19 @@ describe("internal transaction modal category fields", () => {
       "Account",
       "Amount",
     ]);
-    expect(screen.getByTestId("transaction-primary-fields")).toHaveClass("md:grid-cols-2");
+    expect(screen.getByTestId("transaction-primary-fields")).toHaveClass(
+      "md:grid-cols-2",
+    );
     expect(
-      screen.getByTestId("transaction-primary-fields").querySelector(
-        '[data-transaction-field="type"]',
-      ),
+      screen
+        .getByTestId("transaction-primary-fields")
+        .querySelector('[data-transaction-field="type"]'),
     ).toHaveClass("md:col-span-2");
   });
 
   it("shows Channel for Buy Channels before Account and hides it for a standard category", async () => {
-    vi.spyOn(transactionCategoriesApi, "list").mockImplementation(async (type) =>
-      categories.filter((category) => category.type === type),
+    vi.spyOn(transactionCategoriesApi, "list").mockImplementation(
+      async (type) => categories.filter((category) => category.type === type),
     );
     vi.spyOn(telegramChannelsApi, "select").mockResolvedValue([
       {
@@ -191,9 +195,7 @@ describe("internal transaction modal category fields", () => {
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Buy Channels/ }));
-    await user.click(
-      await screen.findByRole("button", { name: /Operations/ }),
-    );
+    await user.click(await screen.findByRole("button", { name: /Operations/ }));
     await waitFor(() =>
       expect(primaryFieldLabels()).toEqual([
         "Type",
@@ -203,9 +205,26 @@ describe("internal transaction modal category fields", () => {
       ]),
     );
     expect(
-      screen.getByTestId("transaction-primary-fields").querySelector(
-        '[data-transaction-field="type"]',
-      ),
+      screen
+        .getByTestId("transaction-primary-fields")
+        .querySelector('[data-transaction-field="type"]'),
     ).not.toHaveClass("md:col-span-2");
+  });
+
+  it("requires the member for the Salaries system expense", async () => {
+    vi.spyOn(transactionCategoriesApi, "list").mockImplementation(
+      async (type) => categories.filter((category) => category.type === type),
+    );
+    vi.spyOn(telegramChannelsApi, "select").mockResolvedValue([]);
+    const user = userEvent.setup();
+    renderModal();
+    await user.click(screen.getByRole("button", { name: "Select category" }));
+    await user.click(await screen.findByRole("button", { name: /Salaries/ }));
+    expect(transactionCategoryPurpose(categories.at(-1))).toBe("salary");
+    expect(
+      within(screen.getByTestId("transaction-primary-fields")).getByText(
+        "Member",
+      ),
+    ).toBeInTheDocument();
   });
 });

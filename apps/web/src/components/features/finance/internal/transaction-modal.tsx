@@ -10,10 +10,7 @@ import type {
   TransactionCategory,
   WorkspaceMemberSelectOption as WorkspaceMember,
 } from "@/lib/api";
-import {
-  telegramChannelsApi,
-  transactionCategoriesApi,
-} from "@/lib/api";
+import { telegramChannelsApi, transactionCategoriesApi } from "@/lib/api";
 import { accountDisplayName } from "@/lib/features/finance/account-display";
 import {
   Button,
@@ -39,6 +36,7 @@ export type InternalTransactionValues = {
 
 type CategoryPurpose =
   | "investment"
+  | "salary"
   | "buy-channels"
   | "channel-advertising-revenue"
   | "standard";
@@ -59,6 +57,15 @@ export function transactionCategoryPurpose(
 ): CategoryPurpose {
   if (!category) return "standard";
   const name = normalizedCategoryName(category);
+  if (
+    category.type === "expense" &&
+    (category.key === "salary" ||
+      category.key === "salaries" ||
+      name === "salary" ||
+      name === "salaries")
+  ) {
+    return "salary";
+  }
   if (
     category.type === "income" &&
     (category.key === "investment" || name === "investment")
@@ -124,9 +131,7 @@ function channelOptionProps(channel: TelegramChannel) {
   };
 }
 
-function transactionDefaults(
-  initial?: Transaction,
-): InternalTransactionValues {
+function transactionDefaults(initial?: Transaction): InternalTransactionValues {
   return initial
     ? {
         accountId: initial.accountId,
@@ -205,17 +210,15 @@ export function InternalTransactionModal({
   );
   const categoryPurpose = transactionCategoryPurpose(selectedCategory);
   const isInvestment = categoryPurpose === "investment";
+  const requiresMember = isInvestment || categoryPurpose === "salary";
   const isBuyChannels = categoryPurpose === "buy-channels";
   const isChannelAdvertisingRevenue =
     categoryPurpose === "channel-advertising-revenue";
-  const requiresTelegramChannel =
-    isBuyChannels || isChannelAdvertisingRevenue;
-  const hasCategoryExtraField = isInvestment || requiresTelegramChannel;
+  const requiresTelegramChannel = isBuyChannels || isChannelAdvertisingRevenue;
+  const hasCategoryExtraField = requiresMember || requiresTelegramChannel;
   const ownChannels = useMemo(
     () =>
-      (telegramChannels ?? []).filter(
-        (channel) => channel.isActive !== false,
-      ),
+      (telegramChannels ?? []).filter((channel) => channel.isActive !== false),
     [telegramChannels],
   );
   const selectedAccount = useMemo(
@@ -230,18 +233,18 @@ export function InternalTransactionModal({
   }, [open, initial, reset]);
 
   useEffect(() => {
-    if (!isInvestment) {
+    if (!requiresMember) {
       lastAutoMemberIdRef.current = "";
       setValue("memberId", "");
     }
-  }, [isInvestment, setValue]);
+  }, [requiresMember, setValue]);
 
   useEffect(() => {
     if (!requiresTelegramChannel) setValue("telegramChannelId", "");
   }, [requiresTelegramChannel, setValue]);
 
   useEffect(() => {
-    if (!isInvestment) return;
+    if (!requiresMember) return;
     const autoMemberId = selectedAccount?.assignedMemberId ?? "";
     const currentMemberId = getValues("memberId") ?? "";
     const lastAutoMemberId = lastAutoMemberIdRef.current;
@@ -260,7 +263,7 @@ export function InternalTransactionModal({
       });
       lastAutoMemberIdRef.current = autoMemberId;
     }
-  }, [getValues, isInvestment, selectedAccount, setValue]);
+  }, [getValues, requiresMember, selectedAccount, setValue]);
 
   useEffect(() => {
     const selected = getValues("categoryId");
@@ -292,162 +295,168 @@ export function InternalTransactionModal({
             className={hasCategoryExtraField ? "md:col-span-2" : undefined}
             data-transaction-field="type"
           >
-          <FormField label="Type">
-            <Select
-              {...register("type")}
-              value={type}
-              onChange={(event) =>
-                setValue("type", event.target.value as InternalTransactionValues["type"], {
-                  shouldDirty: true,
-                  shouldValidate: true,
-                })
-              }
-            >
-              <option value="income">Income</option>
-              <option value="expense">Expense</option>
-            </Select>
-          </FormField>
+            <FormField label="Type">
+              <Select
+                {...register("type")}
+                value={type}
+                onChange={(event) =>
+                  setValue(
+                    "type",
+                    event.target.value as InternalTransactionValues["type"],
+                    {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    },
+                  )
+                }
+              >
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+              </Select>
+            </FormField>
           </div>
           <div data-transaction-field="category">
-          <FormField
-            label="Category"
-            required
-            error={errors.categoryId ? "Required field" : undefined}
-          >
-            <Select
-              {...register("categoryId", { required: true })}
-              value={categoryId}
-              onChange={(event) =>
-                setValue("categoryId", event.target.value, {
-                  shouldDirty: true,
-                  shouldValidate: true,
-                })
-              }
-            >
-              <option value="" disabled hidden>
-                Select category
-              </option>
-              {categories?.map((category) => (
-                <option
-                  key={category.id}
-                  value={category.id}
-                  {...iconOptionProps(category)}
-                >
-                  {category.name}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          </div>
-          {isInvestment ? (
-            <div data-transaction-field="member">
             <FormField
-              label="Member"
+              label="Category"
               required
-              error={errors.memberId ? "Required field" : undefined}
+              error={errors.categoryId ? "Required field" : undefined}
             >
               <Select
-                {...register("memberId", { required: true })}
-                value={memberId}
+                {...register("categoryId", { required: true })}
+                value={categoryId}
                 onChange={(event) =>
-                  setValue("memberId", event.target.value, {
+                  setValue("categoryId", event.target.value, {
                     shouldDirty: true,
                     shouldValidate: true,
                   })
                 }
               >
                 <option value="" disabled hidden>
-                  Select member
+                  Select category
                 </option>
-                {members.map((member) => (
+                {categories?.map((category) => (
                   <option
-                    key={member.id}
-                    value={member.id}
-                    {...memberOptionProps(member)}
+                    key={category.id}
+                    value={category.id}
+                    {...iconOptionProps(category)}
                   >
-                    {member.user.name}
+                    {category.name}
                   </option>
                 ))}
               </Select>
             </FormField>
+          </div>
+          {requiresMember ? (
+            <div data-transaction-field="member">
+              <FormField
+                label="Member"
+                required
+                error={errors.memberId ? "Required field" : undefined}
+              >
+                <Select
+                  {...register("memberId", { required: true })}
+                  value={memberId}
+                  onChange={(event) =>
+                    setValue("memberId", event.target.value, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
+                >
+                  <option value="" disabled hidden>
+                    Select member
+                  </option>
+                  {members.map((member) => (
+                    <option
+                      key={member.id}
+                      value={member.id}
+                      {...memberOptionProps(member)}
+                    >
+                      {member.user.name}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
             </div>
           ) : null}
           {requiresTelegramChannel ? (
             <div data-transaction-field="channel">
+              <FormField
+                label={
+                  isChannelAdvertisingRevenue ? "Revenue channel" : "Channel"
+                }
+                required={isChannelAdvertisingRevenue}
+                error={errors.telegramChannelId ? "Required field" : undefined}
+              >
+                <Select
+                  {...register("telegramChannelId", {
+                    validate: (value) =>
+                      !isChannelAdvertisingRevenue ||
+                      Boolean(value) ||
+                      "required",
+                  })}
+                  value={telegramChannelId}
+                  onChange={(event) =>
+                    setValue("telegramChannelId", event.target.value, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
+                >
+                  <option value="">No channel</option>
+                  {ownChannels.map((channel) => (
+                    <option
+                      key={channel.id}
+                      value={channel.id}
+                      {...channelOptionProps(channel)}
+                    >
+                      {channel.title}
+                      {channel.username ? ` (@${channel.username})` : ""}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+            </div>
+          ) : null}
+          <div data-transaction-field="account">
             <FormField
-              label={
-                isChannelAdvertisingRevenue ? "Revenue channel" : "Channel"
-              }
-              required={isChannelAdvertisingRevenue}
-              error={errors.telegramChannelId ? "Required field" : undefined}
+              label="Account"
+              required
+              error={errors.accountId ? "Required field" : undefined}
             >
               <Select
-                {...register("telegramChannelId", {
-                  validate: (value) =>
-                    !isChannelAdvertisingRevenue || Boolean(value) || "required",
-                })}
-                value={telegramChannelId}
+                {...register("accountId", { required: true })}
+                value={accountId}
                 onChange={(event) =>
-                  setValue("telegramChannelId", event.target.value, {
+                  setValue("accountId", event.target.value, {
                     shouldDirty: true,
                     shouldValidate: true,
                   })
                 }
               >
-                <option value="">No channel</option>
-                {ownChannels.map((channel) => (
+                <option value="" disabled hidden>
+                  Select account
+                </option>
+                {accounts.map((account) => (
                   <option
-                    key={channel.id}
-                    value={channel.id}
-                    {...channelOptionProps(channel)}
+                    key={account.id}
+                    value={account.id}
+                    {...iconOptionProps(account)}
                   >
-                    {channel.title}
-                    {channel.username ? ` (@${channel.username})` : ""}
+                    {accountDisplayName(account)} ({account.currency})
                   </option>
                 ))}
               </Select>
             </FormField>
-            </div>
-          ) : null}
-          <div data-transaction-field="account">
-          <FormField
-            label="Account"
-            required
-            error={errors.accountId ? "Required field" : undefined}
-          >
-            <Select
-              {...register("accountId", { required: true })}
-              value={accountId}
-              onChange={(event) =>
-                setValue("accountId", event.target.value, {
-                  shouldDirty: true,
-                  shouldValidate: true,
-                })
-              }
-            >
-              <option value="" disabled hidden>
-                Select account
-              </option>
-              {accounts.map((account) => (
-                <option
-                  key={account.id}
-                  value={account.id}
-                  {...iconOptionProps(account)}
-                >
-                  {accountDisplayName(account)} ({account.currency})
-                </option>
-              ))}
-            </Select>
-          </FormField>
           </div>
           <div data-transaction-field="amount">
-          <FormField label="Amount">
-            <Input
-              type="number"
-              step="0.01"
-              {...register("amount", { valueAsNumber: true })}
-            />
-          </FormField>
+            <FormField label="Amount">
+              <Input
+                type="number"
+                step="0.01"
+                {...register("amount", { valueAsNumber: true })}
+              />
+            </FormField>
           </div>
         </div>
         <FormField label="Description">
