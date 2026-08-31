@@ -45,6 +45,7 @@ import {
   TelegramUserAccountLoginFinalizer,
 } from './telegram-user-account-login-finalizer';
 import { TelegramUserAccountQrLoginService } from './telegram-user-account-qr-login.service';
+import { TelegramUserAccountRemovalService } from './telegram-user-account-removal.service';
 import {
   decryptTelegramLoginTempSession,
   encryptTelegramLoginTempSession,
@@ -77,6 +78,10 @@ export class TelegramUserAccountsService {
       info: () => undefined,
       writeStructured: () => undefined,
     } as unknown as ApplicationLoggerService,
+    private readonly accountRemoval: TelegramUserAccountRemovalService = new TelegramUserAccountRemovalService(
+      prisma,
+      workspaceService,
+    ),
   ) {}
 
   private async notifyProgress(
@@ -477,35 +482,7 @@ export class TelegramUserAccountsService {
   }
 
   async remove(userId: string, id: string) {
-    const workspaceId = await this.getWorkspaceId(userId);
-    const existing = await this.prisma.telegramUserAccountIntegration.findFirst(
-      {
-        where: { id, workspaceId },
-      },
-    );
-    if (!existing)
-      throw new NotFoundException('Telegram user account not found');
-    const row = await this.prisma.$transaction(async (tx) => {
-      await tx.telegramChannelAdminLink.deleteMany({
-        where: { workspaceId, telegramUserAccountIntegrationId: id },
-      });
-      await tx.telegramChannelSourceAccess.deleteMany({
-        where: {
-          workspaceId,
-          sourceId: id,
-          sourceType: TelegramSourceType.MTPROTO,
-        },
-      });
-      await tx.telegramChannelDataSource.deleteMany({
-        where: {
-          workspaceId,
-          sourceId: id,
-          sourceType: TelegramSourceType.MTPROTO,
-        },
-      });
-      return tx.telegramUserAccountIntegration.delete({ where: { id } });
-    });
-    return safeTelegramUserAccount(row);
+    return this.accountRemoval.remove(userId, id);
   }
 
   async startLogin(userId: string, id: string, dto: StartLoginDto) {

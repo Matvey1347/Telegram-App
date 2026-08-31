@@ -75,6 +75,24 @@ describe('selectManagedPostPublishingSource', () => {
       }),
     ).toBeUndefined();
   });
+
+  it('excludes publication-disabled MTProto accounts without disabling Bot API', () => {
+    const disabledMtproto = {
+      ...sources[0],
+      mtprotoPublishingEnabled: false,
+    };
+
+    expect(
+      selectManagedPostPublishingSource([disabledMtproto, sources[1]], {
+        requiresBotApi: false,
+      }),
+    ).toBe(sources[1]);
+    expect(
+      selectManagedPostPublishingSource([disabledMtproto, sources[1]], {
+        requiresBotApi: true,
+      }),
+    ).toBe(sources[1]);
+  });
 });
 
 describe('managedPostRequiresBotApi', () => {

@@ -22,6 +22,8 @@ import { TelegramAdSalesBotTargetsService } from './telegram-ad-sales-bot-target
 import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
 import { TelegramAdSalesPlacementOptionsService } from './telegram-ad-sales-placement-options.service';
 import { TelegramAdvertiserCheckoutResolverService } from './telegram-advertiser-checkout-resolver.service';
+import { TelegramCrmModule } from '../telegram-crm/telegram-crm.module';
+import { TelegramAdSalesLegacyCrmService } from './telegram-ad-sales-legacy-crm.service';
 
 @Module({
   imports: [
@@ -29,6 +31,7 @@ import { TelegramAdvertiserCheckoutResolverService } from './telegram-advertiser
     TelegramChannelNetworksModule,
     ApplicationLogsModule,
     FinanceCategoriesModule,
+    TelegramCrmModule,
   ],
   controllers: [TelegramAdSalesReadController, TelegramAdSalesController],
   providers: [
@@ -39,6 +42,7 @@ import { TelegramAdvertiserCheckoutResolverService } from './telegram-advertiser
     TelegramAdSalesCheckoutService,
     TelegramAdSalesCrmAdvertisersService,
     TelegramAdSalesCrmSettingsService,
+    TelegramAdSalesLegacyCrmService,
     TelegramAdPlacementLifecycleService,
     TelegramAdSalesBotCommandService,
     TelegramAdSalesBotCommandExecutorService,

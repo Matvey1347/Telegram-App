@@ -112,7 +112,12 @@ export const WORKSPACE_FEATURE_REGISTRY = [
     navigation: ["adSalesCrm"],
     search: ["advertisers"],
     dashboard: ["crmMetrics"],
-    extra: [{ capability: "manageAutomation", sensitivity: "sensitive" }],
+    extra: [
+      { capability: "viewOwn", sensitivity: "standard" },
+      { capability: "viewAny", sensitivity: "sensitive" },
+      { capability: "sendManualMessages", sensitivity: "sensitive" },
+      { capability: "manageAutomation", sensitivity: "sensitive" },
+    ],
   }),
   feature({
     id: "advertising",

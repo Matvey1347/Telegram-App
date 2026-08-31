@@ -660,8 +660,10 @@ describe('TelegramAdSalesCrmAdvertisersService', () => {
 
   it('forces own CRM lists to the current member in the Prisma query', async () => {
     const authorization = {
-      require: jest.fn().mockResolvedValue({ workspaceId: 'ws-1', memberId: 'member-1' }),
-      can: jest.fn(async (_userId: string, key: string) => key === 'adSales.crm.editOwn'),
+      require: jest
+        .fn()
+        .mockResolvedValue({ workspaceId: 'ws-1', memberId: 'member-1' }),
+      scope: jest.fn().mockResolvedValue({ assignedMemberId: 'member-1' }),
     };
     const { service, prisma } = createService(authorization);
     prisma.telegramAdCrmWorkspaceSettings.findUnique.mockResolvedValue(null);
@@ -677,6 +679,11 @@ describe('TelegramAdSalesCrmAdvertisersService', () => {
     expect(prisma.telegramAdvertiser.count).toHaveBeenCalledWith({
       where: expect.objectContaining({ ownerMemberId: 'member-1' }),
     });
+    expect(authorization.scope).toHaveBeenCalledWith(
+      'user-1',
+      'adSales.crm.viewOwn',
+      'adSales.crm.viewAny',
+    );
   });
 
   it('classifies CRM RFM recency and frequency buckets', () => {

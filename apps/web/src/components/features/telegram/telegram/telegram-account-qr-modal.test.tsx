@@ -23,6 +23,9 @@ const account = {
   isPremium: false,
   captionLengthMax: 1024,
   messageLengthMax: 4096,
+  crmSyncEnabled: false,
+  crmSendEnabled: false,
+  mtprotoPublishingEnabled: true,
   status: "error",
   isActive: true,
 } satisfies TelegramUserAccount;

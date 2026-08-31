@@ -30,13 +30,20 @@ import { decimal, decimalToString } from './domain/decimal';
 import * as crmMetrics from './telegram-ad-sales-crm-advertiser-metrics';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 import { adSalesAuthorizationTestFallback } from './telegram-ad-sales-authorization-test-fallback';
+import {
+  legacyAdvertiserFilter,
+  legacyAdvertiserLifecycleStage,
+  legacyAdvertiserStatus,
+} from '../telegram-crm/telegram-crm-legacy-compatibility';
 
 @Injectable()
 export class TelegramAdSalesCrmAdvertisersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
-    private readonly authorization: WorkspaceAuthorizationService = adSalesAuthorizationTestFallback(workspaceService),
+    private readonly authorization: WorkspaceAuthorizationService = adSalesAuthorizationTestFallback(
+      workspaceService,
+    ),
   ) {}
 
   private async workspace(userId: string) {
@@ -64,8 +71,7 @@ export class TelegramAdSalesCrmAdvertisersService {
       phone: true,
       email: true,
       website: true,
-      status: true,
-      lifecycleStage: true,
+      stage: true,
       completedSalesCount: true,
       totalSalesCount: true,
       totalRevenueInPrimaryCurrency: true,
@@ -155,13 +161,13 @@ export class TelegramAdSalesCrmAdvertisersService {
       safeMonetaryValue,
       highValueThreshold,
     );
-    const effectiveStatus =
-      advertiser.status === TelegramAdvertiserStatus.LOST ||
-      advertiser.status === TelegramAdvertiserStatus.BLOCKED
-        ? advertiser.status
-        : advertiser.hasActiveSale
-          ? TelegramAdvertiserStatus.ACTIVE
-          : TelegramAdvertiserStatus.LEAD;
+    const effectiveStatus = legacyAdvertiserStatus(
+      advertiser.stage,
+      advertiser.hasActiveSale,
+    );
+    const effectiveLifecycleStage = legacyAdvertiserLifecycleStage(
+      advertiser.stage,
+    );
     const activityStatus = advertiser.hasActivePlacement
       ? ('ACTIVE' as const)
       : advertiser.hasWaitingPlacement
@@ -169,7 +175,7 @@ export class TelegramAdSalesCrmAdvertisersService {
         : ('LEAD' as const);
     const rfmSegment = crmMetrics.rfmSegment({
       status: effectiveStatus,
-      lifecycleStage: advertiser.lifecycleStage,
+      lifecycleStage: effectiveLifecycleStage,
       completedSalesCount: advertiser.completedSalesCount,
       recencyBucket,
       frequencyBucket,
@@ -223,7 +229,7 @@ export class TelegramAdSalesCrmAdvertisersService {
         : null,
       status: effectiveStatus,
       activityStatus,
-      lifecycleStage: advertiser.lifecycleStage,
+      lifecycleStage: effectiveLifecycleStage,
       completedSalesCount: advertiser.completedSalesCount,
       totalSalesCount: advertiser.totalSalesCount,
       paidSalesCount: advertiser.paidSalesCount ?? 0,
@@ -621,6 +627,11 @@ export class TelegramAdSalesCrmAdvertisersService {
     query: TelegramAdvertisersQueryDto,
   ): Promise<TelegramAdCrmAdvertisersListResult> {
     const access = await this.authorization.require(userId, 'adSales.crm.view');
+    const ownership = await this.authorization.scope(
+      userId,
+      'adSales.crm.viewOwn',
+      'adSales.crm.viewAny',
+    );
     const workspaceId = access.workspaceId;
     const pagination = normalizePagination(query);
     const search = query.search?.trim();
@@ -631,9 +642,12 @@ export class TelegramAdSalesCrmAdvertisersService {
         : query.archived === false
           ? { archivedAt: null }
           : {}),
-      ...(query.status ? { status: query.status } : {}),
-      ...(query.lifecycleStage ? { lifecycleStage: query.lifecycleStage } : {}),
-      ...(query.ownerMemberId ? { ownerMemberId: query.ownerMemberId } : {}),
+      ...legacyAdvertiserFilter(query),
+      ...('assignedMemberId' in ownership
+        ? { ownerMemberId: ownership.assignedMemberId }
+        : query.ownerMemberId
+          ? { ownerMemberId: query.ownerMemberId }
+          : {}),
       ...(search
         ? {
             OR: [
@@ -672,10 +686,6 @@ export class TelegramAdSalesCrmAdvertisersService {
           }
         : {}),
     };
-    if (
-      (await this.authorization.can(userId, 'adSales.crm.editOwn')) &&
-      !(await this.authorization.can(userId, 'adSales.crm.editAny'))
-    ) where.ownerMemberId = access.memberId;
     const crmSettings =
       await this.prisma.telegramAdCrmWorkspaceSettings.findUnique({
         where: { workspaceId },

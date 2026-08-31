@@ -1,6 +1,29 @@
 # Project Refactor ExecPlan
 
-Updated: 2026-08-30
+Updated: 2026-08-31
+
+## 2026-08-31 Contact-centered CRM foundation
+
+Stage 1 evolves the existing Ad Sales CRM without adding parallel Contact or
+Deal storage. `TelegramAdvertiser` remains the Contact backing entity and
+`TelegramAdSale` remains the Deal. The two persisted advertiser lifecycle
+fields are replaced by one authoritative CRM Contact stage; legacy API fields
+are compatibility projections only, and active-Deal state remains derived.
+
+The new focused `domains/telegram/telegram-crm` boundary owns Contact, stable
+Telegram Peer identity, Conversation/Message persistence, per-account sync
+state, CRM settings, independent account capabilities, and a pure fail-closed
+customer-automation policy. It does not import the Ad Sales service or Telegram
+protocol SDK. Ad Sales continues to own sales, placements, payments, pricing,
+calendar, availability, and analytics.
+
+Rollout is deliberately inert: existing/new Contacts have customer automation
+off, existing Deals are migration-disabled and ineligible, workspace/type
+switches default off, and migration creates no Messages, Conversations, sync
+states, due events, or automation executions. No cron, polling, heartbeat,
+startup scan, worker, queue, persistent MTProto connection, telemetry writer,
+Redis, or Railway service is introduced. See
+`docs/architecture/CRM_ARCHITECTURE.md`.
 
 ## 2026-08-30 Cross-stack operations slice
 

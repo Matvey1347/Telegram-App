@@ -43,6 +43,9 @@ const telegramAccount = {
   isPremium: false,
   captionLengthMax: 1024,
   messageLengthMax: 4096,
+  crmSyncEnabled: false,
+  crmSendEnabled: false,
+  mtprotoPublishingEnabled: true,
   isActive: true,
   assignedMember: null,
 };

@@ -348,6 +348,10 @@ export class TelegramSourceAccessService {
             row.sourceType === TelegramSourceType.MTPROTO
               ? (account?.lastCheckedAt ?? null)
               : null,
+          mtprotoPublishingEnabled:
+            row.sourceType === TelegramSourceType.MTPROTO
+              ? account?.mtprotoPublishingEnabled !== false
+              : null,
           canBeUsedForAnalytics: this.canBeUsedForAnalytics(
             permissions,
             row.role,
@@ -411,6 +415,7 @@ export class TelegramSourceAccessService {
         where: {
           workspaceId,
           isActive: true,
+          mtprotoPublishingEnabled: true,
           status: TelegramUserAccountStatus.connected,
           sessionEncrypted: { not: null },
           sessionIv: { not: null },

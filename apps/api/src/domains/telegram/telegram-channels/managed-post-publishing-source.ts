@@ -5,6 +5,7 @@ type PublishSource = {
   sourceType: TelegramSourceType;
   permissions: { canPostMessages: boolean };
   accountLastCheckedAt?: Date | string | null;
+  mtprotoPublishingEnabled?: boolean | null;
 };
 
 export function managedPostRequiresBotApi(input: {
@@ -52,6 +53,7 @@ export function selectManagedPostPublishingSource<T extends PublishSource>(
     .filter(
       (source) =>
         source.sourceType === TelegramSourceType.MTPROTO &&
+        source.mtprotoPublishingEnabled !== false &&
         source.permissions.canPostMessages,
     )
     .sort((left, right) => accountCheckTime(right) - accountCheckTime(left));
@@ -60,6 +62,7 @@ export function selectManagedPostPublishingSource<T extends PublishSource>(
         (source) =>
           source.sourceId === options.existingScheduledSourceId &&
           source.sourceType === TelegramSourceType.MTPROTO &&
+          source.mtprotoPublishingEnabled !== false &&
           source.permissions.canPostMessages,
       )
     : undefined;

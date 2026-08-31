@@ -21,6 +21,9 @@ export type TelegramUserAccount = {
     supportsCustomEmoji: boolean;
     limitsSource: "telegram_config" | "fallback";
   } | null;
+  crmSyncEnabled: boolean;
+  crmSendEnabled: boolean;
+  mtprotoPublishingEnabled: boolean;
   status:
     | "pending"
     | "needs_code"

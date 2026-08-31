@@ -20,8 +20,7 @@ import {
   TelegramAdSlotStrategy,
   TelegramAdvertiserActivityType,
   TelegramAdvertiserContactType,
-  TelegramAdvertiserLifecycleStage,
-  TelegramAdvertiserStatus,
+  TelegramCrmContactStage,
   TelegramAdvertiserTaskPriority,
   TelegramAdvertiserTaskStatus,
   TransactionType,
@@ -43,6 +42,9 @@ import { adDeletionReadyWhere } from '../../operations/scheduled-tasks/due-work-
 import { notifyScheduledTaskDueWorkChanged } from '../../operations/scheduled-tasks/scheduled-task-wake-notifier';
 import { FinanceCategoriesService } from '../../finance/finance-categories/finance-categories.service';
 import { TelegramManagedPostCommandService } from '../telegram-channels/telegram-managed-post-command.service';
+import { legacyAdvertiserLifecycleStage, legacyAdvertiserFilter, legacyAdvertiserStatus, stageFromLegacyAdvertiser } from '../telegram-crm/telegram-crm-legacy-compatibility';
+import { syncLegacyCrmPeer } from '../telegram-crm/telegram-crm-legacy-peer';
+import { telegramAdvertiserCompatibilityInclude, telegramAdvertiserInclude } from './telegram-ad-sales-advertiser-read-model';
 import { TelegramManagedPostPublicationService } from '../telegram-channels/telegram-managed-post-publication.service';
 import { TelegramManagedPostRemoteSyncService } from '../telegram-channels/telegram-managed-post-remote-sync.service';
 import { TelegramPostGroupsService } from '../telegram-channels/telegram-post-groups.service';
@@ -492,8 +494,13 @@ export class TelegramAdSalesService {
   }
 
   private mapAdvertiser(settings: any) {
+    const { stage, crmPeers, _count, ...legacySettings } = settings;
+    const hasActiveDeal = Number(_count?.sales ?? 0) > 0;
     return {
-      ...settings,
+      ...legacySettings,
+      telegramUserId: crmPeers?.[0]?.telegramUserId ?? null,
+      status: legacyAdvertiserStatus(stage, hasActiveDeal),
+      lifecycleStage: legacyAdvertiserLifecycleStage(stage),
       totalRevenueInPrimaryCurrency: decimalToString(
         settings.totalRevenueInPrimaryCurrency,
       ),
@@ -725,14 +732,7 @@ export class TelegramAdSalesService {
   private includeSaleRelations() {
     return {
       advertiser: {
-        include: {
-          contacts: {
-            orderBy: [
-              { isPrimary: 'desc' as const },
-              { createdAt: 'asc' as const },
-            ],
-          },
-        },
+        include: telegramAdvertiserCompatibilityInclude,
       },
       placements: {
         orderBy: { scheduledAt: 'asc' as const },
@@ -821,35 +821,7 @@ export class TelegramAdSalesService {
   }
 
   private advertiserInclude() {
-    return {
-      contacts: {
-        orderBy: [
-          { isPrimary: 'desc' as const },
-          { createdAt: 'asc' as const },
-        ],
-      },
-      activities: {
-        orderBy: [{ occurredAt: 'desc' as const }, { id: 'desc' as const }],
-        take: 10,
-      },
-      tasks: {
-        where: {
-          status: {
-            in: [
-              TelegramAdvertiserTaskStatus.OPEN,
-              TelegramAdvertiserTaskStatus.IN_PROGRESS,
-            ],
-          },
-        },
-        orderBy: [{ dueAt: 'asc' as const }, { id: 'asc' as const }],
-        take: 10,
-      },
-      sales: {
-        orderBy: [{ createdAt: 'desc' as const }],
-        take: 10,
-        include: this.includeSaleRelations(),
-      },
-    };
+    return telegramAdvertiserInclude(this.includeSaleRelations());
   }
 
   private async getAdvertiser(workspaceId: string, advertiserId: string) {
@@ -973,16 +945,6 @@ export class TelegramAdSalesService {
         firstPurchaseAt,
         lastPurchaseAt,
         repeatCustomerAt,
-        lifecycleStage:
-          customerSales.length >= 2
-            ? TelegramAdvertiserLifecycleStage.REPEAT_CUSTOMER
-            : customerSales.length >= 1
-              ? TelegramAdvertiserLifecycleStage.CUSTOMER
-              : undefined,
-        status:
-          customerSales.length >= 1
-            ? TelegramAdvertiserStatus.ACTIVE
-            : undefined,
       },
     });
   }
@@ -1011,8 +973,7 @@ export class TelegramAdSalesService {
         email: this.normalizeEmail(dto.advertiserContact),
         ownerMemberId: assignedMemberId ?? null,
         createdByUserId: userId,
-        status: TelegramAdvertiserStatus.LEAD,
-        lifecycleStage: TelegramAdvertiserLifecycleStage.NEW,
+        stage: TelegramCrmContactStage.NEW,
       },
     });
     if (dto.advertiserTelegram?.trim()) {
@@ -2307,10 +2268,17 @@ export class TelegramAdSalesService {
     });
   }
 
-  async analyticsOverview(userId: string, query: TelegramAdAnalyticsSeriesQueryDto) {
+  async analyticsOverview(
+    userId: string,
+    query: TelegramAdAnalyticsSeriesQueryDto,
+  ) {
     const selectedChannelIds = [...new Set(query.channelIds ?? [])];
-    if (selectedChannelIds.length > TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS) {
-      throw new BadRequestException(`Analytics supports at most ${TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS} selected channels`);
+    if (
+      selectedChannelIds.length > TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS
+    ) {
+      throw new BadRequestException(
+        `Analytics supports at most ${TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS} selected channels`,
+      );
     }
     const workspaceId = await this.workspace(userId);
     let effectiveQuery = query;
@@ -2729,8 +2697,7 @@ export class TelegramAdSalesService {
     const where: Prisma.TelegramAdvertiserWhereInput = {
       workspaceId,
       ...(query.archived ? {} : { archivedAt: null }),
-      ...(query.status ? { status: query.status } : {}),
-      ...(query.lifecycleStage ? { lifecycleStage: query.lifecycleStage } : {}),
+      ...legacyAdvertiserFilter(query),
       ...(query.ownerMemberId ? { ownerMemberId: query.ownerMemberId } : {}),
       ...(search
         ? {
@@ -2786,7 +2753,7 @@ export class TelegramAdSalesService {
     );
   }
 
-  async advertiserSearch(userId: string, query: TelegramAdvertiserSearchDto) {
+  async advertiserSearch(userId: string, query: TelegramAdvertiserSearchDto, ownerMemberId?: string) {
     const workspaceId = await this.workspace(userId);
     const search = query.q.trim();
     const normalizedVariants = [
@@ -2799,6 +2766,7 @@ export class TelegramAdSalesService {
       where: {
         workspaceId,
         archivedAt: null,
+        ...(ownerMemberId ? { ownerMemberId } : {}),
         OR: [
           { displayName: { contains: search, mode: 'insensitive' } },
           { companyName: { contains: search, mode: 'insensitive' } },
@@ -2823,9 +2791,7 @@ export class TelegramAdSalesService {
           })),
         ],
       },
-      include: {
-        contacts: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] },
-      },
+      include: telegramAdvertiserCompatibilityInclude,
       orderBy: [
         { totalRevenueInPrimaryCurrency: 'desc' },
         { updatedAt: 'desc' },
@@ -2844,29 +2810,42 @@ export class TelegramAdSalesService {
 
   async createAdvertiser(userId: string, dto: CreateTelegramAdvertiserDto) {
     const workspaceId = await this.workspace(userId);
-    const advertiser = await this.prisma.telegramAdvertiser.create({
-      data: {
+    const advertiser = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.telegramAdvertiser.create({
+        data: {
+          workspaceId,
+          displayName: dto.displayName.trim(),
+          companyName: dto.companyName?.trim() || null,
+          telegramUsername: this.normalizeTelegramUsername(
+            dto.telegramUsername,
+          ),
+          phone: this.normalizePhone(dto.phone),
+          email: this.normalizeEmail(dto.email),
+          website: this.normalizeWebsite(dto.website),
+          description: dto.description?.trim() || null,
+          source: dto.source?.trim() || null,
+          stage: stageFromLegacyAdvertiser(dto) ?? TelegramCrmContactStage.NEW,
+          archivedAt: stageFromLegacyAdvertiser(dto) === TelegramCrmContactStage.ARCHIVED ? new Date() : null,
+          ownerMemberId: dto.ownerMemberId ?? null,
+          createdByUserId: userId,
+          nextContactAt: dto.nextContactAt ? new Date(dto.nextContactAt) : null,
+          defaultFollowUpDays: dto.defaultFollowUpDays ?? null,
+          preferredCurrency: dto.preferredCurrency ?? null,
+          preferredContactMethod: dto.preferredContactMethod ?? null,
+        },
+      });
+      await syncLegacyCrmPeer(tx, {
         workspaceId,
-        displayName: dto.displayName.trim(),
-        companyName: dto.companyName?.trim() || null,
-        telegramUsername: this.normalizeTelegramUsername(dto.telegramUsername),
-        telegramUserId: dto.telegramUserId?.trim() || null,
-        phone: this.normalizePhone(dto.phone),
-        email: this.normalizeEmail(dto.email),
-        website: this.normalizeWebsite(dto.website),
-        description: dto.description?.trim() || null,
-        source: dto.source?.trim() || null,
-        status: dto.status ?? TelegramAdvertiserStatus.LEAD,
-        lifecycleStage:
-          dto.lifecycleStage ?? TelegramAdvertiserLifecycleStage.NEW,
-        ownerMemberId: dto.ownerMemberId ?? null,
-        createdByUserId: userId,
-        nextContactAt: dto.nextContactAt ? new Date(dto.nextContactAt) : null,
-        defaultFollowUpDays: dto.defaultFollowUpDays ?? null,
-        preferredCurrency: dto.preferredCurrency ?? null,
-        preferredContactMethod: dto.preferredContactMethod ?? null,
-      },
-      include: this.advertiserInclude(),
+        contactId: created.id,
+        telegramUserId: dto.telegramUserId,
+        telegramUserIdSpecified: Boolean(dto.telegramUserId?.trim()),
+        username: dto.telegramUsername,
+        usernameSpecified: dto.telegramUsername !== undefined,
+      });
+      return tx.telegramAdvertiser.findUniqueOrThrow({
+        where: { id: created.id },
+        include: this.advertiserInclude(),
+      });
     });
     await this.createAdvertiserActivity(workspaceId, advertiser.id, {
       type: TelegramAdvertiserActivityType.ADVERTISER_CREATED,
@@ -2883,65 +2862,78 @@ export class TelegramAdSalesService {
   ) {
     const workspaceId = await this.workspace(userId);
     await this.getAdvertiser(workspaceId, advertiserId);
-    const advertiser = await this.prisma.telegramAdvertiser.update({
-      where: { id: advertiserId },
-      data: {
-        ...(dto.displayName === undefined
-          ? {}
-          : { displayName: dto.displayName.trim() }),
-        ...(dto.companyName === undefined
-          ? {}
-          : { companyName: dto.companyName?.trim() || null }),
-        ...(dto.telegramUsername === undefined
-          ? {}
-          : {
-              telegramUsername: this.normalizeTelegramUsername(
-                dto.telegramUsername,
-              ),
-            }),
-        ...(dto.telegramUserId === undefined
-          ? {}
-          : { telegramUserId: dto.telegramUserId?.trim() || null }),
-        ...(dto.phone === undefined
-          ? {}
-          : { phone: this.normalizePhone(dto.phone) }),
-        ...(dto.email === undefined
-          ? {}
-          : { email: this.normalizeEmail(dto.email) }),
-        ...(dto.website === undefined
-          ? {}
-          : { website: this.normalizeWebsite(dto.website) }),
-        ...(dto.description === undefined
-          ? {}
-          : { description: dto.description?.trim() || null }),
-        ...(dto.source === undefined
-          ? {}
-          : { source: dto.source?.trim() || null }),
-        ...(dto.status === undefined ? {} : { status: dto.status }),
-        ...(dto.lifecycleStage === undefined
-          ? {}
-          : { lifecycleStage: dto.lifecycleStage }),
-        ...(dto.ownerMemberId === undefined
-          ? {}
-          : { ownerMemberId: dto.ownerMemberId }),
-        ...(dto.nextContactAt === undefined
-          ? {}
-          : {
-              nextContactAt: dto.nextContactAt
-                ? new Date(dto.nextContactAt)
-                : null,
-            }),
-        ...(dto.defaultFollowUpDays === undefined
-          ? {}
-          : { defaultFollowUpDays: dto.defaultFollowUpDays }),
-        ...(dto.preferredCurrency === undefined
-          ? {}
-          : { preferredCurrency: dto.preferredCurrency }),
-        ...(dto.preferredContactMethod === undefined
-          ? {}
-          : { preferredContactMethod: dto.preferredContactMethod }),
-      },
-      include: this.advertiserInclude(),
+    const stage = stageFromLegacyAdvertiser(dto);
+    const advertiser = await this.prisma.$transaction(async (tx) => {
+      await tx.telegramAdvertiser.update({
+        where: { id: advertiserId },
+        data: {
+          ...(dto.displayName === undefined
+            ? {}
+            : { displayName: dto.displayName.trim() }),
+          ...(dto.companyName === undefined
+            ? {}
+            : { companyName: dto.companyName?.trim() || null }),
+          ...(dto.telegramUsername === undefined
+            ? {}
+            : {
+                telegramUsername: this.normalizeTelegramUsername(
+                  dto.telegramUsername,
+                ),
+              }),
+          ...(dto.phone === undefined
+            ? {}
+            : { phone: this.normalizePhone(dto.phone) }),
+          ...(dto.email === undefined
+            ? {}
+            : { email: this.normalizeEmail(dto.email) }),
+          ...(dto.website === undefined
+            ? {}
+            : { website: this.normalizeWebsite(dto.website) }),
+          ...(dto.description === undefined
+            ? {}
+            : { description: dto.description?.trim() || null }),
+          ...(dto.source === undefined
+            ? {}
+            : { source: dto.source?.trim() || null }),
+          ...(stage === undefined
+            ? {}
+            : {
+                stage,
+                archivedAt: stage === TelegramCrmContactStage.ARCHIVED ? new Date() : null,
+              }),
+          ...(dto.ownerMemberId === undefined
+            ? {}
+            : { ownerMemberId: dto.ownerMemberId }),
+          ...(dto.nextContactAt === undefined
+            ? {}
+            : {
+                nextContactAt: dto.nextContactAt
+                  ? new Date(dto.nextContactAt)
+                  : null,
+              }),
+          ...(dto.defaultFollowUpDays === undefined
+            ? {}
+            : { defaultFollowUpDays: dto.defaultFollowUpDays }),
+          ...(dto.preferredCurrency === undefined
+            ? {}
+            : { preferredCurrency: dto.preferredCurrency }),
+          ...(dto.preferredContactMethod === undefined
+            ? {}
+            : { preferredContactMethod: dto.preferredContactMethod }),
+        },
+      });
+      await syncLegacyCrmPeer(tx, {
+        workspaceId,
+        contactId: advertiserId,
+        telegramUserId: dto.telegramUserId,
+        telegramUserIdSpecified: dto.telegramUserId !== undefined,
+        username: dto.telegramUsername,
+        usernameSpecified: dto.telegramUsername !== undefined,
+      });
+      return tx.telegramAdvertiser.findUniqueOrThrow({
+        where: { id: advertiserId },
+        include: this.advertiserInclude(),
+      });
     });
     return this.mapAdvertiser(advertiser);
   }
@@ -2953,7 +2945,7 @@ export class TelegramAdSalesService {
       where: { id: advertiserId },
       data: {
         archivedAt: new Date(),
-        status: TelegramAdvertiserStatus.ARCHIVED,
+        stage: TelegramCrmContactStage.ARCHIVED,
       },
       include: this.advertiserInclude(),
     });
@@ -2965,7 +2957,7 @@ export class TelegramAdSalesService {
     await this.getAdvertiser(workspaceId, advertiserId);
     const advertiser = await this.prisma.telegramAdvertiser.update({
       where: { id: advertiserId },
-      data: { archivedAt: null, status: TelegramAdvertiserStatus.ACTIVE },
+      data: { archivedAt: null, stage: TelegramCrmContactStage.LEAD },
       include: this.advertiserInclude(),
     });
     return this.mapAdvertiser(advertiser);
@@ -3149,11 +3141,12 @@ export class TelegramAdSalesService {
     });
   }
 
-  async listCrmTasks(userId: string, query: TelegramAdvertiserTasksQueryDto) {
+  async listCrmTasks(userId: string, query: TelegramAdvertiserTasksQueryDto, ownerMemberId?: string) {
     const workspaceId = await this.workspace(userId);
     const pagination = normalizePagination(query);
     const where: Prisma.TelegramAdvertiserTaskWhereInput = {
       workspaceId,
+      ...(ownerMemberId ? { advertiser: { ownerMemberId } } : {}),
       ...(query.advertiserId ? { advertiserId: query.advertiserId } : {}),
       ...(query.assignedMemberId
         ? { assignedMemberId: query.assignedMemberId }

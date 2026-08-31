@@ -75,6 +75,7 @@ import { TelegramAdSalesCheckoutService } from './telegram-ad-sales-checkout.ser
 import { TelegramAdSalesCrmAdvertisersService } from './telegram-ad-sales-crm-advertisers.service';
 import { TelegramAdSalesCrmSettingsService } from './telegram-ad-sales-crm-settings.service';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
+import { TelegramAdSalesLegacyCrmService } from './telegram-ad-sales-legacy-crm.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('telegram-ad-sales')
@@ -85,6 +86,7 @@ export class TelegramAdSalesController {
     private readonly checkoutService: TelegramAdSalesCheckoutService,
     private readonly crmAdvertisersService: TelegramAdSalesCrmAdvertisersService,
     private readonly crmSettingsService: TelegramAdSalesCrmSettingsService,
+    private readonly legacyCrmService: TelegramAdSalesLegacyCrmService,
     private readonly streamResponse: StreamResponseService,
   ) {}
 
@@ -338,7 +340,7 @@ export class TelegramAdSalesController {
     @CurrentUser() user: JwtUser,
     @Query() query: TelegramAdvertisersQueryDto,
   ) {
-    return this.service.listAdvertisers(user.sub, query);
+    return this.legacyCrmService.listAdvertisers(user.sub, query);
   }
 
   @Get('advertisers/search')
@@ -346,12 +348,12 @@ export class TelegramAdSalesController {
     @CurrentUser() user: JwtUser,
     @Query() query: TelegramAdvertiserSearchDto,
   ) {
-    return this.service.advertiserSearch(user.sub, query);
+    return this.legacyCrmService.advertiserSearch(user.sub, query);
   }
 
   @Get('advertisers/:id')
   getAdvertiser(@CurrentUser() user: JwtUser, @Param('id') id: string) {
-    return this.service.getAdvertiserDetails(user.sub, id);
+    return this.legacyCrmService.getAdvertiserDetails(user.sub, id);
   }
 
   @Post('advertisers')
@@ -359,7 +361,7 @@ export class TelegramAdSalesController {
     @CurrentUser() user: JwtUser,
     @Body() dto: CreateTelegramAdvertiserDto,
   ) {
-    return this.service.createAdvertiser(user.sub, dto);
+    return this.legacyCrmService.createAdvertiser(user.sub, dto);
   }
 
   @Patch('advertisers/:id')
@@ -368,17 +370,17 @@ export class TelegramAdSalesController {
     @Param('id') id: string,
     @Body() dto: UpdateTelegramAdvertiserDto,
   ) {
-    return this.service.updateAdvertiser(user.sub, id, dto);
+    return this.legacyCrmService.updateAdvertiser(user.sub, id, dto);
   }
 
   @Post('advertisers/:id/archive')
   archiveAdvertiser(@CurrentUser() user: JwtUser, @Param('id') id: string) {
-    return this.service.archiveAdvertiser(user.sub, id);
+    return this.legacyCrmService.archiveAdvertiser(user.sub, id);
   }
 
   @Post('advertisers/:id/restore')
   restoreAdvertiser(@CurrentUser() user: JwtUser, @Param('id') id: string) {
-    return this.service.restoreAdvertiser(user.sub, id);
+    return this.legacyCrmService.restoreAdvertiser(user.sub, id);
   }
 
   @Post('advertisers/:id/contacts')
@@ -387,7 +389,7 @@ export class TelegramAdSalesController {
     @Param('id') id: string,
     @Body() dto: CreateTelegramAdvertiserContactDto,
   ) {
-    return this.service.addAdvertiserContact(user.sub, id, dto);
+    return this.legacyCrmService.addAdvertiserContact(user.sub, id, dto);
   }
 
   @Patch('advertisers/:id/contacts/:contactId')
@@ -397,7 +399,7 @@ export class TelegramAdSalesController {
     @Param('contactId') contactId: string,
     @Body() dto: UpdateTelegramAdvertiserContactDto,
   ) {
-    return this.service.updateAdvertiserContact(user.sub, id, contactId, dto);
+    return this.legacyCrmService.updateAdvertiserContact(user.sub, id, contactId, dto);
   }
 
   @Delete('advertisers/:id/contacts/:contactId')
@@ -406,7 +408,7 @@ export class TelegramAdSalesController {
     @Param('id') id: string,
     @Param('contactId') contactId: string,
   ) {
-    return this.service.deleteAdvertiserContact(user.sub, id, contactId);
+    return this.legacyCrmService.deleteAdvertiserContact(user.sub, id, contactId);
   }
 
   @Post('advertisers/:id/contacts/:contactId/set-primary')
@@ -415,7 +417,7 @@ export class TelegramAdSalesController {
     @Param('id') id: string,
     @Param('contactId') contactId: string,
   ) {
-    return this.service.setPrimaryAdvertiserContact(user.sub, id, contactId);
+    return this.legacyCrmService.setPrimaryAdvertiserContact(user.sub, id, contactId);
   }
 
   @Get('advertisers/:id/activities')
@@ -424,7 +426,7 @@ export class TelegramAdSalesController {
     @Param('id') id: string,
     @Query() query: TelegramAdvertiserActivitiesQueryDto,
   ) {
-    return this.service.listAdvertiserActivities(user.sub, id, query);
+    return this.legacyCrmService.listAdvertiserActivities(user.sub, id, query);
   }
 
   @Post('advertisers/:id/activities')
@@ -433,7 +435,7 @@ export class TelegramAdSalesController {
     @Param('id') id: string,
     @Body() dto: CreateTelegramAdvertiserActivityDto,
   ) {
-    return this.service.createAdvertiserActivityEntry(user.sub, id, dto);
+    return this.legacyCrmService.createAdvertiserActivityEntry(user.sub, id, dto);
   }
 
   @Post('advertisers/:id/notes')
@@ -442,7 +444,7 @@ export class TelegramAdSalesController {
     @Param('id') id: string,
     @Body() dto: CreateTelegramAdvertiserActivityDto,
   ) {
-    return this.service.createAdvertiserNote(user.sub, id, dto);
+    return this.legacyCrmService.createAdvertiserNote(user.sub, id, dto);
   }
 
   @Get('crm/tasks')
@@ -450,7 +452,7 @@ export class TelegramAdSalesController {
     @CurrentUser() user: JwtUser,
     @Query() query: TelegramAdvertiserTasksQueryDto,
   ) {
-    return this.service.listCrmTasks(user.sub, query);
+    return this.legacyCrmService.listCrmTasks(user.sub, query);
   }
 
   @Get('crm/advertisers')
@@ -467,7 +469,7 @@ export class TelegramAdSalesController {
     @Param('id') id: string,
     @Body() dto: CreateTelegramAdvertiserTaskDto,
   ) {
-    return this.service.createAdvertiserTask(user.sub, id, dto);
+    return this.legacyCrmService.createAdvertiserTask(user.sub, id, dto);
   }
 
   @Patch('crm/tasks/:taskId')
@@ -476,7 +478,7 @@ export class TelegramAdSalesController {
     @Param('taskId') taskId: string,
     @Body() dto: UpdateTelegramAdvertiserTaskDto,
   ) {
-    return this.service.updateCrmTask(user.sub, taskId, dto);
+    return this.legacyCrmService.updateCrmTask(user.sub, taskId, dto);
   }
 
   @Post('crm/tasks/:taskId/complete')
@@ -485,7 +487,7 @@ export class TelegramAdSalesController {
     @Param('taskId') taskId: string,
     @Body() dto: CompleteTelegramAdvertiserTaskDto,
   ) {
-    return this.service.completeCrmTask(user.sub, taskId, dto);
+    return this.legacyCrmService.completeCrmTask(user.sub, taskId, dto);
   }
 
   @Post('crm/tasks/:taskId/snooze')
@@ -494,7 +496,7 @@ export class TelegramAdSalesController {
     @Param('taskId') taskId: string,
     @Body() dto: UpdateTelegramAdvertiserTaskDto,
   ) {
-    return this.service.snoozeCrmTask(user.sub, taskId, dto);
+    return this.legacyCrmService.snoozeCrmTask(user.sub, taskId, dto);
   }
 
   @Post('crm/tasks/:taskId/skip')
@@ -503,7 +505,7 @@ export class TelegramAdSalesController {
     @Param('taskId') taskId: string,
     @Body() dto: SkipTelegramAdvertiserTaskDto,
   ) {
-    return this.service.skipCrmTask(user.sub, taskId, dto);
+    return this.legacyCrmService.skipCrmTask(user.sub, taskId, dto);
   }
 
   @Get('crm/settings/workspace')

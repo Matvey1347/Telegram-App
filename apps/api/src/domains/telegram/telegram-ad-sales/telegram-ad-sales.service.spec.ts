@@ -8,6 +8,7 @@ import {
   TelegramAdSaleStatus,
   TelegramAdvertiserLifecycleStage,
   TelegramAdvertiserStatus,
+  TelegramCrmContactStage,
   TelegramAdvertiserTaskPriority,
   TelegramAdvertiserTaskStatus,
   TelegramManagedPostStatus,
@@ -442,6 +443,44 @@ function mockPricingPreview(
 }
 
 describe('TelegramAdSalesService', () => {
+  it('keeps Telegram identity and active Deal projections in advertiser search', async () => {
+    const { service, prisma } = createService();
+    prisma.telegramAdvertiser.findMany.mockResolvedValue([
+      {
+        id: 'contact-1',
+        displayName: 'Peer Contact',
+        stage: TelegramCrmContactStage.LEAD,
+        crmPeers: [{ telegramUserId: '778899' }],
+        _count: { sales: 1 },
+        contacts: [],
+        totalRevenueInPrimaryCurrency: decimal(0),
+        averageOrderValueInPrimaryCurrency: decimal(0),
+        createdAt: new Date('2026-08-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-08-02T00:00:00.000Z'),
+      },
+    ]);
+
+    const result = await service.advertiserSearch('user-1', {
+      q: 'Peer',
+      limit: 10,
+    });
+
+    expect(prisma.telegramAdvertiser.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          crmPeers: expect.any(Object),
+          _count: expect.any(Object),
+        }),
+      }),
+    );
+    expect(result[0]).toEqual(
+      expect.objectContaining({
+        telegramUserId: '778899',
+        status: TelegramAdvertiserStatus.ACTIVE,
+      }),
+    );
+  });
+
   it('hydrates sale-list metrics from the managed post Telegram message', async () => {
     const { service, prisma } = createService();
     const sale = makeSale({

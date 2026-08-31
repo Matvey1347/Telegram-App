@@ -144,4 +144,45 @@ describe('TelegramSourceAccessService publishing capabilities', () => {
     expect(capabilities.source?.sourceType).toBe('MTPROTO');
     expect(capabilities.canPublishInlineButtons).toBe(false);
   });
+
+  it('filters publication-disabled MTProto accounts while preserving the built-in Bot API path', async () => {
+    const prisma = {
+      telegramChannelSourceAccess: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            channelId: 'channel-1',
+            sourceId: 'account-1',
+            sourceType: TelegramSourceType.MTPROTO,
+            canPostMessages: true,
+          },
+          {
+            channelId: 'channel-1',
+            sourceId: TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID,
+            sourceType: TelegramSourceType.BOT,
+            canPostMessages: true,
+          },
+        ]),
+      },
+      telegramBotIntegration: { findMany: jest.fn().mockResolvedValue([]) },
+      telegramUserAccountIntegration: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    };
+    const service = new TelegramSourceAccessService(prisma as never);
+
+    const capabilities = await service.publishingCapabilitiesForChannel(
+      'workspace-1',
+      'channel-1',
+    );
+
+    expect(prisma.telegramUserAccountIntegration.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ mtprotoPublishingEnabled: true }),
+      }),
+    );
+    expect(capabilities.source?.sourceId).toBe(
+      TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID,
+    );
+    expect(capabilities.canPublishInlineButtons).toBe(true);
+  });
 });

@@ -2,8 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   Prisma,
   TelegramAdvertiserContactType,
-  TelegramAdvertiserLifecycleStage,
-  TelegramAdvertiserStatus,
+  TelegramCrmContactStage,
 } from '@prisma/client';
 
 type AdvertiserInput = {
@@ -82,8 +81,7 @@ export class TelegramAdvertiserCheckoutResolverService {
         email: this.normalizeEmail(input.advertiserContact),
         ownerMemberId: context.ownerMemberId,
         createdByUserId: context.userId,
-        status: TelegramAdvertiserStatus.LEAD,
-        lifecycleStage: TelegramAdvertiserLifecycleStage.NEW,
+        stage: TelegramCrmContactStage.NEW,
       },
       select: {
         id: true,

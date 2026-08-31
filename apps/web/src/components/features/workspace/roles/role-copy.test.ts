@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { WORKSPACE_FEATURE_REGISTRY } from "@telegram-system/shared";
-import { permissionIsEnabled, summarizeRole } from "./role-copy";
+import {
+  capabilityLabel,
+  permissionIsEnabled,
+  summarizeRole,
+} from "./role-copy";
 
 describe("role access presentation", () => {
   it("summarizes an own-data role and hidden features", () => {
@@ -22,5 +26,13 @@ describe("role access presentation", () => {
     expect(permissionIsEnabled("DENYLIST", exceptions, "channels.view")).toBe(
       true,
     );
+  });
+
+  it.each([
+    ["viewOwn", "View own"],
+    ["viewAny", "View all"],
+    ["sendManualMessages", "Send manual messages"],
+  ])("presents the %s CRM capability with a readable label", (key, label) => {
+    expect(capabilityLabel(key)).toBe(label);
   });
 });

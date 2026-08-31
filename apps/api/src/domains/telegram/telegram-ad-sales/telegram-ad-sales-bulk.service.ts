@@ -7,8 +7,7 @@ import {
   TelegramAdSaleStatus,
   TelegramAdvertiserActivityType,
   TelegramAdvertiserContactType,
-  TelegramAdvertiserLifecycleStage,
-  TelegramAdvertiserStatus,
+  TelegramCrmContactStage,
 } from '@prisma/client';
 import type {
   TelegramAdSalesBulkCreateResponse,
@@ -390,8 +389,7 @@ export class TelegramAdSalesBulkService {
             email: contactIsEmail ? normalizedEmail : null,
             ownerMemberId: assignedMemberId,
             createdByUserId: userId,
-            status: TelegramAdvertiserStatus.LEAD,
-            lifecycleStage: TelegramAdvertiserLifecycleStage.NEW,
+            stage: TelegramCrmContactStage.NEW,
           },
         });
         await this.createAdvertiserContacts(tx, workspaceId, created.id, advertiser);
