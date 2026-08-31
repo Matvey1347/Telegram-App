@@ -6,6 +6,8 @@ export const crmMessageSelect = {
   workspaceId: true,
   conversationId: true,
   telegramMessageId: true,
+  telegramMessageIdNumeric: true,
+  clientIdempotencyKey: true,
   mtprotoAccountId: true,
   direction: true,
   origin: true,
@@ -20,18 +22,18 @@ export const crmMessageSelect = {
   createdAt: true,
 } satisfies Prisma.TelegramCrmMessageSelect;
 
-type MessageRow = Prisma.TelegramCrmMessageGetPayload<{
+export type CrmMessageRow = Prisma.TelegramCrmMessageGetPayload<{
   select: typeof crmMessageSelect;
 }>;
 
-export function mapCrmMessage(row: MessageRow): CrmMessage {
+export function mapCrmMessage(row: CrmMessageRow): CrmMessage {
   return {
     ...row,
     contentMetadata:
       row.contentMetadata &&
       typeof row.contentMetadata === 'object' &&
       !Array.isArray(row.contentMetadata)
-        ? (row.contentMetadata as Record<string, unknown>)
+        ? row.contentMetadata
         : null,
     sentAt: row.sentAt.toISOString(),
     editedAt: row.editedAt?.toISOString() ?? null,

@@ -237,6 +237,7 @@ enum TelegramCrmContactStage {
 
 enum TelegramCrmConversationState {
   ACTIVE
+  IGNORED
   ARCHIVED
 }
 
@@ -933,6 +934,7 @@ model TelegramUserAccountIntegration {
 
   @@unique([id, workspaceId])
   @@index([workspaceId, assignedMemberId])
+  @@index([crmSyncEnabled, isActive, status, id], map: "TelegramUserAccountIntegration_crm_runtime_idx")
 }
 
 model TelegramChannelAdminLink {
@@ -1904,6 +1906,8 @@ model TelegramAdvertiser {
   ownerMemberId                      String?
   createdByUserId                    String?
   lastContactAt                      DateTime?
+  lastInboundAt                      DateTime?
+  lastOutboundAt                     DateTime?
   lastPurchaseAt                     DateTime?
   nextContactAt                      DateTime?
   defaultFollowUpDays                Int?
@@ -2131,25 +2135,30 @@ model TelegramCrmPeer {
 }
 
 model TelegramCrmConversation {
-  id                        String                       @id @default(cuid())
-  workspaceId               String
-  telegramCrmPeerId         String
-  contactId                 String?
-  mtprotoAccountId          String
-  telegramDialogId          String
-  state                     TelegramCrmConversationState @default(ACTIVE)
-  lastMessageAt             DateTime?
-  lastInboundAt             DateTime?
-  lastOutboundAt            DateTime?
-  unreadCount               Int                          @default(0)
-  readState                 TelegramCrmReadState         @default(UNKNOWN)
-  lastReadTelegramMessageId String?
-  lastReadAt                DateTime?
-  incrementalSyncCheckpoint String?
-  recoveryCheckpoint        String?
-  lastMeaningfulSyncAt      DateTime?
-  createdAt                 DateTime                     @default(now())
-  updatedAt                 DateTime                     @updatedAt
+  id                              String                       @id @default(cuid())
+  workspaceId                     String
+  telegramCrmPeerId               String
+  contactId                       String?
+  mtprotoAccountId                String
+  telegramDialogId                String
+  telegramAccessHash              String?
+  state                           TelegramCrmConversationState @default(ACTIVE)
+  historyCursorTelegramMessageId  Int?
+  historyExhausted                Boolean                      @default(false)
+  lastMessageAt                   DateTime?
+  lastInboundAt                   DateTime?
+  lastOutboundAt                  DateTime?
+  unreadCount                     Int                          @default(0)
+  readState                       TelegramCrmReadState         @default(UNKNOWN)
+  lastReadTelegramMessageId       String?
+  lastReadInboxTelegramMessageId  Int?
+  lastReadOutboxTelegramMessageId Int?
+  lastReadAt                      DateTime?
+  incrementalSyncCheckpoint       String?
+  recoveryCheckpoint              String?
+  lastMeaningfulSyncAt            DateTime?
+  createdAt                       DateTime                     @default(now())
+  updatedAt                       DateTime                     @updatedAt
 
   workspace      Workspace                      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   peer           TelegramCrmPeer                @relation(fields: [telegramCrmPeerId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "TelegramCrmConversation_peer_workspace_fkey")
@@ -2163,25 +2172,28 @@ model TelegramCrmConversation {
   @@index([workspaceId, state, lastMessageAt, id], map: "TelegramCrmConversation_workspace_state_lastMessage_id_idx")
   @@index([workspaceId, contactId, lastMessageAt, id], map: "TelegramCrmConversation_workspace_contact_lastMessage_id_idx")
   @@index([workspaceId, mtprotoAccountId, lastMessageAt, id], map: "TelegramCrmConversation_workspace_account_lastMessage_id_idx")
+  @@index([workspaceId, contactId, state, lastMessageAt, id], map: "TelegramCrmConversation_workspace_contact_state_last_idx")
 }
 
 model TelegramCrmMessage {
-  id                    String                      @id @default(cuid())
-  workspaceId           String
-  conversationId        String
-  telegramMessageId     String
-  mtprotoAccountId      String
-  direction             TelegramCrmMessageDirection
-  origin                TelegramCrmMessageOrigin
-  sentByMemberId        String?
-  automationExecutionId String?
-  text                  String?
-  contentMetadata       Json?
-  sentAt                DateTime
-  editedAt              DateTime?
-  readState             TelegramCrmReadState        @default(UNKNOWN)
-  deliveryState         TelegramCrmDeliveryState    @default(UNKNOWN)
-  createdAt             DateTime                    @default(now())
+  id                       String                      @id @default(cuid())
+  workspaceId              String
+  conversationId           String
+  telegramMessageId        String
+  telegramMessageIdNumeric Int?
+  clientIdempotencyKey     String?
+  mtprotoAccountId         String
+  direction                TelegramCrmMessageDirection
+  origin                   TelegramCrmMessageOrigin
+  sentByMemberId           String?
+  automationExecutionId    String?
+  text                     String?
+  contentMetadata          Json?
+  sentAt                   DateTime
+  editedAt                 DateTime?
+  readState                TelegramCrmReadState        @default(UNKNOWN)
+  deliveryState            TelegramCrmDeliveryState    @default(UNKNOWN)
+  createdAt                DateTime                    @default(now())
 
   workspace           Workspace                               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   conversation        TelegramCrmConversation                 @relation(fields: [conversationId, workspaceId, mtprotoAccountId], references: [id, workspaceId, mtprotoAccountId], onDelete: Cascade, map: "TelegramCrmMessage_conversation_workspace_account_fkey")
@@ -2189,14 +2201,17 @@ model TelegramCrmMessage {
   automationExecution TelegramCrmCustomerAutomationExecution? @relation(fields: [automationExecutionId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "TelegramCrmMessage_automationExecution_workspace_fkey")
 
   @@unique([conversationId, telegramMessageId], map: "TelegramCrmMessage_conversation_telegramMessage_key")
+  @@unique([conversationId, clientIdempotencyKey], map: "TelegramCrmMessage_conversation_clientIdempotency_key")
   @@unique([automationExecutionId, workspaceId], map: "TelegramCrmMessage_automationExecution_workspace_key")
   @@index([conversationId, sentAt, id], map: "TelegramCrmMessage_conversation_sentAt_id_idx")
+  @@index([conversationId, direction, telegramMessageIdNumeric], map: "TelegramCrmMessage_conversation_direction_numeric_idx")
 }
 
 model TelegramCrmAccountSyncState {
   mtprotoAccountId      String                         @id
   workspaceId           String
   initialImportStatus   TelegramCrmInitialImportStatus @default(NOT_STARTED)
+  initialImportCursor   String?
   incrementalCheckpoint String?
   recoveryCheckpoint    String?
   status                TelegramCrmSyncStatus          @default(IDLE)
@@ -2237,6 +2252,7 @@ model TelegramCrmCustomerAutomationExecution {
   @@unique([id, workspaceId])
   @@unique([workspaceId, automationType, eventKey], map: "TelegramCrmCustomerAutomationExecution_event_key")
   @@index([workspaceId, createdAt, id], map: "TelegramCrmCustomerAutomationExecution_workspace_created_id_idx")
+  @@index([workspaceId, contactId, createdAt, id], map: "TelegramCrmCustomerAutomationExecution_contact_created_idx")
 }
 
 model TelegramAdvertiserAutomationRule {
@@ -2287,6 +2303,7 @@ model TelegramAdvertiserAutomationExecution {
 
   @@unique([automationRuleId, eventKey], map: "TelegramAdvertiserAutomationExecution_automationRuleId_eventKey")
   @@index([workspaceId, executedAt], map: "TelegramAdvertiserAutomationExecution_workspaceId_executedAt_id")
+  @@index([workspaceId, advertiserId, createdAt, id], map: "TelegramAdvertiserAutomationExecution_contact_created_idx")
 }
 
 model TelegramAdPlacementAdvertiserResult {

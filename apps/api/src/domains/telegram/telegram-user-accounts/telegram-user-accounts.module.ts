@@ -7,6 +7,7 @@ import { TelegramUserAccountsService } from './telegram-user-accounts.service';
 import { TelegramUserAccountLoginFinalizer } from './telegram-user-account-login-finalizer';
 import { TelegramUserAccountQrLoginService } from './telegram-user-account-qr-login.service';
 import { TelegramUserAccountRemovalService } from './telegram-user-account-removal.service';
+import { TelegramUserAccountCapabilityRefreshService } from './telegram-user-account-capability-refresh.service';
 
 @Module({
   imports: [TelegramChannelsModule],
@@ -18,6 +19,7 @@ import { TelegramUserAccountRemovalService } from './telegram-user-account-remov
     TelegramUserAccountLoginFinalizer,
     TelegramUserAccountQrLoginService,
     TelegramUserAccountRemovalService,
+    TelegramUserAccountCapabilityRefreshService,
   ],
   exports: [TelegramUserAccountsService],
 })

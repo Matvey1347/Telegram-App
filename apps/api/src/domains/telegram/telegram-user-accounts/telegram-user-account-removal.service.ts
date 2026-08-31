@@ -7,12 +7,14 @@ import { TelegramSourceType } from '@prisma/client';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { safeTelegramUserAccount } from './telegram-user-account-login-state';
+import { TelegramAccountRuntimeNotifier } from '../../../common/telegram-account-runtime-notifier.service';
 
 @Injectable()
 export class TelegramUserAccountRemovalService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
+    private readonly runtimeNotifier: TelegramAccountRuntimeNotifier = new TelegramAccountRuntimeNotifier(),
   ) {}
 
   async remove(userId: string, accountId: string) {
@@ -59,6 +61,11 @@ export class TelegramUserAccountRemovalService {
       return tx.telegramUserAccountIntegration.delete({
         where: { id: accountId },
       });
+    });
+    this.runtimeNotifier.wake({
+      workspaceId,
+      accountId,
+      reason: 'removed',
     });
     return safeTelegramUserAccount(row);
   }

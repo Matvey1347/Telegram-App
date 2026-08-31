@@ -1,9 +1,10 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { Prisma, TelegramUserAccountStatus } from '@prisma/client';
-import type { TelegramAccountProfile } from '../../../telegram/shared/telegram-mtproto.client';
+import type { TelegramAccountProfile } from '../../../telegram/shared/telegram-mtproto-account-profile';
 import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
+import { TelegramAccountRuntimeNotifier } from '../../../common/telegram-account-runtime-notifier.service';
 
 type LoginAccountSnapshot = {
   id: string;
@@ -33,6 +34,7 @@ export class TelegramUserAccountLoginFinalizer {
   constructor(
     private readonly prisma: PrismaService,
     private readonly encryptionService: TokenEncryptionService,
+    private readonly runtimeNotifier: TelegramAccountRuntimeNotifier = new TelegramAccountRuntimeNotifier(),
   ) {}
 
   async finalize(
@@ -80,6 +82,11 @@ export class TelegramUserAccountLoginFinalizer {
         'A newer Telegram login attempt replaced this authorization.',
       );
     }
+    this.runtimeNotifier.wake({
+      workspaceId: account.workspaceId,
+      accountId: account.id,
+      reason: 'login',
+    });
     return this.prisma.telegramUserAccountIntegration.findFirstOrThrow({
       where: { id: account.id, workspaceId: account.workspaceId },
       include: {

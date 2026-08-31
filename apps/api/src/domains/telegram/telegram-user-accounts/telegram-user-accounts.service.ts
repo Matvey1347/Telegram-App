@@ -20,10 +20,7 @@ import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-s
 import { normalizeTelegramChannelId } from '../../../telegram/shared/telegram-post-url';
 import {
   getTelegramFloodWaitSeconds,
-  isRevokedTelegramSessionError,
   isTelegramSendCodeUnavailableError,
-  REVOKED_TELEGRAM_SESSION_MESSAGE,
-  withTelegramTimeout,
 } from '../../../telegram/shared/telegram-session-errors';
 import {
   Confirm2faPasswordDto,
@@ -37,9 +34,7 @@ import { ConfigService } from '@nestjs/config';
 import { TelegramChannelImportPolicyService } from '../telegram-channels/telegram-channel-import-policy.service';
 import { TelegramChannelSyncOrchestrator } from '../telegram-channels/telegram-channel-sync.orchestrator';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
-import type { TelegramAccountCapabilities } from '@telegram-system/shared';
 import type { TelegramQrLoginProgress } from '@telegram-system/shared';
-import { TELEGRAM_ACCOUNT_CAPABILITY_CONFIG } from './telegram-capability.config';
 import {
   telegramAccountCapabilityUpdate,
   TelegramUserAccountLoginFinalizer,
@@ -53,6 +48,9 @@ import {
   safeTelegramUserAccount,
   updateTelegramLoginStateIfCurrent,
 } from './telegram-user-account-login-state';
+import { TelegramUserAccountCapabilityRefreshService } from './telegram-user-account-capability-refresh.service';
+import { TelegramAccountRuntimeNotifier } from '../../../common/telegram-account-runtime-notifier.service';
+import { decryptTelegramMtprotoCredentials } from '../../../telegram/shared/telegram-mtproto-credentials';
 
 type ProgressCallback = (
   item: { message: string },
@@ -82,6 +80,14 @@ export class TelegramUserAccountsService {
       prisma,
       workspaceService,
     ),
+    private readonly capabilityRefresh: TelegramUserAccountCapabilityRefreshService = new TelegramUserAccountCapabilityRefreshService(
+      prisma,
+      encryptionService,
+      mtprotoClient,
+      applicationLogger,
+      new TelegramAccountRuntimeNotifier(),
+    ),
+    private readonly runtimeNotifier: TelegramAccountRuntimeNotifier = new TelegramAccountRuntimeNotifier(),
   ) {}
 
   private async notifyProgress(
@@ -94,190 +100,16 @@ export class TelegramUserAccountsService {
     await onProgress({ message }, current, total);
   }
 
-  private capabilityTtlMs() {
-    return TELEGRAM_ACCOUNT_CAPABILITY_CONFIG.ttlHours * 60 * 60 * 1000;
-  }
-
-  private capabilityRefreshConcurrency() {
-    return TELEGRAM_ACCOUNT_CAPABILITY_CONFIG.refreshConcurrency;
-  }
-
-  private capabilityCheckTimeoutMs() {
-    return TELEGRAM_ACCOUNT_CAPABILITY_CONFIG.checkTimeoutMs;
-  }
-
-  private isCapabilityStale(account: { premiumCheckedAt?: Date | null }) {
-    if (!account.premiumCheckedAt) return true;
-    return (
-      Date.now() - account.premiumCheckedAt.getTime() > this.capabilityTtlMs()
-    );
-  }
-
-  private hasConnectedSession(account: {
-    sessionEncrypted?: string | null;
-    sessionIv?: string | null;
-    sessionAuthTag?: string | null;
-  }) {
-    return Boolean(
-      account.sessionEncrypted && account.sessionIv && account.sessionAuthTag,
-    );
-  }
-
-  private accountCredentials(account: {
-    apiId: string;
-    apiHashEncrypted: string;
-    apiHashIv: string;
-    apiHashAuthTag: string;
-    sessionEncrypted?: string | null;
-    sessionIv?: string | null;
-    sessionAuthTag?: string | null;
-  }) {
-    return {
-      apiId: account.apiId,
-      apiHash: this.encryptionService.decrypt({
-        encrypted: account.apiHashEncrypted,
-        iv: account.apiHashIv,
-        authTag: account.apiHashAuthTag,
-      }),
-      session: this.encryptionService.decrypt({
-        encrypted: account.sessionEncrypted || '',
-        iv: account.sessionIv || '',
-        authTag: account.sessionAuthTag || '',
-      }),
-    };
-  }
-
-  private async refreshAccountCapabilities(
-    account: {
-      id: string;
-      workspaceId: string;
-      label: string;
-      status: TelegramUserAccountStatus;
-      isPremium: boolean;
-      premiumCheckedAt: Date | null;
-      captionLengthMax: number;
-      messageLengthMax: number;
-      sessionEncrypted?: string | null;
-      sessionIv?: string | null;
-      sessionAuthTag?: string | null;
-      apiId: string;
-      apiHashEncrypted: string;
-      apiHashIv: string;
-      apiHashAuthTag: string;
-    },
-    options?: { force?: boolean },
+  private async updateLoginState(
+    account: Parameters<typeof updateTelegramLoginStateIfCurrent>[1],
+    data: Parameters<typeof updateTelegramLoginStateIfCurrent>[2],
   ) {
-    if (account.status !== TelegramUserAccountStatus.connected) return null;
-    if (!this.hasConnectedSession(account)) return null;
-    if (!options?.force && !this.isCapabilityStale(account)) return null;
-
-    try {
-      const profile = await withTelegramTimeout(
-        this.mtprotoClient.getAccountProfile(this.accountCredentials(account)),
-        this.capabilityCheckTimeoutMs(),
-        `Telegram capability check for account ${account.id}`,
-      );
-      return await this.prisma.telegramUserAccountIntegration.update({
-        where: { id: account.id },
-        data: {
-          telegramUserId: profile.id,
-          username: profile.username,
-          firstName: profile.firstName,
-          lastName: profile.lastName,
-          photoUrl: profile.photoUrl ?? null,
-          nameColor: profile.nameColor ?? null,
-          label:
-            (profile.username &&
-              `@${String(profile.username).replace('@', '')}`) ||
-            profile.firstName ||
-            account.label,
-          status: TelegramUserAccountStatus.connected,
-          lastCheckedAt: new Date(),
-          lastErrorMessage: null,
-          ...telegramAccountCapabilityUpdate(profile),
-        },
-        include: {
-          assignedMember: WorkspaceService.assignedMemberInclude,
-          createdByUser: WorkspaceService.createdByUserInclude,
-        },
-      });
-    } catch (error) {
-      this.applicationLogger.writeStructured({
-        level: 'warn',
-        kind: 'integration',
-        source: TelegramUserAccountsService.name,
-        event: 'telegram.account_capabilities.refresh_failed',
-        message:
-          error instanceof Error
-            ? error.message
-            : 'Telegram account capability refresh failed',
-        workspaceId: account.workspaceId,
-        errorName: error instanceof Error ? error.name : 'Error',
-        stack: error instanceof Error ? error.stack || null : null,
-        metadata: { accountId: account.id, forced: Boolean(options?.force) },
-      });
-      if (isRevokedTelegramSessionError(error))
-        return this.prisma.telegramUserAccountIntegration.update({
-          where: { id: account.id },
-          data: {
-            status: TelegramUserAccountStatus.error,
-            lastCheckedAt: new Date(),
-            lastErrorMessage: REVOKED_TELEGRAM_SESSION_MESSAGE,
-          },
-          include: {
-            assignedMember: WorkspaceService.assignedMemberInclude,
-            createdByUser: WorkspaceService.createdByUserInclude,
-          },
-        });
-      return null;
-    }
-  }
-
-  private async refreshAccountsCapabilities(
-    rows: Array<{
-      id: string;
-      workspaceId: string;
-      label: string;
-      isActive?: boolean;
-      status: TelegramUserAccountStatus;
-      isPremium: boolean;
-      premiumCheckedAt: Date | null;
-      captionLengthMax: number;
-      messageLengthMax: number;
-      sessionEncrypted?: string | null;
-      sessionIv?: string | null;
-      sessionAuthTag?: string | null;
-      apiId: string;
-      apiHashEncrypted: string;
-      apiHashIv: string;
-      apiHashAuthTag: string;
-    }>,
-  ) {
-    const pending = rows.filter(
-      (row) =>
-        row.status === TelegramUserAccountStatus.connected &&
-        row.isActive !== false &&
-        this.hasConnectedSession(row) &&
-        this.isCapabilityStale(row),
-    );
-    if (!pending.length) return new Map<string, unknown>();
-
-    const concurrency = this.capabilityRefreshConcurrency();
-    const updated = new Map<string, unknown>();
-    let index = 0;
-    const worker = async () => {
-      while (index < pending.length) {
-        const current = pending[index++];
-        const refreshed = await this.refreshAccountCapabilities(current);
-        if (refreshed) updated.set(current.id, refreshed);
-      }
-    };
-    await Promise.all(
-      Array.from({ length: Math.min(concurrency, pending.length) }, () =>
-        worker(),
-      ),
-    );
-    return updated;
+    await updateTelegramLoginStateIfCurrent(this.prisma, account, data);
+    this.runtimeNotifier.wake({
+      workspaceId: account.workspaceId,
+      accountId: account.id,
+      reason: 'credentials',
+    });
   }
 
   private decryptPhone(account: {
@@ -376,7 +208,7 @@ export class TelegramUserAccountsService {
       },
       orderBy: { createdAt: 'desc' },
     });
-    const refreshed = await this.refreshAccountsCapabilities(rows as never);
+    const refreshed = await this.capabilityRefresh.refreshMany(rows as never);
     return rows.map((row) =>
       safeTelegramUserAccount(
         (refreshed.get(row.id) as Record<string, unknown>) || row,
@@ -478,6 +310,17 @@ export class TelegramUserAccountsService {
         createdByUser: WorkspaceService.createdByUserInclude,
       },
     });
+    if (
+      dto.isActive !== undefined ||
+      dto.apiId !== undefined ||
+      dto.apiHash !== undefined
+    ) {
+      this.runtimeNotifier.wake({
+        workspaceId,
+        accountId: id,
+        reason: 'credentials',
+      });
+    }
     return safeTelegramUserAccount(row);
   }
 
@@ -548,7 +391,7 @@ export class TelegramUserAccountsService {
       started.tempSession,
     );
 
-    await updateTelegramLoginStateIfCurrent(this.prisma, account, {
+    await this.updateLoginState(account, {
       status: TelegramUserAccountStatus.needs_code,
       lastErrorMessage: null,
       lastCheckedAt: new Date(),
@@ -581,7 +424,7 @@ export class TelegramUserAccountsService {
       account,
     );
     if (!statePhoneCodeHash) {
-      await updateTelegramLoginStateIfCurrent(this.prisma, account, {
+      await this.updateLoginState(account, {
         status: TelegramUserAccountStatus.error,
         lastErrorMessage: 'Login session expired. Start login again.',
         loginPhoneCodeHash: null,
@@ -612,7 +455,7 @@ export class TelegramUserAccountsService {
     });
 
     if (result.needsPassword) {
-      await updateTelegramLoginStateIfCurrent(this.prisma, account, {
+      await this.updateLoginState(account, {
         status: TelegramUserAccountStatus.needs_password,
         lastErrorMessage: null,
         loginPhoneCodeHash: statePhoneCodeHash,
@@ -663,7 +506,7 @@ export class TelegramUserAccountsService {
       account.status !== TelegramUserAccountStatus.needs_password ||
       !stateTempSession
     ) {
-      await updateTelegramLoginStateIfCurrent(this.prisma, account, {
+      await this.updateLoginState(account, {
         status: TelegramUserAccountStatus.error,
         lastErrorMessage: 'Login session expired. Start login again.',
         loginPhoneCodeHash: null,
@@ -729,11 +572,16 @@ export class TelegramUserAccountsService {
           lastErrorMessage: 'Account is not connected yet',
         },
       });
+      this.runtimeNotifier.wake({
+        workspaceId,
+        accountId: account.id,
+        reason: 'credentials',
+      });
       return safeTelegramUserAccount(row);
     }
 
     const row =
-      (await this.refreshAccountCapabilities(account as never, {
+      (await this.capabilityRefresh.refreshOne(account as never, {
         force: true,
       })) ||
       (await this.prisma.telegramUserAccountIntegration.findFirstOrThrow({
@@ -769,7 +617,12 @@ export class TelegramUserAccountsService {
     );
     const { channels, profile } =
       await this.mtprotoClient.getAdminChannelsWithProfile(
-        this.accountCredentials(account),
+        decryptTelegramMtprotoCredentials(this.encryptionService, {
+          ...account,
+          sessionEncrypted: account.sessionEncrypted,
+          sessionIv: account.sessionIv,
+          sessionAuthTag: account.sessionAuthTag,
+        }),
       );
 
     await this.notifyProgress(

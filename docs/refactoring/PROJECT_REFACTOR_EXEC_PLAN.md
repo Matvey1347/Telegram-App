@@ -2,6 +2,27 @@
 
 Updated: 2026-08-31
 
+## 2026-08-31 Telegram CRM multi-account runtime and Inbox
+
+Stage 2 continues the Contact-centered CRM foundation with an event-driven
+MTProto runtime. One process-local client is maintained per eligible account;
+there is no global master account, database/Telegram polling, cron, heartbeat,
+or new worker service. Existing Conversations keep their fixed account while
+the workspace default is consulted only when creating a new Conversation.
+
+The runtime adds explicit bounded private-dialog import, batch-idempotent live
+updates, bounded `GetDifference` recovery, lazy history, numeric read state,
+manual idempotent sending, Inbox classification, Peer promotion, transactional
+Contact merge, and a process-local authenticated event stream. Telegram
+protocol details stay in `telegram/shared`, while focused CRM services own
+workspace-scoped persistence and authorization. The MTProto facade and account
+service continue shrinking and their architecture ceilings are lowered.
+
+The rollout remains automation-inert: no customer automation runner, schedule,
+send, execution, opt-in mutation, or historical backfill is introduced. Manual
+sending is independently permissioned and account-capability gated. See
+`docs/architecture/CRM_ARCHITECTURE.md`.
+
 ## 2026-08-31 Contact-centered CRM foundation
 
 Stage 1 evolves the existing Ad Sales CRM without adding parallel Contact or

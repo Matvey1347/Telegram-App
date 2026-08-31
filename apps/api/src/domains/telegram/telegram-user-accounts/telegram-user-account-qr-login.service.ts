@@ -15,6 +15,7 @@ import { TokenEncryptionService } from '../../../common/security/token-encryptio
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
 import { TelegramUserAccountLoginFinalizer } from './telegram-user-account-login-finalizer';
+import { TelegramAccountRuntimeNotifier } from '../../../common/telegram-account-runtime-notifier.service';
 
 function throwIfAborted(signal: AbortSignal) {
   if (!signal.aborted) return;
@@ -31,6 +32,7 @@ export class TelegramUserAccountQrLoginService {
     private readonly encryptionService: TokenEncryptionService,
     private readonly mtprotoClient: TelegramMtprotoClient,
     private readonly finalizer: TelegramUserAccountLoginFinalizer,
+    private readonly runtimeNotifier: TelegramAccountRuntimeNotifier = new TelegramAccountRuntimeNotifier(),
   ) {}
 
   private accountView(row: Record<string, unknown>): TelegramQrLoginAccount {
@@ -117,6 +119,11 @@ export class TelegramUserAccountQrLoginService {
           'A newer Telegram login attempt replaced this QR authorization.',
         );
       }
+      this.runtimeNotifier.wake({
+        workspaceId,
+        accountId: account.id,
+        reason: 'credentials',
+      });
       return { success: true, status: 'needs_password' };
     }
 

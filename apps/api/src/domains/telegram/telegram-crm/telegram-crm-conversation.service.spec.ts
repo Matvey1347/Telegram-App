@@ -1,4 +1,10 @@
+import { Prisma } from '@prisma/client';
 import { TelegramCrmConversationService } from './telegram-crm-conversation.service';
+
+const callArgument = (
+  mock: { mock: { calls: unknown[][] } },
+  index = 0,
+): unknown => mock.mock.calls[index]?.[0];
 
 const conversation = (accountId: string) => ({
   id: `conversation-${accountId}`,
@@ -26,9 +32,11 @@ describe('TelegramCrmConversationService', () => {
   const setup = () => {
     const prisma = {
       telegramCrmPeer: {
-        findFirst: jest
-          .fn()
-          .mockResolvedValue({ id: 'peer-1', contactId: null }),
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'peer-1',
+          contactId: null,
+          telegramUserId: '42',
+        }),
       },
       telegramCrmConversation: {
         create: jest.fn(({ data }: { data: { mtprotoAccountId: string } }) =>
@@ -78,17 +86,21 @@ describe('TelegramCrmConversationService', () => {
       telegramDialogId: 'dialog-123',
     });
 
-    expect(
-      prisma.telegramCrmConversation.create.mock.calls[0][0].data,
-    ).toMatchObject({
-      telegramCrmPeerId: 'peer-1',
-      mtprotoAccountId: 'account-1',
+    expect(callArgument(prisma.telegramCrmConversation.create)).toMatchObject({
+      data: {
+        telegramCrmPeerId: 'peer-1',
+        mtprotoAccountId: 'account-1',
+        telegramDialogId: '42',
+      },
     });
     expect(
-      prisma.telegramCrmConversation.create.mock.calls[1][0].data,
+      callArgument(prisma.telegramCrmConversation.create, 1),
     ).toMatchObject({
-      telegramCrmPeerId: 'peer-1',
-      mtprotoAccountId: 'account-2',
+      data: {
+        telegramCrmPeerId: 'peer-1',
+        mtprotoAccountId: 'account-2',
+        telegramDialogId: '42',
+      },
     });
   });
 
@@ -111,9 +123,43 @@ describe('TelegramCrmConversationService', () => {
       'account-default',
     );
     expect(result.mtprotoAccountId).toBe('account-default');
-    expect(prisma.telegramCrmConversation.create).toHaveBeenCalledWith(
+    expect(callArgument(prisma.telegramCrmConversation.create)).toMatchObject({
+      data: { mtprotoAccountId: 'account-default' },
+    });
+  });
+
+  it('returns the composite-key winner when creation races with a different client dialog id', async () => {
+    const { service, prisma } = setup();
+    const winner = {
+      ...conversation('account-1'),
+      id: 'conversation-winner',
+      telegramDialogId: 'legacy-client-dialog-id',
+    };
+    prisma.telegramCrmConversation.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('unique race', {
+        code: 'P2002',
+        clientVersion: '7.8.0',
+      }),
+    );
+    prisma.telegramCrmConversation.findUnique.mockResolvedValue(winner);
+
+    const result = await service.create('user-1', {
+      telegramCrmPeerId: 'peer-1',
+      accountId: 'account-1',
+      telegramDialogId: 'client-supplied-dialog-id',
+    });
+
+    expect(result.id).toBe('conversation-winner');
+    expect(result.telegramDialogId).toBe('legacy-client-dialog-id');
+    expect(prisma.telegramCrmConversation.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ mtprotoAccountId: 'account-default' }),
+        where: {
+          workspaceId_telegramCrmPeerId_mtprotoAccountId: {
+            workspaceId: 'workspace-1',
+            telegramCrmPeerId: 'peer-1',
+            mtprotoAccountId: 'account-1',
+          },
+        },
       }),
     );
   });

@@ -3,8 +3,9 @@
 ## Scope
 
 This document defines the Stage 1 persistence, contract, authorization, and
-rollout-safety foundation. It does not add realtime MTProto synchronization, a
-full CRM frontend, customer-message runners, background workers, or a PWA.
+rollout-safety foundation together with the Stage 2 multi-account MTProto CRM
+runtime and Inbox use cases. It does not add a full CRM frontend,
+customer-message automation runners, a durable queue, or a PWA.
 
 The existing Ad Sales product remains intact. `TelegramAdvertiser` is the
 physical backing record for a CRM Contact, and `TelegramAdSale` remains the
@@ -168,16 +169,104 @@ internal task creation. They are not customer-message consent or delivery
 records. Customer-message idempotency uses the separately named CRM execution
 model.
 
+## Multi-account MTProto runtime
+
+There is no process-wide master Telegram account. Every active, connected,
+session-backed account with `crmSyncEnabled=true` may own exactly one live
+client in one API process. A Conversation retains its fixed account for sync,
+read state, history, and sending; the workspace default is used only to create
+a new Conversation.
+
+The process manager performs one bounded startup query. Thereafter it reacts to
+in-process wake notifications from capability, account, login, and removal
+changes. It performs no database or Telegram polling, cron, or heartbeat and
+stops a client when the account becomes ineligible. Reconnect uses bounded
+backoff, and every account has a serialized update queue so overlapping GramJS
+callbacks cannot reorder checkpoint work. A send-only client created for an
+account with sync disabled is transient and is closed after the request.
+
+The process-local ownership model assumes one API replica. More replicas would
+require an explicit ownership/lease design; the Stage 2 runtime does not wake
+Neon with advisory-lock polling.
+
+## Import, incremental sync, and recovery
+
+Initial import is an explicit, bounded command. It scans Telegram dialogs in
+bounded pages and accepts only private human-user dialogs. Groups, channels,
+bots, self, deleted users, Telegram support/system identities, and service
+messages are excluded. Import creates or updates the canonical workspace Peer
+and the account-specific Conversation, but never promotes a Peer to Contact.
+The initial window and lazy history pages have hard limits and persist a cursor
+instead of loading unbounded history.
+
+Telegram access hashes are account-scoped and therefore live on Conversation,
+not on the workspace Peer. Numeric Telegram message IDs are stored beside the
+wire identifier for ordering and read ranges. New messages, edits, read updates,
+new dialogs, and peer metadata flow through one normalized adapter and a batch
+store. A replay creates no duplicate Messages, does not increment unread twice,
+and does not downgrade a manually sent Message to sync attribution.
+
+GramJS `catchUp()` is not used as a recovery guarantee. The runtime explicitly
+runs bounded `updates.GetDifference` slices from the stored account checkpoint.
+A checkpoint advances only after its database batch succeeds, and unchanged
+profiles, status, and checkpoints do not produce writes.
+`DifferenceTooLong` clears the incremental checkpoint and resets the bounded
+initial-import cursor; recovery then requires the same explicit initial-sync
+command instead of silently treating an incomplete slice as current.
+
+## Inbox, promotion, and merge
+
+The Inbox is a compact workspace-scoped read model over private Conversations
+and Peers. It supports Lead, Qualified, Follow-up, Customer, Ignore, and Archive
+actions without requiring a Contact at import time, and orders Peers by their
+latest Conversation activity. Promoting a Peer atomically claims one Contact,
+initializes its compact message signals, and attaches every Conversation for
+that canonical Peer.
+
+Manual Contact merge is one transaction. It moves Telegram Peers,
+Conversations, Deals, tasks, activities, notes, tags, contact methods,
+preferences, and automation references before removing the source Contact.
+Conflicts are resolved explicitly and customer automation remains fail-closed;
+merge must not discard customer history or silently broaden consent.
+
+## Manual messages, read state, and realtime events
+
+Manual CRM sending requires the manual-send permission, a fixed Conversation
+account that is active, connected, session-backed, and `crmSendEnabled`, plus a
+non-empty client idempotency key. The key reserves one Message per Conversation
+and derives the stable MTProto `randomId`, so retries and a simultaneous live
+echo converge on one manually attributed Message. Customer-automation flags do
+not block manual sends and this stage never executes an automation.
+
+Mark-read uses the Conversation's fixed account and numeric Telegram message
+range. Conversation unread state and compact Contact last-inbound/last-outbound
+signals are updated with the same persisted batch.
+
+The event stream is authenticated, workspace-scoped, and process-local. Events
+are emitted only after commit and use the stable names `message.received`,
+`message.sent`, `conversation.unreadChanged`, `readChanged`, `contact.updated`,
+and `inbox.updated`. There is no event table, replay log, heartbeat, or polling;
+clients refetch authoritative read models after reconnect.
+
 ## Runtime cost and scaling
 
-Stage 1 adds no cron, polling, heartbeat, startup workspace scan, per-Contact or
-per-Conversation worker, queue, Redis, persistent MTProto connection, telemetry
-writer, or Railway service. Idle Neon queries/writes and Railway CPU/RAM/network
-remain unchanged.
+Stage 1 added no recurring runtime work. Stage 2 adds one persistent GramJS
+client only for each eligible sync account, one bounded startup query, and
+event-driven account rechecks. Idle database reads/writes remain zero after
+startup. There is no per-Contact or per-Conversation worker, queue service,
+Redis, telemetry writer, cron, or heartbeat.
+
+GramJS itself maintains each live connection with an approximately nine-second
+ping and a state request about every 30 minutes. That is roughly 9,600 pings and
+at most 48 state requests per account/day: about 96,000/480 for 10 accounts and
+960,000/4,800 for 100 accounts. This is Telegram network traffic and Railway
+socket/CPU/RAM load, not Neon activity. Connect and difference recovery have
+global concurrency caps, queues are bounded, and overflow is surfaced instead
+of silently dropping accounts or updates.
 
 Peers grow with stable Telegram identities, Conversations with actual
-peer/account pairs, Messages with imported or sent product history, and sync
-state with explicitly started accounts. Future sync must batch identity reads,
-insert Messages idempotently, update each touched Conversation once per batch,
-and advance one account checkpoint only when changed. Stored rows never imply
-recurring work.
+peer/account pairs, and Messages only with imported or sent product history.
+Dialog/history/difference pages and database batches are bounded; each touched
+Conversation is updated once per batch and each account checkpoint only when it
+changes. Stored rows never imply recurring work, and raw Telegram payloads or
+process-local events are not retained.

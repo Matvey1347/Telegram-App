@@ -23,6 +23,8 @@ export const crmContactSelect = {
   automatedMessagesEnabled: true,
   automatedMessagesEnabledAt: true,
   lastContactAt: true,
+  lastInboundAt: true,
+  lastOutboundAt: true,
   lastPurchaseAt: true,
   nextContactAt: true,
   archivedAt: true,
@@ -57,6 +59,8 @@ export function mapCrmContact(row: ContactRow): CrmContact {
     automatedMessagesEnabledAt:
       row.automatedMessagesEnabledAt?.toISOString() ?? null,
     lastContactAt: row.lastContactAt?.toISOString() ?? null,
+    lastInboundAt: row.lastInboundAt?.toISOString() ?? null,
+    lastOutboundAt: row.lastOutboundAt?.toISOString() ?? null,
     lastPurchaseAt: row.lastPurchaseAt?.toISOString() ?? null,
     nextContactAt: row.nextContactAt?.toISOString() ?? null,
     archivedAt: row.archivedAt?.toISOString() ?? null,

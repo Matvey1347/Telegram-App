@@ -30,7 +30,12 @@ export type CrmDeliveryState =
   | "SENT"
   | "DELIVERED"
   | "FAILED";
-export type CrmConversationState = "ACTIVE" | "ARCHIVED";
+export const CRM_CONVERSATION_STATES = [
+  "ACTIVE",
+  "IGNORED",
+  "ARCHIVED",
+] as const;
+export type CrmConversationState = (typeof CRM_CONVERSATION_STATES)[number];
 export type CrmInitialImportStatus =
   | "NOT_STARTED"
   | "IN_PROGRESS"
@@ -63,6 +68,8 @@ export type CrmContact = {
   automatedMessagesEnabled: boolean;
   automatedMessagesEnabledAt: string | null;
   lastContactAt: string | null;
+  lastInboundAt: string | null;
+  lastOutboundAt: string | null;
   lastPurchaseAt: string | null;
   nextContactAt: string | null;
   archivedAt: string | null;
@@ -94,12 +101,16 @@ export type CrmConversation = {
   mtprotoAccountId: string;
   telegramDialogId: string;
   state: CrmConversationState;
+  historyCursorTelegramMessageId: number | null;
+  historyExhausted: boolean;
   lastMessageAt: string | null;
   lastInboundAt: string | null;
   lastOutboundAt: string | null;
   unreadCount: number;
   readState: CrmReadState;
   lastReadTelegramMessageId: string | null;
+  lastReadInboxTelegramMessageId: number | null;
+  lastReadOutboxTelegramMessageId: number | null;
   lastReadAt: string | null;
   incrementalSyncCheckpoint: string | null;
   recoveryCheckpoint: string | null;
@@ -113,6 +124,8 @@ export type CrmMessage = {
   workspaceId: string;
   conversationId: string;
   telegramMessageId: string;
+  telegramMessageIdNumeric: number | null;
+  clientIdempotencyKey: string | null;
   mtprotoAccountId: string;
   direction: CrmMessageDirection;
   origin: CrmMessageOrigin;
@@ -138,6 +151,7 @@ export type CrmAccountSyncState = {
   mtprotoAccountId: string;
   workspaceId: string;
   initialImportStatus: CrmInitialImportStatus;
+  initialImportCursor: string | null;
   incrementalCheckpoint: string | null;
   recoveryCheckpoint: string | null;
   status: CrmSyncStatus;

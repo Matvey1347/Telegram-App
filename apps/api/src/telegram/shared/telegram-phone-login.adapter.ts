@@ -1,5 +1,5 @@
 import { Api, TelegramClient } from 'telegram';
-import type { TelegramAccountProfile } from './telegram-mtproto.client';
+import type { TelegramAccountProfile } from './telegram-mtproto-account-profile';
 
 type PhoneLoginDependencies = {
   createClient: (session?: string) => Promise<TelegramClient>;

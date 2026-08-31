@@ -1,6 +1,6 @@
 import { Api, TelegramClient } from 'telegram';
 import type { TelegramQrLoginProgress } from '@telegram-system/shared';
-import type { TelegramAccountProfile } from './telegram-mtproto.client';
+import type { TelegramAccountProfile } from './telegram-mtproto-account-profile';
 
 type QrLoginResult =
   | {

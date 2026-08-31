@@ -7,10 +7,8 @@ import {
 } from '@nestjs/common';
 import { Api, TelegramClient } from 'telegram';
 import { returnBigInt } from 'telegram/Helpers';
-import { Logger as GramJsLogger, LogLevel } from 'telegram/extensions/Logger';
 import { HTMLParser } from 'telegram/extensions/html';
 import { normalizeTelegramChannelId } from './telegram-post-url';
-import { StringSession } from 'telegram/sessions';
 import {
   telegramHtmlToGramJsAlbumHtml,
   telegramHtmlToMtprotoHtml,
@@ -45,6 +43,13 @@ import {
   convertTelegramPublishImageWithSips,
   downloadTelegramPublishImage,
 } from './telegram-mtproto-publish-image';
+import type { TelegramAccountProfile } from './telegram-mtproto-account-profile';
+import {
+  closeTelegramMtprotoSession,
+  createTelegramMtprotoSession,
+} from './telegram-mtproto-session.factory';
+
+export type { TelegramAccountProfile } from './telegram-mtproto-account-profile';
 
 type ApiCredentials = { apiId: string; apiHash: string };
 type SessionParams = ApiCredentials & { session?: string };
@@ -81,15 +86,6 @@ type ResolvedStoredTelegramChannel = {
     inviteLink: string | null;
     resolvedBy: 'dialog-id' | 'stored-peer' | 'username' | 'invite-link';
   };
-};
-export type TelegramAccountProfile = {
-  id: string;
-  username: string | null;
-  firstName: string | null;
-  lastName: string | null;
-  photoUrl: string | null;
-  nameColor: number | null;
-  capabilities: TelegramAccountCapabilities;
 };
 export type TelegramInviteLinksResult = {
   scope: 'ALL_ADMINS' | 'PARTIAL_ADMINS';
@@ -536,40 +532,10 @@ export class TelegramMtprotoClient {
     this.logger.log(
       `Connecting MTProto client: apiId=${apiId} session=${session ? 'present' : 'empty'}`,
     );
-    const client = new TelegramClient(
-      new StringSession(session || ''),
-      Number(apiId),
-      apiHash,
-      {
-        autoReconnect: false,
-        baseLogger: new GramJsLogger(LogLevel.NONE),
-        connectionRetries: 3,
-        reconnectRetries: 0,
-      },
+    const client = await createTelegramMtprotoSession(
+      { apiId, apiHash, session },
+      signal,
     );
-    let closePromise: Promise<void> | undefined;
-    const closeOnce = () => {
-      closePromise ??= this.closeClient(client);
-      return closePromise;
-    };
-    const abortConnect = () => void closeOnce();
-    signal?.addEventListener('abort', abortConnect, { once: true });
-    try {
-      await client.connect();
-      if (signal?.aborted) {
-        const error = new Error('Telegram MTProto connection was cancelled');
-        error.name = 'AbortError';
-        throw error;
-      }
-    } catch (error) {
-      await closeOnce();
-      // `connect()` can finish after the abort-triggered destroy and revive
-      // its transport. Close once more after the connect promise settles.
-      if (signal?.aborted) await this.closeClient(client);
-      throw error;
-    } finally {
-      signal?.removeEventListener('abort', abortConnect);
-    }
     this.logger.log(
       `MTProto client connected in ${this.elapsed(startedAt)}: apiId=${apiId}`,
     );
@@ -577,21 +543,7 @@ export class TelegramMtprotoClient {
   }
 
   private async closeClient(client: TelegramClient) {
-    try {
-      const startedAt = this.now();
-      await client.destroy();
-      this.logger.log(`MTProto client destroyed in ${this.elapsed(startedAt)}`);
-    } catch {
-      try {
-        const startedAt = this.now();
-        await client.disconnect();
-        this.logger.log(
-          `MTProto client disconnected in ${this.elapsed(startedAt)}`,
-        );
-      } catch {
-        // Best-effort cleanup for short-lived MTProto clients.
-      }
-    }
+    await closeTelegramMtprotoSession(client);
   }
 
   private async withTimeout<T>(

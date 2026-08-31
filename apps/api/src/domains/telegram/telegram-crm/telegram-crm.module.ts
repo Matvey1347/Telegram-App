@@ -15,9 +15,33 @@ import { TelegramCrmPeerService } from './telegram-crm-peer.service';
 import { TelegramCrmSettingsService } from './telegram-crm-settings.service';
 import { TelegramCrmSyncStateService } from './telegram-crm-sync-state.service';
 import { TelegramCrmLegacyAuthorizationService } from './telegram-crm-legacy-authorization.service';
+import { TelegramCrmMtprotoAdapter } from '../../../telegram/shared/telegram-crm-mtproto.adapter';
+import { TelegramCrmAccountSessionService } from './telegram-crm-account-session.service';
+import { TelegramCrmBatchStoreService } from './telegram-crm-batch-store.service';
+import { TelegramCrmDialogBatchWriter } from './telegram-crm-dialog-batch-writer.service';
+import { TelegramCrmContactMergeService } from './telegram-crm-contact-merge.service';
+import { TelegramCrmEventHub } from './telegram-crm-event-hub.service';
+import { TelegramCrmEventsController } from './telegram-crm-events.controller';
+import { TelegramCrmHistoryService } from './telegram-crm-history.service';
+import { TelegramCrmInboxCommandService } from './telegram-crm-inbox-command.service';
+import { TelegramCrmInboxController } from './telegram-crm-inbox.controller';
+import { TelegramCrmInboxReadService } from './telegram-crm-inbox-read.service';
+import { TelegramCrmInitialSyncService } from './telegram-crm-initial-sync.service';
+import { TelegramCrmManualSendService } from './telegram-crm-manual-send.service';
+import { TelegramCrmMessageBatchWriter } from './telegram-crm-message-batch-writer.service';
+import { TelegramCrmReadService } from './telegram-crm-read.service';
+import { TelegramCrmRecoveryService } from './telegram-crm-recovery.service';
+import { TelegramCrmRuntimeController } from './telegram-crm-runtime.controller';
+import { TelegramCrmRuntimeManager } from './telegram-crm-runtime-manager.service';
 
 @Module({
-  controllers: [TelegramCrmController, TelegramCrmAccountController],
+  controllers: [
+    TelegramCrmController,
+    TelegramCrmAccountController,
+    TelegramCrmInboxController,
+    TelegramCrmRuntimeController,
+    TelegramCrmEventsController,
+  ],
   providers: [
     TelegramCrmAccountAccessService,
     TelegramCrmAccountCapabilitiesService,
@@ -33,6 +57,21 @@ import { TelegramCrmLegacyAuthorizationService } from './telegram-crm-legacy-aut
     TelegramCrmSettingsService,
     TelegramCrmSyncStateService,
     TelegramCrmLegacyAuthorizationService,
+    TelegramCrmMtprotoAdapter,
+    TelegramCrmAccountSessionService,
+    TelegramCrmBatchStoreService,
+    TelegramCrmDialogBatchWriter,
+    TelegramCrmContactMergeService,
+    TelegramCrmEventHub,
+    TelegramCrmHistoryService,
+    TelegramCrmInboxCommandService,
+    TelegramCrmInboxReadService,
+    TelegramCrmInitialSyncService,
+    TelegramCrmManualSendService,
+    TelegramCrmMessageBatchWriter,
+    TelegramCrmReadService,
+    TelegramCrmRecoveryService,
+    TelegramCrmRuntimeManager,
   ],
   exports: [
     TelegramCrmAutomationPolicyService,

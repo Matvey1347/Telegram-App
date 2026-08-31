@@ -6,7 +6,7 @@ import { WorkspaceAuthorizationService } from '../../workspace/workspace-authori
 import { UpsertCrmPeerDto } from './telegram-crm.dto';
 import { isPrismaUniqueConflict } from './telegram-crm-prisma-errors';
 
-const peerSelect = {
+export const crmPeerSelect = {
   id: true,
   workspaceId: true,
   telegramUserId: true,
@@ -19,7 +19,9 @@ const peerSelect = {
   updatedAt: true,
 } satisfies Prisma.TelegramCrmPeerSelect;
 
-type PeerRow = Prisma.TelegramCrmPeerGetPayload<{ select: typeof peerSelect }>;
+type PeerRow = Prisma.TelegramCrmPeerGetPayload<{
+  select: typeof crmPeerSelect;
+}>;
 type PeerChanges = Partial<
   Pick<
     PeerRow,
@@ -27,7 +29,7 @@ type PeerChanges = Partial<
   >
 >;
 
-const mapPeer = (row: PeerRow): CrmPeer => ({
+export const mapCrmPeer = (row: PeerRow): CrmPeer => ({
   ...row,
   createdAt: row.createdAt.toISOString(),
   updatedAt: row.updatedAt.toISOString(),
@@ -50,13 +52,13 @@ export class TelegramCrmPeerService {
       const row = await this.prisma.$transaction((tx) =>
         this.upsertInTransaction(tx, access.workspaceId, telegramUserId, dto),
       );
-      return mapPeer(row);
+      return mapCrmPeer(row);
     } catch (error) {
       if (!isPrismaUniqueConflict(error)) throw error;
       const row = await this.prisma.$transaction((tx) =>
         this.upsertInTransaction(tx, access.workspaceId, telegramUserId, dto),
       );
-      return mapPeer(row);
+      return mapCrmPeer(row);
     }
   }
 
@@ -69,7 +71,7 @@ export class TelegramCrmPeerService {
     await this.requireContact(tx, workspaceId, dto.contactId);
     const existing = await tx.telegramCrmPeer.findUnique({
       where: { workspaceId_telegramUserId: { workspaceId, telegramUserId } },
-      select: peerSelect,
+      select: crmPeerSelect,
     });
     if (!existing) {
       return tx.telegramCrmPeer.create({
@@ -82,7 +84,7 @@ export class TelegramCrmPeerService {
           lastName: dto.lastName ?? null,
           photoUrl: dto.photoUrl ?? null,
         },
-        select: peerSelect,
+        select: crmPeerSelect,
       });
     }
 
@@ -91,7 +93,7 @@ export class TelegramCrmPeerService {
     const updated = await tx.telegramCrmPeer.update({
       where: { id: existing.id },
       data,
-      select: peerSelect,
+      select: crmPeerSelect,
     });
     if (data.contactId !== undefined) {
       await tx.telegramCrmConversation.updateMany({

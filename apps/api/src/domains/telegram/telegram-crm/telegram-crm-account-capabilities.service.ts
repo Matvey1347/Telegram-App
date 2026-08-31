@@ -12,6 +12,7 @@ import {
   TelegramCrmAccountAccessService,
 } from './telegram-crm-account-access.service';
 import { UpdateCrmAccountCapabilitiesDto } from './telegram-crm.dto';
+import { TelegramAccountRuntimeNotifier } from '../../../common/telegram-account-runtime-notifier.service';
 
 @Injectable()
 export class TelegramCrmAccountCapabilitiesService {
@@ -19,6 +20,7 @@ export class TelegramCrmAccountCapabilitiesService {
     private readonly prisma: PrismaService,
     private readonly authorization: WorkspaceAuthorizationService,
     private readonly accountAccess: TelegramCrmAccountAccessService,
+    private readonly runtimeNotifier: TelegramAccountRuntimeNotifier = new TelegramAccountRuntimeNotifier(),
   ) {}
 
   async get(userId: string, accountId: string) {
@@ -77,6 +79,11 @@ export class TelegramCrmAccountCapabilitiesService {
       where: { id: account.id },
       data,
       select: crmAccountSelect,
+    });
+    this.runtimeNotifier.wake({
+      workspaceId: access.workspaceId,
+      accountId,
+      reason: 'capability',
     });
     return this.map(updated);
   }

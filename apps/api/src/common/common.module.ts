@@ -8,6 +8,7 @@ import { RequestContextModule } from './request-context/request-context.module';
 import { MemoryMonitorService } from './observability/memory-monitor.service';
 import { B2ObjectStorageService } from './object-storage/b2-object-storage.service';
 import { WorkspaceAuthorizationService } from '../domains/workspace/workspace-authorization/workspace-authorization.service';
+import { TelegramAccountRuntimeNotifier } from './telegram-account-runtime-notifier.service';
 
 @Global()
 @Module({
@@ -21,6 +22,7 @@ import { WorkspaceAuthorizationService } from '../domains/workspace/workspace-au
     MemoryMonitorService,
     B2ObjectStorageService,
     WorkspaceAuthorizationService,
+    TelegramAccountRuntimeNotifier,
   ],
   exports: [
     WorkspaceService,
@@ -30,6 +32,7 @@ import { WorkspaceAuthorizationService } from '../domains/workspace/workspace-au
     MemoryMonitorService,
     B2ObjectStorageService,
     WorkspaceAuthorizationService,
+    TelegramAccountRuntimeNotifier,
   ],
 })
 export class CommonModule {}

@@ -10,7 +10,11 @@ import {
 } from './config/deployment-config';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true,
+    rawBody: true,
+  });
+  app.enableShutdownHooks();
   app.useLogger(app.get(ApplicationLoggerService));
 
   const proxyHops = trustedProxyHops();

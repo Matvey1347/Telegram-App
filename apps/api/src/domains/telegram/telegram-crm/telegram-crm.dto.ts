@@ -142,7 +142,9 @@ export class CrmConversationsQueryDto extends PaginationQueryDto {
   @IsOptional() @IsString() contactId?: string;
   @IsOptional() @IsString() accountId?: string;
   @IsOptional() @IsString() telegramCrmPeerId?: string;
-  @IsOptional() @IsIn(['ACTIVE', 'ARCHIVED']) state?: 'ACTIVE' | 'ARCHIVED';
+  @IsOptional()
+  @IsIn(['ACTIVE', 'IGNORED', 'ARCHIVED'])
+  state?: 'ACTIVE' | 'IGNORED' | 'ARCHIVED';
 }
 
 export class CrmMessagesQueryDto extends PaginationQueryDto {}

@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-} from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { CrmConversation } from '@telegram-system/shared';
 import {
@@ -27,12 +22,16 @@ export const crmConversationSelect = {
   mtprotoAccountId: true,
   telegramDialogId: true,
   state: true,
+  historyCursorTelegramMessageId: true,
+  historyExhausted: true,
   lastMessageAt: true,
   lastInboundAt: true,
   lastOutboundAt: true,
   unreadCount: true,
   readState: true,
   lastReadTelegramMessageId: true,
+  lastReadInboxTelegramMessageId: true,
+  lastReadOutboxTelegramMessageId: true,
   lastReadAt: true,
   incrementalSyncCheckpoint: true,
   recoveryCheckpoint: true,
@@ -69,7 +68,7 @@ export class TelegramCrmConversationService {
     const access = await this.authorization.context(userId);
     const peer = await this.prisma.telegramCrmPeer.findFirst({
       where: { id: dto.telegramCrmPeerId, workspaceId: access.workspaceId },
-      select: { id: true, contactId: true },
+      select: { id: true, contactId: true, telegramUserId: true },
     });
     if (!peer) throw new BadRequestException('CRM peer is not in workspace');
     if (dto.contactId !== undefined && dto.contactId !== peer.contactId) {
@@ -92,7 +91,7 @@ export class TelegramCrmConversationService {
           telegramCrmPeerId: peer.id,
           contactId: peer.contactId,
           mtprotoAccountId: accountId,
-          telegramDialogId: dto.telegramDialogId.trim(),
+          telegramDialogId: peer.telegramUserId,
         },
         select: crmConversationSelect,
       });
@@ -110,11 +109,6 @@ export class TelegramCrmConversationService {
         select: crmConversationSelect,
       });
       if (!existing) throw error;
-      if (existing.telegramDialogId !== dto.telegramDialogId.trim()) {
-        throw new ConflictException(
-          'Conversation already exists with a different Telegram dialog',
-        );
-      }
       return mapCrmConversation(existing);
     }
   }
