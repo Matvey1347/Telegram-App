@@ -3,171 +3,170 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { TelegramCrmAutomationOverride } from '@prisma/client';
 import { TelegramCrmDealAutomationService } from './telegram-crm-deal-automation.service';
 
 describe('TelegramCrmDealAutomationService', () => {
-  const eligibleAt = new Date('2026-08-31T10:00:00.000Z');
+  type DealFixture = {
+    id: string;
+    workspaceId: string;
+    advertiserId: string | null;
+    customerAutomationOverride: 'INHERIT' | 'ENABLED' | 'DISABLED';
+    customerAutomationEligibleAt: Date | null;
+    prePublicationAutomationOverride: 'INHERIT' | 'ENABLED' | 'DISABLED';
+    publishedLinksAutomationOverride: 'INHERIT' | 'ENABLED' | 'DISABLED';
+    followUpAutomationOverride: 'INHERIT' | 'ENABLED' | 'DISABLED';
+    crmConversationId: string | null;
+    advertiser: { ownerMemberId: string | null } | null;
+  };
+  const deal = {
+    id: 'deal-1',
+    workspaceId: 'workspace-1',
+    advertiserId: 'contact-1',
+    customerAutomationOverride: 'DISABLED' as const,
+    customerAutomationEligibleAt: null,
+    prePublicationAutomationOverride: 'INHERIT' as const,
+    publishedLinksAutomationOverride: 'INHERIT' as const,
+    followUpAutomationOverride: 'INHERIT' as const,
+    crmConversationId: null,
+    advertiser: { ownerMemberId: 'member-1' },
+  } satisfies DealFixture;
 
-  function setup(
-    deal: {
-      id: string;
-      advertiserId: string | null;
-      advertiser?: { ownerMemberId: string | null } | null;
-      customerAutomationEligibleAt: Date | null;
-    } | null,
-  ) {
+  function setup(row: DealFixture | null = deal) {
     const prisma = {
       telegramAdSale: {
-        findFirst: jest.fn().mockResolvedValue(deal),
-        update: jest.fn().mockImplementation(({ data }) =>
-          Promise.resolve({
-            id: deal?.id,
-            customerAutomationOverride: data.customerAutomationOverride,
-            customerAutomationEligibleAt: data.customerAutomationEligibleAt,
-          }),
-        ),
+        findFirst: jest.fn().mockResolvedValue(row),
+        update: jest.fn().mockResolvedValue(row),
       },
+      telegramCrmConversation: { findFirst: jest.fn() },
     };
     const authorization = {
       require: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
-      requireOwnOrAny: jest.fn().mockResolvedValue(undefined),
+      requireOwnOrAny: jest.fn(),
     };
-    const events = { emit: jest.fn() };
+    const occurrences = {
+      recordCancellation: jest.fn(),
+      cancelType: jest.fn(),
+      recordExplicitLegacyEnable: jest.fn(),
+      recordFollowUpConfigured: jest.fn(),
+    };
+    const result = {
+      dealId: 'deal-1',
+      override: 'INHERIT',
+      eligibleAt: new Date().toISOString(),
+    };
+    const statuses = { get: jest.fn().mockResolvedValue({ deals: [result] }) };
     return {
       prisma,
       authorization,
-      events,
+      occurrences,
       service: new TelegramCrmDealAutomationService(
         prisma as never,
         authorization as never,
-        events as never,
+        occurrences as never,
+        statuses as never,
       ),
     };
   }
 
-  it('requires automation permission and scopes the Deal to the workspace', async () => {
+  it('requires permission and scopes the Deal to the workspace', async () => {
     const { prisma, authorization, service } = setup(null);
-
     await expect(
-      service.update(
-        'user-1',
-        'deal-other-workspace',
-        TelegramCrmAutomationOverride.ENABLED,
-      ),
+      service.update('user-1', 'other-deal', { override: 'ENABLED' }),
     ).rejects.toBeInstanceOf(NotFoundException);
-
     expect(authorization.require).toHaveBeenCalledWith(
       'user-1',
       'adSales.crm.manageAutomation',
     );
     expect(prisma.telegramAdSale.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'deal-other-workspace', workspaceId: 'workspace-1' },
+        where: { id: 'other-deal', workspaceId: 'workspace-1' },
       }),
     );
-    expect(prisma.telegramAdSale.update).not.toHaveBeenCalled();
   });
 
-  it('makes a migrated protected Deal eligible only after an explicit action', async () => {
-    const { authorization, prisma, service } = setup({
-      id: 'deal-1',
-      advertiserId: 'contact-1',
-      advertiser: { ownerMemberId: 'member-1' },
-      customerAutomationEligibleAt: null,
-    });
-
-    const result = await service.update(
-      'user-1',
+  it('makes a protected Deal eligible and materializes future facts on DISABLED to INHERIT', async () => {
+    const { prisma, occurrences, service } = setup();
+    await service.update('user-1', 'deal-1', { override: 'INHERIT' });
+    const data = prisma.telegramAdSale.update.mock.calls[0]![0].data;
+    expect(data.customerAutomationOverride).toBe('INHERIT');
+    expect(data.customerAutomationEligibleAt).toBeInstanceOf(Date);
+    expect(occurrences.recordExplicitLegacyEnable).toHaveBeenCalledWith(
+      'workspace-1',
       'deal-1',
-      TelegramCrmAutomationOverride.INHERIT,
-    );
-
-    const update = prisma.telegramAdSale.update.mock.calls[0]![0];
-    expect(update.data.customerAutomationOverride).toBe('INHERIT');
-    expect(update.data.customerAutomationEligibleAt).toBeInstanceOf(Date);
-    expect(result).toMatchObject({ dealId: 'deal-1', override: 'INHERIT' });
-    expect(result.eligibleAt).not.toBeNull();
-    expect(authorization.requireOwnOrAny).toHaveBeenCalledWith(
-      'user-1',
-      { assignedMemberId: 'member-1' },
-      'adSales.crm.editOwn',
-      'adSales.crm.editAny',
+      expect.any(Date),
     );
   });
 
-  it('rejects a cross-owner Deal even with automation permission', async () => {
-    const { authorization, prisma, service } = setup({
-      id: 'deal-1',
-      advertiserId: 'contact-1',
-      advertiser: { ownerMemberId: 'member-2' },
-      customerAutomationEligibleAt: null,
+  it('stamps every per-type transition so DISABLED to INHERIT cannot resurrect old facts', async () => {
+    const current = {
+      ...deal,
+      customerAutomationOverride: 'INHERIT' as const,
+      customerAutomationEligibleAt: new Date('2026-09-01T00:00:00Z'),
+      prePublicationAutomationOverride: 'DISABLED' as const,
+    };
+    const { prisma, occurrences, service } = setup(current);
+    await service.update('user-1', 'deal-1', {
+      typeOverrides: { PRE_PUBLICATION_REMINDER: 'INHERIT' },
     });
-    authorization.requireOwnOrAny.mockRejectedValue(new ForbiddenException());
-
-    await expect(
-      service.update(
-        'user-1',
-        'deal-1',
-        TelegramCrmAutomationOverride.ENABLED,
-      ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(prisma.telegramAdSale.update).not.toHaveBeenCalled();
+    expect(prisma.telegramAdSale.update.mock.calls[0]![0].data).toMatchObject({
+      prePublicationAutomationOverride: 'INHERIT',
+      prePublicationAutomationEnabledAt: expect.any(Date),
+    });
+    expect(occurrences.recordExplicitLegacyEnable).toHaveBeenCalled();
   });
 
-  it('keeps the immutable cutover when a Deal is disabled', async () => {
-    const { prisma, service } = setup({
-      id: 'deal-1',
-      advertiserId: 'contact-1',
-      advertiser: { ownerMemberId: 'member-1' },
-      customerAutomationEligibleAt: eligibleAt,
-    });
+  it('treats INHERIT to ENABLED as a fresh explicit Deal action', async () => {
+    const current = {
+      ...deal,
+      customerAutomationOverride: 'INHERIT' as const,
+      customerAutomationEligibleAt: new Date('2026-09-01T00:00:00Z'),
+    };
+    const { occurrences, service } = setup(current);
 
-    await service.update(
-      'user-1',
+    await service.update('user-1', 'deal-1', { override: 'ENABLED' });
+
+    expect(occurrences.recordExplicitLegacyEnable).toHaveBeenCalledWith(
+      'workspace-1',
       'deal-1',
-      TelegramCrmAutomationOverride.DISABLED,
+      expect.any(Date),
     );
-
-    expect(
-      prisma.telegramAdSale.update.mock.calls[0]![0].data
-        .customerAutomationEligibleAt,
-    ).toBe(eligibleAt);
   });
 
-  it('does not enable automation for a Deal without a Contact', async () => {
-    const { prisma, service } = setup({
-      id: 'deal-1',
-      advertiserId: null,
-      advertiser: null,
-      customerAutomationEligibleAt: null,
+  it('treats INHERIT to type ENABLED as a fresh explicit Deal action', async () => {
+    const current = {
+      ...deal,
+      customerAutomationOverride: 'INHERIT' as const,
+      customerAutomationEligibleAt: new Date('2026-09-01T00:00:00Z'),
+    };
+    const { occurrences, service } = setup(current);
+
+    await service.update('user-1', 'deal-1', {
+      typeOverrides: { PRE_PUBLICATION_REMINDER: 'ENABLED' },
     });
 
+    expect(occurrences.recordExplicitLegacyEnable).toHaveBeenCalledWith(
+      'workspace-1',
+      'deal-1',
+      expect.any(Date),
+    );
+  });
+
+  it('rejects invalid type override keys and values', async () => {
+    const { prisma, service } = setup();
     await expect(
-      service.update(
-        'user-1',
-        'deal-1',
-        TelegramCrmAutomationOverride.ENABLED,
-      ),
+      service.update('user-1', 'deal-1', {
+        typeOverrides: { UNKNOWN: 'ENABLED' } as never,
+      }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.telegramAdSale.update).not.toHaveBeenCalled();
   });
 
-  it('can keep an unlinked Deal disabled without emitting a malformed Contact event', async () => {
-    const { events, service } = setup({
-      id: 'deal-1',
-      advertiserId: null,
-      advertiser: null,
-      customerAutomationEligibleAt: null,
-    });
-
+  it('does not write a cross-owner Deal', async () => {
+    const { authorization, prisma, service } = setup();
+    authorization.requireOwnOrAny.mockRejectedValue(new ForbiddenException());
     await expect(
-      service.update(
-        'user-1',
-        'deal-1',
-        TelegramCrmAutomationOverride.DISABLED,
-      ),
-    ).resolves.toMatchObject({ override: 'DISABLED', eligibleAt: null });
-    expect(events.emit).not.toHaveBeenCalled();
+      service.update('user-1', 'deal-1', { override: 'ENABLED' }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.telegramAdSale.update).not.toHaveBeenCalled();
   });
 });

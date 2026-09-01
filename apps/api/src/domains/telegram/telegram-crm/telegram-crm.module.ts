@@ -34,6 +34,15 @@ import { TelegramCrmReadService } from './telegram-crm-read.service';
 import { TelegramCrmRecoveryService } from './telegram-crm-recovery.service';
 import { TelegramCrmRuntimeController } from './telegram-crm-runtime.controller';
 import { TelegramCrmRuntimeManager } from './telegram-crm-runtime-manager.service';
+import { TelegramCrmAutomationController } from './telegram-crm-automation.controller';
+import { TelegramCrmAutomationConversationService } from './telegram-crm-automation-conversation.service';
+import { TelegramCrmAutomationOccurrenceService } from './telegram-crm-automation-occurrence.service';
+import { TelegramCrmAutomationRunnerService } from './telegram-crm-automation-runner.service';
+import { TelegramCrmAutomationStatusService } from './telegram-crm-automation-status.service';
+import { TelegramCrmContactAutomationService } from './telegram-crm-contact-automation.service';
+import { TelegramCrmAutomationClaimService } from './telegram-crm-automation-claim.service';
+import { TelegramCrmAutomationFinalizerService } from './telegram-crm-automation-finalizer.service';
+import { TelegramCrmAutomationAuthorizationService } from './telegram-crm-automation-authorization.service';
 
 @Module({
   controllers: [
@@ -42,6 +51,7 @@ import { TelegramCrmRuntimeManager } from './telegram-crm-runtime-manager.servic
     TelegramCrmInboxController,
     TelegramCrmRuntimeController,
     TelegramCrmEventsController,
+    TelegramCrmAutomationController,
   ],
   providers: [
     TelegramCrmAccountAccessService,
@@ -74,6 +84,14 @@ import { TelegramCrmRuntimeManager } from './telegram-crm-runtime-manager.servic
     TelegramCrmReadService,
     TelegramCrmRecoveryService,
     TelegramCrmRuntimeManager,
+    TelegramCrmAutomationConversationService,
+    TelegramCrmAutomationAuthorizationService,
+    TelegramCrmAutomationClaimService,
+    TelegramCrmAutomationFinalizerService,
+    TelegramCrmAutomationOccurrenceService,
+    TelegramCrmAutomationRunnerService,
+    TelegramCrmAutomationStatusService,
+    TelegramCrmContactAutomationService,
   ],
   exports: [
     TelegramCrmAutomationPolicyService,
@@ -81,6 +99,8 @@ import { TelegramCrmRuntimeManager } from './telegram-crm-runtime-manager.servic
     TelegramCrmManualMessageEligibilityService,
     TelegramCrmMessageStoreService,
     TelegramCrmLegacyAuthorizationService,
+    TelegramCrmAutomationOccurrenceService,
+    TelegramCrmAutomationRunnerService,
   ],
 })
 export class TelegramCrmModule {}

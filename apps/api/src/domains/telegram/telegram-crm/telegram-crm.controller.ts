@@ -134,7 +134,7 @@ export class TelegramCrmController {
     @Param('id') id: string,
     @Body() dto: UpdateCrmDealAutomationDto,
   ) {
-    return this.dealAutomation.update(user.sub, id, dto.override);
+    return this.dealAutomation.update(user.sub, id, dto);
   }
 
   @Patch('settings')

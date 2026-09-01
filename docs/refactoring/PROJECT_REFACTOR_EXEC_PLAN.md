@@ -1,6 +1,41 @@
 # Project Refactor ExecPlan
 
-Updated: 2026-08-31
+Updated: 2026-09-01
+
+## 2026-09-01 CRM customer-message automations
+
+Stage 4 activates a separate CRM Automations layer after the CRM foundation,
+MTProto runtime, and Contact-centered UI. Ad Sales emits fresh business facts;
+CRM alone evaluates cutovers and consent, resolves a fixed Conversation,
+renders localized customer copy, sends through the Conversation's MTProto
+account, and records the attributed execution and Message.
+
+The rollout remains fail closed. Migration creates no occurrences, executions,
+Conversations, Messages, or Telegram calls; existing Contacts remain off and
+pre-Stage4 Deals remain protected. Startup, settings enablement, initial CRM
+Sync, Peer promotion, Contact stage changes, historical publications,
+`nextContactAt`, and internal follow-up tasks do not backfill customer events.
+Only explicit future domain mutations may create a due occurrence whose
+business timestamp is after every applicable activation boundary.
+
+The existing CRM customer execution record becomes an indexed, leased,
+idempotent due/send state machine. The legacy advertiser automation tables
+remain internal-task-only. Scheduling reuses the persisted one-shot scheduler:
+one nearest-due timer, bounded claims, no minute cron, no Deal/workspace scan,
+no per-Deal timer, no new Railway service, and zero incremental recurring DB or
+Telegram work while idle.
+
+The final send authorization is serialized against current Workspace,
+Contact, Deal, placement/channel/post, Conversation, and account mutations.
+The worker locks and reloads those rows, rechecks cutovers/source identity, and
+only then commits `SENDING`; a prior OFF/reschedule/delete commit therefore
+produces zero runtime calls. Expired ambiguous sends keep their pinned envelope
+and become an explicit failed/uncertain audit outcome when current gates no
+longer allow an idempotent retry. Composite workspace foreign keys remain in
+force, with Deal deletion atomically unlinking only mutable audit pointers.
+Dedicated and generic Deal cancellation converge on one atomic lifecycle write;
+the final locked send barrier independently rejects `CANCELLED`, including when
+the best-effort post-commit fact callback fails.
 
 ## 2026-08-31 Contact-centered CRM web application
 

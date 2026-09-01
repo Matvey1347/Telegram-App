@@ -29,6 +29,7 @@ describe('ScheduledTasksService', () => {
       scheduleEditable: true,
       supportedFrequencies: ['INTERVAL' as const],
       notificationSupported: true,
+      dueDriven: false,
       execute: jest.fn(),
     };
     const systemDefinition = {
@@ -137,6 +138,7 @@ describe('ScheduledTasksService', () => {
   it('treats a null runner result as an attempted due-driven occurrence', async () => {
     const { service, runner, definition, config } = setup();
     definition.key = 'greeter.automations.repair';
+    definition.dueDriven = true;
     config.taskKey = definition.key;
     const refresh = jest.fn().mockResolvedValue(undefined);
     (

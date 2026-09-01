@@ -12,6 +12,7 @@ import { DailyAnalyticsSyncService } from '../../telegram/telegram-sync/daily-an
 import { TelegramWorkspaceFullSyncService } from '../../telegram/telegram-sync/telegram-workspace-full-sync.service';
 import { TelegramWorkspaceSyncTasksService } from '../../telegram/telegram-sync/telegram-workspace-sync-tasks.service';
 import { TelegramManagedPostReconciliationService } from '../../telegram/telegram-channels/telegram-managed-post-reconciliation.service';
+import { TelegramCrmAutomationRunnerService } from '../../telegram/telegram-crm/telegram-crm-automation-runner.service';
 import type {
   ScheduledTaskExecutionContext,
   ScheduledTaskExecutionResult,
@@ -66,6 +67,14 @@ export class ScheduledTaskExecutorService {
       ).processDueDeletionBatch(20);
       return {
         summary: `Reconciled ${lifecycleResult.reconciled} published placements; processed ${result.processed} placements, ${result.failed} failed.`,
+      };
+    },
+    'telegram_crm.customer_automations': async () => {
+      const result = await (
+        await this.crmAutomationRunner()
+      ).processDueBatch(1_000);
+      return {
+        summary: `Processed ${result.processed} CRM customer automations: ${result.sent} sent, ${result.skipped} skipped, ${result.retried} retrying, ${result.failed} failed.`,
       };
     },
     'application_logs.cleanup': async () => {
@@ -207,6 +216,14 @@ export class ScheduledTaskExecutorService {
     return this.moduleRef.resolve(TelegramAdSalesService, undefined, {
       strict: false,
     });
+  }
+
+  private crmAutomationRunner() {
+    return this.moduleRef.resolve(
+      TelegramCrmAutomationRunnerService,
+      undefined,
+      { strict: false },
+    );
   }
 
   private applicationLogsService() {

@@ -37,6 +37,9 @@ export const telegramCrmKeys = {
     ["telegram-crm", "messages", "infinite", conversationId] as const,
   unread: () => ["telegram-crm", "unread"] as const,
   settings: () => ["telegram-crm", "settings"] as const,
+  automationStatuses: () => ["telegram-crm", "automations", "status"] as const,
+  automationStatus: (contactId: string) =>
+    ["telegram-crm", "automations", "status", contactId] as const,
   accountCapabilities: (accountId: string) =>
     ["telegram-crm", "accounts", accountId, "capabilities"] as const,
   accountSyncState: (accountId: string) =>
@@ -82,26 +85,34 @@ export function changeCrmContactUnread(
 ) {
   queryClient.setQueriesData<CrmContactsListResult>(
     { queryKey: telegramCrmKeys.contactLists() },
-    (current) => current ? {
-      ...current,
-      items: current.items.map((item) => item.id === contactId
-        ? { ...item, unreadCount: Math.max(0, item.unreadCount + delta) }
-        : item),
-    } : current,
+    (current) =>
+      current
+        ? {
+            ...current,
+            items: current.items.map((item) =>
+              item.id === contactId
+                ? {
+                    ...item,
+                    unreadCount: Math.max(0, item.unreadCount + delta),
+                  }
+                : item,
+            ),
+          }
+        : current,
   );
   queryClient.setQueryData<CrmContactDetail>(
     telegramCrmKeys.contactDetail(contactId),
-    (current) => current ? {
-      ...current,
-      unreadCount: Math.max(0, current.unreadCount + delta),
-    } : current,
+    (current) =>
+      current
+        ? {
+            ...current,
+            unreadCount: Math.max(0, current.unreadCount + delta),
+          }
+        : current,
   );
 }
 
-export function removeCrmInboxPeer(
-  queryClient: QueryClient,
-  peerId: string,
-) {
+export function removeCrmInboxPeer(queryClient: QueryClient, peerId: string) {
   queryClient.setQueriesData<CrmInboxListResult>(
     { queryKey: telegramCrmKeys.inboxLists() },
     (current) => {
@@ -156,7 +167,7 @@ export function patchCrmConversation(
   );
   queryClient.setQueryData<CrmConversationListItem>(
     telegramCrmKeys.conversationDetail(conversationId),
-    (current) => current ? { ...current, ...patch } : current,
+    (current) => (current ? { ...current, ...patch } : current),
   );
 }
 
@@ -176,7 +187,8 @@ export function reconcileCrmConversationUnread(
   const direct = queryClient.getQueryData<CrmConversationListItem>(
     telegramCrmKeys.conversationDetail(conversationId),
   );
-  const previousUnread = listed?.unreadCount ?? direct?.unreadCount ?? fallbackUnreadCount;
+  const previousUnread =
+    listed?.unreadCount ?? direct?.unreadCount ?? fallbackUnreadCount;
   patchCrmConversation(queryClient, conversationId, {
     unreadCount,
     readState: unreadCount ? "UNREAD" : "READ",
@@ -248,7 +260,8 @@ export function reconcileCrmMessage(
           return [item];
         }),
       }));
-      if (!found && pages[0]) pages[0] = { ...pages[0], items: [...pages[0].items, message] };
+      if (!found && pages[0])
+        pages[0] = { ...pages[0], items: [...pages[0].items, message] };
       return { ...current, pages };
     },
   );

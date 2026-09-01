@@ -31,13 +31,6 @@ import { ScheduledTaskAutomaticEligibility } from './scheduled-task-automatic-el
 import { scheduledTaskWakeNotifier } from './scheduled-task-wake-notifier';
 import { ScheduledTaskWakeTimer } from './scheduled-task-wake-timer';
 
-const DUE_DRIVEN_KEYS = new Set([
-  'telegram.managed_posts.reconcile_due',
-  'telegram_ad_sales.due_deletions',
-  'greeter.expire_pending',
-  'greeter.broadcasts.dispatch',
-  'greeter.automations.repair',
-]);
 const SCHEDULER_RECOVERY_BACKOFF_MS = 30_000;
 
 @Injectable()
@@ -103,7 +96,7 @@ export class ScheduledTasksService
       for (const config of configs) {
         const definition = this.registry.get(config.taskKey);
         if (!definition || !config.nextScheduledRunAt) continue;
-        if (DUE_DRIVEN_KEYS.has(config.taskKey)) {
+        if (definition.dueDriven) {
           attemptedDueDriven.add(config.taskKey);
         }
         try {
@@ -283,7 +276,7 @@ export class ScheduledTasksService
         });
       return;
     }
-    if (!DUE_DRIVEN_KEYS.has(taskKey)) return;
+    if (!this.registry.get(taskKey)?.dueDriven) return;
     void this.refreshDueDrivenTask(taskKey)
       .then(() => this.scheduleNextWake())
       .catch((error) => {
@@ -318,7 +311,12 @@ export class ScheduledTasksService
   }
 
   private async refreshDueDrivenTasks(attempted?: Set<string>) {
-    const keys = attempted ? [...attempted] : [...DUE_DRIVEN_KEYS];
+    const keys = attempted
+      ? [...attempted]
+      : this.registry
+          .definitions()
+          .filter((definition) => definition.dueDriven)
+          .map((definition) => definition.key);
     await Promise.all(
       keys.map((key) => this.refreshDueDrivenTask(key, attempted?.has(key))),
     );

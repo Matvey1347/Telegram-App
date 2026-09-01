@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   Prisma,
   TelegramAdCrmDealStage,
@@ -20,10 +24,9 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { decimal, decimalOrNull } from './domain/decimal';
 import { utcDateKey, zonedDateTimeToUtc } from './domain/timezone';
 import { TelegramAdSalesBulkCreateDto } from './dto';
-import {
-  telegramAdSalesAdvisoryLockKey,
-} from './telegram-ad-sales-reservation';
+import { telegramAdSalesAdvisoryLockKey } from './telegram-ad-sales-reservation';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
+import { TelegramAdSalesCustomerAutomationFactsService } from './telegram-ad-sales-customer-automation-facts.service';
 
 type ResolvedChannel = {
   id: string;
@@ -72,30 +75,47 @@ export class TelegramAdSalesBulkService {
     private readonly logger: ApplicationLoggerService,
     private readonly responseCache: ResponseCacheService,
     private readonly salesService: TelegramAdSalesService,
+    private readonly automationFacts?: TelegramAdSalesCustomerAutomationFactsService,
   ) {}
 
-  async create(userId: string, dto: TelegramAdSalesBulkCreateDto): Promise<TelegramAdSalesBulkCreateResponse> {
+  async create(
+    userId: string,
+    dto: TelegramAdSalesBulkCreateDto,
+  ): Promise<TelegramAdSalesBulkCreateResponse> {
     if (!dto.rows.length) {
       throw new BadRequestException('At least one bulk row is required');
     }
-    const { workspaceId, assignedMemberId } = await this.workspaceService.resolveAssignedMemberId(
-      userId,
-      dto.defaults.assignedMemberId,
-    );
+    const { workspaceId, assignedMemberId } =
+      await this.workspaceService.resolveAssignedMemberId(
+        userId,
+        dto.defaults.assignedMemberId,
+      );
     const channels = await this.resolveTargetChannels(workspaceId, dto);
     const expanded = await this.expandPlacements(workspaceId, channels, dto);
     if (expanded.length > 500) {
-      throw new BadRequestException('Bulk operation can create at most 500 placements');
+      throw new BadRequestException(
+        'Bulk operation can create at most 500 placements',
+      );
     }
     this.assertBulkPriceRules(expanded);
 
     const saleIds = new Set<string>();
+    const automationEligibleAt = new Date();
     const rowResults = new Map<string, TelegramAdSalesBulkRowResult>();
     await this.prisma.$transaction(async (tx) => {
-      const advertiserIdsByKey = await this.resolveAdvertisers(tx, workspaceId, userId, assignedMemberId, expanded);
-      for (const [advertiserKey, placements] of this.groupByAdvertiser(expanded)) {
+      const advertiserIdsByKey = await this.resolveAdvertisers(
+        tx,
+        workspaceId,
+        userId,
+        assignedMemberId,
+        expanded,
+      );
+      for (const [advertiserKey, placements] of this.groupByAdvertiser(
+        expanded,
+      )) {
         const advertiser = placements[0].advertiser;
-        const linkedAdvertiserId = advertiserIdsByKey.get(advertiserKey) ?? advertiser.advertiserId;
+        const linkedAdvertiserId =
+          advertiserIdsByKey.get(advertiserKey) ?? advertiser.advertiserId;
         const sale = await tx.telegramAdSale.create({
           data: {
             workspaceId,
@@ -111,6 +131,7 @@ export class TelegramAdSalesBulkService {
             settlementCurrency: dto.defaults.settlementCurrency,
             createdByUserId: userId,
             assignedMemberId,
+            customerAutomationEligibleAt: automationEligibleAt,
           },
         });
         saleIds.add(sale.id);
@@ -148,7 +169,9 @@ export class TelegramAdSalesBulkService {
               currency: placement.currency,
               manualPriceReason: placement.manualPriceReason,
               telegramPostId: placement.telegramPostId,
-              publishedAt: placement.telegramPostId ? placement.scheduledAt : null,
+              publishedAt: placement.telegramPostId
+                ? placement.scheduledAt
+                : null,
             },
           });
           const lockKey = telegramAdSalesAdvisoryLockKey(
@@ -178,13 +201,28 @@ export class TelegramAdSalesBulkService {
       }
     });
 
-    this.responseCache.clearByPrefix(`telegram-ad-sales:availability:${workspaceId}:`);
-    const sales = await Promise.all([...saleIds].map((saleId) => this.salesService.getSale(userId, saleId)));
+    await this.automationFacts?.dealsCreated(
+      workspaceId,
+      [...saleIds],
+      automationEligibleAt,
+    );
+
+    this.responseCache.clearByPrefix(
+      `telegram-ad-sales:availability:${workspaceId}:`,
+    );
+    const sales = await Promise.all(
+      [...saleIds].map((saleId) => this.salesService.getSale(userId, saleId)),
+    );
     return {
       sales,
-      rows: [...rowResults.values()].sort((left, right) => left.date.localeCompare(right.date)),
+      rows: [...rowResults.values()].sort((left, right) =>
+        left.date.localeCompare(right.date),
+      ),
       createdSaleCount: sales.length,
-      createdPlacementCount: [...rowResults.values()].reduce((sum, row) => sum + row.placementIds.length, 0),
+      createdPlacementCount: [...rowResults.values()].reduce(
+        (sum, row) => sum + row.placementIds.length,
+        0,
+      ),
       channelIds: channels.map((channel) => channel.id),
     };
   }
@@ -203,11 +241,19 @@ export class TelegramAdSalesBulkService {
     }
     const network = await this.prisma.telegramChannelNetwork.findFirst({
       where: { id: dto.target.networkId, workspaceId },
-      include: { channels: { include: { telegramChannel: { select: { id: true, adBaseCurrency: true } } } } },
+      include: {
+        channels: {
+          include: {
+            telegramChannel: { select: { id: true, adBaseCurrency: true } },
+          },
+        },
+      },
     });
-    if (!network) throw new NotFoundException('Telegram channel network not found');
+    if (!network)
+      throw new NotFoundException('Telegram channel network not found');
     const channels = network.channels.map((member) => member.telegramChannel);
-    if (!channels.length) throw new BadRequestException('Selected network has no channels');
+    if (!channels.length)
+      throw new BadRequestException('Selected network has no channels');
     return channels;
   }
 
@@ -217,8 +263,16 @@ export class TelegramAdSalesBulkService {
     dto: TelegramAdSalesBulkCreateDto,
   ): Promise<ExpandedPlacement[]> {
     const sortedRows = dto.rows
-      .map((row, index) => ({ ...row, clientRowIds: [row.clientRowId], sortIndex: index }))
-      .sort((left, right) => left.date.localeCompare(right.date) || left.sortIndex - right.sortIndex);
+      .map((row, index) => ({
+        ...row,
+        clientRowIds: [row.clientRowId],
+        sortIndex: index,
+      }))
+      .sort(
+        (left, right) =>
+          left.date.localeCompare(right.date) ||
+          left.sortIndex - right.sortIndex,
+      );
     const productIds = new Set<string>();
     const postIds = new Set<string>();
     for (const row of sortedRows) {
@@ -228,19 +282,24 @@ export class TelegramAdSalesBulkService {
         if (override.telegramPostId) postIds.add(override.telegramPostId);
       }
     }
-    const [products, posts]: [BulkProduct[], BulkTelegramPost[]] = await Promise.all([
-      productIds.size
-        ? this.prisma.telegramAdProduct.findMany({
-            where: { id: { in: [...productIds] }, workspaceId, isActive: true },
-          })
-        : Promise.resolve([] as BulkProduct[]),
-      postIds.size
-        ? this.prisma.telegramPost.findMany({
-            where: { id: { in: [...postIds] }, workspaceId },
-            select: { id: true, telegramChannelId: true, postDate: true },
-          })
-        : Promise.resolve([] as BulkTelegramPost[]),
-    ]);
+    const [products, posts]: [BulkProduct[], BulkTelegramPost[]] =
+      await Promise.all([
+        productIds.size
+          ? this.prisma.telegramAdProduct.findMany({
+              where: {
+                id: { in: [...productIds] },
+                workspaceId,
+                isActive: true,
+              },
+            })
+          : Promise.resolve([] as BulkProduct[]),
+        postIds.size
+          ? this.prisma.telegramPost.findMany({
+              where: { id: { in: [...postIds] }, workspaceId },
+              select: { id: true, telegramChannelId: true, postDate: true },
+            })
+          : Promise.resolve([] as BulkTelegramPost[]),
+      ]);
     const productById = new Map<string, BulkProduct>(
       products.map((product) => [product.id, product]),
     );
@@ -250,10 +309,17 @@ export class TelegramAdSalesBulkService {
     const channelIds = new Set(channels.map((channel) => channel.id));
 
     return sortedRows.flatMap((row) => {
-      const overrides = new Map((row.channelOverrides ?? []).map((override) => [override.channelId, override]));
+      const overrides = new Map(
+        (row.channelOverrides ?? []).map((override) => [
+          override.channelId,
+          override,
+        ]),
+      );
       for (const channelId of overrides.keys()) {
         if (!channelIds.has(channelId)) {
-          throw new BadRequestException('Channel override is outside selected target');
+          throw new BadRequestException(
+            'Channel override is outside selected target',
+          );
         }
       }
       const rowAdvertiser = this.resolveRowAdvertiser(dto, row);
@@ -261,40 +327,83 @@ export class TelegramAdSalesBulkService {
         const override = overrides.get(channel.id);
         const productId = override?.productId ?? dto.defaults.productId ?? null;
         const product = productId ? productById.get(productId) : null;
-        if (productId && (!product || product.telegramChannelId !== channel.id)) {
-          throw new BadRequestException('Telegram ad product does not belong to target channel');
+        if (
+          productId &&
+          (!product || product.telegramChannelId !== channel.id)
+        ) {
+          throw new BadRequestException(
+            'Telegram ad product does not belong to target channel',
+          );
         }
         const telegramPostId = override?.telegramPostId ?? null;
-        const telegramPost = telegramPostId ? postById.get(telegramPostId) : null;
-        if (telegramPostId && (!telegramPost || telegramPost.telegramChannelId !== channel.id)) {
-          throw new BadRequestException('Telegram post does not belong to target channel');
+        const telegramPost = telegramPostId
+          ? postById.get(telegramPostId)
+          : null;
+        if (
+          telegramPostId &&
+          (!telegramPost || telegramPost.telegramChannelId !== channel.id)
+        ) {
+          throw new BadRequestException(
+            'Telegram post does not belong to target channel',
+          );
         }
         const scheduledAt = telegramPost
           ? telegramPost.postDate
-          : zonedDateTimeToUtc(row.date, override?.time || dto.defaults.time, dto.defaults.timezone);
-        if (telegramPost && utcDateKey(telegramPost.postDate, dto.defaults.timezone) !== row.date) {
-          throw new BadRequestException('Telegram post date does not match bulk row date');
+          : zonedDateTimeToUtc(
+              row.date,
+              override?.time || dto.defaults.time,
+              dto.defaults.timezone,
+            );
+        if (
+          telegramPost &&
+          utcDateKey(telegramPost.postDate, dto.defaults.timezone) !== row.date
+        ) {
+          throw new BadRequestException(
+            'Telegram post date does not match bulk row date',
+          );
         }
-        const recommendedPrice = decimalOrNull(override?.recommendedPrice ?? dto.defaults.recommendedPrice) ?? decimal(0);
-        const minimumPrice = decimalOrNull(override?.minimumPrice ?? dto.defaults.minimumPrice) ?? decimalOrNull(product?.minimumPrice) ?? decimal(0);
-        const agreedPrice = decimal(row.agreedPriceOverride ?? dto.defaults.agreedPrice);
+        const recommendedPrice =
+          decimalOrNull(
+            override?.recommendedPrice ?? dto.defaults.recommendedPrice,
+          ) ?? decimal(0);
+        const minimumPrice =
+          decimalOrNull(override?.minimumPrice ?? dto.defaults.minimumPrice) ??
+          decimalOrNull(product?.minimumPrice) ??
+          decimal(0);
+        const agreedPrice = decimal(
+          row.agreedPriceOverride ?? dto.defaults.agreedPrice,
+        );
         const manualPriceReason =
-          (override?.manualPriceReason ?? dto.defaults.manualPriceReason)?.trim() ||
+          (
+            override?.manualPriceReason ?? dto.defaults.manualPriceReason
+          )?.trim() ||
           (agreedPrice.lt(minimumPrice) ? 'Bulk price override' : null);
         return {
           clientRowIds: row.clientRowIds,
           date: row.date,
           channelId: channel.id,
-          networkId: dto.target.type === 'NETWORK' ? dto.target.networkId ?? null : null,
+          networkId:
+            dto.target.type === 'NETWORK'
+              ? (dto.target.networkId ?? null)
+              : null,
           scheduledAt,
           telegramPostId,
           productId,
-          pricingMode: override?.pricingMode ?? dto.defaults.pricingMode ?? product?.defaultPricingMode ?? TelegramAdPricingMode.CPM,
-          expectedViews: override?.expectedViews ?? dto.defaults.expectedViews ?? 0,
+          pricingMode:
+            override?.pricingMode ??
+            dto.defaults.pricingMode ??
+            product?.defaultPricingMode ??
+            TelegramAdPricingMode.CPM,
+          expectedViews:
+            override?.expectedViews ?? dto.defaults.expectedViews ?? 0,
           recommendedPrice,
           minimumPrice,
           agreedPrice,
-          currency: dto.defaults.settlementCurrency || product?.currency || channel.adBaseCurrency || 'USD',
+          currency:
+            dto.defaults.settlementCurrency ||
+            product?.currency ||
+            channel.adBaseCurrency ||
+            'USD',
           manualPriceReason,
           advertiser: rowAdvertiser,
         };
@@ -359,7 +468,8 @@ export class TelegramAdSalesBulkService {
           where: { id: advertiser.advertiserId, workspaceId },
           select: { id: true },
         });
-        if (!existing) throw new NotFoundException('Telegram advertiser not found');
+        if (!existing)
+          throw new NotFoundException('Telegram advertiser not found');
         result.set(key, existing.id);
         continue;
       }
@@ -384,7 +494,9 @@ export class TelegramAdSalesBulkService {
             workspaceId,
             displayName: advertiser.advertiserName,
             companyName: advertiser.advertiserCompanyName,
-            telegramUsername: advertiser.advertiserTelegram?.replace(/^@+/, '').toLowerCase() ?? null,
+            telegramUsername:
+              advertiser.advertiserTelegram?.replace(/^@+/, '').toLowerCase() ??
+              null,
             phone: contactIsEmail ? null : normalizedPhone,
             email: contactIsEmail ? normalizedEmail : null,
             ownerMemberId: assignedMemberId,
@@ -392,10 +504,18 @@ export class TelegramAdSalesBulkService {
             stage: TelegramCrmContactStage.NEW,
           },
         });
-        await this.createAdvertiserContacts(tx, workspaceId, created.id, advertiser);
+        await this.createAdvertiserContacts(
+          tx,
+          workspaceId,
+          created.id,
+          advertiser,
+        );
         result.set(key, created.id);
       } catch (error) {
-        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+        if (
+          !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+          error.code !== 'P2002'
+        ) {
           throw error;
         }
         const existingAfterConflict = await tx.telegramAdvertiser.findFirst({
@@ -422,7 +542,9 @@ export class TelegramAdSalesBulkService {
           advertiserId,
           type: TelegramAdvertiserContactType.TELEGRAM_USERNAME,
           value: advertiser.advertiserTelegram,
-          normalizedValue: advertiser.advertiserTelegram.replace(/^@+/, '').toLowerCase(),
+          normalizedValue: advertiser.advertiserTelegram
+            .replace(/^@+/, '')
+            .toLowerCase(),
           isPrimary: true,
         },
       });

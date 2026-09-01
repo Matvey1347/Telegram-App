@@ -68,7 +68,7 @@ export class ScheduledTaskRunnerService {
         },
       });
       if (existing && existing.status !== 'RUNNING') {
-        await this.advanceOccurrence(config, scheduledFor);
+        await this.advanceOccurrence(definition, config, scheduledFor);
         return toRunSummary(existing);
       }
       const run = existing
@@ -177,7 +177,7 @@ export class ScheduledTaskRunnerService {
     let advancementError: unknown;
     if (scheduledFor) {
       try {
-        await this.advanceOccurrence(config, scheduledFor);
+        await this.advanceOccurrence(definition, config, scheduledFor);
       } catch (error) {
         advancementError = error;
       }
@@ -208,7 +208,11 @@ export class ScheduledTaskRunnerService {
     }
   }
 
-  private async advanceOccurrence(config: ScheduledConfig, scheduledFor: Date) {
+  private async advanceOccurrence(
+    definition: ScheduledTaskDefinition,
+    config: ScheduledConfig,
+    scheduledFor: Date,
+  ) {
     const advanced = await this.prisma.scheduledTaskConfig.updateMany({
       where: {
         id: config.id,
@@ -216,9 +220,12 @@ export class ScheduledTaskRunnerService {
         scheduledClaimOwner: this.ownerId,
       },
       data: {
-        nextScheduledRunAt: definitionIsDueDriven(config.taskKey)
+        nextScheduledRunAt: definition.dueDriven
           ? null
-          : computeNextRunAt(config.schedule as ScheduledTaskSchedule, scheduledFor),
+          : computeNextRunAt(
+              config.schedule as ScheduledTaskSchedule,
+              scheduledFor,
+            ),
         scheduledClaimOwner: null,
         scheduledClaimExpiresAt: null,
       },
@@ -259,18 +266,6 @@ export class ScheduledTaskRunnerService {
       );
     }
   }
-}
-
-// System operational tasks use a persisted one-shot due occurrence. Keep this
-// local to avoid changing the runner's public config shape.
-function definitionIsDueDriven(taskKey: string) {
-  return new Set([
-    'telegram.managed_posts.reconcile_due',
-    'telegram_ad_sales.due_deletions',
-    'greeter.expire_pending',
-    'greeter.broadcasts.dispatch',
-    'greeter.automations.repair',
-  ]).has(taskKey);
 }
 
 export type ScheduledConfig = {

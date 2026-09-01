@@ -15,11 +15,14 @@ import {
 import {
   CRM_CONTACT_STAGES,
   CRM_AUTOMATION_OVERRIDES,
+  CRM_AUTOMATION_LOCALES,
   CRM_FOLLOW_UP_VIEWS,
   CRM_MESSAGE_DIRECTIONS,
   CRM_MESSAGE_ORIGINS,
   type CrmContactStage,
   type CrmAutomationOverride,
+  type CrmAutomationLocale,
+  type CrmCustomerAutomationType,
   type CrmFollowUpView,
   type CrmMessageDirection,
   type CrmMessageOrigin,
@@ -114,7 +117,6 @@ export class UpdateCrmContactDto {
   @IsOptional() @IsIn(CRM_CONTACT_STAGES) stage?: CrmContactStage;
   @IsOptional() @IsString() ownerMemberId?: string | null;
   @IsOptional() @IsDateString() nextContactAt?: string | null;
-  @IsOptional() @IsBoolean() automatedMessagesEnabled?: boolean;
 }
 
 export class UpsertCrmPeerDto {
@@ -179,6 +181,9 @@ export class UpdateCrmWorkspaceSettingsDto {
   @IsOptional() @IsBoolean() prePublicationReminderEnabled?: boolean;
   @IsOptional() @IsBoolean() publishedLinksEnabled?: boolean;
   @IsOptional() @IsBoolean() followUpEnabled?: boolean;
+  @IsOptional()
+  @IsIn(CRM_AUTOMATION_LOCALES)
+  automationLocale?: CrmAutomationLocale;
 }
 
 export class UpdateCrmAccountCapabilitiesDto {
@@ -188,7 +193,34 @@ export class UpdateCrmAccountCapabilitiesDto {
 }
 
 export class UpdateCrmDealAutomationDto {
-  @IsIn(CRM_AUTOMATION_OVERRIDES) override!: CrmAutomationOverride;
+  @IsOptional()
+  @IsIn(CRM_AUTOMATION_OVERRIDES)
+  override?: CrmAutomationOverride;
+  @IsOptional() @IsString() conversationId?: string | null;
+  @IsOptional() @IsObject() typeOverrides?: Partial<
+    Record<CrmCustomerAutomationType, CrmAutomationOverride>
+  >;
+}
+
+export class UpdateCrmContactAutomationDto {
+  @IsOptional() @IsBoolean() enabled?: boolean;
+  @IsOptional()
+  @IsIn(CRM_AUTOMATION_LOCALES)
+  locale?: CrmAutomationLocale | null;
+  @IsOptional() @IsObject() typeOverrides?: Partial<
+    Record<CrmCustomerAutomationType, CrmAutomationOverride>
+  >;
+}
+
+export class UpdateCrmCustomerFollowUpDto {
+  @IsOptional() @IsDateString() dueAt!: string | null;
+}
+
+export class CrmAutomationStatusQueryDto {
+  @IsString() contactId!: string;
+  @IsOptional() @IsString() dealId?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50) limit?: number =
+    20;
 }
 
 /** Internal-only input used by sync/sending adapters in later stages. */

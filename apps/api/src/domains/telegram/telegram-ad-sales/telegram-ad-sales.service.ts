@@ -42,9 +42,17 @@ import { adDeletionReadyWhere } from '../../operations/scheduled-tasks/due-work-
 import { notifyScheduledTaskDueWorkChanged } from '../../operations/scheduled-tasks/scheduled-task-wake-notifier';
 import { FinanceCategoriesService } from '../../finance/finance-categories/finance-categories.service';
 import { TelegramManagedPostCommandService } from '../telegram-channels/telegram-managed-post-command.service';
-import { legacyAdvertiserLifecycleStage, legacyAdvertiserFilter, legacyAdvertiserStatus, stageFromLegacyAdvertiser } from '../telegram-crm/telegram-crm-legacy-compatibility';
+import {
+  legacyAdvertiserLifecycleStage,
+  legacyAdvertiserFilter,
+  legacyAdvertiserStatus,
+  stageFromLegacyAdvertiser,
+} from '../telegram-crm/telegram-crm-legacy-compatibility';
 import { syncLegacyCrmPeer } from '../telegram-crm/telegram-crm-legacy-peer';
-import { telegramAdvertiserCompatibilityInclude, telegramAdvertiserInclude } from './telegram-ad-sales-advertiser-read-model';
+import {
+  telegramAdvertiserCompatibilityInclude,
+  telegramAdvertiserInclude,
+} from './telegram-ad-sales-advertiser-read-model';
 import { TelegramManagedPostPublicationService } from '../telegram-channels/telegram-managed-post-publication.service';
 import { TelegramManagedPostRemoteSyncService } from '../telegram-channels/telegram-managed-post-remote-sync.service';
 import { TelegramPostGroupsService } from '../telegram-channels/telegram-post-groups.service';
@@ -56,24 +64,6 @@ import {
   buildStableTelegramPostUrl,
   parseTelegramPostUrl,
 } from '../../../telegram/shared/telegram-post-url';
-
-type HydratedTelegramPostMetrics = {
-  id: string;
-  telegramMessageId: string;
-  viewsCount: number | null;
-  forwardsCount: number | null;
-  reactionsCount: number | null;
-  commentsCount: number | null;
-  postDate: Date;
-};
-
-type SaleWithManagedPostMetrics = {
-  placements: Array<{
-    telegramChannelId: string;
-    managedPost?: { telegramMessageIds: string[] } | null;
-    telegramPost?: HydratedTelegramPostMetrics | null;
-  }>;
-};
 import {
   AttachPlacementManagedPostDto,
   TelegramAdAlertsQueryDto,
@@ -128,7 +118,6 @@ import {
 } from './dto';
 import { recommendPolicyFromOrganicPosts } from './domain/policy-recommendation';
 import { decimal, decimalOrNull, decimalToString } from './domain/decimal';
-import { utcTimeKey } from './domain/timezone';
 import { ACTIVE_TELEGRAM_AD_PLACEMENT_STATUSES } from './telegram-ad-sales-reservation';
 import { reconcileTelegramAdPlacementMetrics } from './telegram-ad-placement-metrics';
 import { calculateAdPlacementDeleteAt } from './domain/sales-text';
@@ -180,6 +169,14 @@ import {
   mapAdSalesWorkspaceSettings,
 } from './telegram-ad-sales-workspace-settings';
 import { TelegramAdSalesSaleReadService } from './telegram-ad-sales-sale-read.service';
+import { TelegramAdSalesCustomerAutomationFactsService } from './telegram-ad-sales-customer-automation-facts.service';
+import {
+  assertNoActiveSalePayments,
+  cancelAdSaleRecords,
+  deleteAdSaleRecords,
+  isDedicatedSaleCancellation,
+} from './telegram-ad-sales-lifecycle-records';
+import { hydrateManagedTelegramPosts } from './telegram-ad-sales-managed-post-metrics';
 
 @Injectable()
 export class TelegramAdSalesService {
@@ -205,6 +202,7 @@ export class TelegramAdSalesService {
     private readonly encryptionService: TokenEncryptionService,
     private readonly telegramChannelAccessService: TelegramChannelAccessService,
     private readonly telegramBotApiClient: TelegramBotApiClient,
+    private readonly automationFacts?: TelegramAdSalesCustomerAutomationFactsService,
   ) {
     this.pricingReader = new TelegramAdSalesPricingReader(prisma);
     this.inventoryReader = new TelegramAdSalesInventoryReader(
@@ -222,7 +220,7 @@ export class TelegramAdSalesService {
       prisma,
       this.pricingReader,
       (workspaceId, sales) =>
-        this.hydrateManagedTelegramPosts(workspaceId, sales),
+        hydrateManagedTelegramPosts(this.prisma, workspaceId, sales),
     );
   }
 
@@ -1130,65 +1128,8 @@ export class TelegramAdSalesService {
       include: this.includeSaleRelations(),
     });
     if (!sale) throw new NotFoundException('Telegram ad sale not found');
-    await this.hydrateManagedTelegramPosts(workspaceId, [sale]);
+    await hydrateManagedTelegramPosts(this.prisma, workspaceId, [sale]);
     return sale;
-  }
-
-  private async hydrateManagedTelegramPosts(
-    workspaceId: string,
-    sales: SaleWithManagedPostMetrics[],
-  ) {
-    const managedPostKeys = new Map<
-      string,
-      { telegramChannelId: string; telegramMessageId: string }
-    >();
-    for (const sale of sales) {
-      for (const placement of sale.placements) {
-        for (const telegramMessageId of placement.managedPost
-          ?.telegramMessageIds ?? []) {
-          const key = `${placement.telegramChannelId}:${telegramMessageId}`;
-          managedPostKeys.set(key, {
-            telegramChannelId: placement.telegramChannelId,
-            telegramMessageId,
-          });
-        }
-      }
-    }
-    if (!managedPostKeys.size) return;
-    const telegramPosts = await this.prisma.telegramPost.findMany({
-      where: {
-        workspaceId,
-        OR: [...managedPostKeys.values()],
-      },
-      select: {
-        id: true,
-        telegramChannelId: true,
-        telegramMessageId: true,
-        viewsCount: true,
-        forwardsCount: true,
-        reactionsCount: true,
-        commentsCount: true,
-        postDate: true,
-      },
-    });
-    const telegramPostByChannelAndMessage = new Map(
-      telegramPosts.map((post) => [
-        `${post.telegramChannelId}:${post.telegramMessageId}`,
-        post,
-      ]),
-    );
-    for (const sale of sales) {
-      for (const placement of sale.placements) {
-        const currentTelegramPost = placement.managedPost?.telegramMessageIds
-          .map((messageId) =>
-            telegramPostByChannelAndMessage.get(
-              `${placement.telegramChannelId}:${messageId}`,
-            ),
-          )
-          .find(Boolean);
-        if (currentTelegramPost) placement.telegramPost = currentTelegramPost;
-      }
-    }
   }
 
   private analyticsRange(query?: TelegramAdAnalyticsQueryDto) {
@@ -2753,7 +2694,11 @@ export class TelegramAdSalesService {
     );
   }
 
-  async advertiserSearch(userId: string, query: TelegramAdvertiserSearchDto, ownerMemberId?: string) {
+  async advertiserSearch(
+    userId: string,
+    query: TelegramAdvertiserSearchDto,
+    ownerMemberId?: string,
+  ) {
     const workspaceId = await this.workspace(userId);
     const search = query.q.trim();
     const normalizedVariants = [
@@ -2825,7 +2770,10 @@ export class TelegramAdSalesService {
           description: dto.description?.trim() || null,
           source: dto.source?.trim() || null,
           stage: stageFromLegacyAdvertiser(dto) ?? TelegramCrmContactStage.NEW,
-          archivedAt: stageFromLegacyAdvertiser(dto) === TelegramCrmContactStage.ARCHIVED ? new Date() : null,
+          archivedAt:
+            stageFromLegacyAdvertiser(dto) === TelegramCrmContactStage.ARCHIVED
+              ? new Date()
+              : null,
           ownerMemberId: dto.ownerMemberId ?? null,
           createdByUserId: userId,
           nextContactAt: dto.nextContactAt ? new Date(dto.nextContactAt) : null,
@@ -2899,7 +2847,10 @@ export class TelegramAdSalesService {
             ? {}
             : {
                 stage,
-                archivedAt: stage === TelegramCrmContactStage.ARCHIVED ? new Date() : null,
+                archivedAt:
+                  stage === TelegramCrmContactStage.ARCHIVED
+                    ? new Date()
+                    : null,
               }),
           ...(dto.ownerMemberId === undefined
             ? {}
@@ -3141,7 +3092,11 @@ export class TelegramAdSalesService {
     });
   }
 
-  async listCrmTasks(userId: string, query: TelegramAdvertiserTasksQueryDto, ownerMemberId?: string) {
+  async listCrmTasks(
+    userId: string,
+    query: TelegramAdvertiserTasksQueryDto,
+    ownerMemberId?: string,
+  ) {
     const workspaceId = await this.workspace(userId);
     const pagination = normalizePagination(query);
     const where: Prisma.TelegramAdvertiserTaskWhereInput = {
@@ -3719,6 +3674,7 @@ export class TelegramAdSalesService {
   }
 
   async createSale(userId: string, dto: CreateTelegramAdSaleDto) {
+    const automationEligibleAt = new Date();
     const { workspaceId, assignedMemberId } =
       await this.workspaceService.resolveAssignedMemberId(
         userId,
@@ -3760,6 +3716,7 @@ export class TelegramAdSalesService {
         sourceAdvertiserActivityId: dto.sourceAdvertiserActivityId ?? null,
         createdByUserId: userId,
         assignedMemberId,
+        customerAutomationEligibleAt: automationEligibleAt,
       },
       include: this.includeSaleRelations(),
     });
@@ -3772,10 +3729,16 @@ export class TelegramAdSalesService {
         actorUserId: userId,
       });
     }
+    await this.automationFacts?.dealCreated(
+      workspaceId,
+      sale.id,
+      automationEligibleAt,
+    );
     return this.mapSale(sale);
   }
 
   async updateSale(userId: string, id: string, dto: UpdateTelegramAdSaleDto) {
+    if (isDedicatedSaleCancellation(dto)) return this.cancelSale(userId, id);
     const workspaceId = await this.workspace(userId);
     const existing = await this.getSaleDetails(workspaceId, id);
     const assignedMemberId =
@@ -3794,17 +3757,6 @@ export class TelegramAdSalesService {
         !existing.placements.length
       ) {
         throw new BadRequestException('Cannot confirm sale without placements');
-      }
-      if (dto.status === TelegramAdSaleStatus.CANCELLED) {
-        const activePaidPayments = (existing.payments ?? []).some(
-          (payment: any) =>
-            payment.status !== TelegramAdSalePaymentStatus.VOIDED,
-        );
-        if (activePaidPayments) {
-          throw new BadRequestException(
-            'Cannot cancel paid sale without voiding payments',
-          );
-        }
       }
     }
     const linkedAdvertiser =
@@ -3986,24 +3938,15 @@ export class TelegramAdSalesService {
     const telegramPostIds = existing.placements.flatMap((placement) =>
       placement.telegramPost?.id ? [placement.telegramPost.id] : [],
     );
-
+    await this.automationFacts?.cancelled(workspaceId, id);
     await this.prisma.$transaction(async (tx) => {
-      await tx.telegramAdSale.delete({ where: { id, workspaceId } });
-      if (transactionIds.length) {
-        await tx.transaction.deleteMany({
-          where: { workspaceId, id: { in: [...new Set(transactionIds)] } },
-        });
-      }
-      if (managedPostIds.length) {
-        await tx.telegramManagedPost.deleteMany({
-          where: { workspaceId, id: { in: [...new Set(managedPostIds)] } },
-        });
-      }
-      if (telegramPostIds.length) {
-        await tx.telegramPost.deleteMany({
-          where: { workspaceId, id: { in: [...new Set(telegramPostIds)] } },
-        });
-      }
+      await deleteAdSaleRecords(tx, {
+        workspaceId,
+        saleId: id,
+        transactionIds,
+        managedPostIds,
+        telegramPostIds,
+      });
     });
     this.invalidateAvailabilityCache(workspaceId);
     this.notifyAdDeletionDueWorkChanged();
@@ -4125,6 +4068,7 @@ export class TelegramAdSalesService {
       throw error;
     }
     this.invalidateAvailabilityCache(workspaceId);
+    await this.automationFacts?.scheduleChanged(workspaceId, sale.id);
     return this.mapPlacement(placement);
   }
 
@@ -4255,6 +4199,7 @@ export class TelegramAdSalesService {
       },
     });
     this.invalidateAvailabilityCache(workspaceId);
+    await this.automationFacts?.scheduleChanged(workspaceId, saleId);
     return {
       ...this.mapPlacement(updated),
       warnings: updated.agreedPrice.lt(updated.minimumPrice)
@@ -4765,6 +4710,7 @@ export class TelegramAdSalesService {
         },
       });
       this.notifyAdDeletionDueWorkChanged();
+      await this.automationFacts?.verifiedPublication(workspaceId, saleId);
       return this.mapPlacement(this.appendPlacementFinancials(updated));
     }
     const managedPost = await this.prisma.telegramManagedPost.findFirst({
@@ -4826,6 +4772,9 @@ export class TelegramAdSalesService {
       },
     });
     if (isPublishedManagedPost) this.notifyAdDeletionDueWorkChanged();
+    if (isPublishedManagedPost) {
+      await this.automationFacts?.verifiedPublication(workspaceId, saleId);
+    }
     return this.mapPlacement(this.appendPlacementFinancials(updated));
   }
 
@@ -4852,6 +4801,7 @@ export class TelegramAdSalesService {
       where: { id: placementId },
       data: { managedPostId: null },
     });
+    await this.automationFacts?.scheduleChanged(workspaceId, saleId);
     return this.mapPlacement(this.appendPlacementFinancials(updated));
   }
 
@@ -4972,6 +4922,7 @@ export class TelegramAdSalesService {
         data: { status: TelegramAdSaleStatus.IN_PROGRESS },
       });
     }
+    await this.automationFacts?.scheduleChanged(workspaceId, saleId);
     return this.mapPlacement(this.appendPlacementFinancials(updated));
   }
 
@@ -5104,6 +5055,7 @@ export class TelegramAdSalesService {
       include: { paymentAllocations: { include: { payment: true } } },
     });
     this.notifyAdDeletionDueWorkChanged();
+    await this.automationFacts?.verifiedPublication(workspaceId, saleId);
     return this.mapPlacement(this.appendPlacementFinancials(updated));
   }
 
@@ -5151,6 +5103,7 @@ export class TelegramAdSalesService {
       data: { status: TelegramAdPlacementStatus.CANCELLED },
       include: { paymentAllocations: { include: { payment: true } } },
     });
+    await this.automationFacts?.scheduleChanged(workspaceId, saleId);
     return this.mapPlacement(this.appendPlacementFinancials(updated));
   }
 
@@ -5193,6 +5146,7 @@ export class TelegramAdSalesService {
       },
       include: { paymentAllocations: { include: { payment: true } } },
     });
+    await this.automationFacts?.verifiedPublication(workspaceId, saleId);
     return this.mapPlacement(this.appendPlacementFinancials(updated));
   }
 
@@ -5485,6 +5439,9 @@ export class TelegramAdSalesService {
       });
     });
     if (dueWorkChanged) this.notifyAdDeletionDueWorkChanged();
+    if (dueWorkChanged) {
+      await this.automationFacts?.verifiedPublication(workspaceId, saleId);
+    }
     return this.getSale(userId, saleId);
   }
 
@@ -5631,6 +5588,8 @@ export class TelegramAdSalesService {
       },
     });
 
+    await this.automationFacts?.scheduleChanged(workspaceId, saleId);
+
     return this.mapSale(reserved);
   }
 
@@ -5671,37 +5630,16 @@ export class TelegramAdSalesService {
     const workspaceId = await this.workspace(userId);
     const sale = await this.getSaleDetails(workspaceId, saleId);
     this.assertSaleTransition(sale.status, TelegramAdSaleStatus.CANCELLED);
-    const activePaidPayments = (sale.payments ?? []).some(
-      (payment: any) => payment.status !== TelegramAdSalePaymentStatus.VOIDED,
+    assertNoActiveSalePayments(sale.payments ?? []);
+    const cancelledSale = await this.prisma.$transaction((tx) =>
+      cancelAdSaleRecords(tx, workspaceId, saleId, this.includeSaleRelations()),
     );
-    if (activePaidPayments) {
-      throw new BadRequestException(
-        'Cannot cancel paid sale without voiding payments',
-      );
-    }
-    const cancelledSale = await this.prisma.$transaction(async (tx) => {
-      await tx.telegramAdSalePlacement.updateMany({
-        where: {
-          workspaceId,
-          telegramAdSaleId: saleId,
-          status: { not: TelegramAdPlacementStatus.COMPLETED },
-        },
-        data: { status: TelegramAdPlacementStatus.CANCELLED },
-      });
-      await tx.telegramAdSale.update({
-        where: { id: saleId },
-        data: { status: TelegramAdSaleStatus.CANCELLED },
-      });
-      return tx.telegramAdSale.findUniqueOrThrow({
-        where: { id: saleId },
-        include: this.includeSaleRelations(),
-      });
-    });
     this.logger.info({
       event: 'telegram_ad_sales.sale_cancelled',
       message: `Cancelled sale ${saleId}`,
       metadata: { saleId },
     });
+    await this.automationFacts?.cancelled(workspaceId, saleId);
     return this.mapSale(cancelledSale);
   }
 }

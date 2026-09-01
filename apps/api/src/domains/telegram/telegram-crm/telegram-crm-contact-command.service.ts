@@ -52,9 +52,6 @@ export class TelegramCrmContactCommandService {
 
   async update(userId: string, contactId: string, dto: UpdateCrmContactDto) {
     const existing = await this.requireWritableContact(userId, contactId);
-    if (dto.automatedMessagesEnabled !== undefined) {
-      await this.authorization.require(userId, 'adSales.crm.manageAutomation');
-    }
     if (dto.ownerMemberId !== undefined) {
       await this.requireOwnerInWorkspace(
         existing.workspaceId,
@@ -112,16 +109,6 @@ export class TelegramCrmContactCommandService {
         : {
             nextContactAt: dto.nextContactAt
               ? new Date(dto.nextContactAt)
-              : null,
-          }),
-      ...(dto.automatedMessagesEnabled === undefined
-        ? {}
-        : {
-            automatedMessagesEnabled: dto.automatedMessagesEnabled,
-            automatedMessagesEnabledAt: dto.automatedMessagesEnabled
-              ? existing.automatedMessagesEnabled
-                ? existing.automatedMessagesEnabledAt
-                : new Date()
               : null,
           }),
     };
@@ -182,8 +169,6 @@ export class TelegramCrmContactCommandService {
         workspaceId: true,
         ownerMemberId: true,
         archivedAt: true,
-        automatedMessagesEnabled: true,
-        automatedMessagesEnabledAt: true,
       },
     });
     if (!row) throw new NotFoundException('CRM Contact not found');

@@ -31,7 +31,8 @@ export class ScheduledTaskRegistryService {
         group: {
           key: 'TELEGRAM',
           name: 'Telegram sync',
-          description: 'Independent Telegram synchronization tasks and notifications.',
+          description:
+            'Independent Telegram synchronization tasks and notifications.',
         },
         name: 'Sync all Telegram channels',
         description:
@@ -52,7 +53,8 @@ export class ScheduledTaskRegistryService {
         group: {
           key: 'TELEGRAM',
           name: 'Telegram sync',
-          description: 'Independent Telegram synchronization tasks and notifications.',
+          description:
+            'Independent Telegram synchronization tasks and notifications.',
         },
         name: 'Telegram post metrics sync',
         description:
@@ -73,7 +75,8 @@ export class ScheduledTaskRegistryService {
         group: {
           key: 'TELEGRAM',
           name: 'Telegram sync',
-          description: 'Independent Telegram synchronization tasks and notifications.',
+          description:
+            'Independent Telegram synchronization tasks and notifications.',
         },
         name: 'Telegram broadcast stats sync',
         description:
@@ -94,7 +97,8 @@ export class ScheduledTaskRegistryService {
         group: {
           key: 'TELEGRAM',
           name: 'Telegram sync',
-          description: 'Independent Telegram synchronization tasks and notifications.',
+          description:
+            'Independent Telegram synchronization tasks and notifications.',
         },
         name: 'Daily analytics sync',
         description:
@@ -142,6 +146,23 @@ export class ScheduledTaskRegistryService {
         notificationSupported: false,
         dueDriven: true,
         execute: this.executor.executors['telegram_ad_sales.due_deletions'],
+      },
+      {
+        key: 'telegram_crm.customer_automations',
+        name: 'CRM customer automation delivery',
+        description:
+          'Claims and sends only persisted due CRM customer automation occurrences.',
+        scope: 'SYSTEM_MAINTENANCE',
+        defaultSchedule: {
+          frequency: 'INTERVAL',
+          intervalMinutes: 60,
+          timezone: 'Europe/Warsaw',
+        },
+        scheduleEditable: false,
+        supportedFrequencies: ['INTERVAL'],
+        notificationSupported: false,
+        dueDriven: true,
+        execute: this.executor.executors['telegram_crm.customer_automations'],
       },
       {
         key: 'application_logs.cleanup',

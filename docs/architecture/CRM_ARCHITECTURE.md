@@ -4,8 +4,9 @@
 
 This document defines the Stage 1 persistence, contract, authorization, and
 rollout-safety foundation, the Stage 2 multi-account MTProto CRM runtime and
-Inbox use cases, and the Stage 3 Contact-centered web application. It does not
-add customer-message automation runners, a durable queue, or a PWA.
+Inbox use cases, the Stage 3 Contact-centered web application, and the Stage 4
+customer-message automation layer. It does not add a generic automation
+engine, a new worker service, polling, historical event replay, or a PWA.
 
 The existing Ad Sales product remains intact. `TelegramAdvertiser` is the
 physical backing record for a CRM Contact, and `TelegramAdSale` remains the
@@ -197,8 +198,129 @@ Migration safety invariants:
 
 The existing `TelegramAdvertiserAutomationRule` and execution tables describe
 internal task creation. They are not customer-message consent or delivery
-records. Customer-message idempotency uses the separately named CRM execution
-model.
+records. Stage 4 evolves the already-existing, separately named
+`TelegramCrmCustomerAutomationExecution` as the durable customer occurrence,
+claim, send-envelope, idempotency, and delivery record. It does not create a
+parallel engine or broaden internal task actions into customer messaging.
+
+## Customer-message automation runtime
+
+Ad Sales reports typed business facts; it never decides or sends customer
+messages. CRM owns the complete path:
+
+```text
+fresh Ad Sales fact
+  -> CRM automation event materializer
+  -> fail-closed eligibility policy
+  -> durable due execution
+  -> Conversation resolver
+  -> localized template presenter
+  -> fixed-account CRM MTProto sender
+  -> CRM Message + terminal execution
+```
+
+Only fresh post-rollout mutations may materialize an occurrence: creation of
+an eligible Deal or placement, explicit activation of one protected Deal, a
+relevant schedule/placement change, cancellation, a verified actual
+publication transition, or explicit customer follow-up configuration.
+Application startup, migration, CRM Sync/import, Peer promotion, Contact stage
+changes, old `nextContactAt`, internal tasks, and historical placement state
+never invoke the materializer. Enabling a workspace, Contact, or type never
+scans or replays existing data.
+
+`eventOccurredAt` records the business occurrence, not evaluation or scheduler
+time. Eligibility rechecks it against every applicable durable activation
+boundary. Workspace, Contact, type, and Deal switches are cumulative; an
+explicit Deal `ENABLED` value never bypasses the workspace kill switch,
+Contact consent, account capability, or another negative gate. Any missing or
+inconsistent scope, cutover, Contact, Conversation, sender account, locale,
+template, or idempotency input fails closed.
+
+The final `PROCESSING -> SENDING` transition is the durable authorization
+point. In one serializable transaction it locks the execution and every
+current gate/source row, reloads Workspace, Contact, Deal, placements, channel
+and post identity, Conversation, and account state, reruns policy and source
+fingerprint checks, then applies a workspace-scoped compare-and-set. A state
+mutation that commits first is observed; one that waits commits only after the
+logical send was authorized. This closes the disable/reschedule/delete race
+without holding a database transaction open across the Telegram request.
+Both public Deal-cancellation paths converge on one transaction that cancels
+unsent executions before writing the Deal and placement terminal states. The
+final locked barrier also rejects a `CANCELLED` Deal directly, so a failed
+post-commit fact notification cannot allow a customer follow-up send.
+
+Pre-publication reminders use one stable logical key per Deal. Before the first
+send, a schedule change updates or invalidates the unsent occurrence; after a
+send, it cannot create an automatic second reminder. The default due time is
+one hour before the earliest relevant future placement, while the localized
+template lists every placement's real date, time, timezone, and channel. It
+uses the single-time key only when those times are actually the same.
+
+Customer copy is rendered and pinned from machine keys
+`crm.automation.prePublication.singleTime`,
+`crm.automation.prePublication.multiTime`, and
+`crm.automation.publishedLinks.complete`. The supported locales are `uk`,
+`ru`, and `en`; a Contact override wins, otherwise the workspace locale is
+used, with `en` as the final fail-safe fallback.
+
+Published-links occurrences are created only by a fresh verified publication
+transition after every required placement has a successful terminal state,
+actual publication time, Telegram post identity, and stable URL. Scheduled
+time is never publication proof. Pending, missed, failed, cancelled, or
+identity-less placements wait and never produce a false customer success.
+The occurrence time is the latest actual publication time, so reconciling an
+old Deal cannot turn history into a new event.
+
+Customer follow-up is independent of internal follow-up tasks. It requires a
+dedicated explicit Deal configuration and versioned occurrence. Existing
+`nextContactAt` values and `TelegramAdvertiserTask` rows remain available to
+internal CRM views but never become customer sends.
+
+Conversation resolution is deterministic: an explicit Deal Conversation,
+otherwise an existing active Contact Conversation, otherwise a newly created
+Conversation through a valid Default CRM sender. Once selected, the execution
+pins the Conversation and its `mtprotoAccountId`. A temporary account error
+retries the same frozen envelope and never fails over to another Telegram
+account.
+
+Before the Telegram request, the execution persists the selected Conversation,
+account, rendered text, template key/locale, and stable MTProto random ID.
+Claims are bounded and leased. A retry after a timeout, process exit, or
+database finalization failure uses that identical envelope; Message uniqueness
+by automation execution and the stable Telegram random ID converge duplicate
+claims and synchronized echoes into one `AUTOMATION` Message. Automated
+Messages always have `sentByMemberId=null` and retain the Conversation account.
+
+An expired `SENDING` lease is explicitly marked as ambiguous. It may retry only
+the same pinned idempotent envelope after current gates and source pass the
+atomic authorization point again. If they no longer pass, the execution ends
+as `FAILED` with an ambiguous-send audit reason and makes no new runtime call;
+it is never mislabeled as an ordinary policy skip. Retry exhaustion preserves
+the same `AMBIGUOUS_SEND_UNRESOLVED` audit meaning instead of reporting an
+ordinary recoverable failure.
+
+Execution-to-Deal and execution-to-placement foreign keys remain composite
+with `workspaceId`. Deal deletion first cancels unsent work and atomically
+unlinks the mutable Deal/placement references before deletion, preserving the
+immutable Message/execution audit record without weakening tenant isolation.
+
+## Customer automation scheduling and cost
+
+Customer executions reuse the system's persisted one-shot due scheduler. A
+new occurrence emits one in-process wake signal after commit; restart recovery
+performs bounded indexed nearest-due reads for pending work and expired leases.
+The scheduler then arms one timer for the earliest execution and atomically
+claims bounded due batches. It never scans workspaces, Contacts, Deals,
+placements, tasks, or historical Messages to discover work.
+
+With no persisted due execution, the Stage 4 incremental idle cost is zero
+recurring database reads/writes, zero Telegram requests, zero per-Deal timers,
+and no additional Railway service. Work scales with eligible occurrences: 100
+or 1,000 due Deals use one scheduler configuration and bounded indexed claims,
+with at most one customer send per unique event key. Successful executions are
+the customer-message audit record; they do not create per-item application log
+rows. Terminal execution history follows the CRM customer-history lifecycle
+and is not copied into a second technical log.
 
 ## Multi-account MTProto runtime
 

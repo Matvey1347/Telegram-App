@@ -1,7 +1,6 @@
 import type {
   CrmAccountCapabilities,
   CrmAccountSyncState,
-  CrmAutomationOverride,
   CrmContact,
   CrmContactDetail,
   CrmContactMergeResult,
@@ -10,7 +9,6 @@ import type {
   CrmConversationListItem,
   CrmConversationReadResult,
   CrmConversationsListResult,
-  CrmDealAutomationUpdateResult,
   CrmFollowUpView,
   CrmHistoryImportResult,
   CrmInboxListResult,
@@ -74,7 +72,6 @@ export type CreateCrmContactPayload = Pick<CrmContact, "displayName"> &
 export type UpdateCrmContactPayload = Partial<
   Omit<CreateCrmContactPayload, "displayName"> & {
     displayName: string;
-    automatedMessagesEnabled: boolean;
   }
 >;
 
@@ -101,10 +98,7 @@ export const telegramCrmApi = {
     ).data,
   createContact: async (payload: CreateCrmContactPayload) =>
     (await api.post<CrmContact>("/telegram-crm/contacts", payload)).data,
-  updateContact: async (
-    contactId: string,
-    payload: UpdateCrmContactPayload,
-  ) =>
+  updateContact: async (contactId: string, payload: UpdateCrmContactPayload) =>
     (
       await api.patch<CrmContact>(
         `/telegram-crm/contacts/${contactId}`,
@@ -112,17 +106,11 @@ export const telegramCrmApi = {
       )
     ).data,
   archiveContact: async (contactId: string) =>
-    (
-      await api.post<CrmContact>(
-        `/telegram-crm/contacts/${contactId}/archive`,
-      )
-    ).data,
+    (await api.post<CrmContact>(`/telegram-crm/contacts/${contactId}/archive`))
+      .data,
   restoreContact: async (contactId: string) =>
-    (
-      await api.post<CrmContact>(
-        `/telegram-crm/contacts/${contactId}/restore`,
-      )
-    ).data,
+    (await api.post<CrmContact>(`/telegram-crm/contacts/${contactId}/restore`))
+      .data,
   listInbox: async (params: CrmInboxParams, signal?: AbortSignal) =>
     (
       await api.get<CrmInboxListResult>("/telegram-crm/inbox", {
@@ -130,10 +118,7 @@ export const telegramCrmApi = {
         signal,
       })
     ).data,
-  promoteInboxPeer: async (
-    peerId: string,
-    stage: CrmInboxPromotionStage,
-  ) =>
+  promoteInboxPeer: async (peerId: string, stage: CrmInboxPromotionStage) =>
     (
       await api.post<CrmInboxPromotionResult>(
         `/telegram-crm/inbox/${peerId}/promote`,
@@ -170,10 +155,10 @@ export const telegramCrmApi = {
     signal?: AbortSignal,
   ) =>
     (
-      await api.get<CrmConversationsListResult>(
-        "/telegram-crm/conversations",
-        { params, signal },
-      )
+      await api.get<CrmConversationsListResult>("/telegram-crm/conversations", {
+        params,
+        signal,
+      })
     ).data,
   getConversation: async (conversationId: string, signal?: AbortSignal) =>
     (
@@ -234,10 +219,6 @@ export const telegramCrmApi = {
       .data,
   updateSettings: async (payload: {
     defaultCrmSenderAccountId?: string | null;
-    customerTelegramAutomationsEnabled?: boolean;
-    prePublicationReminderEnabled?: boolean;
-    publishedLinksEnabled?: boolean;
-    followUpEnabled?: boolean;
   }) =>
     (await api.patch<CrmWorkspaceSettings>("/telegram-crm/settings", payload))
       .data,
@@ -269,16 +250,6 @@ export const telegramCrmApi = {
     (
       await api.post<CrmInitialSyncResult>(
         `/telegram-crm/accounts/${accountId}/initial-sync`,
-      )
-    ).data,
-  updateDealAutomation: async (
-    dealId: string,
-    override: CrmAutomationOverride,
-  ) =>
-    (
-      await api.patch<CrmDealAutomationUpdateResult>(
-        `/telegram-crm/deals/${dealId}/automation`,
-        { override },
       )
     ).data,
 };

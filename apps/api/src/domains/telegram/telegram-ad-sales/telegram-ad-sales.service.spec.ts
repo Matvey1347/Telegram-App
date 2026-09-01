@@ -226,6 +226,9 @@ function createService() {
       delete: jest.fn(),
       findUniqueOrThrow: jest.fn(),
     },
+    telegramCrmCustomerAutomationExecution: {
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     telegramAdProduct: {
       findFirst: jest.fn(),
       create: jest.fn(),
@@ -679,6 +682,60 @@ describe('TelegramAdSalesService', () => {
     );
   });
 
+  it.each(['dedicated endpoint', 'generic PATCH'] as const)(
+    '%s cancellation atomically blocks customer automations even when fact publication fails',
+    async (path) => {
+      const { service, prisma, mtprotoClient, telegramBotApiClient } =
+        createService();
+      const automationFacts = {
+        cancelled: jest.fn().mockResolvedValue(false),
+      };
+      (service as any).automationFacts = automationFacts;
+      const existing = makeSale({
+        status: TelegramAdSaleStatus.DRAFT,
+        payments: [],
+      });
+      prisma.telegramAdSale.findFirst.mockResolvedValue(existing);
+      prisma.telegramAdSale.findUniqueOrThrow.mockResolvedValue(
+        makeSale({
+          ...existing,
+          status: TelegramAdSaleStatus.CANCELLED,
+          placements: existing.placements.map((placement: any) => ({
+            ...placement,
+            status: TelegramAdPlacementStatus.CANCELLED,
+          })),
+        }),
+      );
+
+      if (path === 'generic PATCH') {
+        await service.updateSale('user-1', 'sale-1', {
+          status: TelegramAdSaleStatus.CANCELLED,
+        });
+      } else {
+        await service.cancelSale('user-1', 'sale-1');
+      }
+
+      expect(
+        prisma.telegramCrmCustomerAutomationExecution.updateMany,
+      ).toHaveBeenCalledWith({
+        where: {
+          workspaceId: 'ws-1',
+          telegramAdSaleId: 'sale-1',
+          status: { in: ['PENDING', 'PROCESSING'] },
+        },
+        data: expect.objectContaining({
+          status: 'CANCELLED',
+          reason: 'DEAL_CANCELLED',
+          leaseOwner: null,
+          leaseExpiresAt: null,
+        }),
+      });
+      expect(automationFacts.cancelled).toHaveBeenCalledWith('ws-1', 'sale-1');
+      expect(mtprotoClient.deletePublishedMessages).not.toHaveBeenCalled();
+      expect(telegramBotApiClient.deleteMessage).not.toHaveBeenCalled();
+    },
+  );
+
   it('deletes the sale and all linked local finance and post records', async () => {
     const { service, prisma } = createService();
     prisma.telegramAdSale.findFirst.mockResolvedValue(
@@ -712,6 +769,12 @@ describe('TelegramAdSalesService', () => {
     );
     expect(prisma.telegramAdSale.delete).toHaveBeenCalledWith({
       where: { id: 'sale-1', workspaceId: 'ws-1' },
+    });
+    expect(
+      prisma.telegramCrmCustomerAutomationExecution.updateMany,
+    ).toHaveBeenCalledWith({
+      where: { workspaceId: 'ws-1', telegramAdSaleId: 'sale-1' },
+      data: { telegramAdSaleId: null, placementId: null },
     });
     expect(prisma.transaction.deleteMany).toHaveBeenCalledWith({
       where: {

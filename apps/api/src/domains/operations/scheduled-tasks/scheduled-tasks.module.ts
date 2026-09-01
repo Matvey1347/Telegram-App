@@ -3,6 +3,7 @@ import { ApplicationLogsModule } from '../application-logs/application-logs.modu
 import { CurrenciesModule } from '../../finance/currencies/currencies.module';
 import { PrismaModule } from '../../../prisma/prisma.module';
 import { TelegramAdSalesModule } from '../../telegram/telegram-ad-sales/telegram-ad-sales.module';
+import { TelegramCrmModule } from '../../telegram/telegram-crm/telegram-crm.module';
 import { TelegramBotsModule } from '../../telegram/telegram-bots/telegram-bots.module';
 import { TelegramSyncModule } from '../../telegram/telegram-sync/telegram-sync.module';
 import { ScheduledTaskLockService } from './scheduled-task-lock.service';
@@ -19,6 +20,7 @@ import { ScheduledTasksService } from './scheduled-tasks.service';
     TelegramSyncModule,
     CurrenciesModule,
     TelegramAdSalesModule,
+    TelegramCrmModule,
     TelegramBotsModule,
     ApplicationLogsModule,
   ],

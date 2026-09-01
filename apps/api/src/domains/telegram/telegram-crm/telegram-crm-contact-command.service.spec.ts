@@ -92,7 +92,10 @@ describe('TelegramCrmContactCommandService', () => {
     };
     const authorization = {
       require: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
-      context: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1', memberId: 'member-1' }),
+      context: jest.fn().mockResolvedValue({
+        workspaceId: 'workspace-1',
+        memberId: 'member-1',
+      }),
       can: jest.fn().mockResolvedValue(true),
       requireOwnOrAny: jest.fn().mockResolvedValue(undefined),
     };
@@ -108,12 +111,46 @@ describe('TelegramCrmContactCommandService', () => {
         data: { stage: 'CUSTOMER', archivedAt: null },
       }),
     );
-    expect(prisma.telegramAdvertiser.update.mock.calls[0]?.[0].data).not.toHaveProperty(
-      'automatedMessagesEnabled',
-    );
+    expect(
+      prisma.telegramAdvertiser.update.mock.calls[0]?.[0].data,
+    ).not.toHaveProperty('automatedMessagesEnabled');
     expect(authorization.require).not.toHaveBeenCalledWith(
       'user-1',
       'adSales.crm.manageAutomation',
     );
+  });
+
+  it('does not accept automation consent through the legacy Contact command', async () => {
+    const prisma = {
+      telegramAdvertiser: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'contact-1',
+          workspaceId: 'workspace-1',
+          ownerMemberId: 'member-1',
+          archivedAt: null,
+        }),
+        update: jest.fn(),
+      },
+    };
+    const authorization = {
+      require: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
+      context: jest.fn().mockResolvedValue({
+        workspaceId: 'workspace-1',
+        memberId: 'member-1',
+      }),
+      can: jest.fn().mockResolvedValue(true),
+      requireOwnOrAny: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new TelegramCrmContactCommandService(
+      prisma as never,
+      authorization as never,
+    );
+
+    await expect(
+      service.update('user-1', 'contact-1', {
+        automatedMessagesEnabled: true,
+      } as never),
+    ).rejects.toThrow('No changes');
+    expect(prisma.telegramAdvertiser.update).not.toHaveBeenCalled();
   });
 });

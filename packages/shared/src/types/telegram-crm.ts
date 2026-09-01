@@ -1,4 +1,5 @@
 import type { PaginatedResponse } from "../pagination";
+import type { CrmDealAutomationSummary } from "./telegram-crm-automations";
 
 export const CRM_CONTACT_STAGES = [
   "NEW",
@@ -42,20 +43,6 @@ export type CrmInitialImportStatus =
   | "COMPLETED"
   | "FAILED";
 export type CrmSyncStatus = "IDLE" | "SYNCING" | "RECOVERING" | "FAILED";
-
-export const CRM_CUSTOMER_AUTOMATION_TYPES = [
-  "PRE_PUBLICATION_REMINDER",
-  "PUBLISHED_LINKS",
-  "FOLLOW_UP",
-] as const;
-export type CrmCustomerAutomationType =
-  (typeof CRM_CUSTOMER_AUTOMATION_TYPES)[number];
-export const CRM_AUTOMATION_OVERRIDES = [
-  "INHERIT",
-  "ENABLED",
-  "DISABLED",
-] as const;
-export type CrmAutomationOverride = (typeof CRM_AUTOMATION_OVERRIDES)[number];
 
 export const CRM_FOLLOW_UP_VIEWS = [
   "TODAY",
@@ -129,12 +116,6 @@ export type CrmContactPaymentSummary = {
   agreedAmount: string;
   paidAmount: string;
   outstandingAmount: string;
-};
-
-export type CrmDealAutomationSummary = {
-  dealId: string;
-  override: CrmAutomationOverride;
-  eligibleAt: string | null;
 };
 
 export type CrmContact = {
@@ -279,8 +260,6 @@ export type CrmUnreadSummary = {
   inbox: number;
 };
 
-export type CrmDealAutomationUpdateResult = CrmDealAutomationSummary;
-
 export type CrmAccountCapabilities = {
   accountId: string;
   crmSyncEnabled: boolean;
@@ -307,32 +286,4 @@ export type CrmSenderAccount = CrmAccountCapabilities & {
   label: string;
   status: "connected";
   isActive: true;
-};
-
-export type CrmWorkspaceAutomationSettings = {
-  customerTelegramAutomationsEnabled: boolean;
-  customerTelegramAutomationsEnabledAt: string | null;
-  typeEnabled: Record<CrmCustomerAutomationType, boolean>;
-};
-
-export type CrmWorkspaceSettings = {
-  workspaceId: string;
-  defaultCrmSenderAccountId: string | null;
-  automation: CrmWorkspaceAutomationSettings;
-  createdAt: string | null;
-  updatedAt: string | null;
-};
-
-export type CrmAutomationEligibility = {
-  allowed: boolean;
-  reason:
-    | "ELIGIBLE"
-    | "WORKSPACE_DISABLED"
-    | "CONTACT_DISABLED"
-    | "TYPE_DISABLED"
-    | "DEAL_DISABLED"
-    | "DEAL_NOT_ELIGIBLE"
-    | "BEFORE_CUTOVER"
-    | "HISTORICAL_EVENT"
-    | "MISSING_IDEMPOTENCY_KEY";
 };

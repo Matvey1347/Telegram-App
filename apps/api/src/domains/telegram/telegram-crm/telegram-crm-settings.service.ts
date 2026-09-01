@@ -1,19 +1,24 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { CrmWorkspaceSettings } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 import { TelegramCrmAccountAccessService } from './telegram-crm-account-access.service';
 import { UpdateCrmWorkspaceSettingsDto } from './telegram-crm.dto';
+import { TelegramCrmAutomationOccurrenceService } from './telegram-crm-automation-occurrence.service';
 
 const settingsSelect = {
   workspaceId: true,
   defaultCrmSenderAccountId: true,
   customerTelegramAutomationsEnabled: true,
   customerTelegramAutomationsEnabledAt: true,
+  automationLocale: true,
   prePublicationReminderEnabled: true,
+  prePublicationReminderEnabledAt: true,
   publishedLinksEnabled: true,
+  publishedLinksEnabledAt: true,
   followUpEnabled: true,
+  followUpEnabledAt: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.TelegramAdCrmWorkspaceSettingsSelect;
@@ -27,9 +32,13 @@ type SettingsChanges = Partial<
     | 'defaultCrmSenderAccountId'
     | 'customerTelegramAutomationsEnabled'
     | 'customerTelegramAutomationsEnabledAt'
+    | 'automationLocale'
     | 'prePublicationReminderEnabled'
+    | 'prePublicationReminderEnabledAt'
     | 'publishedLinksEnabled'
+    | 'publishedLinksEnabledAt'
     | 'followUpEnabled'
+    | 'followUpEnabledAt'
   >
 >;
 
@@ -39,6 +48,8 @@ export class TelegramCrmSettingsService {
     private readonly prisma: PrismaService,
     private readonly authorization: WorkspaceAuthorizationService,
     private readonly accountAccess: TelegramCrmAccountAccessService,
+    @Optional()
+    private readonly occurrences?: TelegramCrmAutomationOccurrenceService,
   ) {}
 
   async get(userId: string) {
@@ -57,6 +68,7 @@ export class TelegramCrmSettingsService {
       dto.prePublicationReminderEnabled,
       dto.publishedLinksEnabled,
       dto.followUpEnabled,
+      dto.automationLocale,
     ].some((value) => value !== undefined);
     if (!hasDefaultSender && !hasAutomation) {
       throw new BadRequestException('No CRM settings changes');
@@ -94,6 +106,20 @@ export class TelegramCrmSettingsService {
           data: { workspaceId: access.workspaceId, ...data },
           select: settingsSelect,
         });
+    if (dto.customerTelegramAutomationsEnabled === false) {
+      await this.occurrences?.cancelWorkspace(access.workspaceId);
+    } else {
+      const disabledTypes = [
+        ['PRE_PUBLICATION_REMINDER', dto.prePublicationReminderEnabled],
+        ['PUBLISHED_LINKS', dto.publishedLinksEnabled],
+        ['FOLLOW_UP', dto.followUpEnabled],
+      ] as const;
+      for (const [type, enabled] of disabledTypes) {
+        if (enabled === false) {
+          await this.occurrences?.cancelWorkspaceType(access.workspaceId, type);
+        }
+      }
+    }
     return this.map(row);
   }
 
@@ -102,6 +128,7 @@ export class TelegramCrmSettingsService {
     dto: UpdateCrmWorkspaceSettingsDto,
   ): SettingsChanges {
     const data: SettingsChanges = {};
+    const now = new Date();
     const assign = <K extends keyof UpdateCrmWorkspaceSettingsDto>(
       key: K,
       currentValue: UpdateCrmWorkspaceSettingsDto[K],
@@ -114,12 +141,37 @@ export class TelegramCrmSettingsService {
       'defaultCrmSenderAccountId',
       current?.defaultCrmSenderAccountId ?? null,
     );
-    assign(
+    if (
+      dto.automationLocale !== undefined &&
+      dto.automationLocale !== (current?.automationLocale ?? 'en')
+    ) {
+      data.automationLocale = dto.automationLocale;
+    }
+    const assignType = (
+      enabledKey:
+        | 'prePublicationReminderEnabled'
+        | 'publishedLinksEnabled'
+        | 'followUpEnabled',
+      enabledAtKey:
+        | 'prePublicationReminderEnabledAt'
+        | 'publishedLinksEnabledAt'
+        | 'followUpEnabledAt',
+    ) => {
+      const next = dto[enabledKey];
+      if (next === undefined) return;
+      const currentEnabled = current?.[enabledKey] ?? false;
+      const missingActivation = next && !current?.[enabledAtKey];
+      if (next !== currentEnabled || missingActivation) {
+        data[enabledKey] = next;
+        data[enabledAtKey] = next ? now : null;
+      }
+    };
+    assignType(
       'prePublicationReminderEnabled',
-      current?.prePublicationReminderEnabled ?? false,
+      'prePublicationReminderEnabledAt',
     );
-    assign('publishedLinksEnabled', current?.publishedLinksEnabled ?? false);
-    assign('followUpEnabled', current?.followUpEnabled ?? false);
+    assignType('publishedLinksEnabled', 'publishedLinksEnabledAt');
+    assignType('followUpEnabled', 'followUpEnabledAt');
     const currentEnabled = current?.customerTelegramAutomationsEnabled ?? false;
     if (
       dto.customerTelegramAutomationsEnabled !== undefined &&
@@ -128,7 +180,13 @@ export class TelegramCrmSettingsService {
       data.customerTelegramAutomationsEnabled =
         dto.customerTelegramAutomationsEnabled;
       data.customerTelegramAutomationsEnabledAt =
-        dto.customerTelegramAutomationsEnabled ? new Date() : null;
+        dto.customerTelegramAutomationsEnabled ? now : null;
+    } else if (
+      dto.customerTelegramAutomationsEnabled === true &&
+      !current?.customerTelegramAutomationsEnabledAt
+    ) {
+      data.customerTelegramAutomationsEnabled = true;
+      data.customerTelegramAutomationsEnabledAt = now;
     }
     return data;
   }
@@ -140,10 +198,16 @@ export class TelegramCrmSettingsService {
       automation: {
         customerTelegramAutomationsEnabled: false,
         customerTelegramAutomationsEnabledAt: null,
+        locale: 'en',
         typeEnabled: {
           PRE_PUBLICATION_REMINDER: false,
           PUBLISHED_LINKS: false,
           FOLLOW_UP: false,
+        },
+        typeSettings: {
+          PRE_PUBLICATION_REMINDER: { enabled: false, enabledAt: null },
+          PUBLISHED_LINKS: { enabled: false, enabledAt: null },
+          FOLLOW_UP: { enabled: false, enabledAt: null },
         },
       },
       createdAt: null,
@@ -160,10 +224,26 @@ export class TelegramCrmSettingsService {
           row.customerTelegramAutomationsEnabled,
         customerTelegramAutomationsEnabledAt:
           row.customerTelegramAutomationsEnabledAt?.toISOString() ?? null,
+        locale: row.automationLocale as 'en' | 'ru' | 'uk',
         typeEnabled: {
           PRE_PUBLICATION_REMINDER: row.prePublicationReminderEnabled,
           PUBLISHED_LINKS: row.publishedLinksEnabled,
           FOLLOW_UP: row.followUpEnabled,
+        },
+        typeSettings: {
+          PRE_PUBLICATION_REMINDER: {
+            enabled: row.prePublicationReminderEnabled,
+            enabledAt:
+              row.prePublicationReminderEnabledAt?.toISOString() ?? null,
+          },
+          PUBLISHED_LINKS: {
+            enabled: row.publishedLinksEnabled,
+            enabledAt: row.publishedLinksEnabledAt?.toISOString() ?? null,
+          },
+          FOLLOW_UP: {
+            enabled: row.followUpEnabled,
+            enabledAt: row.followUpEnabledAt?.toISOString() ?? null,
+          },
         },
       },
       createdAt: row.createdAt.toISOString(),
