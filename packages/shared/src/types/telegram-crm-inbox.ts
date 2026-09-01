@@ -1,9 +1,11 @@
 import type { PaginatedResponse } from "../pagination";
 import type {
+  CrmAccountSummary,
   CrmContact,
   CrmContactStage,
   CrmConversationState,
-  CrmMessage,
+  CrmMessageWithAttribution,
+  CrmMessagePreview,
   CrmPeer,
   CrmReadState,
 } from "./telegram-crm";
@@ -27,6 +29,8 @@ export type CrmInboxConversationSummary = {
   lastOutboundAt: string | null;
   unreadCount: number;
   readState: CrmReadState;
+  account: CrmAccountSummary;
+  lastMessage: CrmMessagePreview | null;
 };
 
 /** One canonical row per unlinked Telegram Peer, across all enabled accounts. */
@@ -34,6 +38,7 @@ export type CrmInboxItem = {
   peer: CrmPeer;
   conversationCount: number;
   unreadCount: number;
+  conversations: CrmInboxConversationSummary[];
   latestConversation: CrmInboxConversationSummary | null;
 };
 
@@ -58,7 +63,7 @@ export type CrmContactMergeResult = {
 };
 
 export type CrmManualMessageResult = {
-  message: CrmMessage;
+  message: CrmMessageWithAttribution;
   idempotentReplay: boolean;
 };
 

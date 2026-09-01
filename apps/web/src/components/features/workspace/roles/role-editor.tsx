@@ -40,12 +40,17 @@ const LEVELS = [
     Icon: EyeOff,
     capabilities: [],
   },
-  { id: "view", label: "View", Icon: Eye, capabilities: ["view"] },
+  {
+    id: "view",
+    label: "View",
+    Icon: Eye,
+    capabilities: ["view", "viewOwn"],
+  },
   {
     id: "own",
     label: "Own data",
     Icon: UserRound,
-    capabilities: ["view", "create", "editOwn", "deleteOwn"],
+    capabilities: ["view", "viewOwn", "create", "editOwn", "deleteOwn"],
   },
   {
     id: "manage",
@@ -53,6 +58,8 @@ const LEVELS = [
     Icon: ShieldCheck,
     capabilities: [
       "view",
+      "viewOwn",
+      "viewAny",
       "create",
       "editOwn",
       "editAny",
@@ -103,12 +110,12 @@ export function RoleEditor({
     feature: FeatureDefinition,
     capabilities: readonly string[],
   ) => {
-    const standard = feature.permissions.filter(
-      (item) => item.sensitivity === "standard",
+    const levelPermissions = feature.permissions.filter(
+      (item) => item.sensitivity === "standard" || item.capability === "viewAny",
     );
     setKeys((current) => {
       const next = new Set(current);
-      for (const permission of standard) {
+      for (const permission of levelPermissions) {
         const value = capabilities.includes(permission.capability);
         const storeKey = mode === "ALLOWLIST" ? value : !value;
         if (storeKey) next.add(permission.id);
@@ -227,7 +234,7 @@ export function RoleEditor({
             const current =
               LEVELS.findLast((level) =>
                 level.capabilities.every((capability) => {
-                  const permission = standard.find(
+                  const permission = feature.permissions.find(
                     (item) => item.capability === capability,
                   );
                   return !permission || enabled(permission.id);
@@ -261,7 +268,16 @@ export function RoleEditor({
                             setLevel(
                               feature,
                               level.id === "manage"
-                                ? standard.map((item) => item.capability)
+                                ? [
+                                    ...standard.map(
+                                      (item) => item.capability,
+                                    ),
+                                    ...(feature.permissions.some(
+                                      (item) => item.capability === "viewAny",
+                                    )
+                                      ? ["viewAny"]
+                                      : []),
+                                  ]
                                 : level.capabilities,
                             )
                           }

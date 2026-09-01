@@ -94,6 +94,7 @@ const workspaceScopedQueryKeys = new Set<string>([
   "telegram-ad-baseline",
   "telegram-ad-price-history",
   "telegram-ad-analytics",
+  "telegram-crm",
   "dashboard-summary",
   "application-logs",
   "application-log-filter-options",

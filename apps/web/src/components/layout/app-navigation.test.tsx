@@ -52,4 +52,29 @@ describe("AppNavigation permissions", () => {
     expect(screen.queryByRole("button", { name: /Growth/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /Operations/i })).toBeNull();
   });
+
+  it("shows CRM when either CRM or legacy sales is available", () => {
+    const { rerender } = render(
+      <AppNavigation
+        pathname="/ad-sales"
+        openGroups={{ growth: true }}
+        onToggleGroup={vi.fn()}
+        canViewAdmin={false}
+        effectiveFeatureIds={["adSales.crm"]}
+        effectivePermissionKeys={[]}
+      />,
+    );
+    expect(screen.getByRole("link", { name: "CRM" })).toBeInTheDocument();
+    rerender(
+      <AppNavigation
+        pathname="/ad-sales/sales"
+        openGroups={{ growth: true }}
+        onToggleGroup={vi.fn()}
+        canViewAdmin={false}
+        effectiveFeatureIds={["adSales.sales"]}
+        effectivePermissionKeys={[]}
+      />,
+    );
+    expect(screen.getByRole("link", { name: "CRM" })).toBeInTheDocument();
+  });
 });

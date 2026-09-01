@@ -2,6 +2,28 @@
 
 Updated: 2026-08-31
 
+## 2026-08-31 Contact-centered CRM web application
+
+Stage 3 makes `/ad-sales` a Contact-centered CRM while retaining the existing
+Sales, Calendar, Analytics, placements, pricing, availability, payment,
+checkout, and publication-lifecycle implementations. The former page remains a
+route integrator; focused CRM components own Contacts, Inbox, stable Contact +
+Conversation deep links, account-specific threads, cursor Message history,
+unread state, explicit promotion, and automation safety presentation.
+
+The cross-stack contract adds purpose-built compact Contact/detail,
+Conversation, Inbox, unread, and Message cursor read models. It does not return
+full histories or introduce frontend joins. CRM cache state is workspace
+scoped and non-persisted; one authenticated event stream drives narrow cache
+updates, with no polling or root-wide invalidation.
+
+Customer automation remains execution-inert. The UI exposes explicit future
+Contact consent, workspace/type configuration, and protected Deal overrides,
+but no runner, cron, queue, heartbeat, historical backfill, or implicit opt-in
+is added. Account capability controls keep CRM Sync, CRM Send, and MTProto
+Publishing independent, and the default sender applies only to a new
+Conversation.
+
 ## 2026-08-31 Telegram CRM multi-account runtime and Inbox
 
 Stage 2 continues the Contact-centered CRM foundation with an event-driven

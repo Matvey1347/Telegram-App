@@ -19,6 +19,7 @@ type NavigationItem = {
   icon: LucideIcon;
   adminOnly?: boolean;
   featureId?: string;
+  featureIds?: readonly string[];
   permissionId?: string;
 };
 
@@ -76,10 +77,10 @@ const groups: readonly NavigationGroup[] = [
     icon: Megaphone,
     children: [
       {
-        label: "Ad sales",
+        label: "CRM",
         href: "/ad-sales",
         icon: workspaceFeatureIcons["adSales.sales"],
-        featureId: "adSales.sales",
+        featureIds: ["adSales.crm", "adSales.sales"],
       },
       {
         label: "Ad campaigns",
@@ -183,8 +184,11 @@ export function AppNavigation({
 }) {
   const featureAllowed = (item: NavigationItem) =>
     !effectiveFeatureIds ||
-    !item.featureId ||
-    effectiveFeatureIds.includes(item.featureId);
+    ((!item.featureId || effectiveFeatureIds.includes(item.featureId)) &&
+      (!item.featureIds ||
+        item.featureIds.some((featureId) =>
+          effectiveFeatureIds.includes(featureId),
+        )));
   const permissionAllowed = (item: NavigationItem) =>
     !item.permissionId ||
     (effectivePermissionKeys

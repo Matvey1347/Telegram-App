@@ -2,6 +2,32 @@ import { ForbiddenException } from '@nestjs/common';
 import { TelegramCrmContactCommandService } from './telegram-crm-contact-command.service';
 
 describe('TelegramCrmContactCommandService', () => {
+  const contactRow = {
+    id: 'contact-1',
+    workspaceId: 'workspace-1',
+    displayName: 'Customer',
+    companyName: null,
+    telegramUsername: null,
+    phone: null,
+    email: null,
+    website: null,
+    description: null,
+    source: null,
+    stage: 'CUSTOMER',
+    ownerMemberId: 'member-1',
+    automatedMessagesEnabled: false,
+    automatedMessagesEnabledAt: null,
+    lastContactAt: null,
+    lastInboundAt: null,
+    lastOutboundAt: null,
+    lastPurchaseAt: null,
+    nextContactAt: null,
+    archivedAt: null,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    _count: { sales: 0 },
+  };
+
   it('authorizes writes against Contact ownership inside the selected workspace', async () => {
     const prisma = {
       telegramAdvertiser: {
@@ -48,5 +74,46 @@ describe('TelegramCrmContactCommandService', () => {
       'adSales.crm.editAny',
     );
     expect(prisma.telegramAdvertiser.update).not.toHaveBeenCalled();
+  });
+
+  it('does not enable customer automation when the Contact becomes a Customer', async () => {
+    const prisma = {
+      telegramAdvertiser: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'contact-1',
+          workspaceId: 'workspace-1',
+          ownerMemberId: 'member-1',
+          archivedAt: null,
+          automatedMessagesEnabled: false,
+          automatedMessagesEnabledAt: null,
+        }),
+        update: jest.fn().mockResolvedValue(contactRow),
+      },
+    };
+    const authorization = {
+      require: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
+      context: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1', memberId: 'member-1' }),
+      can: jest.fn().mockResolvedValue(true),
+      requireOwnOrAny: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new TelegramCrmContactCommandService(
+      prisma as never,
+      authorization as never,
+    );
+
+    await service.update('user-1', 'contact-1', { stage: 'CUSTOMER' });
+
+    expect(prisma.telegramAdvertiser.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { stage: 'CUSTOMER', archivedAt: null },
+      }),
+    );
+    expect(prisma.telegramAdvertiser.update.mock.calls[0]?.[0].data).not.toHaveProperty(
+      'automatedMessagesEnabled',
+    );
+    expect(authorization.require).not.toHaveBeenCalledWith(
+      'user-1',
+      'adSales.crm.manageAutomation',
+    );
   });
 });

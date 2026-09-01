@@ -1,4 +1,4 @@
-import type { CrmConversation, CrmMessage } from "./telegram-crm";
+import type { CrmConversation, CrmMessageWithAttribution } from "./telegram-crm";
 
 export type CrmTelegramCheckpoint = {
   pts: number;
@@ -28,7 +28,7 @@ export type CrmRealtimeEvent =
       conversationId: string;
       contactId: string | null;
       ownerMemberId: string | null;
-      message: CrmMessage;
+      message: CrmMessageWithAttribution;
     })
   | (CrmRealtimeBase & {
       type: "conversation.unreadChanged" | "readChanged";

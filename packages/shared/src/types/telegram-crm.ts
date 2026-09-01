@@ -50,7 +50,92 @@ export const CRM_CUSTOMER_AUTOMATION_TYPES = [
 ] as const;
 export type CrmCustomerAutomationType =
   (typeof CRM_CUSTOMER_AUTOMATION_TYPES)[number];
-export type CrmAutomationOverride = "INHERIT" | "ENABLED" | "DISABLED";
+export const CRM_AUTOMATION_OVERRIDES = [
+  "INHERIT",
+  "ENABLED",
+  "DISABLED",
+] as const;
+export type CrmAutomationOverride = (typeof CRM_AUTOMATION_OVERRIDES)[number];
+
+export const CRM_FOLLOW_UP_VIEWS = [
+  "TODAY",
+  "WAITING_FOR_REPLY",
+  "WROTE_NO_REPLY",
+  "READ_NO_REPLY",
+] as const;
+export type CrmFollowUpView = (typeof CRM_FOLLOW_UP_VIEWS)[number];
+
+export type CrmMemberSummary = {
+  id: string;
+  name: string;
+  email: string | null;
+};
+
+export type CrmAccountSummary = {
+  id: string;
+  label: string;
+  username: string | null;
+  photoUrl: string | null;
+};
+
+export type CrmPeerSummary = {
+  id: string;
+  telegramUserId: string;
+  username: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  photoUrl: string | null;
+};
+
+export type CrmMessagePreview = {
+  id: string;
+  conversationId: string;
+  direction: CrmMessageDirection;
+  origin: CrmMessageOrigin;
+  text: string | null;
+  sentAt: string;
+  readState: CrmReadState;
+};
+
+export type CrmTaskSummary = {
+  id: string;
+  title: string;
+  dueAt: string;
+  status: string;
+  type: string;
+  priority: string;
+};
+
+export type CrmActiveDealSummary = {
+  id: string;
+  title: string | null;
+  status: string;
+  placementCount: number;
+  settlementCurrency: string;
+  agreedAmount: string;
+  paidAmount: string;
+  paymentStatus: "UNPAID" | "PARTIALLY_PAID" | "PAID" | "OVERPAID";
+  scheduledAt: string | null;
+};
+
+export type CrmTagSummary = {
+  id: string;
+  name: string;
+  color: string | null;
+};
+
+export type CrmContactPaymentSummary = {
+  currency: string;
+  agreedAmount: string;
+  paidAmount: string;
+  outstandingAmount: string;
+};
+
+export type CrmDealAutomationSummary = {
+  dealId: string;
+  override: CrmAutomationOverride;
+  eligibleAt: string | null;
+};
 
 export type CrmContact = {
   id: string;
@@ -78,7 +163,33 @@ export type CrmContact = {
   updatedAt: string;
 };
 
-export type CrmContactsListResult = PaginatedResponse<CrmContact>;
+export type CrmContactListItem = CrmContact & {
+  ownerMember: CrmMemberSummary | null;
+  peer: CrmPeerSummary | null;
+  unreadCount: number;
+  conversationCount: number;
+  conversationAccounts: CrmAccountSummary[];
+  lastMessage: CrmMessagePreview | null;
+  nextOpenTask: CrmTaskSummary | null;
+  activeDeal: CrmActiveDealSummary | null;
+};
+
+export type CrmContactDetail = CrmContact & {
+  ownerMember: CrmMemberSummary | null;
+  peers: CrmPeerSummary[];
+  unreadCount: number;
+  tags: CrmTagSummary[];
+  paymentSummary: CrmContactPaymentSummary[];
+  dealAutomation: CrmDealAutomationSummary[];
+  counts: {
+    conversations: number;
+    deals: number;
+    openTasks: number;
+    activities: number;
+  };
+};
+
+export type CrmContactsListResult = PaginatedResponse<CrmContactListItem>;
 
 export type CrmPeer = {
   id: string;
@@ -119,6 +230,14 @@ export type CrmConversation = {
   updatedAt: string;
 };
 
+export type CrmConversationListItem = CrmConversation & {
+  account: CrmAccountSummary;
+  peer: CrmPeerSummary;
+};
+
+export type CrmConversationsListResult =
+  PaginatedResponse<CrmConversationListItem>;
+
 export type CrmMessage = {
   id: string;
   workspaceId: string;
@@ -139,6 +258,28 @@ export type CrmMessage = {
   deliveryState: CrmDeliveryState;
   createdAt: string;
 };
+
+export type CrmMessageWithAttribution = CrmMessage & {
+  sentByMember: CrmMemberSummary | null;
+};
+
+export type CrmMessageListItem = CrmMessageWithAttribution & {
+  account: CrmAccountSummary;
+};
+
+export type CrmMessagesCursorPage = {
+  items: CrmMessageListItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
+export type CrmUnreadSummary = {
+  total: number;
+  contacts: number;
+  inbox: number;
+};
+
+export type CrmDealAutomationUpdateResult = CrmDealAutomationSummary;
 
 export type CrmAccountCapabilities = {
   accountId: string;

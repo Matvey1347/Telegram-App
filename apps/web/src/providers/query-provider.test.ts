@@ -13,6 +13,7 @@ describe("workspace query isolation", () => {
     "telegram-managed-posts-calendar",
     "telegram-managed-post-history",
     "telegram-ad-baseline",
+    "telegram-crm",
     "icons",
     "trash",
   ])("marks %s as workspace scoped", (root) => {

@@ -76,6 +76,7 @@ export type AdSaleModalProps = {
   initialChannelId?: string | null;
   initialScheduledAt?: string | null;
   initialInventoryOpportunityKey?: string | null;
+  initialAdvertiser?: TelegramAdvertiser | null;
   headerAction?: ReactNode;
   sessionOpen?: boolean;
   systemBotConnected?: boolean;

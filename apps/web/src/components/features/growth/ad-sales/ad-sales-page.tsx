@@ -1,13 +1,6 @@
 "use client";
-
-import {
-  useDeferredValue,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+// prettier-ignore
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   keepPreviousData,
   useMutation,
@@ -25,28 +18,16 @@ import {
 import { AppShell } from "@/components/layout/app-shell";
 import {
   telegramChannelKeys,
-  telegramPostKeys,
   telegramSystemBotKeys,
 } from "@/lib/query-keys";
 import { PageTabHead } from "@/components/layout/page-tab-head";
-import {
-  Button,
-  FormField,
-  Input,
-  Modal,
-  PageHeader,
-  Select,
-  Textarea,
-} from "@/components/ui/primitives";
-import { RegisterPaymentModal } from "@/components/features/growth/ad-sales/register-payment-modal";
+import { Button, PageHeader } from "@/components/ui/primitives";
 import { AdSaleModal } from "@/components/features/growth/ad-sales/ad-sale-modal";
 import { AdSalesWorkspaceHero } from "@/components/features/growth/ad-sales/ad-sales-workspace-hero";
 import { AdSalesInventoryModal } from "@/components/features/growth/ad-sales/ad-sales-inventory-modal";
 import type { AdSaleScopeMode } from "@/components/features/growth/ad-sales/ad-sale-placement-scope";
 import { CalendarTab } from "@/components/features/growth/ad-sales/ad-sales-calendar-tab";
 import { AdSalesAnalyticsPanel } from "@/components/features/growth/ad-sales/ad-sales-analytics-panel";
-import { AdSalesClientsPanel } from "@/components/features/growth/ad-sales/ad-sales-clients-panel";
-import { SaleDetailsModal } from "@/components/features/growth/ad-sales/ad-sales-sale-details-modal";
 import { SalesTab } from "@/components/features/growth/ad-sales/ad-sales-sales-tab";
 import { useAdSalesLifecycleRefresh } from "@/components/features/growth/ad-sales/use-ad-sales-publication-refresh";
 import { AdSalesPostLinkDialogs } from "@/components/features/growth/ad-sales/ad-sales-post-link-dialogs";
@@ -67,9 +48,7 @@ import {
   accountsApi,
   authApi,
   currenciesApi,
-  getAllTelegramChannelPosts,
   getTelegramChannelPosts,
-  syncTelegramChannelPostMetrics,
   telegramAdSalesApi,
   telegramSystemBotApi,
   telegramChannelsApi,
@@ -83,9 +62,7 @@ import {
   expandNetworkChannelIds,
   readAdSalesCalendarRangeMode,
   writeAdSalesCalendarRangeMode,
-  zonedDateTimeToUtc,
   type TelegramAdSalesCalendarRangeMode,
-  type TelegramAdSalesTab,
 } from "@/lib/features/growth/telegram-ad-sales";
 import {
   invalidateTelegramAdSaleReads,
@@ -95,6 +72,9 @@ import {
 } from "@/lib/features/growth/telegram-ad-sales-query";
 import { resolveAdSalesPreferenceSelection } from "@/lib/features/growth/ad-sales-preferences-hydration";
 import { useAppToast } from "@/providers/toast-provider";
+import { CrmWorkspace } from "./crm/crm-workspace";
+import { resolveAdSalesSurface } from "./crm/crm-routes";
+import { useCrmDealDeepLink } from "./use-crm-deal-deep-link";
 const adSalesDataCacheOptions = {
   staleTime: 2 * 60 * 1000,
   gcTime: 15 * 60 * 1000,
@@ -104,7 +84,17 @@ const adSalesDataCacheOptions = {
 
 export function AdSalesPage() {
   const pathname = usePathname();
-  const requestedChannelId = useSearchParams().get("channelId")?.trim() || null;
+  const searchParams = useSearchParams();
+  const surface = resolveAdSalesSurface(pathname, searchParams);
+  if (surface.kind !== "legacy") return <CrmWorkspace surface={surface} />;
+  return <LegacyAdSalesPage />;
+}
+
+function LegacyAdSalesPage() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const requestedChannelId = searchParams.get("channelId")?.trim() || null;
+  const requestedSaleId = searchParams.get("saleId")?.trim() || null;
   const router = useRouter();
   const queryClient = useQueryClient();
   const { pushToast, startOperation } = useAppToast();
@@ -125,8 +115,9 @@ export function AdSalesPage() {
   const [salesPageSize, setSalesPageSize] = useState(25);
   const [saleSearch, setSaleSearch] = useState("");
   const deferredSaleSearch = useDeferredValue(saleSearch.trim());
-  const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
+  const [selectedSaleId, setSelectedSaleId] = useState<string | null>(requestedSaleId);
   const [adSaleModalOpen, setAdSaleModalOpen] = useState(false);
+  const initialAdvertiser = useCrmDealDeepLink(searchParams, setAdSaleModalOpen);
   const adSaleCheckoutIdempotencyKeyRef = useRef<string | null>(null);
   const [adSaleSeedSlot, setAdSaleSeedSlot] =
     useState<TelegramAdAvailabilitySlot | null>(null);
@@ -251,7 +242,7 @@ export function AdSalesPage() {
       adSaleModalOpen,
     staleTime: 60 * 1000,
   });
-  const savePreferencesMutation = useMutation({
+  const { mutate: savePreferences } = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
       telegramAdSalesApi.updatePreferences(payload),
     onSuccess: (preferences) => {
@@ -381,7 +372,7 @@ export function AdSalesPage() {
     );
 
     if (!preferences.initialized && nextIds.length) {
-      savePreferencesMutation.mutate({
+      savePreferences({
         selectedChannelIds: nextIds,
         selectedNetworkId: null,
         calendarView:
@@ -398,7 +389,7 @@ export function AdSalesPage() {
       (!sameStringArray(nextIds, preferences.selectedChannelIds) ||
         nextNetworkId !== (preferences.selectedNetworkId ?? ""))
     ) {
-      savePreferencesMutation.mutate({
+      savePreferences({
         selectedChannelIds: nextIds,
         selectedNetworkId: nextNetworkId || null,
         calendarView:
@@ -413,6 +404,7 @@ export function AdSalesPage() {
     networksQuery.isSuccess,
     preferencesQuery.data,
     requestedChannelId,
+    savePreferences,
     saleableChannelIdsList,
     saleableNetworks,
   ]);
@@ -424,7 +416,7 @@ export function AdSalesPage() {
       calendarView: "week" | "month";
     }>,
   ) => {
-    savePreferencesMutation.mutate({
+    savePreferences({
       selectedChannelIds,
       selectedNetworkId: selectedNetworkId || null,
       calendarView:
@@ -936,8 +928,6 @@ export function AdSalesPage() {
         />
       ) : null}
 
-      {tab === "clients" ? <AdSalesClientsPanel /> : null}
-
       {tab === "analytics" ? (
         <AdSalesAnalyticsPanel
           selectedChannelIds={effectiveChannelIds}
@@ -962,6 +952,7 @@ export function AdSalesPage() {
         paymentSale={paymentSale}
         setPaymentSale={setPaymentSale}
         refreshSaleAfterMutation={refreshSaleAfterMutation}
+        initialAdvertiser={initialAdvertiser}
       />
 
       <AdSalesSaleDetailsDialog

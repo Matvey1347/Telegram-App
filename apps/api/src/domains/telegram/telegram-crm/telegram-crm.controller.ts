@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { TelegramCrmContactCommandService } from './telegram-crm-contact-command.service';
 import { TelegramCrmContactReadService } from './telegram-crm-contact-read.service';
 import { TelegramCrmConversationService } from './telegram-crm-conversation.service';
+import { TelegramCrmDealAutomationService } from './telegram-crm-deal-automation.service';
 import {
   CreateCrmContactDto,
   CreateCrmConversationDto,
@@ -21,6 +22,7 @@ import {
   CrmConversationsQueryDto,
   CrmMessagesQueryDto,
   UpdateCrmContactDto,
+  UpdateCrmDealAutomationDto,
   UpdateCrmWorkspaceSettingsDto,
   UpsertCrmPeerDto,
 } from './telegram-crm.dto';
@@ -36,6 +38,7 @@ export class TelegramCrmController {
     private readonly contactCommands: TelegramCrmContactCommandService,
     private readonly peers: TelegramCrmPeerService,
     private readonly conversations: TelegramCrmConversationService,
+    private readonly dealAutomation: TelegramCrmDealAutomationService,
     private readonly messages: TelegramCrmMessageReadService,
     private readonly settings: TelegramCrmSettingsService,
   ) {}
@@ -46,6 +49,16 @@ export class TelegramCrmController {
     @Query() query: CrmContactsQueryDto,
   ) {
     return this.contactRead.list(user.sub, query);
+  }
+
+  @Get('contacts/:id')
+  getContact(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.contactRead.get(user.sub, id);
+  }
+
+  @Get('unread')
+  unread(@CurrentUser() user: JwtUser) {
+    return this.contactRead.unread(user.sub);
   }
 
   @Post('contacts')
@@ -96,6 +109,11 @@ export class TelegramCrmController {
     return this.conversations.list(user.sub, query);
   }
 
+  @Get('conversations/:id')
+  getConversation(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.conversations.get(user.sub, id);
+  }
+
   @Get('conversations/:id/messages')
   listMessages(
     @CurrentUser() user: JwtUser,
@@ -108,6 +126,15 @@ export class TelegramCrmController {
   @Get('settings')
   getSettings(@CurrentUser() user: JwtUser) {
     return this.settings.get(user.sub);
+  }
+
+  @Patch('deals/:id/automation')
+  updateDealAutomation(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateCrmDealAutomationDto,
+  ) {
+    return this.dealAutomation.update(user.sub, id, dto.override);
   }
 
   @Patch('settings')

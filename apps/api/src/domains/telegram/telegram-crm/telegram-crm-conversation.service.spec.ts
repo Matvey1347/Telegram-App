@@ -26,6 +26,20 @@ const conversation = (accountId: string) => ({
   lastMeaningfulSyncAt: null,
   createdAt: new Date('2026-09-01T08:00:00.000Z'),
   updatedAt: new Date('2026-09-01T08:00:00.000Z'),
+  mtprotoAccount: {
+    id: accountId,
+    label: accountId,
+    username: null,
+    photoUrl: null,
+  },
+  peer: {
+    id: 'peer-1',
+    telegramUserId: '42',
+    username: null,
+    firstName: null,
+    lastName: null,
+    photoUrl: null,
+  },
 });
 
 describe('TelegramCrmConversationService', () => {
@@ -123,6 +137,8 @@ describe('TelegramCrmConversationService', () => {
       'account-default',
     );
     expect(result.mtprotoAccountId).toBe('account-default');
+    expect(result.account).toMatchObject({ id: 'account-default' });
+    expect(result.peer).toMatchObject({ id: 'peer-1', telegramUserId: '42' });
     expect(callArgument(prisma.telegramCrmConversation.create)).toMatchObject({
       data: { mtprotoAccountId: 'account-default' },
     });
@@ -159,6 +175,66 @@ describe('TelegramCrmConversationService', () => {
             telegramCrmPeerId: 'peer-1',
             mtprotoAccountId: 'account-1',
           },
+        },
+      }),
+    );
+  });
+
+  it('returns fixed account and peer summaries for list and deep-link reads', async () => {
+    const enriched = {
+      ...conversation('account-2'),
+      mtprotoAccount: {
+        id: 'account-2',
+        label: 'Manager two',
+        username: 'manager_two',
+        photoUrl: null,
+      },
+      peer: {
+        id: 'peer-1',
+        telegramUserId: '42',
+        username: 'client',
+        firstName: 'Client',
+        lastName: null,
+        photoUrl: 'https://cdn.example/client.jpg',
+      },
+    };
+    const prisma = {
+      telegramCrmConversation: {
+        findMany: jest.fn().mockReturnValue('rows'),
+        count: jest.fn().mockReturnValue('count'),
+        findFirst: jest.fn().mockResolvedValue(enriched),
+      },
+      $transaction: jest.fn().mockResolvedValue([[enriched], 1]),
+    };
+    const authorization = {
+      require: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
+      scope: jest.fn().mockResolvedValue({ assignedMemberId: 'member-1' }),
+    };
+    const service = new TelegramCrmConversationService(
+      prisma as never,
+      authorization as never,
+      {} as never,
+    );
+
+    const listed = await service.list('user-1', { page: 1, pageSize: 25 });
+    const direct = await service.get('user-1', enriched.id);
+
+    expect(listed.items[0]).toMatchObject({
+      mtprotoAccountId: 'account-2',
+      account: { id: 'account-2', username: 'manager_two' },
+      peer: { id: 'peer-1', photoUrl: 'https://cdn.example/client.jpg' },
+    });
+    expect(direct).toMatchObject({
+      id: enriched.id,
+      account: { id: 'account-2' },
+      peer: { telegramUserId: '42' },
+    });
+    expect(prisma.telegramCrmConversation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: enriched.id,
+          workspaceId: 'workspace-1',
+          contact: { ownerMemberId: 'member-1' },
         },
       }),
     );

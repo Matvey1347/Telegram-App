@@ -5,7 +5,7 @@ import { MtprotoAccountsPanel } from "./telegram-account-panels";
 
 const { listAccounts, loginWithQr, startLogin, account } = vi.hoisted(() => ({
   listAccounts: vi.fn(),
-  loginWithQr: vi.fn((..._args: unknown[]) => new Promise(() => undefined)),
+  loginWithQr: vi.fn(() => new Promise(() => undefined)),
   startLogin: vi.fn(),
   account: {
     id: "account-1",
@@ -22,6 +22,23 @@ const { listAccounts, loginWithQr, startLogin, account } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/api", () => ({
+  authApi: {
+    me: vi.fn().mockResolvedValue({
+      user: { id: "user-1", email: "owner@example.com", name: "Owner" },
+      workspace: {
+        id: "workspace-1",
+        name: "Workspace",
+        role: "OWNER",
+        access: {
+          roleId: null,
+          roleVersion: 1,
+          isOwner: true,
+          permissionKeys: [],
+          featureIds: ["adSales.crm"],
+        },
+      },
+    }),
+  },
   telegramUserAccountsApi: {
     list: listAccounts,
     channels: vi.fn().mockResolvedValue([]),

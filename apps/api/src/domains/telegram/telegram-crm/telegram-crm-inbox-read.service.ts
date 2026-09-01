@@ -12,6 +12,35 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 import { CrmInboxQueryDto } from './telegram-crm-inbox.dto';
 import { crmPeerSelect, mapCrmPeer } from './telegram-crm-peer.service';
+import {
+  crmAccountSummarySelect,
+  crmMessagePreviewSelect,
+  mapCrmAccountSummary,
+  mapCrmMessagePreview,
+} from './telegram-crm-read-model.mapper';
+
+export const CRM_INBOX_CONVERSATION_SUMMARY_LIMIT = 5;
+
+const inboxConversationSelect = {
+  id: true,
+  mtprotoAccountId: true,
+  state: true,
+  lastMessageAt: true,
+  lastInboundAt: true,
+  lastOutboundAt: true,
+  unreadCount: true,
+  readState: true,
+  mtprotoAccount: { select: crmAccountSummarySelect },
+  messages: {
+    orderBy: [{ sentAt: 'desc' as const }, { id: 'desc' as const }],
+    take: 1,
+    select: crmMessagePreviewSelect,
+  },
+} satisfies Prisma.TelegramCrmConversationSelect;
+
+type InboxConversationRow = Prisma.TelegramCrmConversationGetPayload<{
+  select: typeof inboxConversationSelect;
+}>;
 
 @Injectable()
 export class TelegramCrmInboxReadService {
@@ -29,12 +58,15 @@ export class TelegramCrmInboxReadService {
       'adSales.crm.viewAny',
     );
     const pagination = normalizePagination(query);
-    const conversationWhere = query.state ? { state: query.state } : {};
-    const where = {
+    const conversationWhere: Prisma.TelegramCrmConversationWhereInput = {
+      contactId: null,
+      ...(query.state ? { state: query.state } : {}),
+    };
+    const where: Prisma.TelegramCrmPeerWhereInput = {
       workspaceId: access.workspaceId,
       contactId: null,
       conversations: { some: conversationWhere },
-    } as const;
+    };
     const activityRows = await this.prisma.$queryRaw<Array<{ id: string }>>(
       Prisma.sql`
         SELECT peer."id"
@@ -59,7 +91,7 @@ export class TelegramCrmInboxReadService {
       `,
     );
     const orderedPeerIds = activityRows.map((row) => row.id);
-    const [rows, totalItems] = await this.prisma.$transaction([
+    const [rows, totalItems, aggregates] = await this.prisma.$transaction([
       this.prisma.telegramCrmPeer.findMany({
         where: { ...where, id: { in: orderedPeerIds } },
         select: {
@@ -67,29 +99,42 @@ export class TelegramCrmInboxReadService {
           conversations: {
             where: conversationWhere,
             orderBy: [
-              {
-                lastMessageAt: {
-                  sort: 'desc' as const,
-                  nulls: 'last' as const,
-                },
-              },
-              { id: 'desc' as const },
+              { lastMessageAt: { sort: 'desc', nulls: 'last' } },
+              { id: 'desc' },
             ],
-            select: {
-              id: true,
-              mtprotoAccountId: true,
-              state: true,
-              lastMessageAt: true,
-              lastInboundAt: true,
-              lastOutboundAt: true,
-              unreadCount: true,
-              readState: true,
-            },
+            take: CRM_INBOX_CONVERSATION_SUMMARY_LIMIT,
+            select: inboxConversationSelect,
           },
         },
       }),
       this.prisma.telegramCrmPeer.count({ where }),
+      this.prisma.telegramCrmConversation.groupBy({
+        by: ['telegramCrmPeerId'] as const,
+        where: {
+          workspaceId: access.workspaceId,
+          telegramCrmPeerId: { in: orderedPeerIds },
+          ...conversationWhere,
+        },
+        orderBy: { telegramCrmPeerId: 'asc' },
+        _count: { _all: true },
+        _sum: { unreadCount: true },
+      }),
     ]);
+    const aggregateByPeerId = new Map(
+      aggregates.map((row) => [
+        row.telegramCrmPeerId,
+        {
+          conversationCount:
+            row._count && typeof row._count === 'object'
+              ? (row._count._all ?? 0)
+              : 0,
+          unreadCount:
+            row._sum && typeof row._sum === 'object'
+              ? (row._sum.unreadCount ?? 0)
+              : 0,
+        },
+      ]),
+    );
     const rowsById = new Map(rows.map((row) => [row.id, row]));
     const orderedRows = orderedPeerIds.flatMap((id) => {
       const row = rowsById.get(id);
@@ -97,28 +142,38 @@ export class TelegramCrmInboxReadService {
     });
     return createPaginatedResponse(
       orderedRows.map((row) => {
-        const { conversations, ...peer } = row;
-        const latest = conversations[0];
-        const latestConversation: CrmInboxConversationSummary | null = latest
-          ? {
-              ...latest,
-              lastMessageAt: latest.lastMessageAt?.toISOString() ?? null,
-              lastInboundAt: latest.lastInboundAt?.toISOString() ?? null,
-              lastOutboundAt: latest.lastOutboundAt?.toISOString() ?? null,
-            }
-          : null;
+        const { conversations: rawConversations, ...peer } = row;
+        const conversations = rawConversations.map((conversation) =>
+          this.mapConversation(conversation),
+        );
+        const aggregate = aggregateByPeerId.get(row.id);
         return {
           peer: mapCrmPeer(peer),
-          conversationCount: conversations.length,
-          unreadCount: conversations.reduce(
-            (sum, conversation) => sum + conversation.unreadCount,
-            0,
-          ),
-          latestConversation,
+          conversationCount: aggregate?.conversationCount ?? 0,
+          unreadCount: aggregate?.unreadCount ?? 0,
+          conversations,
+          latestConversation: conversations[0] ?? null,
         };
       }),
       totalItems,
       pagination,
     );
+  }
+
+  private mapConversation(
+    row: InboxConversationRow,
+  ): CrmInboxConversationSummary {
+    return {
+      id: row.id,
+      mtprotoAccountId: row.mtprotoAccountId,
+      state: row.state,
+      lastMessageAt: row.lastMessageAt?.toISOString() ?? null,
+      lastInboundAt: row.lastInboundAt?.toISOString() ?? null,
+      lastOutboundAt: row.lastOutboundAt?.toISOString() ?? null,
+      unreadCount: row.unreadCount,
+      readState: row.readState,
+      account: mapCrmAccountSummary(row.mtprotoAccount),
+      lastMessage: mapCrmMessagePreview(row.messages[0]),
+    };
   }
 }

@@ -57,6 +57,7 @@ export function useAdSaleModalSession(
     initialChannelId,
     initialScheduledAt,
     initialInventoryOpportunityKey,
+    initialAdvertiser,
     sessionOpen,
   }: AdSaleModalProps,
   {
@@ -121,10 +122,10 @@ export function useAdSaleModalSession(
     if (modalInitializedRef.current) return;
     modalInitializedRef.current = true;
     draftReadyRef.current = false;
-    setAdvertiserTelegram("");
-    setAdvertiserContact("");
-    setSelectedAdvertiser(null);
-    setSelectedAdvertiserId(null);
+    setAdvertiserTelegram(initialAdvertiser?.telegramUsername ?? "");
+    setAdvertiserContact(initialAdvertiser?.telegramUsername ?? initialAdvertiser?.email ?? initialAdvertiser?.phone ?? "");
+    setSelectedAdvertiser(initialAdvertiser ?? null);
+    setSelectedAdvertiserId(initialAdvertiser?.id ?? null);
     setAdvertiserMatches([]);
     setAssignedMemberId("");
     setSaleOrigin("DIRECT");
@@ -169,6 +170,7 @@ export function useAdSaleModalSession(
     defaultCurrency,
     initialChannelId,
     initialInventoryOpportunityKey,
+    initialAdvertiser,
     initialScheduledAt,
     open,
     productsByChannelId,

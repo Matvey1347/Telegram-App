@@ -75,6 +75,23 @@ describe('WorkspaceAuthorizationService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('combines the CRM base view grant with its explicit own scope', async () => {
+    const { service } = setup({
+      permissionKeys: ['adSales.crm.view', 'adSales.crm.viewOwn'],
+    });
+
+    await expect(
+      service.require('user-1', 'adSales.crm.view'),
+    ).resolves.toBeDefined();
+    await expect(
+      service.scope(
+        'user-1',
+        'adSales.crm.viewOwn',
+        'adSales.crm.viewAny',
+      ),
+    ).resolves.toEqual({ assignedMemberId: 'member-1' });
+  });
+
   it('allows any and delete-any access without ownership restriction', async () => {
     const { service } = setup({
       permissionKeys: ['finance.editAny', 'finance.deleteAny'],

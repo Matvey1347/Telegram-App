@@ -36,6 +36,7 @@ export function AdSalesCheckoutDialogs({
   paymentSale,
   setPaymentSale,
   refreshSaleAfterMutation,
+  initialAdvertiser,
 }: {
   adSaleModalOpen: boolean;
   setAdSaleModalOpen: Dispatch<SetStateAction<boolean>>;
@@ -57,6 +58,7 @@ export function AdSalesCheckoutDialogs({
     saleId: string,
     channelIds: string[],
   ) => Promise<void>;
+  initialAdvertiser?: ComponentProps<typeof AdSaleModal>["initialAdvertiser"];
 }) {
   return (
     <>
@@ -74,6 +76,7 @@ export function AdSalesCheckoutDialogs({
         initialInventoryOpportunityKey={
           adSaleSeedSlot?.inventoryOpportunityKey ?? null
         }
+        initialAdvertiser={initialAdvertiser}
         systemBotConnected={systemBotConnected}
         systemBotUsername={systemBotUsername}
         onPrepareSystemBot={async () => {

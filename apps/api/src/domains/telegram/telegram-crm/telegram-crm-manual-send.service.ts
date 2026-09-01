@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  Prisma,
   TelegramCrmDeliveryState,
   TelegramCrmMessageDirection,
   TelegramCrmMessageOrigin,
@@ -18,10 +19,27 @@ import { SendCrmManualMessageDto } from './telegram-crm-inbox.dto';
 import {
   crmMessageSelect,
   mapCrmMessage,
-  type CrmMessageRow,
 } from './telegram-crm-message.mapper';
+import {
+  crmMemberSummarySelect,
+  mapCrmMemberSummary,
+} from './telegram-crm-read-model.mapper';
 import { TelegramCrmRuntimeManager } from './telegram-crm-runtime-manager.service';
 import { isPrismaUniqueConflict } from './telegram-crm-prisma-errors';
+
+const crmManualMessageSelect = {
+  ...crmMessageSelect,
+  sentByMember: { select: crmMemberSummarySelect },
+} satisfies Prisma.TelegramCrmMessageSelect;
+
+type CrmManualMessageRow = Prisma.TelegramCrmMessageGetPayload<{
+  select: typeof crmManualMessageSelect;
+}>;
+
+const mapCrmManualMessage = (row: CrmManualMessageRow) => ({
+  ...mapCrmMessage(row),
+  sentByMember: mapCrmMemberSummary(row.sentByMember ?? null),
+});
 
 @Injectable()
 export class TelegramCrmManualSendService {
@@ -68,7 +86,7 @@ export class TelegramCrmManualSendService {
     );
     const replay = await this.findReplay(conversation.id, key, text);
     if (replay)
-      return { message: mapCrmMessage(replay), idempotentReplay: true };
+      return { message: mapCrmManualMessage(replay), idempotentReplay: true };
 
     const sent = await this.runtime.withAccountHandle(
       access.workspaceId,
@@ -107,7 +125,7 @@ export class TelegramCrmManualSendService {
       },
     );
     let transactionResult: {
-      row: CrmMessageRow;
+      row: CrmManualMessageRow;
       replay: boolean;
     };
     try {
@@ -119,7 +137,7 @@ export class TelegramCrmManualSendService {
               clientIdempotencyKey: key,
             },
           },
-          select: crmMessageSelect,
+          select: crmManualMessageSelect,
         });
         if (replayInside) {
           if (replayInside.text !== text) {
@@ -136,7 +154,7 @@ export class TelegramCrmManualSendService {
               telegramMessageId: String(sent.telegramMessageId),
             },
           },
-          select: crmMessageSelect,
+          select: crmManualMessageSelect,
         });
         if (
           echo &&
@@ -160,7 +178,7 @@ export class TelegramCrmManualSendService {
                 sentAt: sent.sentAt,
                 deliveryState: TelegramCrmDeliveryState.SENT,
               },
-              select: crmMessageSelect,
+              select: crmManualMessageSelect,
             })
           : await tx.telegramCrmMessage.create({
               data: {
@@ -177,7 +195,7 @@ export class TelegramCrmManualSendService {
                 sentAt: sent.sentAt,
                 deliveryState: TelegramCrmDeliveryState.SENT,
               },
-              select: crmMessageSelect,
+              select: crmManualMessageSelect,
             });
         await tx.telegramCrmConversation.update({
           where: { id: conversation.id },
@@ -204,7 +222,7 @@ export class TelegramCrmManualSendService {
       if (!replayAfterRace) throw error;
       transactionResult = { row: replayAfterRace, replay: true };
     }
-    const message = mapCrmMessage(transactionResult.row);
+    const message = mapCrmManualMessage(transactionResult.row);
     if (transactionResult.replay) {
       return { message, idempotentReplay: true };
     }
@@ -247,7 +265,7 @@ export class TelegramCrmManualSendService {
           clientIdempotencyKey: key,
         },
       },
-      select: crmMessageSelect,
+      select: crmManualMessageSelect,
     });
     if (existing && existing.text !== text) {
       throw new ConflictException(

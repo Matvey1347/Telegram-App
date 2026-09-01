@@ -1,6 +1,14 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { CrmConversation } from '@telegram-system/shared';
+import type {
+  CrmConversation,
+  CrmConversationListItem,
+  CrmConversationsListResult,
+} from '@telegram-system/shared';
 import {
   createPaginatedResponse,
   normalizePagination,
@@ -13,6 +21,12 @@ import {
   CrmConversationsQueryDto,
 } from './telegram-crm.dto';
 import { isPrismaUniqueConflict } from './telegram-crm-prisma-errors';
+import {
+  crmAccountSummarySelect,
+  crmPeerSummarySelect,
+  mapCrmAccountSummary,
+  mapCrmPeerSummary,
+} from './telegram-crm-read-model.mapper';
 
 export const crmConversationSelect = {
   id: true,
@@ -44,6 +58,16 @@ type ConversationRow = Prisma.TelegramCrmConversationGetPayload<{
   select: typeof crmConversationSelect;
 }>;
 
+const crmConversationListSelect = {
+  ...crmConversationSelect,
+  mtprotoAccount: { select: crmAccountSummarySelect },
+  peer: { select: crmPeerSummarySelect },
+} satisfies Prisma.TelegramCrmConversationSelect;
+
+type ConversationListRow = Prisma.TelegramCrmConversationGetPayload<{
+  select: typeof crmConversationListSelect;
+}>;
+
 export const mapCrmConversation = (row: ConversationRow): CrmConversation => ({
   ...row,
   lastMessageAt: row.lastMessageAt?.toISOString() ?? null,
@@ -53,6 +77,14 @@ export const mapCrmConversation = (row: ConversationRow): CrmConversation => ({
   lastMeaningfulSyncAt: row.lastMeaningfulSyncAt?.toISOString() ?? null,
   createdAt: row.createdAt.toISOString(),
   updatedAt: row.updatedAt.toISOString(),
+});
+
+const mapCrmConversationListItem = (
+  row: ConversationListRow,
+): CrmConversationListItem => ({
+  ...mapCrmConversation(row),
+  account: mapCrmAccountSummary(row.mtprotoAccount),
+  peer: mapCrmPeerSummary(row.peer),
 });
 
 @Injectable()
@@ -93,9 +125,9 @@ export class TelegramCrmConversationService {
           mtprotoAccountId: accountId,
           telegramDialogId: peer.telegramUserId,
         },
-        select: crmConversationSelect,
+        select: crmConversationListSelect,
       });
-      return mapCrmConversation(row);
+      return mapCrmConversationListItem(row);
     } catch (error) {
       if (!isPrismaUniqueConflict(error)) throw error;
       const existing = await this.prisma.telegramCrmConversation.findUnique({
@@ -106,14 +138,17 @@ export class TelegramCrmConversationService {
             mtprotoAccountId: accountId,
           },
         },
-        select: crmConversationSelect,
+        select: crmConversationListSelect,
       });
       if (!existing) throw error;
-      return mapCrmConversation(existing);
+      return mapCrmConversationListItem(existing);
     }
   }
 
-  async list(userId: string, query: CrmConversationsQueryDto) {
+  async list(
+    userId: string,
+    query: CrmConversationsQueryDto,
+  ): Promise<CrmConversationsListResult> {
     const access = await this.authorization.require(userId, 'adSales.crm.view');
     const ownership = await this.authorization.scope(
       userId,
@@ -136,7 +171,7 @@ export class TelegramCrmConversationService {
     const [rows, totalItems] = await this.prisma.$transaction([
       this.prisma.telegramCrmConversation.findMany({
         where,
-        select: crmConversationSelect,
+        select: crmConversationListSelect,
         orderBy: [
           { lastMessageAt: { sort: 'desc', nulls: 'last' } },
           { id: 'desc' },
@@ -147,10 +182,34 @@ export class TelegramCrmConversationService {
       this.prisma.telegramCrmConversation.count({ where }),
     ]);
     return createPaginatedResponse(
-      rows.map(mapCrmConversation),
+      rows.map(mapCrmConversationListItem),
       totalItems,
       pagination,
     );
+  }
+
+  async get(
+    userId: string,
+    conversationId: string,
+  ): Promise<CrmConversationListItem> {
+    const access = await this.authorization.require(userId, 'adSales.crm.view');
+    const ownership = await this.authorization.scope(
+      userId,
+      'adSales.crm.viewOwn',
+      'adSales.crm.viewAny',
+    );
+    const row = await this.prisma.telegramCrmConversation.findFirst({
+      where: {
+        id: conversationId,
+        workspaceId: access.workspaceId,
+        ...('assignedMemberId' in ownership
+          ? { contact: { ownerMemberId: ownership.assignedMemberId } }
+          : {}),
+      },
+      select: crmConversationListSelect,
+    });
+    if (!row) throw new NotFoundException('CRM Conversation not found');
+    return mapCrmConversationListItem(row);
   }
 
   private async requireWriteAccess(

@@ -12,6 +12,7 @@ import {
   TelegramCardActionsMenu,
   TelegramCardMenuAction,
 } from "./telegram-card-actions-menu";
+import { TelegramCrmAccountCapabilities } from "./telegram-crm-account-capabilities";
 
 function displayName(account: TelegramUserAccount) {
   const username = String(account.username || "").replace(/^@/, "");
@@ -135,6 +136,7 @@ export function TelegramMtprotoAccountCard({
           </Button>
         ) : null}
       </div>
+      <TelegramCrmAccountCapabilities account={account} />
       {children}
     </article>
   );

@@ -3,9 +3,9 @@
 ## Scope
 
 This document defines the Stage 1 persistence, contract, authorization, and
-rollout-safety foundation together with the Stage 2 multi-account MTProto CRM
-runtime and Inbox use cases. It does not add a full CRM frontend,
-customer-message automation runners, a durable queue, or a PWA.
+rollout-safety foundation, the Stage 2 multi-account MTProto CRM runtime and
+Inbox use cases, and the Stage 3 Contact-centered web application. It does not
+add customer-message automation runners, a durable queue, or a PWA.
 
 The existing Ad Sales product remains intact. `TelegramAdvertiser` is the
 physical backing record for a CRM Contact, and `TelegramAdSale` remains the
@@ -45,6 +45,37 @@ under `apps/api/src/telegram/shared`.
 Legacy `/telegram-ad-sales/advertisers*` and CRM task routes remain compatible,
 but a focused facade applies the same Contact view-own/view-any and
 edit-own/edit-any policy before delegating to the existing Ad Sales use cases.
+
+## Contact-centered web application
+
+`/ad-sales` is the CRM Contacts entry point while the existing Sales, Calendar,
+and Analytics routes continue to render their established Ad Sales use cases.
+`/ad-sales/clients` remains a compatible Contacts alias. Contact and
+account-specific Conversation identifiers are encoded in stable nested routes,
+so a reload never merges account threads or loses the selected context.
+
+The web read path uses compact Contact, Inbox, Conversation, unread, and
+cursor-paginated Message models. Full Message history is never embedded in a
+Contact or collection response. Contact detail collections stay bounded and
+the existing Ad Sales endpoints remain authoritative for full Deal, placement,
+payment, pricing, availability, publication, calendar, and analytics behavior.
+
+CRM React Query state uses its own workspace-scoped, non-persisted key family.
+Realtime events patch the affected Message, Conversation, Contact, Inbox, or
+unread cache; there is no API polling or root-wide CRM invalidation. After a
+bounded stream reconnect, only the active surface is revalidated.
+
+Manual Message composition is independent of customer automation. It replies
+through the Conversation's fixed MTProto account, uses an idempotency key for
+optimistic reconciliation and retry, and becomes read-only when permission or
+account capability is missing. Starting a new Conversation is the only place
+where the workspace default CRM sender may be consulted.
+
+Automation controls display migrated Contacts as off and migrated Deals as
+protected. Contact enablement and Deal eligibility require separate explicit
+user actions guarded by automation-management permission. Inbox promotion,
+stage changes, Deal/payment/publication actions, CRM Sync, and CRM Send never
+enable customer automation.
 
 ## Contact and stage
 

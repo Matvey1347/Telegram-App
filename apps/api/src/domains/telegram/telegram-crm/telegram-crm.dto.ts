@@ -14,9 +14,13 @@ import {
 } from 'class-validator';
 import {
   CRM_CONTACT_STAGES,
+  CRM_AUTOMATION_OVERRIDES,
+  CRM_FOLLOW_UP_VIEWS,
   CRM_MESSAGE_DIRECTIONS,
   CRM_MESSAGE_ORIGINS,
   type CrmContactStage,
+  type CrmAutomationOverride,
+  type CrmFollowUpView,
   type CrmMessageDirection,
   type CrmMessageOrigin,
 } from '@telegram-system/shared';
@@ -29,6 +33,9 @@ export class CrmContactsQueryDto extends PaginationQueryDto {
   @IsOptional() @IsString() @MaxLength(120) search?: string;
   @IsOptional() @IsIn(CRM_CONTACT_STAGES) stage?: CrmContactStage;
   @IsOptional() @IsString() ownerMemberId?: string;
+  @IsOptional() @IsIn(CRM_FOLLOW_UP_VIEWS) followUpView?: CrmFollowUpView;
+  @IsOptional() @IsDateString() dueFrom?: string;
+  @IsOptional() @IsDateString() dueTo?: string;
   @IsOptional()
   @Transform(({ value }) =>
     value === true || value === 'true'
@@ -147,7 +154,24 @@ export class CrmConversationsQueryDto extends PaginationQueryDto {
   state?: 'ACTIVE' | 'IGNORED' | 'ARCHIVED';
 }
 
-export class CrmMessagesQueryDto extends PaginationQueryDto {}
+export class CrmMessagesQueryDto {
+  @IsOptional() @IsString() @MaxLength(2_000) cursor?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize?: number = 50;
+
+  /** Temporary alias for cursor consumers that conventionally call it limit. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+}
 
 export class UpdateCrmWorkspaceSettingsDto {
   @IsOptional() @IsString() defaultCrmSenderAccountId?: string | null;
@@ -161,6 +185,10 @@ export class UpdateCrmAccountCapabilitiesDto {
   @IsOptional() @IsBoolean() crmSyncEnabled?: boolean;
   @IsOptional() @IsBoolean() crmSendEnabled?: boolean;
   @IsOptional() @IsBoolean() mtprotoPublishingEnabled?: boolean;
+}
+
+export class UpdateCrmDealAutomationDto {
+  @IsIn(CRM_AUTOMATION_OVERRIDES) override!: CrmAutomationOverride;
 }
 
 /** Internal-only input used by sync/sending adapters in later stages. */

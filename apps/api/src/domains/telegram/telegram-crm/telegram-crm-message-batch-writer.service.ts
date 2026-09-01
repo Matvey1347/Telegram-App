@@ -156,7 +156,7 @@ export class TelegramCrmMessageBatchWriter {
           conversationId: message.conversationId,
           contactId: input?.conversation.contactId ?? null,
           ownerMemberId: input?.conversation.contact?.ownerMemberId ?? null,
-          message,
+          message: { ...message, sentByMember: null },
         });
       }
     }

@@ -12,12 +12,14 @@ export function MemberSelect({
   onChange,
   includeAll = false,
   defaultToCurrent = false,
+  allowAssignOthers,
   disabled,
 }: {
   value?: string | null;
   onChange: (value: string) => void;
   includeAll?: boolean;
   defaultToCurrent?: boolean;
+  allowAssignOthers?: boolean;
   disabled?: boolean;
 }) {
   const { workspace } = useAuth();
@@ -26,8 +28,8 @@ export function MemberSelect({
     queryFn: () => workspaceMembersApi.select(),
   });
   const current = members.data?.find((member) => member.isCurrentUser);
-  const canAssignOthers =
-    workspace?.role === 'owner' || workspace?.role === 'admin';
+  const canAssignOthers = allowAssignOthers ??
+    (workspace?.role === 'owner' || workspace?.role === 'admin');
 
   useEffect(() => {
     if (defaultToCurrent && !value && current?.id) onChange(current.id);

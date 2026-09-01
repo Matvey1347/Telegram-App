@@ -88,7 +88,13 @@ describe('TelegramCrmManualSendService', () => {
           .fn()
           .mockResolvedValueOnce(null)
           .mockResolvedValueOnce(null),
-        create: jest.fn().mockResolvedValue(messageRow),
+        create: jest.fn().mockResolvedValue({
+          ...messageRow,
+          sentByMember: {
+            id: 'member-1',
+            user: { name: 'Alice', email: 'alice@example.com' },
+          },
+        }),
       },
       telegramCrmConversation: { update: jest.fn() },
       telegramAdvertiser: { update: jest.fn() },
@@ -122,6 +128,11 @@ describe('TelegramCrmManualSendService', () => {
       message: {
         origin: 'MANUAL',
         sentByMemberId: 'member-1',
+        sentByMember: {
+          id: 'member-1',
+          name: 'Alice',
+          email: 'alice@example.com',
+        },
         mtprotoAccountId: 'account-fixed',
       },
     });

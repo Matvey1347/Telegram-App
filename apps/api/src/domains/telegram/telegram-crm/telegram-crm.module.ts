@@ -7,6 +7,7 @@ import { TelegramCrmContactCommandService } from './telegram-crm-contact-command
 import { TelegramCrmContactReadService } from './telegram-crm-contact-read.service';
 import { TelegramCrmController } from './telegram-crm.controller';
 import { TelegramCrmConversationService } from './telegram-crm-conversation.service';
+import { TelegramCrmDealAutomationService } from './telegram-crm-deal-automation.service';
 import { TelegramCrmManualMessagePolicyService } from './telegram-crm-manual-message-policy.service';
 import { TelegramCrmManualMessageEligibilityService } from './telegram-crm-manual-message-eligibility.service';
 import { TelegramCrmMessageReadService } from './telegram-crm-message-read.service';
@@ -49,6 +50,7 @@ import { TelegramCrmRuntimeManager } from './telegram-crm-runtime-manager.servic
     TelegramCrmContactCommandService,
     TelegramCrmContactReadService,
     TelegramCrmConversationService,
+    TelegramCrmDealAutomationService,
     TelegramCrmManualMessagePolicyService,
     TelegramCrmManualMessageEligibilityService,
     TelegramCrmMessageReadService,
