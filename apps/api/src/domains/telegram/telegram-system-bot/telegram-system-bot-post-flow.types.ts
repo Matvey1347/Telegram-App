@@ -42,6 +42,7 @@ export type TelegramSystemBotPostFlowScope = {
   telegramUserId: string;
   chatId: string;
   timezone: string;
+  locale?: import('@telegram-system/shared').AppLocale;
 };
 
 export type TelegramSystemBotPostWorkflow = Awaited<

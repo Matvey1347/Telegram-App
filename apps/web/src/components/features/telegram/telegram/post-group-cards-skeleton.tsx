@@ -1,11 +1,14 @@
+
 import { Skeleton } from "@/components/ui/primitives";
+import { useI18n } from "@/providers/i18n-provider";
 
 export function PostGroupCardsSkeleton({ count }: { count: number }) {
+  const { t } = useI18n();
   return (
     <div
       className="grid gap-3 md:grid-cols-2 xl:grid-cols-3"
       role="status"
-      aria-label="Loading post groups"
+      aria-label={t("telegram.posts.support.loadingGroups")}
     >
       {Array.from({ length: count }, (_, index) => (
         <div

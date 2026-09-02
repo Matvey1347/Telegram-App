@@ -61,6 +61,7 @@ export type User = {
   name: string;
   createdAt?: string;
   editorShortcuts?: EditorShortcutPreferences;
+  locale?: "en" | "ru";
 };
 export type AuthResponse = {
   accessToken: string;
@@ -82,6 +83,7 @@ export type AccountMe = {
   email: string;
   name: string;
   editorShortcuts?: EditorShortcutPreferences;
+  locale?: "en" | "ru";
   createdAt: string;
   avatarIconId?: string | null;
   avatarIcon?: Icon | null;

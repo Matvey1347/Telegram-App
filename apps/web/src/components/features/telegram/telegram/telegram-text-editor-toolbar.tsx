@@ -1,9 +1,11 @@
 "use client";
 
+
 import { Braces, ChevronDown, Heading, Link as LinkIcon, List, ListOrdered, MousePointerClick, Quote, Settings2, Sigma, SmilePlus, Table2, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import type { EditorCommandId } from "@telegram-system/shared";
 import { editorWrapActions } from "./telegram-text-editor-commands";
+import { useI18n } from "@/providers/i18n-provider";
 
 export function TelegramTextEditorToolbar({ disabled, hasButtons, onCommand, onHeading, onPullQuoteWithAuthor, onConfigure }: {
   disabled?: boolean;
@@ -13,31 +15,40 @@ export function TelegramTextEditorToolbar({ disabled, hasButtons, onCommand, onH
   onPullQuoteWithAuthor: () => void;
   onConfigure: () => void;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState<"heading" | "quote" | "list" | null>(null);
   const select = (action: () => void) => { action(); setOpen(null); };
+  const wrapLabels: Partial<Record<EditorCommandId, string>> = {
+    bold: t("telegram.posts.editorComponents.format.bold"),
+    italic: t("telegram.posts.editorComponents.format.italic"),
+    underline: t("telegram.posts.editorComponents.format.underline"),
+    strikethrough: t("telegram.posts.editorComponents.format.strikethrough"),
+    spoiler: t("telegram.posts.editorComponents.format.spoiler"),
+    inlineCode: t("telegram.posts.editorComponents.format.inlineCode"),
+  };
   return <div className="flex flex-wrap items-center gap-1 border-b border-neutral-700 bg-neutral-950/70 p-2">
-    {editorWrapActions.map(({ id, label, icon }) => <ToolbarButton key={id} label={label} icon={icon} disabled={disabled} onClick={() => onCommand(id)} />)}
+    {editorWrapActions.map(({ id, icon }) => <ToolbarButton key={id} label={wrapLabels[id]!} icon={icon} disabled={disabled} onClick={() => onCommand(id)} />)}
     <span className="mx-1 h-6 w-px bg-neutral-700" />
-    <ToolbarButton label="Code block" icon={Braces} disabled={disabled} onClick={() => onCommand("codeBlock")} />
-    <ToolbarMenu label="Quote" icon={Quote} open={open === "quote"} disabled={disabled} onToggle={() => setOpen(open === "quote" ? null : "quote")}>
-      <MenuItem icon={Quote} label="Quote" onClick={() => select(() => onCommand("quote"))} />
-      <MenuItem icon={Quote} label="Pull quote" onClick={() => select(() => onCommand("pullQuote"))} />
-      <MenuItem icon={Quote} label="Pull quote with author" onClick={() => select(onPullQuoteWithAuthor)} />
+    <ToolbarButton label={t("telegram.posts.editorComponents.format.codeBlock")} icon={Braces} disabled={disabled} onClick={() => onCommand("codeBlock")} />
+    <ToolbarMenu label={t("telegram.posts.editorComponents.format.quote")} icon={Quote} open={open === "quote"} disabled={disabled} onToggle={() => setOpen(open === "quote" ? null : "quote")}>
+      <MenuItem icon={Quote} label={t("telegram.posts.editorComponents.format.quote")} onClick={() => select(() => onCommand("quote"))} />
+      <MenuItem icon={Quote} label={t("telegram.posts.editorComponents.format.pullQuote")} onClick={() => select(() => onCommand("pullQuote"))} />
+      <MenuItem icon={Quote} label={t("telegram.posts.editorComponents.format.pullQuoteWithAuthor")} onClick={() => select(onPullQuoteWithAuthor)} />
     </ToolbarMenu>
-    <ToolbarMenu label="Heading" icon={Heading} open={open === "heading"} disabled={disabled} onToggle={() => setOpen(open === "heading" ? null : "heading")}>
-      {[1, 2, 3, 4, 5, 6].map((level) => <MenuItem key={level} icon={Heading} label={`Heading ${level}`} onClick={() => select(() => onHeading(level))} />)}
+    <ToolbarMenu label={t("telegram.posts.editorComponents.format.heading")} icon={Heading} open={open === "heading"} disabled={disabled} onToggle={() => setOpen(open === "heading" ? null : "heading")}>
+      {[1, 2, 3, 4, 5, 6].map((level) => <MenuItem key={level} icon={Heading} label={t("telegram.posts.editorComponents.format.headingLevel", { level })} onClick={() => select(() => onHeading(level))} />)}
     </ToolbarMenu>
-    <ToolbarMenu label="List" icon={List} open={open === "list"} disabled={disabled} onToggle={() => setOpen(open === "list" ? null : "list")}>
-      <MenuItem icon={List} label="Bulleted list" onClick={() => select(() => onCommand("bulletedList"))} />
-      <MenuItem icon={ListOrdered} label="Numbered list" onClick={() => select(() => onCommand("numberedList"))} />
+    <ToolbarMenu label={t("telegram.posts.editorComponents.format.list")} icon={List} open={open === "list"} disabled={disabled} onToggle={() => setOpen(open === "list" ? null : "list")}>
+      <MenuItem icon={List} label={t("telegram.posts.editorComponents.format.bulletedList")} onClick={() => select(() => onCommand("bulletedList"))} />
+      <MenuItem icon={ListOrdered} label={t("telegram.posts.editorComponents.format.numberedList")} onClick={() => select(() => onCommand("numberedList"))} />
     </ToolbarMenu>
-    <ToolbarButton label="Table" icon={Table2} disabled={disabled} onClick={() => onCommand("table")} />
-    <ToolbarButton label="Formula" icon={Sigma} disabled={disabled} onClick={() => onCommand("formula")} />
+    <ToolbarButton label={t("telegram.posts.editorComponents.format.table")} icon={Table2} disabled={disabled} onClick={() => onCommand("table")} />
+    <ToolbarButton label={t("telegram.posts.editorComponents.format.formula")} icon={Sigma} disabled={disabled} onClick={() => onCommand("formula")} />
     <span className="mx-1 h-6 w-px bg-neutral-700" />
-    <ToolbarButton label="Insert link" icon={LinkIcon} disabled={disabled} onClick={() => onCommand("link")} />
-    <ToolbarButton label="Emoji" icon={SmilePlus} disabled={disabled} onClick={() => onCommand("emoji")} />
-    {hasButtons ? <ToolbarButton label="Inline buttons" icon={MousePointerClick} disabled={disabled} onClick={() => onCommand("buttons")} /> : null}
-    <ToolbarButton label="Configure editor shortcuts" icon={Settings2} disabled={disabled} onClick={onConfigure} />
+    <ToolbarButton label={t("telegram.posts.editorComponents.format.insertLink")} icon={LinkIcon} disabled={disabled} onClick={() => onCommand("link")} />
+    <ToolbarButton label={t("telegram.posts.editorComponents.format.emoji")} icon={SmilePlus} disabled={disabled} onClick={() => onCommand("emoji")} />
+    {hasButtons ? <ToolbarButton label={t("telegram.posts.editorComponents.inlineButtons.title")} icon={MousePointerClick} disabled={disabled} onClick={() => onCommand("buttons")} /> : null}
+    <ToolbarButton label={t("telegram.posts.editorComponents.shortcuts.configure")} icon={Settings2} disabled={disabled} onClick={onConfigure} />
   </div>;
 }
 

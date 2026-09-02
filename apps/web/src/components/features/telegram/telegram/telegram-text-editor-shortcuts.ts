@@ -1,28 +1,27 @@
 import type { EditorCommandId, EditorShortcutPreferences } from "@telegram-system/shared";
 
-export const editorCommandDetails: Array<{
-  id: EditorCommandId;
-  label: string;
-  description: string;
-}> = [
-  { id: "bold", label: "Bold", description: "Emphasize selected text" },
-  { id: "italic", label: "Italic", description: "Add italic formatting" },
-  { id: "underline", label: "Underline", description: "Underline selected text" },
-  { id: "strikethrough", label: "Strikethrough", description: "Strike through selected text" },
-  { id: "spoiler", label: "Spoiler", description: "Hide text behind a spoiler" },
-  { id: "inlineCode", label: "Inline code", description: "Format a code fragment" },
-  { id: "codeBlock", label: "Code block", description: "Insert a multiline code block" },
-  { id: "quote", label: "Quote", description: "Turn selected lines into a quote" },
-  { id: "pullQuote", label: "Pull quote", description: "Insert an emphasized quote block" },
-  { id: "heading", label: "Heading", description: "Turn selected lines into a heading" },
-  { id: "bulletedList", label: "Bulleted list", description: "Start a bulleted list" },
-  { id: "numberedList", label: "Numbered list", description: "Start a numbered list" },
-  { id: "table", label: "Table", description: "Insert a table" },
-  { id: "formula", label: "Formula", description: "Insert a formula block" },
-  { id: "link", label: "Insert link", description: "Add a link to selected text" },
-  { id: "emoji", label: "Insert emoji", description: "Open the emoji picker" },
-  { id: "buttons", label: "Buttons", description: "Edit the post buttons" },
-];
+const editorCommandIds = [
+  "bold",
+  "italic",
+  "underline",
+  "strikethrough",
+  "spoiler",
+  "inlineCode",
+  "codeBlock",
+  "quote",
+  "pullQuote",
+  "heading",
+  "bulletedList",
+  "numberedList",
+  "table",
+  "formula",
+  "link",
+  "emoji",
+  "buttons",
+] as const satisfies readonly EditorCommandId[];
+
+export const editorCommandDetails: Array<{ id: EditorCommandId }> =
+  editorCommandIds.map((id) => ({ id }));
 
 export const defaultEditorShortcuts: EditorShortcutPreferences = {
   bold: "Mod+B",

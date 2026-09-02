@@ -4,9 +4,12 @@
 import { useEffect, useRef, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { uiCopy, type UiLocale } from "@/lib/ui-i18n";
+import { useOptionalI18n } from "@/providers/i18n-provider";
 
 export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  const locale = props.lang === "ru" ? "ru-RU" : undefined;
+  const i18n = useOptionalI18n();
+  const locale = props.lang === "ru" || i18n?.locale === "ru" ? "ru-RU" : "en-GB";
+  const ui = uiCopy(i18n?.locale);
   const formatLocalDate = (date: Date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -117,7 +120,7 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   const selectedIso = value || "";
   const display = selectedIso
     ? selectedIso.split("-").reverse().join(".")
-    : props.placeholder || "Select date";
+    : props.placeholder || ui.selectStartDate;
 
   return (
     <div ref={rootRef} className="relative">
@@ -198,7 +201,7 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
               className="text-neutral-400 hover:text-white"
               onClick={() => commit("")}
             >
-              Clear
+              {ui.clear}
             </button>
             <button
               type="button"
@@ -210,7 +213,7 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
                 setOpen(false);
               }}
             >
-              Today
+              {ui.today}
             </button>
           </div>
         </div>
@@ -282,7 +285,9 @@ export function DateRangeInput({
   placeholder,
   uiLocale,
 }: DateRangeInputProps) {
-  const ui = uiCopy(uiLocale);
+  const i18n = useOptionalI18n();
+  const effectiveLocale = uiLocale ?? i18n?.locale;
+  const ui = uiCopy(effectiveLocale);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const [openUp, setOpenUp] = useState(false);
@@ -375,9 +380,9 @@ export function DateRangeInput({
             </button>
             <p className="text-sm font-medium">
               {cursor.toLocaleString(
-                uiLocale === "uk"
+                effectiveLocale === "uk"
                   ? "uk-UA"
-                  : uiLocale === "ru"
+                  : effectiveLocale === "ru"
                     ? "ru-RU"
                     : "en-US",
                 {
@@ -453,4 +458,3 @@ export function DateRangeInput({
     </div>
   );
 }
-

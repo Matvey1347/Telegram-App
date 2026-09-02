@@ -164,6 +164,22 @@ the same change after the final measured scan.
 - `apps/web`: Next.js App Router frontend with React Query and Tailwind v4 CSS.
 - `packages/shared`: serializable cross-stack contracts.
 
+## 2026-08-31 Modular internationalization foundation
+
+The internal product is gaining a locale-neutral domain contract and modular
+presentation catalogs. The first translated slice covers the global navigation
+and the complete Telegram Posts workspace (editor, groups, calendar and its
+supporting modals). Locale persistence, SSR cookie mirroring, feature namespace
+registration, typed keys and CI catalog validation form the reusable foundation
+for later sections and languages.
+
+HTTP errors in this slice move toward stable machine codes and structured
+parameters; backend translation is reserved for direct outbound bot,
+notification, email and export presentation. Catalog loading is route/feature
+scoped, with heavy subfeatures eligible for lazy loading. The implementation
+adds no polling, recurring database work or per-entity locale lookup. See
+`docs/architecture/I18N.md` for the contract.
+
 The main architectural issue is concentrated handwritten production files that combine unrelated responsibilities. The former 12978-line Telegram channels god-service is now a 255-line checker-counted compatibility facade over focused use-case providers. The largest remaining backend file is `apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.service.ts` at 5,825 checker-counted lines; the largest frontend file is `apps/web/src/app/(internal)/(telegram)/telegram-posts/page.tsx` at 8,564 checker-counted lines.
 
 ## Metrics Before Refactoring

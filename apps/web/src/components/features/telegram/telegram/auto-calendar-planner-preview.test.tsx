@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
+import { renderWithI18n as render } from "@/test/render-with-i18n";
 import { describe, expect, it, vi } from "vitest";
 import { AutoCalendarPlannerPreview } from "./auto-calendar-planner-preview";
 
@@ -87,7 +88,7 @@ describe("AutoCalendarPlannerPreview", () => {
 
     expect(screen.getAllByText("🧠").length).toBeGreaterThan(0);
     fireEvent.click(
-      screen.getByRole("button", { name: "Open First post in new tab" }),
+      screen.getByRole("button", { name: "Open First post in a new tab" }),
     );
     expect(onOpenPostInNewTab).toHaveBeenCalledWith("post-1");
 

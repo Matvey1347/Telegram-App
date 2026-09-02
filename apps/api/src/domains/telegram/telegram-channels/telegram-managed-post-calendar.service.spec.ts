@@ -82,7 +82,34 @@ describe('TelegramManagedPostCalendarService', () => {
         from: '2025-01-01T00:00:00.000Z',
         to: '2026-08-01T00:00:00.000Z',
       }),
-    ).rejects.toThrow('Calendar range is too large');
+    ).rejects.toMatchObject({
+      response: {
+        code: 'TELEGRAM_POST_CALENDAR_RANGE_TOO_LARGE',
+        message: 'Calendar range is too large',
+        params: { maxDays: 366 },
+      },
+    });
     expect(prisma.telegramManagedPost.findMany).not.toHaveBeenCalled();
+  });
+
+  it('returns a stable code for malformed calendar ranges', async () => {
+    const service = new TelegramManagedPostCalendarService(
+      {} as any,
+      { getOrSet: jest.fn() } as any,
+      { workspace: jest.fn().mockResolvedValue('workspace-1') } as any,
+      { findOne: jest.fn().mockResolvedValue({ id: 'channel-1' }) } as any,
+    );
+
+    await expect(
+      service.managedPostsCalendar('user-1', 'channel-1', {
+        from: 'not-a-date',
+        to: '2026-08-01T00:00:00.000Z',
+      }),
+    ).rejects.toMatchObject({
+      response: {
+        code: 'TELEGRAM_POST_CALENDAR_RANGE_INVALID',
+        message: 'Calendar range is invalid',
+      },
+    });
   });
 });

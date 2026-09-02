@@ -27,9 +27,12 @@ import { GlobalSearchBox } from "@/components/layout/global-search-box";
 import { GlobalRefreshButton } from "@/components/layout/global-refresh-button";
 import { useSystemBotWorkspaceSync } from "@/components/layout/use-system-bot-workspace-sync";
 import { NotificationCenter } from "@/components/features/operations/notifications/notification-center";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
+import { useI18n } from "@/providers/i18n-provider";
 import { ChevronRight, LogOut, Menu, Plus, X } from "lucide-react";
 
 export function AppShell({ children }: PropsWithChildren) {
+  const { locale, setLocale, t } = useI18n();
   const pathname = usePathname();
   const qc = useQueryClient();
   const { pushToast, setProgress, clearProgress } = useAppToast();
@@ -53,6 +56,11 @@ export function AppShell({ children }: PropsWithChildren) {
     queryKey: ["account-me"],
     queryFn: accountApi.me,
   });
+  useEffect(() => {
+    if (currentAccount?.locale && currentAccount.locale !== locale) {
+      void setLocale(currentAccount.locale);
+    }
+  }, [currentAccount?.locale, locale, setLocale]);
   const { data: searchResults = [], isFetching: searchFetching } = useQuery({
     queryKey: ["global-search", debouncedGlobalSearch],
     queryFn: () => globalSearchApi.search(debouncedGlobalSearch),
@@ -209,10 +217,10 @@ export function AppShell({ children }: PropsWithChildren) {
         runProgressSequence({
           api: { pushToast, setProgress, clearProgress },
           id: `global-refresh:${Date.now()}`,
-          title: "Refreshing workspace",
+          title: t("navigation.refreshingWorkspace"),
           steps: [
             {
-              message: "Clearing cached workspace data",
+              message: t("navigation.clearCache"),
               run: async () => {
                 clearPersistedQueryCache();
                 qc.removeQueries({
@@ -223,7 +231,7 @@ export function AppShell({ children }: PropsWithChildren) {
               },
             },
             {
-              message: "Marking visible workspace data stale",
+              message: t("navigation.markStale"),
               run: async () => {
                 await qc.invalidateQueries({
                   predicate: (query) => shouldRefreshQuery(query.queryKey),
@@ -232,7 +240,7 @@ export function AppShell({ children }: PropsWithChildren) {
               },
             },
             {
-              message: "Refetching visible page data",
+              message: t("navigation.refetch"),
               run: async () => {
                 await qc.refetchQueries(
                   {
@@ -244,7 +252,7 @@ export function AppShell({ children }: PropsWithChildren) {
               },
             },
             {
-              message: "Finalizing refreshed data",
+              message: t("navigation.finalize"),
               run: async () => {
                 await Promise.resolve();
               },
@@ -253,7 +261,7 @@ export function AppShell({ children }: PropsWithChildren) {
         }),
       );
     } catch {
-      pushToast("Failed to refresh data.", "error");
+      pushToast(t("navigation.refreshError"), "error");
     } finally {
       setRefreshing(false);
     }
@@ -299,7 +307,7 @@ export function AppShell({ children }: PropsWithChildren) {
           type="button"
           onClick={() => setMobileMenuOpen(true)}
           className="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-800 text-neutral-200 hover:bg-neutral-900"
-          aria-label="Open navigation"
+          aria-label={t("navigation.open")}
           aria-expanded={mobileMenuOpen}
           aria-controls="app-sidebar"
         >
@@ -316,12 +324,12 @@ export function AppShell({ children }: PropsWithChildren) {
           type="button"
           className="fixed inset-0 z-30 bg-black/65 lg:hidden"
           onClick={() => setMobileMenuOpen(false)}
-          aria-label="Close navigation"
+          aria-label={t("navigation.close")}
         />
       ) : null}
       <aside
         id="app-sidebar"
-        aria-label="Application sidebar"
+        aria-label={t("navigation.sidebar")}
         className={`fixed left-0 top-0 z-40 flex h-[100dvh] w-[min(19rem,calc(100vw-1.25rem))] -translate-x-full flex-col border-r border-neutral-800 bg-neutral-950 p-4 shadow-2xl transition-transform duration-200 lg:z-30 lg:h-screen lg:w-64 lg:translate-x-0 lg:p-5 lg:shadow-none ${mobileMenuOpen ? "translate-x-0" : ""}`}
         onClickCapture={(event) => {
           if ((event.target as HTMLElement).closest("a"))
@@ -332,19 +340,22 @@ export function AppShell({ children }: PropsWithChildren) {
           type="button"
           onClick={() => setMobileMenuOpen(false)}
           className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-800 text-neutral-300 hover:bg-neutral-900 lg:hidden"
-          aria-label="Close navigation"
+          aria-label={t("navigation.close")}
         >
           <X size={18} />
         </button>
         <div className="mb-4">
           <div className="flex items-center justify-between gap-2 pr-10 lg:pr-0">
             <SystemBrandLogo />
-            <GlobalRefreshButton
-              compact
-              hidden={mobileMenuOpen}
-              refreshing={refreshing}
-              onRefresh={() => void handleGlobalRefresh()}
-            />
+            <div className="flex items-center gap-1.5">
+              <LanguageSwitcher />
+              <GlobalRefreshButton
+                compact
+                hidden={mobileMenuOpen}
+                refreshing={refreshing}
+                onRefresh={() => void handleGlobalRefresh()}
+              />
+            </div>
           </div>
         </div>
 
@@ -359,14 +370,17 @@ export function AppShell({ children }: PropsWithChildren) {
 
         <div className="mb-4 space-y-2">
           <div className="flex items-center gap-2">
-            <div className="min-w-0 flex-1" aria-label="Workspace">
+            <div
+              className="min-w-0 flex-1"
+              aria-label={t("navigation.workspace")}
+            >
               <CustomSelect
                 value={activeWorkspaceId}
                 onChange={switchWorkspace}
-                placeholder="Select workspace"
+                placeholder={t("navigation.selectWorkspace")}
                 options={(workspaces ?? []).map((workspace) => ({
                   value: workspace.id,
-                  label: `${workspace.name} (${workspace.role})`,
+                  label: workspace.name,
                   iconPresentation: workspace.avatarPresentation ?? undefined,
                   iconUrl:
                     workspace.avatarPresentation?.type === "image"
@@ -391,8 +405,8 @@ export function AppShell({ children }: PropsWithChildren) {
                   ? "border-blue-700 bg-blue-950/40 text-blue-200"
                   : "border-neutral-800 bg-neutral-900/60 text-neutral-400 hover:border-neutral-700 hover:text-white"
               }`}
-              aria-label="Create workspace"
-              title="Create workspace"
+              aria-label={t("navigation.createWorkspace")}
+              title={t("navigation.createWorkspace")}
             >
               <Plus size={17} />
             </button>
@@ -415,11 +429,12 @@ export function AppShell({ children }: PropsWithChildren) {
                   compact
                   iconId={workspaceIconId}
                   onChange={setWorkspaceIconId}
+                  uiLocale={locale}
                 />
                 <input
                   value={workspaceName}
                   onChange={(e) => setWorkspaceName(e.target.value)}
-                  placeholder="Workspace name"
+                  placeholder={t("navigation.workspaceName")}
                   className="h-9 min-w-0 flex-1 rounded-lg border border-neutral-700 bg-neutral-950 px-2 text-sm outline-none focus:border-blue-600"
                 />
               </div>
@@ -427,7 +442,7 @@ export function AppShell({ children }: PropsWithChildren) {
                 type="submit"
                 className="rounded-lg border border-neutral-700 px-3 text-sm text-neutral-200 hover:bg-neutral-800"
               >
-                Add
+                {t("common.add")}
               </button>
             </form>
           ) : null}
@@ -442,7 +457,7 @@ export function AppShell({ children }: PropsWithChildren) {
           effectivePermissionKeys={activeWorkspace?.access?.permissionKeys}
         />
 
-        <div className="mt-3 border-t border-neutral-800 pt-3">
+        <div className="mt-3 space-y-2 border-t border-neutral-800 pt-3">
           <div
             className={`flex min-w-0 items-stretch overflow-hidden rounded-xl border transition ${
               pathname === "/account"
@@ -456,16 +471,20 @@ export function AppShell({ children }: PropsWithChildren) {
             >
               <IconAvatar
                 icon={currentAccount?.avatarPresentation}
-                label={currentAccount?.name || currentAccount?.email || "User"}
+                label={
+                  currentAccount?.name ||
+                  currentAccount?.email ||
+                  t("navigation.user")
+                }
                 size="md"
                 className="!rounded-full"
               />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium text-white">
-                  {currentAccount?.name || "My profile"}
+                  {currentAccount?.name || t("navigation.myProfile")}
                 </span>
                 <span className="block truncate text-xs text-neutral-500">
-                  {currentAccount?.email || "Account settings"}
+                  {currentAccount?.email || t("navigation.accountSettings")}
                 </span>
               </span>
               <ChevronRight size={15} className="shrink-0 text-neutral-600" />
@@ -474,8 +493,8 @@ export function AppShell({ children }: PropsWithChildren) {
               type="button"
               onClick={handleLogout}
               className="flex w-11 shrink-0 items-center justify-center border-l border-neutral-800 text-neutral-500 transition hover:bg-rose-950/30 hover:text-rose-300"
-              aria-label="Log out"
-              title="Log out"
+              aria-label={t("navigation.logout")}
+              title={t("navigation.logout")}
             >
               <LogOut size={17} />
             </button>

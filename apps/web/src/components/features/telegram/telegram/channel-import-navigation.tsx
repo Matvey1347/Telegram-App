@@ -1,6 +1,8 @@
 "use client";
 
+
 import { CalendarDays, FileText, FolderOpen, Trash2 } from "lucide-react";
+import { useI18n } from "@/providers/i18n-provider";
 
 export type ChannelImportMode = "posts" | "groups" | "calendar" | "reimport";
 
@@ -13,11 +15,12 @@ export function ChannelImportNavigation({
   onChange: (mode: ChannelImportMode) => void;
   disabled?: boolean;
 }) {
+  const { t } = useI18n();
   const items = [
-    { value: "posts" as const, label: "Posts", icon: FileText },
-    { value: "groups" as const, label: "Groups", icon: FolderOpen },
-    { value: "calendar" as const, label: "Calendar", icon: CalendarDays },
-    { value: "reimport" as const, label: "Reimport / Delete", icon: Trash2 },
+    { value: "posts" as const, label: t("telegram.posts.tabs.posts"), icon: FileText },
+    { value: "groups" as const, label: t("telegram.posts.tabs.groups"), icon: FolderOpen },
+    { value: "calendar" as const, label: t("telegram.posts.tabs.calendar"), icon: CalendarDays },
+    { value: "reimport" as const, label: t("telegram.posts.import.reimportDelete"), icon: Trash2 },
   ];
   return (
     <div className="grid grid-cols-2 gap-1 rounded-xl border border-neutral-800 bg-neutral-950 p-1 md:grid-cols-4">

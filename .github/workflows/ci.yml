@@ -113,6 +113,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:generate
+      - run: pnpm i18n:check
       - name: Web lint (legacy debt report)
         continue-on-error: true
         run: pnpm --filter web lint

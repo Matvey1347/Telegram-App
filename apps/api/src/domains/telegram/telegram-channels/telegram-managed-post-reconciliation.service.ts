@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { TelegramManagedPostStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
@@ -9,6 +9,7 @@ import { TelegramManagedPostGroupPresentationService } from './telegram-managed-
 import { TelegramManagedPostIdentityService } from './telegram-managed-post-identity.service';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
 import { MANAGED_POST_LOCAL_PUBLISHING_STALE_MS } from '../../operations/scheduled-tasks/due-work-predicates';
+import { managedPostNotFound } from './telegram-posts.errors';
 
 @Injectable()
 export class TelegramManagedPostReconciliationService {
@@ -191,7 +192,7 @@ export class TelegramManagedPostReconciliationService {
       where: { id: postId, workspaceId, telegramChannelId: channelId },
       include: this.managedPostInclude,
     });
-    if (!updated) throw new NotFoundException('Managed post not found');
+    if (!updated) throw managedPostNotFound();
     const [hydrated] =
       await this.telegramManagedPostGroupPresentationService.attachManagedPostIcons(
         [updated],

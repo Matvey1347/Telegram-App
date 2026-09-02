@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer from 'nodemailer';
+import { normalizeAppLocale } from '@telegram-system/shared';
+import { translateAuthOutput } from './i18n/auth-output';
 
 @Injectable()
 export class PasswordResetEmailService {
@@ -8,7 +10,11 @@ export class PasswordResetEmailService {
 
   constructor(private readonly config: ConfigService) {}
 
-  async send(recipient: string, rawToken: string): Promise<void> {
+  async send(
+    recipient: string,
+    rawToken: string,
+    locale?: string | null,
+  ): Promise<void> {
     const host = this.config.get<string>('SMTP_HOST')?.trim();
     const user = this.config.get<string>('SMTP_USER')?.trim();
     const pass = this.config.get<string>('SMTP_PASSWORD');
@@ -32,19 +38,25 @@ export class PasswordResetEmailService {
 
     const resetUrl = new URL('/reset-password', frontendUrl);
     resetUrl.searchParams.set('token', rawToken);
+    resetUrl.searchParams.set('locale', normalizeAppLocale(locale));
     const transport = nodemailer.createTransport({
       host,
       port,
       secure: port === 465,
       auth: { user, pass },
     });
+    const subject = translateAuthOutput(locale, 'resetSubject');
+    const intro = translateAuthOutput(locale, 'resetIntro');
+    const action = translateAuthOutput(locale, 'resetAction');
+    const expiry = translateAuthOutput(locale, 'resetExpiry');
+    const url = resetUrl.toString();
 
     await transport.sendMail({
       from,
       to: recipient,
-      subject: 'Reset your Telegram System password',
-      text: `Reset your password using this link: ${resetUrl.toString()}\n\nThis link expires in 60 minutes and can be used once.`,
-      html: `<p>Reset your password using the link below.</p><p><a href="${resetUrl.toString()}">Reset password</a></p><p>This link expires in 60 minutes and can be used once.</p>`,
+      subject,
+      text: `${intro}\n${url}\n\n${expiry}`,
+      html: `<p>${intro}</p><p><a href="${url}">${action}</a></p><p>${expiry}</p>`,
     });
   }
 }

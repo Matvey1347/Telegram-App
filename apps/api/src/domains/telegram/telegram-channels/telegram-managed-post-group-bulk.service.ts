@@ -23,6 +23,10 @@ import { TelegramChannelsSupportService } from './telegram-channels-support.serv
 import { BulkProgressCallback } from './telegram-channels.internal';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
+import {
+  postGroupNotFound,
+  telegramPostsBadRequest,
+} from './telegram-posts.errors';
 
 @Injectable()
 export class TelegramManagedPostGroupBulkService {
@@ -50,9 +54,12 @@ export class TelegramManagedPostGroupBulkService {
         },
       },
     });
-    if (!group) throw new NotFoundException('Post group not found');
+    if (!group) throw postGroupNotFound();
     if (!group.posts.length)
-      throw new BadRequestException('Post group is empty');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_INVALID_SCHEDULE',
+        'Post group is empty',
+      );
     const includeScheduled = dto.includeScheduled ?? true;
     const includeFailed = dto.includeFailed ?? true;
     const republishPublished = dto.republishPublished ?? false;
@@ -147,6 +154,7 @@ export class TelegramManagedPostGroupBulkService {
             success: false,
             message: `Post ${index}/${total} failed: ${message}`,
             error: message,
+            errorCode: 'TELEGRAM_POST_PUBLISH_FAILED',
           },
           onProgress,
         );
@@ -179,9 +187,12 @@ export class TelegramManagedPostGroupBulkService {
         },
       },
     });
-    if (!group) throw new NotFoundException('Post group not found');
+    if (!group) throw postGroupNotFound();
     if (!group.posts.length)
-      throw new BadRequestException('Post group is empty');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_INVALID_SCHEDULE',
+        'Post group is empty',
+      );
     const total = group.posts.length;
     const results: BulkActionResultItem[] = [];
 
@@ -252,6 +263,7 @@ export class TelegramManagedPostGroupBulkService {
             success: false,
             message: `Post ${index}/${total} failed: ${message}`,
             error: message,
+            errorCode: 'TELEGRAM_POST_PUBLISH_FAILED',
           },
           onProgress,
         );
@@ -284,9 +296,12 @@ export class TelegramManagedPostGroupBulkService {
         },
       },
     });
-    if (!group) throw new NotFoundException('Post group not found');
+    if (!group) throw postGroupNotFound();
     if (!group.posts.length)
-      throw new BadRequestException('Post group is empty');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_INVALID_SCHEDULE',
+        'Post group is empty',
+      );
     const overwriteExistingScheduled = dto.overwriteExistingScheduled ?? false;
     const includeFailed = dto.includeFailed ?? true;
     const includeDraftsOnly = dto.includeDraftsOnly ?? false;
@@ -307,7 +322,8 @@ export class TelegramManagedPostGroupBulkService {
       timezone,
     );
     if (dates.some((date) => date.getTime() <= Date.now())) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_SCHEDULE_IN_PAST',
         'Every schedule date must be in the future',
       );
     }
@@ -376,6 +392,7 @@ export class TelegramManagedPostGroupBulkService {
             success: false,
             message: `Post ${index}/${total} failed: ${message}`,
             error: message,
+            errorCode: 'TELEGRAM_POST_PUBLISH_FAILED',
           },
           onProgress,
         );
@@ -414,6 +431,8 @@ export class TelegramManagedPostGroupBulkService {
       action: 'SKIPPED',
       success: false,
       skipped: true,
+      errorCode: 'TELEGRAM_POST_NOT_EDITABLE',
+      errorParams: { reason },
       message: `Post ${index}/${total} skipped: ${reason}`,
     };
   }

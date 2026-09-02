@@ -3,6 +3,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { accountApi, telegramUserAccountsApi } from "@/lib/api";
 import { AccountWorkspace } from "./account-workspace";
+import { I18nProvider } from "@/providers/i18n-provider";
+import accountEn from "@/i18n/locales/en/account";
+import accountRu from "@/i18n/locales/ru/account";
 
 vi.mock("@/components/layout/app-shell", () => ({
   AppShell: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -50,13 +53,18 @@ const telegramAccount = {
   assignedMember: null,
 };
 
-function renderAccount() {
+function renderAccount(locale: "en" | "ru" = "en") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   render(
     <QueryClientProvider client={client}>
-      <AccountWorkspace />
+      <I18nProvider
+        initialLocale={locale}
+        preloadedCatalogs={{ account: locale === "ru" ? accountRu : accountEn }}
+      >
+        <AccountWorkspace />
+      </I18nProvider>
     </QueryClientProvider>,
   );
 }
@@ -83,6 +91,21 @@ describe("AccountWorkspace", () => {
     expect(screen.queryByText("Telegram identity")).not.toBeInTheDocument();
   });
 
+  it("renders the complete profile workflow in Russian", async () => {
+    renderAccount("ru");
+
+    expect(await screen.findByText("Мой профиль")).toBeInTheDocument();
+    expect(await screen.findByText("Telegram-профиль")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Сохранить изменения" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Изменить пароль" }));
+    expect(screen.getByText("Текущий пароль")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Обновить пароль" }),
+    ).toBeInTheDocument();
+  });
+
   it("uses exactly one Telegram identity mode in the update payload", async () => {
     renderAccount();
     await screen.findByText("Telegram identity");
@@ -99,5 +122,18 @@ describe("AccountWorkspace", () => {
         }),
       ),
     );
+  });
+
+  it("shows a recoverable Russian error when the profile cannot load", async () => {
+    vi.mocked(accountApi.me).mockRejectedValue(
+      new Error("database unavailable"),
+    );
+    renderAccount("ru");
+
+    expect(
+      await screen.findByText("Не удалось загрузить профиль."),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Повторить" }));
+    await waitFor(() => expect(accountApi.me).toHaveBeenCalledTimes(2));
   });
 });

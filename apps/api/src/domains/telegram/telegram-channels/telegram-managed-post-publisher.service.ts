@@ -34,6 +34,10 @@ import {
 } from '../../../telegram/shared/telegram-session-errors';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import {
+  telegramPostsBadRequest,
+  telegramPostsNotFound,
+} from './telegram-posts.errors';
+import {
   managedPostRequiresBotApi,
   selectManagedPostPublishingSource,
 } from './managed-post-publishing-source';
@@ -118,12 +122,20 @@ export class TelegramManagedPostPublisherService {
       this.sourceAccessService.sourcesForChannel(workspaceId, channelId),
     ]);
     if (!foundPost || !channel)
-      throw new NotFoundException('Post or channel not found');
+      throw telegramPostsNotFound(
+        !foundPost
+          ? 'TELEGRAM_MANAGED_POST_NOT_FOUND'
+          : 'TELEGRAM_CHANNEL_NOT_FOUND',
+        'Post or channel not found',
+      );
     const { _count, ...postRecord } = foundPost;
     let post = postRecord;
     let sources = initialSources;
     if (!post.text?.trim() && !post.imageUrls.length)
-      throw new BadRequestException('Text or at least one image is required');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_CONTENT_REQUIRED',
+        'Text or at least one image is required',
+      );
     await this.telegramManagedPostRevisionStore.createManagedPostRevision(
       this.prisma,
       post,
@@ -174,7 +186,8 @@ export class TelegramManagedPostPublisherService {
       });
     }
     if (requiresBotApi && !source) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_PUBLISH_SOURCE_UNAVAILABLE',
         requiresRichMessage
           ? 'Native Telegram rich content (including pull quotes) requires an active workspace bot with posting permission for this channel.'
           : buttonRows.length
@@ -194,14 +207,16 @@ export class TelegramManagedPostPublisherService {
           candidate.permissions.canPostMessages,
       );
       if (!journaledSource) {
-        throw new BadRequestException(
+        throw telegramPostsBadRequest(
+          'TELEGRAM_POST_PUBLISH_SOURCE_UNAVAILABLE',
           'The bot that started this delivery is no longer available. Restore its channel access before retrying.',
         );
       }
       source = journaledSource;
     }
     if (!source) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_PUBLISH_SOURCE_UNAVAILABLE',
         'No connected source has posting permission',
       );
     }
@@ -237,7 +252,10 @@ export class TelegramManagedPostPublisherService {
     const channelReference =
       this.telegramChannelAccessService.mtprotoChannelReference(channel);
     if (!channelReference.telegramChatId && !channelReference.username)
-      throw new BadRequestException('Channel has no Telegram reference');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_TELEGRAM_REFERENCE_MISSING',
+        'Channel has no Telegram reference',
+      );
     let previousScheduledMessageCancelled = false;
     try {
       const storedImageUrls =
@@ -370,7 +388,10 @@ export class TelegramManagedPostPublisherService {
         );
         const chatId = this.telegramChannelAccessService.botChatId(channel);
         if (!chatId) {
-          throw new BadRequestException('Channel has no Telegram chat id');
+          throw telegramPostsBadRequest(
+            'TELEGRAM_POST_TELEGRAM_REFERENCE_MISSING',
+            'Channel has no Telegram chat id',
+          );
         }
         const call = <T>(method: string, body: Record<string, unknown>) =>
           this.botApiClient.call<T>(token, method, {
@@ -517,7 +538,8 @@ export class TelegramManagedPostPublisherService {
         });
       }
       if (!ids.length) {
-        throw new BadRequestException(
+        throw telegramPostsBadRequest(
+          'TELEGRAM_POST_PUBLISH_FAILED',
           scheduleAt
             ? 'Telegram did not confirm the scheduled post. Nothing was added to Telegram Scheduled Messages.'
             : 'Telegram did not confirm the published post.',
@@ -575,7 +597,11 @@ export class TelegramManagedPostPublisherService {
           where: { id: updated.id },
           include: this.managedPostInclude,
         });
-        if (!canonical) throw new NotFoundException('Managed post not found');
+        if (!canonical)
+          throw telegramPostsNotFound(
+            'TELEGRAM_MANAGED_POST_NOT_FOUND',
+            'Managed post not found',
+          );
         return canonical;
       });
       return this.notifyManagedPostSchedulePersisted(
@@ -632,7 +658,10 @@ export class TelegramManagedPostPublisherService {
         }
       });
       if (error instanceof BadRequestException) throw error;
-      throw new BadRequestException(publicMessage);
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_PUBLISH_FAILED',
+        publicMessage,
+      );
     }
   }
 

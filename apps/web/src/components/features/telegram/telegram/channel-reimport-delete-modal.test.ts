@@ -20,12 +20,12 @@ describe("parseChannelDeletionFile", () => {
   it("rejects an empty destructive file", () => {
     expect(() =>
       parseChannelDeletionFile('{"postIds":[],"groupIds":[]}'),
-    ).toThrow("Add at least one");
+    ).toThrow("EMPTY_DELETION_FILE");
   });
 
   it("rejects non-string IDs", () => {
     expect(() => parseChannelDeletionFile('{"postIds":[1]}')).toThrow(
-      "postIds must be an array of IDs",
+      "INVALID_DELETION_FILE",
     );
   });
 

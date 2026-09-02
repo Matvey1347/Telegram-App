@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import sharp from 'sharp';
 import { B2ObjectStorageService } from '../../../common/object-storage/b2-object-storage.service';
+import { telegramPostsBadRequest } from './telegram-posts.errors';
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
@@ -25,8 +26,10 @@ export class TelegramManagedPostMediaStorageService {
         if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
         return url.toString();
       } catch {
-        throw new BadRequestException(
+        throw telegramPostsBadRequest(
+          'TELEGRAM_POST_MEDIA_URL_INVALID',
           `Image ${index + 1} must use a valid HTTP or HTTPS URL.`,
+          { index: index + 1 },
         );
       }
     });
@@ -34,10 +37,18 @@ export class TelegramManagedPostMediaStorageService {
 
   private async normalizeImage(bytes: Buffer, index: number) {
     if (!bytes.length) {
-      throw new BadRequestException(`Image ${index + 1} is empty.`);
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_MEDIA_EMPTY',
+        `Image ${index + 1} is empty.`,
+        { index: index + 1 },
+      );
     }
     if (bytes.length > MAX_IMAGE_BYTES) {
-      throw new BadRequestException(`Image ${index + 1} is larger than 10 MB.`);
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_MEDIA_TOO_LARGE',
+        `Image ${index + 1} is larger than 10 MB.`,
+        { index: index + 1, maxMegabytes: 10 },
+      );
     }
     const mimeType = detectedImageMimeType(bytes);
     if (mimeType) return { bytes, mimeType };
@@ -49,7 +60,11 @@ export class TelegramManagedPostMediaStorageService {
       if (!normalized.length) throw new Error('empty_conversion');
       return { bytes: normalized, mimeType: 'image/webp' };
     } catch {
-      throw new BadRequestException(`File ${index + 1} is not a valid image.`);
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_MEDIA_INVALID',
+        `File ${index + 1} is not a valid image.`,
+        { index: index + 1 },
+      );
     }
   }
 }

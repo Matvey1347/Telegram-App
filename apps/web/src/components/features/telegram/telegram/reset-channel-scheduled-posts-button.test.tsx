@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   fireEvent,
-  render,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
+import { renderWithI18n as render } from "@/test/render-with-i18n";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { telegramPostKeys } from "@/lib/query-keys";
 import { ResetChannelScheduledPostsButton } from "./reset-channel-scheduled-posts-button";
@@ -107,7 +107,7 @@ describe("ResetChannelScheduledPostsButton", () => {
 
     await waitFor(() =>
       expect(pushToast).toHaveBeenCalledWith(
-        "Telegram account is blocked",
+        "Could not return scheduled posts to drafts",
         "error",
         7000,
       ),

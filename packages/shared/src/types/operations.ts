@@ -26,7 +26,9 @@ export type SyncOperationResult = {
 
 export type StructuredApiError = {
   code: string;
-  message: string;
+  /** English compatibility fallback. Consumers should resolve `code` first. */
+  message?: string;
+  params?: import("../i18n/contracts").TranslationParams;
   details?: Record<string, unknown> | string | null;
   correlationId?: string;
 };
@@ -45,7 +47,10 @@ export type StreamCompleteEvent<TResult> = {
 
 export type StreamErrorEvent = {
   type: "error";
-  message: string;
+  code: string;
+  params?: import("../i18n/contracts").TranslationParams;
+  /** English compatibility fallback. Consumers should resolve `code` first. */
+  message?: string;
   correlationId?: string;
 };
 

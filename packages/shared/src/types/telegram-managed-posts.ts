@@ -269,5 +269,7 @@ export type TelegramManagedPostsImportProgressItem = {
   title?: string;
   postId?: string;
   error?: string;
+  errorCode?: string;
+  errorParams?: import("../i18n/contracts").TranslationParams;
   message: string;
 };

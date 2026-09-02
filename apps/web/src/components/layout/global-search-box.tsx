@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Search } from "lucide-react";
 import type { GlobalSearchResult } from "@/lib/api";
+import { useI18n } from "@/providers/i18n-provider";
 
 function SearchResultIcon({ result }: { result: GlobalSearchResult }) {
   if (result.iconUrl) {
@@ -45,6 +46,7 @@ export function GlobalSearchBox({
   results: GlobalSearchResult[];
   isFetching: boolean;
 }) {
+  const { t } = useI18n();
   const showResults = focused && query.trim().length >= 2;
   return (
     <div className="relative mb-3">
@@ -60,7 +62,7 @@ export function GlobalSearchBox({
           onKeyDown={(event) => {
             if (event.key === "Escape") onFocusedChange(false);
           }}
-          placeholder="Search everything"
+          placeholder={t("navigation.searchEverything")}
           className="h-10 w-full rounded-xl border border-neutral-800 bg-neutral-900/45 pl-9 pr-3 text-sm text-neutral-100 outline-none transition placeholder:text-neutral-600 focus:border-blue-600 focus:bg-neutral-900/70 focus:ring-1 focus:ring-blue-600"
         />
       </div>
@@ -70,7 +72,9 @@ export function GlobalSearchBox({
           onMouseDown={(event) => event.preventDefault()}
         >
           {isFetching ? (
-            <p className="px-3 py-2 text-sm text-neutral-400">Searching...</p>
+            <p className="px-3 py-2 text-sm text-neutral-400">
+              {t("common.searching")}
+            </p>
           ) : null}
           {!isFetching && results.length ? (
             <div className="space-y-1">
@@ -99,7 +103,9 @@ export function GlobalSearchBox({
             </div>
           ) : null}
           {!isFetching && !results.length ? (
-            <p className="px-3 py-2 text-sm text-neutral-400">No results</p>
+            <p className="px-3 py-2 text-sm text-neutral-400">
+              {t("common.noResults")}
+            </p>
           ) : null}
         </div>
       ) : null}

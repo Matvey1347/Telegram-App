@@ -34,6 +34,13 @@ describe('PasswordResetRateLimitService', () => {
     expect(() => service.checkReset('10.0.0.9', 'raw-secret-token')).toThrow(
       HttpException,
     );
+    try {
+      service.checkReset('10.0.0.9', 'raw-secret-token');
+    } catch (error) {
+      expect((error as HttpException).getResponse()).toEqual(
+        expect.objectContaining({ code: 'AUTH_TOO_MANY_ATTEMPTS' }),
+      );
+    }
     expect(JSON.stringify(service)).not.toContain('raw-secret-token');
   });
 });

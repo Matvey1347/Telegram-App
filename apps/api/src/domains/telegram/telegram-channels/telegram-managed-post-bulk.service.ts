@@ -17,6 +17,11 @@ import { TelegramChannelCatalogService } from './telegram-channel-catalog.servic
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 import { BulkProgressCallback } from './telegram-channels.internal';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
+import {
+  telegramPostsBadRequest,
+  telegramPostsNotFound,
+} from './telegram-posts.errors';
+import { structuredErrorPayload } from '../../../common/http/structured-http-error';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 
@@ -43,18 +48,31 @@ export class TelegramManagedPostBulkService {
     await this.telegramChannelCatalogService.findOne(userId, channelId);
     const items = dto.items ?? [];
     if (!items.length) {
-      throw new BadRequestException('At least one post is required');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_INVALID_SCHEDULE',
+        'At least one post is required',
+      );
     }
     if (items.length > 50) {
-      throw new BadRequestException('Batch schedule is limited to 50 posts');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_BATCH_LIMIT_EXCEEDED',
+        'Batch schedule is limited to 50 posts',
+        { maxBatchSize: 50 },
+      );
     }
     const uniquePostIds = new Set(items.map((item) => item.postId));
     if (uniquePostIds.size !== items.length) {
-      throw new BadRequestException('Duplicate postId in batch');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_INVALID_SCHEDULE',
+        'Duplicate postId in batch',
+      );
     }
     const uniqueScheduledAt = new Set(items.map((item) => item.scheduledAt));
     if (uniqueScheduledAt.size !== items.length) {
-      throw new BadRequestException('Duplicate scheduledAt in batch');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_INVALID_SCHEDULE',
+        'Duplicate scheduledAt in batch',
+      );
     }
 
     const posts = await this.prisma.telegramManagedPost.findMany({
@@ -66,17 +84,26 @@ export class TelegramManagedPostBulkService {
       orderBy: { createdAt: 'asc' },
     });
     if (posts.length !== items.length) {
-      throw new NotFoundException('One or more posts were not found');
+      throw telegramPostsNotFound(
+        'TELEGRAM_MANAGED_POST_NOT_FOUND',
+        'One or more posts were not found',
+      );
     }
 
     const postById = new Map(posts.map((post) => [post.id, post]));
     const requestedDates = items.map((item) => {
       const parsed = new Date(item.scheduledAt);
       if (Number.isNaN(parsed.getTime())) {
-        throw new BadRequestException('One or more schedule dates are invalid');
+        throw telegramPostsBadRequest(
+          'TELEGRAM_POST_INVALID_SCHEDULE',
+          'One or more schedule dates are invalid',
+        );
       }
       if (parsed.getTime() <= Date.now()) {
-        throw new BadRequestException('Schedule date must be in the future');
+        throw telegramPostsBadRequest(
+          'TELEGRAM_POST_SCHEDULE_IN_PAST',
+          'Schedule date must be in the future',
+        );
       }
       return parsed;
     });
@@ -96,7 +123,8 @@ export class TelegramManagedPostBulkService {
         .filter((value): value is string => Boolean(value)),
     );
     if (requestedDates.some((date) => occupiedTimes.has(date.toISOString()))) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_INVALID_SCHEDULE',
         'One or more schedule times are already occupied',
       );
     }
@@ -169,8 +197,12 @@ export class TelegramManagedPostBulkService {
           onProgress,
         );
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'Could not schedule post';
+        const failure = structuredErrorPayload(
+          error,
+          'TELEGRAM_POST_PUBLISH_FAILED',
+          'Could not schedule post',
+        );
+        const message = failure.message ?? 'Could not schedule post';
         await this.appendBulkResult(
           results,
           {
@@ -185,6 +217,8 @@ export class TelegramManagedPostBulkService {
             success: false,
             message: `Post ${index + 1}/${total} failed: ${message}`,
             error: message,
+            errorCode: failure.code,
+            errorParams: failure.params,
           },
           onProgress,
         );
@@ -236,6 +270,8 @@ export class TelegramManagedPostBulkService {
       success: false,
       skipped: true,
       message: `Post ${index}/${total} skipped: ${reason}`,
+      errorCode: 'TELEGRAM_POST_NOT_EDITABLE',
+      errorParams: { reason },
     };
   }
 

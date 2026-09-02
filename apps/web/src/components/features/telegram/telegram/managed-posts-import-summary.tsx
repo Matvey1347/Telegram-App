@@ -1,5 +1,9 @@
+
 import { AlertTriangle } from "lucide-react";
 import type { TelegramManagedPostsImportProgressItem } from "@/lib/api";
+import { useI18n } from "@/providers/i18n-provider";
+import { TELEGRAM_POSTS_ERROR_KEYS } from "@telegram-system/shared";
+import type { TranslationKey } from "@/i18n/catalog";
 
 export function ManagedPostsImportStats({
   parsed,
@@ -12,12 +16,13 @@ export function ManagedPostsImportStats({
   skipped: number;
   errors: number;
 }) {
+  const { t } = useI18n();
   return (
     <div className="grid gap-2 sm:grid-cols-4">
-      <ImportStat label="Parsed rows" value={parsed} />
-      <ImportStat label="Successful" value={successful} tone="success" />
-      <ImportStat label="Skipped" value={skipped} tone="warning" />
-      <ImportStat label="Errors" value={errors} tone="danger" />
+      <ImportStat label={t("telegram.posts.import.parsedRows")} value={parsed} />
+      <ImportStat label={t("telegram.posts.import.successful")} value={successful} tone="success" />
+      <ImportStat label={t("telegram.posts.import.skipped")} value={skipped} tone="warning" />
+      <ImportStat label={t("telegram.posts.import.errors")} value={errors} tone="danger" />
     </div>
   );
 }
@@ -25,21 +30,32 @@ export function ManagedPostsImportStats({
 export function ManagedPostsImportErrors({
   rows,
 }: {
-  rows: Array<TelegramManagedPostsImportProgressItem & { error: string }>;
+  rows: TelegramManagedPostsImportProgressItem[];
 }) {
+  const { locale, t } = useI18n();
   if (!rows.length) return null;
   return (
     <div className="rounded-lg border border-rose-800/70 bg-rose-950/25 p-3 text-sm text-rose-100">
       <div className="mb-2 flex items-center gap-2 font-medium">
         <AlertTriangle size={16} />
-        Import errors ({rows.length})
+        {t("telegram.posts.import.errorTitle", { count: rows.length })}
       </div>
       <ul className="space-y-1 text-xs">
-        {rows.slice(0, 5).map((item) => (
-          <li key={`${item.index}-${item.error}`}>
-            Row {item.index + 1}: {item.error}
-          </li>
-        ))}
+        {rows.slice(0, 5).map((item) => {
+          const errorKey = item.errorCode && item.errorCode in TELEGRAM_POSTS_ERROR_KEYS
+            ? TELEGRAM_POSTS_ERROR_KEYS[item.errorCode as keyof typeof TELEGRAM_POSTS_ERROR_KEYS] as TranslationKey
+            : null;
+          const error = errorKey
+            ? t(errorKey, item.errorParams)
+            : locale === "en" && item.error?.trim()
+              ? item.error
+              : t("telegram.posts.import.unknownRowError");
+          return (
+            <li key={`${item.index}-${item.errorCode || item.error || "unknown"}`}>
+              {t("telegram.posts.import.errorRow", { row: item.index + 1, error })}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

@@ -8,6 +8,7 @@ import { TelegramManagedPostPublicationService } from '../telegram-channels/tele
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import { formatSystemBotDate } from './telegram-system-bot-menu';
 import type { TelegramSystemBotPostFlowScope } from './telegram-system-bot-post-flow.types';
+import { translateSystemBotPosts as t } from './i18n/posts';
 
 type PostsView = 'PUBLISHED' | 'SCHEDULED';
 
@@ -34,7 +35,7 @@ export class TelegramSystemBotPostsService {
   }
 
   open(scope: TelegramSystemBotPostFlowScope) {
-    return this.render(scope, this.homeCard());
+    return this.render(scope, this.homeCard(scope.locale));
   }
 
   async callback(
@@ -43,7 +44,7 @@ export class TelegramSystemBotPostsService {
     controlMessageId: number | undefined,
   ) {
     if (callback === 'posts:home') {
-      return this.render(scope, this.homeCard(), controlMessageId);
+      return this.render(scope, this.homeCard(scope.locale), controlMessageId);
     }
     if (callback === 'posts:published') {
       return this.renderList(scope, 'PUBLISHED', controlMessageId);
@@ -58,7 +59,7 @@ export class TelegramSystemBotPostsService {
         controlMessageId,
       );
     }
-    return this.render(scope, this.homeCard(), controlMessageId);
+    return this.render(scope, this.homeCard(scope.locale), controlMessageId);
   }
 
   private async publishNow(
@@ -74,7 +75,7 @@ export class TelegramSystemBotPostsService {
         },
         select: { id: true, telegramChannelId: true },
       });
-      if (!post) throw new NotFoundException('Scheduled post is unavailable');
+      if (!post) throw new NotFoundException(t(scope.locale, 'unavailable'));
       const publication = await this.resolvePublication(scope.workspaceId);
       await publication.publishManagedPostNow(
         scope.userId,
@@ -86,7 +87,7 @@ export class TelegramSystemBotPostsService {
         scope,
         'SCHEDULED',
         controlMessageId,
-        '✅ Post published.',
+        t(scope.locale, 'publishedNotice'),
       );
     } catch (error) {
       return this.renderList(
@@ -107,7 +108,7 @@ export class TelegramSystemBotPostsService {
     const posts = await this.posts(scope, view);
     return this.render(
       scope,
-      this.listCard(view, posts, scope.timezone, notice),
+      this.listCard(view, posts, scope.timezone, scope.locale, notice),
       controlMessageId,
     );
   }
@@ -155,15 +156,15 @@ export class TelegramSystemBotPostsService {
     );
   }
 
-  private homeCard() {
+  private homeCard(locale: string | undefined) {
     return {
-      text: '📝 Posts',
+      text: t(locale, 'title'),
       reply_markup: {
         inline_keyboard: [
-          [{ text: '➕ Add new', callback_data: 'posts:new' }],
+          [{ text: t(locale, 'addNew'), callback_data: 'posts:new' }],
           [
-            { text: '✅ Published', callback_data: 'posts:published' },
-            { text: '🕒 Scheduled', callback_data: 'posts:scheduled' },
+            { text: t(locale, 'published'), callback_data: 'posts:published' },
+            { text: t(locale, 'scheduled'), callback_data: 'posts:scheduled' },
           ],
         ],
       },
@@ -174,19 +175,22 @@ export class TelegramSystemBotPostsService {
     view: PostsView,
     posts: ManagedPostListItem[],
     timezone: string,
+    locale: string | undefined,
     notice?: string,
   ) {
     const scheduled = view === 'SCHEDULED';
-    const title = scheduled ? '🕒 Scheduled posts' : '✅ Published posts';
+    const title = scheduled
+      ? t(locale, 'scheduledTitle')
+      : t(locale, 'publishedTitle');
     const lines = posts.map((post, index) => {
       const at = scheduled ? post.scheduledAt : post.publishedAt;
       const source = scheduled
         ? ` · ${post.scheduleMode === 'TELEGRAM_NATIVE' ? 'Telegram/MTProto' : 'System Bot'}`
         : '';
-      return `${index + 1}. ${post.title}\n${post.telegramChannel.title} · ${formatSystemBotDate(at, timezone)}${source}`;
+      return `${index + 1}. ${post.title}\n${post.telegramChannel.title} · ${formatSystemBotDate(at, timezone, locale)}${source}`;
     });
     return {
-      text: [notice, title, lines.join('\n\n') || 'No posts.']
+      text: [notice, title, lines.join('\n\n') || t(locale, 'noPosts')]
         .filter(Boolean)
         .join('\n\n'),
       reply_markup: {
@@ -199,7 +203,7 @@ export class TelegramSystemBotPostsService {
                 },
               ])
             : []),
-          [{ text: '← Posts', callback_data: 'posts:home' }],
+          [{ text: t(locale, 'back'), callback_data: 'posts:home' }],
         ],
       },
     };

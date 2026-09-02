@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApplicationLoggerService } from '../../domains/operations/application-logs/application-logger.service';
 import { RequestContextService } from '../request-context/request-context.service';
+import { structuredErrorPayload } from '../http/structured-http-error';
 
 @Injectable()
 export class StreamResponseService {
@@ -74,13 +75,17 @@ export class StreamResponseService {
       ) {
         return;
       }
-      const message =
-        error instanceof Error ? error.message : 'Stream action failed';
+      const payload = structuredErrorPayload(
+        error,
+        'STREAM_ACTION_FAILED',
+        'Stream action failed',
+      );
+      const message = payload.message ?? 'Stream action failed';
       if (!res.destroyed && !res.writableEnded) {
         res.write(
           `${JSON.stringify({
             type: 'error',
-            message,
+            ...payload,
             correlationId: context?.correlationId,
           })}\n`,
         );

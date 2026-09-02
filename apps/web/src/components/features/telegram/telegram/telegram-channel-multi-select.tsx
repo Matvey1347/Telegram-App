@@ -1,8 +1,10 @@
 "use client";
 
+
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import type { TelegramChannelSelectOption as TelegramChannel } from "@/lib/api";
+import { useI18n } from "@/providers/i18n-provider";
 
 export function ChannelMultiSelect({
   channels,
@@ -13,6 +15,7 @@ export function ChannelMultiSelect({
   selectedIds: string[];
   onChange: (ids: string[]) => void;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const selected = new Set(selectedIds);
@@ -36,8 +39,8 @@ export function ChannelMultiSelect({
     );
   };
   const label = selectedIds.length
-    ? `${selectedIds.length} selected`
-    : "All channels";
+    ? t("telegram.posts.channels.selected", { count: selectedIds.length })
+    : t("telegram.posts.channels.all");
 
   return (
     <div ref={rootRef} className="relative">
@@ -58,7 +61,7 @@ export function ChannelMultiSelect({
         <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-xl">
           <div className="flex items-center justify-between gap-2 border-b border-neutral-800 px-2 py-2">
             <span className="truncate px-1 text-xs text-neutral-500">
-              Empty = visible in every channel
+              {t("telegram.posts.channels.emptyMeansAll")}
             </span>
             <div className="flex shrink-0 gap-1 text-xs">
               <button
@@ -66,14 +69,14 @@ export function ChannelMultiSelect({
                 onClick={() => onChange(channels.map((channel) => channel.id))}
                 className="rounded-md px-2 py-1 text-blue-300 hover:bg-blue-950/50"
               >
-                Select all
+                {t("telegram.posts.channels.selectAll")}
               </button>
               <button
                 type="button"
                 onClick={() => onChange([])}
                 className="rounded-md px-2 py-1 text-neutral-400 hover:bg-neutral-800 hover:text-white"
               >
-                All channels
+                {t("telegram.posts.channels.all")}
               </button>
             </div>
           </div>
@@ -116,4 +119,3 @@ export function ChannelMultiSelect({
     </div>
   );
 }
-

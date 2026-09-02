@@ -1,4 +1,5 @@
 import type { ResolvedEmoji } from "../types/resolved-emoji";
+import type { I18nNamespace } from "../i18n/contracts";
 
 export type WorkspaceRoleMode = "ALLOWLIST" | "DENYLIST";
 
@@ -27,6 +28,7 @@ export type FeatureDefinition = {
   labelKey: string;
   descriptionKey: string;
   permissions: readonly PermissionDefinition[];
+  i18nNamespaces: readonly I18nNamespace[];
   surfaces: {
     navigation: readonly string[];
     search: readonly string[];

@@ -1,5 +1,6 @@
 "use client";
 
+
 import { useState } from "react";
 import { buildTelegramGptContextFilename } from "@telegram-system/shared";
 import { Button } from "@/components/ui/primitives";
@@ -7,6 +8,8 @@ import { telegramChannelsApi } from "@/lib/api";
 import { useAppToast } from "@/providers/toast-provider";
 import { Download } from "lucide-react";
 import { TelegramCardMenuAction } from "./telegram-card-actions-menu";
+import { useI18n } from "@/providers/i18n-provider";
+import { safeApiErrorMessage } from "@/i18n/error-localization";
 
 export function GptContextDownloadButton({
   channelId,
@@ -17,6 +20,7 @@ export function GptContextDownloadButton({
   channelTitle: string;
   presentation?: "button" | "menu";
 }) {
+  const { locale, t } = useI18n();
   const { pushToast } = useAppToast();
   const [downloading, setDownloading] = useState(false);
 
@@ -33,10 +37,10 @@ export function GptContextDownloadButton({
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      pushToast("Context downloaded.", "success");
+      pushToast(t("telegram.posts.support.contextDownloaded"), "success");
     } catch (error) {
       pushToast(
-        apiErrorMessage(error, "Could not download GPT context"),
+        safeApiErrorMessage(error, locale, t, t("common.error.generic")),
         "error",
       );
     } finally {
@@ -47,7 +51,7 @@ export function GptContextDownloadButton({
   if (presentation === "menu") {
     return (
       <TelegramCardMenuAction
-        label={downloading ? "Downloading Context…" : "Context"}
+        label={downloading ? t("telegram.posts.support.downloadingContextLabel") : t("telegram.posts.support.context")}
         icon={<Download size={15} />}
         disabled={downloading}
         onClick={() => void download()}
@@ -59,17 +63,17 @@ export function GptContextDownloadButton({
     <Button
       variant="secondary"
       className="shrink-0"
-      aria-label="Context"
+      aria-label={t("telegram.posts.support.context")}
       disabled={downloading}
       aria-busy={downloading}
       onClick={download}
     >
       <Download size={15} />
-      Context
+      {t("telegram.posts.support.context")}
       {downloading ? (
         <span
           role="status"
-          aria-label="Downloading context"
+          aria-label={t("telegram.posts.support.downloadingContext")}
           className="inline-block w-4 animate-pulse text-left tracking-widest"
         >
           <span aria-hidden="true">...</span>
@@ -77,15 +81,4 @@ export function GptContextDownloadButton({
       ) : null}
     </Button>
   );
-}
-
-function apiErrorMessage(error: unknown, fallback: string) {
-  const apiError = error as {
-    response?: { data?: { message?: string | string[] } };
-    message?: string;
-  };
-  const message = apiError.response?.data?.message;
-  return Array.isArray(message)
-    ? message.join(", ")
-    : message || apiError.message || fallback;
 }

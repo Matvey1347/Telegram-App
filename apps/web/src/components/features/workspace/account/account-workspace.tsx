@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Send, UserRound } from "lucide-react";
 import { IconPicker } from "@/components/icons/icon-picker";
@@ -10,6 +10,7 @@ import {
   Button,
   Card,
   CustomSelect,
+  ErrorState,
   FormError,
   FormField,
   Input,
@@ -27,6 +28,8 @@ import {
   memberKeys,
   telegramAccountKeys,
 } from "@/lib/query-keys";
+import { useI18n } from "@/providers/i18n-provider";
+import { localizedAccountError } from "@/lib/features/workspace/account-error";
 
 type AccountTab = "profile" | "password";
 type IdentityMode = "username" | "account";
@@ -42,21 +45,17 @@ type PasswordValues = {
   confirmNewPassword: string;
 };
 
-const messageOf = (error: unknown, fallback: string) => {
-  const message = (error as { response?: { data?: { message?: unknown } } })
-    ?.response?.data?.message;
-  return typeof message === "string" ? message : fallback;
-};
 const accountTitle = (account: TelegramUserAccount) =>
   [account.firstName, account.lastName].filter(Boolean).join(" ") ||
   account.label;
 
 export function AccountWorkspace() {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<AccountTab>("profile");
   const [identityMode, setIdentityMode] = useState<IdentityMode>("username");
-  const [profileError, setProfileError] = useState("");
-  const [passwordError, setPasswordError] = useState("");
+  const [profileError, setProfileError] = useState<unknown>(null);
+  const [passwordError, setPasswordError] = useState<unknown>(null);
   const [avatarIconId, setAvatarIconId] = useState<string | null>(null);
   const account = useQuery({
     queryKey: accountKeys.me(),
@@ -80,7 +79,6 @@ export function AccountWorkspace() {
   useEffect(() => {
     if (!account.data) return;
     // Async account data hydrates controls outside react-hook-form.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAvatarIconId(
       account.data.avatarIconId ?? account.data.avatarIcon?.id ?? null,
     );
@@ -91,17 +89,18 @@ export function AccountWorkspace() {
     );
   }, [account.data]);
 
-  const assignedIds =
-    account.data?.assignedTelegramUserAccounts?.map(({ id }) => id) ?? [];
-  const availableAccounts = useMemo(
-    () =>
-      (telegramAccounts.data ?? []).filter(
-        (item) => !item.assignedMember || assignedIds.includes(item.id),
-      ),
-    [assignedIds, telegramAccounts.data],
-  );
+  const availableAccounts = useMemo(() => {
+    const assignedIds =
+      account.data?.assignedTelegramUserAccounts?.map(({ id }) => id) ?? [];
+    return (telegramAccounts.data ?? []).filter(
+      (item) => !item.assignedMember || assignedIds.includes(item.id),
+    );
+  }, [account.data?.assignedTelegramUserAccounts, telegramAccounts.data]);
   const selectedAccountId =
-    profileForm.watch("telegramUserAccountIds")?.[0] ?? "";
+    useWatch({
+      control: profileForm.control,
+      name: "telegramUserAccountIds",
+    })?.[0] ?? "";
   const selectedAccount = availableAccounts.find(
     ({ id }) => id === selectedAccountId,
   );
@@ -109,7 +108,7 @@ export function AccountWorkspace() {
   const updateProfile = useMutation({
     mutationFn: accountApi.updateMe,
     onSuccess: (updated) => {
-      setProfileError("");
+      setProfileError(null);
       queryClient.setQueryData(accountKeys.me(), updated);
       void Promise.all([
         queryClient.invalidateQueries({ queryKey: authKeys.me() }),
@@ -119,44 +118,49 @@ export function AccountWorkspace() {
         }),
       ]);
     },
-    onError: (error: unknown) =>
-      setProfileError(messageOf(error, "Failed to update profile")),
+    onError: setProfileError,
   });
   const updatePassword = useMutation({
     mutationFn: accountApi.updatePassword,
     onSuccess: () => {
-      setPasswordError("");
+      setPasswordError(null);
       passwordForm.reset();
     },
-    onError: (error: unknown) =>
-      setPasswordError(messageOf(error, "Failed to update password")),
+    onError: setPasswordError,
   });
 
   return (
     <AppShell>
       <PageHeader
-        title="My Profile"
-        subtitle="Personal details, Telegram identity and security"
+        title={t("account.page.title")}
+        subtitle={t("account.page.subtitle")}
       />
       <div
         className="mb-4 inline-flex w-full rounded-xl border border-neutral-800 bg-neutral-900/60 p-1 sm:w-auto"
         role="tablist"
-        aria-label="Profile sections"
+        aria-label={t("account.sections")}
       >
         <Tab
           active={tab === "profile"}
           onClick={() => setTab("profile")}
           icon={<UserRound size={16} />}
-          label="Profile settings"
+          label={t("account.tabs.profile")}
         />
         <Tab
           active={tab === "password"}
           onClick={() => setTab("password")}
           icon={<KeyRound size={16} />}
-          label="Change password"
+          label={t("account.tabs.password")}
         />
       </div>
-      {account.isLoading || !account.data ? (
+      {account.isError && !account.data ? (
+        <Card className="max-w-3xl space-y-3">
+          <ErrorState text={t("account.errors.loadProfile")} />
+          <Button variant="secondary" onClick={() => void account.refetch()}>
+            {t("account.actions.retry")}
+          </Button>
+        </Card>
+      ) : account.isLoading || !account.data ? (
         <LoadingState />
       ) : tab === "profile" ? (
         <ProfileForm
@@ -168,9 +172,19 @@ export function AccountWorkspace() {
           setIdentityMode={setIdentityMode}
           accounts={availableAccounts}
           accountsLoading={telegramAccounts.isLoading}
+          accountsError={telegramAccounts.isError}
+          retryAccounts={() => void telegramAccounts.refetch()}
           selectedAccount={selectedAccount}
           selectedAccountId={selectedAccountId}
-          error={profileError}
+          error={
+            profileError
+              ? localizedAccountError(
+                  profileError,
+                  t,
+                  "account.errors.updateProfile",
+                )
+              : ""
+          }
           pending={updateProfile.isPending}
           onSubmit={(values) =>
             updateProfile.mutate({
@@ -191,18 +205,22 @@ export function AccountWorkspace() {
       ) : (
         <PasswordForm
           form={passwordForm}
-          error={passwordError}
+          error={
+            passwordError
+              ? localizedAccountError(
+                  passwordError,
+                  t,
+                  "account.errors.updatePassword",
+                )
+              : ""
+          }
           pending={updatePassword.isPending}
-          onSubmit={(values) => {
-            if (values.newPassword !== values.confirmNewPassword)
-              return setPasswordError(
-                "New password confirmation does not match",
-              );
+          onSubmit={(values) =>
             updatePassword.mutate({
               currentPassword: values.currentPassword,
               newPassword: values.newPassword,
-            });
-          }}
+            })
+          }
         />
       )}
     </AppShell>
@@ -218,6 +236,8 @@ function ProfileForm({
   setIdentityMode,
   accounts,
   accountsLoading,
+  accountsError,
+  retryAccounts,
   selectedAccount,
   selectedAccountId,
   error,
@@ -232,12 +252,15 @@ function ProfileForm({
   setIdentityMode: (mode: IdentityMode) => void;
   accounts: TelegramUserAccount[];
   accountsLoading: boolean;
+  accountsError: boolean;
+  retryAccounts: () => void;
   selectedAccount?: TelegramUserAccount;
   selectedAccountId: string;
   error: string;
   pending: boolean;
   onSubmit: (values: ProfileValues) => void;
 }) {
+  const { t } = useI18n();
   return (
     <Card className="max-w-3xl">
       <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)}>
@@ -247,34 +270,46 @@ function ProfileForm({
             iconId={avatarIconId}
             icon={data.avatarPresentation}
             onChange={setAvatarIconId}
-            buttonLabel="Change avatar"
+            buttonLabel={t("account.avatar.change")}
             className="!h-14 !w-14 !overflow-hidden !rounded-xl !border-neutral-700 !bg-neutral-950 text-xl"
             iconClassName="!h-full !w-full !rounded-xl !border-0 !bg-transparent"
           />
           <div>
-            <p className="font-medium text-white">Profile avatar</p>
+            <p className="font-medium text-white">
+              {t("account.avatar.title")}
+            </p>
             <p className="text-xs text-neutral-500">
-              Visible to workspace members.
+              {t("account.avatar.description")}
             </p>
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField
-            label="Name"
+            label={t("account.fields.name")}
             required
-            error={form.formState.errors.name ? "Required field" : undefined}
+            error={
+              form.formState.errors.name
+                ? t("account.validation.required")
+                : undefined
+            }
           >
             <Input
+              aria-label={t("account.fields.name")}
               autoComplete="name"
               {...form.register("name", { required: true })}
             />
           </FormField>
           <FormField
-            label="Email"
+            label={t("account.fields.email")}
             required
-            error={form.formState.errors.email ? "Required field" : undefined}
+            error={
+              form.formState.errors.email
+                ? t("account.validation.required")
+                : undefined
+            }
           >
             <Input
+              aria-label={t("account.fields.email")}
               type="email"
               autoComplete="email"
               {...form.register("email", { required: true })}
@@ -287,16 +322,16 @@ function ProfileForm({
         >
           <div>
             <h3 id="telegram-title" className="font-semibold text-white">
-              Telegram identity
+              {t("account.telegram.title")}
             </h3>
             <p className="mt-0.5 text-xs text-neutral-500">
-              Choose one identity source for workspace workflows.
+              {t("account.telegram.description")}
             </p>
           </div>
           <div className="grid grid-cols-2 gap-1 rounded-lg border border-neutral-800 bg-neutral-950/60 p-1">
             <Mode
               active={identityMode === "username"}
-              label="Username"
+              label={t("account.telegram.usernameMode")}
               onClick={() => {
                 setIdentityMode("username");
                 form.setValue("telegramUserAccountIds", [], {
@@ -306,7 +341,7 @@ function ProfileForm({
             />
             <Mode
               active={identityMode === "account"}
-              label="Connected account"
+              label={t("account.telegram.accountMode")}
               onClick={() => {
                 setIdentityMode("account");
                 form.setValue("telegramUsername", "", { shouldDirty: true });
@@ -314,19 +349,20 @@ function ProfileForm({
             />
           </div>
           {identityMode === "username" ? (
-            <FormField label="Telegram username">
+            <FormField label={t("account.telegram.username")}>
               <Input
+                aria-label={t("account.telegram.username")}
                 autoComplete="off"
                 placeholder="@username"
                 {...form.register("telegramUsername")}
               />
               <p className="mt-1.5 text-xs text-neutral-500">
-                Used when no connected account is assigned.
+                {t("account.telegram.usernameHelp")}
               </p>
             </FormField>
           ) : (
             <div className="space-y-2">
-              <FormField label="Telegram account">
+              <FormField label={t("account.telegram.account")}>
                 <CustomSelect
                   value={selectedAccountId}
                   onChange={(id) =>
@@ -336,8 +372,8 @@ function ProfileForm({
                   }
                   placeholder={
                     accountsLoading
-                      ? "Loading accounts…"
-                      : "Select connected account"
+                      ? t("account.telegram.loadingAccounts")
+                      : t("account.telegram.selectAccount")
                   }
                   disabled={accountsLoading || !accounts.length}
                   options={accounts.map((item) => ({
@@ -351,13 +387,20 @@ function ProfileForm({
                   }))}
                 />
               </FormField>
-              {selectedAccount ? (
+              {accountsError ? (
+                <div className="space-y-2">
+                  <ErrorState text={t("account.errors.loadTelegramAccounts")} />
+                  <Button variant="secondary" onClick={retryAccounts}>
+                    {t("account.actions.retry")}
+                  </Button>
+                </div>
+              ) : selectedAccount ? (
                 <SelectedAccount account={selectedAccount} />
               ) : (
                 <p className="rounded-lg border border-dashed border-neutral-800 p-3 text-sm text-neutral-500">
                   {accounts.length
-                    ? "Select an account to show it on your profile."
-                    : "No available connected Telegram accounts."}
+                    ? t("account.telegram.selectPrompt")
+                    : t("account.telegram.noneAvailable")}
                 </p>
               )}
             </div>
@@ -366,7 +409,7 @@ function ProfileForm({
         <FormError message={error} />
         <div className="flex justify-end">
           <Button type="submit" disabled={pending}>
-            {pending ? "Saving…" : "Save changes"}
+            {pending ? t("account.actions.saving") : t("account.actions.save")}
           </Button>
         </div>
       </form>
@@ -385,41 +428,51 @@ function PasswordForm({
   pending: boolean;
   onSubmit: (values: PasswordValues) => void;
 }) {
+  const { t } = useI18n();
+  const passwordToggleLabels = {
+    show: t("account.password.show"),
+    hide: t("account.password.hide"),
+  };
   return (
     <Card className="max-w-3xl">
       <div className="mb-5">
-        <h3 className="font-semibold">Change password</h3>
+        <h3 className="font-semibold">{t("account.password.title")}</h3>
         <p className="mt-1 text-sm text-neutral-500">
-          Use at least 8 characters and keep it different from your current
-          password.
+          {t("account.password.description")}
         </p>
       </div>
       <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
         <FormField
-          label="Current password"
+          label={t("account.password.current")}
           required
           error={
-            form.formState.errors.currentPassword ? "Required field" : undefined
+            form.formState.errors.currentPassword
+              ? t("account.validation.required")
+              : undefined
           }
         >
           <Input
             type="password"
+            aria-label={t("account.password.current")}
+            passwordToggleLabels={passwordToggleLabels}
             autoComplete="current-password"
             {...form.register("currentPassword", { required: true })}
           />
         </FormField>
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField
-            label="New password"
+            label={t("account.password.new")}
             required
             error={
               form.formState.errors.newPassword
-                ? "Use at least 8 characters"
+                ? t("account.validation.passwordMin")
                 : undefined
             }
           >
             <Input
               type="password"
+              aria-label={t("account.password.new")}
+              passwordToggleLabels={passwordToggleLabels}
               autoComplete="new-password"
               {...form.register("newPassword", {
                 required: true,
@@ -428,25 +481,34 @@ function PasswordForm({
             />
           </FormField>
           <FormField
-            label="Confirm new password"
+            label={t("account.password.confirm")}
             required
             error={
-              form.formState.errors.confirmNewPassword
-                ? "Required field"
-                : undefined
+              form.formState.errors.confirmNewPassword?.type === "validate"
+                ? t("account.validation.passwordMismatch")
+                : form.formState.errors.confirmNewPassword
+                  ? t("account.validation.required")
+                  : undefined
             }
           >
             <Input
               type="password"
+              aria-label={t("account.password.confirm")}
+              passwordToggleLabels={passwordToggleLabels}
               autoComplete="new-password"
-              {...form.register("confirmNewPassword", { required: true })}
+              {...form.register("confirmNewPassword", {
+                required: true,
+                validate: (value) => value === form.getValues("newPassword"),
+              })}
             />
           </FormField>
         </div>
         <FormError message={error} />
         <div className="flex justify-end">
           <Button type="submit" disabled={pending}>
-            {pending ? "Updating…" : "Update password"}
+            {pending
+              ? t("account.password.updating")
+              : t("account.password.update")}
           </Button>
         </div>
       </form>
@@ -499,6 +561,7 @@ function Mode({
   );
 }
 function SelectedAccount({ account }: { account: TelegramUserAccount }) {
+  const { t } = useI18n();
   return (
     <div className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-950/50 p-3">
       <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-neutral-700 bg-neutral-800">
@@ -521,7 +584,7 @@ function SelectedAccount({ account }: { account: TelegramUserAccount }) {
         </p>
       </div>
       <span className="rounded-full border border-emerald-800 bg-emerald-950/40 px-2 py-1 text-xs text-emerald-300">
-        Connected
+        {t("account.telegram.connected")}
       </span>
     </div>
   );

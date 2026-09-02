@@ -250,10 +250,6 @@ export class TelegramChannelGptContextExporter {
           reasons.push(
             `internal link target "${target.title}" has no stable Telegram URL`,
           );
-        } else if (target.lastError) {
-          reasons.push(
-            `internal link target "${target.title}" has an error: ${target.lastError}`,
-          );
         }
       }
       const block = this.calendarPostBlock(

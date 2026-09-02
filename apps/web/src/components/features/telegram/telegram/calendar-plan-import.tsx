@@ -1,5 +1,6 @@
 "use client";
 
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Download } from "lucide-react";
 import {
@@ -9,6 +10,7 @@ import {
 import { Button } from "@/components/ui/primitives";
 import { telegramChannelsApi } from "@/lib/api";
 import { useAppToast } from "@/providers/toast-provider";
+import { useI18n } from "@/providers/i18n-provider";
 import { ManagedPostsImportSource } from "./managed-posts-import-source";
 import { parseCalendarPlanImport } from "./calendar-plan-import-model";
 
@@ -33,6 +35,7 @@ export function CalendarPlanImport({
   onContentChange: (content: string) => void;
   onPreview: (preview: TelegramPostPlannerPreviewResult | null) => void;
 }) {
+  const { t } = useI18n();
   const { pushToast } = useAppToast();
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileError, setFileError] = useState("");
@@ -52,10 +55,10 @@ export function CalendarPlanImport({
     } catch (error) {
       return {
         preview: null,
-        error: error instanceof Error ? error.message : "Could not parse plan.",
+        error: t("telegram.posts.import.parsePlanError"),
       };
     }
-  }, [content, posts, timezone]);
+  }, [content, posts, t, timezone]);
   const error = fileError || parsed.error;
   const previewInputKey = JSON.stringify({
     content,
@@ -74,13 +77,12 @@ export function CalendarPlanImport({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-white">Import JSON plan</h3>
+          <h3 className="text-sm font-semibold text-white">{t("telegram.posts.support.importJsonPlan")}</h3>
           <p className="mt-0.5 text-xs text-neutral-400">
-            Upload or paste postId with scheduledAt, or date and time.
+            {t("telegram.posts.support.planUploadHint")}
           </p>
           <p className="mt-1 text-xs text-neutral-500">
-            The GPT instruction includes stable channel times, post texts,
-            publishing blockers, occupied slots, and recent history.
+            {t("telegram.posts.support.planInstructionHint")}
           </p>
         </div>
         <Button
@@ -101,9 +103,9 @@ export function CalendarPlanImport({
               link.click();
               link.remove();
               URL.revokeObjectURL(url);
-              pushToast("GPT planner instruction downloaded.", "success");
+              pushToast(t("telegram.posts.support.plannerDownloaded"), "success");
             } catch {
-              pushToast("Could not download GPT planner instruction.", "error");
+              pushToast(t("telegram.posts.support.plannerDownloadError"), "error");
             } finally {
               setInstructionLoading(false);
             }
@@ -111,8 +113,8 @@ export function CalendarPlanImport({
         >
           <Download size={15} />
           {instructionLoading
-            ? "Preparing instruction…"
-            : "Download GPT instruction"}
+            ? t("telegram.posts.support.preparingInstruction")
+            : t("telegram.posts.support.downloadInstruction")}
         </Button>
       </div>
       <ManagedPostsImportSource
@@ -132,7 +134,7 @@ export function CalendarPlanImport({
               setFileName(file.name);
               setFileError("");
             })
-            .catch(() => setFileError("Could not read this file."));
+            .catch(() => setFileError(t("telegram.posts.support.fileReadError")));
         }}
         onClear={() => {
           onContentChange("");

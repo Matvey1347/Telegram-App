@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
+import { renderWithI18n as render } from "@/test/render-with-i18n";
 import { describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import type { TelegramPostButtonRows } from "@telegram-system/shared";

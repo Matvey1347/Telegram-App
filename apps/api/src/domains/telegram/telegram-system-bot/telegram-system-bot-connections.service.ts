@@ -395,6 +395,7 @@ export class TelegramSystemBotConnectionsService {
   async requireEnabledConnection(telegramUserId: string) {
     const connection = await this.prisma.telegramSystemBotConnection.findFirst({
       where: { telegramUserId, enabled: true },
+      select: SYSTEM_BOT_AUTHORIZED_CONNECTION_SELECT,
     });
     if (!connection)
       throw new NotFoundException('Telegram account is not connected');

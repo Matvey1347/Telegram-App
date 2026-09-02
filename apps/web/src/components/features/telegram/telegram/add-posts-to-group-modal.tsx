@@ -1,5 +1,6 @@
 "use client";
 
+
 import { useState } from "react";
 import type { PostGroup, TelegramManagedPost } from "@/lib/api";
 import { telegramChannelsApi } from "@/lib/api";
@@ -7,6 +8,7 @@ import { IconAvatar } from "@/components/icons/icon-avatar";
 import { PostStatusIcon } from "./managed-post-presentation";
 import { Button, EmptyState, Modal } from "@/components/ui/primitives";
 import { Pagination } from "@/components/ui/pagination";
+import { useI18n } from "@/providers/i18n-provider";
 
 export function AddPostsModal({
   group,
@@ -30,11 +32,12 @@ export function AddPostsModal({
   onClose: () => void;
   onAdded: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const available = posts.filter((post) => post.groupId !== group?.id);
   return (
-    <Modal open onClose={onClose} title="Add posts" loading={busy}>
+    <Modal open onClose={onClose} title={t("telegram.posts.support.addPosts")} loading={busy}>
       <div className="space-y-3">
         {available.length ? (
           available.map((post) => (
@@ -65,7 +68,7 @@ export function AddPostsModal({
             </label>
           ))
         ) : (
-          <EmptyState text="No posts available to add." />
+          <EmptyState text={t("telegram.posts.support.noPostsAvailable")} />
         )}
         {pagination ? (
           <Pagination
@@ -77,7 +80,7 @@ export function AddPostsModal({
         ) : null}
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             disabled={!group || !selected.length || busy}
@@ -92,12 +95,10 @@ export function AddPostsModal({
               }
             }}
           >
-            Add selected
+            {t("telegram.posts.support.addSelected")}
           </Button>
         </div>
       </div>
     </Modal>
   );
 }
-
-

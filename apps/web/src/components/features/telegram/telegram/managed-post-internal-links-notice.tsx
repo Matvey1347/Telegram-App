@@ -1,10 +1,13 @@
 "use client";
 
+
 import { AlertTriangle } from "lucide-react";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { TooltipBubble } from "@/components/ui/primitives";
 import type { TelegramManagedPost } from "@/lib/api";
 import type { TelegramManagedPostLookupItem } from "@/lib/features/telegram/telegram-managed-posts-api";
+import { telegramManagedPostStatusKey } from "@/lib/features/telegram/telegram-posts-i18n";
+import { useI18n, type TranslationFunction } from "@/providers/i18n-provider";
 
 type ManagedPostLinkTarget = Pick<
   TelegramManagedPostLookupItem,
@@ -88,7 +91,7 @@ export function canScheduleManagedPost(
   );
 }
 
-function postStatusLabel(post?: ManagedPostLinkTarget) {
+function postStatusLabel(t: TranslationFunction, post?: ManagedPostLinkTarget) {
   if (!post) return null;
   if (
     post.status === "PUBLISHED" &&
@@ -96,9 +99,9 @@ function postStatusLabel(post?: ManagedPostLinkTarget) {
       post.telegramRemoteStatus === "MISSING" ||
       post.lastError)
   ) {
-    return "link broken";
+    return t("telegram.posts.links.broken");
   }
-  return post.status.toLowerCase();
+  return t(telegramManagedPostStatusKey(post.status));
 }
 
 export function ManagedPostInternalLinksNotice({
@@ -114,6 +117,7 @@ export function ManagedPostInternalLinksNotice({
   onOpenPostInNewTab?: (post: ManagedPostLinkTarget) => void;
   allowUnresolved?: boolean;
 }) {
+  const { t } = useI18n();
   if (!links.length) return null;
 
   const unresolved = links
@@ -140,21 +144,21 @@ export function ManagedPostInternalLinksNotice({
           <p className="text-sm font-medium">
             {unresolved.length
               ? allowUnresolved
-                ? "Linked posts will be repaired before publication"
-                : "Publishing is blocked by linked posts"
-              : "Internal linked posts are ready"}
+                ? t("telegram.posts.links.repairTitle")
+                : t("telegram.posts.links.blockedTitle")
+              : t("telegram.posts.links.readyTitle")}
           </p>
           <p className="mt-0.5 text-xs text-amber-300/80">
             {unresolved.length
               ? allowUnresolved
-                ? "You can schedule this series now. Links stay non-clickable until each earlier post is published and verified:"
-                : "Publish these posts or attach their Telegram links first:"
-              : "All linked posts are already ready for publishing."}
+                ? t("telegram.posts.links.repairDescription")
+                : t("telegram.posts.links.blockedDescription")
+              : t("telegram.posts.links.readyDescription")}
           </p>
           {unresolved.length ? (
             <div className="mt-3">
               <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-300/75">
-                {allowUnresolved ? "Pending verification" : "Blocking"}
+                {allowUnresolved ? t("telegram.posts.links.pending") : t("telegram.posts.links.blocking")}
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {unresolved.map((target) => (
@@ -173,7 +177,7 @@ export function ManagedPostInternalLinksNotice({
           {resolved.length ? (
             <div className="mt-3">
               <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-300/75">
-                Ready
+                {t("telegram.posts.links.ready")}
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {resolved.map((target) => (
@@ -208,8 +212,9 @@ function ManagedPostInternalLinkPill({
   onHighlightTarget?: (targetId: string) => void;
   onOpenPostInNewTab?: (post: ManagedPostLinkTarget) => void;
 }) {
+  const { t } = useI18n();
   const ready = tone === "ready";
-  const status = ready ? "published" : postStatusLabel(post);
+  const status = ready ? t("telegramPosts.status.published") : postStatusLabel(t, post);
   return (
     <span className="relative inline-flex group">
       <button
@@ -238,7 +243,7 @@ function ManagedPostInternalLinkPill({
         ) : (
           <span aria-hidden="true">📝</span>
         )}
-        <span>{post?.title || (ready ? id : `Missing post ${id}`)}</span>
+        <span>{post?.title || (ready ? id : t("telegram.posts.links.missingNamed", { id }))}</span>
         {status ? (
           <span className={ready ? "text-emerald-300/80" : "text-amber-400/70"}>
             {status}
@@ -250,8 +255,8 @@ function ManagedPostInternalLinkPill({
         align="center"
         className="max-w-64 px-2.5 py-1.5 text-neutral-200 opacity-0 transition-opacity group-hover:opacity-100"
       >
-        Click to jump to this link in the text.
-        {onOpenPostInNewTab ? " Cmd/Ctrl-click opens it in a new tab." : ""}
+        {t("telegram.posts.links.jumpHint")}
+        {onOpenPostInNewTab ? ` ${t("telegram.posts.links.newTabHint")}` : ""}
       </TooltipBubble>
     </span>
   );

@@ -6,7 +6,14 @@ describe('TelegramSystemBotNotificationsService', () => {
       telegramSystemBotTaskSubscription: {
         findMany: jest
           .fn()
-          .mockResolvedValue([{ connection: { telegramChatId: '44' } }]),
+          .mockResolvedValue([
+            {
+              connection: {
+                telegramChatId: '44',
+                user: { locale: 'en' },
+              },
+            },
+          ]),
       },
       workspace: {
         findUnique: jest.fn().mockResolvedValue({ name: 'Business' }),
@@ -40,5 +47,56 @@ describe('TelegramSystemBotNotificationsService', () => {
       chatId: '44',
       text: expect.stringContaining('Successful: 8/8'),
     });
+  });
+
+  it('renders direct Telegram output using each persisted user locale', async () => {
+    const prisma = {
+      telegramSystemBotTaskSubscription: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            connection: {
+              telegramChatId: '44',
+              user: { locale: 'en' },
+            },
+          },
+          {
+            connection: {
+              telegramChatId: '45',
+              user: { locale: 'ru' },
+            },
+          },
+        ]),
+      },
+      workspace: {
+        findUnique: jest.fn().mockResolvedValue({ name: 'Business' }),
+      },
+    } as any;
+    const handler = {
+      sendTaskNotification: jest.fn().mockResolvedValue({ status: 'SENT' }),
+    } as any;
+    const service = new TelegramSystemBotNotificationsService(prisma, handler);
+
+    await service.notify({
+      taskKey: 'telegram.managed_posts.sync',
+      taskName: 'Managed posts sync',
+      workspaceId: 'workspace-a',
+      runId: 'run',
+      status: 'FAILED',
+      resultSummary: null,
+      durationMs: 2_000,
+      errorReason: null,
+    });
+
+    expect(handler.sendTaskNotification).toHaveBeenNthCalledWith(1, {
+      chatId: '44',
+      text: expect.stringContaining('Failed: Managed posts sync'),
+    });
+    expect(handler.sendTaskNotification).toHaveBeenNthCalledWith(2, {
+      chatId: '45',
+      text: expect.stringContaining('Ошибка: Managed posts sync'),
+    });
+    expect(
+      prisma.telegramSystemBotTaskSubscription.findMany,
+    ).toHaveBeenCalledTimes(1);
   });
 });

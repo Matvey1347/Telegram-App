@@ -1,5 +1,6 @@
 "use client";
 
+
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -14,6 +15,9 @@ import { Button, Modal } from "@/components/ui/primitives";
 import { telegramChannelsApi } from "@/lib/api";
 import { telegramPostKeys } from "@/lib/query-keys";
 import { useAppToast } from "@/providers/toast-provider";
+import { useI18n } from "@/providers/i18n-provider";
+import { telegramManagedPostStatusKey } from "@/lib/features/telegram/telegram-posts-i18n";
+import { safeApiErrorMessage } from "@/i18n/error-localization";
 import { ManagedPostsImportSource } from "./managed-posts-import-source";
 import {
   ChannelImportNavigation,
@@ -40,20 +44,20 @@ Rules and consequences:
 export function parseChannelDeletionFile(content: string) {
   const parsed = JSON.parse(content) as unknown;
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Deletion file must be a JSON object.");
+    throw new Error("INVALID_DELETION_FILE");
   }
   const value = parsed as { postIds?: unknown; groupIds?: unknown };
   const parseIds = (input: unknown, field: string) => {
     if (input == null) return [];
     if (!Array.isArray(input) || input.some((id) => typeof id !== "string")) {
-      throw new Error(`${field} must be an array of IDs.`);
+      throw new Error("INVALID_DELETION_FILE");
     }
     return [...new Set(input.map((id) => id.trim()).filter(Boolean))];
   };
   const postIds = parseIds(value.postIds, "postIds");
   const groupIds = parseIds(value.groupIds, "groupIds");
   if (!postIds.length && !groupIds.length) {
-    throw new Error("Add at least one postId or groupId.");
+    throw new Error("EMPTY_DELETION_FILE");
   }
   return { postIds, groupIds };
 }
@@ -74,8 +78,9 @@ export function excludeChannelDeletionItem(
 }
 
 function PreviewSkeleton() {
+  const { t } = useI18n();
   return (
-    <div className="space-y-2" aria-label="Loading deletion preview">
+    <div className="space-y-2" aria-label={t("telegram.posts.support.loadingDeletion")}>
       {[0, 1].map((item) => (
         <div
           key={item}
@@ -99,6 +104,7 @@ export function ChannelReimportDeleteModal({
   onModeChange: (mode: ChannelImportMode) => void;
   onClose: () => void;
 }) {
+  const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const { pushToast, startOperation } = useAppToast();
   const [content, setContent] = useState("");
@@ -111,11 +117,12 @@ export function ChannelReimportDeleteModal({
     } catch (error) {
       return {
         value: null,
-        error:
-          error instanceof Error ? error.message : "Invalid deletion file.",
+        error: error instanceof Error && error.message === "EMPTY_DELETION_FILE"
+          ? t("telegram.posts.import.emptyDeletionFile")
+          : t("telegram.posts.import.invalidDeletionFile"),
       };
     }
-  }, [content]);
+  }, [content, t]);
   const posts = useQuery({
     queryKey: ["telegram-managed-post-lookup", channelId, parsed.value?.postIds],
     queryFn: () =>
@@ -159,9 +166,9 @@ export function ChannelReimportDeleteModal({
   const copyDeletionPrompt = async () => {
     try {
       await navigator.clipboard.writeText(channelDeletionPrompt);
-      pushToast("Deletion prompt copied.", "success");
+      pushToast(t("telegram.posts.support.deletionPromptCopied"), "success");
     } catch {
-      pushToast("Could not copy deletion prompt.", "error");
+      pushToast(t("telegram.posts.support.deletionPromptCopyError"), "error");
     }
   };
 
@@ -171,8 +178,8 @@ export function ChannelReimportDeleteModal({
     const total = parsed.value.postIds.length + parsed.value.groupIds.length;
     const operation = startOperation({
       id: `channel-file-delete:${channelId}`,
-      title: "Delete channel content",
-      message: "Deleting selected posts and groups…",
+      title: t("telegram.posts.import.deleteOperation"),
+      message: t("telegram.posts.import.deleting"),
       current: 0,
       total,
     });
@@ -189,7 +196,7 @@ export function ChannelReimportDeleteModal({
         operation.update({
           current: completed,
           total,
-          message: "Posts deleted. Removing groups…",
+          message: t("telegram.posts.import.postsDeleted"),
         });
       }
       for (const groupId of parsed.value.groupIds) {
@@ -198,7 +205,7 @@ export function ChannelReimportDeleteModal({
         operation.update({
           current: completed,
           total,
-          message: "Deleting groups…",
+          message: t("telegram.posts.import.deletingGroups"),
         });
       }
       await Promise.all([
@@ -212,15 +219,12 @@ export function ChannelReimportDeleteModal({
           queryKey: telegramPostKeys.postGroups(channelId),
         }),
       ]);
-      operation.succeed({ message: `Deleted ${total} items.` });
+      operation.succeed({ message: t("telegram.posts.import.deletedItems", { count: total }) });
       setContent("");
       setFileName(null);
       onClose();
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Could not delete channel content.";
+      const message = safeApiErrorMessage(error, locale, t, t("telegram.posts.import.deleteError"));
       operation.fail({ message });
       pushToast(message, "error");
     } finally {
@@ -229,7 +233,7 @@ export function ChannelReimportDeleteModal({
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Channel import" size="xl">
+    <Modal open={open} onClose={onClose} title={t("telegram.posts.support.channelImport")} size="xl">
       <div className="space-y-4">
         <ChannelImportNavigation
           value={mode}
@@ -240,11 +244,10 @@ export function ChannelReimportDeleteModal({
           <div className="flex items-start justify-between gap-3">
             <div>
               <h3 className="font-semibold text-rose-100">
-                Delete by reimport file
+                {t("telegram.posts.import.deleteTitle")}
               </h3>
               <p className="mt-1 text-sm text-neutral-400">
-                Only IDs found in this channel can be deleted. Posts are deleted
-                first; deleting a group does not delete posts outside the file.
+                {t("telegram.posts.import.deleteHint")}
               </p>
             </div>
             <Button
@@ -253,7 +256,7 @@ export function ChannelReimportDeleteModal({
               disabled={busy}
               onClick={() => void copyDeletionPrompt()}
             >
-              <ClipboardList size={15} /> Prompt
+              <ClipboardList size={15} /> {t("telegram.posts.import.prompt")}
             </Button>
           </div>
         </div>
@@ -280,7 +283,7 @@ export function ChannelReimportDeleteModal({
         {parsed.error || unknownIds.length ? (
           <p className="rounded-lg border border-rose-800/70 bg-rose-950/30 px-3 py-2 text-sm text-rose-200">
             {parsed.error ||
-              `Unknown IDs in this channel: ${unknownIds.join(", ")}`}
+              t("telegram.posts.import.unknownIds", { ids: unknownIds.join(", ") })}
           </p>
         ) : null}
         {parsed.value && previewLoading ? <PreviewSkeleton /> : null}
@@ -288,7 +291,7 @@ export function ChannelReimportDeleteModal({
           <div className="grid gap-4 lg:grid-cols-2">
             <section className="min-w-0 rounded-xl border border-neutral-800 bg-neutral-950/40 p-3">
               <h4 className="mb-2 text-sm font-semibold text-white">
-                Posts to delete · {parsed.value.postIds.length}
+                {t("telegram.posts.import.postsToDelete", { count: parsed.value.postIds.length })}
               </h4>
               {parsed.value.postIds.length ? (
                 <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
@@ -311,7 +314,7 @@ export function ChannelReimportDeleteModal({
                             {post.title}
                           </p>
                           <p className="truncate text-xs text-neutral-400">
-                            {post.status}
+                            {t(telegramManagedPostStatusKey(post.status))}
                             {relevantDate
                               ? ` · ${new Date(relevantDate).toLocaleString()}`
                               : ""}
@@ -322,16 +325,16 @@ export function ChannelReimportDeleteModal({
                           target="_blank"
                           rel="noreferrer"
                           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-neutral-700 text-neutral-400 transition hover:border-blue-500 hover:text-blue-400"
-                          aria-label={`Open ${post.title} in a new tab`}
-                          title="Open post in a new tab"
+                          aria-label={t("telegram.posts.support.openNamed", { title: post.title })}
+                          title={t("telegram.posts.support.openNewTab")}
                         >
                           <ExternalLink size={15} />
                         </a>
                         <button
                           type="button"
                           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-neutral-700 text-neutral-400 transition hover:border-neutral-500 hover:text-white"
-                          aria-label={`Exclude ${post.title} from deletion`}
-                          title="Exclude from deletion"
+                          aria-label={t("telegram.posts.import.excludeNamed", { title: post.title })}
+                          title={t("telegram.posts.support.excludeDeletion")}
                           onClick={() => excludeItem("postIds", id)}
                         >
                           <Trash2 size={15} />
@@ -341,12 +344,12 @@ export function ChannelReimportDeleteModal({
                   })}
                 </div>
               ) : (
-                <p className="text-sm text-neutral-500">No posts selected.</p>
+                <p className="text-sm text-neutral-500">{t("telegram.posts.support.noPostsSelected")}</p>
               )}
             </section>
             <section className="min-w-0 rounded-xl border border-neutral-800 bg-neutral-950/40 p-3">
               <h4 className="mb-2 text-sm font-semibold text-white">
-                Groups to delete · {parsed.value.groupIds.length}
+                {t("telegram.posts.import.groupsToDelete", { count: parsed.value.groupIds.length })}
               </h4>
               {parsed.value.groupIds.length ? (
                 <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
@@ -376,15 +379,15 @@ export function ChannelReimportDeleteModal({
                             {group.title}
                           </p>
                           <p className="truncate text-xs text-neutral-400">
-                            {postsCount} {postsCount === 1 ? "post" : "posts"}
+                            {t("telegram.posts.import.postsCount", { count: postsCount })}
                             {group.description ? ` · ${group.description}` : ""}
                           </p>
                         </div>
                         <button
                           type="button"
                           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-neutral-700 text-neutral-400 transition hover:border-neutral-500 hover:text-white"
-                          aria-label={`Exclude ${group.title} from deletion`}
-                          title="Exclude from deletion"
+                          aria-label={t("telegram.posts.import.excludeNamed", { title: group.title })}
+                          title={t("telegram.posts.support.excludeDeletion")}
                           onClick={() => excludeItem("groupIds", id)}
                         >
                           <Trash2 size={15} />
@@ -394,7 +397,7 @@ export function ChannelReimportDeleteModal({
                   })}
                 </div>
               ) : (
-                <p className="text-sm text-neutral-500">No groups selected.</p>
+                <p className="text-sm text-neutral-500">{t("telegram.posts.support.noGroupsSelected")}</p>
               )}
             </section>
           </div>
@@ -410,7 +413,7 @@ export function ChannelReimportDeleteModal({
             ) : (
               <Trash2 size={15} />
             )}
-            Delete selected content
+            {t("telegram.posts.import.deleteSelected")}
           </Button>
         </div>
       </div>

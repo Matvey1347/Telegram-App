@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
+import { renderWithI18n as render } from "@/test/render-with-i18n";
 import { describe, expect, it, vi } from "vitest";
 import { ManagedPostsImportList } from "./managed-posts-import-list";
 import { rowToEditable } from "./managed-posts-import-model";
@@ -23,9 +24,9 @@ describe("ManagedPostsImportList", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "new (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New (1)" })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "imported (1)" }),
+      screen.getByRole("button", { name: "Imported (1)" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /approved \(/i }),

@@ -5,6 +5,7 @@ import {
   TelegramManagedPostStatus,
 } from '@prisma/client';
 import type { BulkActionResultItem } from '@telegram-system/shared';
+import { telegramPostsBadRequest } from './telegram-posts.errors';
 
 export type PostGroupStatusSummary = {
   totalPosts: number;
@@ -63,13 +64,15 @@ export function validateCompletePostOrder(
     new Set(orderedPostIds).size !== orderedPostIds.length ||
     currentPostIds.length !== orderedPostIds.length
   ) {
-    throw new BadRequestException(
+    throw telegramPostsBadRequest(
+      'TELEGRAM_POST_INVALID_SCHEDULE',
       'orderedPostIds must contain every group post exactly once',
     );
   }
   const current = new Set(currentPostIds);
   if (orderedPostIds.some((postId) => !current.has(postId))) {
-    throw new BadRequestException(
+    throw telegramPostsBadRequest(
+      'TELEGRAM_POST_INVALID_SCHEDULE',
       'orderedPostIds must contain every group post exactly once',
     );
   }
@@ -243,12 +246,19 @@ export function zonedDateTimeToUtc(
   const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
   const timeMatch = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time);
   if (!dateMatch || !timeMatch) {
-    throw new BadRequestException('Invalid schedule date or time');
+    throw telegramPostsBadRequest(
+      'TELEGRAM_POST_INVALID_SCHEDULE',
+      'Invalid schedule date or time',
+    );
   }
   try {
     new Intl.DateTimeFormat('en', { timeZone: timezone }).format();
   } catch {
-    throw new BadRequestException('Invalid IANA timezone');
+    throw telegramPostsBadRequest(
+      'TELEGRAM_POST_INVALID_TIMEZONE',
+      'Invalid IANA timezone',
+      { timezone },
+    );
   }
   const intended = {
     year: Number(dateMatch[1]),
@@ -266,7 +276,10 @@ export function zonedDateTimeToUtc(
     calendarCheck.getUTCMonth() + 1 !== intended.month ||
     calendarCheck.getUTCDate() !== intended.day
   ) {
-    throw new BadRequestException('Invalid schedule date');
+    throw telegramPostsBadRequest(
+      'TELEGRAM_POST_INVALID_SCHEDULE',
+      'Invalid schedule date',
+    );
   }
   const intendedUtc = Date.UTC(
     intended.year,
@@ -296,7 +309,8 @@ export function zonedDateTimeToUtc(
     resolved.hour !== intended.hour ||
     resolved.minute !== intended.minute
   ) {
-    throw new BadRequestException(
+    throw telegramPostsBadRequest(
+      'TELEGRAM_POST_INVALID_SCHEDULE',
       'Schedule time does not exist in the selected timezone',
     );
   }
@@ -311,10 +325,17 @@ export function scheduleSequenceDates(
   timezone = 'UTC',
 ) {
   if (!Number.isInteger(intervalDays) || intervalDays < 1) {
-    throw new BadRequestException('intervalDays must be at least 1');
+    throw telegramPostsBadRequest(
+      'TELEGRAM_POST_INVALID_SCHEDULE',
+      'intervalDays must be at least 1',
+    );
   }
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(startDate);
-  if (!match) throw new BadRequestException('Invalid startDate');
+  if (!match)
+    throw telegramPostsBadRequest(
+      'TELEGRAM_POST_INVALID_SCHEDULE',
+      'Invalid startDate',
+    );
   return Array.from({ length: count }, (_, index) => {
     const date = new Date(
       Date.UTC(

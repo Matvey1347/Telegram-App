@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { renderWithI18n as render } from "@/test/render-with-i18n";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TelegramImageUpload } from "@/components/features/telegram/telegram/telegram-image-upload";
 

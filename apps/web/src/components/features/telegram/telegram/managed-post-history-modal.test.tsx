@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, waitFor } from "@testing-library/react";
+import { waitFor } from "@testing-library/react";
+import { renderWithI18n as render } from "@/test/render-with-i18n";
 import { describe, expect, it, vi } from "vitest";
 import { ManagedPostHistoryModal } from "./managed-post-history-modal";
 

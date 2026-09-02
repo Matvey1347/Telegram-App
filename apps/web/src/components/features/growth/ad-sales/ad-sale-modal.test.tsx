@@ -1,5 +1,6 @@
 import type { ComponentProps } from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { renderWithI18n as render } from "@/test/render-with-i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AdSaleModal, defaultAdSaleAccountId } from "./ad-sale-modal";

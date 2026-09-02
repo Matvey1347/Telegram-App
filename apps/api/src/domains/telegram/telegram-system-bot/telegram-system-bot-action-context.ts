@@ -2,6 +2,7 @@ import type { Prisma, TelegramSystemBotConnection } from '@prisma/client';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import type { TelegramSystemBotIncomingMessage } from './telegram-system-bot-forwarded-content.parser';
 import { systemBotCommandFor } from './telegram-system-bot-menu';
+import { normalizeAppLocale } from '@telegram-system/shared';
 
 export type TelegramSystemBotUpdate = {
   update_id?: number | string;
@@ -54,17 +55,18 @@ export type TelegramSystemBotAction = {
   callbackMessageId: number | undefined;
 };
 
-export type SystemBotAuthorizedConnection = Pick<
-  TelegramSystemBotConnection,
-  'id' | 'userId' | 'telegramUserId' | 'currentWorkspaceId'
->;
-
 export const SYSTEM_BOT_AUTHORIZED_CONNECTION_SELECT = {
   id: true,
   userId: true,
   telegramUserId: true,
   currentWorkspaceId: true,
+  user: { select: { locale: true } },
 } as const satisfies Prisma.TelegramSystemBotConnectionSelect;
+
+export type SystemBotAuthorizedConnection = Pick<
+  TelegramSystemBotConnection,
+  'id' | 'userId' | 'telegramUserId' | 'currentWorkspaceId'
+> & { user?: { locale: string } };
 
 export const SYSTEM_BOT_WORKSPACE_MEMBERSHIP_SELECT = {
   workspaceId: true,
@@ -151,5 +153,8 @@ export function systemBotWorkflowScope(
     telegramUserId: connection.telegramUserId,
     workspaceId: workspace.workspaceId,
     timezone: workspace.workspace.timezone,
+    ...(connection.user?.locale
+      ? { locale: normalizeAppLocale(connection.user.locale) }
+      : {}),
   };
 }

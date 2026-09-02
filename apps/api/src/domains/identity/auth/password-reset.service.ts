@@ -1,8 +1,9 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PasswordResetEmailService } from './password-reset-email.service';
+import { badRequest } from '../../../common/http/structured-http-error';
 
 const REQUEST_ACCEPTED = {
   message: 'If an account exists for that email, a reset link has been sent.',
@@ -21,7 +22,7 @@ export class PasswordResetService {
   async request(inputEmail: string): Promise<{ message: string }> {
     const user = await this.prisma.user.findUnique({
       where: { email: inputEmail.toLowerCase().trim() },
-      select: { id: true, email: true },
+      select: { id: true, email: true, locale: true },
     });
     if (!user) return REQUEST_ACCEPTED;
 
@@ -41,7 +42,7 @@ export class PasswordResetService {
     });
 
     try {
-      await this.email.send(user.email, rawToken);
+      await this.email.send(user.email, rawToken, user.locale);
     } catch {
       // The public response stays identical so SMTP health cannot enumerate users.
       this.logger.error('Password reset email delivery failed');
@@ -59,7 +60,10 @@ export class PasswordResetService {
       select: { id: true, userId: true, usedAt: true, expiresAt: true },
     });
     if (!candidate || candidate.usedAt || candidate.expiresAt <= new Date()) {
-      throw new BadRequestException('Reset token is invalid or expired');
+      throw badRequest(
+        'AUTH_RESET_TOKEN_INVALID',
+        'Reset token is invalid or expired',
+      );
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -83,7 +87,10 @@ export class PasswordResetService {
     });
 
     if (!changed) {
-      throw new BadRequestException('Reset token is invalid or expired');
+      throw badRequest(
+        'AUTH_RESET_TOKEN_INVALID',
+        'Reset token is invalid or expired',
+      );
     }
     return { message: 'Password has been reset.' };
   }

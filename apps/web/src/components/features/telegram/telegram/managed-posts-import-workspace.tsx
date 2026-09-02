@@ -1,5 +1,6 @@
 "use client";
 
+
 import { useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ListChecks, Trash2 } from "lucide-react";
 import { IconPicker } from "@/components/icons/icon-picker";
@@ -31,6 +32,7 @@ import {
   type ImportRowTab,
 } from "./managed-posts-import-model";
 import type { ManagedPostsGroupOption } from "./managed-posts-import-source";
+import { useI18n } from "@/providers/i18n-provider";
 
 const noGroupValue = "__no_group__";
 const useDefaultGroupValue = "__use_default_group__";
@@ -74,6 +76,7 @@ export function ManagedPostsImportWorkspace({
   onSelectRow: (index: number) => void;
   onSelectTab: (tab: ImportRowTab) => void;
 }) {
+  const { t } = useI18n();
   const textEditorRef = useRef<TelegramTextEditorHandle | null>(null);
   const [highlightedTargetId, setHighlightedTargetId] = useState<string | null>(
     null,
@@ -103,9 +106,9 @@ export function ManagedPostsImportWorkspace({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-100">
           <ListChecks size={16} />
-          Preview & edit
+          {t("telegram.posts.import.preview")}
           <span className="text-xs font-normal text-neutral-500">
-            {selectedRowIndex + 1} of {rows.length}
+            {t("telegram.posts.import.position", { current: selectedRowIndex + 1, total: rows.length })}
           </span>
         </div>
         <div className="inline-flex items-center gap-2">
@@ -115,8 +118,8 @@ export function ManagedPostsImportWorkspace({
             className="px-2 py-2"
             disabled={disabled}
             onClick={() => onDeleteRow(selectedRowIndex)}
-            title="Delete post from import"
-            aria-label="Delete post from import"
+            title={t("telegram.posts.import.deletePost")}
+            aria-label={t("telegram.posts.import.deletePost")}
           >
             <Trash2 size={14} />
           </Button>
@@ -126,7 +129,7 @@ export function ManagedPostsImportWorkspace({
             className="px-2 py-2"
             disabled={selectedPosition <= 0 || disabled}
             onClick={() => onSelectRow(visibleRowIndices[selectedPosition - 1])}
-            aria-label="Previous post"
+            aria-label={t("telegram.posts.import.previousPost")}
           >
             <ChevronLeft size={14} />
           </Button>
@@ -138,7 +141,7 @@ export function ManagedPostsImportWorkspace({
               selectedPosition >= visibleRowIndices.length - 1 || disabled
             }
             onClick={() => onSelectRow(visibleRowIndices[selectedPosition + 1])}
-            aria-label="Next post"
+            aria-label={t("telegram.posts.import.nextPost")}
           >
             <ChevronRight size={14} />
           </Button>
@@ -148,7 +151,7 @@ export function ManagedPostsImportWorkspace({
       <div className="grid gap-3 xl:grid-cols-[minmax(270px,0.72fr)_minmax(420px,1.25fr)_minmax(260px,0.7fr)]">
         <div className="min-h-[360px] overflow-hidden rounded-lg border border-neutral-800 bg-[#0e1b26]">
           <TelegramPostPreview
-            channelTitle={channelTitle || "Preview"}
+            channelTitle={channelTitle || t("telegram.posts.import.previewChannel")}
             channelPhotoUrl={channelPhotoUrl ?? null}
             text={selectedRow?.text ?? ""}
             imageUrls={imageUrls}
@@ -180,7 +183,7 @@ export function ManagedPostsImportWorkspace({
                     })
                   }
                 />
-                Approved
+                {t("telegram.posts.import.approved")}
               </label>
               <label className="flex items-center gap-2 text-sm text-neutral-200">
                 <input
@@ -193,12 +196,12 @@ export function ManagedPostsImportWorkspace({
                     })
                   }
                 />
-                Imported
+                {t("telegram.posts.import.imported")}
               </label>
             </div>
 
             <div className="grid gap-2 sm:grid-cols-[48px_minmax(0,1fr)]">
-              <FormField label="Icon">
+              <FormField label={t("telegram.posts.import.icon")}>
                 <IconPicker
                   compact
                   allowImages={false}
@@ -211,12 +214,12 @@ export function ManagedPostsImportWorkspace({
                   onEmojiChange={(icon) =>
                     onUpdateRow(selectedRowIndex, { icon: icon ?? "" })
                   }
-                  buttonLabel="Add emoji"
+                  buttonLabel={t("telegram.posts.icon.addEmoji")}
                   className="!h-9 !w-9"
                   iconClassName="!h-6 !w-6 !bg-transparent"
                 />
               </FormField>
-              <FormField label="Title">
+              <FormField label={t("telegram.posts.import.titleField")}>
                 <Input
                   value={selectedRow.title}
                   disabled={disabled}
@@ -227,7 +230,7 @@ export function ManagedPostsImportWorkspace({
               </FormField>
             </div>
 
-            <FormField label="Telegram text">
+            <FormField label={t("telegram.posts.import.telegramText")}>
               <TelegramTextEditor
                 key={selectedRowIndex}
                 ref={textEditorRef}
@@ -263,12 +266,12 @@ export function ManagedPostsImportWorkspace({
             />
 
             <div className="grid gap-3 lg:grid-cols-2">
-              <FormField label="Image URLs">
+              <FormField label={t("telegram.posts.import.imageUrls")}>
                 <Textarea
                   rows={3}
                   value={selectedRow.urlsText}
                   disabled={disabled}
-                  placeholder="One image URL per line"
+                  placeholder={t("telegram.posts.import.imageUrlsHint")}
                   className="font-mono text-xs"
                   onChange={(event) =>
                     onUpdateRow(selectedRowIndex, {
@@ -277,12 +280,12 @@ export function ManagedPostsImportWorkspace({
                   }
                 />
               </FormField>
-              <FormField label="Image search">
+              <FormField label={t("telegram.posts.import.imageSearch")}>
                 <Textarea
                   rows={3}
                   value={selectedRow.imageSearchText}
                   disabled={disabled}
-                  placeholder="One search query per line"
+                  placeholder={t("telegram.posts.import.imageSearchHint")}
                   className="font-mono text-xs"
                   onChange={(event) =>
                     onUpdateRow(selectedRowIndex, {
@@ -294,7 +297,7 @@ export function ManagedPostsImportWorkspace({
             </div>
 
             <div className="grid gap-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.65fr)]">
-              <FormField label="Post group">
+              <FormField label={t("telegram.posts.import.postGroup")}>
                 <CustomSelect
                   value={
                     selectedRow.groupId === undefined
@@ -313,12 +316,12 @@ export function ManagedPostsImportWorkspace({
                   }
                   disabled={disabled}
                   options={[
-                    { value: useDefaultGroupValue, label: "Use default group" },
+                    { value: useDefaultGroupValue, label: t("telegram.posts.import.defaultGroup") },
                     ...groupOptions,
                   ]}
                 />
               </FormField>
-              <FormField label="Date">
+              <FormField label={t("telegram.posts.import.date")}>
                 <DateInput
                   value={selectedRow.scheduledAt?.slice(0, 10) ?? ""}
                   disabled={disabled}
@@ -335,7 +338,7 @@ export function ManagedPostsImportWorkspace({
                   }}
                 />
               </FormField>
-              <FormField label="Time">
+              <FormField label={t("telegram.posts.import.time")}>
                 <TimeInput
                   value={selectedRow.scheduledAt?.slice(11, 16) ?? ""}
                   disabled={disabled}
@@ -359,7 +362,7 @@ export function ManagedPostsImportWorkspace({
                   onUpdateRow(selectedRowIndex, { scheduledAt: null })
                 }
               >
-                Clear schedule
+                {t("telegram.posts.import.clearSchedule")}
               </Button>
             </div>
           </div>

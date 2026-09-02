@@ -1,5 +1,6 @@
 "use client";
 
+
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Clock3, Plus, Trash2 } from "lucide-react";
@@ -21,6 +22,7 @@ import {
 import { patchTelegramChannelCaches } from "@/lib/features/telegram/telegram-channel-cache";
 import { telegramChannelKeys } from "@/lib/query-keys";
 import { useAppToast } from "@/providers/toast-provider";
+import { useI18n } from "@/providers/i18n-provider";
 import { TelegramCardMenuAction } from "./telegram-card-actions-menu";
 
 type TimePostDraft = TelegramChannelTimePost;
@@ -68,6 +70,7 @@ function TimePostEditor({
   onChange: (patch: Partial<TimePostDraft>) => void;
   onRemove: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="rounded-lg border border-neutral-800 bg-neutral-900/20 p-3">
       <div className="grid gap-3 md:grid-cols-[auto_minmax(0,1fr)_140px_auto]">
@@ -79,17 +82,17 @@ function TimePostEditor({
             onChange={(iconId) =>
               onChange({ iconId: iconId || null, iconPresentation: null })
             }
-            buttonLabel="Pick icon"
+            buttonLabel={t("telegram.posts.time.pickIcon")}
           />
         </div>
-        <FormField label="Title">
+        <FormField label={t("telegram.posts.time.title")}>
           <Input
             value={item.title}
             onChange={(event) => onChange({ title: event.target.value })}
-            placeholder="Optional label"
+            placeholder={t("telegram.posts.time.optionalLabel")}
           />
         </FormField>
-        <FormField label="Time">
+        <FormField label={t("telegram.posts.time.time")}>
           <TimeInput
             value={item.time}
             onChange={(event) => onChange({ time: event.target.value })}
@@ -101,7 +104,7 @@ function TimePostEditor({
             variant="secondary"
             className="h-10 px-3"
             onClick={onRemove}
-            aria-label="Remove publishing time"
+            aria-label={t("telegram.posts.time.remove")}
           >
             <Trash2 size={15} />
           </Button>
@@ -122,6 +125,7 @@ export function TimePostsControl({
 }) {
   const queryClient = useQueryClient();
   const { pushToast } = useAppToast();
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [draftTimePosts, setDraftTimePosts] = useState<TimePostDraft[]>(timePosts);
   const saveMutation = useMutation({
@@ -131,10 +135,10 @@ export function TimePostsControl({
       }),
     onSuccess: (channel) => {
       reconcileTimePosts(queryClient, channel);
-      pushToast("Publishing times saved.", "success");
+      pushToast(t("telegram.posts.time.saved"), "success");
       setOpen(false);
     },
-    onError: () => pushToast("Could not save publishing times.", "error"),
+    onError: () => pushToast(t("telegram.posts.time.saveError"), "error"),
   });
 
   const invalid = draftTimePosts.some(
@@ -145,7 +149,7 @@ export function TimePostsControl({
     <>
       {presentation === "menu" ? (
         <TelegramCardMenuAction
-          label="Time posts"
+          label={t("telegram.posts.time.menu")}
           icon={<Clock3 size={15} />}
           onClick={() => {
             setDraftTimePosts(timePosts);
@@ -163,18 +167,18 @@ export function TimePostsControl({
         >
           <span className="inline-flex items-center gap-2">
             <Clock3 size={15} />
-            Time posts
+            {t("telegram.posts.time.menu")}
           </span>
         </Button>
       )}
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="Publishing times"
+        title={t("telegram.posts.time.manageTitle")}
       >
         <div className="space-y-4">
           <p className="rounded-lg border border-neutral-800 bg-neutral-900/30 p-3 text-sm text-neutral-300">
-            Saved times can be selected when scheduling a post or filling the calendar.
+            {t("telegram.posts.time.description")}
           </p>
           <div className="space-y-3">
             {draftTimePosts.map((item, index) => (
@@ -199,7 +203,7 @@ export function TimePostsControl({
             ))}
             {!draftTimePosts.length ? (
               <div className="rounded-lg border border-dashed border-neutral-700 p-4 text-sm text-neutral-400">
-                No publishing times yet. Add your first reusable slot.
+                {t("telegram.posts.time.empty")}
               </div>
             ) : null}
           </div>
@@ -213,19 +217,19 @@ export function TimePostsControl({
             >
               <span className="inline-flex items-center gap-2">
                 <Plus size={15} />
-                Add time
+                {t("telegram.posts.time.add")}
               </span>
             </Button>
             <div className="flex gap-2">
               <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 type="button"
                 disabled={saveMutation.isPending || invalid}
                 onClick={() => saveMutation.mutate(draftTimePosts)}
               >
-                {saveMutation.isPending ? "Saving..." : "Save times"}
+                {saveMutation.isPending ? t("common.saving") : t("telegram.posts.time.save")}
               </Button>
             </div>
           </div>
@@ -248,6 +252,7 @@ export function AddTimePostButton({
 }) {
   const queryClient = useQueryClient();
   const { pushToast } = useAppToast();
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<TimePostDraft>(() => newTimePost(0));
   const saveMutation = useMutation({
@@ -257,20 +262,20 @@ export function AddTimePostButton({
       }),
     onSuccess: (channel) => {
       reconcileTimePosts(queryClient, channel);
-      pushToast("Publishing time added.", "success");
+      pushToast(t("telegram.posts.time.added"), "success");
       setOpen(false);
       setDraft(newTimePost(0));
     },
-    onError: () => pushToast("Could not add publishing time.", "error"),
+    onError: () => pushToast(t("telegram.posts.time.addError"), "error"),
   });
   const invalid = !canonicalizeTimeInputValue(draft.time);
   const openModal = () => setOpen(true);
   const button =
     presentation === "editor" ? (
-      <Tooltip content="Add a new publishing time">
+      <Tooltip content={t("telegram.posts.time.addAccessible")}>
         <Button
           type="button"
-          aria-label="Add a new publishing time"
+          aria-label={t("telegram.posts.time.addAccessible")}
           className={`!grid h-9 w-9 shrink-0 !place-items-center !p-0 leading-none bg-blue-600 hover:bg-blue-500 ${className ?? ""}`}
           onClick={openModal}
         >
@@ -290,7 +295,7 @@ export function AddTimePostButton({
       >
         <span className="inline-flex items-center gap-1.5">
           <Plus size={presentation === "calendar" ? 14 : 15} />
-          {presentation === "calendar" ? "Add time" : "Add new time"}
+          {presentation === "calendar" ? t("telegram.posts.time.add") : t("telegram.posts.time.addNew")}
         </span>
       </Button>
     );
@@ -298,7 +303,7 @@ export function AddTimePostButton({
   return (
     <>
       {button}
-      <Modal open={open} onClose={() => setOpen(false)} title="Add publishing time">
+      <Modal open={open} onClose={() => setOpen(false)} title={t("telegram.posts.time.addTitle")}>
         <div className="space-y-4">
           <TimePostEditor
             item={draft}
@@ -307,14 +312,14 @@ export function AddTimePostButton({
           />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               type="button"
               disabled={saveMutation.isPending || invalid}
               onClick={() => saveMutation.mutate()}
             >
-              {saveMutation.isPending ? "Saving..." : "Add time"}
+              {saveMutation.isPending ? t("common.saving") : t("telegram.posts.time.add")}
             </Button>
           </div>
         </div>

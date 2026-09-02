@@ -29,6 +29,11 @@ import { TelegramManagedPostPublicationService } from './telegram-managed-post-p
 import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-media-storage.service';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
+import {
+  managedPostNotFound,
+  telegramPostsBadRequest,
+  telegramPostsNotFound,
+} from './telegram-posts.errors';
 
 @Injectable()
 export class TelegramManagedPostHistoryService {
@@ -89,7 +94,7 @@ export class TelegramManagedPostHistoryService {
       where: { id: postId, workspaceId, telegramChannelId: channelId },
       select: { id: true },
     });
-    if (!post) throw new NotFoundException('Managed post not found');
+    if (!post) throw managedPostNotFound();
     return this.telegramManagedPostGroupPresentationService.attachManagedPostIcons(
       await this.telegramManagedPostRevisionStore.listManagedPostRevisions(
         this.prisma,
@@ -124,8 +129,12 @@ export class TelegramManagedPostHistoryService {
         },
       ),
     ])) as [ManagedPostRevisionSource | null, ManagedPostRevisionRecord | null];
-    if (!post) throw new NotFoundException('Managed post not found');
-    if (!revision) throw new NotFoundException('Post revision not found');
+    if (!post) throw managedPostNotFound();
+    if (!revision)
+      throw telegramPostsNotFound(
+        'TELEGRAM_MANAGED_POST_NOT_FOUND',
+        'Post revision not found',
+      );
     return this.prisma.$transaction(async (tx) => {
       await this.telegramManagedPostRevisionStore.createManagedPostRevision(
         tx,
@@ -191,7 +200,7 @@ export class TelegramManagedPostHistoryService {
         where: { id: restored.id },
         include: this.managedPostInclude,
       });
-      if (!canonical) throw new NotFoundException('Managed post not found');
+      if (!canonical) throw managedPostNotFound();
       return canonical;
     });
   }
@@ -207,11 +216,17 @@ export class TelegramManagedPostHistoryService {
     const post = await this.prisma.telegramManagedPost.findFirst({
       where: { id: postId, workspaceId, telegramChannelId: channelId },
     });
-    if (!post) throw new NotFoundException('Post draft not found');
+    if (!post) throw managedPostNotFound();
     if (dto.title !== undefined && !dto.title.trim())
-      throw new BadRequestException('Title is required');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_TITLE_REQUIRED',
+        'Title is required',
+      );
     if (dto.assignedMemberId === null)
-      throw new BadRequestException('Assigned member is required');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_ASSIGNED_MEMBER_REQUIRED',
+        'Assigned member is required',
+      );
     if (
       (post.status === TelegramManagedPostStatus.PUBLISHED ||
         post.status === TelegramManagedPostStatus.SCHEDULED) &&
@@ -221,7 +236,8 @@ export class TelegramManagedPostHistoryService {
         post.imageUrls,
       )
     ) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_IMAGES_NOT_EDITABLE',
         'Images cannot be edited after the post is sent or scheduled. Update only the text.',
       );
     }
@@ -234,7 +250,8 @@ export class TelegramManagedPostHistoryService {
         post.imageUrls,
       )
     ) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_MEDIA_NOT_REPLACEABLE',
         'Imported Telegram media cannot be replaced from the editor.',
       );
     }
@@ -245,7 +262,10 @@ export class TelegramManagedPostHistoryService {
         dto.assignedMemberId,
       );
       if (!resolved.assignedMemberId) {
-        throw new BadRequestException('Assigned member is required');
+        throw telegramPostsBadRequest(
+          'TELEGRAM_POST_ASSIGNED_MEMBER_REQUIRED',
+          'Assigned member is required',
+        );
       }
       assignedMemberId = resolved.assignedMemberId;
     }
@@ -264,7 +284,8 @@ export class TelegramManagedPostHistoryService {
       nextButtonRows.length > 0 &&
       post.scheduleMode !== 'LOCAL';
     if (dto.inPlaceOnly && convertsNativeScheduleToLocal) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_NOT_EDITABLE',
         'This scheduled Telegram post cannot add inline buttons without replacing the remote message.',
       );
     }
@@ -282,7 +303,8 @@ export class TelegramManagedPostHistoryService {
           source.permissions.canPostMessages,
       );
       if (!localBotSource) {
-        throw new BadRequestException(
+        throw telegramPostsBadRequest(
+          'TELEGRAM_POST_PUBLISH_SOURCE_UNAVAILABLE',
           'Publishing inline buttons requires a workspace bot with posting permission for this channel.',
         );
       }

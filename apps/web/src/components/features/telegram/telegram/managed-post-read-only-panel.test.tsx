@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
+import { renderWithI18n as render } from "@/test/render-with-i18n";
 import { describe, expect, it } from "vitest";
 import { ManagedPostReadOnlyPanel } from "./managed-post-read-only-panel";
 

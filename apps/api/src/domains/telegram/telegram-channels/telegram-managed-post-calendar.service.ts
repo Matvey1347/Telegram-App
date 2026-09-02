@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma, TelegramManagedPostStatus } from '@prisma/client';
 import type { TelegramManagedPostCalendarResult } from '@telegram-system/shared';
 import { ResponseCacheService } from '../../../common/response-cache.service';
@@ -7,6 +7,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { ManagedPostsCalendarQueryDto } from './dto';
 import { TelegramChannelCatalogService } from './telegram-channel-catalog.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
+import { telegramPostsBadRequest } from './telegram-posts.errors';
 
 @Injectable()
 export class TelegramManagedPostCalendarService {
@@ -28,14 +29,24 @@ export class TelegramManagedPostCalendarService {
     const from = new Date(query.from);
     const to = new Date(query.to);
     if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
-      throw new BadRequestException('Calendar range is invalid');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_CALENDAR_RANGE_INVALID',
+        'Calendar range is invalid',
+      );
     }
     if (to < from) {
-      throw new BadRequestException('Calendar range is invalid');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_CALENDAR_RANGE_INVALID',
+        'Calendar range is invalid',
+      );
     }
     const maxRangeMs = 366 * 24 * 60 * 60 * 1000;
     if (to.getTime() - from.getTime() > maxRangeMs) {
-      throw new BadRequestException('Calendar range is too large');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_CALENDAR_RANGE_TOO_LARGE',
+        'Calendar range is too large',
+        { maxDays: 366 },
+      );
     }
     const now = new Date();
     const publishedRangeEnd = to < now ? to : now;

@@ -48,6 +48,13 @@ export class ApplicationLogsExceptionFilter implements ExceptionFilter {
         : isHttpException
           ? exception.name
           : 'INTERNAL_SERVER_ERROR';
+    const params =
+      typeof payload === 'object' &&
+      payload != null &&
+      typeof (payload as any).params === 'object' &&
+      (payload as any).params != null
+        ? (payload as any).params
+        : undefined;
     const event =
       exception instanceof BadRequestException
         ? 'validation.failed'
@@ -95,6 +102,7 @@ export class ApplicationLogsExceptionFilter implements ExceptionFilter {
         ? { details: (payload as any).details }
         : {}),
       code,
+      ...(params ? { params } : {}),
       correlationId,
     });
   }

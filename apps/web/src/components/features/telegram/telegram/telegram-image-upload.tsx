@@ -1,10 +1,12 @@
 "use client";
 
+
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from "react";
 import { ImagePlus, Link2, LoaderCircle, Plus, X } from "lucide-react";
 import { iconsApi } from "@/lib/api";
 import { useAppToast } from "@/providers/toast-provider";
 import { Button, FormField, Input } from "@/components/ui/primitives";
+import { useI18n } from "@/providers/i18n-provider";
 
 export function TelegramImageUpload({
   value,
@@ -12,7 +14,7 @@ export function TelegramImageUpload({
   disabled,
   readOnly,
   compact,
-  label = "Images",
+  label,
   onUploadingChange,
 }: {
   value: string[];
@@ -28,15 +30,16 @@ export function TelegramImageUpload({
   const [pasteFocused, setPasteFocused] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { pushToast } = useAppToast();
+  const { t } = useI18n();
 
   const uploadBusy = uploadingPreviews.length > 0;
   const disabledState = disabled || uploadBusy;
   const helperText = useMemo(
     () =>
       compact
-        ? "Upload, paste with Ctrl/Cmd+V, or add an image URL"
-        : "Upload images, paste with Ctrl/Cmd+V, or load by image URL",
-    [compact],
+        ? t("telegram.posts.editorComponents.images.compactHelp")
+        : t("telegram.posts.editorComponents.images.help"),
+    [compact, t],
   );
 
   useEffect(() => {
@@ -47,7 +50,7 @@ export function TelegramImageUpload({
     if (!files.length) return;
     const imageFiles = files.filter((file) => file.type.startsWith("image/"));
     if (!imageFiles.length) {
-      pushToast("Only image files can be uploaded.", "error");
+      pushToast(t("telegram.posts.editorComponents.images.errors.onlyImages"), "error");
       return;
     }
 
@@ -59,10 +62,9 @@ export function TelegramImageUpload({
         imageFiles.map((file) => iconsApi.upload(file)),
       );
       onChange([...value, ...uploaded.map((item) => item.imageUrl)]);
-    } catch (error) {
+    } catch {
       pushToast(
-        (error as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message || "Failed to upload image.",
+        t("telegram.posts.editorComponents.images.errors.uploadFailed"),
         "error",
       );
     } finally {
@@ -101,19 +103,19 @@ export function TelegramImageUpload({
     try {
       const parsedUrl = new URL(normalizedUrl);
       if (!["http:", "https:"].includes(parsedUrl.protocol)) {
-        throw new Error("Image URL must use HTTP or HTTPS.");
+        throw new Error(t("telegram.posts.editorComponents.images.errors.protocol"));
       }
       onChange(value.includes(parsedUrl.toString()) ? value : [...value, parsedUrl.toString()]);
       setImageUrl("");
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Invalid image URL.";
+        t("telegram.posts.editorComponents.images.errors.invalidUrl");
       pushToast(message, "error");
     }
   };
 
   return (
-    <FormField label={label}>
+    <FormField label={label ?? t("telegram.posts.editorComponents.images.label")}>
       {!readOnly ? (
         <div className="space-y-3">
           <div
@@ -135,7 +137,7 @@ export function TelegramImageUpload({
               }`}
             >
               <ImagePlus size={18} />
-              {uploadBusy ? "Uploading images..." : "Upload images"}
+              {uploadBusy ? t("telegram.posts.editorComponents.images.uploadingImages") : t("telegram.posts.editorComponents.images.uploadImages")}
               <input
                 ref={fileInputRef}
                 className="sr-only"
@@ -181,7 +183,7 @@ export function TelegramImageUpload({
             >
               <span className="inline-flex items-center gap-2">
                 <Link2 size={15} />
-                Add by URL
+                {t("telegram.posts.editorComponents.images.addByUrl")}
               </span>
             </Button>
           </div>
@@ -205,7 +207,7 @@ export function TelegramImageUpload({
                     )
                   }
                   className="absolute right-1 top-1 rounded-md bg-black/75 p-1 text-white opacity-0 transition group-hover:opacity-100"
-                  aria-label="Remove image"
+                  aria-label={t("telegram.posts.editorComponents.images.remove")}
                 >
                   <X size={14} />
                 </button>
@@ -220,12 +222,12 @@ export function TelegramImageUpload({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={url}
-                alt={`Uploading image ${index + 1}`}
+                alt={t("telegram.posts.editorComponents.images.uploadingImage", { number: index + 1 })}
                 className="h-full w-full object-contain opacity-35 blur-[1px]"
               />
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/25 text-blue-200">
                 <LoaderCircle size={22} className="animate-spin" />
-                <span className="text-[10px]">Uploading</span>
+                <span className="text-[10px]">{t("telegram.posts.editorComponents.images.uploading")}</span>
               </div>
             </div>
           ))}

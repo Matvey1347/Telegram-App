@@ -13,6 +13,7 @@ import {
 } from '@/lib/features/identity/auth';
 import { useAppToast } from '@/providers/toast-provider';
 import { Skeleton } from '@/components/ui/primitives';
+import { useOptionalI18n } from '@/providers/i18n-provider';
 
 export function ProtectedRoute({ children }: PropsWithChildren) {
   const pathname = usePathname();
@@ -26,6 +27,9 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
     error,
   } = useAuth();
   const { pushToast } = useAppToast();
+  const i18n = useOptionalI18n();
+  const networkError = i18n?.t('common.error.network') ?? 'Unable to connect to the server. Please try again later.';
+  const loadingLabel = i18n?.t('common.loading') ?? 'Loading…';
   const isAuthPage = isAuthPath(pathname);
   const isEntryAuthPage = pathname === '/login' || pathname === '/register';
   const [mounted, setMounted] = useState(false);
@@ -43,13 +47,13 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
     if (hasConnectionIssue) {
       if (!hasShownConnectionAlertRef.current) {
         hasShownConnectionAlertRef.current = true;
-        pushToast('Unable to connect to the server. Please try again later.', 'error');
+        pushToast(networkError, 'error');
       }
       return;
     }
 
     hasShownConnectionAlertRef.current = false;
-  }, [mounted, isTokenReady, hasConnectionIssue, pushToast]);
+  }, [mounted, isTokenReady, hasConnectionIssue, networkError, pushToast]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -79,15 +83,15 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
     }
   }, [mounted, isTokenReady, isAuthResolved, token, isLoading, isAuthenticated, isAuthPage, isEntryAuthPage, router, pathname, hasConnectionIssue]);
 
-  if (!mounted || !isTokenReady) {
-    return <FullScreenLoader />;
+  // Public auth pages must be present in the very first client render. Token
+  // state comes from localStorage after hydration, so using the protected-app
+  // loader here causes a misleading dashboard flash on every auth refresh.
+  if (isAuthPage) {
+    return <>{children}</>;
   }
 
-  if (isAuthPage) {
-    if (isEntryAuthPage && token && (isLoading || isAuthenticated) && !hasConnectionIssue) {
-      return <FullScreenLoader />;
-    }
-    return <>{children}</>;
+  if (!mounted || !isTokenReady) {
+    return <FullScreenLoader label={loadingLabel} />;
   }
 
   if (hasConnectionIssue && token) {
@@ -95,16 +99,16 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
   }
 
   if (isLoading || !token || !isAuthenticated) {
-    return <FullScreenLoader />;
+    return <FullScreenLoader label={loadingLabel} />;
   }
 
   return <>{children}</>;
 }
 
-function FullScreenLoader() {
+function FullScreenLoader({ label }: { label: string }) {
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100" role="status" aria-label="Loading application">
-      <span className="sr-only">Loading application</span>
+    <div className="min-h-screen bg-neutral-950 text-neutral-100" role="status" aria-label={label}>
+      <span className="sr-only">{label}</span>
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-neutral-800 bg-neutral-950 p-5 lg:block">
         <Skeleton className="h-6 w-40" />
         <Skeleton className="mt-2 h-4 w-32" />

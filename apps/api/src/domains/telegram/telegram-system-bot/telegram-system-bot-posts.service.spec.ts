@@ -74,6 +74,24 @@ describe('TelegramSystemBotPostsService', () => {
     });
   });
 
+  it('renders managed-post navigation in the persisted Russian locale', async () => {
+    const test = setup();
+
+    await test.service.open({ ...scope, locale: 'ru' });
+
+    expect(test.api.sendMessage).toHaveBeenCalledWith(
+      'token',
+      expect.objectContaining({
+        text: '📝 Публикации',
+        reply_markup: expect.objectContaining({
+          inline_keyboard: expect.arrayContaining([
+            [{ text: '➕ Добавить', callback_data: 'posts:new' }],
+          ]),
+        }),
+      }),
+    );
+  });
+
   it('renders a purpose-built published read model into the callback message', async () => {
     const test = setup();
     test.prisma.telegramManagedPost.findMany.mockResolvedValue([

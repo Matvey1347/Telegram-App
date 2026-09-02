@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import {
   Prisma,
   TelegramManagedPostIdVerificationStatus,
@@ -23,6 +19,10 @@ import { TelegramManagedPostGroupPresentationService } from './telegram-managed-
 import { TelegramManagedPostReconciliationService } from './telegram-managed-post-reconciliation.service';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
+import {
+  managedPostNotFound,
+  telegramPostsBadRequest,
+} from './telegram-posts.errors';
 
 @Injectable()
 export class TelegramManagedPostLinksService {
@@ -88,18 +88,18 @@ export class TelegramManagedPostLinksService {
         where: { id: channelId, workspaceId },
       }),
     ]);
-    if (!post || !channel)
-      throw new NotFoundException('Managed post not found');
+    if (!post || !channel) throw managedPostNotFound();
     const normalizedInput = telegramUrl.trim();
     const currentPost = await this.prisma.telegramManagedPost.findFirst({
       where: { id: postId, workspaceId, telegramChannelId: channelId },
     });
-    if (!currentPost) throw new NotFoundException('Managed post not found');
+    if (!currentPost) throw managedPostNotFound();
     if (
       normalizedInput &&
       currentPost.status === TelegramManagedPostStatus.SCHEDULED
     ) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_MANUAL_LINK_BLOCKED',
         'Cancel or publish the scheduled Telegram post before attaching a manual link.',
       );
     }
@@ -145,7 +145,7 @@ export class TelegramManagedPostLinksService {
           where: { id: updated.id },
           include: this.managedPostInclude,
         });
-        if (!canonical) throw new NotFoundException('Managed post not found');
+        if (!canonical) throw managedPostNotFound();
         return canonical;
       });
       const [hydrated] =
@@ -156,7 +156,10 @@ export class TelegramManagedPostLinksService {
     }
     const parsed = parseTelegramPostUrl(normalizedInput);
     if (!parsed) {
-      throw new BadRequestException('Enter a valid https://t.me/... post URL');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_LINK_INVALID',
+        'Enter a valid https://t.me/... post URL',
+      );
     }
     const channelUsername =
       this.telegramChannelsSupportService.normalizeUsername(channel.username);
@@ -167,14 +170,18 @@ export class TelegramManagedPostLinksService {
       (parsed.kind === 'public' && parsed.username !== channelUsername) ||
       (parsed.kind === 'private' && parsed.chatId !== channelChatId)
     ) {
-      throw new BadRequestException('Telegram link belongs to another channel');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_LINK_CHANNEL_MISMATCH',
+        'Telegram link belongs to another channel',
+      );
     }
     const normalizedTelegramUrl = buildStableTelegramPostUrl({
       telegramChatId: channel.telegramChatId,
       messageId: parsed.messageId,
     });
     if (!normalizedTelegramUrl) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_TELEGRAM_REFERENCE_MISSING',
         'Channel has no stable Telegram channel ID. Sync or re-import the channel first.',
       );
     }
@@ -217,7 +224,7 @@ export class TelegramManagedPostLinksService {
         where: { id: updated.id },
         include: this.managedPostInclude,
       });
-      if (!canonical) throw new NotFoundException('Managed post not found');
+      if (!canonical) throw managedPostNotFound();
       return canonical;
     });
     const [hydrated] =

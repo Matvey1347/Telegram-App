@@ -13,6 +13,10 @@ import { TelegramManagedPostGroupPresentationService } from './telegram-managed-
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
 import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-media-storage.service';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
+import {
+  telegramPostsBadRequest,
+  telegramPostsNotFound,
+} from './telegram-posts.errors';
 
 @Injectable()
 export class TelegramManagedPostCommandService {
@@ -88,7 +92,8 @@ export class TelegramManagedPostCommandService {
       new Set(dto.orderedItems).size !== dto.orderedItems.length ||
       dto.orderedItems.some((item) => !expected.includes(item))
     ) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_INVALID_SCHEDULE',
         'orderedItems must contain every group and ungrouped post exactly once',
       );
     }
@@ -150,7 +155,10 @@ export class TelegramManagedPostCommandService {
     dto: CreateTelegramManagedPostDto,
   ) {
     if (dto.assignedMemberId === null) {
-      throw new BadRequestException('Assigned member is required');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_ASSIGNED_MEMBER_REQUIRED',
+        'Assigned member is required',
+      );
     }
     const { workspaceId, assignedMemberId } =
       await this.workspaceService.resolveAssignedMemberId(
@@ -158,11 +166,18 @@ export class TelegramManagedPostCommandService {
         dto.assignedMemberId,
       );
     if (!assignedMemberId) {
-      throw new BadRequestException('Assigned member is required');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_ASSIGNED_MEMBER_REQUIRED',
+        'Assigned member is required',
+      );
     }
     await this.telegramChannelCatalogService.findOne(userId, channelId);
     const title = dto.title.trim();
-    if (!title) throw new BadRequestException('Title is required');
+    if (!title)
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_TITLE_REQUIRED',
+        'Title is required',
+      );
     const imageUrls =
       await this.telegramManagedPostMediaStorageService.persistImageUrls(
         dto.imageUrls ?? [],
@@ -212,7 +227,10 @@ export class TelegramManagedPostCommandService {
             select: { id: true },
           });
           if (!group)
-            throw new BadRequestException('Post group is unavailable');
+            throw telegramPostsNotFound(
+              'TELEGRAM_POST_GROUP_NOT_FOUND',
+              'Post group is unavailable',
+            );
           const groupPosition = await tx.telegramManagedPost.count({
             where: { groupId: group.id },
           });

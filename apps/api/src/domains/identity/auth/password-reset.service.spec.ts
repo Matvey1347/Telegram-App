@@ -20,6 +20,7 @@ describe('PasswordResetService', () => {
     prisma.user.findUnique.mockResolvedValue({
       id: 'user-1',
       email: 'person@example.test',
+      locale: 'ru',
     });
     prisma.passwordResetToken.upsert.mockResolvedValue({});
     email.send.mockResolvedValue(undefined);
@@ -31,6 +32,11 @@ describe('PasswordResetService', () => {
         'If an account exists for that email, a reset link has been sent.',
     });
     const sentToken = email.send.mock.calls[0][1] as string;
+    expect(email.send).toHaveBeenCalledWith(
+      'person@example.test',
+      sentToken,
+      'ru',
+    );
     expect(sentToken).toHaveLength(43);
     const write = prisma.passwordResetToken.upsert.mock.calls[0][0];
     expect(write.where).toEqual({ userId: 'user-1' });
@@ -57,6 +63,7 @@ describe('PasswordResetService', () => {
     prisma.user.findUnique.mockResolvedValue({
       id: 'user-1',
       email: 'person@example.test',
+      locale: 'en',
     });
     prisma.passwordResetToken.upsert.mockResolvedValue({});
     email.send.mockRejectedValue(new Error('SMTP unavailable'));
@@ -133,6 +140,11 @@ describe('PasswordResetService', () => {
     await expect(
       service.reset('b'.repeat(43), 'new-password'),
     ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.reset('b'.repeat(43), 'new-password'),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'AUTH_RESET_TOKEN_INVALID' }),
+    });
     expect(tx.user.update).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });

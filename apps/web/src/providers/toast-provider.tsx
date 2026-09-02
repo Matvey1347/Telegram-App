@@ -12,6 +12,11 @@ import {
 } from "react";
 import { ToastStack, type ToastItem } from "@/components/ui/primitives";
 import { API_MUTATION_EVENT } from "@/lib/api";
+import { useOptionalI18n } from "@/providers/i18n-provider";
+
+const identityTranslation = (key: string) => key;
+import { TELEGRAM_POSTS_ERROR_KEYS } from "@telegram-system/shared";
+import type { TranslationKey } from "@/i18n/catalog";
 
 type ToastTone = NonNullable<ToastItem["tone"]>;
 
@@ -151,6 +156,9 @@ function normalizeProgress(current?: number, total?: number) {
 }
 
 export function ToastProvider({ children }: PropsWithChildren) {
+  const i18n = useOptionalI18n();
+  const locale = i18n?.locale ?? "en";
+  const t = i18n?.t ?? identityTranslation;
   const [entries, setEntries] = useState<OperationEntry[]>([]);
   const entriesRef = useRef<Map<string, OperationEntry>>(new Map());
   const dismissTimersRef = useRef<Map<string, number>>(new Map());
@@ -211,11 +219,12 @@ export function ToastProvider({ children }: PropsWithChildren) {
       },
     ) => {
       clearDismissTimer(id);
+      const rawMessage = input.message ?? entriesRef.current.get(id)?.message ?? "Working…";
       upsertEntry(id, (existing) => ({
         id,
         createdAt: existing?.createdAt ?? Date.now(),
         title: input.title ?? existing?.title,
-        message: input.message ?? existing?.message ?? "Working…",
+        message: rawMessage,
         tone:
           phase === "loading"
             ? "loading"
@@ -231,7 +240,7 @@ export function ToastProvider({ children }: PropsWithChildren) {
         cancelable: input.cancelable ?? existing?.cancelable,
         details:
           buildDetails({
-            details: input.details,
+            details: locale === "ru" ? undefined : input.details,
             code: input.code,
             correlationId: input.correlationId,
           }) || existing?.details,
@@ -240,7 +249,7 @@ export function ToastProvider({ children }: PropsWithChildren) {
       if (phase === "error") scheduleDismiss(id, ERROR_DISMISS_MS);
       if (phase === "info") scheduleDismiss(id, INFO_DISMISS_MS);
     },
-    [clearDismissTimer, scheduleDismiss, upsertEntry],
+    [clearDismissTimer, locale, scheduleDismiss, upsertEntry],
   );
 
   const startOperation = useCallback(
@@ -423,8 +432,14 @@ export function ToastProvider({ children }: PropsWithChildren) {
       }
       handle.fail({
         title: detail.title,
-        message: detail.message || "The operation could not be completed.",
-        details: detail.details,
+        message: locale === "ru" && detail.code && detail.code in TELEGRAM_POSTS_ERROR_KEYS
+          ? t(
+              TELEGRAM_POSTS_ERROR_KEYS[
+                detail.code as keyof typeof TELEGRAM_POSTS_ERROR_KEYS
+              ] as TranslationKey,
+            )
+          : detail.message || "The operation could not be completed.",
+        details: locale === "ru" ? undefined : detail.details,
         code: detail.code,
         correlationId: detail.correlationId,
         icon: detail.icon,
@@ -438,7 +453,7 @@ export function ToastProvider({ children }: PropsWithChildren) {
       entriesRef.current.clear();
       cancelHandlersRef.current.clear();
     };
-  }, [startOperation]);
+  }, [locale, startOperation, t]);
 
   const items = useMemo<ToastItem[]>(
     () =>

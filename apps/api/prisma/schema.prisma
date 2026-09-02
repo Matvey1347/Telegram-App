@@ -746,6 +746,7 @@ model User {
   authVersion                               Int                                   @default(0)
   name                                      String
   editorShortcuts                           Json?
+  locale                                    String                                @default("en")
   memberships                               WorkspaceMember[]
   icons                                     Icon[]
   createdAccounts                           Account[]                             @relation("AccountCreatedBy")

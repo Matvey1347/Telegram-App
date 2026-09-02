@@ -2,13 +2,19 @@ import {
   ArrayUnique,
   IsArray,
   IsEmail,
+  IsIn,
   IsObject,
   IsOptional,
   IsString,
   MinLength,
 } from 'class-validator';
+import { APP_LOCALES, type AppLocale } from '@telegram-system/shared';
 
 export class UpdateMeDto {
+  @IsOptional()
+  @IsIn(APP_LOCALES)
+  locale?: AppLocale;
+
   @IsOptional()
   @IsString()
   @MinLength(1)
@@ -35,6 +41,11 @@ export class UpdateMeDto {
   @IsOptional()
   @IsObject()
   editorShortcuts?: Record<string, string>;
+}
+
+export class UpdateLocaleDto {
+  @IsIn(APP_LOCALES)
+  locale!: AppLocale;
 }
 
 export class UpdatePasswordDto {

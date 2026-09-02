@@ -14,6 +14,7 @@ const posts: FeatureDefinition = {
   labelKey: "features.posts.label",
   descriptionKey: "features.posts.description",
   surfaces: { navigation: [], search: [], dashboard: [] },
+  i18nNamespaces: ["common"],
   permissions: [
     { id: "posts.view", featureId: "posts", capability: "view", labelKey: "", descriptionKey: "", sensitivity: "standard" },
     { id: "posts.create", featureId: "posts", capability: "create", labelKey: "", descriptionKey: "", sensitivity: "standard" },
@@ -26,6 +27,7 @@ const crm: FeatureDefinition = {
   labelKey: "features.adSales.crm.label",
   descriptionKey: "features.adSales.crm.description",
   surfaces: { navigation: [], search: [], dashboard: [] },
+  i18nNamespaces: ["common", "navigation", "ad-sales/common"],
   permissions: [
     { id: "adSales.crm.view", featureId: "adSales.crm", capability: "view", labelKey: "", descriptionKey: "", sensitivity: "standard" },
     { id: "adSales.crm.viewOwn", featureId: "adSales.crm", capability: "viewOwn", labelKey: "", descriptionKey: "", sensitivity: "standard" },

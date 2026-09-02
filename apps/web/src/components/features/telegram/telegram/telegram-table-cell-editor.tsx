@@ -1,5 +1,6 @@
 "use client";
 
+
 import {
   AlignCenter,
   AlignLeft,
@@ -20,6 +21,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import type { TelegramTableCellAlignment } from "@telegram-system/shared";
+import { useI18n } from "@/providers/i18n-provider";
 
 type TableAction =
   | "insert-above"
@@ -38,6 +40,7 @@ export function useTelegramTableCellEditor(
   contentRef: RefObject<HTMLDivElement | null>,
   emitChange: () => void,
 ) {
+  const { t } = useI18n();
   const activeCellRef = useRef<HTMLTableCellElement | null>(null);
   const [control, setControl] = useState<{
     top: number;
@@ -169,8 +172,8 @@ export function useTelegramTableCellEditor(
           ) : (
             <button
               type="button"
-              title="Edit table"
-              aria-label="Edit table"
+              title={t("telegram.posts.editorComponents.table.edit")}
+              aria-label={t("telegram.posts.editorComponents.table.edit")}
               className="fixed z-[330] inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#3a4d60] bg-[#172534] text-[#b5c5d3] shadow-xl hover:bg-[#22374a] hover:text-white"
               style={{ top: control.top, left: control.left }}
               onMouseDown={(event) => event.preventDefault()}
@@ -202,6 +205,7 @@ function TableCellMenu({
   onAction: (action: TableAction) => void;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   useEffect(() => {
     const close = () => onClose();
     window.addEventListener("resize", close);
@@ -214,7 +218,7 @@ function TableCellMenu({
   return (
     <div
       role="menu"
-      aria-label="Table cell actions"
+      aria-label={t("telegram.posts.editorComponents.table.cellActions")}
       className="fixed z-[340] w-64 rounded-2xl border border-[#2a3a4a] bg-[#17212b] p-2 shadow-2xl"
       style={{
         top: Math.max(8, top),
@@ -224,64 +228,64 @@ function TableCellMenu({
     >
       <Item
         icon={Rows3}
-        label="Insert Above"
+        label={t("telegram.posts.editorComponents.table.insertAbove")}
         onClick={() => onAction("insert-above")}
       />
       <Item
         icon={Rows3}
-        label="Insert Below"
+        label={t("telegram.posts.editorComponents.table.insertBelow")}
         onClick={() => onAction("insert-below")}
       />
       <Item
         icon={Columns3}
-        label="Insert Left"
+        label={t("telegram.posts.editorComponents.table.insertLeft")}
         onClick={() => onAction("insert-left")}
       />
       <Item
         icon={Columns3}
-        label="Insert Right"
+        label={t("telegram.posts.editorComponents.table.insertRight")}
         onClick={() => onAction("insert-right")}
       />
       <Divider />
       <Item
         icon={Highlighter}
-        label="Highlight"
+        label={t("telegram.posts.editorComponents.table.highlight")}
         disabled={highlighted}
         onClick={() => onAction("highlight")}
       />
       <Item
         icon={Highlighter}
-        label="Remove Highlight"
+        label={t("telegram.posts.editorComponents.table.removeHighlight")}
         disabled={!highlighted}
         onClick={() => onAction("remove-highlight")}
       />
       <Divider />
       <Item
         icon={AlignLeft}
-        label="Align Left"
+        label={t("telegram.posts.editorComponents.table.alignLeft")}
         onClick={() => onAction("align-left")}
       />
       <Item
         icon={AlignCenter}
-        label="Align Center"
+        label={t("telegram.posts.editorComponents.table.alignCenter")}
         onClick={() => onAction("align-center")}
       />
       <Item
         icon={AlignRight}
-        label="Align Right"
+        label={t("telegram.posts.editorComponents.table.alignRight")}
         onClick={() => onAction("align-right")}
       />
       <Divider />
       <Item
         danger
         icon={Trash2}
-        label="Delete Row"
+        label={t("telegram.posts.editorComponents.table.deleteRow")}
         onClick={() => onAction("delete-row")}
       />
       <Item
         danger
         icon={Trash2}
-        label="Delete Column"
+        label={t("telegram.posts.editorComponents.table.deleteColumn")}
         onClick={() => onAction("delete-column")}
       />
     </div>

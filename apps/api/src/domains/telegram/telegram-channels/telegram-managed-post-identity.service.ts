@@ -21,6 +21,7 @@ import {
   managedPostIdentityCandidateWhere,
   managedPostIdentityReadyWhere,
 } from '../../operations/scheduled-tasks/due-work-predicates';
+import { telegramPostsBadRequest } from './telegram-posts.errors';
 
 export type ManagedPostIdentityMessage = {
   id: string;
@@ -204,7 +205,8 @@ export class TelegramManagedPostIdentityService {
     const targetIds = extractInternalPostLinkIds(params.text);
     if (!targetIds.length) return params.text;
     if (targetIds.includes(params.currentPostId)) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_NOT_EDITABLE',
         'Cannot publish post because it contains an internal link to itself.',
       );
     }
@@ -232,7 +234,8 @@ export class TelegramManagedPostIdentityService {
         target.status === TelegramManagedPostStatus.SCHEDULED &&
         target.telegramRemoteStatus ===
           TelegramManagedPostRemoteStatus.SCHEDULED &&
-        !target.lastError
+        target.telegramIdVerificationStatus !==
+          TelegramManagedPostIdVerificationStatus.MISSING
       ) {
         return !target.scheduledAt ||
           target.scheduledAt.getTime() >= params.currentScheduleAt.getTime()
@@ -245,7 +248,7 @@ export class TelegramManagedPostIdentityService {
         target.status === TelegramManagedPostStatus.PUBLISHED &&
         target.telegramIdVerificationStatus ===
           TelegramManagedPostIdVerificationStatus.VERIFIED &&
-        !target.lastError;
+        target.telegramRemoteStatus === TelegramManagedPostRemoteStatus.PUBLISHED;
       if (!publishedAndVerified) {
         return [
           `"${target.title}" (${target.id}) is not published or has a broken Telegram link`,
@@ -266,8 +269,10 @@ export class TelegramManagedPostIdentityService {
           ];
     });
     if (errors.length) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_PUBLISH_FAILED',
         `Cannot publish post because some internal post links are unresolved: ${errors.join('; ')}.`,
+        { unresolvedCount: errors.length },
       );
     }
     const urls = new Map<string, string>();

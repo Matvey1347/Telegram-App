@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import type { Response } from 'express';
 import { StreamResponseService } from './stream-response.service';
+import { telegramPostsBadRequest } from '../../domains/telegram/telegram-channels/telegram-posts.errors';
 
 function responseHarness() {
   const events = new EventEmitter();
@@ -111,5 +112,25 @@ describe('StreamResponseService', () => {
     });
 
     expect(applicationLogger.writeStructured).not.toHaveBeenCalled();
+  });
+
+  it('preserves machine error codes and parameters in stream errors', async () => {
+    const { response, writes } = responseHarness();
+
+    await createService().stream(response, {
+      eventPrefix: 'test.structured-error',
+      action: async () => {
+        throw telegramPostsBadRequest(
+          'TELEGRAM_POST_INVALID_TIMEZONE',
+          'Invalid timezone',
+          { timezone: 'Moon/Base' },
+        );
+      },
+    });
+
+    expect(writes.join('')).toContain(
+      '"code":"TELEGRAM_POST_INVALID_TIMEZONE"',
+    );
+    expect(writes.join('')).toContain('"timezone":"Moon/Base"');
   });
 });

@@ -58,6 +58,7 @@ export function systemBotMenuPayload(workspace: {
 export function formatSystemBotDate(
   value: string | Date | null | undefined,
   timezone: string,
+  locale = 'en',
 ) {
   if (!value) return 'Never';
   const date = new Date(value);
@@ -69,11 +70,14 @@ export function formatSystemBotDate(
     minute: '2-digit',
   };
   try {
-    return new Intl.DateTimeFormat('en-GB', {
+    return new Intl.DateTimeFormat(locale === 'ru' ? 'ru-RU' : 'en-GB', {
       ...options,
       timeZone: timezone,
     }).format(date);
   } catch {
-    return new Intl.DateTimeFormat('en-GB', options).format(date);
+    return new Intl.DateTimeFormat(
+      locale === 'ru' ? 'ru-RU' : 'en-GB',
+      options,
+    ).format(date);
   }
 }

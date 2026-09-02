@@ -1,5 +1,6 @@
 "use client";
 
+
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -20,6 +21,8 @@ import { telegramChannelsApi, type TelegramManagedPost } from "@/lib/api";
 import { telegramPostKeys } from "@/lib/query-keys";
 import { reconcileManagedPost } from "./managed-post-cache";
 import { useAppToast } from "@/providers/toast-provider";
+import { useI18n, type TranslationFunction } from "@/providers/i18n-provider";
+import { safeApiErrorMessage } from "@/i18n/error-localization";
 
 type IdentityTone = "normal" | "warning" | "error";
 type ManagedPostIdentityPresentation = {
@@ -36,8 +39,7 @@ export function managedPostTelegramIdentityTone(
   if (
     post.telegramIdVerificationStatus === "MISSING" ||
     post.telegramRemoteStatus === "BROKEN" ||
-    post.telegramRemoteStatus === "MISSING" ||
-    /link is broken/i.test(post.lastError ?? "")
+    post.telegramRemoteStatus === "MISSING"
   ) {
     return "error";
   }
@@ -66,15 +68,16 @@ export function ManagedPostTelegramIdentityIndicator({
   post: ManagedPostIdentityPresentation;
   className?: string;
 }) {
+  const { t } = useI18n();
   const tone = managedPostTelegramIdentityTone(post);
   if (tone === "normal") return null;
 
   const missing = tone === "error";
   const label = missing
-    ? "Telegram post was not found"
+    ? t("telegram.posts.telegramLink.notFound")
     : post.telegramIdVerificationStatus === "MISMATCH"
-      ? "Telegram ID mismatch"
-      : "Telegram ID has not been verified";
+      ? t("telegram.posts.telegramLink.idMismatch")
+      : t("telegram.posts.telegramLink.notVerified");
 
   return (
     <AlertTriangle
@@ -85,18 +88,18 @@ export function ManagedPostTelegramIdentityIndicator({
   );
 }
 
-function verificationDescription(post: TelegramManagedPost) {
+function verificationDescription(t: TranslationFunction, post: TelegramManagedPost) {
   switch (post.telegramIdVerificationStatus) {
     case "VERIFIED":
-      return "This link matches the published post found in Telegram.";
+      return t("telegram.posts.telegramLink.verifiedDescription");
     case "MISMATCH":
-      return "This Telegram link was set manually and does not match the post found in Telegram. The manual link was preserved.";
+      return t("telegram.posts.telegramLink.mismatchDescription");
     case "MISSING":
-      return "Telegram could not find a published message matching this managed post. The saved link was preserved.";
+      return t("telegram.posts.telegramLink.missingDescription");
     default:
       return post.telegramLinkSource === "MANUAL"
-        ? "This manual Telegram link has not been verified yet."
-        : "Telegram has not verified a published identity for this post yet.";
+        ? t("telegram.posts.telegramLink.manualDescription")
+        : t("telegram.posts.telegramLink.unverifiedDescription");
   }
 }
 
@@ -113,6 +116,7 @@ export function ManagedPostTelegramLink({
 }) {
   const queryClient = useQueryClient();
   const { pushToast } = useAppToast();
+  const { locale, t } = useI18n();
   const [open, setOpen] = useState(false);
   const [telegramUrl, setTelegramUrl] = useState(
     post.telegramMessageUrls[0] ?? "",
@@ -127,11 +131,11 @@ export function ManagedPostTelegramLink({
   const isLocalSchedule =
     post.status === "SCHEDULED" && post.scheduleMode === "LOCAL";
   const scheduledStatusLabel = isLocalSchedule
-    ? "Scheduled via Nexeloq"
-    : "Scheduled in Telegram";
+    ? t("telegram.posts.telegramLink.scheduledSystem")
+    : t("telegram.posts.telegramLink.scheduledTelegram");
   const scheduledStatusDescription = isLocalSchedule
-    ? "Telegram System will publish this post at the scheduled time. It is not currently in Telegram Scheduled Messages."
-    : "Telegram link will be available after publication and verification.";
+    ? t("telegram.posts.telegramLink.systemScheduleDescription")
+    : t("telegram.posts.telegramLink.scheduleDescription");
 
   const openModal = () => {
     setTelegramUrl(storedUrl);
@@ -172,15 +176,13 @@ export function ManagedPostTelegramLink({
       if (!updated.telegramMessageUrls.length) setOpen(false);
       pushToast(
         updated.telegramMessageUrls.length
-          ? "Telegram post link saved. Verify it against Telegram to confirm the ID."
-          : "Telegram post link removed. Post returned to draft.",
+          ? t("telegram.posts.telegramLink.saved")
+          : t("telegram.posts.telegramLink.removed"),
         "success",
       );
     } catch (saveError) {
       setError(
-        saveError instanceof Error
-          ? saveError.message
-          : "Could not save Telegram post link",
+        safeApiErrorMessage(saveError, locale, t, t("telegram.posts.telegramLink.saveError")),
       );
     } finally {
       setSaving(false);
@@ -198,16 +200,14 @@ export function ManagedPostTelegramLink({
       await applyPost(updated);
       pushToast(
         updated.telegramIdVerificationStatus === "VERIFIED"
-          ? "Telegram post ID verified."
-          : verificationDescription(updated),
+          ? t("telegram.posts.telegramLink.verified")
+          : verificationDescription(t, updated),
         updated.telegramIdVerificationStatus === "MISSING" ? "error" : "info",
         7000,
       );
     } catch (verifyError) {
       setError(
-        verifyError instanceof Error
-          ? verifyError.message
-          : "Could not verify the Telegram post ID",
+        safeApiErrorMessage(verifyError, locale, t, t("telegram.posts.telegramLink.verifyError")),
       );
     } finally {
       setVerifying(false);
@@ -260,7 +260,7 @@ export function ManagedPostTelegramLink({
             ) : (
               <ExternalLink size={13} />
             )}
-            Open in TG
+            {t("telegram.posts.telegramLink.open")}
           </button>
         )}
         <button
@@ -268,8 +268,8 @@ export function ManagedPostTelegramLink({
           onClick={openModal}
           aria-label={
             post.status === "SCHEDULED"
-              ? "View scheduled Telegram status"
-              : "Set or verify Telegram link"
+              ? t("telegram.posts.telegramLink.viewSchedule")
+              : t("telegram.posts.telegramLink.setOrVerify")
           }
           className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-neutral-700 text-neutral-400 transition hover:border-blue-600 hover:bg-blue-950/30 hover:text-blue-200"
         >
@@ -282,7 +282,7 @@ export function ManagedPostTelegramLink({
         >
           {post.status === "SCHEDULED"
             ? scheduledStatusDescription
-            : verificationDescription(post)}
+            : verificationDescription(t, post)}
         </TooltipBubble>
       </span>
 
@@ -292,11 +292,11 @@ export function ManagedPostTelegramLink({
         title={
           post.status === "SCHEDULED"
             ? isLocalSchedule
-              ? "Scheduled delivery status"
-              : "Scheduled Telegram status"
+              ? t("telegram.posts.telegramLink.deliveryTitle")
+              : t("telegram.posts.telegramLink.scheduleTitle")
             : storedUrl
-              ? "Telegram post link"
-              : "Set Telegram link"
+              ? t("telegram.posts.telegramLink.linkTitle")
+              : t("telegram.posts.telegramLink.setTitle")
         }
       >
         {post.status === "SCHEDULED" ? (
@@ -311,7 +311,7 @@ export function ManagedPostTelegramLink({
               <p className="font-medium text-white">{scheduledStatusLabel}</p>
               <p className="mt-0.5 text-xs">
                 {tone === "error"
-                  ? "Telegram could not confirm this scheduled post. A scheduled ID is not a public post link; refresh or reconcile the channel before publication."
+                  ? t("telegram.posts.telegramLink.scheduleError")
                   : scheduledStatusDescription}
               </p>
             </div>
@@ -321,15 +321,14 @@ export function ManagedPostTelegramLink({
                 type="button"
                 onClick={() => setOpen(false)}
               >
-                Close
+                {t("common.close")}
               </Button>
             </div>
           </div>
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-neutral-300">
-              Paste a published Telegram post URL. Manual links are preserved
-              when verification finds a mismatch or cannot find the post.
+              {t("telegram.posts.telegramLink.pasteHint")}
             </p>
             <Input
               type="url"
@@ -347,11 +346,11 @@ export function ManagedPostTelegramLink({
                     : "border-neutral-800 bg-neutral-950/40 text-neutral-300"
               }`}
             >
-              {verificationDescription(post)}
+              {verificationDescription(t, post)}
             </div>
             {hasUnsavedUrl ? (
               <p className="text-xs text-amber-300">
-                Save this link before checking its Telegram ID.
+                {t("telegram.posts.telegramLink.saveBeforeCheck")}
               </p>
             ) : null}
             {error ? (
@@ -366,7 +365,7 @@ export function ManagedPostTelegramLink({
                 disabled={saving || verifying}
                 onClick={() => setOpen(false)}
               >
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 variant="secondary"
@@ -377,7 +376,7 @@ export function ManagedPostTelegramLink({
                 {verifying ? (
                   <LoaderCircle size={14} className="animate-spin" />
                 ) : null}
-                {verifying ? "Checking…" : "Check Telegram ID"}
+                {verifying ? t("telegram.posts.telegramLink.checking") : t("telegram.posts.telegramLink.check")}
               </Button>
               <Button
                 type="button"
@@ -385,10 +384,10 @@ export function ManagedPostTelegramLink({
                 onClick={() => void save()}
               >
                 {saving
-                  ? "Saving…"
+                  ? t("common.saving")
                   : telegramUrl.trim()
-                    ? "Save link"
-                    : "Remove link"}
+                    ? t("telegram.posts.telegramLink.save")
+                    : t("telegram.posts.telegramLink.remove")}
               </Button>
             </div>
           </div>

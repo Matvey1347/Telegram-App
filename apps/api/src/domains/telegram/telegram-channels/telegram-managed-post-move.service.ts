@@ -20,6 +20,12 @@ import { BulkProgressCallback } from './telegram-channels.internal';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
+import {
+  managedPostNotFound,
+  postGroupNotFound,
+  telegramPostsBadRequest,
+  telegramPostsNotFound,
+} from './telegram-posts.errors';
 
 @Injectable()
 export class TelegramManagedPostMoveService {
@@ -77,7 +83,7 @@ export class TelegramManagedPostMoveService {
       where: { id: postId, workspaceId },
       include: { telegramChannel: true },
     });
-    if (!post) throw new NotFoundException('Post not found');
+    if (!post) throw managedPostNotFound();
     const previousStatus = post.status;
     const transition = movedPostState(previousStatus);
     let cancellationError: string | null = null;
@@ -274,11 +280,17 @@ export class TelegramManagedPostMoveService {
         select: { id: true },
       }),
     ]);
-    if (!post) throw new NotFoundException('Post not found');
+    if (!post) throw managedPostNotFound();
     if (!targetChannel)
-      throw new NotFoundException('Target Telegram channel not found');
+      throw telegramPostsNotFound(
+        'TELEGRAM_CHANNEL_NOT_FOUND',
+        'Target Telegram channel not found',
+      );
     if (channelId === targetChannel.id) {
-      throw new BadRequestException('Post already belongs to target channel');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_ALREADY_IN_TARGET_CHANNEL',
+        'Post already belongs to target channel',
+      );
     }
     const moved = await this.moveManagedPostInternal(
       workspaceId,
@@ -323,11 +335,17 @@ export class TelegramManagedPostMoveService {
         select: { id: true },
       }),
     ]);
-    if (!group) throw new NotFoundException('Post group not found');
+    if (!group) throw postGroupNotFound();
     if (!targetChannel)
-      throw new NotFoundException('Target Telegram channel not found');
+      throw telegramPostsNotFound(
+        'TELEGRAM_CHANNEL_NOT_FOUND',
+        'Target Telegram channel not found',
+      );
     if (group.telegramChannelId === targetChannel.id) {
-      throw new BadRequestException('Group already belongs to target channel');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_GROUP_ALREADY_IN_TARGET_CHANNEL',
+        'Group already belongs to target channel',
+      );
     }
     const originalChannelId = group.telegramChannelId;
 
@@ -386,7 +404,8 @@ export class TelegramManagedPostMoveService {
           `Could not move group. ${moveError}. Rollback also failed for: ${rollbackFailures.join('; ')}`,
         );
       }
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_PUBLISH_FAILED',
         `Could not move group. ${moveError}. The group was left in the original channel.`,
       );
     }
@@ -416,13 +435,14 @@ export class TelegramManagedPostMoveService {
       where: { id: postId, workspaceId, telegramChannelId: channelId },
       include: { telegramChannel: true },
     });
-    if (!post) throw new NotFoundException('Post draft not found');
+    if (!post) throw managedPostNotFound();
     if (
       post.status === 'SCHEDULED' &&
       post.telegramScheduledMessageIds.length
     ) {
       if (post.sourceType !== TelegramSourceType.MTPROTO || !post.sourceId) {
-        throw new BadRequestException(
+        throw telegramPostsBadRequest(
+          'TELEGRAM_POST_NOT_SCHEDULED',
           'Scheduled post has no MTProto source and cannot be cancelled safely',
         );
       }
@@ -436,7 +456,10 @@ export class TelegramManagedPostMoveService {
           post.telegramChannel,
         );
       if (!channelReference.telegramChatId && !channelReference.username)
-        throw new BadRequestException('Channel has no Telegram reference');
+        throw telegramPostsBadRequest(
+          'TELEGRAM_POST_TELEGRAM_REFERENCE_MISSING',
+          'Channel has no Telegram reference',
+        );
       await this.mtprotoClient.deleteScheduledPost({
         ...this.telegramChannelAccessService.accountCredentials(account),
         channel: channelReference,

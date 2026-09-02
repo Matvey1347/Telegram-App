@@ -34,3 +34,5 @@ export * from "./telegram-spoilers";
 export * from "./telegram-table-markup";
 export * from "./pagination";
 export * from "./permissions";
+export * from "./i18n/locales";
+export * from "./i18n/contracts";

@@ -24,6 +24,11 @@ import {
 } from './post-groups.helpers';
 import { TelegramChannelSchemaCompatibilityService } from './telegram-channel-schema-compatibility.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
+import {
+  postGroupNotFound,
+  telegramChannelNotFound,
+  telegramPostsBadRequest,
+} from './telegram-posts.errors';
 import { TelegramManagedPostGroupPresentationService } from './telegram-managed-post-group-presentation.service';
 import { TelegramPostGroupStore } from './telegram-post-group.store';
 
@@ -187,7 +192,7 @@ export class TelegramPostGroupsService {
         },
         select: { id: true, assignedMemberId: true },
       });
-      if (!channel) throw new NotFoundException('Telegram channel not found');
+      if (!channel) throw telegramChannelNotFound();
       await this.telegramPostGroupStore.ensureRequiredChannelSystemGroups(
         this.prisma,
         workspaceId,
@@ -262,7 +267,7 @@ export class TelegramPostGroupsService {
       where: { id: groupId, workspaceId },
       select: { id: true },
     });
-    if (!group) throw new NotFoundException('Post group not found');
+    if (!group) throw postGroupNotFound();
     await this.prisma.$transaction(async (tx) => {
       await this.telegramPostGroupStore.normalizePostGroupNumbering(
         tx,
@@ -287,9 +292,13 @@ export class TelegramPostGroupsService {
       },
       select: { id: true },
     });
-    if (!channel) throw new NotFoundException('Telegram channel not found');
+    if (!channel) throw telegramChannelNotFound();
     const title = dto.title.trim();
-    if (!title) throw new BadRequestException('Title is required');
+    if (!title)
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_TITLE_REQUIRED',
+        'Title is required',
+      );
     const createdByMemberId = dto.createdByMemberId?.trim() || membership.id;
     if (createdByMemberId !== membership.id) {
       const member = await this.prisma.workspaceMember.findFirst({
@@ -300,14 +309,18 @@ export class TelegramPostGroupsService {
         select: { id: true },
       });
       if (!member) {
-        throw new BadRequestException(
+        throw telegramPostsBadRequest(
+          'TELEGRAM_POST_ASSIGNED_MEMBER_REQUIRED',
           'Group member must belong to the current workspace',
         );
       }
     }
     const postIds = [...new Set(dto.postIds ?? [])];
     if (postIds.length !== (dto.postIds?.length ?? 0)) {
-      throw new BadRequestException('postIds must not contain duplicates');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_INVALID_SCHEDULE',
+        'postIds must not contain duplicates',
+      );
     }
     const iconId = await this.resolvePostGroupIconId(
       membership.workspaceId,
@@ -327,7 +340,8 @@ export class TelegramPostGroupsService {
           })
         : [];
       if (posts.length !== postIds.length) {
-        throw new BadRequestException(
+        throw telegramPostsBadRequest(
+          'TELEGRAM_MANAGED_POST_NOT_FOUND',
           'Every post must belong to the selected channel and workspace',
         );
       }
@@ -429,10 +443,16 @@ export class TelegramPostGroupsService {
       groupId,
     );
     if (group.isSystem) {
-      throw new BadRequestException('System post groups cannot be edited');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_NOT_EDITABLE',
+        'System post groups cannot be edited',
+      );
     }
     if (dto.title !== undefined && !dto.title.trim()) {
-      throw new BadRequestException('Title is required');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_TITLE_REQUIRED',
+        'Title is required',
+      );
     }
     await this.prisma.postGroup.update({
       where: { id: groupId },
@@ -460,7 +480,10 @@ export class TelegramPostGroupsService {
       groupId,
     );
     if (group.isSystem) {
-      throw new BadRequestException('System post groups cannot be deleted');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_NOT_EDITABLE',
+        'System post groups cannot be deleted',
+      );
     }
     await this.prisma.$transaction(async (tx) => {
       await tx.telegramManagedPost.updateMany({
@@ -478,10 +501,13 @@ export class TelegramPostGroupsService {
     const group = await this.prisma.postGroup.findFirst({
       where: { id: groupId, workspaceId },
     });
-    if (!group) throw new NotFoundException('Post group not found');
+    if (!group) throw postGroupNotFound();
     const postIds = [...new Set(dto.postIds)];
     if (postIds.length !== dto.postIds.length) {
-      throw new BadRequestException('postIds must not contain duplicates');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_INVALID_SCHEDULE',
+        'postIds must not contain duplicates',
+      );
     }
     await this.prisma.$transaction(async (tx) => {
       const posts = await tx.telegramManagedPost.findMany({
@@ -493,7 +519,8 @@ export class TelegramPostGroupsService {
         select: { id: true, groupId: true },
       });
       if (posts.length !== postIds.length) {
-        throw new BadRequestException(
+        throw telegramPostsBadRequest(
+          'TELEGRAM_MANAGED_POST_NOT_FOUND',
           'Every post must belong to the group channel and workspace',
         );
       }
@@ -543,7 +570,7 @@ export class TelegramPostGroupsService {
       where: { id: postId, groupId, workspaceId },
       select: { id: true },
     });
-    if (!post) throw new NotFoundException('Group post not found');
+    if (!post) throw postGroupNotFound();
     await this.prisma.$transaction(async (tx) => {
       await tx.telegramManagedPost.update({
         where: { id: postId },
@@ -576,7 +603,7 @@ export class TelegramPostGroupsService {
       where: { id: groupId, workspaceId },
       select: { id: true },
     });
-    if (!group) throw new NotFoundException('Post group not found');
+    if (!group) throw postGroupNotFound();
     validateCompletePostOrder(
       posts.map((post) => post.id),
       dto.orderedPostIds,

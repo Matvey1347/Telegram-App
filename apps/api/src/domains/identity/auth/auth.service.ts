@@ -1,8 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma } from '@prisma/client';
@@ -14,9 +10,12 @@ import { LoginDto, RegisterDto } from './dto';
 import {
   accessibleWorkspaceFeatureIds,
   effectiveWorkspacePermissionKeys,
+  normalizeAppLocale,
   type EditorShortcutPreferences,
 } from '@telegram-system/shared';
 import { WorkspaceRole } from '@prisma/client';
+import { StructuredHttpException } from '../../../common/http/structured-http-error';
+import { translateAuthOutput } from './i18n/auth-output';
 
 @Injectable()
 export class AuthService {
@@ -34,6 +33,7 @@ export class AuthService {
         email: true,
         name: true,
         editorShortcuts: true,
+        locale: true,
         authVersion: true,
       },
     });
@@ -73,6 +73,7 @@ export class AuthService {
         name: user.name,
         editorShortcuts:
           (user.editorShortcuts as EditorShortcutPreferences | null) ?? {},
+        locale: normalizeAppLocale(user.locale),
       },
       workspace: {
         id: membership.workspace.id,
@@ -93,18 +94,29 @@ export class AuthService {
     const name = dto.name.trim();
 
     const existing = await this.prisma.user.findUnique({ where: { email } });
-    if (existing) throw new ConflictException('Email already exists');
+    if (existing) {
+      throw this.emailAlreadyExists();
+    }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
-    const user = await this.prisma.$transaction(async (tx) => {
-      const createdUser = await tx.user.create({
-        data: { email, name, passwordHash },
-      });
-      const workspaceName = dto.workspaceName?.trim() || `${name}'s Workspace`;
-      const workspaceId = randomUUID();
-      await tx.$executeRaw(
-        Prisma.sql`
+    let user: { id: string };
+    try {
+      user = await this.prisma.$transaction(async (tx) => {
+        const createdUser = await tx.user.create({
+          data: {
+            email,
+            name,
+            passwordHash,
+            locale: normalizeAppLocale(dto.locale),
+          },
+        });
+        const workspaceName =
+          dto.workspaceName?.trim() ||
+          translateAuthOutput(dto.locale, 'workspaceName', { name });
+        const workspaceId = randomUUID();
+        await tx.$executeRaw(
+          Prisma.sql`
           INSERT INTO "Workspace" (
             "id",
             "name",
@@ -116,16 +128,25 @@ export class AuthService {
           )
           VALUES (${workspaceId}, ${workspaceName}, 'Europe/Warsaw', 'USD', 'UAH', NOW(), NOW())
         `,
-      );
-      await tx.workspaceMember.create({
-        data: {
-          userId: createdUser.id,
-          workspaceId,
-          role: 'owner',
-        },
+        );
+        await tx.workspaceMember.create({
+          data: {
+            userId: createdUser.id,
+            workspaceId,
+            role: 'owner',
+          },
+        });
+        return createdUser;
       });
-      return createdUser;
-    });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw this.emailAlreadyExists();
+      }
+      throw error;
+    }
 
     return this.authResponse(user.id);
   }
@@ -135,10 +156,10 @@ export class AuthService {
       where: { email: dto.email.toLowerCase().trim() },
     });
 
-    if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (!user) throw this.invalidCredentials();
 
     const isValid = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!isValid) throw new UnauthorizedException('Invalid credentials');
+    if (!isValid) throw this.invalidCredentials();
 
     return this.authResponse(user.id);
   }
@@ -152,11 +173,26 @@ export class AuthService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2025'
       ) {
-        throw new UnauthorizedException(
-          'Session is invalid. Please sign in again.',
-        );
+        throw new StructuredHttpException(HttpStatus.UNAUTHORIZED, {
+          code: 'AUTH_SESSION_INVALID',
+          message: 'Session is invalid. Please sign in again.',
+        });
       }
       throw error;
     }
+  }
+
+  private invalidCredentials() {
+    return new StructuredHttpException(HttpStatus.UNAUTHORIZED, {
+      code: 'AUTH_INVALID_CREDENTIALS',
+      message: 'Invalid credentials',
+    });
+  }
+
+  private emailAlreadyExists() {
+    return new StructuredHttpException(HttpStatus.CONFLICT, {
+      code: 'AUTH_EMAIL_ALREADY_EXISTS',
+      message: 'Email already exists',
+    });
   }
 }

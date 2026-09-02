@@ -154,6 +154,8 @@ export type TelegramManagedPostsImportProgressItem = {
   title?: string;
   postId?: string;
   error?: string;
+  errorCode?: string;
+  errorParams?: import("@telegram-system/shared").TranslationParams;
   message: string;
 };
 export type TelegramManagedPostRevision = {

@@ -3,23 +3,29 @@ import {
   managedPostScheduleUnchanged,
 } from "./managed-post-presentation";
 import { describe, expect, it } from "vitest";
+import messages from "@/i18n/locales/en/telegram/posts/editor";
+import { interpolateTranslation } from "@/i18n/types";
+import type { TranslationFunction } from "@/providers/i18n-provider";
+
+const t: TranslationFunction = (key, values) =>
+  interpolateTranslation(messages[key as keyof typeof messages] ?? key, values);
 
 describe("managed post schedule feedback", () => {
   it("does not claim that a Bot API post is already in Telegram", () => {
     expect(
-      managedPostScheduleUi({ title: "Post", scheduleMode: "LOCAL" }).message,
+      managedPostScheduleUi({ title: "Post", scheduleMode: "LOCAL", t }).message,
     ).toContain("not in Telegram Scheduled Messages");
-    expect(managedPostScheduleUi({ hasInlineButtons: true }).label).toBe(
+    expect(managedPostScheduleUi({ hasInlineButtons: true, t }).label).toBe(
       "Schedule via Nexeloq",
     );
   });
 
   it("confirms a native Telegram schedule", () => {
     expect(
-      managedPostScheduleUi({ title: "Post", scheduleMode: "TELEGRAM_NATIVE" })
+      managedPostScheduleUi({ title: "Post", scheduleMode: "TELEGRAM_NATIVE", t })
         .message,
     ).toBe('"Post" scheduled in Telegram.');
-    expect(managedPostScheduleUi({ hasInlineButtons: false }).label).toBe(
+    expect(managedPostScheduleUi({ hasInlineButtons: false, t }).label).toBe(
       "Schedule in Telegram",
     );
   });

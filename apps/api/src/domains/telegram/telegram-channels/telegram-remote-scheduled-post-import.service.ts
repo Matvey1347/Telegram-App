@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   TelegramManagedPostIdVerificationStatus,
   TelegramManagedPostLinkSource,
@@ -21,6 +21,7 @@ import { TelegramChannelAccessService } from './telegram-channel-access.service'
 import { TelegramChannelSchemaCompatibilityService } from './telegram-channel-schema-compatibility.service';
 import { TelegramManagedPostPresentationService } from './telegram-managed-post-presentation.service';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
+import { telegramPostsBadRequest } from './telegram-posts.errors';
 
 @Injectable()
 export class TelegramRemoteScheduledPostImportService {
@@ -51,7 +52,10 @@ export class TelegramRemoteScheduledPostImportService {
     const channelReference =
       this.telegramChannelAccessService.mtprotoChannelReference(params.channel);
     if (!channelReference.telegramChatId && !channelReference.username) {
-      throw new BadRequestException('Channel has no Telegram reference');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_TELEGRAM_REFERENCE_MISSING',
+        'Channel has no Telegram reference',
+      );
     }
 
     const remoteScheduledHistory = await this.mtprotoClient.getScheduledHistory(
@@ -95,7 +99,8 @@ export class TelegramRemoteScheduledPostImportService {
         })
       )?.id;
     if (!fallbackAssignedMemberId) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_ASSIGNED_MEMBER_REQUIRED',
         'Assigned member is required to import Telegram posts',
       );
     }

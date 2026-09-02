@@ -16,6 +16,7 @@ import { parseTelegramPostUrl } from '../../../telegram/shared/telegram-post-url
 import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
+import { telegramPostsBadRequest } from './telegram-posts.errors';
 import {
   BotMessageEntity,
   TELEGRAM_CAPTION_LIMIT,
@@ -87,7 +88,8 @@ export class TelegramManagedPostEditTransportService {
           ),
         ];
     if (!effectiveMessageIds.length) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_TELEGRAM_REFERENCE_MISSING',
         'This Telegram post cannot be updated because no Telegram message link is attached yet.',
       );
     }
@@ -124,7 +126,8 @@ export class TelegramManagedPostEditTransportService {
               item.permissions.canPostMessages),
         ));
     if (!source) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_PUBLISH_SOURCE_UNAVAILABLE',
         'No connected Telegram source has permission to edit this post.',
       );
     }
@@ -132,7 +135,10 @@ export class TelegramManagedPostEditTransportService {
     const channelReference =
       this.telegramChannelAccessService.mtprotoChannelReference(channel);
     if (!channelReference.telegramChatId && !channelReference.username)
-      throw new BadRequestException('Channel has no Telegram reference');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_TELEGRAM_REFERENCE_MISSING',
+        'Channel has no Telegram reference',
+      );
 
     const resolvedText =
       await this.telegramManagedPostPresentationService.resolveInternalPostLinksForPublish(
@@ -166,7 +172,8 @@ export class TelegramManagedPostEditTransportService {
     if (source.sourceType === TelegramSourceType.MTPROTO) {
       if (rendered.richHtml) {
         if (params.inPlaceOnly) {
-          throw new BadRequestException(
+          throw telegramPostsBadRequest(
+            'TELEGRAM_POST_NOT_EDITABLE',
             'This Telegram post cannot be converted to rich content without replacing the remote message.',
           );
         }
@@ -191,12 +198,14 @@ export class TelegramManagedPostEditTransportService {
           );
         }
         if (!botSource) {
-          throw new BadRequestException(
+          throw telegramPostsBadRequest(
+            'TELEGRAM_POST_PUBLISH_SOURCE_UNAVAILABLE',
             'Native Telegram rich content (including pull quotes) requires an active workspace bot with posting permission for this channel.',
           );
         }
         if (post.status !== TelegramManagedPostStatus.PUBLISHED) {
-          throw new BadRequestException(
+          throw telegramPostsBadRequest(
+            'TELEGRAM_POST_NOT_EDITABLE',
             'A scheduled MTProto post must be cancelled before it can be converted to a native Telegram rich message.',
           );
         }
@@ -212,7 +221,10 @@ export class TelegramManagedPostEditTransportService {
         );
         const chatId = this.telegramChannelAccessService.botChatId(channel);
         if (!chatId) {
-          throw new BadRequestException('Channel has no Telegram chat id');
+          throw telegramPostsBadRequest(
+            'TELEGRAM_POST_TELEGRAM_REFERENCE_MISSING',
+            'Channel has no Telegram chat id',
+          );
         }
         const published = await this.botApiClient.call<{
           message_id: number;
@@ -255,12 +267,14 @@ export class TelegramManagedPostEditTransportService {
         };
       }
       if (expectedMessageCount !== effectiveMessageIds.length) {
-        throw new BadRequestException(
+        throw telegramPostsBadRequest(
+          'TELEGRAM_POST_NOT_EDITABLE',
           'Text update would change the number of Telegram messages. Keep the same message count or republish the post.',
         );
       }
       if (buttonRows.length)
-        throw new BadRequestException(
+        throw telegramPostsBadRequest(
+          'TELEGRAM_POST_PUBLISH_SOURCE_UNAVAILABLE',
           'Inline buttons require a Bot API published post and cannot be added through an MTProto source.',
         );
       const account = await this.telegramChannelAccessService.connectedAccount(
@@ -292,7 +306,8 @@ export class TelegramManagedPostEditTransportService {
     }
 
     if (expectedMessageCount !== effectiveMessageIds.length) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_NOT_EDITABLE',
         'Text update would change the number of Telegram messages. Keep the same message count or republish the post.',
       );
     }
@@ -302,7 +317,10 @@ export class TelegramManagedPostEditTransportService {
     );
     const chatId = this.telegramChannelAccessService.botChatId(channel);
     if (!chatId) {
-      throw new BadRequestException('Channel has no Telegram chat id');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_TELEGRAM_REFERENCE_MISSING',
+        'Channel has no Telegram chat id',
+      );
     }
     let updatedCount = 0;
     let unchangedCount = 0;

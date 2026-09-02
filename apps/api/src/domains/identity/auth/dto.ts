@@ -1,4 +1,10 @@
-import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsIn,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 
 export class LoginDto {
   @IsEmail()
@@ -25,6 +31,10 @@ export class RegisterDto {
   @IsString()
   @MinLength(2)
   workspaceName?: string;
+
+  @IsOptional()
+  @IsIn(['en', 'ru'])
+  locale?: 'en' | 'ru';
 }
 
 export class ForgotPasswordDto {

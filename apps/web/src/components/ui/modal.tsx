@@ -8,6 +8,7 @@ import {
   useId,
   useRef,
 } from "react";
+import { useOptionalI18n } from "@/providers/i18n-provider";
 
 export function Modal({
   open,
@@ -18,7 +19,7 @@ export function Modal({
   children,
   size = "md",
   allowOverflow = false,
-  closeLabel = "Close dialog",
+  closeLabel,
 }: PropsWithChildren<{
   open: boolean;
   onClose: () => void;
@@ -30,6 +31,8 @@ export function Modal({
   loading?: boolean;
   closeLabel?: string;
 }>) {
+  const i18n = useOptionalI18n();
+  const resolvedCloseLabel = closeLabel ?? i18n?.t("common.closeDialog") ?? "Close dialog";
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   const titleId = useId();
@@ -114,7 +117,7 @@ export function Modal({
           </div>
           <button
             type="button"
-            aria-label={closeLabel}
+            aria-label={resolvedCloseLabel}
             onClick={onClose}
             className="cursor-pointer rounded-lg border border-neutral-700 p-2 hover:bg-neutral-800"
           >

@@ -1,5 +1,4 @@
 "use client";
-
 import {
   Bold,
   ChevronRight,
@@ -18,6 +17,7 @@ import {
   type RefObject,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -36,6 +36,7 @@ import {
   escapeTelegramPreviewHtml as escapeHtml,
   renderTelegramPreviewInlineMarkup,
 } from "./telegram-post-preview-markup";
+import { useI18n } from "@/providers/i18n-provider";
 
 type TelegramPostPreviewProps = {
   channelTitle: string;
@@ -57,21 +58,20 @@ type TelegramPostPreviewProps = {
   buttonRows?: TelegramPostButtonRows;
   customEmojiPacks?: TelegramCustomEmojiPackSummary[];
 };
-
-function renderFencedCodeBlock(info: string, lineBreak: string, code: string) {
+type PreviewLabels = { copy: string; copyCode: string; internalPostLink: string };
+function renderFencedCodeBlock(info: string, lineBreak: string, code: string, labels: PreviewLabels) {
   const normalizedInfo = info.replace(/\r/g, "");
   const normalizedLineBreak = lineBreak.replace(/\r/g, "\n");
   const normalizedCode = code.replace(/\r/g, "");
   const hasLabel = normalizedInfo.trim().length > 0;
-  const label = hasLabel ? normalizedInfo : "copy";
+  const label = hasLabel ? normalizedInfo : labels.copy;
   const content = hasLabel
     ? normalizedCode
     : normalizedInfo
       ? `${normalizedInfo}${normalizedLineBreak}${normalizedCode}`
       : normalizedCode;
-  return `<pre class="tg-code-block" data-code-label="${escapeHtml(label)}" data-has-code-label="${hasLabel ? "true" : "false"}"><span class="tg-code-header" contenteditable="false"><span>${escapeHtml(label)}</span><button type="button" data-copy-code aria-label="Copy code" contenteditable="false"><svg class="tg-copy-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="6.5" y="2.5" width="10" height="12" rx="1.8"></rect><rect x="3.5" y="5.5" width="10" height="12" rx="1.8"></rect></svg></button></span><code>${escapeHtml(content)}</code></pre>`;
+  return `<pre class="tg-code-block" data-code-label="${escapeHtml(label)}" data-has-code-label="${hasLabel ? "true" : "false"}"><span class="tg-code-header" contenteditable="false"><span>${escapeHtml(label)}</span><button type="button" data-copy-code aria-label="${escapeHtml(labels.copyCode)}" contenteditable="false"><svg class="tg-copy-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="6.5" y="2.5" width="10" height="12" rx="1.8"></rect><rect x="3.5" y="5.5" width="10" height="12" rx="1.8"></rect></svg></button></span><code>${escapeHtml(content)}</code></pre>`;
 }
-
 function renderRichBlocks(
   raw: string,
   token: (html: string, display?: "inline" | "block") => string,
@@ -159,7 +159,8 @@ function renderRichBlocks(
 
 function previewHtml(
   raw: string,
-  customEmojiPacks: TelegramCustomEmojiPackSummary[] = [],
+  customEmojiPacks: TelegramCustomEmojiPackSummary[],
+  labels: PreviewLabels,
 ) {
   const tokens: Array<{ html: string; display: "inline" | "block" }> = [];
   const token = (html: string, display: "inline" | "block" = "inline") => {
@@ -195,7 +196,7 @@ function previewHtml(
   value = value.replace(
     /```([^\n\r\u2028\u2029`]*)((?:\r\n|[\n\r\u2028\u2029])?)([\s\S]*?)```/g,
     (_match, info: string, lineBreak: string, code: string) => {
-      return token(renderFencedCodeBlock(info, lineBreak, code), "block");
+      return token(renderFencedCodeBlock(info, lineBreak, code, labels), "block");
     },
   );
   value = value.replace(/`([^`\n]+)`/g, (_match, code: string) =>
@@ -205,7 +206,7 @@ function previewHtml(
     /\[([^\]\n]+)\]\(tg-post:([a-zA-Z0-9_-]+)\)/g,
     (_match, label: string, postId: string) =>
       token(
-        `<a href="tg-post:${escapeHtml(postId)}" data-internal-post-link="${escapeHtml(postId)}" data-internal-post-id="${escapeHtml(postId)}" title="Internal post link">${escapeHtml(label)}</a>`,
+        `<a href="tg-post:${escapeHtml(postId)}" data-internal-post-link="${escapeHtml(postId)}" data-internal-post-id="${escapeHtml(postId)}" title="${escapeHtml(labels.internalPostLink)}">${escapeHtml(label)}</a>`,
       ),
   );
   value = value.replace(
@@ -318,7 +319,6 @@ function previewHtml(
       (_match, index: string) => tokens[Number(index)]?.html || "",
     );
 }
-
 /**
  * React Query may briefly expose no data while a channel query is remounted.
  * Keep previously resolved assets for the same mounted preview so editing text
@@ -333,7 +333,6 @@ function useRetainedCustomEmojiPacks(
   }, [packs]);
   return packs ?? lastAvailableRef.current;
 }
-
 function useTelegramCustomEmojiLottie(
   rootRef: RefObject<HTMLDivElement | null>,
   text: string,
@@ -381,7 +380,6 @@ function useTelegramCustomEmojiLottie(
     };
   }, [customEmojiPacks, rootRef, text]);
 }
-
 function RenderedPreviewText({
   text,
   customEmojiPacks,
@@ -389,18 +387,21 @@ function RenderedPreviewText({
   text: string;
   customEmojiPacks: TelegramCustomEmojiPackSummary[];
 }) {
+  const { t } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
   useTelegramCustomEmojiLottie(ref, text, customEmojiPacks);
   return (
     <div
       ref={ref}
       className="telegram-preview-text whitespace-pre-wrap break-words text-[14px] leading-[1.3] text-[#f5f5f5]"
-      dangerouslySetInnerHTML={{ __html: previewHtml(text, customEmojiPacks) }}
+      dangerouslySetInnerHTML={{ __html: previewHtml(text, customEmojiPacks, {
+        copy: t("telegram.posts.editorComponents.preview.copy"), copyCode: t("telegram.posts.editorComponents.preview.copyCode"),
+        internalPostLink: t("telegram.posts.editorComponents.preview.internalPostLink"),
+      }) }}
       onClick={handlePreviewContentClick}
     />
   );
 }
-
 export function TelegramPostPreview({
   channelTitle,
   channelPhotoUrl,
@@ -418,10 +419,11 @@ export function TelegramPostPreview({
   buttonRows = [],
   customEmojiPacks,
 }: TelegramPostPreviewProps) {
+  const { locale, t } = useI18n();
   const resolvedCustomEmojiPacks =
     useRetainedCustomEmojiPacks(customEmojiPacks);
   const hasContent = text.trim() || imageUrls.length || hasMedia;
-  const time = new Intl.DateTimeFormat("en", {
+  const time = new Intl.DateTimeFormat(locale, {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -471,7 +473,7 @@ export function TelegramPostPreview({
             <p className="truncate text-sm font-semibold text-white">
               {channelTitle}
             </p>
-            <p className="text-xs text-[#7f91a4]">channel</p>
+            <p className="text-xs text-[#7f91a4]">{t("telegram.posts.editorComponents.preview.channel")}</p>
           </div>
         </div>
 
@@ -480,7 +482,7 @@ export function TelegramPostPreview({
             <div className="max-w-full space-y-2">
               {hasMedia && !imageUrls.length ? (
                 <div className="flex min-h-28 items-center justify-center gap-2 rounded-[18px] rounded-bl-[5px] bg-[#182533] text-sm text-[#9fb2c3]">
-                  <ImageIcon size={18} /> Media attached in Telegram
+                  <ImageIcon size={18} /> {t("telegram.posts.editorComponents.preview.mediaAttached")}
                 </div>
               ) : null}
               {messages.map((message, index) => (
@@ -517,7 +519,7 @@ export function TelegramPostPreview({
             </div>
           ) : (
             <div className="flex min-h-[400px] items-center justify-center px-8 text-center text-sm text-[#708499]">
-              Start typing or upload images to preview your Telegram post.
+              {t("telegram.posts.editorComponents.preview.empty")}
             </div>
           )}
         </div>
@@ -525,7 +527,6 @@ export function TelegramPostPreview({
     </aside>
   );
 }
-
 function TelegramMessageBubble({
   text,
   formattedHtml,
@@ -547,6 +548,7 @@ function TelegramMessageBubble({
   onRedo?: () => void;
   customEmojiPacks?: TelegramCustomEmojiPackSummary[];
 }) {
+  const { t } = useI18n();
   return (
     <div className="telegram-message-bubble overflow-hidden rounded-[18px] rounded-bl-[5px] bg-[#182533] shadow-md">
       {imageUrls.length ? <TelegramMediaGrid imageUrls={imageUrls} /> : null}
@@ -560,7 +562,7 @@ function TelegramMessageBubble({
             <div
               className="telegram-preview-text whitespace-pre-wrap break-words text-[14px] leading-[1.3] text-[#f5f5f5]"
               dangerouslySetInnerHTML={{
-                __html: normalizeTelegramFormattedHtml(formattedHtml),
+                __html: normalizeTelegramFormattedHtml(formattedHtml, t("telegram.posts.editorComponents.preview.copyCode")),
               }}
               onClick={handlePreviewContentClick}
             />
@@ -588,14 +590,13 @@ function TelegramMessageBubble({
       <div className="flex items-center justify-between border-t border-[#324557] px-3.5 py-2.5 text-[13px] text-[#40a7e3]">
         <span className="flex items-center gap-2">
           <MessageCircle size={17} />
-          Leave a Comment
+          {t("telegram.posts.editorComponents.preview.leaveComment")}
         </span>
         <ChevronRight size={18} />
       </div>
     </div>
   );
 }
-
 function EditableTelegramPreviewText({
   value,
   onChange,
@@ -609,6 +610,9 @@ function EditableTelegramPreviewText({
   onRedo?: () => void;
   customEmojiPacks?: TelegramCustomEmojiPackSummary[];
 }) {
+  const { t } = useI18n();
+  const previewLabels = useMemo<PreviewLabels>(() => ({ copy: t("telegram.posts.editorComponents.preview.copy"),
+    copyCode: t("telegram.posts.editorComponents.preview.copyCode"), internalPostLink: t("telegram.posts.editorComponents.preview.internalPostLink") }), [t]);
   const contentRef = useRef<HTMLDivElement>(null);
   const savedRangeRef = useRef<Range | null>(null);
   const undoStackRef = useRef<string[]>([]);
@@ -645,7 +649,7 @@ function EditableTelegramPreviewText({
   useEffect(() => {
     const element = contentRef.current;
     if (!element) return;
-    const nextHtml = previewHtml(value, customEmojiPacks);
+    const nextHtml = previewHtml(value, customEmojiPacks, previewLabels);
     if (!hasRenderedValueRef.current) {
       element.innerHTML = nextHtml;
       hasRenderedValueRef.current = true;
@@ -669,7 +673,7 @@ function EditableTelegramPreviewText({
         setToolbar(null);
       }, 0);
     }
-  }, [collapseSelectionToPreviewEnd, customEmojiPacks, value]);
+  }, [collapseSelectionToPreviewEnd, customEmojiPacks, previewLabels, value]);
 
   const applyMarkup = useCallback(
     (
@@ -749,10 +753,10 @@ function EditableTelegramPreviewText({
     (nextValue: string) => {
       const element = contentRef.current;
       if (!element) return;
-      element.innerHTML = previewHtml(nextValue, customEmojiPacks);
+      element.innerHTML = previewHtml(nextValue, customEmojiPacks, previewLabels);
       collapseSelectionToPreviewEnd();
     },
-    [collapseSelectionToPreviewEnd, customEmojiPacks],
+    [collapseSelectionToPreviewEnd, customEmojiPacks, previewLabels],
   );
 
   const undo = useCallback(() => {
@@ -924,32 +928,32 @@ function EditableTelegramPreviewText({
               onMouseDown={(event) => event.preventDefault()}
             >
               <PreviewFormatButton
-                label="Bold"
+                label={t("telegram.posts.editorComponents.format.bold")}
                 icon={Bold}
                 onClick={() => wrapSelection("strong")}
               />
               <PreviewFormatButton
-                label="Italic"
+                label={t("telegram.posts.editorComponents.format.italic")}
                 icon={Italic}
                 onClick={() => wrapSelection("em")}
               />
               <PreviewFormatButton
-                label="Underline"
+                label={t("telegram.posts.editorComponents.format.underline")}
                 icon={Underline}
                 onClick={() => wrapSelection("u")}
               />
               <PreviewFormatButton
-                label="Strikethrough"
+                label={t("telegram.posts.editorComponents.format.strikethrough")}
                 icon={Strikethrough}
                 onClick={() => wrapSelection("s")}
               />
               <PreviewFormatButton
-                label="Code"
+                label={t("telegram.posts.editorComponents.format.inlineCode")}
                 icon={Code}
                 onClick={() => wrapSelection("code")}
               />
               <PreviewFormatButton
-                label="Quote"
+                label={t("telegram.posts.editorComponents.format.quote")}
                 icon={Quote}
                 onClick={() => wrapSelection("blockquote")}
               />
@@ -1007,7 +1011,6 @@ function PreviewFormatButton({
     </button>
   );
 }
-
 function MessageMeta({ time }: { time: string }) {
   return (
     <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-[#9fb0c0]">
@@ -1017,7 +1020,6 @@ function MessageMeta({ time }: { time: string }) {
     </div>
   );
 }
-
 function handlePreviewContentClick(event: MouseEvent<HTMLDivElement>) {
   const target = event.target as HTMLElement;
   const copyButton = target.closest("[data-copy-code]");
@@ -1043,7 +1045,6 @@ function handlePreviewContentClick(event: MouseEvent<HTMLDivElement>) {
     event.preventDefault();
   }
 }
-
 function splitPreviewText(rawText: string, maxLength: number): string[] {
   const parts: string[] = [];
   let remaining = rawText.trim();
@@ -1055,7 +1056,6 @@ function splitPreviewText(rawText: string, maxLength: number): string[] {
   }
   return parts.length ? parts : [rawText];
 }
-
 function splitPreviewTextOnce(
   rawText: string,
   maxLength: number,
@@ -1086,7 +1086,6 @@ function splitPreviewTextOnce(
     rawText.slice(fallbackAt).trimStart(),
   ];
 }
-
 function findHardPreviewSplit(rawText: string, maxLength: number) {
   for (
     let position = Math.min(rawText.length, maxLength);
@@ -1098,7 +1097,6 @@ function findHardPreviewSplit(rawText: string, maxLength: number) {
   }
   return 0;
 }
-
 function hasBalancedPreviewMarkup(value: string) {
   if ((value.match(/```/g) || []).length % 2 !== 0) return false;
   const withoutFenced = value.replace(/```[\s\S]*?```/g, "");
@@ -1113,7 +1111,6 @@ function hasBalancedPreviewMarkup(value: string) {
     return count % 2 === 0;
   });
 }
-
 function TelegramMediaGrid({ imageUrls }: { imageUrls: string[] }) {
   const visible = imageUrls.slice(0, 4);
 

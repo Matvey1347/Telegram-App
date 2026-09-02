@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
+import { renderWithI18n as render } from "@/test/render-with-i18n";
 import { describe, expect, it, vi } from "vitest";
 import type { TelegramCustomEmojiPackSummary } from "@telegram-system/shared";
 import { customEmojiToken, TelegramCustomEmojiRenderer } from "./telegram-custom-emoji";

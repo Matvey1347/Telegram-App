@@ -5,7 +5,7 @@ const escapeHtml = (value: string) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
-export function normalizeTelegramFormattedHtml(html: string) {
+export function normalizeTelegramFormattedHtml(html: string, copyCodeLabel: string) {
   return html
     .replace(
       /<blockquote\s+expandable(?:=(['"])?.*?\1)?\s*>/gi,
@@ -34,7 +34,7 @@ export function normalizeTelegramFormattedHtml(html: string) {
         const content = /<code[\s>]/i.test(inner)
           ? inner
           : `<code>${inner}</code>`;
-        const copyButton = `<button type="button" data-copy-code aria-label="Copy code"><svg class="tg-copy-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="6.5" y="2.5" width="10" height="12" rx="1.8"></rect><rect x="3.5" y="5.5" width="10" height="12" rx="1.8"></rect></svg></button>`;
+        const copyButton = `<button type="button" data-copy-code aria-label="${escapeHtml(copyCodeLabel)}"><svg class="tg-copy-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="6.5" y="2.5" width="10" height="12" rx="1.8"></rect><rect x="3.5" y="5.5" width="10" height="12" rx="1.8"></rect></svg></button>`;
         return label
           ? `<pre class="tg-native-pre"><span class="tg-native-pre-header"><span>${escapeHtml(label)}</span>${copyButton}</span>${content}</pre>`
           : `<pre class="tg-native-pre tg-native-pre-plain">${copyButton}${content}</pre>`;

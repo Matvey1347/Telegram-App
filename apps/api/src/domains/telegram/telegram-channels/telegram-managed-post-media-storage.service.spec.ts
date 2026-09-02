@@ -31,7 +31,13 @@ describe('TelegramManagedPostMediaStorageService', () => {
 
     await expect(
       service.persistImageUrls(['file:///tmp/image.png']),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).rejects.toMatchObject({
+      response: {
+        code: 'TELEGRAM_POST_MEDIA_URL_INVALID',
+        message: 'Image 1 must use a valid HTTP or HTTPS URL.',
+        params: { index: 1 },
+      },
+    });
     await expect(
       service.persistImageUrls(['not-a-url']),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -48,11 +54,9 @@ describe('TelegramManagedPostMediaStorageService', () => {
       persistImmutableImages,
     } as unknown as B2ObjectStorageService);
 
-    await expect(
-      service.persistImageBytes([{ bytes: jpeg }]),
-    ).resolves.toEqual([
-      'https://s3.example.test/telegram/post-images/image.jpg',
-    ]);
+    await expect(service.persistImageBytes([{ bytes: jpeg }])).resolves.toEqual(
+      ['https://s3.example.test/telegram/post-images/image.jpg'],
+    );
     expect(persistImmutableImages).toHaveBeenCalledWith([
       { bytes: jpeg, mimeType: 'image/jpeg' },
     ]);
@@ -65,7 +69,31 @@ describe('TelegramManagedPostMediaStorageService', () => {
 
     await expect(
       service.persistImageBytes([{ bytes: Buffer.from('not-an-image') }]),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).rejects.toMatchObject({
+      response: {
+        code: 'TELEGRAM_POST_MEDIA_INVALID',
+        message: 'File 1 is not a valid image.',
+        params: { index: 1 },
+      },
+    });
+  });
+
+  it('reports image size limits with stable interpolation params', async () => {
+    const service = new TelegramManagedPostMediaStorageService({
+      persistImmutableImages: jest.fn(),
+    } as unknown as B2ObjectStorageService);
+
+    await expect(
+      service.persistImageBytes([
+        { bytes: Buffer.alloc(10 * 1024 * 1024 + 1) },
+      ]),
+    ).rejects.toMatchObject({
+      response: {
+        code: 'TELEGRAM_POST_MEDIA_TOO_LARGE',
+        message: 'Image 1 is larger than 10 MB.',
+        params: { index: 1, maxMegabytes: 10 },
+      },
+    });
   });
 
   it('normalizes uploaded formats such as AVIF to WebP', async () => {

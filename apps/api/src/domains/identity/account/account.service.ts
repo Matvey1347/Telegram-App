@@ -1,17 +1,19 @@
 import {
   ConflictException,
   ForbiddenException,
+  HttpStatus,
   Injectable,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { WorkspaceRole } from '@prisma/client';
-import type {
-  EditorCommandId,
-  EditorShortcutPreferences,
-  TelegramAccountCapabilities,
+import {
+  normalizeAppLocale,
+  type AppLocale,
+  type EditorCommandId,
+  type EditorShortcutPreferences,
+  type TelegramAccountCapabilities,
 } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
@@ -19,6 +21,7 @@ import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { UpdateMeDto, UpdatePasswordDto, UpdateWorkspaceDto } from './dto';
 import { normalizeTelegramUsername } from '../../../telegram/shared/telegram-import.helpers';
 import { TelegramInviteAttributionService } from '../../telegram/telegram-channels/telegram-invite-attribution.service';
+import { StructuredHttpException } from '../../../common/http/structured-http-error';
 
 const editorCommandIds = new Set<EditorCommandId>([
   'bold',
@@ -88,6 +91,7 @@ export class AccountService {
         name: true,
         createdAt: true,
         editorShortcuts: true,
+        locale: true,
       },
     });
     const membership =
@@ -96,6 +100,7 @@ export class AccountService {
       ...user,
       editorShortcuts:
         (user.editorShortcuts as EditorShortcutPreferences | null) ?? {},
+      locale: normalizeAppLocale(user.locale),
       avatarIconId: membership.avatarIconId,
       avatarIcon: membership.avatarIcon ?? null,
       avatarPresentation: iconToResolvedEmoji(membership.avatarIcon),
@@ -153,17 +158,30 @@ export class AccountService {
           ? normalizeTelegramUsername(dto.telegramUsername)
           : null;
 
+    if (dto.locale !== undefined) {
+      data.locale = normalizeAppLocale(dto.locale) satisfies AppLocale;
+    }
+
     if (dto.name !== undefined) {
       const trimmed = dto.name.trim();
-      if (!trimmed) throw new ConflictException('Name cannot be empty');
+      if (!trimmed) {
+        throw new StructuredHttpException(HttpStatus.CONFLICT, {
+          code: 'ACCOUNT_NAME_EMPTY',
+          message: 'Name cannot be empty',
+        });
+      }
       data.name = trimmed;
     }
 
     if (dto.email !== undefined) {
       const email = dto.email.toLowerCase().trim();
       const existing = await this.prisma.user.findUnique({ where: { email } });
-      if (existing && existing.id !== userId)
-        throw new ConflictException('Email already exists');
+      if (existing && existing.id !== userId) {
+        throw new StructuredHttpException(HttpStatus.CONFLICT, {
+          code: 'ACCOUNT_EMAIL_ALREADY_EXISTS',
+          message: 'Email already exists',
+        });
+      }
       data.email = email;
     }
 
@@ -183,7 +201,7 @@ export class AccountService {
           'Editor shortcuts must be unique supported key combinations',
         );
       }
-      data.editorShortcuts = dto.editorShortcuts as Prisma.InputJsonValue;
+      data.editorShortcuts = dto.editorShortcuts;
     }
 
     if (dto.avatarIconId !== undefined && dto.avatarIconId !== null) {
@@ -191,7 +209,10 @@ export class AccountService {
         where: { id: dto.avatarIconId, workspaceId: membership.workspaceId },
       });
       if (!icon) {
-        throw new NotFoundException('Avatar image not found');
+        throw new StructuredHttpException(HttpStatus.NOT_FOUND, {
+          code: 'ACCOUNT_AVATAR_NOT_FOUND',
+          message: 'Avatar image not found',
+        });
       }
     }
 
@@ -213,9 +234,11 @@ export class AccountService {
           select: { id: true },
         });
         if (existingMember) {
-          throw new ConflictException(
-            'Telegram username is already assigned to another workspace member',
-          );
+          throw new StructuredHttpException(HttpStatus.CONFLICT, {
+            code: 'ACCOUNT_TELEGRAM_USERNAME_ASSIGNED',
+            message:
+              'Telegram username is already assigned to another workspace member',
+          });
         }
       }
 
@@ -231,9 +254,11 @@ export class AccountService {
             })
           : [];
         if (accounts.length !== requestedIds.length) {
-          throw new NotFoundException(
-            'One or more Telegram accounts were not found in this workspace',
-          );
+          throw new StructuredHttpException(HttpStatus.NOT_FOUND, {
+            code: 'ACCOUNT_TELEGRAM_ACCOUNTS_NOT_FOUND',
+            message:
+              'One or more Telegram accounts were not found in this workspace',
+          });
         }
         const occupied = accounts.find(
           (account) =>
@@ -241,9 +266,11 @@ export class AccountService {
             account.assignedMemberId !== membership.id,
         );
         if (occupied) {
-          throw new ConflictException(
-            'One or more Telegram accounts are already linked to another workspace member',
-          );
+          throw new StructuredHttpException(HttpStatus.CONFLICT, {
+            code: 'ACCOUNT_TELEGRAM_ACCOUNTS_ASSIGNED',
+            message:
+              'One or more Telegram accounts are already linked to another workspace member',
+          });
         }
         const currentAccounts =
           await tx.telegramUserAccountIntegration.findMany({
@@ -317,13 +344,25 @@ export class AccountService {
     return this.me(userId);
   }
 
+  async updateLocale(userId: string, locale: AppLocale) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { locale: normalizeAppLocale(locale) },
+      select: { locale: true },
+    });
+  }
+
   async updatePassword(userId: string, dto: UpdatePasswordDto) {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
     });
     const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
-    if (!valid)
-      throw new UnauthorizedException('Current password is incorrect');
+    if (!valid) {
+      throw new StructuredHttpException(HttpStatus.UNAUTHORIZED, {
+        code: 'ACCOUNT_CURRENT_PASSWORD_INCORRECT',
+        message: 'Current password is incorrect',
+      });
+    }
 
     const passwordHash = await bcrypt.hash(dto.newPassword, 10);
     await this.prisma.user.update({

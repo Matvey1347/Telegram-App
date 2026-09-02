@@ -24,6 +24,77 @@ describe("ProtectedRoute", () => {
     window.history.replaceState({}, "", "/");
   });
 
+  it.each(["/login", "/register"])(
+    "renders %s immediately while the local session is still unresolved",
+    (pathname) => {
+      vi.mocked(usePathname).mockReturnValue(pathname);
+      window.history.replaceState({}, "", pathname);
+      useAuthMock.mockReturnValue({
+        token: null,
+        isTokenReady: false,
+        isAuthResolved: false,
+        isLoading: true,
+        isAuthenticated: false,
+        error: null,
+      });
+
+      renderWithProviders(
+        <ProtectedRoute>
+          <div>Public auth page</div>
+        </ProtectedRoute>,
+      );
+
+      expect(screen.getByText("Public auth page")).toBeInTheDocument();
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    },
+  );
+
+  it("keeps the protected loader while a protected route session is unresolved", () => {
+    vi.mocked(usePathname).mockReturnValue("/settings");
+    window.history.replaceState({}, "", "/settings");
+    useAuthMock.mockReturnValue({
+      token: null,
+      isTokenReady: false,
+      isAuthResolved: false,
+      isLoading: true,
+      isAuthenticated: false,
+      error: null,
+    });
+
+    renderWithProviders(
+      <ProtectedRoute>
+        <div>Settings page</div>
+      </ProtectedRoute>,
+    );
+
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(screen.queryByText("Settings page")).not.toBeInTheDocument();
+  });
+
+  it("redirects a resolved authenticated login visit to its safe return path", async () => {
+    vi.mocked(usePathname).mockReturnValue("/login");
+    window.history.replaceState({}, "", "/login?redirect=%2Fsettings");
+    useAuthMock.mockReturnValue({
+      token: "active-session",
+      isTokenReady: true,
+      isAuthResolved: true,
+      isLoading: false,
+      isAuthenticated: true,
+      error: null,
+    });
+
+    renderWithProviders(
+      <ProtectedRoute>
+        <div>Login page</div>
+      </ProtectedRoute>,
+    );
+
+    expect(screen.getByText("Login page")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(navigationMocks.replace).toHaveBeenCalledWith("/settings");
+    });
+  });
+
   it("renders the registration page without redirecting guests to login", async () => {
     vi.mocked(usePathname).mockReturnValue("/register");
     window.history.replaceState({}, "", "/register");

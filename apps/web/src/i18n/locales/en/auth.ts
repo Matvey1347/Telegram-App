@@ -1,0 +1,78 @@
+import type { TranslationCatalog } from "@/i18n/types";
+
+const messages = {
+  "auth.language": "Language",
+  "auth.language.english": "English",
+  "auth.language.russian": "Russian",
+  "auth.hero.eyebrow": "Smarter operations",
+  "auth.hero.title": "One workspace for Telegram operations.",
+  "auth.hero.description":
+    "Channels, advertising, finance and team workflows under the Nexeloq brand.",
+  "auth.login.title": "Welcome back",
+  "auth.login.description": "Sign in with your workspace account.",
+  "auth.login.noAccount": "No account?",
+  "auth.login.createWorkspace": "Create a workspace",
+  "auth.login.forgotPassword": "Forgot password?",
+  "auth.login.submit": "Sign in",
+  "auth.login.submitting": "Signing in…",
+  "auth.register.title": "Create your workspace",
+  "auth.register.description":
+    "Set up your account. You can invite the rest of your team later.",
+  "auth.register.hasAccount": "Already have an account?",
+  "auth.register.signIn": "Sign in",
+  "auth.register.submit": "Create workspace",
+  "auth.register.submitting": "Creating…",
+  "auth.forgot.title": "Reset your password",
+  "auth.forgot.description":
+    "Enter your account email and we’ll send you a secure reset link.",
+  "auth.forgot.back": "Back to sign in",
+  "auth.forgot.sent":
+    "If an account exists for that email, a reset link is on its way.",
+  "auth.forgot.submit": "Send reset link",
+  "auth.forgot.submitting": "Sending…",
+  "auth.reset.title": "Choose a new password",
+  "auth.reset.description": "Use a strong password you don’t use elsewhere.",
+  "auth.reset.continue": "Continue to sign in",
+  "auth.reset.requestNew": "Request a new link",
+  "auth.reset.complete": "Your password has been updated.",
+  "auth.reset.submit": "Update password",
+  "auth.reset.submitting": "Updating…",
+  "auth.fields.email": "Email",
+  "auth.fields.workEmail": "Work email",
+  "auth.fields.password": "Password",
+  "auth.fields.newPassword": "New password",
+  "auth.fields.confirmPassword": "Confirm password",
+  "auth.fields.name": "Your name",
+  "auth.fields.workspaceName": "Workspace name",
+  "auth.password.show": "Show password",
+  "auth.password.hide": "Hide password",
+  "auth.placeholders.email": "you@company.com",
+  "auth.placeholders.password": "Enter your password",
+  "auth.placeholders.newPassword": "At least 8 characters",
+  "auth.placeholders.confirmPassword": "Repeat your password",
+  "auth.placeholders.name": "Alex Morgan",
+  "auth.placeholders.workspaceName": "Company or team name",
+  "auth.validation.emailRequired": "Email is required",
+  "auth.validation.passwordRequired": "Password is required",
+  "auth.validation.nameRequired": "Name is required",
+  "auth.validation.passwordMin": "Use at least 8 characters",
+  "auth.validation.confirmRequired": "Please confirm your password",
+  "auth.validation.passwordMismatch": "Passwords do not match",
+  "auth.errors.network":
+    "Unable to connect to the server. Please try again later.",
+  "auth.errors.generic": "Something went wrong. Please try again.",
+  "auth.errors.signIn": "Sign in failed. Please try again.",
+  "auth.errors.register": "Failed to create the workspace.",
+  "auth.errors.forgot": "We could not send the reset email.",
+  "auth.errors.emailAlreadyExists":
+    "An account with this email already exists.",
+  "auth.errors.invalidCredentials": "Invalid email or password.",
+  "auth.errors.resetTokenMissing":
+    "This reset link is missing a token. Request a new link.",
+  "auth.errors.resetTokenInvalid": "This reset link is invalid or has expired.",
+  "auth.errors.tooManyAttempts": "Too many attempts. Please try again later.",
+  "auth.errors.sessionInvalid":
+    "Your session is invalid. Please sign in again.",
+} as const satisfies TranslationCatalog;
+
+export default messages;

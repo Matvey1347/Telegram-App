@@ -94,6 +94,7 @@ function main() {
   }
 
   if (touchesAny(files, ["apps/web/"])) {
+    commands.push("pnpm i18n:check");
     commands.push("pnpm --filter web lint");
     commands.push("pnpm --filter web typecheck");
     commands.push("pnpm --filter web test -- --run");

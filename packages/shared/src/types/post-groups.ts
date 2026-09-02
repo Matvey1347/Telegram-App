@@ -18,6 +18,8 @@ export type BulkActionResultItem = {
   skipped?: boolean;
   message?: string;
   error?: string;
+  errorCode?: string;
+  errorParams?: import("../i18n/contracts").TranslationParams;
 };
 
 export type BulkActionResult = {

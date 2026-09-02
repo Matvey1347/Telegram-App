@@ -1,5 +1,6 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
+import { StructuredHttpException } from '../../../common/http/structured-http-error';
 
 type Attempt = { count: number; resetAt: number };
 
@@ -31,10 +32,10 @@ export class PasswordResetRateLimitService {
       return;
     }
     if (current.count >= limit) {
-      throw new HttpException(
-        { message: 'Too many attempts. Please try again later.' },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+      throw new StructuredHttpException(HttpStatus.TOO_MANY_REQUESTS, {
+        code: 'AUTH_TOO_MANY_ATTEMPTS',
+        message: 'Too many attempts. Please try again later.',
+      });
     }
     current.count += 1;
   }

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import {
   TelegramManagedPostIdVerificationStatus,
   TelegramManagedPostLinkSource,
@@ -13,6 +13,7 @@ import { TelegramChannelsSupportService } from './telegram-channels-support.serv
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramManagedPostRemoteSyncService } from './telegram-managed-post-remote-sync.service';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
+import { telegramChannelNotFound } from './telegram-posts.errors';
 
 @Injectable()
 export class TelegramManagedPostScheduledResetService {
@@ -46,7 +47,7 @@ export class TelegramManagedPostScheduledResetService {
         telegramAccessHash: true,
       },
     });
-    if (!channel) throw new NotFoundException('Telegram channel not found');
+    if (!channel) throw telegramChannelNotFound();
 
     const posts = await this.prisma.telegramManagedPost.findMany({
       where: {

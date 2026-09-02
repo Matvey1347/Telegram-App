@@ -1,5 +1,6 @@
 "use client";
 
+
 import {
   useRef,
   useState,
@@ -14,6 +15,7 @@ import {
   Modal,
   Textarea,
 } from "@/components/ui/primitives";
+import { useI18n } from "@/providers/i18n-provider";
 
 export type ManagedPostsGroupOption = {
   value: string;
@@ -40,6 +42,7 @@ export function ManagedPostsImportSource({
   onClear: () => void;
   onCopyContent: () => void;
 }) {
+  const { t } = useI18n();
   const [dragging, setDragging] = useState(false);
   const emptyFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -68,23 +71,23 @@ export function ManagedPostsImportSource({
 
   return (
     <div className="space-y-3">
-      <FormField label="Import data">
+      <FormField label={t("telegram.posts.import.data")}>
         {content ? (
           <div className="overflow-hidden rounded-lg border border-neutral-700 bg-neutral-950 focus-within:border-blue-600">
             <div className="flex items-center justify-between gap-2 border-b border-neutral-800 px-2 py-1.5">
               <span className="min-w-0 truncate text-xs text-neutral-400">
-                {fileName ?? "Pasted text"}
+                {fileName ?? t("telegram.posts.import.pastedText")}
               </span>
               <div className="flex shrink-0 items-center gap-1">
                 <Button
                   type="button"
                   variant="secondary"
                   className="h-9 w-[104px] px-2 py-0 text-sm"
-                  aria-label="Copy import data"
+                  aria-label={t("telegram.posts.import.copyData")}
                   disabled={disabled}
                   onClick={onCopyContent}
                 >
-                  <Copy size={12} /> Copy
+                  <Copy size={12} /> {t("telegram.posts.import.copy")}
                 </Button>
                 <label
                   className={`inline-flex h-9 w-[104px] items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-neutral-700 px-2 py-0 text-sm font-medium text-white hover:bg-neutral-600 ${
@@ -93,7 +96,7 @@ export function ManagedPostsImportSource({
                       : "cursor-pointer"
                   }`}
                 >
-                  <RotateCcw size={12} /> Replace
+                  <RotateCcw size={12} /> {t("telegram.posts.import.replace")}
                   <input
                     type="file"
                     accept=".json,.csv,.tsv,.txt,application/json,text/csv,text/tab-separated-values,text/plain"
@@ -113,7 +116,7 @@ export function ManagedPostsImportSource({
                   disabled={disabled}
                   onClick={onClear}
                 >
-                  Clear
+                  {t("telegram.posts.import.clear")}
                 </Button>
               </div>
             </div>
@@ -123,14 +126,14 @@ export function ManagedPostsImportSource({
               onPaste={paste}
               rows={7}
               disabled={disabled}
-              aria-label="Import data"
+              aria-label={t("telegram.posts.import.data")}
               className="rounded-none border-0 font-mono text-xs focus:ring-0"
             />
           </div>
         ) : (
           <div
             role="region"
-            aria-label="File drop and paste area"
+            aria-label={t("telegram.posts.import.dropArea")}
             className={`flex min-h-28 flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-neutral-950 px-4 py-5 text-center transition ${
               dragging
                 ? "border-blue-500 bg-blue-950/30 text-white"
@@ -144,7 +147,7 @@ export function ManagedPostsImportSource({
             tabIndex={disabled ? -1 : 0}
           >
             <span className="inline-flex items-center gap-2 text-sm font-medium">
-              <FileUp size={18} /> Drop or paste a file here
+              <FileUp size={18} /> {t("telegram.posts.import.dropFile")}
             </span>
             <button
               type="button"
@@ -152,14 +155,13 @@ export function ManagedPostsImportSource({
               onClick={() => emptyFileInputRef.current?.click()}
               className="inline-flex h-9 items-center gap-2 rounded-lg border border-blue-500/70 bg-blue-600/15 px-4 text-sm font-medium text-blue-200 transition hover:bg-blue-600/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Upload size={14} /> Choose file
+              <Upload size={14} /> {t("telegram.posts.import.chooseFile")}
             </button>
             <span className="text-xs text-neutral-500">
-              JSON, CSV, TSV, TXT, or plain text
+              {t("telegram.posts.import.fileTypes")}
             </span>
             <span className="inline-flex items-center gap-1 text-xs text-blue-300">
-              Text pasted here opens the editor
-              automatically
+              {t("telegram.posts.import.pasteHint")}
             </span>
             <input
               ref={emptyFileInputRef}
@@ -191,24 +193,23 @@ export function ManagedPostsGroupConfirmation({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Modal
       open={Boolean(option)}
       onClose={onClose}
-      title="Apply group to all posts"
+      title={t("telegram.posts.import.applyGroupAll")}
       size="sm"
     >
       <p className="text-sm text-neutral-300">
-        This will set{" "}
-        <span className="font-semibold text-white">{option?.label}</span> for
-        all {rowCount} imported posts and update every groupId in the JSON.
+        {t("telegram.posts.import.applyGroupDescription", { group: option?.label ?? "", count: rowCount })}
       </p>
       <div className="mt-4 flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onClose}>
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button type="button" onClick={onConfirm}>
-          Apply group
+          {t("telegram.posts.import.applyGroup")}
         </Button>
       </div>
     </Modal>
@@ -230,22 +231,23 @@ export function ManagedPostsGroupSelect({
   error: boolean;
   onChange: (value: string) => void;
 }) {
+  const { t } = useI18n();
   return (
-    <FormField label="Group for all posts">
+    <FormField label={t("telegram.posts.import.groupAll")}>
       <CustomSelect
         value={value}
         onChange={onChange}
         options={options}
         disabled={loading || disabled}
-        placeholder={loading ? "Loading groups..." : "Choose a group override"}
+        placeholder={loading ? t("telegram.posts.import.loadingGroups") : t("telegram.posts.import.chooseGroup")}
       />
       {error ? (
         <p className="mt-1 text-xs text-amber-300">
-          Could not load post groups. Posts can still be imported ungrouped.
+          {t("telegram.posts.import.groupsLoadError")}
         </p>
       ) : (
         <p className="mt-1 text-xs text-neutral-500">
-          Changing this value updates groupId in every imported row.
+          {t("telegram.posts.import.groupChangeHint")}
         </p>
       )}
     </FormField>

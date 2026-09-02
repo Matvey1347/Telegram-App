@@ -20,7 +20,7 @@ const STRICT_MODE = process.env.ARCHITECTURE_STRICT === "1";
 // Transitional baseline: these files must shrink and may never grow.
 // Final strict mode ignores this map and fails every production file above policy.
 const TRANSITION_BASELINE = new Map([
-  ["apps/web/src/app/(internal)/(telegram)/telegram-posts/page.tsx", 7950],
+  ["apps/web/src/app/(internal)/(telegram)/telegram-posts/page.tsx", 7843],
   [
     "apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.service.ts",
     5511,
@@ -35,7 +35,7 @@ const TRANSITION_BASELINE = new Map([
   ["apps/web/src/lib/api.ts", 750],
   ["apps/web/src/app/(internal)/(growth)/ad-campaigns/page.tsx", 2464],
   ["apps/api/src/domains/growth/ad-campaigns/ad-campaigns.service.ts", 1793],
-  ["apps/web/src/components/ui/primitives.tsx", 1747],
+  ["apps/web/src/components/ui/primitives.tsx", 1746],
   [
     "apps/web/src/components/features/growth/ad-campaigns/campaigns-table.tsx",
     1242,
@@ -48,7 +48,7 @@ const TRANSITION_BASELINE = new Map([
     "apps/web/src/components/features/telegram/telegram/telegram-account-panels.tsx",
     1083,
   ],
-  ["apps/web/src/components/icons/icon-picker.tsx", 1165],
+  ["apps/web/src/components/icons/icon-picker.tsx", 1164],
   [
     "apps/api/src/domains/telegram/telegram-bots/core/telegram-bot-runtime.service.ts",
     888,
@@ -56,7 +56,7 @@ const TRANSITION_BASELINE = new Map([
   ["apps/api/src/domains/growth/ad-hypotheses/ad-hypotheses.service.ts", 903],
   [
     "apps/web/src/components/features/telegram/telegram/telegram-post-preview.tsx",
-    1156,
+    1153,
   ],
   ["apps/api/src/domains/finance/transactions/transactions.service.ts", 797],
   ["apps/web/src/app/(internal)/(operations)/system-logs/page.tsx", 806],

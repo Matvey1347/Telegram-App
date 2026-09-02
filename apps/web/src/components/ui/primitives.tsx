@@ -1,5 +1,4 @@
 "use client";
-
 import {
   Children,
   PropsWithChildren,
@@ -34,9 +33,9 @@ import { uiCopy, type UiLocale } from "@/lib/ui-i18n";
 import { currencyPresentation } from "@telegram-system/shared";
 import type { ResolvedEmoji } from "@telegram-system/shared";
 import { IconAvatar } from "@/components/icons/icon-avatar";
+import { useOptionalI18n } from "@/providers/i18n-provider";
 export { Modal } from "./modal";
 export { MasonryGrid } from "./masonry-grid";
-
 export type ToastItem = {
   id: number | string;
   message: string;
@@ -49,7 +48,6 @@ export type ToastItem = {
   cancelable?: boolean;
   details?: string;
 };
-
 export function Button({
   variant = "primary",
   ...props
@@ -68,7 +66,6 @@ export function Button({
     />
   );
 }
-
 export function ToggleRow({
   checked,
   onChange,
@@ -119,11 +116,10 @@ export function ToggleRow({
     </div>
   );
 }
-
 export const Input = forwardRef<
   HTMLInputElement,
-  React.InputHTMLAttributes<HTMLInputElement>
->(function Input({ className, type, ...props }, ref) {
+  React.InputHTMLAttributes<HTMLInputElement> & { passwordToggleLabels?: { show: string; hide: string } }
+>(function Input({ className, type, passwordToggleLabels, ...props }, ref) {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const isPassword = type === "password";
   const input = (
@@ -144,7 +140,7 @@ export const Input = forwardRef<
         disabled={props.disabled}
         onClick={() => setPasswordVisible((visible) => !visible)}
         className="absolute right-1 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-neutral-400 transition hover:bg-neutral-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:pointer-events-none disabled:opacity-50"
-        aria-label={passwordVisible ? "Hide password" : "Show password"}
+        aria-label={passwordVisible ? (passwordToggleLabels?.hide ?? "Hide password") : (passwordToggleLabels?.show ?? "Show password")}
         aria-pressed={passwordVisible}
       >
         {passwordVisible ? <EyeOff size={17} /> : <Eye size={17} />}
@@ -152,7 +148,6 @@ export const Input = forwardRef<
     </span>
   );
 });
-
 export function normalizeTimeInputValue(value: string) {
   const sanitized = value.replace(/[^\d:.\s]/g, "").replace(/\s+/g, "");
   if (!sanitized) return "";
@@ -164,7 +159,6 @@ export function normalizeTimeInputValue(value: string) {
   const [hours = "", minutes = ""] = normalized.split(":", 2);
   return `${hours.slice(0, 2)}:${minutes.slice(0, 2)}`;
 }
-
 export function canonicalizeTimeInputValue(value: string) {
   const normalized = normalizeTimeInputValue(value);
   const match = normalized.match(/^(\d{1,2}):(\d{2})$/);
@@ -176,11 +170,9 @@ export function canonicalizeTimeInputValue(value: string) {
   }
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
-
 export function isValidTimeInputValue(value: string) {
   return canonicalizeTimeInputValue(value) !== null;
 }
-
 export function TimeInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   const { className, onBlur, onChange, placeholder, ...restProps } = props;
   return (
@@ -212,7 +204,6 @@ export function TimeInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
     </div>
   );
 }
-
 function OptionIcon({
   iconPresentation,
   iconUrl,
@@ -226,6 +217,8 @@ function OptionIcon({
   premium?: boolean;
   fallback?: string;
 }) {
+  const premiumLabel =
+    useOptionalI18n()?.t("common.premiumEmoji") ?? "Telegram Premium emoji";
   if (iconPresentation)
     return (
       <IconAvatar
@@ -247,13 +240,13 @@ function OptionIcon({
     return (
       <span
         className={`relative flex h-5 w-5 shrink-0 items-center justify-center text-[15px] leading-none ${premium ? "rounded-md ring-1 ring-sky-400/70" : ""}`}
-        title={premium ? "Telegram Premium emoji" : undefined}
+        title={premium ? premiumLabel : undefined}
       >
         {iconEmoji}
         {premium ? (
           <span
             className="absolute -right-1 -top-1 text-[8px] leading-none text-sky-300"
-            aria-label="Telegram Premium emoji"
+            aria-label={premiumLabel}
           >
             ✦
           </span>
@@ -275,7 +268,8 @@ export function Select(
     searchPlaceholder?: string;
   },
 ) {
-  const ui = uiCopy(props.uiLocale);
+  const i18n = useOptionalI18n(),
+    ui = uiCopy(props.uiLocale ?? i18n?.locale);
   const financeTypeClass = (value: string) => {
     if (value === "income") return "text-emerald-300";
     if (value === "expense" || value === "expenses" || value === "expences")
@@ -531,7 +525,6 @@ export function Select(
     </div>
   );
 }
-
 export function CurrencySelect({
   value,
   onChange,
@@ -580,8 +573,8 @@ export function MultiSelect({
   value,
   onChange,
   options,
-  placeholder = "Select",
-  searchPlaceholder = "Search...",
+  placeholder,
+  searchPlaceholder,
   disabled = false,
   className = "",
   allSelectedLabel,
@@ -597,6 +590,11 @@ export function MultiSelect({
   allSelectedLabel?: string;
   compactSelectedAfter?: number;
 }) {
+  const i18n = useOptionalI18n();
+  const resolvedPlaceholder =
+    placeholder ?? i18n?.t("common.select") ?? "Select";
+  const resolvedSearchPlaceholder =
+    searchPlaceholder ?? i18n?.t("common.search") ?? "Search";
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -740,7 +738,7 @@ export function MultiSelect({
               ))
             )
           ) : (
-            <span className="text-neutral-400">{placeholder}</span>
+            <span className="text-neutral-400">{resolvedPlaceholder}</span>
           )}
         </span>
         <ChevronDown size={16} className="shrink-0 text-neutral-400" />
@@ -763,7 +761,7 @@ export function MultiSelect({
                       setSearch("");
                     }
                   }}
-                  placeholder={searchPlaceholder}
+                  placeholder={resolvedSearchPlaceholder}
                   className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-2 text-sm text-white outline-none placeholder:text-neutral-500 focus:border-blue-600"
                 />
               </div>
@@ -804,7 +802,6 @@ export function MultiSelect({
     </div>
   );
 }
-
 export function Textarea(
   props: React.TextareaHTMLAttributes<HTMLTextAreaElement>,
 ) {
@@ -871,7 +868,8 @@ export function CustomSelect({
   dropdownClassName?: string;
   uiLocale?: UiLocale;
 }) {
-  const ui = uiCopy(uiLocale);
+  const i18n = useOptionalI18n(),
+    ui = uiCopy(uiLocale ?? i18n?.locale);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -1099,7 +1097,6 @@ export function CustomSelect({
     </div>
   );
 }
-
 export function Card({
   children,
   className = "",
@@ -1112,7 +1109,6 @@ export function Card({
     </div>
   );
 }
-
 export function Table({ children }: PropsWithChildren) {
   return (
     <div className="table-scroll w-full">
@@ -1380,7 +1376,7 @@ export function ConfirmDeleteModal({
   onClose,
   onConfirm,
   entityName,
-  label = "Delete",
+  label,
   description,
 }: {
   open: boolean;
@@ -1390,6 +1386,8 @@ export function ConfirmDeleteModal({
   label?: string;
   description?: string;
 }) {
+  const t = useOptionalI18n()?.t;
+  const resolvedLabel = label ?? t?.("common.delete") ?? "Delete";
   const [value, setValue] = useState("");
   const valid = useMemo(() => value === entityName, [value, entityName]);
   useEffect(() => {
@@ -1399,10 +1397,10 @@ export function ConfirmDeleteModal({
   }, [open]);
   if (!open) return null;
   return (
-    <Modal open={open} onClose={onClose} title="Confirm deletion">
+    <Modal open={open} onClose={onClose} title={t?.("common.confirmDeletion") ?? "Confirm deletion"}>
       <p className="mb-2 text-sm text-neutral-300">
-        Type <span className="font-semibold text-white">{entityName}</span> to
-        confirm deletion.
+        {t?.("common.typeToConfirm", { name: entityName }) ??
+          `Type ${entityName} to confirm deletion.`}
       </p>
       {description ? (
         <p className="mb-3 text-sm text-amber-300">{description}</p>
@@ -1420,7 +1418,7 @@ export function ConfirmDeleteModal({
             onClose();
           }}
         >
-          Cancel
+          {t?.("common.cancel") ?? "Cancel"}
         </Button>
         <Button
           variant="danger"
@@ -1431,7 +1429,7 @@ export function ConfirmDeleteModal({
             void Promise.resolve(onConfirm()).catch(() => undefined);
           }}
         >
-          <span className="inline-flex items-center gap-2">{label}</span>
+          <span className="inline-flex items-center gap-2">{resolvedLabel}</span>
         </Button>
       </div>
     </Modal>
@@ -1493,26 +1491,27 @@ export function FormError({ message }: { message?: string }) {
   return <p className="mt-2 text-sm text-red-400">{message}</p>;
 }
 
-export function ErrorState({
-  text = "Something went wrong.",
-}: {
-  text?: string;
-}) {
+export function ErrorState({ text }: { text?: string }) {
+  const i18n = useOptionalI18n(),
+    resolvedText =
+      text ?? i18n?.t("common.error.short") ?? "Something went wrong.";
   return (
     <div className="rounded-lg border border-rose-700 bg-rose-950/30 p-4 text-sm text-rose-200">
-      {text}
+      {resolvedText}
     </div>
   );
 }
 
-export function LoadingState({ text = "Loading..." }: { text?: string }) {
+export function LoadingState({ text }: { text?: string }) {
+  const i18n = useOptionalI18n(),
+    resolvedText = text ?? i18n?.t("common.loading") ?? "Loading…";
   return (
     <div
       className="overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900 p-4 sm:p-5"
       role="status"
-      aria-label={text}
+      aria-label={resolvedText}
     >
-      <span className="sr-only">{text}</span>
+      <span className="sr-only">{resolvedText}</span>
       <div className="space-y-3" aria-hidden="true">
         <Skeleton className="h-5 w-40" />
         <Skeleton className="h-3 w-full" />
@@ -1586,10 +1585,11 @@ export function Skeleton({ className = "" }: { className?: string }) {
   );
 }
 
-export function EmptyState({ text = "No data yet." }: { text?: string }) {
+export function EmptyState({ text }: { text?: string }) {
+  const t = useOptionalI18n()?.t;
   return (
     <div className="rounded-xl border border-dashed border-neutral-700 p-5 text-neutral-400">
-      {text}
+      {text ?? t?.("common.empty") ?? "No data yet."}
     </div>
   );
 }
@@ -1601,6 +1601,7 @@ export function ToastStack({
   items: ToastItem[];
   onClose: (id: number | string) => void;
 }) {
+  const t = useOptionalI18n()?.t;
   const [host, setHost] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -1626,25 +1627,25 @@ export function ToastStack({
             card: "border-emerald-700/70 bg-emerald-950/95",
             icon: "bg-emerald-500/15 text-emerald-300",
             bar: "bg-emerald-400",
-            title: "Success",
+            title: t?.("common.success") ?? "Success",
           },
           error: {
             card: "border-red-700/70 bg-red-950/95",
             icon: "bg-red-500/15 text-red-300",
             bar: "bg-red-400",
-            title: "Something went wrong",
+            title: t?.("common.error.short") ?? "Something went wrong",
           },
           info: {
             card: "border-blue-700/70 bg-neutral-950/95",
             icon: "bg-blue-500/15 text-blue-300",
             bar: "bg-blue-400",
-            title: "Information",
+            title: t?.("common.information") ?? "Information",
           },
           loading: {
             card: "border-blue-600/70 bg-neutral-950/95",
             icon: "bg-blue-500/15 text-blue-300",
             bar: "bg-blue-500",
-            title: "Processing",
+            title: t?.("common.processing") ?? "Processing",
           },
         }[tone];
         const StatusIcon =
@@ -1726,10 +1727,8 @@ export function ToastStack({
               {tone !== "loading" || item.cancelable ? (
                 <button
                   type="button"
-                  aria-label={
-                    item.cancelable ? "Stop operation" : "Close notification"
-                  }
-                  title={item.cancelable ? "Stop operation" : undefined}
+                  aria-label={item.cancelable ? (t?.("common.stopOperation") ?? "Stop operation") : (t?.("common.closeNotification") ?? "Close notification")}
+                  title={item.cancelable ? (t?.("common.stopOperation") ?? "Stop operation") : undefined}
                   className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-neutral-400 hover:bg-white/10 hover:text-white"
                   onClick={() => onClose(item.id)}
                 >

@@ -25,6 +25,10 @@ import { TelegramManagedPostPresentationService } from './telegram-managed-post-
 import { TelegramManagedPostPublisherService } from './telegram-managed-post-publisher.service';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
+import {
+  managedPostNotFound,
+  telegramPostsBadRequest,
+} from './telegram-posts.errors';
 
 @Injectable()
 export class TelegramManagedPostPublicationService {
@@ -149,7 +153,10 @@ export class TelegramManagedPostPublicationService {
   ) {
     const scheduledAt = new Date(dto.scheduledAt);
     if (scheduledAt.getTime() <= Date.now())
-      throw new BadRequestException('Schedule date must be in the future');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_SCHEDULE_IN_PAST',
+        'Schedule date must be in the future',
+      );
     const workspaceId =
       await this.telegramChannelsSupportService.workspace(userId);
     return this.publishManagedPost(
@@ -177,7 +184,8 @@ export class TelegramManagedPostPublicationService {
   ) {
     if (!post.telegramScheduledMessageIds.length) return;
     if (post.sourceType !== TelegramSourceType.MTPROTO || !post.sourceId) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_NOT_SCHEDULED',
         'Scheduled post has no MTProto source and cannot be cancelled safely',
       );
     }
@@ -191,7 +199,8 @@ export class TelegramManagedPostPublicationService {
         post.telegramChannel,
       );
     if (!channelReference.telegramChatId && !channelReference.username)
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_TELEGRAM_REFERENCE_MISSING',
         'Scheduled post channel has no Telegram reference',
       );
     await this.mtprotoClient.deleteScheduledPost({
@@ -212,14 +221,16 @@ export class TelegramManagedPostPublicationService {
       where: { id: postId, workspaceId, telegramChannelId: channelId },
       include: { telegramChannel: true },
     });
-    if (!post) throw new NotFoundException('Managed post not found');
+    if (!post) throw managedPostNotFound();
     if (post.status !== TelegramManagedPostStatus.SCHEDULED) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_NOT_SCHEDULED',
         'Only scheduled posts can be returned to draft',
       );
     }
     if (post.origin === 'TELEGRAM') {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_NOT_EDITABLE',
         'Posts created in Telegram cannot be returned to draft from the editor',
       );
     }
@@ -265,7 +276,7 @@ export class TelegramManagedPostPublicationService {
         where: { id: updated.id },
         include: this.managedPostInclude,
       });
-      if (!canonical) throw new NotFoundException('Managed post not found');
+      if (!canonical) throw managedPostNotFound();
       return canonical;
     });
     const [hydrated] =

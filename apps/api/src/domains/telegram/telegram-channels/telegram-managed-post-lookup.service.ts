@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 import { TelegramManagedPostGroupPresentationService } from './telegram-managed-post-group-presentation.service';
+import { telegramChannelNotFound } from './telegram-posts.errors';
 
 type LookupPostRow = {
   id: string;
@@ -33,7 +34,7 @@ export class TelegramManagedPostLookupService {
         id: true,
       },
     });
-    if (!channel) throw new NotFoundException('Telegram channel not found');
+    if (!channel) throw telegramChannelNotFound();
 
     const posts = (await this.prisma.telegramManagedPost.findMany({
       where: {

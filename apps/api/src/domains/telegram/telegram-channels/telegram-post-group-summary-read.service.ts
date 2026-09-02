@@ -1,13 +1,10 @@
-import {
-  Injectable,
-  NotFoundException,
-  PayloadTooLargeException,
-} from '@nestjs/common';
+import { Injectable, PayloadTooLargeException } from '@nestjs/common';
 import { TelegramManagedPostStatus } from '@prisma/client';
 import { TELEGRAM_POST_GROUP_SUMMARY_MAX_ITEMS } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 import { TelegramManagedPostGroupPresentationService } from './telegram-managed-post-group-presentation.service';
+import { telegramChannelNotFound } from './telegram-posts.errors';
 
 type StatusCount = {
   status: TelegramManagedPostStatus;
@@ -93,7 +90,7 @@ export class TelegramPostGroupSummaryReadService {
       where: { id: channelId, workspaceId, isActive: true },
       select: { id: true },
     });
-    if (!channel) throw new NotFoundException('Telegram channel not found');
+    if (!channel) throw telegramChannelNotFound();
 
     const groups = await this.prisma.postGroup.findMany({
       where: { workspaceId, telegramChannelId: channelId },

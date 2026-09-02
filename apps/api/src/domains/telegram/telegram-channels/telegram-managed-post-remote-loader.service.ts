@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { TelegramManagedPostStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
@@ -7,6 +7,7 @@ import { TelegramChannelAccessService } from './telegram-channel-access.service'
 import { TelegramChannelCatalogService } from './telegram-channel-catalog.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 import { TelegramRemoteScheduledPostImportService } from './telegram-remote-scheduled-post-import.service';
+import { telegramPostsBadRequest } from './telegram-posts.errors';
 
 @Injectable()
 export class TelegramManagedPostRemoteLoaderService {
@@ -31,7 +32,10 @@ export class TelegramManagedPostRemoteLoaderService {
     const account = await this.access.connectedAccount(workspaceId, channelId);
     const channelReference = this.access.mtprotoChannelReference(channel);
     if (!channelReference.telegramChatId && !channelReference.username) {
-      throw new BadRequestException('Channel has no Telegram reference');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_TELEGRAM_REFERENCE_MISSING',
+        'Channel has no Telegram reference',
+      );
     }
     const scheduledSync =
       await this.scheduledImport.syncRemoteScheduledManagedPosts({

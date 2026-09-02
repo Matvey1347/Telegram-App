@@ -1,10 +1,5 @@
 "use client";
-
-import {
-  formatDate,
-  formatDateTime,
-  formatDateWithWeekday,
-} from "@/lib/date-format";
+import { formatDate, formatDateTime, formatDateWithWeekday } from "@/lib/date-format";
 import {
   useCallback,
   useEffect,
@@ -158,12 +153,27 @@ import {
   normalizeManagedPostNumbering,
 } from "@/lib/features/telegram/telegram-post-numbering";
 import { extractAutoPrefilledPostTitle } from "@/lib/features/telegram/telegram-post-title";
-import { telegramSyncedPostGroup } from "@/components/features/telegram/telegram/telegram-synced-post-group";
+import { telegramPostGroupTitle } from "@/components/features/telegram/telegram/telegram-post-group-title";
 import {
-  memberKeys,
-  telegramChannelKeys,
-  telegramPostKeys,
-} from "@/lib/query-keys";
+  CALENDAR_WEEKDAYS,
+  addDays,
+  addMonths,
+  buildCalendarDays,
+  calendarGridStart,
+  calendarGridEnd,
+  calendarStatusIcon,
+  calendarStatusTone,
+  endOfDay,
+  endOfMonth,
+  monthLabel,
+  sameMonth,
+  startOfDay,
+  startOfMonth,
+  timeLabel,
+  toLocalDateKey,
+} from "@/components/features/telegram/telegram/telegram-posts-calendar-view";
+import { telegramSyncedPostGroup } from "@/components/features/telegram/telegram/telegram-synced-post-group";
+import { memberKeys, telegramChannelKeys, telegramPostKeys } from "@/lib/query-keys";
 import {
   type ScheduleManagedPostsBatchItem,
   type TelegramManagedPostCalendarResult,
@@ -171,6 +181,8 @@ import {
   type TelegramPostPlannerFormat,
   type TelegramPostPlannerSlot,
   type TelegramPostButtonRows,
+  TELEGRAM_AD_PLACEMENT_STATUS_KEYS,
+  TELEGRAM_MANAGED_POST_STATUS_KEYS,
 } from "@telegram-system/shared";
 import {
   Button,
@@ -192,10 +204,14 @@ import {
   isValidTimeInputValue,
 } from "@/components/ui/primitives";
 import { useAppToast } from "@/providers/toast-provider";
+import { useI18n, type TranslationFunction } from "@/providers/i18n-provider";
+import type { I18nNamespace } from "@/i18n/catalog";
+import { safeApiErrorMessage } from "@/i18n/error-localization";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
 import {
   BulkProgressOverlay,
+  localizedBulkActionMessage,
   type ProgressState,
 } from "@/components/features/telegram/telegram/telegram-posts-workspace-controls";
 type PublishingMode = "draft" | "publish" | "schedule";
@@ -228,13 +244,11 @@ type PlannerFormatDraft = {
   name: string;
   icon: string;
 };
-
 function sameStringSet(left: string[], right: string[]) {
   if (left.length !== right.length) return false;
   const rightSet = new Set(right);
   return left.every((item) => rightSet.has(item));
 }
-
 function plannerSlotDisplayGroupKey(slot: TelegramPostPlannerSlot) {
   return [
     [...slot.postGroupIds].sort().join("|") || "any",
@@ -246,18 +260,15 @@ function plannerSlotDisplayGroupKey(slot: TelegramPostPlannerSlot) {
 
 const plannerFormatWeightsPreferenceKey = (channelId: string) =>
   `telegram-posts-planner-format-weights:${channelId}`;
-
 function selectIconProps(icon?: ResolvedEmoji | null) {
   if (!icon) return {};
   if (icon.type === "image") return { iconUrl: icon.url };
   return { iconEmoji: icon.value };
 }
-
 function plannerFormatResolvedIcon(icon?: string | null): ResolvedEmoji | null {
   const value = icon?.trim();
   return value ? { type: "unicode", value, name: value } : null;
 }
-
 function PlannerFormatEmojiPicker({
   value,
   disabled,
@@ -273,10 +284,10 @@ function PlannerFormatEmojiPicker({
   onChange: (nextIcon: string | null) => void | Promise<void>;
   onError: (error: unknown) => void;
 }) {
+  const { t } = useI18n();
   const handleEmojiChange = async (emoji: string | null) => {
     await onChange(emoji);
   };
-
   return (
     <IconPicker
       compact
@@ -287,13 +298,12 @@ function PlannerFormatEmojiPicker({
       onEmojiChange={(emoji) => {
         void handleEmojiChange(emoji).catch(onError);
       }}
-      buttonLabel="Add emoji"
+      buttonLabel={t("telegram.posts.icon.addEmoji")}
       className={className}
       iconClassName={iconClassName}
     />
   );
 }
-
 function PlannerFormatWeightSlider({
   label,
   value,
@@ -306,7 +316,6 @@ function PlannerFormatWeightSlider({
   onChange: (value: number) => void;
 }) {
   const percent = Math.max(0, Math.min(100, value));
-
   return (
     <Slider.Root
       value={[percent]}
@@ -337,9 +346,7 @@ type PostSidebarSection = {
 type EffectivePostGroup = PostGroup | NonNullable<TelegramManagedPost["group"]>;
 const TELEGRAM_TEXT_MESSAGE_LIMIT = 4096;
 const POST_OPEN_CLICK_DELAY_MS = 180;
-const lastSelectedTelegramPostsChannelKey =
-  "telegram-posts:last-selected-channel";
-
+const lastSelectedTelegramPostsChannelKey = "telegram-posts:last-selected-channel";
 const postGroupPreferenceKey = (channelId: string) =>
   `telegram-posts-new-post-group:${channelId}`;
 const workspaceViewPreferenceKey = (channelId: string) =>
@@ -348,7 +355,6 @@ function localNowParts() {
   const now = new Date();
   return localDateTimeParts(now);
 }
-
 function localDateTimeParts(value: string | Date) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -367,11 +373,9 @@ function localDateTimeParts(value: string | Date) {
     time: `${hours}:${minutes}`,
   };
 }
-
 function wantsNewTab(event: Pick<MouseEvent, "metaKey" | "ctrlKey">) {
   return event.metaKey || event.ctrlKey;
 }
-
 function shouldIgnoreModifiedPostOpen(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   return Boolean(
@@ -380,39 +384,47 @@ function shouldIgnoreModifiedPostOpen(target: EventTarget | null) {
     ),
   );
 }
-
 function isBrokenPublishedPost(post: TelegramManagedPost) {
   return (
     post.status === "PUBLISHED" &&
-    (["BROKEN", "MISSING"].includes(post.telegramRemoteStatus) ||
-      /link is broken/i.test(post.lastError || ""))
+    ["BROKEN", "MISSING"].includes(post.telegramRemoteStatus)
   );
 }
+function managedPostStatusKey(status: TelegramManagedPost["status"]) {
+  return TELEGRAM_MANAGED_POST_STATUS_KEYS[status];
+}
+function remoteStatusKey(status: string) {
+  if (status === "PUBLISHED") return "telegramPosts.status.published" as const;
+  if (status === "SCHEDULED") return "telegramPosts.status.scheduled" as const;
+  if (status === "MISSING") return "telegram.posts.remoteStatus.missing" as const;
+  if (status === "BROKEN") return "telegram.posts.remoteStatus.broken" as const;
+  return "telegram.posts.remoteStatus.unknown" as const;
+}
 
-function formatManagedPostRevisionReason(reason: string) {
+function formatManagedPostRevisionReason(t: TranslationFunction, reason: string) {
   switch (reason) {
     case "before_update":
-      return "Before edit";
+      return t("telegram.posts.history.beforeEdit");
     case "before_publish":
-      return "Before publish";
+      return t("telegram.posts.history.beforePublish");
     case "before_schedule":
-      return "Before schedule";
+      return t("telegram.posts.history.beforeSchedule");
     case "before_manual_link":
-      return "Before manual link";
+      return t("telegram.posts.history.beforeManualLink");
     case "before_sync_missing":
-      return "Before sync: missing in Telegram";
+      return t("telegram.posts.history.beforeSyncMissing");
     case "before_sync_broken":
-      return "Before sync: broken Telegram post";
+      return t("telegram.posts.history.beforeSyncBroken");
     case "before_sync_publish_transition":
-      return "Before sync: published early";
+      return t("telegram.posts.history.beforeSyncPublished");
     case "before_sync_update":
-      return "Before sync update";
+      return t("telegram.posts.history.beforeSyncUpdate");
     case "before_restore":
-      return "Before restore";
+      return t("telegram.posts.history.beforeRestore");
     case "before_delete":
-      return "Before delete";
+      return t("telegram.posts.history.beforeDelete");
     default:
-      return reason.replaceAll("_", " ");
+      return t("telegram.posts.history.change");
   }
 }
 
@@ -427,124 +439,11 @@ function scheduleDateForPreset(time: string) {
   return localDateTimeParts(candidate).date;
 }
 
-const CALENDAR_WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-function startOfMonth(value: Date) {
-  return new Date(value.getFullYear(), value.getMonth(), 1);
-}
-
-function endOfMonth(value: Date) {
-  return new Date(
-    value.getFullYear(),
-    value.getMonth() + 1,
-    0,
-    23,
-    59,
-    59,
-    999,
-  );
-}
-
-function startOfDay(value: Date) {
-  return new Date(
-    value.getFullYear(),
-    value.getMonth(),
-    value.getDate(),
-    0,
-    0,
-    0,
-    0,
-  );
-}
-
-function endOfDay(value: Date) {
-  return new Date(
-    value.getFullYear(),
-    value.getMonth(),
-    value.getDate(),
-    23,
-    59,
-    59,
-    999,
-  );
-}
-
-function addMonths(value: Date, amount: number) {
-  return new Date(value.getFullYear(), value.getMonth() + amount, 1);
-}
-
-function addDays(value: Date, amount: number) {
-  const next = new Date(value);
-  next.setDate(next.getDate() + amount);
-  return next;
-}
-
-function toLocalDateKey(value: Date | string) {
-  const date = value instanceof Date ? value : new Date(value);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function monthLabel(value: Date) {
-  return value.toLocaleDateString(undefined, {
-    month: "long",
-    year: "numeric",
-  });
-}
-
-function calendarGridStart(value: Date) {
-  const first = startOfMonth(value);
-  const day = first.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  const start = new Date(first);
-  start.setDate(first.getDate() + diff);
-  return start;
-}
-
-function calendarGridEnd(value: Date) {
-  const end = calendarGridStart(value);
-  end.setDate(end.getDate() + 41);
-  return end;
-}
-
-function buildCalendarDays(value: Date) {
-  const start = calendarGridStart(value);
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(start);
-    date.setDate(start.getDate() + index);
-    return date;
-  });
-}
-
-function sameMonth(left: Date, right: Date) {
-  return (
-    left.getFullYear() === right.getFullYear() &&
-    left.getMonth() === right.getMonth()
-  );
-}
-
-function timeLabel(value?: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
-function calendarStatusTone(status: "SCHEDULED" | "PUBLISHED") {
-  return status === "SCHEDULED"
-    ? "bg-amber-500/18 text-amber-100 ring-1 ring-amber-400/15"
-    : "bg-emerald-500/12 text-neutral-50 ring-1 ring-white/5";
-}
-
-function calendarStatusIcon(status: "SCHEDULED" | "PUBLISHED") {
-  return status === "SCHEDULED" ? "🕒" : "✅";
-}
-
 export function TelegramPostsPageClient({
   routeChannelId,
   routePostView,
 }: TelegramPostsPageProps = {}) {
+  const { locale, t, ensureNamespaces, hasNamespaces } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
@@ -552,13 +451,17 @@ export function TelegramPostsPageClient({
   const [newPostToken, setNewPostToken] = useState(0);
   const [newGroupRequested, setNewGroupRequested] = useState(false);
   const [importMode, setImportMode] = useState<ChannelImportMode | null>(null);
+  useEffect(() => {
+    if (importMode) void ensureNamespaces(["telegram/posts/import"]);
+  }, [ensureNamespaces, importMode]);
+  const importTranslationsReady = hasNamespaces(["telegram/posts/import"]);
   const routeChannelIdValue = routeChannelId?.trim() || "";
   const channelId = routeChannelIdValue || searchParams.get("channelId") || "";
   const postId = searchParams.get("postId") || "";
   const groupId = searchParams.get("groupId") || "";
-  const [pageWorkspaceView, setPageWorkspaceView] = useState<
-    "posts" | "groups"
-  >(routePostView === "groups" || groupId ? "groups" : "posts");
+  const [pageWorkspaceView, setPageWorkspaceView] = useState<"posts" | "groups">(
+    routePostView === "groups" || groupId ? "groups" : "posts",
+  );
   const initialPostView = (() => {
     if (routePostView) return routePostView;
     const value = searchParams.get("postView");
@@ -568,11 +471,25 @@ export function TelegramPostsPageClient({
   })();
   const currentRoutePostView: PostViewMode =
     initialPostView === "calendar" ? "calendar" : "editor";
+  const routeNamespaces = useMemo<I18nNamespace[]>(
+    () => [
+      "ad-sales/common",
+      "telegram/posts/common",
+      pageWorkspaceView === "groups"
+        ? "telegram/posts/groups"
+        : currentRoutePostView === "calendar"
+          ? "telegram/posts/calendar"
+          : "telegram/posts/editor",
+    ],
+    [currentRoutePostView, pageWorkspaceView],
+  );
+  useEffect(() => {
+    void ensureNamespaces(routeNamespaces);
+  }, [ensureNamespaces, routeNamespaces]);
+  const routeTranslationsReady = hasNamespaces(routeNamespaces);
   const legacyRedirectUrl = useMemo(
     () =>
-      routeChannelIdValue
-        ? null
-        : buildTelegramPostsLegacyRedirectUrl(searchParams),
+      routeChannelIdValue ? null : buildTelegramPostsLegacyRedirectUrl(searchParams),
     [routeChannelIdValue, searchParams],
   );
   const channels = useQuery({
@@ -581,8 +498,7 @@ export function TelegramPostsPageClient({
   });
   const availableChannels = channels.data || [];
   const channel =
-    availableChannels.find((item) => item.id === channelId) ||
-    availableChannels[0];
+    availableChannels.find((item) => item.id === channelId) || availableChannels[0];
   useEffect(() => {
     if (!legacyRedirectUrl) return;
     router.replace(legacyRedirectUrl);
@@ -603,10 +519,7 @@ export function TelegramPostsPageClient({
         (item) => item.id === channelId,
       );
       if (requestedChannelStillAvailable) {
-        window.localStorage.setItem(
-          lastSelectedTelegramPostsChannelKey,
-          channelId,
-        );
+        window.localStorage.setItem(lastSelectedTelegramPostsChannelKey, channelId);
         return;
       }
 
@@ -638,13 +551,7 @@ export function TelegramPostsPageClient({
         extraParams: params,
       }),
     );
-  }, [
-    availableChannels,
-    channelId,
-    currentRoutePostView,
-    router,
-    searchParams,
-  ]);
+  }, [availableChannels, channelId, currentRoutePostView, router, searchParams]);
 
   useEffect(() => {
     if (routeChannelIdValue || !channelId || groupId || initialPostView) return;
@@ -655,41 +562,39 @@ export function TelegramPostsPageClient({
         postView: "editor",
       }),
     );
-  }, [
-    channelId,
-    groupId,
-    initialPostView,
-    postId,
-    routeChannelIdValue,
-    router,
-  ]);
+  }, [channelId, groupId, initialPostView, postId, routeChannelIdValue, router]);
 
   const navigateToChannel = (nextChannelId: string) => {
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(
-        lastSelectedTelegramPostsChannelKey,
-        nextChannelId,
-      );
+      window.localStorage.setItem(lastSelectedTelegramPostsChannelKey, nextChannelId);
     }
     router.push(
       buildTelegramPostsUrl({
         channelId: nextChannelId,
-        postView:
-          pageWorkspaceView === "groups" ? "groups" : currentRoutePostView,
+        postView: pageWorkspaceView === "groups" ? "groups" : currentRoutePostView,
       }),
     );
   };
 
+  if (!routeTranslationsReady) {
+    return (
+      <AppShell>
+        <LoadingState />
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell>
       <PageHeader
-        title="Telegram posts"
-        subtitle="Create drafts, publish now, or schedule directly in Telegram"
+        title={t("telegram.posts.title")}
+        subtitle={t("telegram.posts.subtitle")}
         action={
           channel ? (
             <div className="flex w-full flex-col gap-2 sm:min-w-[620px] sm:flex-row">
               <div className="min-w-0 flex-1 [&>div>button]:h-[42px] [&>div>button]:min-h-0">
                 <CustomSelect
+                  uiLocale={locale}
                   value={channel.id}
                   onChange={navigateToChannel}
                   options={availableChannels.map((item) => ({
@@ -701,21 +606,19 @@ export function TelegramPostsPageClient({
                 />
               </div>
               <TelegramCardActionsMenu
-                label="Channel actions"
+                label={t("telegram.posts.channelActions")}
                 keepMounted
                 triggerClassName="!h-[42px] !w-[42px] shrink-0 rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800"
               >
                 <TelegramCardMenuAction
-                  label="Import"
+                  label={t("common.import")}
                   icon={<Upload size={17} />}
                   onClick={() =>
-                    setImportMode(
-                      pageWorkspaceView === "groups" ? "groups" : "posts",
-                    )
+                    setImportMode(pageWorkspaceView === "groups" ? "groups" : "posts")
                   }
                 />
                 <TelegramCardMenuAction
-                  label="New post"
+                  label={t("telegram.posts.newPost")}
                   icon={<Plus size={17} />}
                   onClick={() => {
                     router.replace(
@@ -729,7 +632,7 @@ export function TelegramPostsPageClient({
                   }}
                 />
                 <TelegramCardMenuAction
-                  label="New group"
+                  label={t("telegram.posts.newGroup")}
                   icon={<FolderPlus size={17} />}
                   onClick={() => {
                     router.replace(
@@ -771,7 +674,7 @@ export function TelegramPostsPageClient({
           ) : undefined
         }
       />
-      {channel ? (
+      {channel && importTranslationsReady ? (
         <ManagedPostsImportModal
           open={importMode === "posts"}
           onClose={() => setImportMode(null)}
@@ -785,7 +688,7 @@ export function TelegramPostsPageClient({
           onModeChange={setImportMode}
         />
       ) : null}
-      {channel ? (
+      {channel && importTranslationsReady ? (
         <PostGroupsImportModal
           open={importMode === "groups"}
           channelId={channel.id}
@@ -799,7 +702,7 @@ export function TelegramPostsPageClient({
           }}
         />
       ) : null}
-      {channel ? (
+      {channel && importTranslationsReady ? (
         <ChannelReimportDeleteModal
           open={importMode === "reimport"}
           channelId={channel.id}
@@ -810,7 +713,7 @@ export function TelegramPostsPageClient({
       ) : null}
       {channels.isLoading ? <LoadingState /> : null}
       {!channels.isLoading && !channels.error && !availableChannels.length ? (
-        <EmptyState text="No Telegram channels with publishing access" />
+        <EmptyState text={t("telegram.posts.noChannels")} />
       ) : null}
       {channel ? (
         <div>
@@ -895,19 +798,23 @@ function TelegramPostWorkspace({
   onWorkspaceViewChange: (view: "posts" | "groups") => void;
   onPostSelect: (postId: string | null) => void;
 }) {
+  const { locale, t } = useI18n();
+  const localizedApiError = useCallback(
+    (error: unknown, fallback: string) =>
+      safeApiErrorMessage(error, locale, t, fallback),
+    [locale, t],
+  );
   const router = useRouter();
   const restoredPostIdRef = useRef("");
   const queryClient = useQueryClient();
-  const { pushToast, setProgress, clearProgress, startOperation } =
-    useAppToast();
+  const { pushToast, setProgress, clearProgress, startOperation } = useAppToast();
   const [customEmojiPacksOpen, setCustomEmojiPacksOpen] = useState(false);
   const [workspaceView, setWorkspaceView] = useState<"posts" | "groups">(() => {
     if (typeof window === "undefined") return "posts";
     if (initialPostView === "groups") return "groups";
     if (initialGroupId) return "groups";
-    return window.localStorage.getItem(
-      workspaceViewPreferenceKey(channelId),
-    ) === "groups"
+    return window.localStorage.getItem(workspaceViewPreferenceKey(channelId)) ===
+      "groups"
       ? "groups"
       : "posts";
   });
@@ -920,24 +827,20 @@ function TelegramPostWorkspace({
     const timeout = window.setTimeout(() => {
       setWorkspaceView("groups");
       onWorkspaceViewChange("groups");
-      window.localStorage.setItem(
-        workspaceViewPreferenceKey(channelId),
-        "groups",
-      );
+      window.localStorage.setItem(workspaceViewPreferenceKey(channelId), "groups");
     }, 0);
     return () => window.clearTimeout(timeout);
   }, [channelId, newGroupRequested, onWorkspaceViewChange]);
   const [postView, setPostView] = useState<PostViewMode>(() => {
     return initialPostView === "calendar" ? "calendar" : "editor";
   });
-  const [calendarMonth, setCalendarMonth] = useState(() =>
-    startOfMonth(new Date()),
-  );
+  const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(() =>
     toLocalDateKey(new Date()),
   );
-  const [calendarBatchSelectedPostIds, setCalendarBatchSelectedPostIds] =
-    useState<string[]>([]);
+  const [calendarBatchSelectedPostIds, setCalendarBatchSelectedPostIds] = useState<
+    string[]
+  >([]);
   const [calendarPostSearch, setCalendarPostSearch] = useState("");
   const [calendarBatchTimeChoiceByPostId, setCalendarBatchTimeChoiceByPostId] =
     useState<Record<string, string>>({});
@@ -959,8 +862,9 @@ function TelegramPostWorkspace({
   );
   const [newPlannerFormatName, setNewPlannerFormatName] = useState("");
   const [newPlannerFormatIcon, setNewPlannerFormatIcon] = useState("");
-  const [plannerSlotDraftsByFormatId, setPlannerSlotDraftsByFormatId] =
-    useState<Record<string, PlannerSlotDraft>>({});
+  const [plannerSlotDraftsByFormatId, setPlannerSlotDraftsByFormatId] = useState<
+    Record<string, PlannerSlotDraft>
+  >({});
   const [plannerSlotEditDraftsById, setPlannerSlotEditDraftsById] = useState<
     Record<string, PlannerSlotEditDraft>
   >({});
@@ -989,16 +893,15 @@ function TelegramPostWorkspace({
   const [plannerFormatDraftsById, setPlannerFormatDraftsById] = useState<
     Record<string, PlannerFormatDraft>
   >({});
-  const [editingPlannerFormatIds, setEditingPlannerFormatIds] = useState<
-    string[]
-  >([]);
+  const [editingPlannerFormatIds, setEditingPlannerFormatIds] = useState<string[]>(
+    [],
+  );
   const [editingPlannerSlotGroupIds, setEditingPlannerSlotGroupIds] = useState<
     string[]
   >([]);
   const [autoPlannerPreview, setAutoPlannerPreview] =
     useState<TelegramPostPlannerPreviewResult | null>(null);
-  const [calendarPlanImportContent, setCalendarPlanImportContent] =
-    useState("");
+  const [calendarPlanImportContent, setCalendarPlanImportContent] = useState("");
   const [autoPlannerRerollingDate, setAutoPlannerRerollingDate] = useState<
     string | null
   >(null);
@@ -1022,18 +925,17 @@ function TelegramPostWorkspace({
   const iconAutofillRequestRef = useRef(0);
   const [iconPickerGeneration, setIconPickerGeneration] = useState(0);
   const [iconPending, setIconPending] = useState(false);
-  const [rememberedPostGroupId, setRememberedPostGroupId] = useState<
-    string | null
-  >(() => {
-    if (typeof window === "undefined") return null;
-    return window.localStorage.getItem(postGroupPreferenceKey(channelId));
-  });
+  const [rememberedPostGroupId, setRememberedPostGroupId] = useState<string | null>(
+    () => {
+      if (typeof window === "undefined") return null;
+      return window.localStorage.getItem(postGroupPreferenceKey(channelId));
+    },
+  );
   const [postGroupId, setPostGroupId] = useState<string | null>(null);
   const [mode, setMode] = useState<PublishingMode>("draft");
   const [scheduleDate, setScheduleDate] = useState(() => localNowParts().date);
   const [scheduleTime, setScheduleTime] = useState(() => localNowParts().time);
-  const [longTextMode, setLongTextMode] =
-    useState<LongTextMode>("IMAGES_THEN_TEXT");
+  const [longTextMode, setLongTextMode] = useState<LongTextMode>("IMAGES_THEN_TEXT");
   const [statusTab, setStatusTab] = useState<PostStatusTab>("DRAFT");
   const [busy, setBusy] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
@@ -1044,29 +946,22 @@ function TelegramPostWorkspace({
   const [highlightedInternalLinkTargetId, setHighlightedInternalLinkTargetId] =
     useState<string | null>(null);
   const [highlightRequestKey, setHighlightRequestKey] = useState(0);
-  const [collapsedGroupIdsPreference, setCollapsedGroupIdsPreference] =
-    useState<string[] | null>(null);
-  const [draggedSidebarKey, setDraggedSidebarKey] = useState<string | null>(
-    null,
-  );
+  const [collapsedGroupIdsPreference, setCollapsedGroupIdsPreference] = useState<
+    string[] | null
+  >(null);
+  const [draggedSidebarKey, setDraggedSidebarKey] = useState<string | null>(null);
   const [sidebarOrderKeys, setSidebarOrderKeys] = useState<string[]>([]);
   const sidebarReorderTimerRef = useRef<number | null>(null);
   const sidebarReorderVersionRef = useRef(0);
   const sidebarReorderQueueRef = useRef<Promise<void>>(Promise.resolve());
   const postOpenTimerRef = useRef<number | null>(null);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
-  const [deletingPost, setDeletingPost] = useState<TelegramManagedPost | null>(
-    null,
-  );
-  const [movingPost, setMovingPost] = useState<TelegramManagedPost | null>(
-    null,
-  );
+  const [deletingPost, setDeletingPost] = useState<TelegramManagedPost | null>(null);
+  const [movingPost, setMovingPost] = useState<TelegramManagedPost | null>(null);
   const [restorePreviewRevision, setRestorePreviewRevision] =
     useState<TelegramManagedPostRevision | null>(null);
   const [restoreConfirmationValue, setRestoreConfirmationValue] = useState("");
-  const [pendingPostSaves, setPendingPostSaves] = useState<PendingPostSave[]>(
-    [],
-  );
+  const [pendingPostSaves, setPendingPostSaves] = useState<PendingPostSave[]>([]);
   const [creatingPostId, setCreatingPostId] = useState<string | null>(null);
   const creatingPostIdRef = useRef<string | null>(null);
   const [savingPostIds, setSavingPostIds] = useState<string[]>([]);
@@ -1076,15 +971,22 @@ function TelegramPostWorkspace({
       page: postsPagination.page,
       pageSize: postsPagination.pageSize,
     }),
-    queryFn: () => telegramChannelsApi.managedPostsPage(channelId, {
-      page: postsPagination.page, pageSize: postsPagination.pageSize,
-    }),
+    queryFn: () =>
+      telegramChannelsApi.managedPostsPage(channelId, {
+        page: postsPagination.page,
+        pageSize: postsPagination.pageSize,
+      }),
     placeholderData: keepPreviousData,
   });
   const deepLinkedPost = useManagedPostDeepLink({
-    channelId, postId: initialPostId, queryClient,
+    channelId,
+    postId: initialPostId,
+    queryClient,
   });
-  const postsData = useManagedPostPageItems(postsPage.data?.items, deepLinkedPost.data);
+  const postsData = useManagedPostPageItems(
+    postsPage.data?.items,
+    deepLinkedPost.data,
+  );
   const posts = {
     ...postsPage,
     data: postsData,
@@ -1092,8 +994,7 @@ function TelegramPostWorkspace({
   const customEmojiPacks = useQuery({
     queryKey: telegramChannelKeys.customEmojiPacks(channelId),
     queryFn: () => telegramChannelsApi.customEmojiPacks(channelId),
-    enabled:
-      Boolean(channelId) && workspaceView === "posts" && postView === "editor",
+    enabled: Boolean(channelId) && workspaceView === "posts" && postView === "editor",
   });
   const refreshCustomEmojiPacks = useCallback(async () => {
     await queryClient.invalidateQueries({
@@ -1114,8 +1015,7 @@ function TelegramPostWorkspace({
       calendarRange.from,
       calendarRange.to,
     ],
-    queryFn: () =>
-      telegramChannelsApi.managedPostsCalendar(channelId, calendarRange),
+    queryFn: () => telegramChannelsApi.managedPostsCalendar(channelId, calendarRange),
     enabled: workspaceView === "posts" && postView === "calendar",
     staleTime: 30_000,
     gcTime: 5 * 60_000,
@@ -1136,17 +1036,14 @@ function TelegramPostWorkspace({
         channelIds: [channelId],
       }),
     enabled:
-      workspaceView === "posts" &&
-      postView === "calendar" &&
-      showAdSalesOverlay,
+      workspaceView === "posts" && postView === "calendar" && showAdSalesOverlay,
     staleTime: 30_000,
     gcTime: 5 * 60_000,
     refetchOnWindowFocus: false,
   });
   const postGroups = useQuery({
     queryKey: ["post-groups", channelId],
-    queryFn: () =>
-      telegramChannelsApi.postGroupSummaries(channelId),
+    queryFn: () => telegramChannelsApi.postGroupSummaries(channelId),
     enabled: workspaceView === "posts",
   });
   const plannerFormats = useQuery({
@@ -1170,14 +1067,7 @@ function TelegramPostWorkspace({
     void queryClient.invalidateQueries({
       queryKey: ["telegram-managed-post-link-targets", channelId],
     });
-  }, [
-    channelId,
-    postGroups.data,
-    postView,
-    posts.data,
-    queryClient,
-    workspaceView,
-  ]);
+  }, [channelId, postGroups.data, postView, posts.data, queryClient, workspaceView]);
 
   useEffect(
     () => () => {
@@ -1191,10 +1081,7 @@ function TelegramPostWorkspace({
   const rememberPostGroup = (nextGroupId: string | null) => {
     setRememberedPostGroupId(nextGroupId);
     if (nextGroupId) {
-      window.localStorage.setItem(
-        postGroupPreferenceKey(channelId),
-        nextGroupId,
-      );
+      window.localStorage.setItem(postGroupPreferenceKey(channelId), nextGroupId);
     } else {
       window.localStorage.removeItem(postGroupPreferenceKey(channelId));
     }
@@ -1213,8 +1100,8 @@ function TelegramPostWorkspace({
     [postGroups.data],
   );
   const syncedPostGroup = useMemo(
-    () => telegramSyncedPostGroup(channelId),
-    [channelId],
+    () => telegramSyncedPostGroup(channelId, t("telegram.posts.support.synced")),
+    [channelId, t],
   );
   const effectivePostGroup = (post: TelegramManagedPost) =>
     (post.groupId ? (postGroupsById.get(post.groupId) ?? post.group) : null) ??
@@ -1251,12 +1138,11 @@ function TelegramPostWorkspace({
       editingMeta.status === "PUBLISHED" ||
       editingMeta.status === "FAILED" ||
       ["BROKEN", "MISSING"].includes(editingMeta.telegramRemoteStatus) ||
-      /link is broken|Telegram link manually/i.test(displayedError)),
+      editingMeta.telegramLinkSource === "MANUAL" ||
+      editingMeta.telegramMessageUrls.length > 0),
   );
   const telegramLinkBroken = Boolean(
-    editingMeta &&
-    (["BROKEN", "MISSING"].includes(editingMeta.telegramRemoteStatus) ||
-      /link is broken/i.test(displayedError)),
+    editingMeta && ["BROKEN", "MISSING"].includes(editingMeta.telegramRemoteStatus),
   );
   const publishedPostNeedsRepublish = Boolean(
     editingMeta?.status === "PUBLISHED" && telegramLinkBroken,
@@ -1290,29 +1176,20 @@ function TelegramPostWorkspace({
   }, [editing, posts.data]);
   const dependencyPublishBlocked =
     effectivePublishingMode === "publish" &&
-    hasBlockingManagedPostInternalLinks(
-      outgoingInternalLinks,
-      channelTelegramChatId,
-    );
+    hasBlockingManagedPostInternalLinks(outgoingInternalLinks, channelTelegramChatId);
   const hasValidScheduleTime = isValidTimeInputValue(scheduleTime);
   const selectedTimePostId =
-    channelTimePosts.find((timePost) => timePost.time === scheduleTime)?.id ||
-    null;
+    channelTimePosts.find((timePost) => timePost.time === scheduleTime)?.id || null;
   const internalLinkScheduledAt =
-    effectivePublishingMode === "schedule" &&
-    scheduleDate &&
-    hasValidScheduleTime
+    effectivePublishingMode === "schedule" && scheduleDate && hasValidScheduleTime
       ? new Date(`${scheduleDate}T${scheduleTime}`).toISOString()
       : undefined;
-  const editingIsSaving = Boolean(
-    editing && savingPostIds.includes(editing.id),
-  );
+  const editingIsSaving = Boolean(editing && savingPostIds.includes(editing.id));
   const editorIsSaving = editingIsSaving || Boolean(creatingPostId);
   const effectiveCaptionLengthMax =
     channelPublishingCapabilities?.captionLengthMax ?? 1024;
   const effectiveMessageLengthMax =
-    channelPublishingCapabilities?.messageLengthMax ??
-    TELEGRAM_TEXT_MESSAGE_LIMIT;
+    channelPublishingCapabilities?.messageLengthMax ?? TELEGRAM_TEXT_MESSAGE_LIMIT;
   const checkInlineButtonPublishingAccess = async () => {
     try {
       const publishingCapabilities =
@@ -1325,18 +1202,13 @@ function TelegramPostWorkspace({
           ),
       );
       if (!publishingCapabilities.canPublishInlineButtons) {
-        throw new Error(
-          "The system bot is not an administrator with permission to post messages in this channel.",
-        );
+        throw new Error(t("telegramPosts.errors.publishSourceUnavailable"));
       }
-      pushToast(
-        "System bot access confirmed. You can now add inline buttons.",
-        "success",
-      );
+      pushToast(t("telegram.posts.editor.botAccessConfirmed"), "success");
       return true;
     } catch (error) {
       pushToast(
-        apiErrorMessage(error, "Could not verify system bot access"),
+        localizedApiError(error, t("telegram.posts.editor.botAccessError")),
         "error",
       );
       return false;
@@ -1353,27 +1225,26 @@ function TelegramPostWorkspace({
   const hasLongTextOnly =
     imageUrls.length === 0 && text.length > effectiveMessageLengthMax;
   const publishDisabledReason = busy
-    ? "Saving or publishing is already in progress."
+    ? t("telegram.posts.editor.validation.busy")
     : isReadOnlyTelegramPost
-      ? "Synced Telegram posts are read-only."
+      ? t("telegram.posts.editor.validation.readOnly")
       : creatingPostId
-        ? "This post is being saved."
+        ? t("telegram.posts.editor.validation.saving")
         : iconPending
-          ? "Wait until the selected icon is ready."
+          ? t("telegram.posts.editor.validation.icon")
           : uploadingImages
-            ? "Wait until image upload finishes."
+            ? t("telegram.posts.editor.validation.images")
             : !title.trim()
-              ? "Internal title is required."
+              ? t("telegram.posts.editor.validation.title")
               : effectivePublishingMode !== "draft" &&
                   !text.trim() &&
                   !imageUrls.length
-                ? "Add Telegram text or at least one image before publishing."
+                ? t("telegram.posts.editor.validation.content")
                 : effectivePublishingMode === "schedule" &&
                     (!scheduleDate || !scheduleTime)
-                  ? "Publish date and time are required."
-                  : effectivePublishingMode === "schedule" &&
-                      !hasValidScheduleTime
-                    ? "Enter publish time in HH:MM format."
+                  ? t("telegram.posts.editor.validation.schedule")
+                  : effectivePublishingMode === "schedule" && !hasValidScheduleTime
+                    ? t("telegram.posts.editor.validation.time")
                     : "";
   const {
     query: postSearch,
@@ -1418,8 +1289,7 @@ function TelegramPostWorkspace({
             return leftPosition - rightPosition;
           }
           return (
-            new Date(left.createdAt).getTime() -
-            new Date(right.createdAt).getTime()
+            new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
           );
         }),
       })),
@@ -1431,10 +1301,7 @@ function TelegramPostWorkspace({
     [calendarMonth],
   );
   const calendarItemsByDay = useMemo(() => {
-    const grouped = new Map<
-      string,
-      TelegramManagedPostCalendarResult["items"]
-    >();
+    const grouped = new Map<string, TelegramManagedPostCalendarResult["items"]>();
     for (const item of calendarData.data?.items || []) {
       const key = toLocalDateKey(
         item.status === "SCHEDULED"
@@ -1463,8 +1330,7 @@ function TelegramPostWorkspace({
     }
     return grouped;
   }, [calendarData.data]);
-  const selectedCalendarItems =
-    calendarItemsByDay.get(selectedCalendarDate) || [];
+  const selectedCalendarItems = calendarItemsByDay.get(selectedCalendarDate) || [];
   const adCalendarItemsByDay = useMemo(() => {
     const grouped = new Map<
       string,
@@ -1499,16 +1365,14 @@ function TelegramPostWorkspace({
   const calendarScheduleSlots = calendarPresetScheduleSlots;
   const calendarPresetSlotByTime = useMemo(
     () =>
-      new Map(
-        calendarPresetScheduleSlots.map((slot) => [slot.time, slot] as const),
-      ),
+      new Map(calendarPresetScheduleSlots.map((slot) => [slot.time, slot] as const)),
     [calendarPresetScheduleSlots],
   );
   const plannerGroupOptions = useMemo(
     () =>
       (postGroups.data || []).map((group) => ({
         value: group.id,
-        label: group.title,
+        label: telegramPostGroupTitle(group, t),
         iconEmoji:
           group.iconPresentation?.type === "unicode"
             ? group.iconPresentation.value
@@ -1517,9 +1381,9 @@ function TelegramPostWorkspace({
           group.iconPresentation?.type === "image"
             ? group.iconPresentation.url
             : undefined,
-        iconFallback: group.title,
+        iconFallback: telegramPostGroupTitle(group, t),
       })),
-    [postGroups.data],
+    [postGroups.data, t],
   );
   const plannerTimePostOptions = useMemo(
     () =>
@@ -1618,8 +1482,7 @@ function TelegramPostWorkspace({
     if (!search) return calendarSchedulablePosts;
     return calendarSchedulablePosts.filter((post) => {
       const title = post.title.toLocaleLowerCase();
-      const groupTitle =
-        effectivePostGroup(post)?.title?.toLocaleLowerCase() || "";
+      const groupTitle = effectivePostGroup(post)?.title?.toLocaleLowerCase() || "";
       return title.includes(search) || groupTitle.includes(search);
     });
   }, [
@@ -1653,11 +1516,7 @@ function TelegramPostWorkspace({
       }
     }
     return { groups: [...grouped.values()], ungrouped };
-  }, [
-    calendarFilteredSchedulablePosts,
-    postGroupsById,
-    telegramImportedSystemGroup,
-  ]);
+  }, [calendarFilteredSchedulablePosts, postGroupsById, telegramImportedSystemGroup]);
   const calendarBatchSelectedPosts = useMemo(
     () =>
       calendarBatchSelectedPostIds
@@ -1695,10 +1554,7 @@ function TelegramPostWorkspace({
           continue;
         }
         const candidate = new Date(`${selectedCalendarDate}T${customTime}:00`);
-        if (
-          Number.isNaN(candidate.getTime()) ||
-          candidate.getTime() <= Date.now()
-        ) {
+        if (Number.isNaN(candidate.getTime()) || candidate.getTime() <= Date.now()) {
           invalidPostIds.push(postId);
           continue;
         }
@@ -1725,8 +1581,7 @@ function TelegramPostWorkspace({
       });
     }
 
-    const chronologicalAssignments =
-      sortScheduleManagedPostAssignments(assignments);
+    const chronologicalAssignments = sortScheduleManagedPostAssignments(assignments);
     return {
       assignments: chronologicalAssignments,
       assignedPostIds: chronologicalAssignments.map((item) => item.postId),
@@ -1747,6 +1602,7 @@ function TelegramPostWorkspace({
   );
   const selectedCalendarDateLabel = formatDateWithWeekday(
     `${selectedCalendarDate}T12:00:00`,
+    locale,
   );
   useEffect(() => {
     setCalendarBatchSelectedPostIds((current) =>
@@ -1854,9 +1710,7 @@ function TelegramPostWorkspace({
     ) {
       return sidebarSections;
     }
-    const byKey = new Map(
-      sidebarSections.map((section) => [section.key, section]),
-    );
+    const byKey = new Map(sidebarSections.map((section) => [section.key, section]));
     return sidebarOrderKeys
       .map((key) => byKey.get(key))
       .filter((section): section is PostSidebarSection => Boolean(section));
@@ -1913,11 +1767,7 @@ function TelegramPostWorkspace({
         queryKey: telegramPostKeys.managedCalendar(channelId),
       }),
       queryClient.invalidateQueries({
-        queryKey: [
-          "telegram-ad-availability",
-          "telegram-posts-overlay",
-          channelId,
-        ],
+        queryKey: ["telegram-ad-availability", "telegram-posts-overlay", channelId],
       }),
       queryClient.invalidateQueries({
         queryKey: telegramPostKeys.postGroups(channelId),
@@ -1946,7 +1796,7 @@ function TelegramPostWorkspace({
       pushToast(successMessage, "success");
     } catch (error) {
       pushToast(
-        error instanceof Error ? error.message : "Could not update planner",
+        localizedApiError(error, t("telegram.posts.calendar.error.updatePlanner")),
         "error",
       );
     } finally {
@@ -1967,10 +1817,10 @@ function TelegramPostWorkspace({
       setNewPlannerFormatName("");
       setNewPlannerFormatIcon("");
       await invalidatePlannerCalendar();
-      pushToast("Planner format created.", "success");
+      pushToast(t("telegram.posts.calendar.formatCreated"), "success");
     } catch (error) {
       pushToast(
-        error instanceof Error ? error.message : "Could not create format",
+        localizedApiError(error, t("telegram.posts.calendar.error.createFormat")),
         "error",
       );
     } finally {
@@ -1982,48 +1832,50 @@ function TelegramPostWorkspace({
     const draft = plannerSlotDraftsByFormatId[formatId];
     const timePosts = (draft?.timePostIds || [])
       .map((timePostId) => plannerTimePostsById.get(timePostId))
-      .filter((timePost): timePost is TelegramChannelTimePost =>
-        Boolean(timePost),
-      );
+      .filter((timePost): timePost is TelegramChannelTimePost => Boolean(timePost));
     if (!timePosts.length || autoPlannerBusy) return;
     setAutoPlannerBusy(true);
     try {
       const basePosition = plannerSlotsByFormatId.get(formatId)?.length ?? 0;
       const operation = startOperation({
         id: `planner-slots-create:${channelId}:${formatId}`,
-        title: "Create auto posting slots",
-        message: "Starting…",
+        title: t("telegram.posts.calendar.createSlots"),
+        message: t("telegram.posts.calendar.starting"),
         current: 0,
         total: timePosts.length,
       });
       let successful = 0;
       let failed = 0;
-      const result =
-        await telegramChannelsApi.mutatePostPlannerSlotsWithProgress(
-          channelId,
-          timePosts.map((timePost, index) => ({
-            action: "CREATE" as const,
-            data: {
-              formatId,
-              postGroupIds: draft?.groupIds || [],
-              weekday: 1,
-              time: timePost.time,
-              position: basePosition + index,
-            },
-          })),
-          (item, current, total) => {
-            if (item.success) successful += 1;
-            else failed += 1;
-            operation.update({
-              message: item.message || "Updating auto posting…",
-              current,
-              total,
-              progressSummary: { successful, failed },
-            });
+      const result = await telegramChannelsApi.mutatePostPlannerSlotsWithProgress(
+        channelId,
+        timePosts.map((timePost, index) => ({
+          action: "CREATE" as const,
+          data: {
+            formatId,
+            postGroupIds: draft?.groupIds || [],
+            weekday: 1,
+            time: timePost.time,
+            position: basePosition + index,
           },
-        );
+        })),
+        (item, current, total) => {
+          if (item.success) successful += 1;
+          else failed += 1;
+          operation.update({
+            message:
+              (locale === "en" ? item.message : null) ||
+              t("telegram.posts.calendar.updating"),
+            current,
+            total,
+            progressSummary: { successful, failed },
+          });
+        },
+      );
       const completion = {
-        message: `${result.successCount} successful, ${result.failedCount} failed.`,
+        message: t("telegram.posts.calendar.result", {
+          successful: result.successCount,
+          failed: result.failedCount,
+        }),
       };
       if (result.failedCount) operation.fail(completion);
       else operation.succeed(completion);
@@ -2034,13 +1886,15 @@ function TelegramPostWorkspace({
       await invalidatePlannerCalendar();
       pushToast(
         timePosts.length === 1
-          ? "Planner slot created."
-          : `${timePosts.length} planner slots created.`,
+          ? t("telegram.posts.calendar.slotCreated")
+          : t("telegram.posts.calendar.slotsCreated", {
+              count: timePosts.length,
+            }),
         result.failedCount ? "info" : "success",
       );
     } catch (error) {
       pushToast(
-        error instanceof Error ? error.message : "Could not create slot",
+        localizedApiError(error, t("telegram.posts.calendar.error.createSlot")),
         "error",
       );
     } finally {
@@ -2084,18 +1938,16 @@ function TelegramPostWorkspace({
     };
     const timePosts = draft.timePostIds
       .map((timePostId) => plannerTimePostsById.get(timePostId))
-      .filter((timePost): timePost is TelegramChannelTimePost =>
-        Boolean(timePost),
-      );
+      .filter((timePost): timePost is TelegramChannelTimePost => Boolean(timePost));
     if (!timePosts.length) {
-      pushToast("At least one publishing time is required.", "error");
+      pushToast(t("telegram.posts.calendar.timeRequired"), "error");
       return;
     }
     await runPlannerMutation(
       async () => {
         const [templateSlot] = slotGroup.slots;
         if (!templateSlot) {
-          throw new Error("Could not find planner slot to update");
+          throw new Error(t("telegram.posts.calendar.error.slotMissing"));
         }
         const existingSlots = slotGroup.slots;
         const slotsToUpdate = existingSlots.slice(0, timePosts.length);
@@ -2136,28 +1988,32 @@ function TelegramPostWorkspace({
         let failed = 0;
         const operation = startOperation({
           id: `planner-slots-save:${channelId}:${slotGroup.id}`,
-          title: "Update auto posting slots",
-          message: "Starting…",
+          title: t("telegram.posts.calendar.updateSlots"),
+          message: t("telegram.posts.calendar.starting"),
           current: 0,
           total: mutations.length,
         });
-        const result =
-          await telegramChannelsApi.mutatePostPlannerSlotsWithProgress(
-            channelId,
-            mutations,
-            (item, current, total) => {
-              if (item.success) successful += 1;
-              else failed += 1;
-              operation.update({
-                message: item.message || "Updating auto posting…",
-                current,
-                total,
-                progressSummary: { successful, failed },
-              });
-            },
-          );
+        const result = await telegramChannelsApi.mutatePostPlannerSlotsWithProgress(
+          channelId,
+          mutations,
+          (item, current, total) => {
+            if (item.success) successful += 1;
+            else failed += 1;
+            operation.update({
+              message:
+                (locale === "en" ? item.message : null) ||
+                t("telegram.posts.calendar.updating"),
+              current,
+              total,
+              progressSummary: { successful, failed },
+            });
+          },
+        );
         const completion = {
-          message: `${result.successCount} successful, ${result.failedCount} failed.`,
+          message: t("telegram.posts.calendar.result", {
+            successful: result.successCount,
+            failed: result.failedCount,
+          }),
         };
         if (result.failedCount) operation.fail(completion);
         else operation.succeed(completion);
@@ -2168,8 +2024,8 @@ function TelegramPostWorkspace({
         );
       },
       timePosts.length === 1
-        ? "Planner slot updated."
-        : `${timePosts.length} planner slots saved.`,
+        ? t("telegram.posts.calendar.slotUpdated")
+        : t("telegram.posts.calendar.slotsSaved", { count: timePosts.length }),
     );
   };
 
@@ -2197,7 +2053,7 @@ function TelegramPostWorkspace({
     if (!draft || autoPlannerBusy) return;
     const name = draft.name.trim();
     if (!name) {
-      pushToast("Format name is required.", "error");
+      pushToast(t("telegram.posts.calendar.nameRequired"), "error");
       return;
     }
     await runPlannerMutation(async () => {
@@ -2212,16 +2068,14 @@ function TelegramPostWorkspace({
       setEditingPlannerFormatIds((current) =>
         current.filter((id) => id !== format.id),
       );
-    }, "Planner format updated.");
+    }, t("telegram.posts.calendar.formatUpdated"));
   };
 
   const autoPlannerRange = () => {
     const from = autoPlannerFrom;
     const to =
       autoPlannerDays > 0
-        ? toLocalDateKey(
-            addDays(new Date(`${from}T00:00:00`), autoPlannerDays - 1),
-          )
+        ? toLocalDateKey(addDays(new Date(`${from}T00:00:00`), autoPlannerDays - 1))
         : autoPlannerTo;
     return { from, to };
   };
@@ -2229,10 +2083,7 @@ function TelegramPostWorkspace({
   const autoPlannerPreviewPayload = () => {
     const { from, to } = autoPlannerRange();
     const formatWeights = Object.fromEntries(
-      plannerFormatsWithWeights.map(({ format, weight }) => [
-        format.id,
-        weight,
-      ]),
+      plannerFormatsWithWeights.map(({ format, weight }) => [format.id, weight]),
     );
     return {
       from,
@@ -2258,15 +2109,19 @@ function TelegramPostWorkspace({
       setAutoPlannerRerollOffsetsByDate({});
       pushToast(
         result.summary.plannedPosts
-          ? `Preview ready: ${result.summary.plannedPosts} posts selected.`
+          ? t("telegram.posts.calendar.previewReady", {
+              count: result.summary.plannedPosts,
+            })
           : result.summary.availableSlots
-            ? `No draft posts match the ${result.summary.availableSlots} available times.`
-            : "No active publishing slots are configured for this range.",
+            ? t("telegram.posts.calendar.noDraftMatches", {
+                count: result.summary.availableSlots,
+              })
+            : t("telegram.posts.calendar.noSlots"),
         result.summary.plannedPosts ? "success" : "info",
       );
     } catch (error) {
       pushToast(
-        error instanceof Error ? error.message : "Could not preview calendar",
+        localizedApiError(error, t("telegram.posts.calendar.error.preview")),
         "error",
       );
     } finally {
@@ -2317,7 +2172,7 @@ function TelegramPostWorkspace({
       }));
     } catch (error) {
       pushToast(
-        error instanceof Error ? error.message : "Could not reroll this day",
+        localizedApiError(error, t("telegram.posts.calendar.error.reroll")),
         "error",
       );
     } finally {
@@ -2344,20 +2199,19 @@ function TelegramPostWorkspace({
       assignments.map((assignment) => assignment.scheduledAt),
     );
     if (uniqueTimes.size !== assignments.length) {
-      pushToast(
-        "The preview contains duplicate publishing times. Fill the range again.",
-        "error",
-      );
+      pushToast(t("telegram.posts.calendar.duplicatePreview"), "error");
       return;
     }
     const progressId = `auto-planner:${channelId}:${autoPlannerPreview.from}:${autoPlannerPreview.to}`;
     setAutoPlannerBusy(true);
     setProgress({
       id: progressId,
-      title: "Schedule calendar plan",
+      title: t("telegram.posts.calendar.schedulePlan"),
       current: 0,
       total: assignments.length,
-      message: `Scheduling ${assignments.length} previewed posts…`,
+      message: t("telegram.posts.calendar.schedulingPreview", {
+        count: assignments.length,
+      }),
       iconUrl: channelPhotoUrl || undefined,
       successCount: 0,
       failedCount: 0,
@@ -2378,10 +2232,12 @@ function TelegramPostWorkspace({
           else failed += 1;
           setProgress({
             id: progressId,
-            title: "Schedule calendar plan",
+            title: t("telegram.posts.calendar.schedulePlan"),
             current,
             total,
-            message: item.message || "Scheduling previewed posts…",
+            message:
+              (locale === "en" ? item.message : null) ||
+              t("telegram.posts.calendar.schedulingPreviewPosts"),
             iconUrl: channelPhotoUrl || undefined,
             successCount: successful,
             failedCount: failed,
@@ -2390,10 +2246,10 @@ function TelegramPostWorkspace({
       );
       setProgress({
         id: progressId,
-        title: "Schedule calendar plan",
+        title: t("telegram.posts.calendar.schedulePlan"),
         current: result.total,
         total: result.total,
-        message: "Calendar plan finished.",
+        message: t("telegram.posts.calendar.finished"),
         completed: true,
         successCount: result.successCount,
         failedCount: result.failedCount,
@@ -2402,9 +2258,7 @@ function TelegramPostWorkspace({
       });
       window.setTimeout(() => clearProgress(progressId), 2800);
       const failedPostIds = new Set(
-        result.results
-          .filter((item) => !item.success)
-          .map((item) => item.postId),
+        result.results.filter((item) => !item.success).map((item) => item.postId),
       );
       if (failedPostIds.size) {
         const remaining = assignments.filter((assignment) =>
@@ -2428,14 +2282,19 @@ function TelegramPostWorkspace({
       await invalidatePlannerCalendar();
       pushToast(
         result.failedCount
-          ? `${result.successCount} posts scheduled; ${result.failedCount} need attention.`
-          : `${result.successCount} posts scheduled.`,
+          ? t("telegram.posts.calendar.scheduleResult", {
+              successful: result.successCount,
+              failed: result.failedCount,
+            })
+          : t("telegram.posts.calendar.scheduledCount", {
+              count: result.successCount,
+            }),
         result.failedCount ? "info" : "success",
       );
     } catch (error) {
       clearProgress(progressId);
       pushToast(
-        error instanceof Error ? error.message : "Could not schedule the plan",
+        localizedApiError(error, t("telegram.posts.calendar.error.schedulePlan")),
         "error",
       );
     } finally {
@@ -2468,26 +2327,22 @@ function TelegramPostWorkspace({
     scheduledAt: string,
     nextPostId: string,
   ) => {
-    const nextPost = calendarSchedulablePosts.find(
-      (post) => post.id === nextPostId,
-    );
+    const nextPost = calendarSchedulablePosts.find((post) => post.id === nextPostId);
     if (!nextPost) return;
     if (
       autoPlannerPreview?.assignments.some(
         (assignment) =>
-          assignment.postId === nextPostId &&
-          assignment.postId !== currentPostId,
+          assignment.postId === nextPostId && assignment.postId !== currentPostId,
       )
     ) {
-      pushToast("This post is already used in the plan.", "error");
+      pushToast(t("telegram.posts.calendar.alreadyUsed"), "error");
       return;
     }
     if (!autoPlannerPreview) return;
     updateEditedPlannerPreview({
       ...autoPlannerPreview,
       assignments: autoPlannerPreview.assignments.map((assignment) =>
-        assignment.postId === currentPostId &&
-        assignment.scheduledAt === scheduledAt
+        assignment.postId === currentPostId && assignment.scheduledAt === scheduledAt
           ? {
               ...assignment,
               postId: nextPost.id,
@@ -2535,26 +2390,18 @@ function TelegramPostWorkspace({
       );
       if (!enabledFormats.length) return [];
       const weightedQueue = enabledFormats.flatMap((item) =>
-        Array.from(
-          { length: Math.max(1, Math.round(item.weight / 10)) },
-          () => item,
-        ),
+        Array.from({ length: Math.max(1, Math.round(item.weight / 10)) }, () => item),
       );
       const usedSlotIds = new Set<string>();
       const sequence: TelegramPostPlannerSlot[] = [];
       let guard = 0;
       while (
         usedSlotIds.size <
-          enabledFormats.reduce(
-            (total, item) => total + item.slots.length,
-            0,
-          ) &&
+          enabledFormats.reduce((total, item) => total + item.slots.length, 0) &&
         guard < 500
       ) {
         const item = weightedQueue[guard % weightedQueue.length];
-        const slot = item.slots.find(
-          (candidate) => !usedSlotIds.has(candidate.id),
-        );
+        const slot = item.slots.find((candidate) => !usedSlotIds.has(candidate.id));
         if (slot) {
           usedSlotIds.add(slot.id);
           sequence.push(slot);
@@ -2626,10 +2473,13 @@ function TelegramPostWorkspace({
     setCalendarBatchBusy(true);
     setProgress({
       id: progressId,
-      title: "Schedule posts for day",
+      title: t("telegram.posts.calendar.scheduleDay"),
       current: 0,
       total: assignments.length,
-      message: `Scheduling ${assignments.length} posts for ${selectedCalendarDateLabel}…`,
+      message: t("telegram.posts.calendar.schedulingDay", {
+        count: assignments.length,
+        date: selectedCalendarDateLabel,
+      }),
       iconUrl: channelPhotoUrl || undefined,
     });
     try {
@@ -2639,23 +2489,29 @@ function TelegramPostWorkspace({
         (item, current, total) => {
           setProgress({
             id: progressId,
-            title: "Schedule posts for day",
+            title: t("telegram.posts.calendar.scheduleDay"),
             current,
             total,
-            message: item.message || "Scheduling posts…",
+            message:
+              (locale === "en" ? item.message : null) ||
+              t("telegram.posts.calendar.schedulingPosts"),
             iconUrl: channelPhotoUrl || undefined,
           });
         },
       );
       setProgress({
         id: progressId,
-        title: "Schedule posts for day",
+        title: t("telegram.posts.calendar.scheduleDay"),
         current: result.total,
         total: result.total,
         message:
           result.failedCount > 0
-            ? `Finished scheduling for ${selectedCalendarDateLabel}`
-            : `Scheduled for ${selectedCalendarDateLabel}`,
+            ? t("telegram.posts.calendar.finishedForDate", {
+                date: selectedCalendarDateLabel,
+              })
+            : t("telegram.posts.calendar.scheduledForDate", {
+                date: selectedCalendarDateLabel,
+              }),
         completed: true,
         successCount: result.successCount,
         failedCount: result.failedCount,
@@ -2687,14 +2543,23 @@ function TelegramPostWorkspace({
       ]);
       pushToast(
         result.failedCount
-          ? `${result.successCount} posts scheduled, ${result.failedCount} failed.`
-          : `${result.successCount} posts scheduled for ${selectedCalendarDateLabel}.`,
+          ? t("telegram.posts.calendar.scheduleResult", {
+              successful: result.successCount,
+              failed: result.failedCount,
+            })
+          : t("telegram.posts.calendar.scheduledCountForDate", {
+              count: result.successCount,
+              date: selectedCalendarDateLabel,
+            }),
         result.failedCount ? "info" : "success",
       );
     } catch (scheduleError) {
       clearProgress(progressId);
       pushToast(
-        apiErrorMessage(scheduleError, "Could not schedule posts for this day"),
+        localizedApiError(
+          scheduleError,
+          t("telegram.posts.calendar.error.scheduleDay"),
+        ),
         "error",
         7000,
       );
@@ -2737,21 +2602,18 @@ function TelegramPostWorkspace({
             "post-groups",
             channelId,
           ]);
-          const orderIndex = new Map(
-            completeOrder.map((key, index) => [key, index]),
-          );
+          const orderIndex = new Map(completeOrder.map((key, index) => [key, index]));
           mapManagedPostPages(queryClient, channelId, (current) => ({
             ...current,
             items: current.items.map((post) =>
-                post.groupId
-                  ? post
-                  : {
-                      ...post,
-                      sidebarPosition:
-                        orderIndex.get(`post:${post.id}`) ??
-                        post.sidebarPosition,
-                    },
-              ),
+              post.groupId
+                ? post
+                : {
+                    ...post,
+                    sidebarPosition:
+                      orderIndex.get(`post:${post.id}`) ?? post.sidebarPosition,
+                  },
+            ),
           }));
           queryClient.setQueryData<PostGroup[]>(
             ["post-groups", channelId],
@@ -2778,17 +2640,17 @@ function TelegramPostWorkspace({
               }),
             ]);
             setSidebarOrderKeys([]);
-            pushToast("New sidebar order saved.", "success", 3000);
+            pushToast(t("telegram.posts.editor.sidebarOrderSaved"), "success", 3000);
           } catch (reorderError) {
             if (version !== sidebarReorderVersionRef.current) return;
             restoreManagedPostPages(queryClient, previousPosts);
-            queryClient.setQueryData(
-              ["post-groups", channelId],
-              previousGroups,
-            );
+            queryClient.setQueryData(["post-groups", channelId], previousGroups);
             setSidebarOrderKeys([]);
             pushToast(
-              apiErrorMessage(reorderError, "Could not save the sidebar order"),
+              localizedApiError(
+                reorderError,
+                t("telegram.posts.calendar.error.sidebarOrder"),
+              ),
               "error",
             );
           }
@@ -2803,9 +2665,7 @@ function TelegramPostWorkspace({
       );
       // Channel-local planner weight preferences hydrate the sliders.
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setPlannerFormatWeights(
-        raw ? (JSON.parse(raw) as Record<string, number>) : {},
-      );
+      setPlannerFormatWeights(raw ? (JSON.parse(raw) as Record<string, number>) : {});
     } catch {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setPlannerFormatWeights({});
@@ -2824,9 +2684,7 @@ function TelegramPostWorkspace({
       setWorkspaceView("groups");
       return;
     }
-    const saved = window.localStorage.getItem(
-      `telegram-posts-status:${channelId}`,
-    );
+    const saved = window.localStorage.getItem(`telegram-posts-status:${channelId}`);
     if (saved === "DRAFT" || saved === "SCHEDULED" || saved === "PUBLISHED") {
       // Restore the last tab independently for every Telegram channel.
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -2837,9 +2695,7 @@ function TelegramPostWorkspace({
   }, [channelId, initialPostView]);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(
-      workspaceViewPreferenceKey(channelId),
-    );
+    const saved = window.localStorage.getItem(workspaceViewPreferenceKey(channelId));
     setWorkspaceView(saved === "groups" ? "groups" : "posts");
   }, [channelId]);
 
@@ -2873,9 +2729,7 @@ function TelegramPostWorkspace({
   }, [channelId]);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(
-      postGroupPreferenceKey(channelId),
-    );
+    const saved = window.localStorage.getItem(postGroupPreferenceKey(channelId));
     // Restore the preferred new-post group independently for every channel.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setRememberedPostGroupId(saved);
@@ -2890,9 +2744,7 @@ function TelegramPostWorkspace({
     // Drop stale preferred group ids when a group was deleted or moved away.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     rememberPostGroup(null);
-    setPostGroupId((current) =>
-      current === rememberedPostGroupId ? null : current,
-    );
+    setPostGroupId((current) => (current === rememberedPostGroupId ? null : current));
     // rememberPostGroup intentionally updates local state and localStorage.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rememberedPostGroupId, postGroups.data]);
@@ -2936,12 +2788,7 @@ function TelegramPostWorkspace({
   }, [newPostToken]);
 
   useEffect(() => {
-    if (
-      editing ||
-      memberSelectionTouched ||
-      assignedMemberId ||
-      !currentMemberId
-    ) {
+    if (editing || memberSelectionTouched || assignedMemberId || !currentMemberId) {
       return;
     }
     // Async member data supplies the initial form default.
@@ -2992,7 +2839,7 @@ function TelegramPostWorkspace({
 
   const restorePostRevision = useMutation({
     mutationFn: async (revision: TelegramManagedPostRevision) => {
-      if (!editing) throw new Error("No post selected");
+      if (!editing) throw new Error(t("telegram.posts.editor.error.noPost"));
       if (editing.readOnlyTelegramPost)
         throw new Error("Synced Telegram posts are read-only");
       return telegramChannelsApi.restoreManagedPostHistory(
@@ -3017,13 +2864,13 @@ function TelegramPostWorkspace({
       setRestorePreviewRevision(null);
       setRestoreConfirmationValue("");
       pushToast(
-        `"${post.title}" restored from backup and moved to draft.`,
+        t("telegram.posts.editor.restored", { title: post.title }),
         "success",
       );
     },
     onError: (mutationError) => {
       pushToast(
-        apiErrorMessage(mutationError, "Could not restore post backup"),
+        localizedApiError(mutationError, t("telegram.posts.editor.restoreError")),
         "error",
         7000,
       );
@@ -3040,13 +2887,10 @@ function TelegramPostWorkspace({
   );
   const returnManagedPostToDraft = useMutation({
     mutationFn: async () => {
-      if (!editing) throw new Error("No post selected");
+      if (!editing) throw new Error(t("telegram.posts.editor.error.noPost"));
       if (editing.readOnlyTelegramPost)
         throw new Error("Synced Telegram posts are read-only");
-      return telegramChannelsApi.returnManagedPostToDraft(
-        channelId,
-        editing.id,
-      );
+      return telegramChannelsApi.returnManagedPostToDraft(channelId, editing.id);
     },
     onSuccess: async (post) => {
       changeStatusTab("DRAFT");
@@ -3068,11 +2912,14 @@ function TelegramPostWorkspace({
           queryKey: ["post-groups", channelId],
         }),
       ]);
-      pushToast(`"${post.title}" returned to draft.`, "success");
+      pushToast(
+        t("telegram.posts.editor.returnedToDraft", { title: post.title }),
+        "success",
+      );
     },
     onError: (mutationError) => {
       pushToast(
-        apiErrorMessage(mutationError, "Could not return post to draft"),
+        localizedApiError(mutationError, t("telegram.posts.editor.returnDraftError")),
         "error",
         7000,
       );
@@ -3130,9 +2977,7 @@ function TelegramPostWorkspace({
   };
 
   const applyChannelTimePost = (timePost: TelegramChannelTimePost) => {
-    setScheduleDate(
-      (current) => current || scheduleDateForPreset(timePost.time),
-    );
+    setScheduleDate((current) => current || scheduleDateForPreset(timePost.time));
     setScheduleTime(timePost.time);
   };
 
@@ -3160,20 +3005,17 @@ function TelegramPostWorkspace({
 
   const deletePosts = async (targetPosts: TelegramManagedPost[]) => {
     if (targetPosts.some((post) => post.readOnlyTelegramPost)) {
-      pushToast(
-        "Synced Telegram posts are read-only and cannot be deleted.",
-        "info",
-      );
+      pushToast(t("telegram.posts.editor.readOnlyDelete"), "info");
       return;
     }
     const progressId = `managed-post-delete:${channelId}`;
     try {
       setProgress({
         id: progressId,
-        title: "Delete posts",
+        title: t("telegram.posts.editor.deletePosts"),
         current: 0,
         total: targetPosts.length,
-        message: "Deleting selected posts...",
+        message: t("telegram.posts.editor.deleting"),
         iconUrl: channelPhotoUrl || undefined,
       });
       const result = await telegramChannelsApi.deleteManagedPosts(
@@ -3182,20 +3024,26 @@ function TelegramPostWorkspace({
         (item, current, total) => {
           setProgress({
             id: progressId,
-            title: "Delete posts",
+            title: t("telegram.posts.editor.deletePosts"),
             current,
             total,
-            message: item.message || "Deleting selected posts...",
+            message:
+              (locale === "en" ? item.message : null) ||
+              t("telegram.posts.editor.deleting"),
             iconUrl: channelPhotoUrl || undefined,
           });
         },
       );
       setProgress({
         id: progressId,
-        title: "Delete posts",
+        title: t("telegram.posts.editor.deletePosts"),
         current: result.total,
         total: result.total,
-        message: `${result.successCount} deleted, ${result.failedCount} failed, ${result.skippedCount} skipped.`,
+        message: t("telegram.posts.editor.deleteResult", {
+          deleted: result.successCount,
+          failed: result.failedCount,
+          skipped: result.skippedCount,
+        }),
         completed: true,
         successCount: result.successCount,
         failedCount: result.failedCount,
@@ -3204,9 +3052,7 @@ function TelegramPostWorkspace({
       });
       window.setTimeout(() => clearProgress(progressId), 2800);
       const deletedPostIds = new Set(
-        result.results
-          .filter((item) => item.success)
-          .map((item) => item.postId),
+        result.results.filter((item) => item.success).map((item) => item.postId),
       );
       if (editing?.id && deletedPostIds.has(editing.id)) {
         reset();
@@ -3223,16 +3069,23 @@ function TelegramPostWorkspace({
       ]);
       pushToast(
         result.failedCount
-          ? `${result.successCount} deleted, ${result.failedCount} failed.`
+          ? t("telegram.posts.editor.deleteResultShort", {
+              successful: result.successCount,
+              failed: result.failedCount,
+            })
           : targetPosts.length === 1
-            ? `"${targetPosts[0].title}" deleted.`
-            : `${result.successCount} posts deleted.`,
+            ? t("telegram.posts.editor.deleted", {
+                title: targetPosts[0].title,
+              })
+            : t("telegram.posts.editor.deletedCount", {
+                count: result.successCount,
+              }),
         result.failedCount ? "info" : "success",
       );
     } catch (error) {
       clearProgress(progressId);
       pushToast(
-        apiErrorMessage(error, "Could not delete posts"),
+        localizedApiError(error, t("telegram.posts.editor.deleteError")),
         "error",
         7000,
       );
@@ -3274,11 +3127,7 @@ function TelegramPostWorkspace({
       const linkedGroupId = effectivePostGroupId(post);
       if (linkedGroupId) {
         setCollapsedGroupIdsPreference((current) => {
-          const next = expandDeepLinkedPostGroup(
-            current,
-            allGroupIds,
-            linkedGroupId,
-          );
+          const next = expandDeepLinkedPostGroup(current, allGroupIds, linkedGroupId);
           window.localStorage.setItem(
             `telegram-posts-collapsed-groups:${channelId}`,
             JSON.stringify(next),
@@ -3301,7 +3150,7 @@ function TelegramPostWorkspace({
     const saveIcon = iconRef.current;
     const saveLongTextMode = longTextMode;
     if (saveMode === "schedule" && !isValidTimeInputValue(scheduleTime)) {
-      setError("Publish time must be in HH:MM format.");
+      setError(t("telegram.posts.editor.invalidPublishTime"));
       return;
     }
     const saveScheduledAt =
@@ -3367,20 +3216,17 @@ function TelegramPostWorkspace({
     }
     changeStatusTab(nextStatusTab);
     void (async () => {
-      let persisted = false; try {
+      let persisted = false;
+      try {
         if (saveMode === "publish" || saveMode === "schedule") {
           if (!channelPublishingCapabilities?.source) {
-            throw new Error(
-              "Connect an active Telegram account or bot with posting permission for this channel before publishing.",
-            );
+            throw new Error(t("telegram.posts.editor.error.publishingSource"));
           }
           if (
             buttonRows.length &&
             !channelPublishingCapabilities.canPublishInlineButtons
           ) {
-            throw new Error(
-              "This post has inline buttons. Connect an active workspace bot and grant it posting permission for this channel before publishing.",
-            );
+            throw new Error(t("telegram.posts.editor.error.inlineButtonsPermission"));
           }
         }
         let post = editingPost
@@ -3390,11 +3236,7 @@ function TelegramPostWorkspace({
               payload,
               true,
             )
-          : await telegramChannelsApi.createManagedPost(
-              channelId,
-              payload,
-              true,
-            );
+          : await telegramChannelsApi.createManagedPost(channelId, payload, true);
         persisted = true;
         if (saveGroupId && saveGroupId !== (editingPost?.groupId ?? null)) {
           const group = await telegramChannelsApi.addPostsToGroup(
@@ -3453,7 +3295,9 @@ function TelegramPostWorkspace({
         }
         reconcileManagedPost(queryClient, channelId, post);
         if (!editingPost) {
-          await queryClient.invalidateQueries({ queryKey: telegramPostKeys.managedLists(channelId) });
+          await queryClient.invalidateQueries({
+            queryKey: telegramPostKeys.managedLists(channelId),
+          });
         }
         if (editingPost) {
           setEditing((current) => (current?.id === post.id ? post : current));
@@ -3478,17 +3322,20 @@ function TelegramPostWorkspace({
           : undefined;
         pushToast(
           shouldRepublishPublished
-            ? `"${saveTitle}" published again with a fresh Telegram link.`
+            ? t("telegram.posts.editor.publishedAgain", { title: saveTitle })
             : editingMeta?.status === "PUBLISHED"
-              ? `"${saveTitle}" updated in Telegram.`
+              ? t("telegram.posts.editor.updatedTelegram", { title: saveTitle })
               : saveMode === "publish"
-                ? `"${saveTitle}" published.`
+                ? t("telegram.posts.editor.publishedNamed", {
+                    title: saveTitle,
+                  })
                 : saveMode === "schedule"
                   ? managedPostScheduleUi({
                       title: saveTitle,
                       scheduleMode: post.scheduleMode,
+                      t,
                     }).message
-                  : `"${saveTitle}" saved.`,
+                  : t("telegram.posts.editor.savedNamed", { title: saveTitle }),
           "success",
           post.scheduleMode === "LOCAL" ? 7000 : 3500,
           toastIcon,
@@ -3496,13 +3343,22 @@ function TelegramPostWorkspace({
       } catch (runError) {
         if (persisted) {
           await Promise.all([
-            queryClient.invalidateQueries({ queryKey: telegramPostKeys.managedLists(channelId) }),
-            queryClient.invalidateQueries({ queryKey: telegramPostKeys.managedCalendar(channelId) }),
-            queryClient.invalidateQueries({ queryKey: telegramPostKeys.linkTargets(channelId) }),
+            queryClient.invalidateQueries({
+              queryKey: telegramPostKeys.managedLists(channelId),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: telegramPostKeys.managedCalendar(channelId),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: telegramPostKeys.linkTargets(channelId),
+            }),
           ]);
         }
         pushToast(
-          apiErrorMessage(runError, `Could not save "${saveTitle}"`),
+          localizedApiError(
+            runError,
+            t("telegram.posts.editor.saveError", { title: saveTitle }),
+          ),
           "error",
           7000,
         );
@@ -3510,9 +3366,7 @@ function TelegramPostWorkspace({
         setPendingPostSaves((current) =>
           current.filter((item) => item.id !== pendingId),
         );
-        setCreatingPostId((current) =>
-          current === pendingId ? null : current,
-        );
+        setCreatingPostId((current) => (current === pendingId ? null : current));
         if (creatingPostIdRef.current === pendingId) {
           creatingPostIdRef.current = null;
         }
@@ -3583,18 +3437,14 @@ function TelegramPostWorkspace({
       <PageTabHead
         title={`${
           workspaceView === "groups"
-            ? "Groups"
+            ? t("telegram.posts.tabs.groups")
             : postView === "calendar"
-              ? "Calendar"
-              : "Posts"
+              ? t("telegram.posts.tabs.calendar")
+              : t("telegram.posts.tabs.posts")
         } · ${channelTitle} · Telegram System`}
         iconUrl={channelPhotoUrl || null}
         emoji={
-          workspaceView === "groups"
-            ? "🗂️"
-            : postView === "calendar"
-              ? "🗓️"
-              : "✈️"
+          workspaceView === "groups" ? "🗂️" : postView === "calendar" ? "🗓️" : "✈️"
         }
         color={
           workspaceView === "groups"
@@ -3616,7 +3466,7 @@ function TelegramPostWorkspace({
             }`}
           >
             <FileText size={15} />
-            Posts
+            {t("telegram.posts.tabs.posts")}
           </button>
           <button
             type="button"
@@ -3628,7 +3478,7 @@ function TelegramPostWorkspace({
             }`}
           >
             <Layers3 size={15} />
-            Groups
+            {t("telegram.posts.tabs.groups")}
           </button>
         </div>
         {workspaceView === "posts" ? (
@@ -3643,7 +3493,7 @@ function TelegramPostWorkspace({
               }`}
             >
               <FileText size={15} />
-              Editor
+              {t("telegram.posts.tabs.editor")}
             </button>
             <button
               type="button"
@@ -3655,7 +3505,7 @@ function TelegramPostWorkspace({
               }`}
             >
               <Clock3 size={15} />
-              Calendar
+              {t("telegram.posts.tabs.calendar")}
             </button>
           </div>
         ) : null}
@@ -3663,7 +3513,7 @@ function TelegramPostWorkspace({
       <Modal
         open={importMode === "calendar"}
         onClose={() => onImportModeChange(null)}
-        title="Channel import"
+        title={t("telegram.posts.import.title")}
         size="xl"
       >
         <div className="grid gap-4">
@@ -3682,9 +3532,7 @@ function TelegramPostWorkspace({
                   title: post.title,
                   groupId: effectivePostGroupId(post),
                 }))}
-                timezone={
-                  Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
-                }
+                timezone={Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"}
                 disabled={autoPlannerBusy}
                 content={calendarPlanImportContent}
                 onContentChange={setCalendarPlanImportContent}
@@ -3714,7 +3562,7 @@ function TelegramPostWorkspace({
             </div>
             <Card className={autoPlannerMode === "system" ? "p-4" : "hidden"}>
               <div className="flex flex-wrap items-end gap-3">
-                <FormField label="Start date">
+                <FormField label={t("telegram.posts.calendar.startDate")}>
                   <DateInput
                     value={autoPlannerFrom}
                     onChange={(event) => {
@@ -3733,7 +3581,7 @@ function TelegramPostWorkspace({
                     }}
                   />
                 </FormField>
-                <FormField label="Range">
+                <FormField label={t("telegram.posts.calendar.range")}>
                   <CustomSelect
                     value={String(autoPlannerDays)}
                     onChange={(value) => {
@@ -3751,17 +3599,21 @@ function TelegramPostWorkspace({
                       }
                     }}
                     options={[
-                      { value: "7", label: "7 days" },
-                      { value: "10", label: "10 days" },
-                      { value: "14", label: "14 days" },
-                      { value: "20", label: "20 days" },
-                      { value: "30", label: "30 days" },
-                      { value: "0", label: "Custom" },
+                      ...[7, 10, 14, 20, 30].map((days) => ({
+                        value: String(days),
+                        label: t("telegram.posts.calendar.days", {
+                          count: days,
+                        }),
+                      })),
+                      {
+                        value: "0",
+                        label: t("telegram.posts.calendar.custom"),
+                      },
                     ]}
                   />
                 </FormField>
                 {autoPlannerDays === 0 ? (
-                  <FormField label="End date">
+                  <FormField label={t("telegram.posts.calendar.endDate")}>
                     <DateInput
                       value={autoPlannerTo}
                       onChange={(event) => setAutoPlannerTo(event.target.value)}
@@ -3778,24 +3630,23 @@ function TelegramPostWorkspace({
                     ) : (
                       <ListPlus size={15} />
                     )}
-                    Preview fill
+                    {t("telegram.posts.calendar.previewFill")}
                   </span>
                 </Button>
               </div>
               {!hasPlannerFormatSlots ? (
                 <p className="mt-3 rounded-lg border border-amber-800/60 bg-amber-950/20 px-3 py-2 text-sm text-amber-200">
-                  Add at least one publishing slot inside a format before
-                  generating a preview.
+                  {t("telegram.posts.calendar.addSlotBeforePreview")}
                 </p>
               ) : null}
               {plannerFormatsWithWeights.length ? (
                 <div className="mt-4 rounded-lg border border-neutral-800 bg-neutral-950/50 p-3">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <h4 className="text-sm font-semibold text-white">
-                      Format frequency
+                      {t("telegram.posts.calendar.formatFrequencyTitle")}
                     </h4>
                     <span className="text-xs text-neutral-500">
-                      Share of generated posts · total 100%
+                      {t("telegram.posts.calendar.frequencyShare")}
                     </span>
                   </div>
                   <div className="space-y-3">
@@ -3809,15 +3660,15 @@ function TelegramPostWorkspace({
                           <span className="truncate">{format.name}</span>
                         </div>
                         <PlannerFormatWeightSlider
-                          label={`${format.name} frequency`}
+                          label={t("telegram.posts.calendar.formatFrequency", {
+                            name: format.name,
+                          })}
                           value={weight}
                           disabled={autoPlannerBusy}
                           onChange={(nextWeight) =>
                             setPlannerFormatWeights((current) =>
                               redistributePlannerFormatWeight(
-                                (plannerFormats.data || []).map(
-                                  (item) => item.id,
-                                ),
+                                (plannerFormats.data || []).map((item) => item.id),
                                 current,
                                 format.id,
                                 nextWeight,
@@ -3859,36 +3710,32 @@ function TelegramPostWorkspace({
 
             <Card className={autoPlannerMode === "system" ? "p-4" : "hidden"}>
               <div className="mb-3 flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-white">Formats</h3>
+                <h3 className="text-sm font-semibold text-white">
+                  {t("telegram.posts.calendar.formats")}
+                </h3>
                 {plannerFormats.isLoading ? (
-                  <LoaderCircle
-                    size={15}
-                    className="animate-spin text-neutral-500"
-                  />
+                  <LoaderCircle size={15} className="animate-spin text-neutral-500" />
                 ) : null}
               </div>
               <div className="flex gap-2">
                 <PlannerFormatEmojiPicker
                   value={newPlannerFormatIcon}
                   disabled={autoPlannerBusy}
-                  onChange={(nextIcon) =>
-                    setNewPlannerFormatIcon(nextIcon ?? "")
-                  }
+                  onChange={(nextIcon) => setNewPlannerFormatIcon(nextIcon ?? "")}
                   onError={(error) =>
                     pushToast(
-                      error instanceof Error
-                        ? error.message
-                        : "Could not select emoji",
+                      localizedApiError(
+                        error,
+                        t("telegram.posts.calendar.error.selectEmoji"),
+                      ),
                       "error",
                     )
                   }
                 />
                 <Input
                   value={newPlannerFormatName}
-                  onChange={(event) =>
-                    setNewPlannerFormatName(event.target.value)
-                  }
-                  placeholder="Format name"
+                  onChange={(event) => setNewPlannerFormatName(event.target.value)}
+                  placeholder={t("telegram.posts.calendar.formatName")}
                 />
                 <Button
                   variant="secondary"
@@ -3900,8 +3747,7 @@ function TelegramPostWorkspace({
               </div>
               <div className="mt-3 space-y-2">
                 {(plannerFormats.data || []).map((format) => {
-                  const slotGroups =
-                    plannerSlotGroupsByFormatId.get(format.id) || [];
+                  const slotGroups = plannerSlotGroupsByFormatId.get(format.id) || [];
                   const draft = plannerSlotDraftsByFormatId[format.id] || {
                     timePostIds: [],
                     groupIds: [],
@@ -3916,9 +3762,7 @@ function TelegramPostWorkspace({
                     (formatDraft.name !== format.name ||
                       formatDraft.icon !== (format.icon ?? "")),
                   );
-                  const formatEditing = editingPlannerFormatIds.includes(
-                    format.id,
-                  );
+                  const formatEditing = editingPlannerFormatIds.includes(format.id);
                   return (
                     <div
                       key={format.id}
@@ -3939,9 +3783,10 @@ function TelegramPostWorkspace({
                               }
                               onError={(error) =>
                                 pushToast(
-                                  error instanceof Error
-                                    ? error.message
-                                    : "Could not update format emoji",
+                                  localizedApiError(
+                                    error,
+                                    t("telegram.posts.calendar.error.updateEmoji"),
+                                  ),
                                   "error",
                                 )
                               }
@@ -3967,7 +3812,7 @@ function TelegramPostWorkspace({
                               onClick={() => savePlannerFormatDraft(format)}
                               className="h-9 shrink-0 border-emerald-800/70 bg-emerald-950/35 px-3 text-emerald-100 hover:bg-emerald-900/45 disabled:border-neutral-800 disabled:bg-neutral-900 disabled:text-neutral-500"
                             >
-                              <Check size={14} /> Save
+                              <Check size={14} /> {t("common.save")}
                             </Button>
                             <Button
                               type="button"
@@ -3985,30 +3830,34 @@ function TelegramPostWorkspace({
                               }}
                               className="h-9 shrink-0 px-3"
                             >
-                              Cancel
+                              {t("common.cancel")}
                             </Button>
                             <button
                               type="button"
                               disabled={autoPlannerBusy}
                               onClick={() => setDeletingPlannerFormat(format)}
                               className="rounded-md border border-red-800/70 p-1.5 text-red-300 hover:bg-red-950/40 disabled:opacity-50"
-                              aria-label={`Delete ${format.name}`}
+                              aria-label={t(
+                                "telegram.posts.calendar.deleteNamedFormat",
+                                {
+                                  name: format.name,
+                                },
+                              )}
                             >
                               <Trash2 size={14} />
                             </button>
                           </>
                         ) : (
                           <>
-                            <span className="text-lg">
-                              {format.icon || "◌"}
-                            </span>
+                            <span className="text-lg">{format.icon || "◌"}</span>
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-semibold text-white">
                                 {format.name}
                               </p>
                               <p className="text-xs text-neutral-500">
-                                {slotGroups.length} configured slot
-                                {slotGroups.length === 1 ? "" : "s"}
+                                {t("telegram.posts.calendar.configuredSlots", {
+                                  count: slotGroups.length,
+                                })}
                               </p>
                             </div>
                             <Button
@@ -4021,7 +3870,7 @@ function TelegramPostWorkspace({
                                 ])
                               }
                             >
-                              <Pencil size={14} /> Edit
+                              <Pencil size={14} /> {t("common.edit")}
                             </Button>
                           </>
                         )}
@@ -4041,9 +3890,7 @@ function TelegramPostWorkspace({
                                 plannerTimePostsById.get(timePostId),
                               )
                               .filter(
-                                (
-                                  timePost,
-                                ): timePost is TelegramChannelTimePost =>
+                                (timePost): timePost is TelegramChannelTimePost =>
                                   Boolean(timePost),
                               );
                             const slotDirty =
@@ -4051,12 +3898,10 @@ function TelegramPostWorkspace({
                                 slotDraft.timePostIds,
                                 slotGroup.timePostIds,
                               ) ||
-                              !sameStringSet(
-                                slotDraft.groupIds,
-                                slotGroup.groupIds,
-                              );
-                            const slotEditing =
-                              editingPlannerSlotGroupIds.includes(slotGroup.id);
+                              !sameStringSet(slotDraft.groupIds, slotGroup.groupIds);
+                            const slotEditing = editingPlannerSlotGroupIds.includes(
+                              slotGroup.id,
+                            );
                             const displayTimePosts = selectedTimePosts.length
                               ? selectedTimePosts
                               : slotGroup.slots
@@ -4064,16 +3909,12 @@ function TelegramPostWorkspace({
                                     plannerTimePostsByTime.get(slot.time),
                                   )
                                   .filter(
-                                    (
-                                      timePost,
-                                    ): timePost is TelegramChannelTimePost =>
+                                    (timePost): timePost is TelegramChannelTimePost =>
                                       Boolean(timePost),
                                   );
                             const groups = slotDraft.groupIds
                               .map((groupId) => postGroupsById.get(groupId))
-                              .filter((group): group is PostGroup =>
-                                Boolean(group),
-                              );
+                              .filter((group): group is PostGroup => Boolean(group));
                             return (
                               <div
                                 key={slotGroup.id}
@@ -4113,7 +3954,8 @@ function TelegramPostWorkspace({
                                       ) : (
                                         <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1 text-neutral-400">
                                           <Clock3 size={14} />
-                                          {primarySlot?.time ?? "No time"}
+                                          {primarySlot?.time ??
+                                            t("telegram.posts.calendar.noTime")}
                                         </span>
                                       )}
                                       {groups.length ? (
@@ -4125,23 +3967,25 @@ function TelegramPostWorkspace({
                                             <PostIcon
                                               iconId={group.icon}
                                               icon={group.iconPresentation}
-                                              label={group.title}
+                                              label={telegramPostGroupTitle(group, t)}
                                               bare
                                             />
                                             <span className="min-w-0 truncate text-neutral-300">
-                                              {group.title}
+                                              {telegramPostGroupTitle(group, t)}
                                             </span>
                                           </span>
                                         ))
                                       ) : (
                                         <span className="inline-flex items-center rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1 text-neutral-400">
-                                          Any group
+                                          {t("telegram.posts.calendar.anyGroup")}
                                         </span>
                                       )}
                                     </div>
                                     {slotEditing ? (
                                       <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
-                                        <FormField label="Groups">
+                                        <FormField
+                                          label={t("telegram.posts.calendar.groups")}
+                                        >
                                           <MultiSelect
                                             value={slotDraft.groupIds}
                                             onChange={(groupIds) =>
@@ -4153,11 +3997,19 @@ function TelegramPostWorkspace({
                                               )
                                             }
                                             options={plannerGroupOptions}
-                                            placeholder="Any group"
-                                            allSelectedLabel="All groups"
+                                            placeholder={t(
+                                              "telegram.posts.calendar.anyGroup",
+                                            )}
+                                            allSelectedLabel={t(
+                                              "telegram.posts.calendar.allGroups",
+                                            )}
                                           />
                                         </FormField>
-                                        <FormField label="Publishing time">
+                                        <FormField
+                                          label={t(
+                                            "telegram.posts.calendar.publishingTime",
+                                          )}
+                                        >
                                           <MultiSelect
                                             value={slotDraft.timePostIds}
                                             onChange={(timePostIds) =>
@@ -4169,8 +4021,12 @@ function TelegramPostWorkspace({
                                               )
                                             }
                                             options={plannerTimePostOptions}
-                                            placeholder="Select time"
-                                            allSelectedLabel="All times"
+                                            placeholder={t(
+                                              "telegram.posts.calendar.selectTime",
+                                            )}
+                                            allSelectedLabel={t(
+                                              "telegram.posts.calendar.allTimes",
+                                            )}
                                           />
                                         </FormField>
                                         <div className="flex md:pt-[22px]">
@@ -4183,15 +4039,13 @@ function TelegramPostWorkspace({
                                               !slotDraft.timePostIds.length
                                             }
                                             onClick={() =>
-                                              savePlannerSlotGroupEditDraft(
-                                                slotGroup,
-                                              )
+                                              savePlannerSlotGroupEditDraft(slotGroup)
                                             }
                                             className="h-10 shrink-0 border-emerald-800/70 bg-emerald-950/35 px-3 text-emerald-100 hover:bg-emerald-900/45 disabled:border-neutral-800 disabled:bg-neutral-900 disabled:text-neutral-500"
                                           >
                                             <span className="inline-flex items-center gap-1.5">
                                               <Check size={14} />
-                                              Save
+                                              {t("common.save")}
                                             </span>
                                           </Button>
                                         </div>
@@ -4201,9 +4055,7 @@ function TelegramPostWorkspace({
                                             variant="secondary"
                                             disabled={autoPlannerBusy}
                                             onClick={() => {
-                                              resetPlannerSlotEditDraft(
-                                                slotGroup.id,
-                                              );
+                                              resetPlannerSlotEditDraft(slotGroup.id);
                                               setEditingPlannerSlotGroupIds(
                                                 (current) =>
                                                   current.filter(
@@ -4215,7 +4067,7 @@ function TelegramPostWorkspace({
                                           >
                                             <span className="inline-flex items-center gap-1.5">
                                               <RotateCcw size={14} />
-                                              Cancel
+                                              {t("common.cancel")}
                                             </span>
                                           </Button>
                                         </div>
@@ -4226,15 +4078,14 @@ function TelegramPostWorkspace({
                                         variant="secondary"
                                         className="h-8 px-2.5 text-xs"
                                         onClick={() =>
-                                          setEditingPlannerSlotGroupIds(
-                                            (current) => [
-                                              ...current,
-                                              slotGroup.id,
-                                            ],
-                                          )
+                                          setEditingPlannerSlotGroupIds((current) => [
+                                            ...current,
+                                            slotGroup.id,
+                                          ])
                                         }
                                       >
-                                        <Pencil size={13} /> Edit slot
+                                        <Pencil size={13} />{" "}
+                                        {t("telegram.posts.calendar.editSlot")}
                                       </Button>
                                     )}
                                   </div>
@@ -4246,7 +4097,9 @@ function TelegramPostWorkspace({
                                         setDeletingPlannerSlotGroup(slotGroup)
                                       }
                                       className="rounded-md border border-red-800/70 p-1.5 text-red-300 hover:bg-red-950/40 disabled:opacity-50"
-                                      aria-label="Delete slot"
+                                      aria-label={t(
+                                        "telegram.posts.calendar.deleteSlot",
+                                      )}
                                     >
                                       <Trash2 size={14} />
                                     </button>
@@ -4257,14 +4110,14 @@ function TelegramPostWorkspace({
                           })}
                           {!slotGroups.length ? (
                             <div className="rounded-lg border border-dashed border-neutral-800 px-3 py-3 text-sm text-neutral-500">
-                              No slots in this format yet.
+                              {t("telegram.posts.calendar.noSlotsInFormat")}
                             </div>
                           ) : null}
                         </div>
                       ) : null}
                       {formatEditing ? (
                         <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-                          <FormField label="Groups">
+                          <FormField label={t("telegram.posts.calendar.groups")}>
                             <MultiSelect
                               value={draft.groupIds}
                               onChange={(groupIds) =>
@@ -4277,11 +4130,15 @@ function TelegramPostWorkspace({
                                 }))
                               }
                               options={plannerGroupOptions}
-                              placeholder="Any group"
-                              allSelectedLabel="All groups"
+                              placeholder={t("telegram.posts.calendar.anyGroup")}
+                              allSelectedLabel={t(
+                                "telegram.posts.calendar.allGroups",
+                              )}
                             />
                           </FormField>
-                          <FormField label="Publishing time">
+                          <FormField
+                            label={t("telegram.posts.calendar.publishingTime")}
+                          >
                             <MultiSelect
                               value={draft.timePostIds}
                               onChange={(timePostIds) =>
@@ -4294,21 +4151,21 @@ function TelegramPostWorkspace({
                                 }))
                               }
                               options={plannerTimePostOptions}
-                              placeholder="Select time"
-                              allSelectedLabel="All times"
+                              placeholder={t("telegram.posts.calendar.selectTime")}
+                              allSelectedLabel={t("telegram.posts.calendar.allTimes")}
                             />
                           </FormField>
                           <div className="flex md:pt-[22px]">
                             <Button
                               variant="secondary"
                               onClick={() => createPlannerSlot(format.id)}
-                              disabled={
-                                autoPlannerBusy || !draft.timePostIds.length
-                              }
+                              disabled={autoPlannerBusy || !draft.timePostIds.length}
                               className="inline-flex h-10 min-w-[112px] shrink-0 items-center justify-center gap-2 whitespace-nowrap"
                             >
                               <Plus size={15} />
-                              Add slot{draft.timePostIds.length > 1 ? "s" : ""}
+                              {draft.timePostIds.length > 1
+                                ? t("telegram.posts.calendar.addSlots")
+                                : t("telegram.posts.calendar.addOneSlot")}
                             </Button>
                           </div>
                         </div>
@@ -4318,7 +4175,7 @@ function TelegramPostWorkspace({
                 })}
                 {!plannerFormats.isLoading && !plannerFormats.data?.length ? (
                   <div className="rounded-lg border border-dashed border-neutral-800 px-3 py-4 text-sm text-neutral-500">
-                    No formats yet.
+                    {t("telegram.posts.calendar.noFormats")}
                   </div>
                 ) : null}
               </div>
@@ -4330,8 +4187,8 @@ function TelegramPostWorkspace({
         open={Boolean(deletingPlannerFormat)}
         onClose={() => setDeletingPlannerFormat(null)}
         entityName={deletingPlannerFormat?.name || ""}
-        label="Delete format"
-        description="This deletes the format and its planner slots. Already scheduled posts are not changed."
+        label={t("telegram.posts.calendar.deleteFormat")}
+        description={t("telegram.posts.calendar.deleteFormatDescription")}
         onConfirm={async () => {
           if (!deletingPlannerFormat) return;
           await runPlannerMutation(
@@ -4340,7 +4197,7 @@ function TelegramPostWorkspace({
                 channelId,
                 deletingPlannerFormat.id,
               ),
-            "Format deleted.",
+            t("telegram.posts.calendar.formatDeleted"),
           );
           setDeletingPlannerFormat(null);
         }}
@@ -4387,13 +4244,13 @@ function TelegramPostWorkspace({
         onClose={() => setDeletingPlannerSlotGroup(null)}
         entityName={
           deletingPlannerSlotGroup
-            ? `${deletingPlannerSlotGroup.timePostIds.length} publishing time${
-                deletingPlannerSlotGroup.timePostIds.length === 1 ? "" : "s"
-              }`
+            ? t("telegram.posts.calendar.publishingTimes", {
+                count: deletingPlannerSlotGroup.timePostIds.length,
+              })
             : ""
         }
-        label="Delete slot"
-        description="This removes the selected slot set from the format. Already scheduled posts are not changed."
+        label={t("telegram.posts.calendar.deleteSlot")}
+        description={t("telegram.posts.calendar.deleteSlotDescription")}
         onConfirm={async () => {
           if (!deletingPlannerSlotGroup) return;
           await runPlannerMutation(
@@ -4407,8 +4264,10 @@ function TelegramPostWorkspace({
                 () => undefined,
               ),
             deletingPlannerSlotGroup.slots.length === 1
-              ? "Slot deleted."
-              : `${deletingPlannerSlotGroup.slots.length} slots deleted.`,
+              ? t("telegram.posts.calendar.slotDeleted")
+              : t("telegram.posts.calendar.slotsDeleted", {
+                  count: deletingPlannerSlotGroup.slots.length,
+                }),
           );
           setDeletingPlannerSlotGroup(null);
         }}
@@ -4435,10 +4294,11 @@ function TelegramPostWorkspace({
                   {monthLabel(calendarMonth)}
                 </h2>
                 <p className="mt-1 text-sm text-neutral-400">
-                  Scheduled through{" "}
-                  {calendarData.data?.summary.lastScheduledAt
-                    ? formatDate(calendarData.data.summary.lastScheduledAt)
-                    : "No posts scheduled"}
+                  {t("telegram.posts.calendar.scheduledThrough", {
+                    date: calendarData.data?.summary.lastScheduledAt
+                      ? formatDate(calendarData.data.summary.lastScheduledAt, locale)
+                      : t("telegram.posts.calendar.noScheduled"),
+                  })}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -4460,13 +4320,11 @@ function TelegramPostWorkspace({
                   }}
                   className="inline-flex h-10 items-center rounded-xl border border-neutral-800 bg-neutral-950 px-4 text-sm font-medium text-white transition hover:border-neutral-700 hover:bg-neutral-900"
                 >
-                  Today
+                  {t("telegram.posts.calendar.today")}
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    setCalendarMonth((current) => addMonths(current, 1))
-                  }
+                  onClick={() => setCalendarMonth((current) => addMonths(current, 1))}
                   className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-800 bg-neutral-950 text-neutral-300 transition hover:border-neutral-700 hover:bg-neutral-900 hover:text-white"
                 >
                   <ChevronRight size={16} />
@@ -4481,7 +4339,7 @@ function TelegramPostWorkspace({
                   className="inline-flex h-10 items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-950 px-4 text-sm font-medium text-neutral-200 transition hover:border-neutral-700 hover:bg-neutral-900 hover:text-white"
                 >
                   <RefreshCw size={15} />
-                  Refresh
+                  {t("common.refresh")}
                 </button>
                 <button
                   type="button"
@@ -4493,7 +4351,7 @@ function TelegramPostWorkspace({
                   }`}
                 >
                   <Layers3 size={15} />
-                  Ads overlay
+                  {t("telegram.posts.calendar.adsOverlay")}
                 </button>
               </div>
             </div>
@@ -4552,38 +4410,44 @@ function TelegramPostWorkspace({
                             <div className="mb-1 flex items-start justify-between">
                               <span
                                 className={`text-[1.3rem] font-semibold leading-none sm:text-[1.75rem] ${
-                                  isCurrentMonth
-                                    ? "text-white"
-                                    : "text-neutral-600"
+                                  isCurrentMonth ? "text-white" : "text-neutral-600"
                                 }`}
                               >
                                 {day.getDate()}
                               </span>
                               {isToday ? (
                                 <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-medium text-white sm:text-xs">
-                                  Today
+                                  {t("telegram.posts.calendar.today")}
                                 </span>
                               ) : null}
                             </div>
                             <div className="mt-0.5 space-y-1 sm:space-y-1.5">
                               {scheduledCount ? (
                                 <div className="text-[10px] font-medium text-amber-300 sm:text-[11px]">
-                                  Scheduled {scheduledCount}
+                                  {t("telegram.posts.calendar.scheduledShort", {
+                                    count: scheduledCount,
+                                  })}
                                 </div>
                               ) : null}
                               {publishedCount ? (
                                 <div className="text-[10px] font-medium text-emerald-300 sm:text-[11px]">
-                                  Published {publishedCount}
+                                  {t("telegram.posts.calendar.publishedShort", {
+                                    count: publishedCount,
+                                  })}
                                 </div>
                               ) : null}
                               {showAdSalesOverlay && adReservedCount ? (
                                 <div className="text-[10px] font-medium text-amber-300 sm:text-[11px]">
-                                  Ad reserved {adReservedCount}
+                                  {t("telegram.posts.calendar.adReserved", {
+                                    count: adReservedCount,
+                                  })}
                                 </div>
                               ) : null}
                               {showAdSalesOverlay && adSoldCount ? (
                                 <div className="text-[10px] font-medium text-sky-300 sm:text-[11px]">
-                                  Ad sold {adSoldCount}
+                                  {t("telegram.posts.calendar.adSold", {
+                                    count: adSoldCount,
+                                  })}
                                 </div>
                               ) : null}
                             </div>
@@ -4627,9 +4491,7 @@ function TelegramPostWorkspace({
                         return;
                       }
                       changePostView("editor");
-                      const post = posts.data?.find(
-                        (entry) => entry.id === item.id,
-                      );
+                      const post = posts.data?.find((entry) => entry.id === item.id);
                       if (post) {
                         selectPost(post);
                         onPostSelect(post.id);
@@ -4666,14 +4528,12 @@ function TelegramPostWorkspace({
                               <div className="truncate text-sm font-medium text-white">
                                 {item.title}
                               </div>
-                              <ManagedPostTelegramIdentityIndicator
-                                post={item}
-                              />
+                              <ManagedPostTelegramIdentityIndicator post={item} />
                             </div>
                             <div className="mt-1 text-xs text-neutral-400">
                               {item.status === "SCHEDULED"
-                                ? "Scheduled"
-                                : "Published"}{" "}
+                                ? t("telegram.posts.editor.scheduled")
+                                : t("telegram.posts.editor.published")}{" "}
                               ·{" "}
                               {timeLabel(
                                 item.status === "SCHEDULED"
@@ -4694,21 +4554,25 @@ function TelegramPostWorkspace({
                                   })()}
                                 </span>
                                 <span className="truncate">
-                                  Slot match: {matchedSlot.time}{" "}
-                                  {matchedSlot.title}
+                                  {t("telegram.posts.calendar.slotMatch", {
+                                    time: matchedSlot.time,
+                                    title: matchedSlot.title,
+                                  })}
                                 </span>
                               </div>
                             ) : null}
                             {item.isAutoPlanned ? (
                               <div className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full border border-blue-700/40 bg-blue-950/30 px-2 py-1 text-[11px] text-blue-200">
                                 <Rocket size={12} />
-                                <span className="truncate">Imported plan</span>
+                                <span className="truncate">
+                                  {t("telegram.posts.calendar.importedPlan")}
+                                </span>
                               </div>
                             ) : null}
                           </div>
                           {item.origin === "TELEGRAM" ? (
                             <span className="shrink-0 rounded-full bg-amber-500/20 px-2 py-1 text-[11px] font-medium whitespace-nowrap text-amber-200">
-                              Created in Telegram
+                              {t("telegram.posts.calendar.createdInTelegram")}
                             </span>
                           ) : null}
                         </div>
@@ -4718,14 +4582,14 @@ function TelegramPostWorkspace({
                 ))
               ) : (
                 <div className="rounded-xl border border-dashed border-neutral-800 px-4 py-8 text-center text-sm text-neutral-500">
-                  No posts on this day
+                  {t("telegram.posts.calendar.noPostsDay")}
                 </div>
               )}
               {showAdSalesOverlay && selectedAdCalendarItems.length ? (
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
                     <Layers3 size={14} />
-                    Ad placements
+                    {t("telegram.posts.calendar.adPlacements")}
                   </div>
                   {selectedAdCalendarItems.map((item) => {
                     const placement = item.existingPlacement;
@@ -4735,8 +4599,7 @@ function TelegramPostWorkspace({
                     const displayPrice = placement
                       ? placement.agreedPrice
                       : item.recommendedPrice;
-                    const displayCurrency =
-                      placement?.currency ?? item.currency;
+                    const displayCurrency = placement?.currency ?? item.currency;
                     return (
                       <div
                         key={`${item.channelId}:${item.scheduledAt}:${placement?.id ?? item.state}`}
@@ -4747,12 +4610,21 @@ function TelegramPostWorkspace({
                             <p className="text-sm font-medium text-white">
                               {placement?.advertiserName ||
                                 placement?.title ||
-                                placement?.status ||
-                                item.state}
+                                (placement
+                                  ? t(
+                                      TELEGRAM_AD_PLACEMENT_STATUS_KEYS[
+                                        placement.status
+                                      ],
+                                    )
+                                  : t(
+                                      "telegram.posts.calendar.unavailablePlacement",
+                                    ))}
                             </p>
                             <p className="mt-1 text-xs text-neutral-300">
                               {timeLabel(item.scheduledAt)} ·{" "}
-                              {displayViews.toLocaleString()} views
+                              {t("telegram.posts.calendar.views", {
+                                count: displayViews.toLocaleString(locale),
+                              })}
                             </p>
                             {placement?.title &&
                             placement.title !== placement.advertiserName ? (
@@ -4767,16 +4639,22 @@ function TelegramPostWorkspace({
                             </p>
                             {placement ? (
                               <p className="mt-1 text-neutral-500">
-                                {placement.status.toLowerCase()}
+                                {t(
+                                  TELEGRAM_AD_PLACEMENT_STATUS_KEYS[placement.status],
+                                )}
                               </p>
                             ) : (
-                              <p>{item.minimumPrice} minimum</p>
+                              <p>
+                                {t("telegram.posts.calendar.minimum", {
+                                  amount: item.minimumPrice,
+                                })}
+                              </p>
                             )}
                           </div>
                         </div>
                         {!placement ? (
                           <p className="mt-2 text-xs text-neutral-400">
-                            {item.blockingReason || item.source}
+                            {t("telegram.posts.calendar.unavailablePlacement")}
                           </p>
                         ) : null}
                         {placement?.saleId ? (
@@ -4784,7 +4662,7 @@ function TelegramPostWorkspace({
                             href={`/ad-sales?saleId=${placement.saleId}`}
                             className="mt-3 inline-flex text-xs font-medium text-blue-300 hover:text-blue-200"
                           >
-                            Open sale
+                            {t("telegram.posts.calendar.openSale")}
                           </a>
                         ) : null}
                       </div>
@@ -4796,16 +4674,15 @@ function TelegramPostWorkspace({
             <div className="hidden">
               <div>
                 <h4 className="text-sm font-semibold text-white">
-                  Schedule multiple posts
+                  {t("telegram.posts.calendar.scheduleMultiple")}
                 </h4>
                 <p className="mt-1 text-xs text-neutral-400">
-                  Uses this channel&apos;s configured publishing slots for the
-                  selected day.
+                  {t("telegram.posts.calendar.scheduleMultipleHint")}
                 </p>
               </div>
               {!calendarSchedulablePosts.length ? (
                 <div className="mt-4 rounded-xl border border-dashed border-neutral-800 px-4 py-5 text-sm text-neutral-500">
-                  No drafts yet. Create a draft first.
+                  {t("telegram.posts.calendar.noDrafts")}
                 </div>
               ) : (
                 <>
@@ -4852,7 +4729,7 @@ function TelegramPostWorkspace({
                     >
                       <span className="inline-flex items-center gap-1.5">
                         <ListPlus size={15} />
-                        Select fit
+                        {t("telegram.posts.calendar.selectFit")}
                       </span>
                     </Button>
                     <Button
@@ -4873,283 +4750,276 @@ function TelegramPostWorkspace({
                     >
                       <span className="inline-flex items-center gap-1.5">
                         <RotateCcw size={15} />
-                        Reroll
+                        {t("telegram.posts.calendar.reroll")}
                       </span>
                     </Button>
                     <Button
                       variant="secondary"
                       onClick={clearCalendarBatchSelection}
                       disabled={
-                        calendarBatchBusy ||
-                        !calendarBatchSelectedPostIds.length
+                        calendarBatchBusy || !calendarBatchSelectedPostIds.length
                       }
                       className="h-9 border-neutral-700 bg-neutral-950 px-3 text-neutral-300 hover:border-red-800 hover:bg-red-950/30 hover:text-red-100"
                     >
                       <span className="inline-flex items-center gap-1.5">
                         <X size={15} />
-                        Clear
+                        {t("common.clear")}
                       </span>
                     </Button>
                   </div>
                   <div className="mt-4 space-y-2">
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-[11px] font-medium uppercase tracking-[0.24em] text-neutral-500">
-                        Posts to schedule
+                        {t("telegram.posts.calendar.postsToSchedule")}
                       </div>
                       <div className="text-xs text-neutral-500">
-                        {calendarBatchSelectedPosts.length} selected
+                        {t("telegram.posts.calendar.selected", {
+                          count: calendarBatchSelectedPosts.length,
+                        })}
                       </div>
                     </div>
                     <Input
                       value={calendarPostSearch}
-                      onChange={(event) =>
-                        setCalendarPostSearch(event.target.value)
-                      }
-                      placeholder="Search posts or groups..."
+                      onChange={(event) => setCalendarPostSearch(event.target.value)}
+                      placeholder={t("telegram.posts.calendar.searchPostsGroups")}
                     />
                     {!calendarFilteredSchedulablePosts.length ? (
                       <div className="rounded-xl border border-dashed border-neutral-800 px-4 py-5 text-sm text-neutral-500">
-                        No posts match this search.
+                        {t("telegram.posts.calendar.noSearchMatches")}
                       </div>
                     ) : (
                       <div className="max-h-64 space-y-2 overflow-auto rounded-xl border border-neutral-800 p-2">
-                        {calendarGroupedSchedulablePosts.groups.map(
-                          (section) => (
-                            <CalendarPostGroupSection
-                              key={section.group.id}
-                              title={section.group.title}
-                              count={section.posts.length}
-                              icon={
-                                <PostIcon
-                                  iconId={section.group.icon}
-                                  icon={section.group.iconPresentation}
-                                  label={section.group.title}
-                                  bare
-                                />
-                              }
-                            >
-                              {section.posts.map((post) => {
-                                const selected =
-                                  calendarBatchSelectedPostIds.includes(
-                                    post.id,
-                                  );
-                                return (
-                                  <div
-                                    key={post.id}
-                                    onClick={(event) => {
-                                      if (
-                                        !wantsNewTab(event) ||
-                                        shouldIgnoreModifiedPostOpen(
-                                          event.target,
-                                        )
-                                      ) {
-                                        return;
-                                      }
-                                      event.preventDefault();
-                                      openPostInNewTab(post);
-                                    }}
-                                    className={`flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition ${
-                                      selected
-                                        ? "border-blue-700 bg-blue-950/20"
-                                        : "border-neutral-800 bg-neutral-950/40 hover:border-neutral-700"
-                                    }`}
-                                  >
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        toggleCalendarBatchPostSelection(
-                                          post.id,
-                                        )
-                                      }
-                                      aria-pressed={selected}
-                                      aria-label={
-                                        selected
-                                          ? `Unselect ${post.title}`
-                                          : `Select ${post.title}`
-                                      }
-                                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs ${
-                                        selected
-                                          ? "border-blue-500 bg-blue-500 text-white"
-                                          : "border-neutral-700 text-neutral-500"
-                                      }`}
-                                    >
-                                      {selected ? "✓" : ""}
-                                    </button>
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex items-center gap-2">
-                                        {post.icon ? (
-                                          <PostIcon
-                                            iconId={post.icon}
-                                            icon={post.iconPresentation}
-                                            label={post.title}
-                                            bare
-                                          />
-                                        ) : (
-                                          <span className="text-sm leading-none">
-                                            📝
-                                          </span>
-                                        )}
-                                        <span className="truncate text-sm font-medium text-white">
-                                          {post.title}
-                                        </span>
-                                      </div>
-                                      <div className="mt-1 text-xs text-neutral-500">
-                                        {post.status === "FAILED"
-                                          ? "Failed"
-                                          : "Draft"}{" "}
-                                        · created {formatDate(post.createdAt)}
-                                      </div>
-                                      {selected ? (
-                                        <CalendarPostTimePicker
-                                          post={post}
-                                          selectedCalendarDate={
-                                            selectedCalendarDate
-                                          }
-                                          availableCalendarScheduleSlots={
-                                            availableCalendarScheduleSlots
-                                          }
-                                          calendarScheduleSlots={
-                                            calendarScheduleSlots
-                                          }
-                                          channelId={channelId}
-                                          channelTimePosts={channelTimePosts}
-                                          selectedPostIds={
-                                            calendarBatchSelectedPostIds
-                                          }
-                                          timeChoiceByPostId={
-                                            calendarBatchTimeChoiceByPostId
-                                          }
-                                          customTimeByPostId={
-                                            calendarBatchCustomTimeByPostId
-                                          }
-                                          onTimeChoiceChange={
-                                            setCalendarBatchTimeChoiceByPostId
-                                          }
-                                          onCustomTimeChange={
-                                            setCalendarBatchCustomTimeByPostId
-                                          }
-                                        />
-                                      ) : null}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </CalendarPostGroupSection>
-                          ),
-                        )}
-                        {calendarGroupedSchedulablePosts.ungrouped.map(
-                          (post) => {
-                            const selected =
-                              calendarBatchSelectedPostIds.includes(post.id);
-                            return (
-                              <div
-                                key={post.id}
-                                onClick={(event) => {
-                                  if (
-                                    !wantsNewTab(event) ||
-                                    shouldIgnoreModifiedPostOpen(event.target)
-                                  ) {
-                                    return;
-                                  }
-                                  event.preventDefault();
-                                  openPostInNewTab(post);
-                                }}
-                                className={`flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition ${
-                                  selected
-                                    ? "border-blue-700 bg-blue-950/20"
-                                    : "border-neutral-800 bg-neutral-950/40 hover:border-neutral-700"
-                                }`}
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    toggleCalendarBatchPostSelection(post.id)
-                                  }
-                                  aria-pressed={selected}
-                                  aria-label={
+                        {calendarGroupedSchedulablePosts.groups.map((section) => (
+                          <CalendarPostGroupSection
+                            key={section.group.id}
+                            title={telegramPostGroupTitle(section.group, t)}
+                            count={section.posts.length}
+                            icon={
+                              <PostIcon
+                                iconId={section.group.icon}
+                                icon={section.group.iconPresentation}
+                                label={telegramPostGroupTitle(section.group, t)}
+                                bare
+                              />
+                            }
+                          >
+                            {section.posts.map((post) => {
+                              const selected = calendarBatchSelectedPostIds.includes(
+                                post.id,
+                              );
+                              return (
+                                <div
+                                  key={post.id}
+                                  onClick={(event) => {
+                                    if (
+                                      !wantsNewTab(event) ||
+                                      shouldIgnoreModifiedPostOpen(event.target)
+                                    ) {
+                                      return;
+                                    }
+                                    event.preventDefault();
+                                    openPostInNewTab(post);
+                                  }}
+                                  className={`flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition ${
                                     selected
-                                      ? `Unselect ${post.title}`
-                                      : `Select ${post.title}`
-                                  }
-                                  className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs ${
-                                    selected
-                                      ? "border-blue-500 bg-blue-500 text-white"
-                                      : "border-neutral-700 text-neutral-500"
+                                      ? "border-blue-700 bg-blue-950/20"
+                                      : "border-neutral-800 bg-neutral-950/40 hover:border-neutral-700"
                                   }`}
                                 >
-                                  {selected ? "✓" : ""}
-                                </button>
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-2">
-                                    {post.icon ? (
-                                      <PostIcon
-                                        iconId={post.icon}
-                                        icon={post.iconPresentation}
-                                        label={post.title}
-                                        bare
-                                      />
-                                    ) : (
-                                      <span className="text-sm leading-none">
-                                        📝
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      toggleCalendarBatchPostSelection(post.id)
+                                    }
+                                    aria-pressed={selected}
+                                    aria-label={
+                                      selected
+                                        ? t("telegram.posts.editor.unselectNamed", {
+                                            title: post.title,
+                                          })
+                                        : t("telegram.posts.editor.selectNamed", {
+                                            title: post.title,
+                                          })
+                                    }
+                                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs ${
+                                      selected
+                                        ? "border-blue-500 bg-blue-500 text-white"
+                                        : "border-neutral-700 text-neutral-500"
+                                    }`}
+                                  >
+                                    {selected ? "✓" : ""}
+                                  </button>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      {post.icon ? (
+                                        <PostIcon
+                                          iconId={post.icon}
+                                          icon={post.iconPresentation}
+                                          label={post.title}
+                                          bare
+                                        />
+                                      ) : (
+                                        <span className="text-sm leading-none">
+                                          📝
+                                        </span>
+                                      )}
+                                      <span className="truncate text-sm font-medium text-white">
+                                        {post.title}
                                       </span>
-                                    )}
-                                    <span className="truncate text-sm font-medium text-white">
-                                      {post.title}
-                                    </span>
+                                    </div>
+                                    <div className="mt-1 text-xs text-neutral-500">
+                                      {post.status === "FAILED"
+                                        ? t("telegram.posts.calendar.failed")
+                                        : t("telegram.posts.calendar.draft")}{" "}
+                                      ·{" "}
+                                      {t("telegram.posts.created", {
+                                        date: formatDate(post.createdAt, locale),
+                                      })}
+                                    </div>
+                                    {selected ? (
+                                      <CalendarPostTimePicker
+                                        post={post}
+                                        selectedCalendarDate={selectedCalendarDate}
+                                        availableCalendarScheduleSlots={
+                                          availableCalendarScheduleSlots
+                                        }
+                                        calendarScheduleSlots={calendarScheduleSlots}
+                                        channelId={channelId}
+                                        channelTimePosts={channelTimePosts}
+                                        selectedPostIds={calendarBatchSelectedPostIds}
+                                        timeChoiceByPostId={
+                                          calendarBatchTimeChoiceByPostId
+                                        }
+                                        customTimeByPostId={
+                                          calendarBatchCustomTimeByPostId
+                                        }
+                                        onTimeChoiceChange={
+                                          setCalendarBatchTimeChoiceByPostId
+                                        }
+                                        onCustomTimeChange={
+                                          setCalendarBatchCustomTimeByPostId
+                                        }
+                                      />
+                                    ) : null}
                                   </div>
-                                  <div className="mt-1 text-xs text-neutral-500">
-                                    {post.status === "FAILED"
-                                      ? "Failed"
-                                      : "Draft"}{" "}
-                                    · created {formatDate(post.createdAt)}
-                                  </div>
-                                  {selected ? (
-                                    <CalendarPostTimePicker
-                                      post={post}
-                                      selectedCalendarDate={
-                                        selectedCalendarDate
-                                      }
-                                      availableCalendarScheduleSlots={
-                                        availableCalendarScheduleSlots
-                                      }
-                                      calendarScheduleSlots={
-                                        calendarScheduleSlots
-                                      }
-                                      channelId={channelId}
-                                      channelTimePosts={channelTimePosts}
-                                      selectedPostIds={
-                                        calendarBatchSelectedPostIds
-                                      }
-                                      timeChoiceByPostId={
-                                        calendarBatchTimeChoiceByPostId
-                                      }
-                                      customTimeByPostId={
-                                        calendarBatchCustomTimeByPostId
-                                      }
-                                      onTimeChoiceChange={
-                                        setCalendarBatchTimeChoiceByPostId
-                                      }
-                                      onCustomTimeChange={
-                                        setCalendarBatchCustomTimeByPostId
-                                      }
-                                    />
-                                  ) : null}
                                 </div>
+                              );
+                            })}
+                          </CalendarPostGroupSection>
+                        ))}
+                        {calendarGroupedSchedulablePosts.ungrouped.map((post) => {
+                          const selected = calendarBatchSelectedPostIds.includes(
+                            post.id,
+                          );
+                          return (
+                            <div
+                              key={post.id}
+                              onClick={(event) => {
+                                if (
+                                  !wantsNewTab(event) ||
+                                  shouldIgnoreModifiedPostOpen(event.target)
+                                ) {
+                                  return;
+                                }
+                                event.preventDefault();
+                                openPostInNewTab(post);
+                              }}
+                              className={`flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition ${
+                                selected
+                                  ? "border-blue-700 bg-blue-950/20"
+                                  : "border-neutral-800 bg-neutral-950/40 hover:border-neutral-700"
+                              }`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  toggleCalendarBatchPostSelection(post.id)
+                                }
+                                aria-pressed={selected}
+                                aria-label={
+                                  selected
+                                    ? t("telegram.posts.editor.unselectNamed", {
+                                        title: post.title,
+                                      })
+                                    : t("telegram.posts.editor.selectNamed", {
+                                        title: post.title,
+                                      })
+                                }
+                                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs ${
+                                  selected
+                                    ? "border-blue-500 bg-blue-500 text-white"
+                                    : "border-neutral-700 text-neutral-500"
+                                }`}
+                              >
+                                {selected ? "✓" : ""}
+                              </button>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  {post.icon ? (
+                                    <PostIcon
+                                      iconId={post.icon}
+                                      icon={post.iconPresentation}
+                                      label={post.title}
+                                      bare
+                                    />
+                                  ) : (
+                                    <span className="text-sm leading-none">📝</span>
+                                  )}
+                                  <span className="truncate text-sm font-medium text-white">
+                                    {post.title}
+                                  </span>
+                                </div>
+                                <div className="mt-1 text-xs text-neutral-500">
+                                  {post.status === "FAILED"
+                                    ? t("telegram.posts.calendar.failed")
+                                    : t("telegram.posts.calendar.draft")}{" "}
+                                  ·{" "}
+                                  {t("telegram.posts.created", {
+                                    date: formatDate(post.createdAt, locale),
+                                  })}
+                                </div>
+                                {selected ? (
+                                  <CalendarPostTimePicker
+                                    post={post}
+                                    selectedCalendarDate={selectedCalendarDate}
+                                    availableCalendarScheduleSlots={
+                                      availableCalendarScheduleSlots
+                                    }
+                                    calendarScheduleSlots={calendarScheduleSlots}
+                                    channelId={channelId}
+                                    channelTimePosts={channelTimePosts}
+                                    selectedPostIds={calendarBatchSelectedPostIds}
+                                    timeChoiceByPostId={
+                                      calendarBatchTimeChoiceByPostId
+                                    }
+                                    customTimeByPostId={
+                                      calendarBatchCustomTimeByPostId
+                                    }
+                                    onTimeChoiceChange={
+                                      setCalendarBatchTimeChoiceByPostId
+                                    }
+                                    onCustomTimeChange={
+                                      setCalendarBatchCustomTimeByPostId
+                                    }
+                                  />
+                                ) : null}
                               </div>
-                            );
-                          },
-                        )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
                   <div className="mt-4 rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-[11px] font-medium uppercase tracking-[0.24em] text-neutral-500">
-                        Schedule preview
+                        {t("telegram.posts.calendar.schedulePreview")}
                       </div>
                       <div className="text-xs text-neutral-500">
-                        {calendarBatchPlan.assignments.length}/
-                        {calendarBatchSelectedPostIds.length} will be scheduled
+                        {t("telegram.posts.calendar.willBeScheduled", {
+                          assigned: calendarBatchPlan.assignments.length,
+                          selected: calendarBatchSelectedPostIds.length,
+                        })}
                       </div>
                     </div>
                     {calendarBatchPlan.assignments.length ? (
@@ -5159,8 +5029,7 @@ function TelegramPostWorkspace({
                             assignment.postId,
                           );
                           const slot = calendarScheduleSlots.find(
-                            (item) =>
-                              item.scheduledAt === assignment.scheduledAt,
+                            (item) => item.scheduledAt === assignment.scheduledAt,
                           );
                           const title = post?.title || assignment.postId;
                           return (
@@ -5172,7 +5041,9 @@ function TelegramPostWorkspace({
                                 if (post) openPostWithModifier(post, event);
                               }}
                               className="flex w-full items-center justify-between gap-3 rounded-lg border border-neutral-800 px-3 py-2 text-left text-sm transition hover:border-neutral-700 hover:bg-neutral-900/70 disabled:cursor-default disabled:hover:border-neutral-800 disabled:hover:bg-transparent"
-                              title={post ? "Open post" : title}
+                              title={
+                                post ? t("telegram.posts.calendar.openPost") : title
+                              }
                             >
                               <div className="flex min-w-0 items-center gap-2">
                                 {post?.icon ? (
@@ -5197,13 +5068,12 @@ function TelegramPostWorkspace({
                               </div>
                               <div className="shrink-0 text-right text-xs text-neutral-400">
                                 <div>
-                                  {slot?.time ||
-                                    timeLabel(assignment.scheduledAt)}
+                                  {slot?.time || timeLabel(assignment.scheduledAt)}
                                 </div>
                                 <div className="mt-0.5 text-[10px] uppercase tracking-wide text-neutral-500">
                                   {slot?.source === "custom"
-                                    ? "Custom"
-                                    : "Slot"}
+                                    ? t("telegram.posts.calendar.custom")
+                                    : t("telegram.posts.calendar.slot")}
                                 </div>
                               </div>
                             </button>
@@ -5212,41 +5082,35 @@ function TelegramPostWorkspace({
                       </div>
                     ) : (
                       <div className="mt-3 text-sm text-neutral-500">
-                        Select posts and assign a slot or custom time to each
-                        one.
+                        {t("telegram.posts.calendar.assignHint")}
                       </div>
                     )}
                     {calendarBatchPlan.invalidPostIds.length ? (
                       <div className="mt-3 rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200">
-                        {calendarBatchPlan.invalidPostIds.length} selected post
-                        {calendarBatchPlan.invalidPostIds.length === 1
-                          ? ""
-                          : "s"}{" "}
-                        still need a valid slot or custom time.
+                        {t("telegram.posts.calendar.invalidAssignments", {
+                          count: calendarBatchPlan.invalidPostIds.length,
+                        })}
                       </div>
                     ) : null}
                     {calendarBatchPlan.duplicatePostIds.length ? (
                       <div className="mt-3 rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200">
-                        Duplicate times detected for{" "}
-                        {calendarBatchPlan.duplicatePostIds.length} selected
-                        post
-                        {calendarBatchPlan.duplicatePostIds.length === 1
-                          ? ""
-                          : "s"}
-                        .
+                        {t("telegram.posts.calendar.duplicateAssignments", {
+                          count: calendarBatchPlan.duplicatePostIds.length,
+                        })}
                       </div>
                     ) : null}
                     <div className="mt-4 flex justify-end">
                       <Button
                         onClick={scheduleCalendarBatch}
                         disabled={
-                          calendarBatchBusy ||
-                          !calendarBatchPlan.assignments.length
+                          calendarBatchBusy || !calendarBatchPlan.assignments.length
                         }
                       >
                         {calendarBatchBusy
-                          ? "Scheduling…"
-                          : `Schedule ${calendarBatchPlan.assignments.length} posts`}
+                          ? t("telegram.posts.calendar.scheduling")
+                          : t("telegram.posts.calendar.scheduleCount", {
+                              count: calendarBatchPlan.assignments.length,
+                            })}
                       </Button>
                     </div>
                   </div>
@@ -5261,14 +5125,10 @@ function TelegramPostWorkspace({
             channelTitle={channelTitle}
             channelPhotoUrl={channelPhotoUrl}
             text={text}
-            formattedHtml={
-              isReadOnlyTelegramPost ? editingMeta?.formattedText : null
-            }
+            formattedHtml={isReadOnlyTelegramPost ? editingMeta?.formattedText : null}
             customEmojiPacks={customEmojiPacks.data?.packs}
             imageUrls={
-              isReadOnlyTelegramPost
-                ? (editingMeta?.imageUrls ?? [])
-                : imageUrls
+              isReadOnlyTelegramPost ? (editingMeta?.imageUrls ?? []) : imageUrls
             }
             hasMedia={editingMeta?.hasMedia}
             engagement={editingMeta?.engagementMetrics}
@@ -5285,14 +5145,10 @@ function TelegramPostWorkspace({
                   }
             }
             onUndo={
-              isReadOnlyTelegramPost
-                ? null
-                : () => textEditorRef.current?.undo()
+              isReadOnlyTelegramPost ? null : () => textEditorRef.current?.undo()
             }
             onRedo={
-              isReadOnlyTelegramPost
-                ? null
-                : () => textEditorRef.current?.redo()
+              isReadOnlyTelegramPost ? null : () => textEditorRef.current?.redo()
             }
             longTextMode={longTextMode}
             captionLengthMax={effectiveCaptionLengthMax}
@@ -5302,11 +5158,10 @@ function TelegramPostWorkspace({
             {editorIsSaving ? (
               <div className="absolute inset-0 z-40 flex items-center justify-center rounded-lg bg-black/55 backdrop-blur-[2px]">
                 <div className="flex items-center gap-3 rounded-xl border border-neutral-700 bg-neutral-900 px-5 py-4 text-sm font-medium text-white shadow-2xl">
-                  <LoaderCircle
-                    size={21}
-                    className="animate-spin text-blue-400"
-                  />
-                  Saving “{editing?.title || title}”…
+                  <LoaderCircle size={21} className="animate-spin text-blue-400" />
+                  {t("telegram.posts.editor.savingNamed", {
+                    title: editing?.title || title,
+                  })}
                 </div>
               </div>
             ) : null}
@@ -5326,26 +5181,26 @@ function TelegramPostWorkspace({
                     iconId={icon}
                     onChange={changePostIcon}
                     onPendingChange={setIconPending}
-                    buttonLabel="Add icon"
+                    buttonLabel={t("telegram.posts.icon.addIcon")}
                     compact
                     className="!h-8 !w-8"
                   />
                   <h2 className="text-lg font-semibold text-white">
                     {isPublished
-                      ? "Published post"
+                      ? t("telegram.posts.editor.publishedPost")
                       : editing
-                        ? "Edit post"
-                        : "New post"}
+                        ? t("telegram.posts.editor.editPost")
+                        : t("telegram.posts.newPost")}
                   </h2>
                   {editing && incomingInternalLinkPosts.length > 0 ? (
                     <button
                       type="button"
                       onClick={() => setUsageModalOpen(true)}
                       className="inline-flex h-8 items-center gap-1.5 rounded-md border border-neutral-700 px-2.5 text-xs font-medium text-neutral-300 transition hover:border-blue-600 hover:bg-blue-950/30 hover:text-white"
-                      title="Show posts that link to this post"
+                      title={t("telegram.posts.editor.showLinks")}
                     >
                       <Layers3 size={13} />
-                      Used in
+                      {t("telegram.posts.groups.usedInPosts")}
                       <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[11px] text-neutral-200">
                         {incomingInternalLinkPosts.length}
                       </span>
@@ -5367,17 +5222,13 @@ function TelegramPostWorkspace({
                       type="button"
                       variant="secondary"
                       className="inline-flex h-8 items-center gap-1.5 px-2.5 text-xs"
-                      disabled={
-                        editorIsSaving || returnManagedPostToDraft.isPending
-                      }
-                      onClick={() =>
-                        void returnManagedPostToDraft.mutateAsync()
-                      }
+                      disabled={editorIsSaving || returnManagedPostToDraft.isPending}
+                      onClick={() => void returnManagedPostToDraft.mutateAsync()}
                     >
                       <RotateCcw size={13} />
                       {returnManagedPostToDraft.isPending
-                        ? "Returning..."
-                        : "Return to draft"}
+                        ? t("telegram.posts.editor.returning")
+                        : t("telegram.posts.editor.returnDraft")}
                     </Button>
                   ) : null}
                 </div>
@@ -5385,10 +5236,11 @@ function TelegramPostWorkspace({
                   <div className="mt-0.5 space-y-0.5 text-xs">
                     <p className="flex items-center gap-1.5 text-emerald-300">
                       <CheckCircle2 size={13} />
-                      Telegram text can still be updated after publishing
+                      {t("telegram.posts.editor.publishedEditable")}
                     </p>
                     <p className="text-neutral-400">
                       {publishModeLabel(
+                        t,
                         editing?.publishMode,
                         editing?.imageUrls.length || 0,
                         editing?.text?.length || 0,
@@ -5401,15 +5253,19 @@ function TelegramPostWorkspace({
                 <CustomSelect
                   value={postGroupId || ""}
                   onChange={changePostGroup}
-                  placeholder="No group"
+                  placeholder={t("telegram.posts.editor.noGroup")}
                   options={[
-                    { value: "", label: "No group", iconEmoji: "📂" },
+                    {
+                      value: "",
+                      label: t("telegram.posts.editor.noGroup"),
+                      iconEmoji: "📂",
+                    },
                     ...(postGroups.data || []).map((group) => {
                       return {
                         value: group.id,
-                        label: group.title,
+                        label: telegramPostGroupTitle(group, t),
                         ...selectIconProps(group.iconPresentation),
-                        iconFallback: group.title,
+                        iconFallback: telegramPostGroupTitle(group, t),
                       };
                     }),
                   ]}
@@ -5417,7 +5273,7 @@ function TelegramPostWorkspace({
               </div>
             </div>
             <div className="grid gap-3 md:grid-cols-[minmax(0,1.25fr)_minmax(220px,0.75fr)]">
-              <FormField label="Internal title" required>
+              <FormField label={t("telegram.posts.editor.title")} required>
                 <Input
                   value={title}
                   disabled={busy}
@@ -5427,7 +5283,7 @@ function TelegramPostWorkspace({
                   }}
                 />
               </FormField>
-              <FormField label="Member">
+              <FormField label={t("telegram.posts.editor.member")}>
                 <MemberSelect
                   value={assignedMemberId}
                   onChange={(value) => {
@@ -5439,7 +5295,7 @@ function TelegramPostWorkspace({
                 />
               </FormField>
             </div>
-            <FormField label="Telegram text">
+            <FormField label={t("telegram.posts.editor.text")}>
               <TelegramTextEditor
                 ref={textEditorRef}
                 value={text}
@@ -5485,8 +5341,7 @@ function TelegramPostWorkspace({
                 />
                 {hasLockedTelegramMedia ? (
                   <p className="text-xs text-amber-300">
-                    Images cannot be changed after a post is sent or scheduled.
-                    You can still update the Telegram text.
+                    {t("telegram.posts.editor.imagesLocked")}
                   </p>
                 ) : null}
               </div>
@@ -5508,28 +5363,36 @@ function TelegramPostWorkspace({
             {!isPublished && hasLongTextOnly ? (
               <div className="rounded-lg border border-blue-700/60 bg-blue-950/20 p-3">
                 <p className="text-sm text-blue-200">
-                  Telegram text messages are limited to 4096 characters after
-                  formatting. Current length: {text.length}. This post will be
-                  published as{" "}
-                  {Math.ceil(text.length / effectiveMessageLengthMax)} separate
-                  messages.
+                  {t("telegram.posts.editor.longTextOnly", {
+                    length: text.length,
+                    count: Math.ceil(text.length / effectiveMessageLengthMax),
+                  })}
                 </p>
               </div>
             ) : null}
             {!isPublished ? (
-              <FormField label="Publishing mode">
+              <FormField label={t("telegram.posts.editor.publishingMode")}>
                 <CustomSelect
                   value={mode}
                   dropdownDirection="up"
                   searchable={false}
                   onChange={(value) => setMode(value as PublishingMode)}
                   options={[
-                    { value: "draft", label: "Save as draft", iconEmoji: "📝" },
-                    { value: "publish", label: "Publish now", iconEmoji: "🚀" },
+                    {
+                      value: "draft",
+                      label: t("telegram.posts.editor.saveDraft"),
+                      iconEmoji: "📝",
+                    },
+                    {
+                      value: "publish",
+                      label: t("telegram.posts.editor.publishNow"),
+                      iconEmoji: "🚀",
+                    },
                     {
                       value: "schedule",
                       label: managedPostScheduleUi({
                         hasInlineButtons: buttonRows.length > 0,
+                        t,
                       }).label,
                       iconEmoji: "🕒",
                     },
@@ -5540,14 +5403,14 @@ function TelegramPostWorkspace({
             {!isPublished && mode === "schedule" ? (
               <div className="space-y-3">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <FormField label="Publish date" required>
+                  <FormField label={t("telegram.posts.editor.publishDate")} required>
                     <DateInput
                       value={scheduleDate}
                       onChange={(event) => setScheduleDate(event.target.value)}
-                      placeholder="Select date"
+                      placeholder={t("telegram.posts.editor.selectDate")}
                     />
                   </FormField>
-                  <FormField label="Publish time" required>
+                  <FormField label={t("telegram.posts.editor.publishTime")} required>
                     <TimeInput
                       value={scheduleTime}
                       onChange={(event) => setScheduleTime(event.target.value)}
@@ -5557,7 +5420,7 @@ function TelegramPostWorkspace({
                 {channelTimePosts.length ? (
                   <div>
                     <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
-                      Time posts
+                      {t("telegram.posts.time.menu")}
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {channelTimePosts.map((timePost) => (
@@ -5608,19 +5471,17 @@ function TelegramPostWorkspace({
             {pendingPostSaves.length + savingPostIds.length > 0 ? (
               <div className="flex items-center gap-2 rounded-lg border border-blue-800/70 bg-blue-950/20 px-3 py-2 text-xs text-blue-200">
                 <LoaderCircle size={14} className="animate-spin" />
-                {pendingPostSaves.length + savingPostIds.length} post
-                {pendingPostSaves.length + savingPostIds.length === 1
-                  ? ""
-                  : "s"}{" "}
-                saving in background. You can continue working.
+                {t("telegram.posts.calendar.savingBackground", {
+                  count: pendingPostSaves.length + savingPostIds.length,
+                })}
               </div>
             ) : null}
             <div className="flex justify-end gap-2">
               {editing ? (
                 <button
                   type="button"
-                  title="Post history"
-                  aria-label="Open post history"
+                  title={t("telegram.posts.editor.history")}
+                  aria-label={t("telegram.posts.editor.openHistory")}
                   onClick={() => setHistoryOpen(true)}
                   className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-300 transition hover:border-blue-600 hover:bg-blue-950/30 hover:text-white"
                 >
@@ -5632,16 +5493,16 @@ function TelegramPostWorkspace({
                 disabled={!!publishDisabledReason || dependencyPublishBlocked}
               >
                 {publishedPostNeedsRepublish
-                  ? "Publish"
+                  ? t("telegram.posts.editor.publish")
                   : isPublished
-                    ? "Update Telegram text"
+                    ? t("telegram.posts.editor.updateText")
                     : mode === "draft"
-                      ? "Save draft"
+                      ? t("telegram.posts.editor.saveDraftAction")
                       : mode === "publish"
-                        ? "Publish now"
+                        ? t("telegram.posts.editor.publishNow")
                         : editing?.status === "SCHEDULED"
-                          ? "Update scheduled post"
-                          : "Schedule post"}
+                          ? t("telegram.posts.editor.updateScheduled")
+                          : t("telegram.posts.editor.schedulePost")}
               </Button>
             </div>
             {publishDisabledReason ? (
@@ -5651,7 +5512,7 @@ function TelegramPostWorkspace({
             ) : null}
             {dependencyPublishBlocked && !publishDisabledReason ? (
               <p className="text-right text-xs text-amber-400">
-                Publish the linked posts and sync them with Telegram first.
+                {t("telegram.posts.editor.publishDependenciesFirst")}
               </p>
             ) : null}
             {editing && usageModalOpen ? (
@@ -5686,9 +5547,13 @@ function TelegramPostWorkspace({
 
           <Card className="min-w-0">
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold text-white">Posts</h2>
+              <h2 className="text-lg font-semibold text-white">
+                {t("telegram.posts.editor.posts")}
+              </h2>
               <span className="text-xs text-neutral-500">
-                {(posts.data?.length || 0) + pendingPostSaves.length} total
+                {t("telegram.posts.total", {
+                  count: (posts.data?.length || 0) + pendingPostSaves.length,
+                })}
               </span>
             </div>
             <div className="mb-3 grid grid-cols-3 gap-1 rounded-lg border border-neutral-800 bg-neutral-950 p-1">
@@ -5696,18 +5561,17 @@ function TelegramPostWorkspace({
                 [
                   {
                     value: "DRAFT",
-                    label: "Drafts",
+                    label: t("telegram.posts.editor.drafts"),
                     icon: FileText,
                     count: (posts.data || []).filter(
                       (post) =>
-                        ["DRAFT", "FAILED", "PUBLISHING"].includes(
-                          post.status,
-                        ) || isBrokenPublishedPost(post),
+                        ["DRAFT", "FAILED", "PUBLISHING"].includes(post.status) ||
+                        isBrokenPublishedPost(post),
                     ).length,
                   },
                   {
                     value: "SCHEDULED",
-                    label: "Scheduled",
+                    label: t("telegram.posts.editor.scheduled"),
                     icon: Clock3,
                     count: (posts.data || []).filter(
                       (post) => post.status === "SCHEDULED",
@@ -5715,12 +5579,11 @@ function TelegramPostWorkspace({
                   },
                   {
                     value: "PUBLISHED",
-                    label: "Published",
+                    label: t("telegram.posts.editor.published"),
                     icon: CheckCircle2,
                     count: (posts.data || []).filter(
                       (post) =>
-                        post.status === "PUBLISHED" &&
-                        !isBrokenPublishedPost(post),
+                        post.status === "PUBLISHED" && !isBrokenPublishedPost(post),
                     ).length,
                   },
                 ] as const
@@ -5746,10 +5609,7 @@ function TelegramPostWorkspace({
                 </button>
               ))}
             </div>
-            <ManagedPostSearchInput
-              value={postSearch}
-              onChange={setPostSearch}
-            />
+            <ManagedPostSearchInput value={postSearch} onChange={setPostSearch} />
             {posts.isLoading ? <LoadingState /> : null}
             {visiblePosts.length || visiblePendingPostSaves.length ? (
               <>
@@ -5759,8 +5619,7 @@ function TelegramPostWorkspace({
                   ))}
                   {orderedSidebarSections.map((section) => {
                     const collapsed =
-                      section.group &&
-                      collapsedGroupIds.includes(section.group.id);
+                      section.group && collapsedGroupIds.includes(section.group.id);
                     const statusNumberingEnabled = Boolean(
                       section.group?.statusNumberingEnabled,
                     );
@@ -5776,8 +5635,7 @@ function TelegramPostWorkspace({
                         key={section.key}
                         draggable={!sectionReadOnly}
                         onDragStart={() => {
-                          if (!sectionReadOnly)
-                            setDraggedSidebarKey(section.key);
+                          if (!sectionReadOnly) setDraggedSidebarKey(section.key);
                         }}
                         onDragOver={(event) => {
                           event.preventDefault();
@@ -5811,11 +5669,7 @@ function TelegramPostWorkspace({
                           section.group
                             ? "overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950/40"
                             : "space-y-2"
-                        } ${
-                          draggedSidebarKey === section.key
-                            ? "border-blue-500 opacity-60"
-                            : ""
-                        }`}
+                        } ${draggedSidebarKey === section.key ? "border-blue-500 opacity-60" : ""}`}
                       >
                         {section.group ? (
                           <div className="flex items-center gap-2 border-b border-neutral-800 px-2 py-2">
@@ -5827,9 +5681,7 @@ function TelegramPostWorkspace({
                             ) : null}
                             <button
                               type="button"
-                              onClick={() =>
-                                toggleGroupCollapsed(section.group!.id)
-                              }
+                              onClick={() => toggleGroupCollapsed(section.group!.id)}
                               className="flex min-w-0 flex-1 items-center gap-2 text-left"
                             >
                               {collapsed ? (
@@ -5846,15 +5698,14 @@ function TelegramPostWorkspace({
                               <PostIcon
                                 iconId={section.group.icon}
                                 icon={section.group.iconPresentation}
-                                label={section.group.title}
+                                label={telegramPostGroupTitle(section.group, t)}
                                 bare
                               />
                               <span className="truncate text-sm font-medium text-white">
-                                {section.group.title}
+                                {telegramPostGroupTitle(section.group, t)}
                               </span>
                               <span className="text-xs text-neutral-500">
-                                {section.posts.length +
-                                  section.pendingPosts.length}
+                                {section.posts.length + section.pendingPosts.length}
                               </span>
                             </button>
                             <button
@@ -5865,31 +5716,24 @@ function TelegramPostWorkspace({
                                     ? current.filter(
                                         (id) => !sectionPostIds.includes(id),
                                       )
-                                    : [
-                                        ...new Set([
-                                          ...current,
-                                          ...sectionPostIds,
-                                        ]),
-                                      ],
+                                    : [...new Set([...current, ...sectionPostIds])],
                                 )
                               }
                               className="shrink-0 rounded-md px-2 py-1 text-[11px] text-blue-300 hover:bg-blue-950/60"
                             >
-                              {allSectionSelected ? "Clear" : "Select all"}
+                              {allSectionSelected
+                                ? t("telegram.posts.editor.clear")
+                                : t("telegram.posts.editor.selectAllAction")}
                             </button>
                           </div>
                         ) : null}
                         {!collapsed ? (
                           <div
-                            className={
-                              section.group ? "space-y-2 p-2" : "space-y-2"
-                            }
+                            className={section.group ? "space-y-2 p-2" : "space-y-2"}
                           >
                             {section.posts.map((post) => {
                               const isSaving = savingPostIds.includes(post.id);
-                              const isSelected = selectedPostIds.includes(
-                                post.id,
-                              );
+                              const isSelected = selectedPostIds.includes(post.id);
                               const isOpen = editing?.id === post.id;
                               const displayNumber = section.group
                                 ? getManagedPostDisplayNumber(
@@ -5956,9 +5800,11 @@ function TelegramPostWorkspace({
                                       <span className="shrink-0">
                                         <span className="sr-only">
                                           {statusNumberingEnabled
-                                            ? "Status"
-                                            : "Group"}{" "}
-                                          number {displayNumber}
+                                            ? t("telegram.posts.calendar.status")
+                                            : t("telegram.posts.calendar.group")}{" "}
+                                          {t("telegram.posts.editor.number", {
+                                            number: displayNumber,
+                                          })}
                                         </span>
                                         <span
                                           aria-hidden="true"
@@ -5976,15 +5822,13 @@ function TelegramPostWorkspace({
                                           label={post.title}
                                           bare
                                         />
-                                        <span className="truncate">
-                                          {post.title}
-                                        </span>
+                                        <span className="truncate">{post.title}</span>
                                         <ManagedPostTelegramIdentityIndicator
                                           post={post}
                                         />
                                         {post.readOnlyTelegramPost ? (
                                           <span className="shrink-0 rounded border border-sky-800 bg-sky-950/40 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-sky-300">
-                                            Synced
+                                            {t("telegram.posts.status.synced")}
                                           </span>
                                         ) : null}
                                         {post.telegramIdVerificationStatus !==
@@ -5995,7 +5839,11 @@ function TelegramPostWorkspace({
                                           <AlertTriangle
                                             size={13}
                                             className="shrink-0 text-red-400"
-                                            aria-label={`Telegram ${post.telegramRemoteStatus.toLowerCase()}`}
+                                            aria-label={t(
+                                              remoteStatusKey(
+                                                post.telegramRemoteStatus,
+                                              ),
+                                            )}
                                           />
                                         ) : null}
                                       </span>
@@ -6003,11 +5851,14 @@ function TelegramPostWorkspace({
                                         <span className="block truncate text-[11px] text-neutral-500">
                                           {post.status === "SCHEDULED" &&
                                           post.scheduledAt
-                                            ? formatDateTime(post.scheduledAt)
+                                            ? formatDateTime(post.scheduledAt, locale)
                                             : post.status === "PUBLISHED" &&
                                                 post.publishedAt
-                                              ? formatDateTime(post.publishedAt)
-                                              : post.status.toLowerCase()}
+                                              ? formatDateTime(
+                                                  post.publishedAt,
+                                                  locale,
+                                                )
+                                              : t(managedPostStatusKey(post.status))}
                                         </span>
                                       ) : null}
                                     </span>
@@ -6015,8 +5866,13 @@ function TelegramPostWorkspace({
                                   {!post.readOnlyTelegramPost ? (
                                     <button
                                       type="button"
-                                      title="Move to another channel"
-                                      aria-label={`Move ${post.title}`}
+                                      title={t("telegram.posts.editor.moveToChannel")}
+                                      aria-label={t(
+                                        "telegram.posts.editor.moveNamed",
+                                        {
+                                          title: post.title,
+                                        },
+                                      )}
                                       onClick={(event) => {
                                         event.stopPropagation();
                                         cancelScheduledPostOpen();
@@ -6030,7 +5886,12 @@ function TelegramPostWorkspace({
                                   {!post.readOnlyTelegramPost ? (
                                     <button
                                       type="button"
-                                      aria-label={`Delete ${post.title}`}
+                                      aria-label={t(
+                                        "telegram.posts.editor.deleteNamed",
+                                        {
+                                          title: post.title,
+                                        },
+                                      )}
                                       onClick={(event) => {
                                         event.stopPropagation();
                                         cancelScheduledPostOpen();
@@ -6045,10 +5906,7 @@ function TelegramPostWorkspace({
                               );
                             })}
                             {section.pendingPosts.map((pending) => (
-                              <PendingPostRow
-                                key={pending.id}
-                                pending={pending}
-                              />
+                              <PendingPostRow key={pending.id} pending={pending} />
                             ))}
                           </div>
                         ) : null}
@@ -6062,9 +5920,11 @@ function TelegramPostWorkspace({
                       type="button"
                       onClick={toggleAllChannelPosts}
                       className="rounded-md px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-800 hover:text-white"
-                      title="Select every post in this channel"
+                      title={t("telegram.posts.editor.selectAll")}
                     >
-                      {allChannelPostsSelected ? "Clear all" : "All"}
+                      {allChannelPostsSelected
+                        ? t("telegram.posts.editor.clearAll")
+                        : t("telegram.posts.editor.all")}
                     </button>
                     <span
                       className={`min-w-9 rounded-md border px-2 py-1 text-center text-xs ${
@@ -6089,10 +5949,10 @@ function TelegramPostWorkspace({
                       onClick={() => setBulkDeleteOpen(true)}
                       title={
                         selectedPosts.some((post) => post.readOnlyTelegramPost)
-                          ? "Synced Telegram posts cannot be deleted"
-                          : "Delete selected"
+                          ? t("telegram.posts.editor.syncedCannotDelete")
+                          : t("telegram.posts.editor.deleteSelectedAction")
                       }
-                      aria-label="Delete selected posts"
+                      aria-label={t("telegram.posts.editor.deleteSelected")}
                       className="flex h-9 min-w-12 items-center justify-center px-3"
                     >
                       <Trash2 size={15} />
@@ -6104,8 +5964,10 @@ function TelegramPostWorkspace({
               <EmptyState
                 text={
                   postSearch.trim()
-                    ? "No posts match this search"
-                    : `No ${statusTab.toLowerCase()} posts`
+                    ? t("telegram.posts.editor.noSearchResults")
+                    : t("telegram.posts.editor.noStatusPosts", {
+                        status: t(managedPostStatusKey(statusTab)),
+                      })
                 }
               />
             ) : null}
@@ -6125,11 +5987,11 @@ function TelegramPostWorkspace({
         open={!!deletingPost}
         onClose={() => setDeletingPost(null)}
         entityName={deletingPost?.title || ""}
-        label="Delete post"
+        label={t("telegram.posts.editor.deletePost")}
         description={
           deletingPost?.status === "SCHEDULED"
-            ? "This will cancel the scheduled message in Telegram and delete it from this system."
-            : "This deletes the record only from this system. Published Telegram messages remain untouched."
+            ? t("telegram.posts.editor.deleteScheduledDescription")
+            : t("telegram.posts.editor.deleteDescription")
         }
         onConfirm={() => {
           if (!deletingPost) return;
@@ -6155,10 +6017,11 @@ function TelegramPostWorkspace({
               }),
             ]);
             pushToast(
-              result.results
-                .map((item) => item.message)
-                .filter(Boolean)
-                .join("\n"),
+              t("telegram.posts.bulk.completed", {
+                success: result.successCount,
+                failed: result.failedCount,
+                skipped: result.skippedCount,
+              }),
               result.failedCount ? "error" : "success",
               7000,
             );
@@ -6174,7 +6037,7 @@ function TelegramPostWorkspace({
             setRestorePreviewRevision(null);
             setRestoreConfirmationValue("");
           }}
-          title="Restore backup"
+          title={t("telegram.posts.editor.restoreBackup")}
           size="xl"
         >
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_360px]">
@@ -6201,23 +6064,18 @@ function TelegramPostWorkspace({
             <div className="space-y-4">
               <div className="rounded-lg border border-neutral-800 bg-neutral-950/60 p-4">
                 <p className="text-sm font-medium text-white">
-                  {formatManagedPostRevisionReason(
-                    restorePreviewRevision.reason,
-                  )}
+                  {formatManagedPostRevisionReason(t, restorePreviewRevision.reason)}
                 </p>
                 <p className="mt-1 text-xs text-neutral-400">
-                  Backup created{" "}
-                  {formatDateTime(restorePreviewRevision.createdAt)}
+                  {t("telegram.posts.history.createdAt", {
+                    date: formatDateTime(restorePreviewRevision.createdAt, locale),
+                  })}
                 </p>
               </div>
               <div className="space-y-2 rounded-lg border border-amber-800/70 bg-amber-950/20 p-4 text-sm text-amber-100">
-                <p>
-                  Restoring will immediately replace the current editor content
-                  of this post with the backup version and move the post to
-                  draft.
-                </p>
+                <p>{t("telegram.posts.editor.restoreWarning")}</p>
                 <p className="text-xs text-amber-300/80">
-                  To confirm, type the current post title exactly:
+                  {t("telegram.posts.editor.restoreConfirmTitle")}
                 </p>
                 <p className="rounded-md border border-amber-900/70 bg-black/20 px-3 py-2 font-medium text-white">
                   {editing.title}
@@ -6240,19 +6098,17 @@ function TelegramPostWorkspace({
                   }}
                   disabled={restorePostRevision.isPending}
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
                 <Button
                   disabled={
                     restorePostRevision.isPending || !restoreConfirmationValid
                   }
-                  onClick={() =>
-                    restorePostRevision.mutate(restorePreviewRevision)
-                  }
+                  onClick={() => restorePostRevision.mutate(restorePreviewRevision)}
                 >
                   {restorePostRevision.isPending
-                    ? "Restoring…"
-                    : "Restore this version"}
+                    ? t("telegram.posts.editor.restoring")
+                    : t("telegram.posts.editor.restoreVersion")}
                 </Button>
               </div>
             </div>
@@ -6262,12 +6118,14 @@ function TelegramPostWorkspace({
       <ConfirmDeleteModal
         open={bulkDeleteOpen}
         onClose={() => setBulkDeleteOpen(false)}
-        entityName={`${selectedPosts.length} selected posts`}
-        label="Delete selected posts"
+        entityName={t("telegram.posts.editor.selectedPosts", {
+          count: selectedPosts.length,
+        })}
+        label={t("telegram.posts.editor.deleteSelected")}
         description={
           selectedPosts.some((post) => post.status === "SCHEDULED")
-            ? "This will cancel selected scheduled messages in Telegram and delete the selected records from this system. Published Telegram messages remain untouched."
-            : "This deletes the selected records only from this system. Published Telegram messages remain untouched."
+            ? t("telegram.posts.editor.deleteSelectedScheduledDescription")
+            : t("telegram.posts.editor.deleteSelectedDescription")
         }
         onConfirm={() => {
           const postsToDelete = [...selectedPosts];
@@ -6297,31 +6155,30 @@ function PostIcon({
     icon?.type === "image" &&
     (icon?.name === "telegram-system-group-icon" ||
       iconId === "telegram-system-group-icon" ||
-      label === "Created in Telegram");
+      iconId === "telegram-system-group-icon");
   return (
     <IconAvatar
       icon={icon}
       label={label}
       size={size}
       bordered={!bare && !isTelegramSystemGroupIcon}
-      className={
-        bare || isTelegramSystemGroupIcon ? "!border-0 !bg-transparent" : ""
-      }
+      className={bare || isTelegramSystemGroupIcon ? "!border-0 !bg-transparent" : ""}
     />
   );
 }
 
 function PendingPostRow({ pending }: { pending: PendingPostSave }) {
+  const { t } = useI18n();
   return (
     <div className="flex items-center gap-2 rounded-lg border border-blue-700/70 bg-blue-950/15 px-3 py-2">
       <LoaderCircle size={16} className="shrink-0 animate-spin text-blue-400" />
       <PostIcon iconId={pending.icon} label={pending.title} bare />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm text-white">
-          {pending.title}
-        </span>
+        <span className="block truncate text-sm text-white">{pending.title}</span>
       </span>
-      <span className="text-[11px] text-blue-300">Saving…</span>
+      <span className="text-[11px] text-blue-300">
+        {t("telegram.posts.editor.saving")}
+      </span>
     </div>
   );
 }
@@ -6339,6 +6196,7 @@ function MovePostModal({
   onClose: () => void;
   onMoved: (result: BulkActionResult) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [targetId, setTargetId] = useState("");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<ProgressState | null>(null);
@@ -6347,16 +6205,15 @@ function MovePostModal({
       <Modal
         open
         onClose={onClose}
-        title="Move post"
+        title={t("telegram.posts.editor.movePost")}
         loading={busy}
         allowOverflow
       >
         <div className="space-y-4">
           <p className="text-sm text-amber-200">
-            Drafts remain drafts. Scheduled posts are recreated at the same
-            time. Published posts become drafts; old Telegram messages remain.
+            {t("telegram.posts.editor.moveDescription")}
           </p>
-          <FormField label="Target channel" required>
+          <FormField label={t("telegram.posts.editor.targetChannel")} required>
             <CustomSelect
               value={targetId}
               onChange={setTargetId}
@@ -6371,7 +6228,7 @@ function MovePostModal({
           </FormField>
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={onClose}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               disabled={!targetId || busy}
@@ -6379,7 +6236,7 @@ function MovePostModal({
                 if (!targetId) return;
                 setBusy(true);
                 setProgress({
-                  title: "Moving post…",
+                  title: t("telegram.posts.editor.moving"),
                   current: 0,
                   total: 1,
                 });
@@ -6390,7 +6247,7 @@ function MovePostModal({
                     targetId,
                   );
                   setProgress({
-                    title: "Moving post",
+                    title: t("telegram.posts.editor.moving"),
                     current: 1,
                     total: 1,
                     item: response.results[0],
@@ -6403,7 +6260,7 @@ function MovePostModal({
                 }
               }}
             >
-              Move post
+              {t("telegram.posts.editor.movePost")}
             </Button>
           </div>
         </div>
@@ -6428,6 +6285,12 @@ function PostGroupsWorkspace({
   onNewGroupRequestHandled: () => void;
   onOpenPost: (post: TelegramManagedPost) => void;
 }) {
+  const { locale, t } = useI18n();
+  const localizedApiError = useCallback(
+    (error: unknown, fallback: string) =>
+      safeApiErrorMessage(error, locale, t, fallback),
+    [locale, t],
+  );
   const router = useRouter();
   const queryClient = useQueryClient();
   const { pushToast, setProgress, clearProgress } = useAppToast();
@@ -6454,11 +6317,10 @@ function PostGroupsWorkspace({
   }, [newGroupRequested, onNewGroupRequestHandled]);
   const [addPostsOpen, setAddPostsOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
-  const [movingListGroup, setMovingListGroup] = useState<PostGroup | null>(
+  const [movingListGroup, setMovingListGroup] = useState<PostGroup | null>(null);
+  const [movingGroupPost, setMovingGroupPost] = useState<TelegramManagedPost | null>(
     null,
   );
-  const [movingGroupPost, setMovingGroupPost] =
-    useState<TelegramManagedPost | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [resetDraftsOpen, setResetDraftsOpen] = useState(false);
@@ -6489,13 +6351,20 @@ function PostGroupsWorkspace({
   });
   const groupPostsPagination = usePagination({ initialPageSize: 50 });
   const posts = useQuery({
-    queryKey: ["telegram-managed-posts", channelId, "group-picker", {
-      page: groupPostsPagination.page, pageSize: groupPostsPagination.pageSize,
-    }],
-    queryFn: () => telegramChannelsApi.managedPostsPage(channelId, {
-      page: groupPostsPagination.page,
-      pageSize: groupPostsPagination.pageSize,
-    }),
+    queryKey: [
+      "telegram-managed-posts",
+      channelId,
+      "group-picker",
+      {
+        page: groupPostsPagination.page,
+        pageSize: groupPostsPagination.pageSize,
+      },
+    ],
+    queryFn: () =>
+      telegramChannelsApi.managedPostsPage(channelId, {
+        page: groupPostsPagination.page,
+        pageSize: groupPostsPagination.pageSize,
+      }),
     placeholderData: keepPreviousData,
   });
   const [orderedPostIds, setOrderedPostIds] = useState<string[]>([]);
@@ -6579,15 +6448,14 @@ function PostGroupsWorkspace({
     const icon = group.iconPresentation;
     return {
       id: `move-group:${group.id}`,
-      title: `Move ${group.title}`,
+      title: t("telegram.posts.groups.movingNamed", {
+        title: telegramPostGroupTitle(group, t),
+      }),
       iconEmoji: icon?.type === "unicode" ? icon.value : undefined,
       iconUrl: icon?.type === "image" ? icon.url : undefined,
     };
   };
-  const scheduleReorderSave = (
-    groupId: string,
-    orderedPostIdsToSave: string[],
-  ) => {
+  const scheduleReorderSave = (groupId: string, orderedPostIdsToSave: string[]) => {
     reorderVersionRef.current += 1;
     const version = reorderVersionRef.current;
     if (reorderTimerRef.current) {
@@ -6605,36 +6473,32 @@ function PostGroupsWorkspace({
           const orderIndex = new Map(
             orderedPostIdsToSave.map((id, index) => [id, index]),
           );
-          queryClient.setQueryData<PostGroup>(
-            ["post-group", groupId],
-            (current) =>
-              current
-                ? {
-                    ...current,
-                    posts: normalizeManagedPostNumbering(
-                      [...(current.posts ?? [])].map((post) => ({
-                        ...post,
-                        groupPosition:
-                          orderIndex.get(post.id) ?? post.groupPosition,
-                      })),
-                    ),
-                  }
-                : current,
+          queryClient.setQueryData<PostGroup>(["post-group", groupId], (current) =>
+            current
+              ? {
+                  ...current,
+                  posts: normalizeManagedPostNumbering(
+                    [...(current.posts ?? [])].map((post) => ({
+                      ...post,
+                      groupPosition: orderIndex.get(post.id) ?? post.groupPosition,
+                    })),
+                  ),
+                }
+              : current,
           );
           mapManagedPostPages(queryClient, channelId, (current) => ({
             ...current,
             items: [
-                    ...normalizeManagedPostNumbering(
-                      current.items
-                        .filter((post) => orderIndex.has(post.id))
-                        .map((post) => ({
-                          ...post,
-                          groupPosition:
-                            orderIndex.get(post.id) ?? post.groupPosition,
-                        })),
-                    ),
-                    ...current.items.filter((post) => !orderIndex.has(post.id)),
-                  ],
+              ...normalizeManagedPostNumbering(
+                current.items
+                  .filter((post) => orderIndex.has(post.id))
+                  .map((post) => ({
+                    ...post,
+                    groupPosition: orderIndex.get(post.id) ?? post.groupPosition,
+                  })),
+              ),
+              ...current.items.filter((post) => !orderIndex.has(post.id)),
+            ],
           }));
           try {
             await telegramChannelsApi.reorderPostGroup(
@@ -6652,14 +6516,14 @@ function PostGroupsWorkspace({
               }),
             ]);
             setOrderedPostIds([]);
-            pushToast("New post order saved.", "success", 3000);
+            pushToast(t("telegram.posts.editor.postOrderSaved"), "success", 3000);
           } catch (error) {
             if (version !== reorderVersionRef.current) return;
             queryClient.setQueryData(["post-group", groupId], previousDetail);
             restoreManagedPostPages(queryClient, previousPosts);
             setOrderedPostIds([]);
             pushToast(
-              apiErrorMessage(error, "Could not reorder posts"),
+              localizedApiError(error, t("telegram.posts.editor.error.reorder")),
               "error",
             );
           }
@@ -6691,7 +6555,7 @@ function PostGroupsWorkspace({
       title: progressMeta?.title || title,
       current: 0,
       total,
-      message: progressMeta?.initialMessage || "Loading…",
+      message: progressMeta?.initialMessage || t("common.loading"),
       iconEmoji: progressMeta?.iconEmoji,
       iconUrl: progressMeta?.iconUrl,
       successCount: 0,
@@ -6708,7 +6572,7 @@ function PostGroupsWorkspace({
           title: progressMeta?.title || title,
           current,
           total: progressTotal,
-          message: item.message,
+          message: localizedBulkActionMessage(item, locale, t),
           iconEmoji: progressMeta?.iconEmoji,
           iconUrl: progressMeta?.iconUrl,
           successCount: successful,
@@ -6720,7 +6584,13 @@ function PostGroupsWorkspace({
         title: progressMeta?.title || title,
         current: result.total,
         total: result.total,
-        message: result.results.at(-1)?.message,
+        message: result.results.at(-1)
+          ? localizedBulkActionMessage(result.results.at(-1)!, locale, t)
+          : t("telegram.posts.bulk.completed", {
+              success: result.successCount,
+              failed: result.failedCount,
+              skipped: result.skippedCount,
+            }),
         completed: true,
         successCount: result.successCount,
         failedCount: result.failedCount,
@@ -6735,7 +6605,14 @@ function PostGroupsWorkspace({
     } catch (error) {
       if (progressId) clearProgress(progressId);
       else setProgress(null);
-      pushToast(apiErrorMessage(error, `${title} failed`), "error", 7000);
+      pushToast(
+        localizedApiError(
+          error,
+          t("telegram.posts.groups.actionFailed", { action: title }),
+        ),
+        "error",
+        7000,
+      );
       throw error;
     }
   };
@@ -6757,7 +6634,7 @@ function PostGroupsWorkspace({
             onClick={() => selectGroup(null)}
             className={groupActionButtonClass}
           >
-            ← Groups
+            ← {t("telegram.posts.tabs.groups")}
           </button>
           {group ? (
             <div className="flex flex-wrap gap-2">
@@ -6767,7 +6644,7 @@ function PostGroupsWorkspace({
                 className={groupActionButtonClass}
               >
                 <ListPlus size={14} />
-                Add posts
+                {t("telegram.posts.groups.addPosts")}
               </button>
               <button
                 type="button"
@@ -6775,7 +6652,7 @@ function PostGroupsWorkspace({
                 className={groupActionButtonClass}
               >
                 <Clock3 size={14} />
-                Schedule sequence
+                {t("telegram.posts.groups.schedule")}
               </button>
               <button
                 type="button"
@@ -6783,7 +6660,7 @@ function PostGroupsWorkspace({
                 className="inline-flex h-9 items-center gap-2 rounded-md bg-blue-600 px-3 text-sm font-medium text-white transition hover:bg-blue-500"
               >
                 <Rocket size={14} />
-                Publish all
+                {t("telegram.posts.groups.publishAllAction")}
               </button>
               <button
                 type="button"
@@ -6791,14 +6668,14 @@ function PostGroupsWorkspace({
                 className={groupActionButtonClass}
               >
                 <RotateCcw size={14} />
-                Make drafts
+                {t("telegram.posts.groups.makeDrafts")}
               </button>
               <button
                 type="button"
                 onClick={() => setMoveOpen(true)}
                 className={groupIconActionButtonClass}
-                title="Move group"
-                aria-label="Move group"
+                title={t("telegram.posts.groups.move")}
+                aria-label={t("telegram.posts.groups.move")}
               >
                 <MoveRight size={14} />
               </button>
@@ -6808,8 +6685,8 @@ function PostGroupsWorkspace({
                     type="button"
                     onClick={() => setGroupForm(group)}
                     className={groupIconActionButtonClass}
-                    title="Edit group"
-                    aria-label="Edit group"
+                    title={t("telegram.posts.groups.edit")}
+                    aria-label={t("telegram.posts.groups.edit")}
                   >
                     <Pencil size={14} />
                   </button>
@@ -6817,8 +6694,8 @@ function PostGroupsWorkspace({
                     type="button"
                     onClick={() => setDeletingGroup(group)}
                     className={groupDangerActionButtonClass}
-                    title="Delete group"
-                    aria-label="Delete group"
+                    title={t("telegram.posts.groups.delete")}
+                    aria-label={t("telegram.posts.groups.delete")}
                   >
                     <Trash2 size={14} />
                   </button>
@@ -6835,25 +6712,27 @@ function PostGroupsWorkspace({
                 <PostIcon
                   iconId={group.icon}
                   icon={group.iconPresentation}
-                  label={group.title}
+                  label={telegramPostGroupTitle(group, t)}
                   size="md"
                 />
                 <div className="min-w-0">
                   <h2 className="text-xl font-semibold text-white">
-                    {group.title}
+                    {telegramPostGroupTitle(group, t)}
                   </h2>
                   <p className="mt-1 text-sm text-neutral-400">
-                    {group.description || "No description"}
+                    {group.description || t("telegram.posts.groups.noDescription")}
                   </p>
                 </div>
               </div>
               <div>
                 <p className="mb-1 text-xs uppercase text-neutral-500">
-                  {group.isSystem ? "Group type" : "Created by"}
+                  {group.isSystem
+                    ? t("telegram.posts.groups.groupType")
+                    : t("telegram.posts.groups.createdBy")}
                 </p>
                 {group.isSystem ? (
                   <span className="inline-flex rounded-full border border-amber-600/40 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-200">
-                    System group
+                    {t("telegram.posts.groups.systemGroup")}
                   </span>
                 ) : (
                   <MemberBadge member={group.createdByMember} />
@@ -6861,7 +6740,7 @@ function PostGroupsWorkspace({
               </div>
               <div>
                 <p className="mb-1 text-xs uppercase text-neutral-500">
-                  Telegram channel
+                  {t("telegram.posts.groups.telegramChannel")}
                 </p>
                 <p className="text-sm text-neutral-200">
                   {group.telegramChannel?.title ||
@@ -6873,9 +6752,11 @@ function PostGroupsWorkspace({
             </Card>
             <Card>
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="font-semibold text-white">Posts in group</h3>
+                <h3 className="font-semibold text-white">
+                  {t("telegram.posts.groups.postsInGroup")}
+                </h3>
                 <span className="text-xs text-neutral-500">
-                  Drag cards to reorder
+                  {t("telegram.posts.groups.dragToReorder")}
                 </span>
               </div>
               {orderedPosts.length ? (
@@ -6938,14 +6819,14 @@ function PostGroupsWorkspace({
                         </span>
                         <span className="block text-xs text-neutral-500">
                           {post.scheduledAt
-                            ? formatDateTime(post.scheduledAt)
-                            : post.status.toLowerCase()}
+                            ? formatDateTime(post.scheduledAt, locale)
+                            : t(managedPostStatusKey(post.status))}
                         </span>
                       </button>
                       <MemberBadge member={post.assignedMember} compact />
                       <button
                         className="rounded-md border border-neutral-700 p-1.5 text-neutral-300 hover:bg-neutral-800"
-                        title="Move to another channel"
+                        title={t("telegram.posts.editor.moveToChannel")}
                         onClick={() => setMovingGroupPost(post)}
                       >
                         <MoveRight size={14} />
@@ -6960,13 +6841,13 @@ function PostGroupsWorkspace({
                           await refresh();
                         }}
                       >
-                        Remove
+                        {t("common.remove")}
                       </button>
                     </div>
                   ))}
                 </div>
               ) : (
-                <EmptyState text="This group has no posts yet." />
+                <EmptyState text={t("telegram.posts.groups.empty")} />
               )}
             </Card>
           </div>
@@ -7007,7 +6888,7 @@ function PostGroupsWorkspace({
             onSubmit={async (targetId) => {
               setMoveOpen(false);
               await runBulk(
-                "Moving group",
+                t("telegram.posts.groups.moving"),
                 async (onProgress) => {
                   const response = await telegramChannelsApi.movePostGroup(
                     group!.id,
@@ -7019,7 +6900,7 @@ function PostGroupsWorkspace({
                 },
                 {
                   ...progressMetaForGroup(group!),
-                  initialMessage: "Loading…",
+                  initialMessage: t("common.loading"),
                 },
               );
               selectGroup(null);
@@ -7038,10 +6919,11 @@ function PostGroupsWorkspace({
               setMovingGroupPost(null);
               await refresh();
               pushToast(
-                result.results
-                  .map((item) => item.message)
-                  .filter(Boolean)
-                  .join("\n"),
+                t("telegram.posts.bulk.completed", {
+                  success: result.successCount,
+                  failed: result.failedCount,
+                  skipped: result.skippedCount,
+                }),
                 result.failedCount ? "error" : "success",
                 7000,
               );
@@ -7053,7 +6935,7 @@ function PostGroupsWorkspace({
           onClose={() => setPublishOpen(false)}
           onSubmit={async (options) => {
             setPublishOpen(false);
-            await runBulk("Publishing posts", (onProgress) =>
+            await runBulk(t("telegram.posts.groups.publishProgress"), (onProgress) =>
               telegramChannelsApi.publishPostGroup(
                 group!.id,
                 options,
@@ -7069,7 +6951,7 @@ function PostGroupsWorkspace({
           onClose={() => setScheduleOpen(false)}
           onSubmit={async (payload) => {
             setScheduleOpen(false);
-            await runBulk("Scheduling posts", (onProgress) =>
+            await runBulk(t("telegram.posts.groups.scheduleProgress"), (onProgress) =>
               telegramChannelsApi.schedulePostGroupSequence(
                 group!.id,
                 payload,
@@ -7082,23 +6964,19 @@ function PostGroupsWorkspace({
         <Modal
           open={resetDraftsOpen}
           onClose={() => setResetDraftsOpen(false)}
-          title="Make all posts drafts?"
+          title={t("telegram.posts.groups.makeDraftsTitle")}
         >
           <p className="text-sm text-neutral-300">
-            Scheduled Telegram posts will be cancelled. Already published
-            Telegram messages will remain in the channel.
+            {t("telegram.posts.groups.scheduledDraftDescription")}
           </p>
           <div className="mt-5 flex justify-end gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => setResetDraftsOpen(false)}
-            >
-              Cancel
+            <Button variant="secondary" onClick={() => setResetDraftsOpen(false)}>
+              {t("common.cancel")}
             </Button>
             <Button
               onClick={() => {
                 setResetDraftsOpen(false);
-                void runBulk("Converting posts to drafts", (onProgress) =>
+                void runBulk(t("telegram.posts.groups.draftProgress"), (onProgress) =>
                   telegramChannelsApi.resetPostGroupToDrafts(
                     group!.id,
                     true,
@@ -7107,7 +6985,7 @@ function PostGroupsWorkspace({
                 ).catch(() => undefined);
               }}
             >
-              Make all drafts
+              {t("telegram.posts.groups.makeAllDrafts")}
             </Button>
           </div>
         </Modal>
@@ -7115,8 +6993,8 @@ function PostGroupsWorkspace({
           open={!!deletingGroup}
           onClose={() => setDeletingGroup(null)}
           entityName={deletingGroup?.title || ""}
-          label="Delete group"
-          description="Delete group? Posts will not be deleted. They will become ungrouped."
+          label={t("telegram.posts.groups.delete")}
+          description={t("telegram.posts.groups.deleteDescription")}
           onConfirm={async () => {
             if (!deletingGroup) return;
             await telegramChannelsApi.deletePostGroup(deletingGroup.id);
@@ -7133,9 +7011,11 @@ function PostGroupsWorkspace({
     <>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold text-white">Post groups</h2>
+          <h2 className="text-xl font-semibold text-white">
+            {t("telegram.posts.groups.title")}
+          </h2>
           <p className="text-sm text-neutral-400">
-            Named series scoped to this Telegram channel
+            {t("telegram.posts.groups.namedSeries")}
           </p>
         </div>
       </div>
@@ -7161,17 +7041,17 @@ function PostGroupsWorkspace({
                     <PostIcon
                       iconId={group.icon}
                       icon={group.iconPresentation}
-                      label={group.title}
+                      label={telegramPostGroupTitle(group, t)}
                       size="sm"
                     />
                     <div className="min-w-0 flex-1">
                       <h3 className="truncate font-semibold text-white">
-                        {group.title}
+                        {telegramPostGroupTitle(group, t)}
                       </h3>
                       <div className="mt-1">
                         {group.isSystem ? (
                           <span className="inline-flex rounded-full border border-amber-600/40 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-200">
-                            System group
+                            {t("telegram.posts.groups.systemGroup")}
                           </span>
                         ) : (
                           <MemberBadge member={group.createdByMember} />
@@ -7179,27 +7059,31 @@ function PostGroupsWorkspace({
                       </div>
                     </div>
                   </button>
-                  <TelegramCardActionsMenu label={`Actions for ${group.title}`}>
+                  <TelegramCardActionsMenu
+                    label={t("telegram.posts.groups.actionsNamed", {
+                      title: telegramPostGroupTitle(group, t),
+                    })}
+                  >
                     <TelegramCardMenuAction
-                      label="Open group"
+                      label={t("telegram.posts.groups.open")}
                       icon={<ChevronRight size={17} />}
                       onClick={() => selectGroup(group.id)}
                     />
                     <TelegramCardMenuAction
-                      label="Move group"
+                      label={t("telegram.posts.groups.move")}
                       icon={<MoveRight size={17} />}
                       onClick={() => setMovingListGroup(group)}
                     />
                     {!group.isSystem ? (
                       <>
                         <TelegramCardMenuAction
-                          label="Edit group"
+                          label={t("telegram.posts.groups.edit")}
                           icon={<Pencil size={17} />}
                           onClick={() => setGroupForm(group)}
                         />
                         <div className="my-1 border-t border-neutral-800" />
                         <TelegramCardMenuAction
-                          label="Delete group"
+                          label={t("telegram.posts.groups.delete")}
                           icon={<Trash2 size={17} />}
                           onClick={() => setDeletingGroup(group)}
                           danger
@@ -7220,7 +7104,7 @@ function PostGroupsWorkspace({
           ))}
         </div>
       ) : !groupsLoading ? (
-        <EmptyState text="No groups yet. Create the first named post series." />
+        <EmptyState text={t("telegram.posts.groups.emptyAll")} />
       ) : null}
       {groups.data ? (
         <Pagination
@@ -7258,7 +7142,7 @@ function PostGroupsWorkspace({
             setMovingListGroup(null);
             if (!group) return;
             await runBulk(
-              "Moving group",
+              t("telegram.posts.groups.moving"),
               async (onProgress) =>
                 telegramChannelsApi.movePostGroup(
                   group.id,
@@ -7268,7 +7152,7 @@ function PostGroupsWorkspace({
                 ),
               {
                 ...progressMetaForGroup(group),
-                initialMessage: "Loading…",
+                initialMessage: t("common.loading"),
               },
             );
             await refresh([channelId, targetId]);
@@ -7280,8 +7164,8 @@ function PostGroupsWorkspace({
         open={!!deletingGroup}
         onClose={() => setDeletingGroup(null)}
         entityName={deletingGroup?.title || ""}
-        label="Delete group"
-        description="Delete group? Posts will not be deleted. They will become ungrouped."
+        label={t("telegram.posts.groups.delete")}
+        description={t("telegram.posts.groups.deleteDescription")}
         onConfirm={async () => {
           if (!deletingGroup) return;
           await telegramChannelsApi.deletePostGroup(deletingGroup.id);
@@ -7294,27 +7178,28 @@ function PostGroupsWorkspace({
 }
 
 function GroupSummary({ summary }: { summary: PostGroup["statusSummary"] }) {
+  const { t } = useI18n();
   const visibleStatuses = [
     {
-      label: "Draft",
+      label: t("telegramPosts.status.draft"),
       count: summary.draftCount,
       emoji: "📝",
       className: "border-blue-800/70 bg-blue-950/30 text-blue-200",
     },
     {
-      label: "Scheduled",
+      label: t("telegramPosts.status.scheduled"),
       count: summary.scheduledCount,
       emoji: "🕒",
       className: "border-amber-800/70 bg-amber-950/30 text-amber-200",
     },
     {
-      label: "Published",
+      label: t("telegramPosts.status.published"),
       count: summary.publishedCount,
       emoji: "✅",
       className: "border-emerald-800/70 bg-emerald-950/30 text-emerald-200",
     },
     {
-      label: "Failed",
+      label: t("telegramPosts.status.failed"),
       count: summary.failedCount,
       emoji: "⚠️",
       className: "border-red-800/70 bg-red-950/30 text-red-200",
@@ -7331,9 +7216,7 @@ function GroupSummary({ summary }: { summary: PostGroup["statusSummary"] }) {
             >
               <span className="text-sm">{item.emoji}</span>
               <span>
-                <span className="mr-1 font-semibold text-white">
-                  {item.count}
-                </span>
+                <span className="mr-1 font-semibold text-white">{item.count}</span>
                 {item.label}
               </span>
             </div>
@@ -7378,6 +7261,7 @@ function CalendarPostTimePicker({
   onTimeChoiceChange: Dispatch<SetStateAction<Record<string, string>>>;
   onCustomTimeChange: Dispatch<SetStateAction<Record<string, string>>>;
 }) {
+  const { t } = useI18n();
   const selectedChoice = timeChoiceByPostId[post.id] || "";
   const customTime = customTimeByPostId[post.id] || "";
   const slotState = calendarScheduleSlots.find(
@@ -7394,22 +7278,21 @@ function CalendarPostTimePicker({
     );
   const invalidPast =
     isValidTimeInputValue(customTime) &&
-    new Date(`${selectedCalendarDate}T${customTime}:00`).getTime() <=
-      Date.now();
+    new Date(`${selectedCalendarDate}T${customTime}:00`).getTime() <= Date.now();
   const invalidOccupied =
     customTime && (slotState === "occupied" || slotState === "past");
   const errorMessage =
     selectedChoice === "custom"
       ? !customTime
-        ? "Enter time for this post."
+        ? t("telegram.posts.calendar.enterTime")
         : !isValidTimeInputValue(customTime)
-          ? "Use HH:MM."
+          ? t("telegram.posts.calendar.useTimeFormat")
           : duplicate
-            ? "This time is already used by another selected post."
+            ? t("telegram.posts.calendar.duplicateTime")
             : invalidPast
-              ? "Time must be later than now."
+              ? t("telegram.posts.calendar.futureTime")
               : invalidOccupied
-                ? "This time is not available for the selected day."
+                ? t("telegram.posts.calendar.unavailableTime")
                 : ""
       : "";
 
@@ -7425,7 +7308,7 @@ function CalendarPostTimePicker({
             }))
           }
           dropdownDirection="up"
-          placeholder="Choose slot or custom time"
+          placeholder={t("telegram.posts.groups.chooseSlot")}
           searchable={false}
           dropdownClassName="min-w-[280px] sm:min-w-[320px]"
           options={[
@@ -7444,15 +7327,13 @@ function CalendarPostTimePicker({
                   const presentation = channelTimePosts.find(
                     (item) => item.id === slot.id,
                   )?.iconPresentation;
-                  return presentation?.type === "unicode"
-                    ? presentation.value
-                    : "•";
+                  return presentation?.type === "unicode" ? presentation.value : "•";
                 })(),
                 tone: "success" as const,
               })),
             {
               value: "custom",
-              label: "Custom time",
+              label: t("telegram.posts.calendar.customTime"),
               iconEmoji: "🕒",
               tone: "info" as const,
             },
@@ -7476,7 +7357,7 @@ function CalendarPostTimePicker({
           />
         ) : (
           <div className="col-span-2 flex h-9 items-center rounded-lg border border-neutral-800 bg-neutral-950/60 px-3 text-xs text-neutral-500">
-            Slot
+            {t("telegram.posts.calendar.slot")}
           </div>
         )}
       </div>
@@ -7498,6 +7379,7 @@ function GroupFormModal({
   onClose: () => void;
   onSaved: (group: PostGroup) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const editing = value && value !== "new" ? value : null;
   const [title, setTitle] = useState(editing?.title || "");
   const [description, setDescription] = useState(editing?.description || "");
@@ -7510,21 +7392,24 @@ function GroupFormModal({
     <Modal
       open={Boolean(value)}
       onClose={onClose}
-      title={editing ? "Edit group" : "Create group"}
+      title={
+        editing ? t("telegram.posts.groups.edit") : t("telegram.posts.groups.create")
+      }
       loading={busy}
       allowOverflow
     >
       <div className="space-y-3">
-        <FormField label="Title" required>
-          <Input
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
+        <FormField label={t("telegram.posts.groups.titleField")} required>
+          <Input value={title} onChange={(event) => setTitle(event.target.value)} />
+        </FormField>
+        <FormField label={t("telegram.posts.groups.icon")}>
+          <IconPicker
+            iconId={icon}
+            onChange={setIcon}
+            buttonLabel={t("telegram.posts.icon.addIcon")}
           />
         </FormField>
-        <FormField label="Icon">
-          <IconPicker iconId={icon} onChange={setIcon} buttonLabel="Add icon" />
-        </FormField>
-        <FormField label="Description">
+        <FormField label={t("telegram.posts.groups.description")}>
           <Textarea
             rows={3}
             value={description}
@@ -7534,19 +7419,21 @@ function GroupFormModal({
         <ToggleRow
           checked={statusNumberingEnabled}
           onChange={setStatusNumberingEnabled}
-          label="Number by status"
-          description="When enabled, draft, scheduled, and published posts each use their own counter."
+          label={t("telegram.posts.groups.numberByStatus")}
+          description={t("telegram.posts.groups.numberByStatusDescription")}
           activeTone="blue"
         />
         {editing ? (
           <div>
-            <p className="mb-1 text-xs text-neutral-500">Created by</p>
+            <p className="mb-1 text-xs text-neutral-500">
+              {t("telegram.posts.groups.createdBy")}
+            </p>
             <MemberBadge member={editing.createdByMember} />
           </div>
         ) : null}
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             disabled={!title.trim() || busy}
@@ -7574,7 +7461,7 @@ function GroupFormModal({
               }
             }}
           >
-            Save group
+            {t("telegram.posts.groups.save")}
           </Button>
         </div>
       </div>
@@ -7593,15 +7480,20 @@ function MoveGroupModal({
   onClose: () => void;
   onSubmit: (targetId: string) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [targetId, setTargetId] = useState("");
   return (
-    <Modal open onClose={onClose} title="Move group" allowOverflow>
+    <Modal
+      open
+      onClose={onClose}
+      title={t("telegram.posts.groups.move")}
+      allowOverflow
+    >
       <div className="space-y-4">
         <p className="text-sm text-amber-200">
-          Drafts remain drafts. Scheduled posts are recreated at the same time.
-          Published posts become drafts; old Telegram messages remain.
+          {t("telegram.posts.groups.moveDescription")}
         </p>
-        <FormField label="Target channel" required>
+        <FormField label={t("telegram.posts.groups.targetChannel")} required>
           <CustomSelect
             value={targetId}
             onChange={setTargetId}
@@ -7616,10 +7508,10 @@ function MoveGroupModal({
         </FormField>
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button disabled={!targetId} onClick={() => onSubmit(targetId)}>
-            Move group
+            {t("telegram.posts.groups.move")}
           </Button>
         </div>
       </div>
@@ -7640,8 +7532,14 @@ function PostUsageModal({
   onOpenPost: (post: TelegramManagedPost) => void;
   onOpenPostInNewTab: (post: TelegramManagedPost) => void;
 }) {
+  const { t } = useI18n();
   return (
-    <Modal open onClose={onClose} title={`Used in posts`} allowOverflow>
+    <Modal
+      open
+      onClose={onClose}
+      title={t("telegram.posts.groups.usedInPosts")}
+      allowOverflow
+    >
       <div className="space-y-3">
         <div className="rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
           <div className="flex items-center gap-2">
@@ -7653,13 +7551,13 @@ function PostUsageModal({
               />
             ) : null}
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-white">
-                {post.title}
-              </p>
+              <p className="truncate text-sm font-medium text-white">{post.title}</p>
               <p className="text-xs text-neutral-400">
                 {usages.length
-                  ? `Used in ${usages.length} post${usages.length === 1 ? "" : "s"}`
-                  : "This post is not used in other posts yet"}
+                  ? t("telegram.posts.groups.usedCount", {
+                      count: usages.length,
+                    })
+                  : t("telegram.posts.groups.notUsed")}
               </p>
             </div>
           </div>
@@ -7695,19 +7593,21 @@ function PostUsageModal({
                     {usagePost.title}
                   </p>
                   <p className="text-xs text-neutral-400">
-                    {usagePost.status.toLowerCase()}
+                    {t(managedPostStatusKey(usagePost.status))}
                   </p>
                 </div>
-                <span className="shrink-0 text-xs text-blue-300">Open</span>
+                <span className="shrink-0 text-xs text-blue-300">
+                  {t("common.open")}
+                </span>
               </button>
             ))}
           </div>
         ) : (
-          <EmptyState text="This post is not linked from other posts in this channel." />
+          <EmptyState text={t("telegram.posts.groups.notLinked")} />
         )}
         <div className="flex justify-end">
           <Button variant="secondary" onClick={onClose}>
-            Close
+            {t("common.close")}
           </Button>
         </div>
       </div>
@@ -7728,29 +7628,34 @@ function PublishGroupModal({
     republishPublished: boolean;
   }) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [includeScheduled, setIncludeScheduled] = useState(true);
   const [includeFailed, setIncludeFailed] = useState(true);
   const [republishPublished, setRepublishPublished] = useState(false);
   return (
-    <Modal open={open} onClose={onClose} title="Publish all posts">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={t("telegram.posts.groups.publishAllTitle")}
+    >
       <div className="space-y-4">
         <p className="text-sm text-neutral-300">
-          Drafts publish now. Scheduled posts can be cancelled and published
-          now. Published posts are skipped unless explicitly enabled.
+          {t("telegram.posts.groups.publishDescription")}
         </p>
         {[
-          ["Include scheduled posts", includeScheduled, setIncludeScheduled],
-          ["Retry failed posts", includeFailed, setIncludeFailed],
           [
-            "Republish already published posts",
+            t("telegram.posts.groups.includeScheduled"),
+            includeScheduled,
+            setIncludeScheduled,
+          ],
+          [t("telegram.posts.groups.retryFailed"), includeFailed, setIncludeFailed],
+          [
+            t("telegram.posts.groups.republishPublished"),
             republishPublished,
             setRepublishPublished,
           ],
         ].map(([label, checked, setter]) => (
-          <label
-            key={String(label)}
-            className="flex items-center gap-2 text-sm"
-          >
+          <label key={String(label)} className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={checked as boolean}
@@ -7763,7 +7668,7 @@ function PublishGroupModal({
         ))}
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             onClick={() =>
@@ -7774,7 +7679,7 @@ function PublishGroupModal({
               })
             }
           >
-            Publish all
+            {t("telegram.posts.groups.publishAllAction")}
           </Button>
         </div>
       </div>
@@ -7801,11 +7706,10 @@ function ScheduleGroupModal({
     includeFailed?: boolean;
   }) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const localDate = new Date();
   localDate.setDate(localDate.getDate() + 1);
-  const [startDate, setStartDate] = useState(
-    localDate.toISOString().slice(0, 10),
-  );
+  const [startDate, setStartDate] = useState(localDate.toISOString().slice(0, 10));
   const [time, setTime] = useState("10:00");
   const [intervalDays, setIntervalDays] = useState(1);
   const [timezone, setTimezone] = useState(
@@ -7840,22 +7744,22 @@ function ScheduleGroupModal({
     ],
   );
   return (
-    <Modal open={open} onClose={onClose} title="Schedule sequence">
+    <Modal open={open} onClose={onClose} title={t("telegram.posts.groups.schedule")}>
       <div className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-3">
-          <FormField label="Start date" required>
+          <FormField label={t("telegram.posts.groups.startDate")} required>
             <DateInput
               value={startDate}
               onChange={(event) => setStartDate(event.target.value)}
             />
           </FormField>
-          <FormField label="Time" required>
+          <FormField label={t("telegram.posts.groups.time")} required>
             <TimeInput
               value={time}
               onChange={(event) => setTime(event.target.value)}
             />
           </FormField>
-          <FormField label="Interval days" required>
+          <FormField label={t("telegram.posts.groups.intervalDays")} required>
             <Input
               type="number"
               min={1}
@@ -7866,7 +7770,7 @@ function ScheduleGroupModal({
             />
           </FormField>
         </div>
-        <FormField label="Timezone">
+        <FormField label={t("telegram.posts.groups.timezone")}>
           <Input
             value={timezone}
             onChange={(event) => setTimezone(event.target.value)}
@@ -7879,7 +7783,7 @@ function ScheduleGroupModal({
               checked={overwrite}
               onChange={(event) => setOverwrite(event.target.checked)}
             />
-            Overwrite scheduled
+            {t("telegram.posts.groups.overwriteScheduled")}
           </label>
           <label className="flex items-center gap-2">
             <input
@@ -7887,7 +7791,7 @@ function ScheduleGroupModal({
               checked={includeDraftsOnly}
               onChange={(event) => setIncludeDraftsOnly(event.target.checked)}
             />
-            Drafts only
+            {t("telegram.posts.groups.draftsOnly")}
           </label>
           <label className="flex items-center gap-2">
             <input
@@ -7895,7 +7799,7 @@ function ScheduleGroupModal({
               checked={includeFailed}
               onChange={(event) => setIncludeFailed(event.target.checked)}
             />
-            Include failed
+            {t("telegram.posts.groups.includeFailed")}
           </label>
         </div>
         {preview.length ? (
@@ -7913,7 +7817,7 @@ function ScheduleGroupModal({
         ) : null}
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             disabled={!startDate || !time || intervalDays < 1}
@@ -7929,21 +7833,10 @@ function ScheduleGroupModal({
               })
             }
           >
-            Schedule sequence
+            {t("telegram.posts.groups.schedule")}
           </Button>
         </div>
       </div>
     </Modal>
   );
-}
-
-function apiErrorMessage(error: unknown, fallback: string) {
-  const apiError = error as {
-    response?: { data?: { message?: string | string[] } };
-    message?: string;
-  };
-  const message = apiError.response?.data?.message;
-  return Array.isArray(message)
-    ? message.join(", ")
-    : message || apiError.message || fallback;
 }

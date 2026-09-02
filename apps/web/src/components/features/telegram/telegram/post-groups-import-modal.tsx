@@ -1,5 +1,6 @@
 "use client";
 
+
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ClipboardList, LoaderCircle, Upload } from "lucide-react";
@@ -7,6 +8,7 @@ import { Button, Modal } from "@/components/ui/primitives";
 import { telegramChannelsApi, workspaceMembersApi } from "@/lib/api";
 import { memberKeys } from "@/lib/query-keys";
 import { useAppToast } from "@/providers/toast-provider";
+import { useI18n } from "@/providers/i18n-provider";
 import { ManagedPostsImportSource } from "./managed-posts-import-source";
 import {
   parsePostGroupImportContent,
@@ -32,6 +34,7 @@ export function PostGroupsImportModal({
   mode: ChannelImportMode;
   onModeChange: (mode: ChannelImportMode) => void;
 }) {
+  const { locale, t } = useI18n();
   const { pushToast, startOperation } = useAppToast();
   const [content, setContent] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
@@ -52,10 +55,10 @@ export function PostGroupsImportModal({
         error:
           parseError instanceof Error
             ? parseError.message
-            : "Could not parse groups.",
+            : t("telegram.posts.import.parseGroupsError"),
       };
     }
-  }, [content]);
+  }, [content, t]);
   const knownMemberIds = new Set(
     (members.data || []).map((member) => member.id),
   );
@@ -67,7 +70,7 @@ export function PostGroupsImportModal({
     error ||
     parsed.error ||
     (unknownMember
-      ? `Member ${unknownMember.createdByMemberId} is not in this workspace.`
+      ? t("telegram.posts.import.memberMissing", { id: unknownMember.createdByMemberId })
       : "");
 
   const reset = () => {
@@ -81,7 +84,7 @@ export function PostGroupsImportModal({
       setFileName(file.name);
       setError("");
     } catch {
-      setError("Could not read this file.");
+      setError(t("telegram.posts.support.fileReadError"));
     }
   };
   const prompt = postGroupsGptPrompt(
@@ -92,7 +95,7 @@ export function PostGroupsImportModal({
   );
 
   return (
-    <Modal open={open} onClose={onClose} title="Channel import" size="xl">
+    <Modal open={open} onClose={onClose} title={t("telegram.posts.support.channelImport")} size="xl">
       <div className="space-y-4">
         <ChannelImportNavigation
           value={mode}
@@ -101,9 +104,9 @@ export function PostGroupsImportModal({
         />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-white">Import groups</h3>
+            <h3 className="text-sm font-semibold text-white">{t("telegram.posts.support.importGroups")}</h3>
             <p className="mt-0.5 text-xs text-neutral-400">
-              Copy the expected format before preparing group data with GPT.
+              {t("telegram.posts.import.groupHint")}
             </p>
           </div>
           <Button
@@ -112,10 +115,10 @@ export function PostGroupsImportModal({
             disabled={importing}
             onClick={async () => {
               await navigator.clipboard.writeText(prompt);
-              pushToast("Prompt copied.", "success");
+              pushToast(t("telegram.posts.support.promptCopied"), "success");
             }}
           >
-            <ClipboardList size={15} /> Prompt
+            <ClipboardList size={15} /> {t("telegram.posts.import.prompt")}
           </Button>
         </div>
         <ManagedPostsImportSource
@@ -153,7 +156,7 @@ export function PostGroupsImportModal({
                       {row.title}
                     </p>
                     <p className="truncate text-xs text-neutral-500">
-                      {member?.user.name || "Current member"}
+                      {member?.user.name || t("telegram.posts.import.currentMember")}
                       {row.description ? ` · ${row.description}` : ""}
                     </p>
                   </div>
@@ -164,8 +167,7 @@ export function PostGroupsImportModal({
         ) : null}
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-neutral-500">
-            JSON supports title, description, icon, memberId,
-            statusNumberingEnabled and postIds.
+            {t("telegram.posts.import.groupJsonHint")}
           </p>
           <Button
             type="button"
@@ -177,8 +179,8 @@ export function PostGroupsImportModal({
               setError("");
               const operation = startOperation({
                 id: `post-groups-import:${channelId}`,
-                title: "Import post groups",
-                message: "Starting import…",
+                title: t("telegram.posts.import.groupOperation"),
+                message: t("telegram.posts.import.starting"),
                 current: 0,
                 total: parsed.rows.length,
               });
@@ -195,7 +197,7 @@ export function PostGroupsImportModal({
                       if (item.success) successful += 1;
                       else failed += 1;
                       operation.update({
-                        message: item.message || "Importing groups…",
+                        message: (locale === "en" ? item.message : null) || t("telegram.posts.import.importingGroups"),
                         current,
                         total,
                         progressSummary: { successful, failed },
@@ -204,7 +206,7 @@ export function PostGroupsImportModal({
                   );
                 await onImported();
                 const completion = {
-                  message: `Import finished: ${result.successCount} successful, ${result.failedCount} failed.`,
+                  message: t("telegram.posts.import.result", { successful: result.successCount, failed: result.failedCount }),
                 };
                 if (result.failedCount) {
                   operation.fail(completion);
@@ -216,9 +218,9 @@ export function PostGroupsImportModal({
                 }
               } catch (importError) {
                 const message =
-                  importError instanceof Error
+                  locale === "en" && importError instanceof Error
                     ? importError.message
-                    : "Could not import groups.";
+                    : t("telegram.posts.import.groupsError");
                 setError(message);
                 operation.fail({ message });
               } finally {
@@ -231,7 +233,7 @@ export function PostGroupsImportModal({
             ) : (
               <Upload size={15} />
             )}
-            Import {parsed.rows.length || ""} groups
+            {t("telegram.posts.import.groupsButton", { count: parsed.rows.length || 0 })}
           </Button>
         </div>
       </div>

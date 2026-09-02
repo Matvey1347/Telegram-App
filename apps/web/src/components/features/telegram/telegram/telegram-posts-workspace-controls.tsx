@@ -1,8 +1,12 @@
 "use client";
 
+
 import { createPortal } from "react-dom";
 import { AlertTriangle, CheckCircle2, LoaderCircle } from "lucide-react";
 import type { BulkActionResult } from "@/lib/api";
+import { useI18n } from "@/providers/i18n-provider";
+import { localizedBulkActionMessage } from "@/lib/features/telegram/telegram-posts-i18n";
+export { localizedBulkActionMessage };
 import { ChannelMultiSelect } from "./telegram-channel-multi-select";
 
 export type ProgressState = {
@@ -18,6 +22,7 @@ export function BulkProgressOverlay({
 }: {
   progress: ProgressState | null;
 }) {
+  const { locale, t } = useI18n();
   if (!progress || typeof document === "undefined") return null;
   return createPortal(
     <div className="fixed inset-x-0 top-4 z-[150] flex justify-center px-4">
@@ -45,20 +50,22 @@ export function BulkProgressOverlay({
                 }}
               />
             </div>
-            {progress.item?.message ? (
+            {progress.item ? (
               <p className="mt-2 text-sm text-neutral-300">
-                {progress.item.message}
+                {localizedBulkActionMessage(progress.item, locale, t)}
               </p>
             ) : (
               <p className="mt-2 text-sm text-neutral-400">
-                Waiting for the server…
+                {t("telegram.posts.bulk.waiting")}
               </p>
             )}
             {progress.result ? (
               <p className="mt-1 text-xs text-neutral-400">
-                Completed: {progress.result.successCount} success,{" "}
-                {progress.result.failedCount} failed,{" "}
-                {progress.result.skippedCount} skipped
+                {t("telegram.posts.bulk.completed", {
+                  success: progress.result.successCount,
+                  failed: progress.result.failedCount,
+                  skipped: progress.result.skippedCount,
+                })}
               </p>
             ) : null}
           </div>

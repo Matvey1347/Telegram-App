@@ -12,9 +12,12 @@ import {
   Trash2,
 } from "lucide-react";
 import { workspaceFeatureIcons } from "@/lib/features/workspace/workspace-feature-icons";
+import { useOptionalI18n } from "@/providers/i18n-provider";
+import navigationEn from "@/i18n/locales/en/navigation";
+import type { TranslationKey } from "@/i18n/catalog";
 
 type NavigationItem = {
-  label: string;
+  label: TranslationKey;
   href: string;
   icon: LucideIcon;
   adminOnly?: boolean;
@@ -25,20 +28,20 @@ type NavigationItem = {
 
 type NavigationGroup = {
   key: "telegram" | "growth" | "operations";
-  label: string;
+  label: TranslationKey;
   icon: LucideIcon;
   children: readonly NavigationItem[];
 };
 
 const primaryItems: readonly NavigationItem[] = [
   {
-    label: "Overview",
+    label: "navigation.overview",
     href: "/",
     icon: workspaceFeatureIcons.dashboard,
     featureId: "dashboard",
   },
   {
-    label: "Finance",
+    label: "navigation.finance",
     href: "/finance",
     icon: workspaceFeatureIcons.finance,
     featureId: "finance",
@@ -48,23 +51,23 @@ const primaryItems: readonly NavigationItem[] = [
 const groups: readonly NavigationGroup[] = [
   {
     key: "telegram",
-    label: "Telegram",
+    label: "navigation.telegram",
     icon: MessageCircle,
     children: [
       {
-        label: "Channels",
+        label: "navigation.channels",
         href: "/telegram-channels",
         icon: workspaceFeatureIcons.channels,
         featureId: "channels",
       },
       {
-        label: "Posts",
+        label: "navigation.posts",
         href: "/telegram-posts",
         icon: workspaceFeatureIcons.posts,
         featureId: "posts",
       },
       {
-        label: "Bots",
+        label: "navigation.bots",
         href: "/telegram-bots",
         icon: workspaceFeatureIcons.bots,
         featureId: "bots",
@@ -73,17 +76,17 @@ const groups: readonly NavigationGroup[] = [
   },
   {
     key: "growth",
-    label: "Growth",
+    label: "navigation.growth",
     icon: Megaphone,
     children: [
       {
-        label: "CRM",
+        label: "navigation.crm",
         href: "/ad-sales",
         icon: workspaceFeatureIcons["adSales.sales"],
         featureIds: ["adSales.crm", "adSales.sales"],
       },
       {
-        label: "Ad campaigns",
+        label: "navigation.adCampaigns",
         href: "/ad-campaigns",
         icon: workspaceFeatureIcons.advertising,
         featureId: "advertising",
@@ -92,37 +95,37 @@ const groups: readonly NavigationGroup[] = [
   },
   {
     key: "operations",
-    label: "Operations",
+    label: "navigation.operations",
     icon: Settings,
     children: [
       {
-        label: "Scheduled tasks",
+        label: "navigation.scheduledTasks",
         href: "/scheduled-tasks",
         icon: workspaceFeatureIcons.operations,
         featureId: "operations",
       },
       {
-        label: "Trash",
+        label: "navigation.trash",
         href: "/trash",
         icon: Trash2,
         permissionId: "operations.restoreTrash",
         featureId: "operations",
       },
       {
-        label: "System logs",
+        label: "navigation.systemLogs",
         href: "/system-logs",
         icon: Bug,
         permissionId: "operations.viewSystemLogs",
         featureId: "operations",
       },
       {
-        label: "Workspace settings",
+        label: "navigation.workspaceSettings",
         href: "/settings",
         icon: workspaceFeatureIcons.workspace,
         featureId: "workspace",
       },
       {
-        label: "Roles & access",
+        label: "navigation.roles",
         href: "/roles",
         icon: workspaceFeatureIcons.members,
         permissionId: "members.assignRoles",
@@ -149,6 +152,9 @@ function ItemLink({
   item: NavigationItem;
   pathname: string;
 }) {
+  const i18n = useOptionalI18n();
+  const t = (key: TranslationKey) =>
+    i18n?.t(key) ?? navigationEn[key as keyof typeof navigationEn] ?? key;
   const active = routeIsActive(pathname, item.href);
   const Icon = item.icon;
   return (
@@ -162,7 +168,7 @@ function ItemLink({
       }`}
     >
       <Icon size={17} aria-hidden="true" />
-      <span className="truncate">{item.label}</span>
+      <span className="truncate">{t(item.label)}</span>
     </Link>
   );
 }
@@ -182,6 +188,9 @@ export function AppNavigation({
   effectiveFeatureIds?: readonly string[];
   effectivePermissionKeys?: readonly string[];
 }) {
+  const i18n = useOptionalI18n();
+  const t = (key: TranslationKey) =>
+    i18n?.t(key) ?? navigationEn[key as keyof typeof navigationEn] ?? key;
   const featureAllowed = (item: NavigationItem) =>
     !effectiveFeatureIds ||
     ((!item.featureId || effectiveFeatureIds.includes(item.featureId)) &&
@@ -216,7 +225,7 @@ export function AppNavigation({
 
   return (
     <nav
-      aria-label="Primary navigation"
+      aria-label={t("navigation.primary")}
       className="app-scrollbar min-h-0 flex-1 space-y-1 overflow-y-auto pr-1"
     >
       {onlyVisibleItem ? (
@@ -252,7 +261,7 @@ export function AppNavigation({
                 >
                   <GroupIcon size={15} aria-hidden="true" />
                   <span className="min-w-0 flex-1 truncate text-left">
-                    {group.label}
+                    {t(group.label)}
                   </span>
                   {open ? (
                     <ChevronDown size={15} />

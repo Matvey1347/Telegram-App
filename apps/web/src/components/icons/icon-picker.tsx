@@ -1,5 +1,4 @@
 "use client";
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -31,6 +30,7 @@ import {
 import { Button, Input } from "@/components/ui/primitives";
 import { IconAvatar } from "./icon-avatar";
 import { emojiLocalizedSearchTerms, uiCopy, type UiLocale } from "@/lib/ui-i18n";
+import { useOptionalI18n } from "@/providers/i18n-provider";
 type IconPickerProps = {
   iconId?: string | null;
   icon?: Icon | ResolvedEmoji | null;
@@ -47,12 +47,10 @@ type IconPickerProps = {
   onPendingChange?: (pending: boolean) => void;
   uiLocale?: UiLocale;
 };
-
 type UploadState = {
   imageUrl: string;
   fileName: string;
 };
-
 type RecentStandardIcon = {
   kind: "standard";
   name: string;
@@ -60,7 +58,6 @@ type RecentStandardIcon = {
   category: EmojiCategory;
   keywords: string[];
 };
-
 type RecentSavedIcon = {
   kind: "saved";
   icon: {
@@ -145,7 +142,9 @@ export function IconPicker({
   onPendingChange,
   uiLocale,
 }: IconPickerProps) {
-  const ui = uiCopy(uiLocale);
+  const i18n = useOptionalI18n();
+  const effectiveUiLocale = uiLocale ?? i18n?.locale;
+  const ui = uiCopy(effectiveUiLocale);
   const resolvedButtonLabel = buttonLabel ?? ui.addIcon;
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -313,8 +312,8 @@ export function IconPicker({
 
   const filteredStandardIcons = useMemo(() => {
     const value = search.trim().toLowerCase();
-    return emojiIcons.filter((item) => matchesSearch(item, value, uiLocale));
-  }, [search, uiLocale]);
+    return emojiIcons.filter((item) => matchesSearch(item, value, effectiveUiLocale));
+  }, [effectiveUiLocale, search]);
 
   const normalizedSearch = search.trim().toLowerCase();
   const isSearching = normalizedSearch.length > 0;
@@ -332,11 +331,11 @@ export function IconPicker({
       flags: [],
     };
     for (const icon of emojiIcons) {
-      if (!matchesSearch(icon, value, uiLocale)) continue;
+      if (!matchesSearch(icon, value, effectiveUiLocale)) continue;
       grouped[icon.category].push(icon);
     }
     return grouped;
-  }, [search, uiLocale]);
+  }, [effectiveUiLocale, search]);
 
   const currentIcon =
     iconToResolvedEmoji(optimisticIcon) ??
@@ -450,8 +449,8 @@ export function IconPicker({
     () =>
       recentIcons
         .filter(isStandardRecent)
-        .filter((item) => matchesRecentStandard(item, normalizedSearch, uiLocale)),
-    [normalizedSearch, recentIcons, uiLocale],
+        .filter((item) => matchesRecentStandard(item, normalizedSearch, effectiveUiLocale)),
+    [effectiveUiLocale, normalizedSearch, recentIcons],
   );
   const savedRecent = useMemo(
     () =>

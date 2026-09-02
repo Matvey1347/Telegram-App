@@ -11,6 +11,7 @@ import { TelegramChannelCatalogService } from './telegram-channel-catalog.servic
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 import { BulkProgressCallback } from './telegram-channels.internal';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
+import { telegramPostsBadRequest } from './telegram-posts.errors';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 
@@ -38,7 +39,10 @@ export class TelegramManagedPostDeletionService {
       ...new Set(dto.postIds.map((id) => id.trim()).filter(Boolean)),
     ];
     if (!postIds.length) {
-      throw new BadRequestException('postIds must contain at least one post');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_INVALID_SCHEDULE',
+        'postIds must contain at least one post',
+      );
     }
     const posts = await this.prisma.telegramManagedPost.findMany({
       where: {
@@ -67,6 +71,7 @@ export class TelegramManagedPostDeletionService {
             success: false,
             message: `Post ${index}/${total} failed: post not found`,
             error: 'Post draft not found',
+            errorCode: 'TELEGRAM_MANAGED_POST_NOT_FOUND',
           },
           onProgress,
         );
@@ -122,6 +127,7 @@ export class TelegramManagedPostDeletionService {
             success: false,
             message: `Post ${index}/${total} failed: ${message}`,
             error: message,
+            errorCode: 'TELEGRAM_POST_PUBLISH_FAILED',
           },
           onProgress,
         );
@@ -170,6 +176,8 @@ export class TelegramManagedPostDeletionService {
       action: 'SKIPPED',
       success: false,
       skipped: true,
+      errorCode: 'TELEGRAM_POST_NOT_EDITABLE',
+      errorParams: { reason },
       message: `Post ${index}/${total} skipped: ${reason}`,
     };
   }

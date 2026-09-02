@@ -1,5 +1,6 @@
 "use client";
 
+
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { RotateCcw } from "lucide-react";
@@ -8,6 +9,8 @@ import { telegramPostKeys } from "@/lib/query-keys";
 import { Button, ConfirmDeleteModal } from "@/components/ui/primitives";
 import { useAppToast } from "@/providers/toast-provider";
 import { TelegramCardMenuAction } from "./telegram-card-actions-menu";
+import { useI18n } from "@/providers/i18n-provider";
+import { safeApiErrorMessage } from "@/i18n/error-localization";
 
 export function ResetChannelScheduledPostsButton({
   channelId,
@@ -20,6 +23,7 @@ export function ResetChannelScheduledPostsButton({
   onCompleted?: () => void;
   presentation?: "button" | "menu";
 }) {
+  const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const { pushToast } = useAppToast();
   const [confirmationOpen, setConfirmationOpen] = useState(false);
@@ -49,17 +53,15 @@ export function ResetChannelScheduledPostsButton({
       const returned = result.postsReturnedToDraftCount;
       pushToast(
         deleted || returned
-          ? `Deleted ${deleted} scheduled Telegram messages and returned ${returned} posts to drafts.`
-          : "No scheduled Telegram messages or system posts were found.",
+          ? t("telegram.posts.support.resetResult", { deleted, returned })
+          : t("telegram.posts.support.resetEmpty"),
         "success",
         7000,
       );
     },
     onError: (error) => {
       pushToast(
-        error instanceof Error
-          ? error.message
-          : "Could not return scheduled posts to drafts",
+        safeApiErrorMessage(error, locale, t, t("telegram.posts.support.resetError")),
         "error",
         7000,
       );
@@ -70,7 +72,7 @@ export function ResetChannelScheduledPostsButton({
     <>
       {presentation === "menu" ? (
         <TelegramCardMenuAction
-          label={resetScheduled.isPending ? "Returning…" : "Return all to drafts"}
+          label={resetScheduled.isPending ? t("telegram.posts.support.returning") : t("telegram.posts.support.returnDrafts")}
           icon={<RotateCcw size={15} />}
           danger
           disabled={resetScheduled.isPending}
@@ -85,7 +87,7 @@ export function ResetChannelScheduledPostsButton({
         >
           <span className="inline-flex items-center gap-2">
             <RotateCcw size={15} />
-            {resetScheduled.isPending ? "Returning…" : "Return all to drafts"}
+            {resetScheduled.isPending ? t("telegram.posts.support.returning") : t("telegram.posts.support.returnDrafts")}
           </span>
         </Button>
       )}
@@ -93,8 +95,8 @@ export function ResetChannelScheduledPostsButton({
         open={confirmationOpen}
         onClose={() => setConfirmationOpen(false)}
         entityName={channelTitle}
-        label="Return all to drafts"
-        description="This permanently deletes every scheduled message currently queued in this Telegram channel. All scheduled posts in Telegram System will become clean drafts and lose their Telegram message IDs and links. Published messages are not affected."
+        label={t("telegram.posts.support.returnDrafts")}
+        description={t("telegram.posts.support.returnDraftsDescription")}
         onConfirm={() => resetScheduled.mutateAsync()}
       />
     </>

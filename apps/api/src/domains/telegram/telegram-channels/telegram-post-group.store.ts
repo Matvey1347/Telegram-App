@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
@@ -22,6 +18,11 @@ import {
   TELEGRAM_IMPORTED_SYSTEM_GROUP_TITLE,
 } from './telegram-channels.internal';
 import { TelegramManagedPostGroupPresentationService } from './telegram-managed-post-group-presentation.service';
+import {
+  postGroupNotFound,
+  telegramChannelNotFound,
+  telegramPostsBadRequest,
+} from './telegram-posts.errors';
 
 @Injectable()
 export class TelegramPostGroupStore {
@@ -94,7 +95,7 @@ export class TelegramPostGroupStore {
       where: { id: channelId, workspaceId },
       select: { id: true },
     });
-    if (!channel) throw new NotFoundException('Telegram channel not found');
+    if (!channel) throw telegramChannelNotFound();
     const groups = await client.postGroup.findMany({
       where: { workspaceId, telegramChannelId: channelId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -142,7 +143,8 @@ export class TelegramPostGroupStore {
         })
       )?.id;
     if (!createdByMemberId) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_ASSIGNED_MEMBER_REQUIRED',
         'Workspace member is required to create the advertise system group',
       );
     }
@@ -180,7 +182,7 @@ export class TelegramPostGroupStore {
       where: { id: channelId, workspaceId },
       select: { id: true },
     });
-    if (!channel) throw new NotFoundException('Telegram channel not found');
+    if (!channel) throw telegramChannelNotFound();
     const existing = await client.postGroup.findFirst({
       where: {
         workspaceId,
@@ -206,7 +208,8 @@ export class TelegramPostGroupStore {
       preferredMemberId,
     );
     if (!createdByMemberId) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_ASSIGNED_MEMBER_REQUIRED',
         'Workspace member is required to create the System Bot posts group',
       );
     }
@@ -282,7 +285,8 @@ export class TelegramPostGroupStore {
       preferredMemberId,
     );
     if (!createdByMemberId) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_ASSIGNED_MEMBER_REQUIRED',
         'Assigned member is required to create system post groups',
       );
     }
@@ -361,7 +365,7 @@ export class TelegramPostGroupStore {
         },
       },
     });
-    if (!group) throw new NotFoundException('Post group not found');
+    if (!group) throw postGroupNotFound();
     const [hydratedGroup] =
       await this.telegramManagedPostGroupPresentationService.attachPostGroupIcons(
         [

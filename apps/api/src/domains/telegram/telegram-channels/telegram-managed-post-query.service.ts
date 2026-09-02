@@ -18,6 +18,7 @@ import {
   telegramPostUrl,
   type TelegramPostEngagementRow,
 } from './telegram-post-engagement';
+import { managedPostNotFound } from './telegram-posts.errors';
 
 type ManagedPostMemberRow = {
   id: string;
@@ -347,14 +348,14 @@ export class TelegramManagedPostQueryService {
       return presented;
     }
     if (!postId.startsWith('telegram-post:')) {
-      throw new NotFoundException('Managed post not found');
+      throw managedPostNotFound();
     }
     const telegramPost = await this.syntheticRead.findOne(
       workspaceId,
       channelId,
       postId.slice('telegram-post:'.length),
     );
-    if (!telegramPost) throw new NotFoundException('Managed post not found');
+    if (!telegramPost) throw managedPostNotFound();
     const member = await this.syntheticMember(userId, workspaceId, channel);
     const [presented] = await this.presentation.attachManagedPostIcons([
       this.syntheticPost(workspaceId, channel, member, telegramPost),

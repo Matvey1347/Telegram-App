@@ -1,7 +1,9 @@
 "use client";
 
+
 import { useEffect, useRef } from "react";
 import type { TelegramCustomEmoji } from "@telegram-system/shared";
+import { useI18n } from "@/providers/i18n-provider";
 
 export const CUSTOM_EMOJI_TOKEN_PATTERN = /!\[([^\]\n]*)\]\(tg:\/\/emoji\?id=([0-9]+)\)/g;
 
@@ -30,7 +32,8 @@ export function TelegramCustomEmojiLottie({ src, className = "h-5 w-5" }: { src:
 }
 
 export function TelegramCustomEmojiRenderer({ emoji, className = "h-5 w-5" }: { emoji: TelegramCustomEmoji; className?: string }) {
-  const label = emoji.alt || "Custom emoji";
+  const { t } = useI18n();
+  const label = emoji.alt || t("telegram.posts.editorComponents.customEmoji.label");
   if (emoji.kind === "VIDEO" && emoji.assetUrl) return <video aria-label={label} className={`${className} inline-block object-contain`} src={emoji.assetUrl} autoPlay loop muted playsInline />;
   if (emoji.kind === "ANIMATED" && emoji.renderAssetUrl) return <span aria-label={label}><TelegramCustomEmojiLottie src={emoji.renderAssetUrl} className={className} /></span>;
   if (emoji.kind === "STATIC" && emoji.assetUrl) return <img src={emoji.assetUrl} alt={label} className={`${className} inline-block object-contain`} />;

@@ -10,4 +10,23 @@ describe('workspace auth api', () => {
     expect(post).toHaveBeenNthCalledWith(1, '/auth/forgot-password', { email: 'user@example.com' });
     expect(post).toHaveBeenNthCalledWith(2, '/auth/reset-password', { token: 'reset-token', password: 'new-password' });
   });
+
+  it('persists locale silently without global loading or success feedback', async () => {
+    const patch = vi.fn().mockResolvedValue({ data: { locale: 'ru' } });
+    const silentFeedbackConfig = { feedback: { mode: 'silent' } } as never;
+    const client = createWorkspaceApi({
+      api: { patch } as never,
+      crud: vi.fn() as never,
+      silentFeedbackConfig,
+      withFeedback: (config) => config,
+    });
+
+    await client.accountApi.updateLocale('ru');
+
+    expect(patch).toHaveBeenCalledWith(
+      '/account/locale',
+      { locale: 'ru' },
+      silentFeedbackConfig,
+    );
+  });
 });

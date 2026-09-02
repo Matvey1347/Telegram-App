@@ -1,5 +1,6 @@
 "use client";
 
+
 import { formatDateTime } from "@/lib/date-format";
 
 import { useQuery } from "@tanstack/react-query";
@@ -10,6 +11,7 @@ import {
   type TelegramManagedPostRevision,
 } from "@/lib/api";
 import { telegramPostKeys } from "@/lib/query-keys";
+import { useI18n } from "@/providers/i18n-provider";
 
 function revisionReason(reason: string) {
   return reason
@@ -32,6 +34,7 @@ export function ManagedPostHistoryModal({
   onClose: () => void;
   onRestore: (revision: TelegramManagedPostRevision) => void;
 }) {
+  const { locale, t } = useI18n();
   const history = useQuery({
     queryKey: telegramPostKeys.managedHistory(channelId, postId),
     queryFn: () => telegramChannelsApi.managedPostHistory(channelId, postId),
@@ -41,17 +44,17 @@ export function ManagedPostHistoryModal({
   });
 
   return (
-    <Modal open={open} onClose={onClose} title="Post history">
+    <Modal open={open} onClose={onClose} title={t("telegram.posts.support.history")}>
       <p className="mb-4 text-xs text-neutral-400">
-        Automatic backups are kept for 7 days before risky changes.
+        {t("telegram.posts.support.historyDescription")}
       </p>
       {history.isLoading || history.isFetching ? (
         <div className="flex items-center gap-2 py-5 text-sm text-neutral-400">
           <LoaderCircle size={15} className="animate-spin" />
-          Loading history…
+          {t("telegram.posts.support.loadingHistory")}
         </div>
       ) : history.isError ? (
-        <p className="py-5 text-sm text-red-300">Could not load history.</p>
+        <p className="py-5 text-sm text-red-300">{t("telegram.posts.support.historyError")}</p>
       ) : history.data?.length ? (
         <div className="space-y-2">
           {history.data.slice(0, 6).map((revision) => (
@@ -64,7 +67,7 @@ export function ManagedPostHistoryModal({
                   {revisionReason(revision.reason)}
                 </p>
                 <p className="text-xs text-neutral-400">
-                  {formatDateTime(revision.createdAt)}
+                  {formatDateTime(revision.createdAt, locale)}
                 </p>
               </div>
               <Button
@@ -73,15 +76,14 @@ export function ManagedPostHistoryModal({
                 disabled={restorePending}
                 onClick={() => onRestore(revision)}
               >
-                Restore
+                {t("telegram.posts.support.restore")}
               </Button>
             </div>
           ))}
         </div>
       ) : (
         <p className="py-5 text-sm text-neutral-500">
-          No backups yet. A backup is created before publish, schedule, sync
-          changes, restore, delete, and manual edits.
+          {t("telegram.posts.support.noBackups")}
         </p>
       )}
     </Modal>

@@ -1,5 +1,6 @@
 "use client";
 
+
 import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClipboardList, Copy, FileUp, LoaderCircle } from "lucide-react";
@@ -11,6 +12,8 @@ import {
 } from "@/lib/api";
 import { telegramPostKeys } from "@/lib/query-keys";
 import { useAppToast } from "@/providers/toast-provider";
+import { useI18n } from "@/providers/i18n-provider";
+import { safeApiErrorMessage } from "@/i18n/error-localization";
 import {
   ManagedPostsGroupConfirmation,
   ManagedPostsGroupSelect,
@@ -54,17 +57,6 @@ export {
 const noGroupValue = "__no_group__";
 const MAX_MANAGED_POST_IMPORT_BATCH_SIZE = 25;
 
-function apiErrorMessage(error: unknown, fallback: string) {
-  const apiError = error as {
-    response?: { data?: { message?: string | string[] } };
-    message?: string;
-  };
-  const message = apiError.response?.data?.message;
-  return Array.isArray(message)
-    ? message.join(", ")
-    : message || apiError.message || fallback;
-}
-
 export function ManagedPostsImportModal({
   open,
   onClose,
@@ -88,6 +80,7 @@ export function ManagedPostsImportModal({
   mode: ChannelImportMode;
   onModeChange: (mode: ChannelImportMode) => void;
 }) {
+  const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const { pushToast, startOperation } = useAppToast();
   const [postGroupId, setPostGroupId] = useState<string>();
@@ -137,7 +130,7 @@ export function ManagedPostsImportModal({
 
   const groupOptions = useMemo(
     () => [
-      { value: noGroupValue, label: "No group" },
+      { value: noGroupValue, label: t("telegram.posts.import.noGroup") },
       ...(postGroups.data ?? []).map((group) => {
         const presentation = group.iconPresentation;
         return {
@@ -183,8 +176,8 @@ export function ManagedPostsImportModal({
       }
     : summarizeResult(result);
   const errorRows = progressItems.filter(
-    (row): row is typeof row & { error: string } =>
-      isFailedImportStatus(row.status) && Boolean(row.error),
+    (row) =>
+      isFailedImportStatus(row.status) && Boolean(row.error || row.errorCode),
   );
 
   const selectTab = (tab: ImportRowTab) => {
@@ -254,8 +247,8 @@ export function ManagedPostsImportModal({
     >();
     const operation = startOperation({
       id: `managed-post-import:${channelId}`,
-      title: "Import posts",
-      message: "Starting import...",
+      title: t("telegram.posts.import.posts"),
+      message: t("telegram.posts.import.starting"),
       current: 0,
       total: importableRowIndices.length,
       onCancel: () => controller.abort(),
@@ -314,7 +307,7 @@ export function ManagedPostsImportModal({
                 });
               }
               operation.update({
-                message: `Batch ${batchNumber}: ${item.message}`,
+                message: t("telegram.posts.import.batchMessage", { batch: batchNumber, message: locale === "en" ? item.message : t("telegram.posts.import.importing") }),
                 current: completed + current,
                 total: importableRowIndices.length,
                 progressSummary: summary,
@@ -356,9 +349,9 @@ export function ManagedPostsImportModal({
         }),
       ]);
       const completion = {
-        message: `Import finished: ${summary.successful} successful, ${summary.failed} failed.`,
+        message: t("telegram.posts.import.complete", { successful: summary.successful, failed: summary.failed }),
         details: summary.failed
-          ? "Failed rows stay outside Imported and can be retried."
+          ? t("telegram.posts.import.failedRowsHint")
           : undefined,
       };
       if (summary.failed) operation.fail(completion);
@@ -366,15 +359,12 @@ export function ManagedPostsImportModal({
     } catch (error) {
       if (controller.signal.aborted) {
         const summary = summarizeImportProgress([...progressByIndex.values()]);
-        const message = `Import stopped. ${summary.successful} successful, ${summary.failed} failed before cancellation.`;
+        const message = t("telegram.posts.import.stopped", { successful: summary.successful, failed: summary.failed });
         setLocalError(message);
         operation.dismiss();
         pushToast(message, "info", 8000);
       } else {
-        const message = apiErrorMessage(
-          error,
-          "Could not import managed posts",
-        );
+        const message = safeApiErrorMessage(error, locale, t, t("telegram.posts.import.postsError"));
         setLocalError(message);
         operation.fail({ message });
       }
@@ -405,7 +395,7 @@ export function ManagedPostsImportModal({
     setResult(null);
     if (!importRows.length) {
       setLocalError(
-        "Paste rows or upload a JSON, CSV, TSV, or TXT file first.",
+        t("telegram.posts.import.dataRequired"),
       );
       return;
     }
@@ -415,18 +405,18 @@ export function ManagedPostsImportModal({
   const copyPromptFormat = async () => {
     try {
       await navigator.clipboard.writeText(gptImportPromptFormat);
-      pushToast("GPT prompt format copied.", "success");
+      pushToast(t("telegram.posts.import.promptCopied"), "success");
     } catch {
-      pushToast("Could not copy GPT prompt format.", "error");
+      pushToast(t("telegram.posts.import.promptCopyError"), "error");
     }
   };
 
   const copyImportContent = async () => {
     try {
       await navigator.clipboard.writeText(content);
-      pushToast("Import data copied.", "success");
+      pushToast(t("telegram.posts.import.dataCopied"), "success");
     } catch {
-      pushToast("Could not copy import data.", "error");
+      pushToast(t("telegram.posts.import.dataCopyError"), "error");
     }
   };
 
@@ -443,7 +433,7 @@ export function ManagedPostsImportModal({
   };
 
   return (
-    <Modal open={open} onClose={close} title="Channel import" size="xl">
+    <Modal open={open} onClose={close} title={t("telegram.posts.support.channelImport")} size="xl">
       <div className="mb-4">
         <ChannelImportNavigation
           value={mode}
@@ -454,9 +444,9 @@ export function ManagedPostsImportModal({
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-white">Import posts</h3>
+            <h3 className="text-sm font-semibold text-white">{t("telegram.posts.import.posts")}</h3>
             <p className="mt-0.5 text-xs text-neutral-400">
-              Copy the expected format before preparing import data with GPT.
+              {t("telegram.posts.import.importHint")}
             </p>
           </div>
           <Button
@@ -464,11 +454,11 @@ export function ManagedPostsImportModal({
             variant="secondary"
             disabled={importing}
             onClick={() => void copyPromptFormat()}
-            title="Copy prompt"
-            aria-label="Copy prompt"
+            title={t("telegram.posts.import.copyPrompt")}
+            aria-label={t("telegram.posts.import.copyPrompt")}
           >
             <ClipboardList size={15} />
-            <span>Prompt</span>
+            <span>{t("telegram.posts.import.prompt")}</span>
             <Copy size={13} />
           </Button>
         </div>
@@ -496,8 +486,7 @@ export function ManagedPostsImportModal({
         {editableRows.length ? (
           <>
             <p className="text-xs text-neutral-500">
-              Up to {MAX_MANAGED_POST_IMPORT_BATCH_SIZE} posts are processed per
-              request. Larger imports are processed sequentially in batches.
+              {t("telegram.posts.import.batchHint", { count: MAX_MANAGED_POST_IMPORT_BATCH_SIZE })}
             </p>
             <ManagedPostsImportStats
               parsed={editableRows.length}
@@ -546,7 +535,7 @@ export function ManagedPostsImportModal({
               onClick={close}
               disabled={importing}
             >
-              Close
+              {t("common.close")}
             </Button>
           ) : null}
           <Button
@@ -555,7 +544,7 @@ export function ManagedPostsImportModal({
             disabled={!canImport || importing}
             title={
               !importableRowIndices.length
-                ? "All posts are already marked as imported."
+                ? t("telegram.posts.import.allImported")
                 : undefined
             }
           >
@@ -566,10 +555,10 @@ export function ManagedPostsImportModal({
                 <FileUp size={15} />
               )}
               {importing
-                ? "Importing..."
+                ? t("telegram.posts.import.importing")
                 : !importableRowIndices.length
-                  ? "All posts are already marked as imported"
-                  : "Import posts"}
+                  ? t("telegram.posts.import.allImported")
+                  : t("telegram.posts.import.importButton")}
             </span>
           </Button>
         </div>

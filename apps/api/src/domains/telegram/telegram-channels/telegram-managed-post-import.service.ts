@@ -19,6 +19,11 @@ import { TelegramManagedPostImportParserService } from './telegram-managed-post-
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
 import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-media-storage.service';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
+import {
+  postGroupNotFound,
+  telegramPostsBadRequest,
+  telegramPostsNotFound,
+} from './telegram-posts.errors';
 
 @Injectable()
 export class TelegramManagedPostImportService {
@@ -75,8 +80,10 @@ export class TelegramManagedPostImportService {
   ) {
     const maxBatchSize = 25;
     if (dto.rows.length > maxBatchSize) {
-      throw new BadRequestException(
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_BATCH_LIMIT_EXCEEDED',
         `Import is limited to ${maxBatchSize} posts per request`,
+        { maxBatchSize },
       );
     }
     const { workspaceId, assignedMemberId } =
@@ -85,7 +92,10 @@ export class TelegramManagedPostImportService {
         dto.assignedMemberId,
       );
     if (!assignedMemberId) {
-      throw new BadRequestException('Assigned member is required');
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_ASSIGNED_MEMBER_REQUIRED',
+        'Assigned member is required',
+      );
     }
     await this.telegramChannelCatalogService.findOne(userId, channelId);
     const trimmedGroupId = dto.postGroupId?.trim() || null;
@@ -100,7 +110,7 @@ export class TelegramManagedPostImportService {
         })
       : null;
     if (trimmedGroupId && !defaultGroup) {
-      throw new NotFoundException('Post group not found');
+      throw postGroupNotFound();
     }
 
     const normalized = dto.rows.map((row, index) => ({
@@ -138,7 +148,10 @@ export class TelegramManagedPostImportService {
         })
       : [];
     if (explicitGroups.length !== explicitGroupIds.length) {
-      throw new NotFoundException('One or more post groups were not found');
+      throw telegramPostsNotFound(
+        'TELEGRAM_POST_GROUP_NOT_FOUND',
+        'One or more post groups were not found',
+      );
     }
     const validRowsWithIcons = await Promise.all(
       validRows.map(async (row) => ({
@@ -196,6 +209,8 @@ export class TelegramManagedPostImportService {
           index: invalid.index,
           status: 'skipped',
           error: invalid.error,
+          errorCode: 'TELEGRAM_POST_IMPORT_ROW_INVALID',
+          errorParams: { row: invalid.index + 1 },
           message: `Row ${invalid.index + 1} skipped: ${invalid.error}`,
         },
         processedRows,
@@ -245,6 +260,14 @@ export class TelegramManagedPostImportService {
             postId: post.id,
             error:
               resultRow && 'error' in resultRow ? resultRow.error : undefined,
+            errorCode:
+              resultRow?.status === 'scheduleFailed'
+                ? 'TELEGRAM_POST_PUBLISH_FAILED'
+                : undefined,
+            errorParams:
+              resultRow?.status === 'scheduleFailed'
+                ? { title: row.value.title }
+                : undefined,
             message:
               resultRow?.status === 'scheduleFailed'
                 ? `Could not schedule ${row.value.title}: ${resultRow.error}`
@@ -358,6 +381,17 @@ export class TelegramManagedPostImportService {
           postId: post?.id,
           error:
             resultRow && 'error' in resultRow ? resultRow.error : undefined,
+          errorCode:
+            resultRow?.status === 'scheduleFailed'
+              ? 'TELEGRAM_POST_PUBLISH_FAILED'
+              : resultRow?.status === 'skipped'
+                ? 'TELEGRAM_POST_IMPORT_ROW_INVALID'
+                : undefined,
+          errorParams:
+            resultRow?.status === 'scheduleFailed' ||
+            resultRow?.status === 'skipped'
+              ? { title: row.value.title }
+              : undefined,
           message:
             resultRow?.status === 'scheduleFailed'
               ? `Could not schedule ${row.value.title}: ${resultRow.error}`

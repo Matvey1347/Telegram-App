@@ -4,6 +4,7 @@ import type {
   PermissionDefinition,
   PermissionSensitivity,
 } from "./types";
+import type { I18nNamespace } from "../i18n/contracts";
 
 type FeatureInput = {
   id: string;
@@ -13,6 +14,7 @@ type FeatureInput = {
   navigation?: readonly string[];
   search?: readonly string[];
   dashboard?: readonly string[];
+  i18nNamespaces?: readonly I18nNamespace[];
 };
 
 const STANDARD_CAPABILITIES = [
@@ -54,6 +56,7 @@ function feature(input: FeatureInput): FeatureDefinition {
         permission(input.id, item.capability, item.sensitivity),
       ),
     ],
+    i18nNamespaces: input.i18nNamespaces ?? ["common", "navigation"],
     surfaces: {
       navigation: input.navigation ?? [],
       search: input.search ?? [],
@@ -77,6 +80,15 @@ export const WORKSPACE_FEATURE_REGISTRY = [
   }),
   feature({
     id: "posts",
+    i18nNamespaces: [
+      "common",
+      "navigation",
+      "telegram/posts/common",
+      "telegram/posts/editor",
+      "telegram/posts/groups",
+      "telegram/posts/calendar",
+      "telegram/posts/import",
+    ],
     navigation: ["telegramPosts"],
     search: ["telegramPosts"],
     dashboard: ["postSchedule"],
@@ -102,6 +114,7 @@ export const WORKSPACE_FEATURE_REGISTRY = [
   }),
   feature({
     id: "adSales.sales",
+    i18nNamespaces: ["common", "navigation", "ad-sales/common"],
     navigation: ["adSales"],
     search: ["adSales"],
     dashboard: ["adSalesMetrics"],
@@ -109,6 +122,7 @@ export const WORKSPACE_FEATURE_REGISTRY = [
   }),
   feature({
     id: "adSales.crm",
+    i18nNamespaces: ["common", "navigation", "ad-sales/common"],
     navigation: ["adSalesCrm"],
     search: ["advertisers"],
     dashboard: ["crmMetrics"],

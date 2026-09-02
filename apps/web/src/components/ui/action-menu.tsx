@@ -6,9 +6,15 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 export function ActionMenu({
   label,
   children,
+  trigger,
+  triggerClassName,
+  menuClassName,
 }: {
   label: string;
   children: ReactNode;
+  trigger?: ReactNode;
+  triggerClassName?: string;
+  menuClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -36,15 +42,16 @@ export function ActionMenu({
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
+        title={label}
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-neutral-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        className={triggerClassName ?? "inline-flex h-10 w-10 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-neutral-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"}
       >
-        <MoreVertical size={19} aria-hidden="true" />
+        {trigger ?? <MoreVertical size={19} aria-hidden="true" />}
       </button>
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 top-11 z-50 w-52 rounded-lg border border-neutral-700 bg-neutral-950 p-1.5 shadow-2xl"
+          className={menuClassName ?? "absolute right-0 top-11 z-50 w-52 rounded-lg border border-neutral-700 bg-neutral-950 p-1.5 shadow-2xl"}
           onClick={() => setOpen(false)}
         >
           {children}

@@ -44,6 +44,7 @@ export function createWorkspaceApi({
       password: string;
       name: string;
       workspaceName?: string;
+      locale?: "en" | "ru";
     }) => (await api.post<AuthResponse>("/auth/register", payload)).data,
     forgotPassword: async (email: string) =>
       (await api.post<{ message: string }>("/auth/forgot-password", { email })).data,
@@ -61,7 +62,16 @@ export function createWorkspaceApi({
       telegramUsername?: string | null;
       telegramUserAccountIds?: string[];
       editorShortcuts?: EditorShortcutPreferences;
+      locale?: "en" | "ru";
     }) => (await api.patch<AccountMe>("/account/me", payload)).data,
+    updateLocale: async (locale: "en" | "ru") =>
+      (
+        await api.patch<{ locale: "en" | "ru" }>(
+          "/account/locale",
+          { locale },
+          silentFeedbackConfig,
+        )
+      ).data,
     updatePassword: async (payload: {
       currentPassword: string;
       newPassword: string;

@@ -1,4 +1,6 @@
+
 import type { ReactNode } from "react";
+import { useI18n } from "@/providers/i18n-provider";
 import {
   importImageSearchToArray,
   urlsTextToArray,
@@ -25,6 +27,7 @@ export function ManagedPostsImportList({
   onSelectRow: (index: number) => void;
   onSelectTab: (tab: ImportRowTab) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="min-w-0 xl:col-start-3">
       <div className="mb-2 grid grid-cols-2 gap-1 rounded-lg border border-neutral-800 bg-neutral-900/70 p-1 text-xs">
@@ -39,7 +42,7 @@ export function ManagedPostsImportList({
                 : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
             }`}
           >
-            {tab} ({tabCounts[tab]})
+            {tab === "new" ? t("telegram.posts.import.tabNew") : t("telegram.posts.import.tabImported")} ({tabCounts[tab]})
           </button>
         ))}
       </div>
@@ -63,26 +66,26 @@ export function ManagedPostsImportList({
               </span>
               {row.icon ? <span className="shrink-0">{row.icon}</span> : null}
               <span className="min-w-0 flex-1 truncate font-medium">
-                {row.title || "Untitled post"}
+                {row.title || t("telegram.posts.import.untitled")}
               </span>
               {row.approved ? (
-                <StatusBadge tone="approved">✓ Approved</StatusBadge>
+                <StatusBadge tone="approved">✓ {t("telegram.posts.import.approved")}</StatusBadge>
               ) : null}
               {row.imported ? (
-                <StatusBadge tone="imported">✓ Imported</StatusBadge>
+                <StatusBadge tone="imported">✓ {t("telegram.posts.import.imported")}</StatusBadge>
               ) : null}
               {urlsTextToArray(row.urlsText).length ? (
-                <StatusBadge tone="image">img</StatusBadge>
+                <StatusBadge tone="image">{t("telegram.posts.import.image")}</StatusBadge>
               ) : null}
               {importImageSearchToArray(row.imageSearchText).length ? (
-                <StatusBadge tone="search">search</StatusBadge>
+                <StatusBadge tone="search">{t("telegram.posts.import.imageSearchBadge")}</StatusBadge>
               ) : null}
             </button>
           );
         })}
         {!visibleRowIndices.length ? (
           <p className="rounded-lg border border-dashed border-neutral-800 p-4 text-center text-xs text-neutral-500">
-            No posts in this tab.
+            {t("telegram.posts.import.emptyTab")}
           </p>
         ) : null}
       </div>
