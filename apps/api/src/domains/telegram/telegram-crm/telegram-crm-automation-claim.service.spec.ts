@@ -22,11 +22,16 @@ describe('TelegramCrmAutomationClaimService', () => {
   });
 
   it('terminalizes exhausted ambiguous states through a bounded locked CTE', async () => {
-    const prisma = { $executeRaw: jest.fn().mockResolvedValue(3) };
+    const queryRaw = jest.fn().mockResolvedValue([]);
+    const prisma = {
+      $transaction: jest.fn((work: (tx: unknown) => unknown) =>
+        work({ $queryRaw: queryRaw }),
+      ),
+    };
     const service = new TelegramCrmAutomationClaimService(prisma as never);
 
     await service.terminalizeExhausted(25);
-    const sql = sqlText(prisma.$executeRaw.mock.calls[0]![0]);
+    const sql = sqlText(queryRaw.mock.calls[0]![0]);
     expect(sql).toContain("'SENDING'");
     expect(sql).toContain('FOR UPDATE SKIP LOCKED');
     expect(sql).toContain('LIMIT');

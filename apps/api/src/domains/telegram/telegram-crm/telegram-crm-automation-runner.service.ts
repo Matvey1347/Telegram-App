@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { sanitizeOperationalError } from '../../../common/security/operational-error';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -16,9 +16,11 @@ import { TelegramCrmAutomationFinalizerService } from './telegram-crm-automation
 import { TelegramCrmRuntimeManager } from './telegram-crm-runtime-manager.service';
 import { TelegramCrmEventHub } from './telegram-crm-event-hub.service';
 import { mapCrmMessage } from './telegram-crm-message.mapper';
+import { TelegramCrmInternalNotificationProjector } from './telegram-crm-internal-notification-projector.service';
 
 const BASE_RETRY_MS = 30_000;
 const MAX_BATCH = 1_000;
+const MAX_TERMINAL_FAILURE_BATCH = 25;
 
 @Injectable()
 export class TelegramCrmAutomationRunnerService {
@@ -30,6 +32,8 @@ export class TelegramCrmAutomationRunnerService {
     private readonly finalizer: TelegramCrmAutomationFinalizerService,
     private readonly runtime: TelegramCrmRuntimeManager,
     private readonly events: TelegramCrmEventHub,
+    @Optional()
+    private readonly notifications?: TelegramCrmInternalNotificationProjector,
   ) {}
 
   async processDueBatch(limit = MAX_BATCH) {
@@ -39,7 +43,9 @@ export class TelegramCrmAutomationRunnerService {
     let skipped = 0;
     let retried = 0;
     let failed = 0;
-    await this.claims.terminalizeExhausted(bounded);
+    await this.claims.terminalizeExhausted(
+      Math.min(MAX_TERMINAL_FAILURE_BATCH, bounded),
+    );
     while (processed < bounded) {
       const ids = await this.claims.claim(Math.min(25, bounded - processed));
       if (!ids.length) break;
@@ -88,7 +94,7 @@ export class TelegramCrmAutomationRunnerService {
     });
     if (!target) {
       if (ambiguousRecovery) {
-        await this.failAmbiguous(execution.id, 'INVALID_CONVERSATION');
+        await this.failAmbiguous(execution, 'INVALID_CONVERSATION');
         return 'FAILED';
       }
       return this.retryOrFail(execution, 'INVALID_CONVERSATION');
@@ -153,7 +159,7 @@ export class TelegramCrmAutomationRunnerService {
     if (authorized.kind === 'LOST') return 'FAILED';
     if (authorized.kind === 'DENIED') {
       if (ambiguousRecovery) {
-        await this.failAmbiguous(execution.id, authorized.reason);
+        await this.failAmbiguous(execution, authorized.reason);
         return 'FAILED';
       }
       if (
@@ -255,27 +261,53 @@ export class TelegramCrmAutomationRunnerService {
     });
   }
 
-  private async failAmbiguous(id: string, reason: string) {
-    await this.prisma.telegramCrmCustomerAutomationExecution.updateMany({
-      where: {
-        id,
-        leaseOwner: this.claims.ownerId,
-        status: 'PROCESSING',
-      },
-      data: {
-        status: 'FAILED',
-        completedAt: new Date(),
-        reason: 'AMBIGUOUS_SEND_UNRESOLVED',
-        lastError: `Current safety gate rejected recovery: ${reason}`,
-        nextAttemptAt: null,
-        leaseOwner: null,
-        leaseExpiresAt: null,
-      },
+  private async failAmbiguous(execution: ExecutionRow, reason: string) {
+    const notificationIds = await this.prisma.$transaction(async (tx) => {
+      const changed =
+        await tx.telegramCrmCustomerAutomationExecution.updateMany({
+          where: {
+            id: execution.id,
+            leaseOwner: this.claims.ownerId,
+            status: 'PROCESSING',
+          },
+          data: {
+            status: 'FAILED',
+            completedAt: new Date(),
+            reason: 'AMBIGUOUS_SEND_UNRESOLVED',
+            lastError: `Current safety gate rejected recovery: ${reason}`,
+            nextAttemptAt: null,
+            leaseOwner: null,
+            leaseExpiresAt: null,
+          },
+        });
+      if (!changed.count) return [];
+      return this.notifications
+        ? (
+            await this.notifications.automationBlocked(tx, [
+              {
+                id: execution.id,
+                workspaceId: execution.workspaceId,
+                contactId: execution.contactId,
+                telegramAdSaleId: execution.telegramAdSaleId,
+                reason: 'AMBIGUOUS_SEND_UNRESOLVED',
+              },
+            ])
+          ).map((item) => item.id)
+        : [];
     });
+    await this.notifications?.publish(notificationIds);
   }
 
   private async retryOrFail(
-    execution: Pick<ExecutionRow, 'id' | 'attempts' | 'maxAttempts'>,
+    execution: Pick<
+      ExecutionRow,
+      | 'id'
+      | 'attempts'
+      | 'maxAttempts'
+      | 'workspaceId'
+      | 'contactId'
+      | 'telegramAdSaleId'
+    >,
     error: string,
     fromSending = false,
     ambiguousProcessing = false,
@@ -284,37 +316,59 @@ export class TelegramCrmAutomationRunnerService {
     const ambiguous = fromSending || ambiguousProcessing;
     const delay = BASE_RETRY_MS * 2 ** Math.max(0, execution.attempts - 1);
     const retryAt = new Date(Date.now() + delay);
-    await this.prisma.telegramCrmCustomerAutomationExecution.updateMany({
-      where: {
-        id: execution.id,
-        leaseOwner: this.claims.ownerId,
-        status: fromSending ? 'SENDING' : 'PROCESSING',
-      },
-      data: {
-        status: terminal
-          ? 'FAILED'
-          : fromSending || ambiguousProcessing
-            ? 'SENDING'
-            : 'PENDING',
-        completedAt: terminal ? new Date() : null,
-        nextAttemptAt:
-          terminal || fromSending || ambiguousProcessing ? null : retryAt,
-        lastError:
-          terminal && ambiguous
-            ? `Telegram send outcome remains ambiguous: ${error}`
-            : error,
-        reason: terminal
-          ? ambiguous
-            ? 'AMBIGUOUS_SEND_UNRESOLVED'
-            : 'RETRY_EXHAUSTED'
-          : ambiguous
-            ? 'AMBIGUOUS_SEND_RECOVERY'
-            : 'RECOVERABLE_FAILURE',
-        leaseOwner: null,
-        leaseExpiresAt:
-          terminal || (!fromSending && !ambiguousProcessing) ? null : retryAt,
-      },
+    const notificationIds = await this.prisma.$transaction(async (tx) => {
+      const changed =
+        await tx.telegramCrmCustomerAutomationExecution.updateMany({
+          where: {
+            id: execution.id,
+            leaseOwner: this.claims.ownerId,
+            status: fromSending ? 'SENDING' : 'PROCESSING',
+          },
+          data: {
+            status: terminal
+              ? 'FAILED'
+              : fromSending || ambiguousProcessing
+                ? 'SENDING'
+                : 'PENDING',
+            completedAt: terminal ? new Date() : null,
+            nextAttemptAt:
+              terminal || fromSending || ambiguousProcessing ? null : retryAt,
+            lastError:
+              terminal && ambiguous
+                ? `Telegram send outcome remains ambiguous: ${error}`
+                : error,
+            reason: terminal
+              ? ambiguous
+                ? 'AMBIGUOUS_SEND_UNRESOLVED'
+                : 'RETRY_EXHAUSTED'
+              : ambiguous
+                ? 'AMBIGUOUS_SEND_RECOVERY'
+                : 'RECOVERABLE_FAILURE',
+            leaseOwner: null,
+            leaseExpiresAt:
+              terminal || (!fromSending && !ambiguousProcessing)
+                ? null
+                : retryAt,
+          },
+        });
+      if (!terminal || !changed.count) return [];
+      return this.notifications
+        ? (
+            await this.notifications.automationBlocked(tx, [
+              {
+                id: execution.id,
+                workspaceId: execution.workspaceId,
+                contactId: execution.contactId,
+                telegramAdSaleId: execution.telegramAdSaleId,
+                reason: ambiguous
+                  ? 'AMBIGUOUS_SEND_UNRESOLVED'
+                  : 'RETRY_EXHAUSTED',
+              },
+            ])
+          ).map((item) => item.id)
+        : [];
     });
+    await this.notifications?.publish(notificationIds);
     return terminal ? 'FAILED' : 'RETRY';
   }
 

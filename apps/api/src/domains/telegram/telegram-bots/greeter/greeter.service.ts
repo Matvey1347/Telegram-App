@@ -15,7 +15,7 @@ import type { UpdateGreeterConfigDto } from '../core/dto';
 import { GreeterAutomationService } from './greeter-automation.service';
 import { GreeterConfigurationService } from './greeter-configuration.service';
 import { TelegramBotDeliveryService } from '../core/telegram-bot-delivery.service';
-import { notifyScheduledTaskDueWorkChanged } from '../../../operations/scheduled-tasks/scheduled-task-wake-notifier';
+import { notifyScheduledTaskDueWorkChanged } from '../../../../common/scheduled-task-wake-notifier';
 import { telegramMarkupToHtml } from '../../../../telegram/shared/telegram-markup';
 import { GreeterTestModeService } from './greeter-test-mode.service';
 
@@ -248,7 +248,8 @@ export class GreeterService {
           : null,
       },
     });
-    if (join.expiredAt) notifyScheduledTaskDueWorkChanged('greeter.expire_pending');
+    if (join.expiredAt)
+      notifyScheduledTaskDueWorkChanged('greeter.expire_pending');
     if (!config.captchaEnabled) return this.approve(context, join.id);
     const text = renderGreeterTemplate(
       config.captchaType === 'SIMPLE_CHOICE'

@@ -21,7 +21,7 @@ import { buildGreeterBroadcastView } from './greeter-broadcast-view';
 import { assertValidGreeterTemplate } from './greeter-template.renderer';
 import { TelegramBotDeliveryService } from '../core/telegram-bot-delivery.service';
 import { TELEGRAM_BOT_DELIVERY_ENQUEUE_BATCH_SIZE } from '../core/telegram-bot-delivery-batch-enqueue';
-import { notifyScheduledTaskDueWorkChanged } from '../../../operations/scheduled-tasks/scheduled-task-wake-notifier';
+import { notifyScheduledTaskDueWorkChanged } from '../../../../common/scheduled-task-wake-notifier';
 import { greeterBroadcastDispatchableWhere } from '../../../operations/scheduled-tasks/due-work-predicates';
 import { queueGreeterBroadcastRecipientPage } from './greeter-broadcast-batch-link';
 

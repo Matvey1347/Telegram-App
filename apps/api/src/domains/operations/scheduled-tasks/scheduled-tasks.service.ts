@@ -28,7 +28,7 @@ import {
 import type { ScheduledTaskDefinition } from './scheduled-task.types';
 import { DueTaskSchedule } from './due-task-schedule';
 import { ScheduledTaskAutomaticEligibility } from './scheduled-task-automatic-eligibility';
-import { scheduledTaskWakeNotifier } from './scheduled-task-wake-notifier';
+import { scheduledTaskWakeNotifier } from '../../../common/scheduled-task-wake-notifier';
 import { ScheduledTaskWakeTimer } from './scheduled-task-wake-timer';
 
 const SCHEDULER_RECOVERY_BACKOFF_MS = 30_000;

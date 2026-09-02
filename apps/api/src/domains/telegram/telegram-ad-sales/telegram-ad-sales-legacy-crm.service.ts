@@ -16,6 +16,7 @@ import {
 } from './dto';
 import { TelegramCrmLegacyAuthorizationService } from '../telegram-crm/telegram-crm-legacy-authorization.service';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
+import { TelegramAdSalesCrmTasksService } from './telegram-ad-sales-crm-tasks.service';
 
 /** RBAC facade for the compatibility advertiser/CRM routes. */
 @Injectable()
@@ -23,6 +24,7 @@ export class TelegramAdSalesLegacyCrmService {
   constructor(
     private readonly service: TelegramAdSalesService,
     private readonly authorization: TelegramCrmLegacyAuthorizationService,
+    private readonly tasks: TelegramAdSalesCrmTasksService,
   ) {}
 
   async listAdvertisers(userId: string, query: TelegramAdvertisersQueryDto) {
@@ -156,7 +158,7 @@ export class TelegramAdSalesLegacyCrmService {
 
   async listCrmTasks(userId: string, query: TelegramAdvertiserTasksQueryDto) {
     const scope = await this.authorization.readScope(userId);
-    return this.service.listCrmTasks(userId, query, scope.ownerMemberId);
+    return this.tasks.list(userId, query, scope.ownerMemberId);
   }
 
   async createAdvertiserTask(
@@ -165,7 +167,7 @@ export class TelegramAdSalesLegacyCrmService {
     dto: CreateTelegramAdvertiserTaskDto,
   ) {
     await this.authorization.requireEditContact(userId, contactId);
-    return this.service.createAdvertiserTask(userId, contactId, dto);
+    return this.tasks.create(userId, contactId, dto);
   }
 
   async updateCrmTask(
@@ -174,7 +176,7 @@ export class TelegramAdSalesLegacyCrmService {
     dto: UpdateTelegramAdvertiserTaskDto,
   ) {
     await this.authorization.requireEditTask(userId, taskId);
-    return this.service.updateCrmTask(userId, taskId, dto);
+    return this.tasks.update(userId, taskId, dto);
   }
 
   async completeCrmTask(
@@ -183,7 +185,7 @@ export class TelegramAdSalesLegacyCrmService {
     dto: CompleteTelegramAdvertiserTaskDto,
   ) {
     await this.authorization.requireEditTask(userId, taskId);
-    return this.service.completeCrmTask(userId, taskId, dto);
+    return this.tasks.complete(userId, taskId, dto);
   }
 
   async snoozeCrmTask(
@@ -192,7 +194,7 @@ export class TelegramAdSalesLegacyCrmService {
     dto: UpdateTelegramAdvertiserTaskDto,
   ) {
     await this.authorization.requireEditTask(userId, taskId);
-    return this.service.snoozeCrmTask(userId, taskId, dto);
+    return this.tasks.snooze(userId, taskId, dto);
   }
 
   async skipCrmTask(
@@ -201,6 +203,6 @@ export class TelegramAdSalesLegacyCrmService {
     dto: SkipTelegramAdvertiserTaskDto,
   ) {
     await this.authorization.requireEditTask(userId, taskId);
-    return this.service.skipCrmTask(userId, taskId, dto);
+    return this.tasks.skip(userId, taskId, dto);
   }
 }

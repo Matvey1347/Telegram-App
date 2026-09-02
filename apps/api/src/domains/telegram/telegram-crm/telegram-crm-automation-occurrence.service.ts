@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, TelegramCrmCustomerAutomationType } from '@prisma/client';
 import type { CrmCustomerAutomationType } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { notifyScheduledTaskDueWorkChanged } from '../../operations/scheduled-tasks/scheduled-task-wake-notifier';
+import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import { TelegramCrmAutomationPolicyService } from './telegram-crm-automation-policy.service';
 import {
   buildCrmPrePublicationOccurrence,

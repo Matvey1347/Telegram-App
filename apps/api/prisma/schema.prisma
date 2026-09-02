@@ -380,6 +380,19 @@ enum TelegramAdvertiserTaskPriority {
   URGENT
 }
 
+enum OperationsNotificationType {
+  CRM_MESSAGE_RECEIVED
+  CRM_FOLLOW_UP_DUE
+  CRM_AUTOMATION_BLOCKED
+  CRM_PLACEMENT_FAILURE
+}
+
+enum OperationsNotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
 enum TelegramAdCrmOwnerMode {
   SALE_ASSIGNEE
   ADVERTISER_OWNER
@@ -756,6 +769,7 @@ model User {
   createdTelegramPlacementAdvertiserResults TelegramAdPlacementAdvertiserResult[] @relation("TelegramAdPlacementAdvertiserResultCreatedBy")
   applicationLogs                           ApplicationLog[]
   telegramSystemBotConnection               TelegramSystemBotConnection?
+  operationsPushSubscriptions               OperationsPushSubscription[]
   passwordResetToken                        PasswordResetToken?
   createdAt                                 DateTime                              @default(now())
   updatedAt                                 DateTime                              @updatedAt
@@ -876,6 +890,8 @@ model Workspace {
   scheduledTaskConfigs                    ScheduledTaskConfig[]
   scheduledTaskRuns                       ScheduledTaskRun[]
   scheduledTaskLeases                     ScheduledTaskLease[]
+  operationsNotifications                 OperationsNotification[]
+  operationsNotificationPreferences       OperationsNotificationPreference[]
   avatarIcon                              Icon?                                    @relation("WorkspaceAvatarIcon", fields: [avatarIconId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
@@ -1050,6 +1066,8 @@ model WorkspaceMember {
   sentTelegramCrmMessages                   TelegramCrmMessage[]               @relation("TelegramCrmMessageSentByMember")
   createdPostGroups                         PostGroup[]                        @relation("PostGroupCreatedByMember")
   createdTelegramInviteLinks                TelegramInviteLink[]               @relation("TelegramInviteLinkCreatorMember")
+  operationsNotifications                   OperationsNotification[]
+  operationsNotificationPreference          OperationsNotificationPreference?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1058,6 +1076,70 @@ model WorkspaceMember {
   @@unique([workspaceId, telegramUsername])
   @@unique([id, workspaceId])
   @@index([workspaceId, roleDefinitionId])
+}
+
+model OperationsNotification {
+  id                String                         @id @default(cuid())
+  workspaceId       String
+  recipientMemberId String
+  type              OperationsNotificationType
+  priority          OperationsNotificationPriority @default(NORMAL)
+  sourceKey         String
+  copyKey           String
+  title             String
+  body              String
+  metadata          Json                           @default("{}")
+  targetUrl         String
+  requiredPermissionKey String?
+  ownPermissionKey      String?
+  anyPermissionKey      String?
+  visibilityMemberId    String?
+  visibilityResourceKey String?
+  readAt            DateTime?
+  deliverAt         DateTime
+  publishedAt       DateTime?
+  expiresAt         DateTime
+  pushAttemptedAt   DateTime?
+  createdAt         DateTime                       @default(now())
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  recipient WorkspaceMember @relation(fields: [recipientMemberId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+
+  @@unique([workspaceId, recipientMemberId, type, sourceKey], map: "OperationsNotification_workspace_recipient_type_source_key")
+  @@index([workspaceId, recipientMemberId, createdAt, id], map: "OperationsNotification_recipient_list_idx")
+  @@index([expiresAt, id], map: "OperationsNotification_expiry_idx")
+  @@index([workspaceId, visibilityResourceKey, publishedAt], map: "OperationsNotification_visibility_resource_idx")
+}
+
+model OperationsPushSubscription {
+  id         String    @id @default(cuid())
+  userId     String
+  endpoint   String    @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  active     Boolean   @default(true)
+  disabledAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, active, id], map: "OperationsPushSubscription_user_active_idx")
+}
+
+model OperationsNotificationPreference {
+  workspaceId    String
+  memberId       String
+  webPushEnabled Boolean @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  member    WorkspaceMember @relation(fields: [memberId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+
+  @@id([workspaceId, memberId])
+  @@unique([memberId, workspaceId], map: "OperationsNotificationPreference_member_workspace_key")
 }
 
 model WorkspaceRoleDefinition {

@@ -43,8 +43,13 @@ import { TelegramCrmContactAutomationService } from './telegram-crm-contact-auto
 import { TelegramCrmAutomationClaimService } from './telegram-crm-automation-claim.service';
 import { TelegramCrmAutomationFinalizerService } from './telegram-crm-automation-finalizer.service';
 import { TelegramCrmAutomationAuthorizationService } from './telegram-crm-automation-authorization.service';
+import { OperationsNotificationsModule } from '../../operations/notifications/operations-notifications.module';
+import { TelegramCrmIncomingNotificationProjector } from './telegram-crm-incoming-notification-projector.service';
+import { TelegramCrmNotificationRecipientService } from './telegram-crm-notification-recipient.service';
+import { TelegramCrmInternalNotificationProjector } from './telegram-crm-internal-notification-projector.service';
 
 @Module({
+  imports: [OperationsNotificationsModule],
   controllers: [
     TelegramCrmController,
     TelegramCrmAccountController,
@@ -92,6 +97,9 @@ import { TelegramCrmAutomationAuthorizationService } from './telegram-crm-automa
     TelegramCrmAutomationRunnerService,
     TelegramCrmAutomationStatusService,
     TelegramCrmContactAutomationService,
+    TelegramCrmIncomingNotificationProjector,
+    TelegramCrmNotificationRecipientService,
+    TelegramCrmInternalNotificationProjector,
   ],
   exports: [
     TelegramCrmAutomationPolicyService,
@@ -101,6 +109,7 @@ import { TelegramCrmAutomationAuthorizationService } from './telegram-crm-automa
     TelegramCrmLegacyAuthorizationService,
     TelegramCrmAutomationOccurrenceService,
     TelegramCrmAutomationRunnerService,
+    TelegramCrmInternalNotificationProjector,
   ],
 })
 export class TelegramCrmModule {}

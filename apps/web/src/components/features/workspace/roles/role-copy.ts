@@ -70,6 +70,7 @@ const CAPABILITY_COPY: Record<string, string> = {
   delete: "Delete workspace",
   restoreTrash: "Restore trash",
   viewSystemLogs: "View logs",
+  notifications: "Notifications",
 };
 
 export function featureCopy(feature: FeatureDefinition) {

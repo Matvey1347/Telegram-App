@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS } from '@telegram-system/shared';
 import {
@@ -21,8 +22,6 @@ import {
   TelegramAdvertiserActivityType,
   TelegramAdvertiserContactType,
   TelegramCrmContactStage,
-  TelegramAdvertiserTaskPriority,
-  TelegramAdvertiserTaskStatus,
   TransactionType,
   WorkspaceRole,
 } from '@prisma/client';
@@ -39,7 +38,7 @@ import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
 import { adDeletionReadyWhere } from '../../operations/scheduled-tasks/due-work-predicates';
-import { notifyScheduledTaskDueWorkChanged } from '../../operations/scheduled-tasks/scheduled-task-wake-notifier';
+import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import { FinanceCategoriesService } from '../../finance/finance-categories/finance-categories.service';
 import { TelegramManagedPostCommandService } from '../telegram-channels/telegram-managed-post-command.service';
 import {
@@ -84,7 +83,6 @@ import {
   CreateTelegramAdSaleDto,
   CreateTelegramAdSalePlacementDto,
   CreateTelegramAdSalePaymentDto,
-  CreateTelegramAdvertiserTaskDto,
   CreatePlacementManagedPostDto,
   PublishPlacementDto,
   RecommendTelegramAdPolicyDto,
@@ -99,17 +97,13 @@ import {
   TelegramAdSalesQueryDto,
   TelegramAdvertiserActivitiesQueryDto,
   TelegramAdvertiserSearchDto,
-  TelegramAdvertiserTasksQueryDto,
   TelegramAdvertisersQueryDto,
-  CompleteTelegramAdvertiserTaskDto,
-  SkipTelegramAdvertiserTaskDto,
   UpdateTelegramAdChannelPricingDto,
   UpdateTelegramAdSalesMemberPreferencesDto,
   UpdateTelegramAdSalesWorkspaceSettingsDto,
   UpdateTelegramAdSalePaymentDto,
   UpdateTelegramAdvertiserContactDto,
   UpdateTelegramAdvertiserDto,
-  UpdateTelegramAdvertiserTaskDto,
   UpdateTelegramAdPolicyDto,
   UpdateTelegramAdProductDto,
   UpdateTelegramAdSaleDto,
@@ -177,6 +171,7 @@ import {
   isDedicatedSaleCancellation,
 } from './telegram-ad-sales-lifecycle-records';
 import { hydrateManagedTelegramPosts } from './telegram-ad-sales-managed-post-metrics';
+import { TelegramCrmInternalNotificationProjector } from '../telegram-crm/telegram-crm-internal-notification-projector.service';
 
 @Injectable()
 export class TelegramAdSalesService {
@@ -203,6 +198,8 @@ export class TelegramAdSalesService {
     private readonly telegramChannelAccessService: TelegramChannelAccessService,
     private readonly telegramBotApiClient: TelegramBotApiClient,
     private readonly automationFacts?: TelegramAdSalesCustomerAutomationFactsService,
+    @Optional()
+    private readonly notificationProjector?: TelegramCrmInternalNotificationProjector,
   ) {
     this.pricingReader = new TelegramAdSalesPricingReader(prisma);
     this.inventoryReader = new TelegramAdSalesInventoryReader(
@@ -2809,8 +2806,9 @@ export class TelegramAdSalesService {
     dto: UpdateTelegramAdvertiserDto,
   ) {
     const workspaceId = await this.workspace(userId);
-    await this.getAdvertiser(workspaceId, advertiserId);
+    const existing = await this.getAdvertiser(workspaceId, advertiserId);
     const stage = stageFromLegacyAdvertiser(dto);
+    let invalidatedMemberIds: string[] = [];
     const advertiser = await this.prisma.$transaction(async (tx) => {
       await tx.telegramAdvertiser.update({
         where: { id: advertiserId },
@@ -2881,11 +2879,29 @@ export class TelegramAdSalesService {
         username: dto.telegramUsername,
         usernameSpecified: dto.telegramUsername !== undefined,
       });
+      if (
+        dto.ownerMemberId !== undefined &&
+        dto.ownerMemberId !== existing.ownerMemberId &&
+        this.notificationProjector
+      ) {
+        invalidatedMemberIds =
+          await this.notificationProjector.contactVisibilityChanged(
+            tx,
+            workspaceId,
+            advertiserId,
+          );
+      }
       return tx.telegramAdvertiser.findUniqueOrThrow({
         where: { id: advertiserId },
         include: this.advertiserInclude(),
       });
     });
+    if (invalidatedMemberIds.length) {
+      this.notificationProjector?.invalidateVisibility(
+        workspaceId,
+        invalidatedMemberIds,
+      );
+    }
     return this.mapAdvertiser(advertiser);
   }
 
@@ -3090,196 +3106,6 @@ export class TelegramAdSalesService {
       ...dto,
       type: TelegramAdvertiserActivityType.NOTE_ADDED,
     });
-  }
-
-  async listCrmTasks(
-    userId: string,
-    query: TelegramAdvertiserTasksQueryDto,
-    ownerMemberId?: string,
-  ) {
-    const workspaceId = await this.workspace(userId);
-    const pagination = normalizePagination(query);
-    const where: Prisma.TelegramAdvertiserTaskWhereInput = {
-      workspaceId,
-      ...(ownerMemberId ? { advertiser: { ownerMemberId } } : {}),
-      ...(query.advertiserId ? { advertiserId: query.advertiserId } : {}),
-      ...(query.assignedMemberId
-        ? { assignedMemberId: query.assignedMemberId }
-        : {}),
-      ...(query.status ? { status: query.status } : {}),
-      ...(query.type ? { type: query.type } : {}),
-    };
-    const [items, totalItems] = await this.prisma.$transaction([
-      this.prisma.telegramAdvertiserTask.findMany({
-        where,
-        orderBy: [{ dueAt: 'asc' }, { id: 'asc' }],
-        skip: pagination.skip,
-        take: pagination.take,
-      }),
-      this.prisma.telegramAdvertiserTask.count({ where }),
-    ]);
-    return createPaginatedResponse(
-      items.map((item) => this.mapAdvertiserTask(item)),
-      totalItems,
-      pagination,
-    );
-  }
-
-  async createAdvertiserTask(
-    userId: string,
-    advertiserId: string,
-    dto: CreateTelegramAdvertiserTaskDto,
-  ) {
-    const workspaceId = await this.workspace(userId);
-    await this.getAdvertiser(workspaceId, advertiserId);
-    const task = await this.prisma.telegramAdvertiserTask.create({
-      data: {
-        workspaceId,
-        advertiserId,
-        saleId: dto.saleId ?? null,
-        placementId: dto.placementId ?? null,
-        assignedMemberId: dto.assignedMemberId,
-        createdByUserId: userId,
-        type: dto.type,
-        priority: dto.priority ?? TelegramAdvertiserTaskPriority.NORMAL,
-        title: dto.title.trim(),
-        description: dto.description?.trim() || null,
-        dueAt: new Date(dto.dueAt),
-        remindAt: dto.remindAt ? new Date(dto.remindAt) : null,
-        metadata:
-          (dto.metadata as Prisma.InputJsonValue | undefined) ??
-          Prisma.JsonNull,
-      },
-    });
-    await this.createAdvertiserActivity(workspaceId, advertiserId, {
-      type: TelegramAdvertiserActivityType.FOLLOW_UP_CREATED,
-      title: task.title,
-      taskId: task.id,
-      saleId: task.saleId,
-      placementId: task.placementId,
-      actorUserId: userId,
-    });
-    return this.mapAdvertiserTask(task);
-  }
-
-  async updateCrmTask(
-    userId: string,
-    taskId: string,
-    dto: UpdateTelegramAdvertiserTaskDto,
-  ) {
-    const workspaceId = await this.workspace(userId);
-    const existing = await this.prisma.telegramAdvertiserTask.findFirst({
-      where: { id: taskId, workspaceId },
-    });
-    if (!existing)
-      throw new NotFoundException('Telegram advertiser task not found');
-    const task = await this.prisma.telegramAdvertiserTask.update({
-      where: { id: taskId },
-      data: {
-        ...(dto.assignedMemberId === undefined
-          ? {}
-          : { assignedMemberId: dto.assignedMemberId }),
-        ...(dto.status === undefined ? {} : { status: dto.status }),
-        ...(dto.priority === undefined ? {} : { priority: dto.priority }),
-        ...(dto.title === undefined ? {} : { title: dto.title.trim() }),
-        ...(dto.description === undefined
-          ? {}
-          : { description: dto.description?.trim() || null }),
-        ...(dto.dueAt === undefined
-          ? {}
-          : { dueAt: dto.dueAt ? new Date(dto.dueAt) : existing.dueAt }),
-        ...(dto.remindAt === undefined
-          ? {}
-          : { remindAt: dto.remindAt ? new Date(dto.remindAt) : null }),
-        ...(dto.snoozedUntil === undefined
-          ? {}
-          : {
-              snoozedUntil: dto.snoozedUntil
-                ? new Date(dto.snoozedUntil)
-                : null,
-            }),
-      },
-    });
-    return this.mapAdvertiserTask(task);
-  }
-
-  async completeCrmTask(
-    userId: string,
-    taskId: string,
-    dto: CompleteTelegramAdvertiserTaskDto,
-  ) {
-    const workspaceId = await this.workspace(userId);
-    const existing = await this.prisma.telegramAdvertiserTask.findFirst({
-      where: { id: taskId, workspaceId },
-    });
-    if (!existing)
-      throw new NotFoundException('Telegram advertiser task not found');
-    const task = await this.prisma.telegramAdvertiserTask.update({
-      where: { id: taskId },
-      data: {
-        status: TelegramAdvertiserTaskStatus.COMPLETED,
-        completedAt: existing.completedAt ?? new Date(),
-        completionNote: dto.completionNote?.trim() || null,
-      },
-    });
-    const activityExists =
-      await this.prisma.telegramAdvertiserActivity.findFirst({
-        where: {
-          workspaceId,
-          advertiserId: task.advertiserId,
-          taskId,
-          type: TelegramAdvertiserActivityType.FOLLOW_UP_COMPLETED,
-        },
-      });
-    if (!activityExists) {
-      await this.createAdvertiserActivity(workspaceId, task.advertiserId, {
-        type: TelegramAdvertiserActivityType.FOLLOW_UP_COMPLETED,
-        title: task.title,
-        taskId: task.id,
-        saleId: task.saleId,
-        placementId: task.placementId,
-        actorUserId: userId,
-        description: dto.completionNote?.trim() || null,
-      });
-    }
-    return this.mapAdvertiserTask(task);
-  }
-
-  async snoozeCrmTask(
-    userId: string,
-    taskId: string,
-    dto: UpdateTelegramAdvertiserTaskDto,
-  ) {
-    return this.updateCrmTask(userId, taskId, dto);
-  }
-
-  async skipCrmTask(
-    userId: string,
-    taskId: string,
-    dto: SkipTelegramAdvertiserTaskDto,
-  ) {
-    const workspaceId = await this.workspace(userId);
-    const existing = await this.prisma.telegramAdvertiserTask.findFirst({
-      where: { id: taskId, workspaceId },
-    });
-    if (!existing)
-      throw new NotFoundException('Telegram advertiser task not found');
-    const task = await this.prisma.telegramAdvertiserTask.update({
-      where: { id: taskId },
-      data: {
-        status: TelegramAdvertiserTaskStatus.SKIPPED,
-        skippedAt: new Date(),
-        completionNote: dto.reason?.trim() || null,
-      },
-    });
-    await this.createAdvertiserActivity(workspaceId, task.advertiserId, {
-      type: TelegramAdvertiserActivityType.FOLLOW_UP_SKIPPED,
-      title: task.title,
-      taskId: task.id,
-      actorUserId: userId,
-      description: dto.reason?.trim() || null,
-    });
-    return this.mapAdvertiserTask(task);
   }
 
   async rebuildInventorySnapshots(
@@ -4106,6 +3932,15 @@ export class TelegramAdSalesService {
     if (dto.telegramAdProductId && !product) {
       throw new NotFoundException('Telegram ad product not found');
     }
+    const freshMissed =
+      dto.status === TelegramAdPlacementStatus.MISSED &&
+      placement.status !== TelegramAdPlacementStatus.MISSED;
+    if (freshMissed) {
+      this.assertPlacementTransition(
+        placement.status,
+        TelegramAdPlacementStatus.MISSED,
+      );
+    }
     const nextScheduledAt = dto.scheduledAt
       ? new Date(dto.scheduledAt)
       : placement.scheduledAt;
@@ -4140,64 +3975,94 @@ export class TelegramAdSalesService {
           'manualPriceReason is required when agreedPrice is below minimumPrice',
       });
     }
-    const updated = await this.prisma.telegramAdSalePlacement.update({
-      where: { id: placementId },
-      data: {
-        ...(dto.scheduledAt === undefined
-          ? {}
-          : { scheduledAt: new Date(dto.scheduledAt) }),
-        ...(dto.telegramAdProductId === undefined
-          ? {}
-          : {
-              telegramAdProductId: product?.id ?? null,
-              topDurationMinutesSnapshot: product?.topDurationMinutes ?? null,
-              feedDurationHoursSnapshot: product?.feedDurationHours ?? null,
+    const data: Prisma.TelegramAdSalePlacementUpdateInput = {
+      ...(freshMissed ? { status: TelegramAdPlacementStatus.MISSED } : {}),
+      ...(dto.scheduledAt === undefined
+        ? {}
+        : { scheduledAt: new Date(dto.scheduledAt) }),
+      ...(dto.telegramAdProductId === undefined
+        ? {}
+        : {
+            telegramAdProductId: product?.id ?? null,
+            topDurationMinutesSnapshot: product?.topDurationMinutes ?? null,
+            feedDurationHoursSnapshot: product?.feedDurationHours ?? null,
+            deleteAfterHoursSnapshot: nextDeleteAfterHours,
+            isPermanentSnapshot: nextIsPermanent,
+          }),
+      ...((dto.scheduledAt !== undefined ||
+        dto.telegramAdProductId !== undefined) &&
+      placement.publishedAt
+        ? {
+            plannedDeleteAt: calculateAdPlacementDeleteAt({
+              scheduledAt: nextScheduledAt,
+              publishedAt: placement.publishedAt,
               deleteAfterHoursSnapshot: nextDeleteAfterHours,
               isPermanentSnapshot: nextIsPermanent,
             }),
-        ...((dto.scheduledAt !== undefined ||
-          dto.telegramAdProductId !== undefined) &&
-        placement.publishedAt
-          ? {
-              plannedDeleteAt: calculateAdPlacementDeleteAt({
-                scheduledAt: nextScheduledAt,
-                publishedAt: placement.publishedAt,
-                deleteAfterHoursSnapshot: nextDeleteAfterHours,
-                isPermanentSnapshot: nextIsPermanent,
-              }),
-            }
-          : {}),
-        ...(dto.timezone === undefined ? {} : { timezone: dto.timezone }),
-        ...(dto.pricingMode === undefined
-          ? {}
-          : { pricingMode: dto.pricingMode }),
-        ...(dto.expectedViews === undefined
-          ? {}
-          : { expectedViews: dto.expectedViews }),
-        ...(dto.recommendedPrice === undefined
-          ? {}
-          : { recommendedPrice: decimal(dto.recommendedPrice) }),
-        ...(dto.minimumPrice === undefined
-          ? {}
-          : { minimumPrice: decimal(dto.minimumPrice) }),
-        ...(dto.agreedPrice === undefined
-          ? {}
-          : { agreedPrice: decimal(dto.agreedPrice) }),
-        ...(dto.quotedCpm === undefined
-          ? {}
-          : { quotedCpm: decimalOrNull(dto.quotedCpm) }),
-        ...(dto.currency === undefined ? {} : { currency: dto.currency }),
-        ...(dto.manualPriceReason === undefined
-          ? {}
-          : { manualPriceReason: dto.manualPriceReason?.trim() || null }),
-        ...(dto.managedPostId === undefined
-          ? {}
-          : { managedPostId: dto.managedPostId || null }),
-        ...(dto.telegramPostId === undefined
-          ? {}
-          : { telegramPostId: dto.telegramPostId || null }),
-      },
-    });
+          }
+        : {}),
+      ...(dto.timezone === undefined ? {} : { timezone: dto.timezone }),
+      ...(dto.pricingMode === undefined
+        ? {}
+        : { pricingMode: dto.pricingMode }),
+      ...(dto.expectedViews === undefined
+        ? {}
+        : { expectedViews: dto.expectedViews }),
+      ...(dto.recommendedPrice === undefined
+        ? {}
+        : { recommendedPrice: decimal(dto.recommendedPrice) }),
+      ...(dto.minimumPrice === undefined
+        ? {}
+        : { minimumPrice: decimal(dto.minimumPrice) }),
+      ...(dto.agreedPrice === undefined
+        ? {}
+        : { agreedPrice: decimal(dto.agreedPrice) }),
+      ...(dto.quotedCpm === undefined
+        ? {}
+        : { quotedCpm: decimalOrNull(dto.quotedCpm) }),
+      ...(dto.currency === undefined ? {} : { currency: dto.currency }),
+      ...(dto.manualPriceReason === undefined
+        ? {}
+        : { manualPriceReason: dto.manualPriceReason?.trim() || null }),
+      ...(dto.managedPostId === undefined
+        ? {}
+        : { managedPostId: dto.managedPostId || null }),
+      ...(dto.telegramPostId === undefined
+        ? {}
+        : { telegramPostId: dto.telegramPostId || null }),
+    };
+    let notificationIds: string[] = [];
+    const updated = freshMissed
+      ? await this.prisma.$transaction(async (tx) => {
+          const sale = await tx.telegramAdSale.findFirst({
+            where: { id: saleId, workspaceId },
+            select: { advertiserId: true },
+          });
+          const transition = await tx.telegramAdSalePlacement.updateMany({
+            where: { id: placementId, status: placement.status },
+            data,
+          });
+          const changed = await tx.telegramAdSalePlacement.findUniqueOrThrow({
+            where: { id: placementId },
+          });
+          notificationIds =
+            transition.count && this.notificationProjector
+              ? (
+                  await this.notificationProjector.placementMissed(tx, {
+                    id: changed.id,
+                    workspaceId,
+                    advertiserId: sale?.advertiserId ?? null,
+                    telegramAdSaleId: saleId,
+                  })
+                ).map((item) => item.id)
+              : [];
+          return changed;
+        })
+      : await this.prisma.telegramAdSalePlacement.update({
+          where: { id: placementId },
+          data,
+        });
+    await this.notificationProjector?.publish(notificationIds);
     this.invalidateAvailabilityCache(workspaceId);
     await this.automationFacts?.scheduleChanged(workspaceId, saleId);
     return {

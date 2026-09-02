@@ -1,5 +1,5 @@
 import { TelegramManagedPostStatus } from '@prisma/client';
-import { scheduledTaskWakeNotifier } from '../../operations/scheduled-tasks/scheduled-task-wake-notifier';
+import { scheduledTaskWakeNotifier } from '../../../common/scheduled-task-wake-notifier';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
 import { TelegramManagedPostPublisherService } from './telegram-managed-post-publisher.service';
 

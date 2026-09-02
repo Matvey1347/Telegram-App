@@ -3,6 +3,7 @@ export * from "./constants/transaction-types";
 export * from "./constants/campaign-statuses";
 export * from "./types/post-groups";
 export * from "./types/operations";
+export * from "./types/operations-notifications";
 export * from "./types/application-logs";
 export * from "./types/scheduled-tasks";
 export * from "./types/telegram-bot-platform";

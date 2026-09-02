@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { TelegramAdPlacementStatus } from '@prisma/client';
-import { scheduledTaskWakeNotifier } from '../../operations/scheduled-tasks/scheduled-task-wake-notifier';
+import { scheduledTaskWakeNotifier } from '../../../common/scheduled-task-wake-notifier';
 import { TelegramAdPlacementLifecycleService } from './telegram-ad-placement-lifecycle.service';
 
 describe('TelegramAdPlacementLifecycleService', () => {

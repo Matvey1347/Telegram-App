@@ -157,6 +157,7 @@ export const WORKSPACE_FEATURE_REGISTRY = [
     navigation: ["scheduledTasks", "trash", "systemLogs"],
     search: ["scheduledTasks"],
     extra: [
+      { capability: "notifications", sensitivity: "standard" },
       { capability: "restoreTrash", sensitivity: "sensitive" },
       { capability: "viewSystemLogs", sensitivity: "sensitive" },
     ],

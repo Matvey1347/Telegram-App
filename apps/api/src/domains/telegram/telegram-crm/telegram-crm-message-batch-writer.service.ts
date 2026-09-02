@@ -1,12 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import {
   Prisma,
   TelegramCrmMessageOrigin,
   TelegramCrmReadState,
 } from '@prisma/client';
 import type { TelegramCrmMtprotoMessage } from '../../../telegram/shared/telegram-crm-mtproto.types';
+import { OperationsNotificationPublisherService } from '../../operations/notifications/operations-notification-publisher.service';
 import { TelegramCrmEventHub } from './telegram-crm-event-hub.service';
-import { crmMessageSelect, mapCrmMessage } from './telegram-crm-message.mapper';
+import { TelegramCrmIncomingNotificationProjector } from './telegram-crm-incoming-notification-projector.service';
+import { TelegramCrmMessageAfterCommitPublisher } from './telegram-crm-message-after-commit-publisher.service';
+import { crmMessageSelect } from './telegram-crm-message.mapper';
 
 export type CrmMessageBatchMode = 'snapshot' | 'live' | 'history';
 export type CrmMessageBatchInput = {
@@ -31,7 +34,19 @@ type MessageRow = Prisma.TelegramCrmMessageGetPayload<{
 
 @Injectable()
 export class TelegramCrmMessageBatchWriter {
-  constructor(private readonly events: TelegramCrmEventHub) {}
+  private readonly afterCommit: TelegramCrmMessageAfterCommitPublisher;
+
+  constructor(
+    events: TelegramCrmEventHub,
+    @Optional() notifications?: OperationsNotificationPublisherService,
+    @Optional()
+    private readonly projector?: TelegramCrmIncomingNotificationProjector,
+  ) {
+    this.afterCommit = new TelegramCrmMessageAfterCommitPublisher(
+      events,
+      notifications,
+    );
+  }
 
   async store(
     tx: Prisma.TransactionClient,
@@ -67,30 +82,39 @@ export class TelegramCrmMessageBatchWriter {
       ({ conversation, message }) =>
         !existingByKey.has(`${conversation.id}:${message.telegramMessageId}`),
     );
-    if (fresh.length) {
-      await tx.telegramCrmMessage.createMany({
-        data: fresh.map(({ conversation, message }) => ({
-          workspaceId: context.workspaceId,
-          conversationId: conversation.id,
-          telegramMessageId: String(message.telegramMessageId),
-          telegramMessageIdNumeric: message.telegramMessageId,
-          mtprotoAccountId: context.accountId,
-          direction: message.direction,
-          origin: TelegramCrmMessageOrigin.TELEGRAM_SYNC,
-          text: message.text,
-          contentMetadata:
-            (message.contentMetadata as Prisma.InputJsonValue | null) ??
-            Prisma.JsonNull,
-          sentAt: message.sentAt,
-          editedAt: message.editedAt,
-          readState:
-            message.direction === 'INBOUND' && mode === 'live'
-              ? TelegramCrmReadState.UNREAD
-              : TelegramCrmReadState.UNKNOWN,
-        })),
-        skipDuplicates: true,
-      });
-    }
+    const inserted = fresh.length
+      ? await tx.telegramCrmMessage.createManyAndReturn({
+          data: fresh.map(({ conversation, message }) => ({
+            workspaceId: context.workspaceId,
+            conversationId: conversation.id,
+            telegramMessageId: String(message.telegramMessageId),
+            telegramMessageIdNumeric: message.telegramMessageId,
+            mtprotoAccountId: context.accountId,
+            direction: message.direction,
+            origin: TelegramCrmMessageOrigin.TELEGRAM_SYNC,
+            text: message.text,
+            contentMetadata:
+              (message.contentMetadata as Prisma.InputJsonValue | null) ??
+              Prisma.JsonNull,
+            sentAt: message.sentAt,
+            editedAt: message.editedAt,
+            readState:
+              message.direction === 'INBOUND' && mode === 'live'
+                ? TelegramCrmReadState.UNREAD
+                : TelegramCrmReadState.UNKNOWN,
+          })),
+          skipDuplicates: true,
+          select: { id: true, conversationId: true, telegramMessageId: true },
+        })
+      : [];
+    const insertedKeys = new Set(
+      inserted.map(
+        (message) => `${message.conversationId}:${message.telegramMessageId}`,
+      ),
+    );
+    const insertedInputs = fresh.filter(({ conversation, message }) =>
+      insertedKeys.has(`${conversation.id}:${message.telegramMessageId}`),
+    );
     let edited = 0;
     const editedInputs: CrmMessageBatchInput[] = [];
     for (const input of inputs) {
@@ -113,20 +137,32 @@ export class TelegramCrmMessageBatchWriter {
       editedInputs.push(input);
     }
     if (mode !== 'history') {
-      await this.updateCompacts(tx, fresh, mode);
+      await this.updateCompacts(tx, insertedInputs, mode);
     }
-    const created = fresh.length
+    const created = inserted.length
       ? await tx.telegramCrmMessage.findMany({
-          where: {
-            OR: fresh.map(({ conversation, message }) => ({
-              conversationId: conversation.id,
-              telegramMessageId: String(message.telegramMessageId),
-            })),
-          },
+          where: { id: { in: inserted.map((message) => message.id) } },
           select: crmMessageSelect,
         })
       : [];
-    return { created, edited, inputs: [...fresh, ...editedInputs] };
+    const notificationIds =
+      this.projector && created.length
+        ? (
+            await this.projector.project(
+              tx,
+              context.workspaceId,
+              mode,
+              insertedInputs,
+              created,
+            )
+          ).map((item) => item.id)
+        : [];
+    return {
+      created,
+      edited,
+      inputs: [...insertedInputs, ...editedInputs],
+      notificationIds,
+    };
   }
 
   emitAfterCommit(
@@ -135,73 +171,11 @@ export class TelegramCrmMessageBatchWriter {
       created: MessageRow[];
       edited: number;
       inputs: CrmMessageBatchInput[];
+      notificationIds?: string[];
     },
     mode: CrmMessageBatchMode,
   ) {
-    if (mode === 'history') return;
-    const inputByConversation = new Map(
-      stored.inputs.map((input) => [input.conversation.id, input]),
-    );
-    if (mode === 'live') {
-      for (const row of stored.created) {
-        const message = mapCrmMessage(row);
-        const input = inputByConversation.get(message.conversationId);
-        this.events.emit({
-          type:
-            message.direction === 'INBOUND'
-              ? 'message.received'
-              : 'message.sent',
-          workspaceId,
-          occurredAt: new Date().toISOString(),
-          conversationId: message.conversationId,
-          contactId: input?.conversation.contactId ?? null,
-          ownerMemberId: input?.conversation.contact?.ownerMemberId ?? null,
-          message: { ...message, sentByMember: null },
-        });
-      }
-    }
-    for (const input of this.touchedConversations(stored.inputs)) {
-      if (mode === 'live') {
-        const inboundCount = stored.inputs.filter(
-          (item) =>
-            item.conversation.id === input.conversation.id &&
-            item.message.direction === 'INBOUND' &&
-            !item.edited,
-        ).length;
-        if (inboundCount > 0) {
-          this.events.emit({
-            type: 'conversation.unreadChanged',
-            workspaceId,
-            occurredAt: new Date().toISOString(),
-            conversationId: input.conversation.id,
-            contactId: input.conversation.contactId,
-            ownerMemberId: input.conversation.contact?.ownerMemberId ?? null,
-            unreadCount: (input.conversation.unreadCount ?? 0) + inboundCount,
-          });
-        }
-      }
-      if (input.conversation.contactId) {
-        this.events.emit({
-          type: 'contact.updated',
-          workspaceId,
-          occurredAt: new Date().toISOString(),
-          contactId: input.conversation.contactId,
-          ownerMemberId: input.conversation.contact?.ownerMemberId ?? null,
-        });
-      } else {
-        this.events.emit({
-          type: 'inbox.updated',
-          workspaceId,
-          occurredAt: new Date().toISOString(),
-          peerId:
-            input.conversation.telegramCrmPeerId ??
-            input.message.telegramUserId,
-          contactId: null,
-          ownerMemberId: null,
-          conversation: null,
-        });
-      }
-    }
+    this.afterCommit.messages(workspaceId, stored, mode);
   }
 
   emitReadsAfterCommit(
@@ -215,39 +189,7 @@ export class TelegramCrmMessageBatchWriter {
       unreadChanged: boolean;
     }>,
   ) {
-    for (const read of reads) {
-      this.events.emit({
-        type: 'readChanged',
-        workspaceId,
-        occurredAt: new Date().toISOString(),
-        conversationId: read.conversationId,
-        contactId: read.contactId,
-        ownerMemberId: read.ownerMemberId,
-        unreadCount: read.unreadCount,
-      });
-      if (read.unreadChanged) {
-        this.events.emit({
-          type: 'conversation.unreadChanged',
-          workspaceId,
-          occurredAt: new Date().toISOString(),
-          conversationId: read.conversationId,
-          contactId: read.contactId,
-          ownerMemberId: read.ownerMemberId,
-          unreadCount: read.unreadCount,
-        });
-      }
-      if (!read.contactId) {
-        this.events.emit({
-          type: 'inbox.updated',
-          workspaceId,
-          occurredAt: new Date().toISOString(),
-          peerId: read.peerId,
-          contactId: null,
-          ownerMemberId: null,
-          conversation: null,
-        });
-      }
-    }
+    this.afterCommit.reads(workspaceId, reads);
   }
 
   emitPeerMetadataAfterCommit(
@@ -258,27 +200,7 @@ export class TelegramCrmMessageBatchWriter {
       ownerMemberId: string | null;
     }>,
   ) {
-    for (const peer of peers) {
-      this.events.emit(
-        peer.contactId
-          ? {
-              type: 'contact.updated',
-              workspaceId,
-              occurredAt: new Date().toISOString(),
-              contactId: peer.contactId,
-              ownerMemberId: peer.ownerMemberId,
-            }
-          : {
-              type: 'inbox.updated',
-              workspaceId,
-              occurredAt: new Date().toISOString(),
-              peerId: peer.id,
-              contactId: null,
-              ownerMemberId: null,
-              conversation: null,
-            },
-      );
-    }
+    this.afterCommit.peers(workspaceId, peers);
   }
 
   private async updateCompacts(

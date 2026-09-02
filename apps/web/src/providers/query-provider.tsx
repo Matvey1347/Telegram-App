@@ -99,6 +99,7 @@ const workspaceScopedQueryKeys = new Set<string>([
   "application-logs",
   "application-log-filter-options",
   "scheduled-tasks",
+  "operations-notifications",
   "global-search",
   "icons",
   "icon",
@@ -110,6 +111,14 @@ export const QUERY_PERSIST_STORAGE_KEY = "telegram-system-react-query-cache";
 export function clearPersistedQueryCache() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(QUERY_PERSIST_STORAGE_KEY);
+}
+
+export function isPersistedQuery(queryKey: readonly unknown[]) {
+  const [root] = queryKey;
+  return (
+    typeof root === "string" &&
+    (PERSISTED_QUERY_KEYS as readonly string[]).includes(root)
+  );
 }
 
 export function QueryProvider({ children }: PropsWithChildren) {
@@ -160,11 +169,7 @@ export function QueryProvider({ children }: PropsWithChildren) {
           shouldDehydrateMutation: () => false,
           shouldDehydrateQuery: (query) => {
             if (query.state.status !== "success") return false;
-            const [root] = query.queryKey;
-            return (
-              typeof root === "string" &&
-              (PERSISTED_QUERY_KEYS as readonly string[]).includes(root)
-            );
+            return isPersistedQuery(query.queryKey);
           },
         },
       }}

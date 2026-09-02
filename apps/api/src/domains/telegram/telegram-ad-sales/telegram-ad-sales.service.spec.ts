@@ -23,7 +23,7 @@ import {
   TelegramAdAnalyticsSeriesQueryDto,
 } from './dto';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
-import { scheduledTaskWakeNotifier } from '../../operations/scheduled-tasks/scheduled-task-wake-notifier';
+import { scheduledTaskWakeNotifier } from '../../../common/scheduled-task-wake-notifier';
 
 const decimal = (value: number | string) => new Prisma.Decimal(value);
 
@@ -295,6 +295,7 @@ function createService() {
       update: jest.fn(),
       updateMany: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
+      findUniqueOrThrow: jest.fn(),
       aggregate: jest.fn().mockResolvedValue({
         _sum: { agreedPrice: decimal(0) },
       }),
@@ -383,6 +384,12 @@ function createService() {
     checkProductionBotPublishingAccess: jest.fn(),
   };
   const telegramBotApiClient: any = { deleteMessage: jest.fn() };
+  const notificationProjector: any = {
+    placementMissed: jest.fn().mockResolvedValue([{ id: 'notification-1' }]),
+    contactVisibilityChanged: jest.fn().mockResolvedValue([]),
+    invalidateVisibility: jest.fn(),
+    publish: jest.fn(),
+  };
   const service = new TelegramAdSalesService(
     prisma,
     workspaceService,
@@ -399,6 +406,8 @@ function createService() {
     encryptionService,
     telegramChannelAccessService,
     telegramBotApiClient,
+    undefined,
+    notificationProjector,
   );
   return {
     service,
@@ -415,6 +424,7 @@ function createService() {
     telegramBotApiClient,
     mtprotoClient,
     encryptionService,
+    notificationProjector,
   };
 }
 
@@ -1492,6 +1502,50 @@ describe('TelegramAdSalesService', () => {
         minimumPrice: 120,
       }),
     ).resolves.toBeDefined();
+  });
+
+  it('projects exactly one notification for a fresh persisted MISSED transition', async () => {
+    const { service, prisma, notificationProjector } = createService();
+    const scheduled = makePlacement({
+      status: TelegramAdPlacementStatus.SCHEDULED,
+    });
+    const missed = makePlacement({ status: TelegramAdPlacementStatus.MISSED });
+    prisma.telegramAdSalePlacement.findFirst.mockResolvedValue(scheduled);
+    prisma.telegramAdSalePlacement.updateMany.mockResolvedValue({ count: 1 });
+    prisma.telegramAdSalePlacement.findUniqueOrThrow.mockResolvedValue(missed);
+    prisma.telegramAdSale.findFirst.mockResolvedValue({
+      advertiserId: 'contact-1',
+    });
+
+    await service.updatePlacement('user-1', 'sale-1', 'placement-1', {
+      status: TelegramAdPlacementStatus.MISSED,
+    });
+
+    expect(notificationProjector.placementMissed).toHaveBeenCalledTimes(1);
+    expect(notificationProjector.placementMissed).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({
+        id: 'placement-1',
+        advertiserId: 'contact-1',
+      }),
+    );
+    expect(notificationProjector.publish).toHaveBeenCalledWith([
+      'notification-1',
+    ]);
+  });
+
+  it('does not project placement failure for an unchanged MISSED row', async () => {
+    const { service, prisma, notificationProjector } = createService();
+    const missed = makePlacement({ status: TelegramAdPlacementStatus.MISSED });
+    prisma.telegramAdSalePlacement.findFirst.mockResolvedValue(missed);
+    prisma.telegramAdSalePlacement.update.mockResolvedValue(missed);
+
+    await service.updatePlacement('user-1', 'sale-1', 'placement-1', {
+      status: TelegramAdPlacementStatus.MISSED,
+    });
+
+    expect(notificationProjector.placementMissed).not.toHaveBeenCalled();
+    expect(notificationProjector.publish).toHaveBeenCalledWith([]);
   });
 
   it('creates advertising managed posts inside the channel Advertise system group', async () => {

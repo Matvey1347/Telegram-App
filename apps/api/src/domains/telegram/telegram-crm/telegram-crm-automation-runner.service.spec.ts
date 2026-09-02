@@ -7,7 +7,9 @@ describe('TelegramCrmAutomationRunnerService', () => {
         findFirst: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
+      $transaction: jest.fn(),
     };
+    prisma.$transaction.mockImplementation((work) => work(prisma));
     const claims = {
       ownerId: 'worker-1',
       terminalizeExhausted: jest.fn(),
@@ -60,6 +62,7 @@ describe('TelegramCrmAutomationRunnerService', () => {
     });
     expect(claims.claim).toHaveBeenCalledTimes(40);
     expect(claims.claim).toHaveBeenCalledWith(25);
+    expect(claims.terminalizeExhausted).toHaveBeenCalledWith(25);
   });
 
   it('checks non-target policy gates before resolving or creating a Conversation', async () => {

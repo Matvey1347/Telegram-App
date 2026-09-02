@@ -181,6 +181,24 @@ export class ScheduledTaskRegistryService {
         execute: this.executor.executors['application_logs.cleanup'],
       },
       {
+        key: 'operations.notifications.publish_due',
+        name: 'Notification publication and retention',
+        description:
+          'Publishes persisted due notifications and removes expired notification history.',
+        scope: 'SYSTEM_MAINTENANCE',
+        defaultSchedule: {
+          frequency: 'INTERVAL',
+          intervalMinutes: 60,
+          timezone: 'Europe/Warsaw',
+        },
+        scheduleEditable: false,
+        supportedFrequencies: ['INTERVAL'],
+        notificationSupported: false,
+        dueDriven: true,
+        execute:
+          this.executor.executors['operations.notifications.publish_due'],
+      },
+      {
         key: 'greeter.expire_pending',
         name: 'Greeter pending request expiry',
         description: 'Expires due Greeter CAPTCHA join requests safely.',

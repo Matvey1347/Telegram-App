@@ -11,7 +11,6 @@ import {
   iconsApi,
   withFreshApiReads,
   workspacesApi,
-  type GlobalSearchResult,
 } from "@/lib/api";
 import { runProgressSequence } from "@/lib/progress";
 import {
@@ -24,16 +23,11 @@ import { IconPicker } from "@/components/icons/icon-picker";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { SystemBrandLogo } from "@/components/layout/system-brand-logo";
 import { AppNavigation } from "@/components/layout/app-navigation";
+import { GlobalSearchBox } from "@/components/layout/global-search-box";
+import { GlobalRefreshButton } from "@/components/layout/global-refresh-button";
 import { useSystemBotWorkspaceSync } from "@/components/layout/use-system-bot-workspace-sync";
-import {
-  ChevronRight,
-  LogOut,
-  Menu,
-  Plus,
-  Search,
-  RefreshCw,
-  X,
-} from "lucide-react";
+import { NotificationCenter } from "@/components/features/operations/notifications/notification-center";
+import { ChevronRight, LogOut, Menu, Plus, X } from "lucide-react";
 
 export function AppShell({ children }: PropsWithChildren) {
   const pathname = usePathname();
@@ -285,8 +279,21 @@ export function AppShell({ children }: PropsWithChildren) {
       "operations.viewSystemLogs",
     ) ??
     (activeWorkspace?.role === "owner" || activeWorkspace?.role === "admin");
+  const canViewNotifications =
+    activeWorkspace?.role === "owner" ||
+    Boolean(
+      activeWorkspace?.access?.permissionKeys.includes(
+        "operations.notifications",
+      ),
+    );
   return (
     <div className="min-h-screen overflow-x-hidden bg-neutral-950 text-neutral-100">
+      <div className="fixed right-[3.75rem] top-2 z-30 lg:left-[9.5rem] lg:right-auto lg:top-5 lg:z-40">
+        <NotificationCenter
+          workspaceId={activeWorkspaceId}
+          enabled={canViewNotifications}
+        />
+      </div>
       <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-neutral-800 bg-neutral-950/95 px-3 backdrop-blur lg:hidden">
         <button
           type="button"
@@ -299,15 +306,10 @@ export function AppShell({ children }: PropsWithChildren) {
           <Menu size={20} />
         </button>
         <SystemBrandLogo compact />
-        <button
-          type="button"
-          onClick={() => void handleGlobalRefresh()}
-          className="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-800 text-neutral-200 transition hover:bg-neutral-900 hover:text-white"
-          aria-label="Refresh data"
-          title="Refresh data"
-        >
-          <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
-        </button>
+        <GlobalRefreshButton
+          refreshing={refreshing}
+          onRefresh={() => void handleGlobalRefresh()}
+        />
       </header>
       {mobileMenuOpen ? (
         <button
@@ -337,18 +339,12 @@ export function AppShell({ children }: PropsWithChildren) {
         <div className="mb-4">
           <div className="flex items-center justify-between gap-2 pr-10 lg:pr-0">
             <SystemBrandLogo />
-            <button
-              type="button"
-              onClick={() => void handleGlobalRefresh()}
-              className={`${mobileMenuOpen ? "hidden" : "flex"} h-9 w-9 items-center justify-center rounded-lg border border-neutral-800 text-neutral-300 transition hover:bg-neutral-900 hover:text-white`}
-              aria-label="Refresh data"
-              title="Refresh data"
-            >
-              <RefreshCw
-                size={16}
-                className={refreshing ? "animate-spin" : ""}
-              />
-            </button>
+            <GlobalRefreshButton
+              compact
+              hidden={mobileMenuOpen}
+              refreshing={refreshing}
+              onRefresh={() => void handleGlobalRefresh()}
+            />
           </div>
         </div>
 
@@ -494,105 +490,6 @@ export function AppShell({ children }: PropsWithChildren) {
           {children}
         </div>
       </main>
-    </div>
-  );
-}
-
-function SearchResultIcon({ result }: { result: GlobalSearchResult }) {
-  if (result.iconUrl)
-    return (
-      <img
-        src={result.iconUrl}
-        alt=""
-        className="h-7 w-7 shrink-0 rounded-md object-cover"
-      />
-    );
-  if (result.iconEmoji)
-    return (
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center text-base">
-        {result.iconEmoji}
-      </span>
-    );
-  return (
-    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-neutral-700 bg-neutral-800 text-xs font-semibold text-neutral-200">
-      {(result.title.trim()[0] || result.label.trim()[0] || "?").toUpperCase()}
-    </span>
-  );
-}
-
-function GlobalSearchBox({
-  query,
-  onQueryChange,
-  focused,
-  onFocusedChange,
-  results,
-  isFetching,
-}: {
-  query: string;
-  onQueryChange: (value: string) => void;
-  focused: boolean;
-  onFocusedChange: (value: boolean) => void;
-  results: GlobalSearchResult[];
-  isFetching: boolean;
-}) {
-  const showResults = focused && query.trim().length >= 2;
-  return (
-    <div className="relative mb-3">
-      <div className="relative">
-        <Search
-          size={15}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500"
-        />
-        <input
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-          onFocus={() => onFocusedChange(true)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") onFocusedChange(false);
-          }}
-          placeholder="Search everything"
-          className="h-10 w-full rounded-xl border border-neutral-800 bg-neutral-900/45 pl-9 pr-3 text-sm text-neutral-100 outline-none transition placeholder:text-neutral-600 focus:border-blue-600 focus:bg-neutral-900/70 focus:ring-1 focus:ring-blue-600"
-        />
-      </div>
-      {showResults ? (
-        <div
-          className="absolute left-0 right-0 top-full z-50 mt-2 max-h-96 overflow-auto rounded-lg border border-neutral-800 bg-neutral-950 p-1 shadow-2xl"
-          onMouseDown={(event) => event.preventDefault()}
-        >
-          {isFetching ? (
-            <p className="px-3 py-2 text-sm text-neutral-400">Searching...</p>
-          ) : null}
-          {!isFetching && results.length ? (
-            <div className="space-y-1">
-              {results.map((result) => (
-                <Link
-                  key={`${result.type}-${result.id}`}
-                  href={result.href}
-                  onClick={() => {
-                    onFocusedChange(false);
-                    onQueryChange("");
-                  }}
-                  className="flex min-w-0 items-center gap-2 rounded-md px-2 py-2 text-sm text-neutral-200 hover:bg-neutral-900"
-                >
-                  <SearchResultIcon result={result} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium text-white">
-                      {result.title}
-                    </span>
-                    <span className="block truncate text-xs text-neutral-500">
-                      {result.label}
-                      {result.subtitle ? ` · ${result.subtitle}` : ""}
-                    </span>
-                  </span>
-                </Link>
-              ))}
-            </div>
-          ) : null}
-          {!isFetching && !results.length ? (
-            <p className="px-3 py-2 text-sm text-neutral-400">No results</p>
-          ) : null}
-        </div>
-      ) : null}
     </div>
   );
 }

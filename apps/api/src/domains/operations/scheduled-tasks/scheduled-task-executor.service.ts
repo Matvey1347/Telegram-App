@@ -17,6 +17,7 @@ import type {
   ScheduledTaskExecutionContext,
   ScheduledTaskExecutionResult,
 } from './scheduled-task.types';
+import { OperationsNotificationDueService } from '../notifications/operations-notification-due.service';
 
 @Injectable()
 export class ScheduledTaskExecutorService {
@@ -75,6 +76,14 @@ export class ScheduledTaskExecutorService {
       ).processDueBatch(1_000);
       return {
         summary: `Processed ${result.processed} CRM customer automations: ${result.sent} sent, ${result.skipped} skipped, ${result.retried} retrying, ${result.failed} failed.`,
+      };
+    },
+    'operations.notifications.publish_due': async () => {
+      const result = await (
+        await this.operationsNotificationDueService()
+      ).processDueBatch(1_000);
+      return {
+        summary: `Published ${result.published} notifications; expired ${result.expired}.`,
       };
     },
     'application_logs.cleanup': async () => {
@@ -228,6 +237,12 @@ export class ScheduledTaskExecutorService {
 
   private applicationLogsService() {
     return this.moduleRef.resolve(ApplicationLogsService, undefined, {
+      strict: false,
+    });
+  }
+
+  private operationsNotificationDueService() {
+    return this.moduleRef.resolve(OperationsNotificationDueService, undefined, {
       strict: false,
     });
   }

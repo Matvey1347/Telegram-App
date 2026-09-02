@@ -105,7 +105,12 @@ export const telegramPostKeys = {
     ["telegram-managed-posts", channelId, "list"] as const,
   managedList: (
     channelId: string,
-    params: { page: number; pageSize: number; status?: string; search?: string },
+    params: {
+      page: number;
+      pageSize: number;
+      status?: string;
+      search?: string;
+    },
   ) => [...telegramPostKeys.managedLists(channelId), params] as const,
   managedDetail: (channelId: string, postId: string) =>
     ["telegram-managed-posts", channelId, "detail", postId] as const,
@@ -180,6 +185,19 @@ export const scheduledTaskKeys = {
   root: ["scheduled-tasks"] as const,
   list: () => ["scheduled-tasks"] as const,
   runs: (taskKey: string) => ["scheduled-tasks", taskKey, "runs"] as const,
+};
+
+export const operationsNotificationKeys = {
+  root: (workspaceId: string) =>
+    ["operations-notifications", workspaceId] as const,
+  list: (workspaceId: string) =>
+    [...operationsNotificationKeys.root(workspaceId), "list"] as const,
+  unread: (workspaceId: string) =>
+    [...operationsNotificationKeys.root(workspaceId), "unread"] as const,
+  preferences: (workspaceId: string) =>
+    [...operationsNotificationKeys.root(workspaceId), "preferences"] as const,
+  pushConfig: (workspaceId: string) =>
+    [...operationsNotificationKeys.root(workspaceId), "push-config"] as const,
 };
 
 export const telegramSystemBotKeys = {

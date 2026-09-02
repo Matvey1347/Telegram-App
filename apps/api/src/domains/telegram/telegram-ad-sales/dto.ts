@@ -4,6 +4,7 @@ import {
   TelegramAdCrmDealStage,
   TelegramAdCrmOwnerMode,
   TelegramAdPricingMode,
+  TelegramAdPlacementStatus,
   TelegramAdSaleOrigin,
   TelegramAdSalePaymentStatus,
   TelegramAdSaleStatus,
@@ -550,6 +551,9 @@ export class CreateTelegramAdSalePlacementDto {
 }
 
 export class UpdateTelegramAdSalePlacementDto {
+  @IsOptional()
+  @IsIn([TelegramAdPlacementStatus.MISSED])
+  status?: TelegramAdPlacementStatus;
   @IsOptional() @IsString() telegramAdProductId?: string | null;
   @IsOptional() @IsDateString() scheduledAt?: string;
   @IsOptional() @IsString() timezone?: string;

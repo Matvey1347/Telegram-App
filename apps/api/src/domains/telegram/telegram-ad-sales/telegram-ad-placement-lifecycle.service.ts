@@ -3,7 +3,7 @@ import { TelegramAdPlacementStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { calculateAdPlacementDeleteAt } from './domain/sales-text';
 import { adPlacementLifecycleReadyWhere } from '../../operations/scheduled-tasks/due-work-predicates';
-import { notifyScheduledTaskDueWorkChanged } from '../../operations/scheduled-tasks/scheduled-task-wake-notifier';
+import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import { TelegramAdSalesCustomerAutomationFactsService } from './telegram-ad-sales-customer-automation-facts.service';
 
 /** Synchronizes the sales lifecycle only after the managed post identity is verified. */

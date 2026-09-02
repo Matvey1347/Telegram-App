@@ -25,7 +25,7 @@ import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { FinanceCategoriesService } from '../../finance/finance-categories/finance-categories.service';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
-import { notifyScheduledTaskDueWorkChanged } from '../../operations/scheduled-tasks/scheduled-task-wake-notifier';
+import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import { decimal, decimalOrNull } from './domain/decimal';
 import { calculateAdPlacementDeleteAt } from './domain/sales-text';
 import {

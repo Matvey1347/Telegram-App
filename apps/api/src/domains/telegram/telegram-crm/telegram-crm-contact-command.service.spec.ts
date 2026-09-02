@@ -53,9 +53,14 @@ describe('TelegramCrmContactCommandService', () => {
       ),
       requireOwnOrAny: jest.fn().mockRejectedValue(new ForbiddenException()),
     };
+    const notifications = {
+      contactVisibilityChanged: jest.fn(),
+      invalidateVisibility: jest.fn(),
+    };
     const service = new TelegramCrmContactCommandService(
       prisma as never,
       authorization as never,
+      notifications as never,
     );
 
     await expect(
@@ -99,9 +104,14 @@ describe('TelegramCrmContactCommandService', () => {
       can: jest.fn().mockResolvedValue(true),
       requireOwnOrAny: jest.fn().mockResolvedValue(undefined),
     };
+    const notifications = {
+      contactVisibilityChanged: jest.fn(),
+      invalidateVisibility: jest.fn(),
+    };
     const service = new TelegramCrmContactCommandService(
       prisma as never,
       authorization as never,
+      notifications as never,
     );
 
     await service.update('user-1', 'contact-1', { stage: 'CUSTOMER' });
@@ -141,9 +151,14 @@ describe('TelegramCrmContactCommandService', () => {
       can: jest.fn().mockResolvedValue(true),
       requireOwnOrAny: jest.fn().mockResolvedValue(undefined),
     };
+    const notifications = {
+      contactVisibilityChanged: jest.fn(),
+      invalidateVisibility: jest.fn(),
+    };
     const service = new TelegramCrmContactCommandService(
       prisma as never,
       authorization as never,
+      notifications as never,
     );
 
     await expect(
@@ -152,5 +167,59 @@ describe('TelegramCrmContactCommandService', () => {
       } as never),
     ).rejects.toThrow('No changes');
     expect(prisma.telegramAdvertiser.update).not.toHaveBeenCalled();
+  });
+
+  it('atomically revokes old previews and transfers pending visibility on ownership change', async () => {
+    const tx = {
+      telegramAdvertiser: { update: jest.fn().mockResolvedValue(contactRow) },
+    };
+    const prisma = {
+      workspaceMember: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'member-2' }),
+      },
+      telegramAdvertiser: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'contact-1',
+          workspaceId: 'workspace-1',
+          ownerMemberId: 'member-1',
+          archivedAt: null,
+        }),
+      },
+      $transaction: jest.fn(async (work: (value: unknown) => unknown) =>
+        work(tx),
+      ),
+    };
+    const authorization = {
+      require: jest.fn(),
+      context: jest.fn().mockResolvedValue({
+        workspaceId: 'workspace-1',
+        memberId: 'member-1',
+      }),
+      can: jest.fn().mockResolvedValue(true),
+      requireOwnOrAny: jest.fn(),
+    };
+    const notifications = {
+      contactVisibilityChanged: jest.fn().mockResolvedValue(['member-1']),
+      invalidateVisibility: jest.fn(),
+    };
+    const service = new TelegramCrmContactCommandService(
+      prisma as never,
+      authorization as never,
+      notifications as never,
+    );
+
+    await service.update('user-1', 'contact-1', {
+      ownerMemberId: 'member-2',
+    });
+
+    expect(notifications.contactVisibilityChanged).toHaveBeenCalledWith(
+      tx,
+      'workspace-1',
+      'contact-1',
+    );
+    expect(notifications.invalidateVisibility).toHaveBeenCalledWith(
+      'workspace-1',
+      ['member-1'],
+    );
   });
 });

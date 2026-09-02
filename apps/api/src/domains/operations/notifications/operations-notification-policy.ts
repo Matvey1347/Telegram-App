@@ -1,0 +1,1 @@
+export const OPERATIONS_PUSH_MAX_ACTIVE_DEVICES = 5;

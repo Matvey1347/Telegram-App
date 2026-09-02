@@ -10,6 +10,7 @@ import {
   managedPostIdentityCandidateWhere,
   managedPostIdentityReadyWhere,
 } from './due-work-predicates';
+import { Prisma } from '@prisma/client';
 
 const NO_PROGRESS_MIN_BACKOFF_MS = 5_000;
 const NO_PROGRESS_MAX_BACKOFF_MS = 15 * 60_000;
@@ -108,6 +109,8 @@ export class DueTaskSchedule {
         return this.nextAdDeletionDueAt(now);
       case 'telegram_crm.customer_automations':
         return this.nextCrmAutomationDueAt(now);
+      case 'operations.notifications.publish_due':
+        return this.nextOperationsNotificationDueAt();
       case 'greeter.expire_pending':
         return this.nextGreeterExpiryDueAt(now);
       case 'greeter.broadcasts.dispatch':
@@ -220,6 +223,26 @@ export class DueTaskSchedule {
       processing?.leaseExpiresAt,
       sending?.leaseExpiresAt,
     ]);
+  }
+
+  private async nextOperationsNotificationDueAt() {
+    const rows = await this.prisma.$queryRaw<Array<{ dueAt: Date }>>(Prisma.sql`
+      SELECT MIN(candidate."dueAt") AS "dueAt"
+      FROM (
+        (SELECT "deliverAt" AS "dueAt"
+         FROM "OperationsNotification"
+         WHERE "publishedAt" IS NULL
+         ORDER BY "deliverAt", "id"
+         LIMIT 1)
+        UNION ALL
+        (SELECT "expiresAt" AS "dueAt"
+         FROM "OperationsNotification"
+         WHERE "publishedAt" IS NOT NULL
+         ORDER BY "expiresAt", "id"
+         LIMIT 1)
+      ) candidate
+    `);
+    return rows[0]?.dueAt ?? null;
   }
 
   private async nextAdDeletionDueAt(now: Date) {

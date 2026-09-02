@@ -1,6 +1,40 @@
 # Project Refactor ExecPlan
 
-Updated: 2026-09-01
+Updated: 2026-09-02
+
+## 2026-09-01 CRM Notification Center and Web Push
+
+Stage 5 adds a generic operations Notification Center without merging it into
+CRM customer messaging or the existing Scheduled Task/System Bot notification
+path. CRM projects only fresh live inbound Messages and explicit internal CRM
+events; the operations module owns compact persisted notifications, member
+unread/preferences, User-device Web Push subscriptions, transport, realtime,
+and bounded retention.
+
+Incoming projection is transactionally idempotent with Message persistence.
+Initial import, history, edits, outgoing/manual messages, application startup,
+and duplicate Telegram updates create no extra notification or Push. Center and
+Push share exact workspace-aware deep links, while backend authorization remains
+authoritative after workspace switching.
+
+Push is explicit, event-driven, best-effort at-most-once, and disabled unless a
+complete validated VAPID key set exists. The service worker has no polling,
+periodic sync, cache refresh, or heartbeat. Follow-up publication and
+90-to-91-day UTC-bucketed retention reuse the one-shot due scheduler; idle notification cost is zero
+recurring work and no Railway service is added.
+
+Final integration review moved the scheduler wake signal to a neutral common
+bridge, centralized source visibility for REST/SSE/due/publish paths, and made
+Contact owner changes revoke published previews plus transfer pending rows in
+the same transaction. Retention is indexed by full expiry order and bucketed
+to one UTC-day wake, while Push loads devices before claiming, caps each User at
+five active devices under a transaction-scoped User lock, and shares one
+eight-request process-wide fanout limit. Exhausted automation failure projection
+is capped at 25 executions per due run so recipient resolution cannot hold one
+transaction across an unbounded number of workspaces.
+Pending follow-ups cross a narrow due-resolution port: CRM recomputes the
+current owner/Deal-assignee/fallback recipient and source RBAC inside the due
+transaction, while the generic operations module remains unaware of CRM models.
 
 ## 2026-09-01 CRM customer-message automations
 
@@ -150,28 +184,28 @@ Measured before edits:
 
 This table is retained as the milestone record and is not the current inventory.
 
-| Metric                              |                                                                                  Count |
-| ----------------------------------- | -------------------------------------------------------------------------------------: |
-| Handwritten production TS/TSX files |                                                                                    675 |
-| Files > 500 lines                   |                                                                                     55 |
-| Files > 1000 lines                  |                                                                                     16 |
-| Files > 2000 lines                  |                                                                                      7 |
-| Files > 3000 lines                  |                                                                                      5 |
-| Largest backend file                |        `apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.service.ts` - 5884 |
-| Largest frontend file               |                `apps/web/src/app/(internal)/(telegram)/telegram-posts/page.tsx` - 8379 |
+| Metric                              |                                                                                 Count |
+| ----------------------------------- | ------------------------------------------------------------------------------------: |
+| Handwritten production TS/TSX files |                                                                                   675 |
+| Files > 500 lines                   |                                                                                    55 |
+| Files > 1000 lines                  |                                                                                    16 |
+| Files > 2000 lines                  |                                                                                     7 |
+| Files > 3000 lines                  |                                                                                     5 |
+| Largest backend file                | `apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.service.ts` - 5884 |
+| Largest frontend file               |               `apps/web/src/app/(internal)/(telegram)/telegram-posts/page.tsx` - 8379 |
 
 ## Current Working-Tree Metrics — 2026-08-27
 
-| Metric                              |                                                                                  Count |
-| ----------------------------------- | -------------------------------------------------------------------------------------: |
-| Handwritten production TS/TSX files |                                                                                    852 |
-| Files > 500 lines                   |                                                                                     65 |
-| Files > 800 lines                   |                                                                                     27 |
-| Files > 1000 lines                  |                                                                                     16 |
-| Files > 2000 lines                  |                                                                                      7 |
-| Files > 3000 lines                  |                                                                                      5 |
+| Metric                              |                                                                                 Count |
+| ----------------------------------- | ------------------------------------------------------------------------------------: |
+| Handwritten production TS/TSX files |                                                                                   852 |
+| Files > 500 lines                   |                                                                                    65 |
+| Files > 800 lines                   |                                                                                    27 |
+| Files > 1000 lines                  |                                                                                    16 |
+| Files > 2000 lines                  |                                                                                     7 |
+| Files > 3000 lines                  |                                                                                     5 |
 | Largest backend file                | `apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.service.ts` - 5825 |
-| Largest frontend file               | `apps/web/src/app/(internal)/(telegram)/telegram-posts/page.tsx` - 8564 |
+| Largest frontend file               |               `apps/web/src/app/(internal)/(telegram)/telegram-posts/page.tsx` - 8564 |
 
 `TelegramChannelsService` was reduced from 12978 lines to a 255-line explicit
 delegation facade. Its file-size baseline and both direct GramJS import
@@ -542,37 +576,37 @@ Pre-existing results before implementation:
 
 Telegram channels god-service decomposition on 2026-08-22:
 
-| Command / audit                                      | Result                                                                                                                                                                      |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| channel/caller/security focused API tests plus AppModule DI smoke | pass: 26 suites, 200 tests                                                                                                                                      |
-| `pnpm --filter api test -- --runInBand --silent`     | pass: 139 suites, 865 tests                                                                                                                                                 |
-| `pnpm --filter api typecheck`                        | pass                                                                                                                                                                        |
-| `pnpm --filter api build`                            | pass                                                                                                                                                                        |
-| `node --test scripts/architecture-policy.test.mjs`   | pass: 16 focused policy tests                                                                                                                                               |
-| `pnpm architecture:check`                            | expected fail only: the two unrelated existing web growth violations in `telegram-posts/page.tsx` and `primitives.tsx`; Telegram channels has no allowance or import exception |
-| `ARCHITECTURE_STRICT=1 pnpm architecture:check`      | expected repository-debt failure; the decomposed facade and every new channels production file satisfy their applicable limits                                             |
-| Telegram channels static import graph                | pass: 65 production TypeScript files, zero cycles                                                                                                                           |
-| facade surface audit                                 | pass: 78 declarations and 78 assignments with no missing, extra or duplicate delegate                                                                                       |
-| extracted-file lint audit                           | actionable/format findings removed; relocated `no-unsafe-*` findings reduced from 427 in the monolith to 425 across extracted implementation files, with no disables or exceptions; the compatibility facade retains legacy inferred-`any` delegate assignments |
-| `git diff --check`                                   | pass                                                                                                                                                                        |
+| Command / audit                                                   | Result                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| channel/caller/security focused API tests plus AppModule DI smoke | pass: 26 suites, 200 tests                                                                                                                                                                                                                                      |
+| `pnpm --filter api test -- --runInBand --silent`                  | pass: 139 suites, 865 tests                                                                                                                                                                                                                                     |
+| `pnpm --filter api typecheck`                                     | pass                                                                                                                                                                                                                                                            |
+| `pnpm --filter api build`                                         | pass                                                                                                                                                                                                                                                            |
+| `node --test scripts/architecture-policy.test.mjs`                | pass: 16 focused policy tests                                                                                                                                                                                                                                   |
+| `pnpm architecture:check`                                         | expected fail only: the two unrelated existing web growth violations in `telegram-posts/page.tsx` and `primitives.tsx`; Telegram channels has no allowance or import exception                                                                                  |
+| `ARCHITECTURE_STRICT=1 pnpm architecture:check`                   | expected repository-debt failure; the decomposed facade and every new channels production file satisfy their applicable limits                                                                                                                                  |
+| Telegram channels static import graph                             | pass: 65 production TypeScript files, zero cycles                                                                                                                                                                                                               |
+| facade surface audit                                              | pass: 78 declarations and 78 assignments with no missing, extra or duplicate delegate                                                                                                                                                                           |
+| extracted-file lint audit                                         | actionable/format findings removed; relocated `no-unsafe-*` findings reduced from 427 in the monolith to 425 across extracted implementation files, with no disables or exceptions; the compatibility facade retains legacy inferred-`any` delegate assignments |
+| `git diff --check`                                                | pass                                                                                                                                                                                                                                                            |
 
 No Prisma schema or shared HTTP contract changed, so database generation and
 frontend gates are not required for this slice.
 
 Environment configuration contract on 2026-08-22:
 
-| Command                                            | Result                                                                                                                                                                                                     |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm env:check`                                   | pass: `.env` and `.env.example` synchronized at 28 key names without printing values                                                                                                                       |
-| `pnpm test:deployment`                             | pass: 7 origin/profile regressions plus Railway artifact verification                                                                                                                                      |
-| `pnpm --filter api test -- --runInBand`            | pass: 135 suites, 849 tests                                                                                                                                                                                |
-| `pnpm --filter web test -- --run`                  | pass: 79 files, 365 tests                                                                                                                                                                                  |
-| `pnpm --filter api typecheck`                      | blocked only by the pre-existing unrelated mock typing error in `telegram-channels/import-managed-posts.spec.ts:389`                                                                                       |
-| `pnpm --filter web typecheck`                      | pass                                                                                                                                                                                                       |
-| API and web production builds                      | pass; `/finance/[botId]` remains dynamic                                                                                                                                                                   |
-| `node --test scripts/architecture-policy.test.mjs` | pass: 16 focused policy tests                                                                                                                                                                              |
+| Command                                            | Result                                                                                                                                                                                                                     |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm env:check`                                   | pass: `.env` and `.env.example` synchronized at 28 key names without printing values                                                                                                                                       |
+| `pnpm test:deployment`                             | pass: 7 origin/profile regressions plus Railway artifact verification                                                                                                                                                      |
+| `pnpm --filter api test -- --runInBand`            | pass: 135 suites, 849 tests                                                                                                                                                                                                |
+| `pnpm --filter web test -- --run`                  | pass: 79 files, 365 tests                                                                                                                                                                                                  |
+| `pnpm --filter api typecheck`                      | blocked only by the pre-existing unrelated mock typing error in `telegram-channels/import-managed-posts.spec.ts:389`                                                                                                       |
+| `pnpm --filter web typecheck`                      | pass                                                                                                                                                                                                                       |
+| API and web production builds                      | pass; `/finance/[botId]` remains dynamic                                                                                                                                                                                   |
+| `node --test scripts/architecture-policy.test.mjs` | pass: 16 focused policy tests                                                                                                                                                                                              |
 | `pnpm architecture:check`                          | expected fail only: the same three pre-existing growth violations in `telegram-channels.service.ts`, `telegram-posts/page.tsx`, and `primitives.tsx`; all environment-access allowances and stale ceilings removed/lowered |
-| `git diff --check` and retired-key contract audit  | pass                                                                                                                                                                                                       |
+| `git diff --check` and retired-key contract audit  | pass                                                                                                                                                                                                                       |
 
 Consumer Finance product isolation on 2026-08-22:
 
@@ -739,34 +773,34 @@ means the measured multiplicative path was removed, but a separately named
 contract or runtime concern remains; it is not a claim that the whole numbered
 slice is complete.
 
-| Slice | Status | Landed evidence |
-| --- | --- | --- |
-| P-01 | Critical path complete for the current single-runtime topology | System Bot stale `PROCESSING` reclaim, process-wide live-attempt exclusion, generation-fenced finalization, callback-first routing, command scopes, one reusable authorized connection, and non-blocking best-effort typing. |
-| P-02 | Complete for proposal confirmation and established bot context | Rates and account/category references are prepared once; a ten-operation confirmation performs no root-Prisma call inside the transaction. Finance Bot user/profile context is one scoped read and downstream handlers reuse it. |
-| P-03 | Multiplicative DB work complete; audience/lease follow-up remains | Atomic `SKIP LOCKED` delivery claims, environment/lease-scoped hydration, fail-closed lost-runtime reconciliation, 250-row idempotent enqueue/link pages, grouped broadcast reconciliation, grouped blocked/missing-chat updates, and cancellation-safe orphan cleanup. |
-| P-04 | Backend read-write regression addressed; cross-stack collection work remains | Established internal-Finance category readiness is one read and zero writes. Browser “load every page” removal and setup-time ownership remain separate work. |
-| P-05/P-06 | Backend hot paths complete; bulk quote UI/API remains | Products/pricing samples and availability inputs are loaded in bounded batches. Pricing preserves requests above 100 channels by processing sequential batches of at most 100, ranks at most 60 posts per channel, and returns only exact nearest/latest snapshot candidates for every required stored product window. Established settings/default reads are write-free; first-use defaults are materialized in one batch and refetched once. |
-| P-07 | Duplicate/prior hydration complete; `allTime` contract blocked | Overview uses one current dataset, one prior revenue aggregate and no standalone payment dataset. Selected channel metadata/inventory/latest prices are batched. |
-| P-08 | Complete for the characterized dashboard path | Period predicates are pushed into reads, account transfers are grouped, and one request-scoped currency graph is reused. |
-| P-12 | Partial | Network financial inputs and daily analytics work are batched. Recurring campaign admission reads at most one predecessor per invite link plus the current sync window; MTProto operation-scoped reuse and remaining lifecycle fan-out are still open. |
-| P-13 | Partial | Scheduler unchanged-state work and due-key rearming were reduced without polling; its automatic-eligibility responsibility was extracted and the touched service reduced from 531 to 464 checker lines. Startup DDL and unchanged Telegram presentation reconciliation remain open. |
-| P-15 | In progress | Ad Sales was reduced to 5,825 checker lines and admission analytics to 798, removing the latter's transitional allowance; the touched scheduled-task service is now below 500 and every new production helper in this continuation is below 500 lines. |
+| Slice     | Status                                                                       | Landed evidence                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P-01      | Critical path complete for the current single-runtime topology               | System Bot stale `PROCESSING` reclaim, process-wide live-attempt exclusion, generation-fenced finalization, callback-first routing, command scopes, one reusable authorized connection, and non-blocking best-effort typing.                                                                                                                                                                                                                   |
+| P-02      | Complete for proposal confirmation and established bot context               | Rates and account/category references are prepared once; a ten-operation confirmation performs no root-Prisma call inside the transaction. Finance Bot user/profile context is one scoped read and downstream handlers reuse it.                                                                                                                                                                                                               |
+| P-03      | Multiplicative DB work complete; audience/lease follow-up remains            | Atomic `SKIP LOCKED` delivery claims, environment/lease-scoped hydration, fail-closed lost-runtime reconciliation, 250-row idempotent enqueue/link pages, grouped broadcast reconciliation, grouped blocked/missing-chat updates, and cancellation-safe orphan cleanup.                                                                                                                                                                        |
+| P-04      | Backend read-write regression addressed; cross-stack collection work remains | Established internal-Finance category readiness is one read and zero writes. Browser “load every page” removal and setup-time ownership remain separate work.                                                                                                                                                                                                                                                                                  |
+| P-05/P-06 | Backend hot paths complete; bulk quote UI/API remains                        | Products/pricing samples and availability inputs are loaded in bounded batches. Pricing preserves requests above 100 channels by processing sequential batches of at most 100, ranks at most 60 posts per channel, and returns only exact nearest/latest snapshot candidates for every required stored product window. Established settings/default reads are write-free; first-use defaults are materialized in one batch and refetched once. |
+| P-07      | Duplicate/prior hydration complete; `allTime` contract blocked               | Overview uses one current dataset, one prior revenue aggregate and no standalone payment dataset. Selected channel metadata/inventory/latest prices are batched.                                                                                                                                                                                                                                                                               |
+| P-08      | Complete for the characterized dashboard path                                | Period predicates are pushed into reads, account transfers are grouped, and one request-scoped currency graph is reused.                                                                                                                                                                                                                                                                                                                       |
+| P-12      | Partial                                                                      | Network financial inputs and daily analytics work are batched. Recurring campaign admission reads at most one predecessor per invite link plus the current sync window; MTProto operation-scoped reuse and remaining lifecycle fan-out are still open.                                                                                                                                                                                         |
+| P-13      | Partial                                                                      | Scheduler unchanged-state work and due-key rearming were reduced without polling; its automatic-eligibility responsibility was extracted and the touched service reduced from 531 to 464 checker lines. Startup DDL and unchanged Telegram presentation reconciliation remain open.                                                                                                                                                            |
+| P-15      | In progress                                                                  | Ad Sales was reduced to 5,825 checker lines and admission analytics to 798, removing the latter's transitional allowance; the touched scheduled-task service is now below 500 and every new production helper in this continuation is below 500 lines.                                                                                                                                                                                         |
 
 Static application-issued operation counts after the continuation:
 
-| Characterized path | Before | After |
-| --- | ---: | ---: |
-| Ad Sales products, 100 channels/four defaults | 903 reads when established; up to 903 reads + 100 writes on first use | 4 whole-path reads when established; 5 reads + 1 batched write on first use |
-| Ad Sales availability, 50 channels | 257/258 calls | 10 whole-path reads and zero writes for the established no-network/empty-placement fixture; first use is 11 reads + 1 batched write |
-| Ad Sales analytics source, six selected channels | up to 10 full datasets / 30 source statements | populated current dataset + prior aggregate / 3 source statements, excluding authorization and other cards |
-| Ad Sales analytics whole six-channel overview | about 119 calls | at most 24 calls for populated, non-`allTime`, no-network input; `allTime` adds two earliest-row reads |
-| Operations dashboard, 100 accounts | up to `409 + L + F` calls | about 21-23 calls, independent of account count |
-| Finance proposal confirmation, 10 operations | up to 40 root reads + 20 full rate-history loads | `M + 5 + B + G + U` operations: 17 for the category-present, single-rate, no-merchant fixture and at most 36 for `M=10`, plus a possible workspace lookup; zero root-Prisma calls inside the transaction |
-| Finance Bot established actor/profile bootstrap | 2 sequential reads plus repeated downstream reads | 1 scoped read; duplicate user/profile/accounts-context reads removed |
-| System Bot `/help` | typing + 3 context reads | no typing and no context read |
-| Delivery claim of `N` rows | `1 + N` claim operations | 2 claim/hydration operations |
-| Greeter normal `ALL_ALIVE` materialize/enqueue/link, 1,000 recipients | 2,022 characterized operations after the earlier partial refactor | 34 operations across four 250-row pages, excluding scheduler/delivery processing; Telegram attempts remain per recipient/retry policy |
-| Recurring campaign admission source, 100 campaigns | per-campaign historical snapshot reads | one campaign read + one bounded predecessor read + one current-window read |
+| Characterized path                                                    |                                                                Before |                                                                                                                                                                                                    After |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| Ad Sales products, 100 channels/four defaults                         | 903 reads when established; up to 903 reads + 100 writes on first use |                                                                                                                              4 whole-path reads when established; 5 reads + 1 batched write on first use |
+| Ad Sales availability, 50 channels                                    |                                                         257/258 calls |                                                                      10 whole-path reads and zero writes for the established no-network/empty-placement fixture; first use is 11 reads + 1 batched write |
+| Ad Sales analytics source, six selected channels                      |                         up to 10 full datasets / 30 source statements |                                                                                               populated current dataset + prior aggregate / 3 source statements, excluding authorization and other cards |
+| Ad Sales analytics whole six-channel overview                         |                                                       about 119 calls |                                                                                                   at most 24 calls for populated, non-`allTime`, no-network input; `allTime` adds two earliest-row reads |
+| Operations dashboard, 100 accounts                                    |                                             up to `409 + L + F` calls |                                                                                                                                                          about 21-23 calls, independent of account count |
+| Finance proposal confirmation, 10 operations                          |                      up to 40 root reads + 20 full rate-history loads | `M + 5 + B + G + U` operations: 17 for the category-present, single-rate, no-merchant fixture and at most 36 for `M=10`, plus a possible workspace lookup; zero root-Prisma calls inside the transaction |
+| Finance Bot established actor/profile bootstrap                       |                     2 sequential reads plus repeated downstream reads |                                                                                                                                     1 scoped read; duplicate user/profile/accounts-context reads removed |
+| System Bot `/help`                                                    |                                              typing + 3 context reads |                                                                                                                                                                            no typing and no context read |
+| Delivery claim of `N` rows                                            |                                              `1 + N` claim operations |                                                                                                                                                                             2 claim/hydration operations |
+| Greeter normal `ALL_ALIVE` materialize/enqueue/link, 1,000 recipients |     2,022 characterized operations after the earlier partial refactor |                                                                    34 operations across four 250-row pages, excluding scheduler/delivery processing; Telegram attempts remain per recipient/retry policy |
+| Recurring campaign admission source, 100 campaigns                    |                                per-campaign historical snapshot reads |                                                                                                                               one campaign read + one bounded predecessor read + one current-window read |
 
 These are deterministic test/static counts, not physical SQL or latency claims.
 One Prisma relation operation can still issue more than one SQL statement.
@@ -837,21 +871,21 @@ integration review all pass this continuation with no unresolved current-slice
 Critical/High finding. The repository-wide transitional debt below is reported
 rather than hidden or widened.
 
-| Check | Result |
-| --- | --- |
-| `pnpm --filter api test -- --runInBand` | pass: 216 suites, 1,331 tests |
-| `pnpm --filter api typecheck` | pass |
-| `pnpm --filter api build` | pass |
-| `pnpm db:generate` | pass |
-| `pnpm --filter api exec prisma validate` | pass with the existing `SetNull` relation warning |
-| Focused lint for new/changed production helpers and final performance slices | pass |
-| Broad changed-API-file lint (87 TypeScript files) | fail: 1,674 errors and 245 warnings, concentrated in inherited oversized service/spec formatting and unsafe typing/test doubles; no false full-lint pass is claimed |
-| `git diff --check` | pass |
-| Architecture policy tests | pass: 16/16 |
-| `pnpm architecture:check` | repository-wide fail: 26 existing/transitional findings; current slice passes shrinking-only review |
-| `ARCHITECTURE_STRICT=1 pnpm architecture:check` | repository-wide fail: 36 existing findings; among touched files only the known 5,825-line Ad Sales legacy service remains a strict size failure |
-| Temporary PostgreSQL pricing execution | pass for SQL types, workspace/channel isolation, custom 96h selection, historical cutoff and row bound; transaction rolled back |
-| Final read-only integration review | Turing pass; focused rerun 4 suites, 70 tests |
+| Check                                                                        | Result                                                                                                                                                              |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm --filter api test -- --runInBand`                                      | pass: 216 suites, 1,331 tests                                                                                                                                       |
+| `pnpm --filter api typecheck`                                                | pass                                                                                                                                                                |
+| `pnpm --filter api build`                                                    | pass                                                                                                                                                                |
+| `pnpm db:generate`                                                           | pass                                                                                                                                                                |
+| `pnpm --filter api exec prisma validate`                                     | pass with the existing `SetNull` relation warning                                                                                                                   |
+| Focused lint for new/changed production helpers and final performance slices | pass                                                                                                                                                                |
+| Broad changed-API-file lint (87 TypeScript files)                            | fail: 1,674 errors and 245 warnings, concentrated in inherited oversized service/spec formatting and unsafe typing/test doubles; no false full-lint pass is claimed |
+| `git diff --check`                                                           | pass                                                                                                                                                                |
+| Architecture policy tests                                                    | pass: 16/16                                                                                                                                                         |
+| `pnpm architecture:check`                                                    | repository-wide fail: 26 existing/transitional findings; current slice passes shrinking-only review                                                                 |
+| `ARCHITECTURE_STRICT=1 pnpm architecture:check`                              | repository-wide fail: 36 existing findings; among touched files only the known 5,825-line Ad Sales legacy service remains a strict size failure                     |
+| Temporary PostgreSQL pricing execution                                       | pass for SQL types, workspace/channel isolation, custom 96h selection, historical cutoff and row bound; transaction rolled back                                     |
+| Final read-only integration review                                           | Turing pass; focused rerun 4 suites, 70 tests                                                                                                                       |
 
 Final production inventory: 852 TypeScript/TSX files; 65 over 500 checker
 lines, 27 over 800, 16 over 1,000, seven over 2,000 and five over 3,000. The
@@ -1267,17 +1301,17 @@ program changes already present in the dirty working tree.
 
 ### Closed route and cache findings
 
-| Surface | Before | Final contract/evidence |
-| --- | --- | --- |
-| Ad Sales quote preview | `C × D` serialized HTTP calls in the original flow; the first batch revision accepted only 200 rows and ran pricing SQL once per date | One ordered POST for up to 10,000 placements; 9,300-row UI fixture makes one HTTP call; current/future/no-date rows share one pricing-source call; exact historical work is capped at 31 cutoffs; zero snapshot writes; stale requests abort and a same-key failure has one bounded retry. |
-| Ad Sales sales search | Browser filtered only the current 25-row page | Workspace-scoped server predicate is shared by `findMany` and `count`; page/search are in the query key, old requests receive an AbortSignal, and a page-two regression is covered. |
-| Ad Sales analytics scope | Selected channel IDs were silently sliced to six | One shared six-channel contract drives the selector and backend; the selector blocks a seventh and direct API/service callers receive an explicit 400 before workspace or analytics reads. |
-| Managed-post collection cache | Visible pages stored `PaginatedResponse`, while mutations/deep links/due refresh read or wrote a phantom raw-array prefix | Separate list/detail key families and one paginated reconciliation helper update every cached page containing the entity; create narrowly invalidates lists; reorder snapshots/rollback use real pages; due refresh also checks/refetches exact deep-link detail and stops on terminal state. |
-| Managed import/deletion validation | Only page 1 / 100 posts was inspected | One workspace/channel-scoped lookup accepts at most 1,000 IDs and returns request-ordered compact 10-field summaries plus missing IDs. It uses channel + one post read + at most one icon read, with zero Telegram/MTProto/writes. |
-| Managed post groups | Route and modals followed every 100-row page serially | One read-only channel summary request returns at most 1,000 compact groups; `take=1001` fails explicitly above the bound, status counts are aggregated without per-post arrays, and the path performs no ensure/normalize/DDL writes. |
-| Campaigns / hypotheses / promos | Active route and hypothesis form used generic serial load-all helpers | Active view makes one 50-row server page request; server owns search/date/sort/count; hidden datasets stay disabled; campaign options paginate while retaining selected IDs; rich edit/preview and off-page promo deep links use detail endpoints. Obsolete load-all wrappers were removed. |
-| Finance categories | Browser downloaded every transaction page (`P`, up to 100 HTTP requests for 1,000 rows) | One category-statistics aggregate request after authorization; no transaction-page chain. |
-| Workspace switch | Workspace-scoped React Query data could survive the selected-workspace transition | Registered workspace-scoped query families are cleared on switch before the next workspace renders. |
+| Surface                            | Before                                                                                                                                | Final contract/evidence                                                                                                                                                                                                                                                                       |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ad Sales quote preview             | `C × D` serialized HTTP calls in the original flow; the first batch revision accepted only 200 rows and ran pricing SQL once per date | One ordered POST for up to 10,000 placements; 9,300-row UI fixture makes one HTTP call; current/future/no-date rows share one pricing-source call; exact historical work is capped at 31 cutoffs; zero snapshot writes; stale requests abort and a same-key failure has one bounded retry.    |
+| Ad Sales sales search              | Browser filtered only the current 25-row page                                                                                         | Workspace-scoped server predicate is shared by `findMany` and `count`; page/search are in the query key, old requests receive an AbortSignal, and a page-two regression is covered.                                                                                                           |
+| Ad Sales analytics scope           | Selected channel IDs were silently sliced to six                                                                                      | One shared six-channel contract drives the selector and backend; the selector blocks a seventh and direct API/service callers receive an explicit 400 before workspace or analytics reads.                                                                                                    |
+| Managed-post collection cache      | Visible pages stored `PaginatedResponse`, while mutations/deep links/due refresh read or wrote a phantom raw-array prefix             | Separate list/detail key families and one paginated reconciliation helper update every cached page containing the entity; create narrowly invalidates lists; reorder snapshots/rollback use real pages; due refresh also checks/refetches exact deep-link detail and stops on terminal state. |
+| Managed import/deletion validation | Only page 1 / 100 posts was inspected                                                                                                 | One workspace/channel-scoped lookup accepts at most 1,000 IDs and returns request-ordered compact 10-field summaries plus missing IDs. It uses channel + one post read + at most one icon read, with zero Telegram/MTProto/writes.                                                            |
+| Managed post groups                | Route and modals followed every 100-row page serially                                                                                 | One read-only channel summary request returns at most 1,000 compact groups; `take=1001` fails explicitly above the bound, status counts are aggregated without per-post arrays, and the path performs no ensure/normalize/DDL writes.                                                         |
+| Campaigns / hypotheses / promos    | Active route and hypothesis form used generic serial load-all helpers                                                                 | Active view makes one 50-row server page request; server owns search/date/sort/count; hidden datasets stay disabled; campaign options paginate while retaining selected IDs; rich edit/preview and off-page promo deep links use detail endpoints. Obsolete load-all wrappers were removed.   |
+| Finance categories                 | Browser downloaded every transaction page (`P`, up to 100 HTTP requests for 1,000 rows)                                               | One category-statistics aggregate request after authorization; no transaction-page chain.                                                                                                                                                                                                     |
+| Workspace switch                   | Workspace-scoped React Query data could survive the selected-workspace transition                                                     | Registered workspace-scoped query families are cleared on switch before the next workspace renders.                                                                                                                                                                                           |
 
 ### Read models and payloads
 
@@ -1314,19 +1348,19 @@ not a widened allowance.
 
 ### Verification
 
-| Gate | Result |
-| --- | --- |
-| API tests | pass: 228 suites, 1,375 tests |
-| Web tests | pass: 129 files, 576 tests |
-| Root TypeScript | pass for shared, API, and web |
-| Production build | pass; 31 web pages generated |
-| Shared typecheck/build | pass |
-| Prisma generate/validate | pass; existing required-field `SetNull` warning remains |
-| Deployment contract | pass: 11 tests and Railway artifact check |
-| Normal architecture | pass: 16/16 policy tests, 906 production files |
-| Strict architecture | expected fail: 23 inherited exact-baseline owners |
-| `git diff --check` | pass |
-| Full lint | inherited red: API 6,112 errors / 581 warnings; web 164 errors / 254 warnings; shared passes. New focused helpers pass targeted lint; no false repository-wide lint pass is claimed. |
+| Gate                     | Result                                                                                                                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| API tests                | pass: 228 suites, 1,375 tests                                                                                                                                                        |
+| Web tests                | pass: 129 files, 576 tests                                                                                                                                                           |
+| Root TypeScript          | pass for shared, API, and web                                                                                                                                                        |
+| Production build         | pass; 31 web pages generated                                                                                                                                                         |
+| Shared typecheck/build   | pass                                                                                                                                                                                 |
+| Prisma generate/validate | pass; existing required-field `SetNull` warning remains                                                                                                                              |
+| Deployment contract      | pass: 11 tests and Railway artifact check                                                                                                                                            |
+| Normal architecture      | pass: 16/16 policy tests, 906 production files                                                                                                                                       |
+| Strict architecture      | expected fail: 23 inherited exact-baseline owners                                                                                                                                    |
+| `git diff --check`       | pass                                                                                                                                                                                 |
+| Full lint                | inherited red: API 6,112 errors / 581 warnings; web 164 errors / 254 warnings; shared passes. New focused helpers pass targeted lint; no false repository-wide lint pass is claimed. |
 
 ### Explicit P1/P2 backlog
 

@@ -32,6 +32,7 @@ describe("role access presentation", () => {
     ["viewOwn", "View own"],
     ["viewAny", "View all"],
     ["sendManualMessages", "Send manual messages"],
+    ["notifications", "Notifications"],
   ])("presents the %s CRM capability with a readable label", (key, label) => {
     expect(capabilityLabel(key)).toBe(label);
   });

@@ -9,12 +9,14 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 import { CreateCrmContactDto, UpdateCrmContactDto } from './telegram-crm.dto';
 import { crmContactSelect, mapCrmContact } from './telegram-crm-contact.mapper';
+import { TelegramCrmInternalNotificationProjector } from './telegram-crm-internal-notification-projector.service';
 
 @Injectable()
 export class TelegramCrmContactCommandService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authorization: WorkspaceAuthorizationService,
+    private readonly notifications: TelegramCrmInternalNotificationProjector,
   ) {}
 
   async create(userId: string, dto: CreateCrmContactDto) {
@@ -113,11 +115,34 @@ export class TelegramCrmContactCommandService {
           }),
     };
     if (!Object.keys(data).length) throw new BadRequestException('No changes');
-    const row = await this.prisma.telegramAdvertiser.update({
-      where: { id: existing.id },
-      data,
-      select: crmContactSelect,
-    });
+    const update = (tx: Prisma.TransactionClient) =>
+      tx.telegramAdvertiser.update({
+        where: { id: existing.id },
+        data,
+        select: crmContactSelect,
+      });
+    const ownerChanged =
+      dto.ownerMemberId !== undefined &&
+      dto.ownerMemberId !== existing.ownerMemberId;
+    let invalidatedMemberIds: string[] = [];
+    const row = ownerChanged
+      ? await this.prisma.$transaction(async (tx) => {
+          const updated = await update(tx);
+          invalidatedMemberIds =
+            await this.notifications.contactVisibilityChanged(
+              tx,
+              existing.workspaceId,
+              existing.id,
+            );
+          return updated;
+        })
+      : await update(this.prisma);
+    if (invalidatedMemberIds.length) {
+      this.notifications.invalidateVisibility(
+        existing.workspaceId,
+        invalidatedMemberIds,
+      );
+    }
     return mapCrmContact(row);
   }
 

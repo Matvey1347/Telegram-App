@@ -16,19 +16,22 @@ function createService() {
     requireEditContact: jest.fn(),
     requireOwnerChange: jest.fn(),
   };
+  const tasks = { list: jest.fn() };
   return {
     service: new TelegramAdSalesLegacyCrmService(
       adSales as never,
       authorization as never,
+      tasks as never,
     ),
     adSales,
     authorization,
+    tasks,
   };
 }
 
 describe('TelegramAdSalesLegacyCrmService', () => {
   it('forces Contact and task lists to the authorized owner scope', async () => {
-    const { service, adSales } = createService();
+    const { service, adSales, tasks } = createService();
 
     await service.listAdvertisers('user-1', {
       page: 1,
@@ -41,7 +44,7 @@ describe('TelegramAdSalesLegacyCrmService', () => {
       'user-1',
       expect.objectContaining({ ownerMemberId: 'member-1' }),
     );
-    expect(adSales.listCrmTasks).toHaveBeenCalledWith(
+    expect(tasks.list).toHaveBeenCalledWith(
       'user-1',
       expect.any(Object),
       'member-1',

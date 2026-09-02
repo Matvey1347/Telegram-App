@@ -9,7 +9,11 @@ export type CrmListView =
 export type AdSalesSurface =
   | { kind: "legacy" }
   | { kind: "contacts"; view: CrmListView }
-  | { kind: "inbox" }
+  | {
+      kind: "inbox";
+      conversationId: string | null;
+      peerId: string | null;
+    }
   | { kind: "contact"; contactId: string; conversationId: string | null };
 
 export function resolveAdSalesSurface(
@@ -36,14 +40,22 @@ export function resolveAdSalesSurface(
         : null,
     };
   }
-  if (pathname === "/ad-sales/inbox") return { kind: "inbox" };
+  if (pathname === "/ad-sales/inbox") {
+    return {
+      kind: "inbox",
+      conversationId: searchParams?.get("conversationId")?.trim() || null,
+      peerId: searchParams?.get("peerId")?.trim() || null,
+    };
+  }
   const queryView = searchParams?.get("view")?.toLowerCase();
   if (queryView === "leads") return { kind: "contacts", view: "LEADS" };
   if (queryView === "qualified") return { kind: "contacts", view: "QUALIFIED" };
   if (queryView === "follow-up") return { kind: "contacts", view: "FOLLOW_UP" };
   if (queryView === "customers") return { kind: "contacts", view: "CUSTOMERS" };
-  if (queryView === "lost" || queryView === "archived") return { kind: "contacts", view: "LOST_ARCHIVED" };
-  if (pathname === "/ad-sales/leads") return { kind: "contacts", view: "LEADS" };
+  if (queryView === "lost" || queryView === "archived")
+    return { kind: "contacts", view: "LOST_ARCHIVED" };
+  if (pathname === "/ad-sales/leads")
+    return { kind: "contacts", view: "LEADS" };
   if (pathname === "/ad-sales/qualified") {
     return { kind: "contacts", view: "QUALIFIED" };
   }

@@ -10,7 +10,7 @@ import { telegramMarkupToHtml } from '../../../../telegram/shared/telegram-marku
 import type { GreeterButtonRows } from './greeter-automation.service';
 import { renderGreeterTemplate } from './greeter-template.renderer';
 import { TelegramBotDeliveryService } from '../core/telegram-bot-delivery.service';
-import { notifyScheduledTaskDueWorkChanged } from '../../../operations/scheduled-tasks/scheduled-task-wake-notifier';
+import { notifyScheduledTaskDueWorkChanged } from '../../../../common/scheduled-task-wake-notifier';
 import {
   GREETER_AUTOMATION_RETRY_MS,
   greeterAutomationDueWhere,

@@ -7,7 +7,7 @@ import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { notifyScheduledTaskDueWorkChanged } from '../../operations/scheduled-tasks/scheduled-task-wake-notifier';
+import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import { CreateTelegramChannelDto, UpdateTelegramChannelDto } from './dto';
 import { TelegramChannelCatalogService } from './telegram-channel-catalog.service';
 import { TelegramChannelImportPolicyService } from './telegram-channel-import-policy.service';

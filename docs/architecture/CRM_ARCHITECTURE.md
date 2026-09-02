@@ -4,9 +4,11 @@
 
 This document defines the Stage 1 persistence, contract, authorization, and
 rollout-safety foundation, the Stage 2 multi-account MTProto CRM runtime and
-Inbox use cases, the Stage 3 Contact-centered web application, and the Stage 4
-customer-message automation layer. It does not add a generic automation
-engine, a new worker service, polling, historical event replay, or a PWA.
+Inbox use cases, the Stage 3 Contact-centered web application, the Stage 4
+customer-message automation layer, and the Stage 5 operations Notification
+Center and Web Push integration. It does not add a generic automation engine,
+a new worker service, polling, historical event replay, or a background-sync
+PWA runtime.
 
 The existing Ad Sales product remains intact. `TelegramAdvertiser` is the
 physical backing record for a CRM Contact, and `TelegramAdSale` remains the
@@ -321,6 +323,113 @@ with at most one customer send per unique event key. Successful executions are
 the customer-message audit record; they do not create per-item application log
 rows. Terminal execution history follows the CRM customer-history lifecycle
 and is not copied into a second technical log.
+
+## Operations notifications and Web Push
+
+Stage 5 adds a minimal generic operations notification boundary under
+`domains/operations/notifications`. CRM owns the decision and presentation
+facts for CRM events; the operations module owns workspace/member-scoped
+persistence, unread state, preferences, subscriptions, Web Push transport,
+realtime delivery, and retention. It does not import CRM, Ad Sales, Telegram
+protocol implementations, Scheduled Tasks, or the Telegram System Bot. A
+neutral process-local wake bridge in `common` lets persisted due-work owners
+re-arm the shared one-shot scheduler without either domain importing the other.
+
+The existing `ScheduledTaskNotificationsService` and
+`TelegramSystemBotNotificationsService` remain the independent operational-run
+to System Bot path. Notification Center records do not replace their settings,
+subscriptions, delivery, or history.
+
+Each Notification stores one recipient Member, a machine type and priority,
+copy key, minimal scalar metadata, a same-origin relative target, read state,
+source idempotency key, publication time, and expiry. It never serializes a
+Contact, Conversation, Deal, Message, or Telegram update payload. Center unread
+is separate from Conversation/CRM unread.
+
+The supported types are `CRM_MESSAGE_RECEIVED`, `CRM_FOLLOW_UP_DUE`,
+`CRM_AUTOMATION_BLOCKED`, and `CRM_PLACEMENT_FAILURE`. Priority is deterministic:
+an unclassified Inbox peer is `LOW`; a qualified Contact, active important Deal,
+or overdue high/urgent action is `HIGH`; other Contact activity is `NORMAL`. No
+AI participates in classification.
+
+Recipient resolution is deterministic and fail closed: an eligible Contact
+owner, then an eligible active Deal assignee, then the workspace Owner, then the
+earliest eligible view-any Member by `(createdAt, id)`. Membership existence is
+the current active-membership definition; `isHidden` is presentation-only.
+Every recipient must retain both Notification Center permission and the source
+CRM permission. API reads and mutations derive the current Member from the
+authenticated workspace context and scope by both `workspaceId` and
+`recipientMemberId`. Contact-backed projections also store an opaque visibility
+resource key. Projection reads take a Contact row lock, and a Contact ownership
+change atomically removes published previews, transfers only pending rows to
+the newly resolved recipient, and invalidates the old recipient's in-memory web
+cache after commit. This prevents stale owner access without teaching the
+generic operations module about CRM models.
+
+The live incoming path is:
+
+```text
+fresh live inbound Telegram Message
+  -> Message + Conversation/Contact compacts
+  -> CRM notification projection in the same transaction
+  -> committed Notification
+  -> narrow Notification realtime event
+  -> optional best-effort Web Push to enabled User devices
+```
+
+The notification uniqueness key includes workspace, recipient, type, and the
+stable source Message/event key. Only rows returned by the conflict-safe insert
+are dispatched after commit. Snapshot import, lazy history, edits, outbound and
+manual Messages create no incoming notification. A duplicate Telegram update
+therefore produces one Message, one Notification, and at most one logical push
+attempt per active device.
+
+Web Push subscriptions are User/device-owned because browser endpoints are not
+workspace identities. Endpoint uniqueness is global and can never silently
+transfer a device to another User. Delivery preference is stored separately per
+WorkspaceMember, so turning Push off in one workspace does not delete or disable
+the User's browser endpoint for other workspaces. A transaction-scoped User
+lock enforces at most five active devices even under concurrent registration.
+The VAPID key set is atomic: all values are present and
+valid, or Push is disabled. Permission is requested only by an explicit browser
+action.
+
+Minimal Push delivery is best-effort and at-most-once. The Notification is the
+durable source of truth; an atomic `pushAttemptedAt` claim prevents duplicate
+egress after duplicate updates or concurrent dispatch. An ambiguous HTTP
+timeout is not retried. `404`/`410` disables the stale endpoint; other provider
+failures do not create health checks, recurring retry work, or success logs.
+Subscription loading precedes the claim, so a User with no active device does
+not consume an attempt. Fanout is capped by one service-wide eight-request
+semaphore, including concurrent MTProto batches; stale endpoints are collected
+and disabled in one bounded write per dispatch.
+The service worker uses the Notification id as its display tag and handles only
+`push` and `notificationclick` events—no cache refresh, heartbeat, periodic sync,
+or keepalive.
+
+Center and Push use the same stored relative deep link. Contact messages target
+the exact Contact and Conversation; Inbox messages target the exact unassigned
+thread. The URL includes workspace context. Before a target surface mounts, the
+web workspace navigation gate verifies membership, clears the previous
+workspace's non-persisted query/realtime state, and switches the workspace. The
+backend remains authoritative when permissions or target ownership changed.
+
+Follow-up notifications are materialized only by a fresh task create/reschedule
+mutation and use a task-and-due occurrence key; existing overdue tasks are never
+backfilled. At due publication, a narrow CRM-owned resolver reloads the current
+Contact owner, active Deal assignees, eligible workspace fallback, and RBAC
+before the generic operations service publishes or pushes the row. Terminal
+automation failure and fresh placement `MISSED` transitions create at most one
+internal notification and never a notification per retry or success step. These
+internal notifications do not change customer-automation eligibility or create
+customer Messages.
+
+Scheduled publication and 90-to-91-day UTC-bucketed expiry reuse the persisted one-shot due
+scheduler. With no unpublished or expiring Notification, there is no recurring
+notification query, write, timer per entity, Push request, or new service. Due
+work uses bounded indexed batches. Expiry wakeups are coalesced once per daily
+bucket in each process, and retention deletes Notification history only—never
+CRM Messages.
 
 ## Multi-account MTProto runtime
 

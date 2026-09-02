@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isWorkspaceScopedQuery } from "./query-provider";
+import { isPersistedQuery, isWorkspaceScopedQuery } from "./query-provider";
 
 describe("workspace query isolation", () => {
   it.each([
@@ -16,11 +16,21 @@ describe("workspace query isolation", () => {
     "telegram-crm",
     "icons",
     "trash",
+    "operations-notifications",
   ])("marks %s as workspace scoped", (root) => {
     expect(isWorkspaceScopedQuery([root, "detail"])).toBe(true);
   });
 
-  it.each(["auth", "workspaces"])("keeps %s across a workspace switch", (root) => {
-    expect(isWorkspaceScopedQuery([root])).toBe(false);
+  it.each(["auth", "workspaces"])(
+    "keeps %s across a workspace switch",
+    (root) => {
+      expect(isWorkspaceScopedQuery([root])).toBe(false);
+    },
+  );
+
+  it("never persists the workspace notification cache", () => {
+    expect(isPersistedQuery(["operations-notifications", "workspace-1"])).toBe(
+      false,
+    );
   });
 });

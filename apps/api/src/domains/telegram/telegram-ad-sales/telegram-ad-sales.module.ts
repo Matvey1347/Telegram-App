@@ -25,6 +25,7 @@ import { TelegramAdvertiserCheckoutResolverService } from './telegram-advertiser
 import { TelegramCrmModule } from '../telegram-crm/telegram-crm.module';
 import { TelegramAdSalesLegacyCrmService } from './telegram-ad-sales-legacy-crm.service';
 import { TelegramAdSalesCustomerAutomationFactsService } from './telegram-ad-sales-customer-automation-facts.service';
+import { TelegramAdSalesCrmTasksService } from './telegram-ad-sales-crm-tasks.service';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { TelegramAdSalesCustomerAutomationFactsService } from './telegram-ad-sal
     TelegramAdvertiserCheckoutResolverService,
     TelegramBotApiClient,
     TelegramAdSalesCustomerAutomationFactsService,
+    TelegramAdSalesCrmTasksService,
   ],
   exports: [
     TelegramAdSalesService,

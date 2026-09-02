@@ -8,7 +8,7 @@ import {
   createTelegramChannelsTestHarness,
   type TelegramChannelsTestHarness,
 } from './__fixtures__/telegram-channels.test-harness';
-import { scheduledTaskWakeNotifier } from '../../operations/scheduled-tasks/scheduled-task-wake-notifier';
+import { scheduledTaskWakeNotifier } from '../../../common/scheduled-task-wake-notifier';
 
 describe('Telegram managed post scheduled identity', () => {
   beforeAll(() => {

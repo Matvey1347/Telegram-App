@@ -32,7 +32,7 @@ import {
   isRevokedTelegramSessionError,
   REVOKED_TELEGRAM_SESSION_MESSAGE,
 } from '../../../telegram/shared/telegram-session-errors';
-import { notifyScheduledTaskDueWorkChanged } from '../../operations/scheduled-tasks/scheduled-task-wake-notifier';
+import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import {
   managedPostRequiresBotApi,
   selectManagedPostPublishingSource,

@@ -13,6 +13,7 @@ import { ScheduledTaskRegistryService } from './scheduled-task-registry.service'
 import { ScheduledTaskRunnerService } from './scheduled-task-runner.service';
 import { ScheduledTasksController } from './scheduled-tasks.controller';
 import { ScheduledTasksService } from './scheduled-tasks.service';
+import { OperationsNotificationsModule } from '../notifications/operations-notifications.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { ScheduledTasksService } from './scheduled-tasks.service';
     TelegramCrmModule,
     TelegramBotsModule,
     ApplicationLogsModule,
+    OperationsNotificationsModule,
   ],
   controllers: [ScheduledTasksController],
   providers: [

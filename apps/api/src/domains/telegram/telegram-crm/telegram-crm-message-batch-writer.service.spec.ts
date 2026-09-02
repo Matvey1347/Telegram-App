@@ -69,7 +69,13 @@ describe('TelegramCrmMessageBatchWriter', () => {
           .fn()
           .mockResolvedValueOnce([])
           .mockResolvedValueOnce([row]),
-        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        createManyAndReturn: jest.fn().mockResolvedValue([
+          {
+            id: row.id,
+            conversationId: row.conversationId,
+            telegramMessageId: row.telegramMessageId,
+          },
+        ]),
         update: jest.fn(),
       },
       telegramCrmConversation: { update: jest.fn() },
@@ -87,7 +93,7 @@ describe('TelegramCrmMessageBatchWriter', () => {
     );
     writer.emitAfterCommit(context.workspaceId, stored, 'live');
 
-    expect(tx.telegramCrmMessage.createMany).toHaveBeenCalledWith(
+    expect(tx.telegramCrmMessage.createManyAndReturn).toHaveBeenCalledWith(
       expect.objectContaining({
         data: [
           expect.objectContaining({
@@ -98,7 +104,7 @@ describe('TelegramCrmMessageBatchWriter', () => {
         ],
       }),
     );
-    const createCall = callArgument(tx.telegramCrmMessage.createMany);
+    const createCall = callArgument(tx.telegramCrmMessage.createManyAndReturn);
     if (!isRecord(createCall) || !Array.isArray(createCall.data)) {
       throw new Error('Expected a typed Message createMany call');
     }
@@ -131,7 +137,13 @@ describe('TelegramCrmMessageBatchWriter', () => {
           .fn()
           .mockResolvedValueOnce([])
           .mockResolvedValueOnce([row]),
-        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        createManyAndReturn: jest.fn().mockResolvedValue([
+          {
+            id: row.id,
+            conversationId: row.conversationId,
+            telegramMessageId: row.telegramMessageId,
+          },
+        ]),
         update: jest.fn(),
       },
       telegramCrmConversation: { update: jest.fn() },
@@ -164,7 +176,13 @@ describe('TelegramCrmMessageBatchWriter', () => {
           .fn()
           .mockResolvedValueOnce([])
           .mockResolvedValueOnce([outboundRow]),
-        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        createManyAndReturn: jest.fn().mockResolvedValue([
+          {
+            id: row.id,
+            conversationId: row.conversationId,
+            telegramMessageId: row.telegramMessageId,
+          },
+        ]),
         update: jest.fn(),
       },
       telegramCrmConversation: { update: jest.fn() },
@@ -179,7 +197,7 @@ describe('TelegramCrmMessageBatchWriter', () => {
     const stored = await writer.store(tx as never, context, [outbound], 'live');
     writer.emitAfterCommit(context.workspaceId, stored, 'live');
 
-    const createCall = callArgument(tx.telegramCrmMessage.createMany);
+    const createCall = callArgument(tx.telegramCrmMessage.createManyAndReturn);
     if (!isRecord(createCall) || !Array.isArray(createCall.data)) {
       throw new Error('Expected a typed Message createMany call');
     }
@@ -217,7 +235,7 @@ describe('TelegramCrmMessageBatchWriter', () => {
             editedAt: null,
           },
         ]),
-        createMany: jest.fn(),
+        createManyAndReturn: jest.fn(),
         update: jest.fn(),
       },
       telegramCrmConversation: { update: jest.fn() },
@@ -234,7 +252,7 @@ describe('TelegramCrmMessageBatchWriter', () => {
     writer.emitAfterCommit(context.workspaceId, stored, 'live');
 
     expect(stored).toMatchObject({ created: [], edited: 1 });
-    expect(tx.telegramCrmMessage.createMany).not.toHaveBeenCalled();
+    expect(tx.telegramCrmMessage.createManyAndReturn).not.toHaveBeenCalled();
     expect(tx.telegramCrmMessage.update).toHaveBeenCalledWith({
       where: { id: 'message-1' },
       data: { text: 'Edited', editedAt },
@@ -255,7 +273,13 @@ describe('TelegramCrmMessageBatchWriter', () => {
           .fn()
           .mockResolvedValueOnce([])
           .mockResolvedValueOnce([row]),
-        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        createManyAndReturn: jest.fn().mockResolvedValue([
+          {
+            id: row.id,
+            conversationId: row.conversationId,
+            telegramMessageId: row.telegramMessageId,
+          },
+        ]),
         update: jest.fn(),
       },
       telegramCrmConversation: { update: jest.fn() },
@@ -313,5 +337,62 @@ describe('TelegramCrmMessageBatchWriter', () => {
         contactId: 'contact-1',
       }),
     );
+  });
+
+  it('publishes exactly one same-transaction notification only after the live batch commits', async () => {
+    const tx = {
+      telegramCrmMessage: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([row]),
+        createManyAndReturn: jest.fn().mockResolvedValue([
+          {
+            id: row.id,
+            conversationId: row.conversationId,
+            telegramMessageId: row.telegramMessageId,
+          },
+        ]),
+        update: jest.fn(),
+      },
+      telegramCrmConversation: { update: jest.fn() },
+      telegramAdvertiser: { findUnique: jest.fn(), update: jest.fn() },
+    };
+    const events = { emit: jest.fn() };
+    const publisher = { publish: jest.fn().mockResolvedValue(undefined) };
+    const projector = {
+      project: jest.fn().mockResolvedValue([{ id: 'notification-1' }]),
+    };
+    const writer = new TelegramCrmMessageBatchWriter(
+      events as never,
+      publisher as never,
+      projector as never,
+    );
+
+    const stored = await writer.store(tx as never, context, [input()], 'live');
+    expect(stored.notificationIds).toEqual(['notification-1']);
+    expect(publisher.publish).not.toHaveBeenCalled();
+
+    writer.emitAfterCommit(context.workspaceId, stored, 'live');
+    expect(publisher.publish).toHaveBeenCalledTimes(1);
+    expect(publisher.publish).toHaveBeenCalledWith(['notification-1']);
+
+    const duplicateTx = {
+      telegramCrmMessage: {
+        findMany: jest.fn().mockResolvedValue([]),
+        createManyAndReturn: jest.fn().mockResolvedValue([]),
+        update: jest.fn(),
+      },
+      telegramCrmConversation: { update: jest.fn() },
+      telegramAdvertiser: { findUnique: jest.fn(), update: jest.fn() },
+    };
+    const duplicate = await writer.store(
+      duplicateTx as never,
+      context,
+      [input()],
+      'live',
+    );
+    writer.emitAfterCommit(context.workspaceId, duplicate, 'live');
+    expect(publisher.publish).toHaveBeenCalledTimes(1);
   });
 });

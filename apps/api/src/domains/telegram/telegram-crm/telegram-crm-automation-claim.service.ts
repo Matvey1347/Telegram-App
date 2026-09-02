@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { TelegramCrmInternalNotificationProjector } from './telegram-crm-internal-notification-projector.service';
 
 const CLAIM_TTL_MS = 5 * 60_000;
 
@@ -9,10 +10,23 @@ const CLAIM_TTL_MS = 5 * 60_000;
 export class TelegramCrmAutomationClaimService {
   readonly ownerId = randomUUID();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional()
+    private readonly notifications?: TelegramCrmInternalNotificationProjector,
+  ) {}
 
   async terminalizeExhausted(limit: number) {
-    await this.prisma.$executeRaw(Prisma.sql`
+    const notificationIds = await this.prisma.$transaction(async (tx) => {
+      const failed = await tx.$queryRaw<
+        Array<{
+          id: string;
+          workspaceId: string;
+          contactId: string;
+          telegramAdSaleId: string | null;
+          reason: string | null;
+        }>
+      >(Prisma.sql`
       WITH exhausted AS (
         SELECT "id"
         FROM "TelegramCrmCustomerAutomationExecution"
@@ -52,7 +66,20 @@ export class TelegramCrmAutomationClaimService {
         "updatedAt" = NOW()
       FROM exhausted
       WHERE execution."id" = exhausted."id"
-    `);
+      RETURNING
+        execution."id",
+        execution."workspaceId",
+        execution."contactId",
+        execution."telegramAdSaleId",
+        execution."reason"
+      `);
+      return this.notifications
+        ? (await this.notifications.automationBlocked(tx, failed)).map(
+            (item) => item.id,
+          )
+        : [];
+    });
+    await this.notifications?.publish(notificationIds);
   }
 
   async claim(limit: number) {
