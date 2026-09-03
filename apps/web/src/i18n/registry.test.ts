@@ -22,7 +22,7 @@ describe("feature i18n registry", () => {
     expect(namespacesForPath("/settings")).not.toContain("account");
   });
 
-  it("loads only base and current Telegram Posts route namespaces", () => {
+  it("preloads editor and calendar copy for an immediate translated switch", () => {
     expect(telegramPostsNamespaces("/telegram-posts/groups")).toEqual([
       "common",
       "navigation",
@@ -36,8 +36,17 @@ describe("feature i18n registry", () => {
     expect(telegramPostsNamespaces("/telegram-posts/calendar")).not.toContain(
       "telegram/posts/groups",
     );
-    expect(telegramPostsNamespaces("/telegram-posts/calendar")).not.toContain(
-      "telegram/posts/editor",
+    expect(telegramPostsNamespaces("/telegram-posts/editor")).toEqual(
+      expect.arrayContaining([
+        "telegram/posts/editor",
+        "telegram/posts/calendar",
+      ]),
+    );
+    expect(telegramPostsNamespaces("/telegram-posts/calendar")).toEqual(
+      expect.arrayContaining([
+        "telegram/posts/editor",
+        "telegram/posts/calendar",
+      ]),
     );
   });
 

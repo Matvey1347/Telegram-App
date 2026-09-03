@@ -1,19 +1,51 @@
-export const CALENDAR_WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+export function calendarWeekdays(locale?: string) {
+  const formatter = new Intl.DateTimeFormat(locale, { weekday: "short" });
+  const monday = new Date(2024, 0, 1);
+  return Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(monday);
+    day.setDate(monday.getDate() + index);
+    return formatter.format(day).replace(/\.$/, "");
+  });
+}
 
 export function startOfMonth(value: Date) {
   return new Date(value.getFullYear(), value.getMonth(), 1);
 }
 
 export function endOfMonth(value: Date) {
-  return new Date(value.getFullYear(), value.getMonth() + 1, 0, 23, 59, 59, 999);
+  return new Date(
+    value.getFullYear(),
+    value.getMonth() + 1,
+    0,
+    23,
+    59,
+    59,
+    999,
+  );
 }
 
 export function startOfDay(value: Date) {
-  return new Date(value.getFullYear(), value.getMonth(), value.getDate(), 0, 0, 0, 0);
+  return new Date(
+    value.getFullYear(),
+    value.getMonth(),
+    value.getDate(),
+    0,
+    0,
+    0,
+    0,
+  );
 }
 
 export function endOfDay(value: Date) {
-  return new Date(value.getFullYear(), value.getMonth(), value.getDate(), 23, 59, 59, 999);
+  return new Date(
+    value.getFullYear(),
+    value.getMonth(),
+    value.getDate(),
+    23,
+    59,
+    59,
+    999,
+  );
 }
 
 export function addMonths(value: Date, amount: number) {
@@ -63,12 +95,18 @@ export function buildCalendarDays(value: Date) {
 }
 
 export function sameMonth(left: Date, right: Date) {
-  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth()
+  );
 }
 
 export function timeLabel(value?: string | null, locale?: string) {
   if (!value) return "";
-  return new Date(value).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+  return new Date(value).toLocaleTimeString(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export function calendarStatusTone(status: "SCHEDULED" | "PUBLISHED") {

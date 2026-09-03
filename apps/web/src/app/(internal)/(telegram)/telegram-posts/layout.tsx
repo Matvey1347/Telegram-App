@@ -7,15 +7,28 @@ const namespaces = [
   "ad-sales/common",
   "telegram/posts/common",
   "telegram/posts/editor",
+  "telegram/posts/calendar",
 ] as const satisfies readonly I18nNamespace[];
 
-export default async function TelegramPostsLayout({ children }: { children: React.ReactNode }) {
-  const locale = normalizeAppLocale((await cookies()).get(APP_LOCALE_COOKIE)?.value);
+export default async function TelegramPostsLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const locale = normalizeAppLocale(
+    (await cookies()).get(APP_LOCALE_COOKIE)?.value,
+  );
   const modules = await Promise.all(
-    namespaces.map(async (namespace) => [namespace, (await loadCatalog(locale, namespace)).default] as const),
+    namespaces.map(
+      async (namespace) =>
+        [namespace, (await loadCatalog(locale, namespace)).default] as const,
+    ),
   );
   return (
-    <I18nPreloadedBoundary initialLocale={locale} catalogs={Object.fromEntries(modules)}>
+    <I18nPreloadedBoundary
+      initialLocale={locale}
+      catalogs={Object.fromEntries(modules)}
+    >
       {children}
     </I18nPreloadedBoundary>
   );

@@ -32,14 +32,16 @@ export const FEATURE_I18N_REGISTRY = {
 >;
 
 export function telegramPostsNamespaces(pathname: string): I18nNamespace[] {
-  const route = pathname.endsWith("/calendar")
-    ? "calendar"
-    : pathname.endsWith("/groups")
-      ? "groups"
-      : "editor";
+  if (pathname.endsWith("/groups")) {
+    return [
+      ...FEATURE_I18N_REGISTRY.posts.base,
+      ...FEATURE_I18N_REGISTRY.posts.routes.groups,
+    ];
+  }
   return [
     ...FEATURE_I18N_REGISTRY.posts.base,
-    ...FEATURE_I18N_REGISTRY.posts.routes[route],
+    ...FEATURE_I18N_REGISTRY.posts.routes.editor,
+    ...FEATURE_I18N_REGISTRY.posts.routes.calendar,
   ];
 }
 
