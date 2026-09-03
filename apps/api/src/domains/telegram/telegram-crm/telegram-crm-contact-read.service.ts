@@ -32,6 +32,7 @@ import {
 } from './telegram-crm-contact-read-model';
 import { CrmContactsQueryDto } from './telegram-crm.dto';
 import { loadCrmReadNoReplyPage } from './telegram-crm-follow-up-read';
+import { loadCrmContactSalesSummaries } from './telegram-crm-contact-sales-summary';
 
 @Injectable()
 export class TelegramCrmContactReadService {
@@ -62,11 +63,7 @@ export class TelegramCrmContactReadService {
             this.dueFilter(query),
           )
         : null;
-    const baseWhere = this.contactWhere(
-      access.workspaceId,
-      ownership,
-      query,
-    );
+    const baseWhere = this.contactWhere(access.workspaceId, ownership, query);
     let rows: ContactListRow[];
     let totalItems: number;
     if (readNoReplyPage) {
@@ -97,7 +94,7 @@ export class TelegramCrmContactReadService {
         this.prisma.telegramAdvertiser.count({ where: baseWhere }),
       ]);
     }
-    const [unreadByContact, dealTotals] = await Promise.all([
+    const [unreadByContact, dealTotals, salesSummaries] = await Promise.all([
       this.unreadByContact(
         access.workspaceId,
         rows.map((row) => row.id),
@@ -106,10 +103,20 @@ export class TelegramCrmContactReadService {
         access.workspaceId,
         rows.flatMap((row) => (row.sales[0] ? [row.sales[0].id] : [])),
       ),
+      loadCrmContactSalesSummaries(
+        this.prisma,
+        access.workspaceId,
+        rows.map((row) => ({
+          id: row.id,
+          displayName: row.displayName,
+          companyName: row.companyName,
+          telegramUsername: row.telegramUsername,
+        })),
+      ),
     ]);
     return createPaginatedResponse(
       rows.map((row) =>
-        mapCrmContactListItem(row, unreadByContact, dealTotals),
+        mapCrmContactListItem(row, unreadByContact, dealTotals, salesSummaries),
       ),
       totalItems,
       pagination,

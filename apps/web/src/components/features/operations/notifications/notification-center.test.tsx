@@ -39,7 +39,7 @@ function item(
   };
 }
 
-function renderCenter() {
+function renderCenter(compact = false) {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -48,7 +48,7 @@ function renderCenter() {
   });
   render(
     <QueryClientProvider client={client}>
-      <NotificationCenter workspaceId="workspace-1" enabled />
+      <NotificationCenter workspaceId="workspace-1" enabled compact={compact} />
     </QueryClientProvider>,
   );
   return client;
@@ -69,6 +69,14 @@ describe("NotificationCenter", () => {
     vi.spyOn(operationsNotificationsApi, "markAllRead").mockResolvedValue({
       unread: 0,
     });
+  });
+
+  it("uses the compact trigger size inside the sidebar action row", async () => {
+    renderCenter(true);
+
+    expect(
+      await screen.findByRole("button", { name: "Notifications, 101 unread" }),
+    ).toHaveClass("h-8", "w-8");
   });
 
   it("caps the accessible badge, labels priority/read state, and bounds pagination", async () => {

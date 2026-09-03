@@ -5,7 +5,7 @@ const navigation = {
   "navigation.overview": "Обзор",
   "navigation.finance": "Финансы",
   "navigation.telegram": "Telegram",
-  "navigation.channels": "Каналы",
+  "navigation.resources": "Ресурсы",
   "navigation.posts": "Публикации",
   "navigation.bots": "Боты",
   "navigation.growth": "Продвижение",

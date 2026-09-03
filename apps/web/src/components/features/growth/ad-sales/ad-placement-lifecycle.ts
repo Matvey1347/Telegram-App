@@ -6,6 +6,15 @@ import { formatDateTime } from "@/lib/date-format";
 
 type LifecyclePlacement = TelegramAdSalePlacement | TelegramAdSaleListPlacement;
 
+export function hasLinkedPlacementPost(placement: LifecyclePlacement) {
+  return Boolean(
+    placement.managedPostId ||
+      placement.telegramPostId ||
+      placement.publishedAt ||
+      placement.managedPost,
+  );
+}
+
 function durationLabel(remaining: number) {
   const seconds = Math.floor(remaining / 1_000);
   const days = Math.floor(seconds / 86_400);
@@ -19,6 +28,7 @@ export function placementTimer(
   placement: LifecyclePlacement,
   now: number,
 ): { phase: "publication" | "deletion" | "complete"; label: string } | null {
+  if (!hasLinkedPlacementPost(placement)) return null;
   if (placement.deletedAt) {
     return { phase: "complete", label: "Automatically deleted" };
   }

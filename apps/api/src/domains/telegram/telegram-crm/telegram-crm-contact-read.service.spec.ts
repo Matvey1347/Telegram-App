@@ -28,6 +28,13 @@ const contactRow = () => ({
   updatedAt: date,
   ownerMember: {
     id: 'member-1',
+    avatarIcon: {
+      id: 'owner-avatar',
+      type: 'image',
+      name: 'Owner avatar',
+      emoji: null,
+      imageUrl: 'https://cdn.example/owner.jpg',
+    },
     user: { name: 'Owner', email: 'owner@example.com' },
   },
   crmPeers: [
@@ -181,9 +188,7 @@ describe('TelegramCrmContactReadService', () => {
   it('uses the newest unanswered outbound across all account Conversations for READ_NO_REPLY', async () => {
     const query = await captureReadNoReplySql();
 
-    expect(query.text).toContain(
-      'conversation."contactId" = advertiser."id"',
-    );
+    expect(query.text).toContain('conversation."contactId" = advertiser."id"');
     expect(query.text).toContain(
       'ORDER BY message."sentAt" DESC, message."id" DESC',
     );
@@ -233,6 +238,27 @@ describe('TelegramCrmContactReadService', () => {
           },
         ]),
       },
+      telegramAdSale: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            advertiserId: 'contact-1',
+            advertiserTelegram: 'ada',
+            advertiserTelegramSnapshot: null,
+            status: 'COMPLETED',
+            createdAt: date,
+            placements: [
+              { agreedPrice: new Prisma.Decimal(735) },
+              { agreedPrice: new Prisma.Decimal(0) },
+            ],
+            payments: [
+              {
+                amount: new Prisma.Decimal(735),
+                currency: 'UAH',
+              },
+            ],
+          },
+        ]),
+      },
     };
     const service = new TelegramCrmContactReadService(
       prisma as never,
@@ -250,6 +276,15 @@ describe('TelegramCrmContactReadService', () => {
 
     expect(result.items[0]).toMatchObject({
       stage: 'LEAD',
+      ownerMember: {
+        id: 'member-1',
+        name: 'Owner',
+        avatarPresentation: {
+          type: 'image',
+          id: 'owner-avatar',
+          url: 'https://cdn.example/owner.jpg',
+        },
+      },
       peer: { id: 'peer-1', photoUrl: 'https://cdn.example/ada.jpg' },
       unreadCount: 7,
       conversationCount: 101,
@@ -265,6 +300,14 @@ describe('TelegramCrmContactReadService', () => {
         paidAmount: '40',
         paymentStatus: 'PARTIALLY_PAID',
         scheduledAt: '2026-08-31T12:00:00.000Z',
+      },
+      salesSummary: {
+        totalSalesCount: 1,
+        paidSalesCount: 1,
+        completedSalesCount: 1,
+        totalPlacementsCount: 2,
+        revenueByCurrency: [{ currency: 'UAH', amount: '735' }],
+        lastDealAt: '2026-08-31T12:00:00.000Z',
       },
     });
     const select = prisma.telegramAdvertiser.findMany.mock.calls[0][0].select;

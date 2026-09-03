@@ -1,9 +1,34 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { TelegramAdSale } from "@telegram-system/shared";
-import { SalesTab } from "./ad-sales-sales-tab";
+import { adSaleClientLabel, SalesTab } from "./ad-sales-sales-tab";
 
 describe("SalesTab", () => {
+  it("shows one canonical label for the same linked client", () => {
+    const linkedClient = {
+      advertiserId: "advertiser-1",
+      advertiserName: "astrakarmaved",
+      advertiserTelegram: "astrakarmaved",
+      advertiserSummary: {
+        displayName: "astrakarmaved",
+        telegramUsername: "astrakarmaved",
+      },
+    };
+
+    expect(
+      adSaleClientLabel({
+        ...linkedClient,
+        advertiserTelegramSnapshot: "@astrakarmaved",
+      } as unknown as TelegramAdSale),
+    ).toBe("astrakarmaved");
+    expect(
+      adSaleClientLabel({
+        ...linkedClient,
+        advertiserTelegramSnapshot: null,
+      } as unknown as TelegramAdSale),
+    ).toBe("astrakarmaved");
+  });
+
   it("shows the buyer, channel preview, and received amount without legacy status fields", () => {
     const onOpenSale = vi.fn();
     const sale = {
@@ -100,7 +125,7 @@ describe("SalesTab", () => {
       />,
     );
 
-    expect(screen.getByText("@buyer")).toBeTruthy();
+    expect(screen.getByText("buyer")).toBeTruthy();
     expect(screen.getByText("Mentor Self-development")).toBeTruthy();
     expect(screen.getByText("Business Patterns")).toBeTruthy();
     expect(screen.getByText(/Published .*28\/08\/2026/)).toBeTruthy();
@@ -123,7 +148,7 @@ describe("SalesTab", () => {
     expect(screen.queryByText("Untitled Sale")).toBeNull();
     expect(screen.queryByText("Payment status")).toBeNull();
     expect(screen.queryByText("Fulfillment status")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Actions for @buyer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Actions for buyer" }));
     expect(screen.getByRole("menuitem", { name: "Edit deal" })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: "Delete deal" })).toBeTruthy();
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete deal" }));
@@ -194,6 +219,7 @@ describe("SalesTab", () => {
       screen.getByText(/Scheduled .*02\/08\/2026.*→.*06\/08\/2026/),
     ).toBeTruthy();
     expect(screen.getByText(/· 1\/24$/)).toBeTruthy();
-    expect(screen.queryByText("Publication pending")).toBeNull();
+    expect(screen.queryByLabelText("Publication pending")).toBeNull();
+    expect(screen.queryByText(/Publishes in/)).toBeNull();
   });
 });

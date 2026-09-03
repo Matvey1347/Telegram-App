@@ -5,7 +5,7 @@ const navigation = {
   "navigation.overview": "Overview",
   "navigation.finance": "Finance",
   "navigation.telegram": "Telegram",
-  "navigation.channels": "Channels",
+  "navigation.resources": "Resources",
   "navigation.posts": "Posts",
   "navigation.bots": "Bots",
   "navigation.growth": "Growth",

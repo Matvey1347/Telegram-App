@@ -46,6 +46,10 @@ describe('TelegramAdSalesSaleReadService', () => {
       createdAt: new Date('2026-08-01T00:00:00.000Z'),
       updatedAt: new Date('2026-08-02T00:00:00.000Z'),
       assignedMember: null,
+      advertiser: {
+        displayName: 'Current buyer',
+        telegramUsername: 'current_buyer',
+      },
       placements: [
         {
           id: 'placement-1',
@@ -157,6 +161,10 @@ describe('TelegramAdSalesSaleReadService', () => {
         totalPaidAmount: '40',
         outstandingAmount: '60',
         paymentStatus: 'PARTIALLY_PAID',
+        advertiserSummary: {
+          displayName: 'Current buyer',
+          telegramUsername: 'current_buyer',
+        },
       }),
     );
     expect(result.items[0]).not.toHaveProperty('payments');
@@ -179,7 +187,9 @@ describe('TelegramAdSalesSaleReadService', () => {
     if (!listQuery) throw new Error('Expected compact sale list query');
     expect(listQuery.where).toEqual({ workspaceId: 'ws-1' });
     expect(listQuery.select).not.toHaveProperty('payments');
-    expect(listQuery.select).not.toHaveProperty('advertiser');
+    expect(listQuery.select.advertiser).toEqual({
+      select: { displayName: true, telegramUsername: true },
+    });
     expect(workspaceService.resolveWorkspaceIdForUser).toHaveBeenCalledTimes(1);
     expect(prisma.telegramAdSale.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.telegramAdSale.count).toHaveBeenCalledTimes(1);

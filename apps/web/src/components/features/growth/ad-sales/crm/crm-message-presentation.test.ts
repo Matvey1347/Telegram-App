@@ -21,22 +21,40 @@ const message = (patch: Partial<CrmMessageListItem>): CrmMessageListItem => ({
   readState: "READ",
   deliveryState: "SENT",
   createdAt: "2026-08-31T12:00:00.000Z",
-  account: { id: "account-1", label: "Sales", username: "sales", photoUrl: null },
+  account: {
+    id: "account-1",
+    label: "Sales",
+    username: "sales",
+    photoUrl: null,
+  },
   sentByMember: null,
   ...patch,
 });
 
 describe("crmMessageOriginLabel", () => {
   it("does not invent a Member for historical Telegram messages", () => {
-    expect(crmMessageOriginLabel(message({ origin: "TELEGRAM_SYNC" }))).toBe("Telegram history");
+    expect(crmMessageOriginLabel(message({ origin: "TELEGRAM_SYNC" }))).toBe(
+      "Telegram history",
+    );
   });
 
   it("labels automation, system and attributed manual messages explicitly", () => {
-    expect(crmMessageOriginLabel(message({ origin: "AUTOMATION" }))).toBe("Automated");
+    expect(crmMessageOriginLabel(message({ origin: "AUTOMATION" }))).toBe(
+      "Automated",
+    );
     expect(crmMessageOriginLabel(message({ origin: "SYSTEM" }))).toBe("System");
-    expect(crmMessageOriginLabel(message({
-      origin: "MANUAL",
-      sentByMember: { id: "member-1", name: "Alice", email: null },
-    }))).toBe("Manual · Member: Alice");
+    expect(
+      crmMessageOriginLabel(
+        message({
+          origin: "MANUAL",
+          sentByMember: {
+            id: "member-1",
+            name: "Alice",
+            email: null,
+            avatarPresentation: null,
+          },
+        }),
+      ),
+    ).toBe("Manual · Member: Alice");
   });
 });

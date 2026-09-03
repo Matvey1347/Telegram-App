@@ -5,6 +5,7 @@ import type {
   CrmMessagePreview,
   CrmPeerSummary,
 } from '@telegram-system/shared';
+import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 
 export const crmAccountSummarySelect = {
   id: true,
@@ -15,6 +16,15 @@ export const crmAccountSummarySelect = {
 
 export const crmMemberSummarySelect = {
   id: true,
+  avatarIcon: {
+    select: {
+      id: true,
+      type: true,
+      name: true,
+      emoji: true,
+      imageUrl: true,
+    },
+  },
   user: { select: { name: true, email: true } },
 } satisfies Prisma.WorkspaceMemberSelect;
 
@@ -58,7 +68,12 @@ export const mapCrmMemberSummary = (
   row: MemberSummaryRow | null,
 ): CrmMemberSummary | null =>
   row
-    ? { id: row.id, name: row.user.name, email: row.user.email ?? null }
+    ? {
+        id: row.id,
+        name: row.user.name,
+        email: row.user.email ?? null,
+        avatarPresentation: iconToResolvedEmoji(row.avatarIcon),
+      }
     : null;
 
 export const mapCrmPeerSummary = (row: PeerSummaryRow): CrmPeerSummary => row;

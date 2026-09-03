@@ -6,7 +6,11 @@ import { Hourglass, Timer, Trash2 } from "lucide-react";
 import type { TelegramChannel } from "@/lib/api";
 import { formatDateTime } from "@/lib/date-format";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
-import { placementFormatLabel, placementTimer } from "./ad-placement-lifecycle";
+import {
+  hasLinkedPlacementPost,
+  placementFormatLabel,
+  placementTimer,
+} from "./ad-placement-lifecycle";
 
 type Placement = TelegramAdSaleListItem["placements"][number];
 
@@ -230,7 +234,9 @@ export function AdSalePlacementLifecyclePreview({
       {groups.map((group) => {
         const formats = formatsLabel(group);
         const statusPlacement =
-          group.find((item) => !item.publishedAt) ?? group[0];
+          group.find(
+            (item) => hasLinkedPlacementPost(item) && !item.publishedAt,
+          ) ?? group.find(hasLinkedPlacementPost);
         const groupObservedPublishedAt = group.every((item) => item.publishedAt)
           ? Math.max(...group.map((item) => observedPublished[item.id] ?? 0)) ||
             undefined
@@ -250,11 +256,13 @@ export function AdSalePlacementLifecyclePreview({
                 {group.length} placements
               </p>
             ) : null}
-            <Status
-              placement={statusPlacement}
-              now={effectiveNow}
-              observedPublishedAt={groupObservedPublishedAt}
-            />
+            {statusPlacement ? (
+              <Status
+                placement={statusPlacement}
+                now={effectiveNow}
+                observedPublishedAt={groupObservedPublishedAt}
+              />
+            ) : null}
           </div>
         );
       })}

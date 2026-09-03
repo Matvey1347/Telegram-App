@@ -17,30 +17,25 @@ describe("resolveAdSalesSurface", () => {
   it("uses root and the clients alias for all contacts", () => {
     expect(resolveAdSalesSurface("/ad-sales", new URLSearchParams())).toEqual({
       kind: "contacts",
-      view: "ALL",
     });
     expect(
       resolveAdSalesSurface("/ad-sales/clients", new URLSearchParams()),
-    ).toEqual({ kind: "contacts", view: "ALL" });
+    ).toEqual({ kind: "contacts" });
   });
 
-  it("restores URL-driven views and deep conversation context", () => {
+  it("collapses old filters and detail links back to the clients surface", () => {
     expect(
       resolveAdSalesSurface(
         "/ad-sales",
         new URLSearchParams("view=follow-up&followUp=READ_NO_REPLY"),
       ),
-    ).toEqual({ kind: "contacts", view: "FOLLOW_UP" });
+    ).toEqual({ kind: "contacts" });
     expect(
       resolveAdSalesSurface(
         "/ad-sales/contacts/contact-1/conversations/conversation-2",
         new URLSearchParams(),
       ),
-    ).toEqual({
-      kind: "contact",
-      contactId: "contact-1",
-      conversationId: "conversation-2",
-    });
+    ).toEqual({ kind: "contacts" });
   });
 
   it("preserves an exact unassigned inbox thread deep link", () => {

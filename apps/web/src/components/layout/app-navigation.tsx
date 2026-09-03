@@ -55,7 +55,7 @@ const groups: readonly NavigationGroup[] = [
     icon: MessageCircle,
     children: [
       {
-        label: "navigation.channels",
+        label: "navigation.resources",
         href: "/telegram-channels",
         icon: workspaceFeatureIcons.channels,
         featureId: "channels",

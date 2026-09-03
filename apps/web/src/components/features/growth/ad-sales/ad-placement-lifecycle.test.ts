@@ -10,6 +10,7 @@ describe("placementTimer", () => {
     expect(
       placementTimer(
         {
+          managedPostId: "post-1",
           scheduledAt: "2026-08-27T10:00:00.000Z",
           publishedAt: null,
           plannedDeleteAt: null,
@@ -35,6 +36,23 @@ describe("placementTimer", () => {
         new Date("2026-08-27T10:00:00.000Z").getTime(),
       )?.label,
     ).toBe("Auto-delete in 1d 00:31:00");
+  });
+
+  it("does not show publication pending without a linked post", () => {
+    expect(
+      placementTimer(
+        {
+          managedPostId: null,
+          telegramPostId: null,
+          managedPost: null,
+          scheduledAt: "2026-08-25T13:30:00.000Z",
+          publishedAt: null,
+          plannedDeleteAt: null,
+          deletedAt: null,
+        } as never,
+        new Date("2026-08-25T14:05:00.000Z").getTime(),
+      ),
+    ).toBeNull();
   });
 
   it("does not show deletion pending after Telegram confirms the post is missing", () => {

@@ -47,7 +47,7 @@ export function LanguageSwitcher() {
     <ActionMenu
       label={t("navigation.language")}
       trigger={<span aria-hidden="true">{current.flag}</span>}
-      triggerClassName="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900/45 text-sm transition hover:bg-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      triggerClassName="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900/45 text-sm transition hover:bg-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
       menuClassName="absolute right-0 top-10 z-50 w-40 rounded-lg border border-neutral-700 bg-neutral-950 p-1.5 shadow-2xl"
     >
       {options.map((option) => {

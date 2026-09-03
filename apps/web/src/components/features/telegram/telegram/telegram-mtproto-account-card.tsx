@@ -2,8 +2,15 @@
 
 import { formatDateTime } from "@/lib/date-format";
 
-import type { ReactNode } from "react";
-import { RefreshCw, SearchCheck, Trash2 } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import {
+  RefreshCw,
+  SearchCheck,
+  Send,
+  Settings2,
+  Share2,
+  Trash2,
+} from "lucide-react";
 import type { TelegramUserAccount } from "@/lib/api";
 import { Button } from "@/components/ui/primitives";
 import { ChannelPreview } from "./channel-preview";
@@ -12,7 +19,7 @@ import {
   TelegramCardActionsMenu,
   TelegramCardMenuAction,
 } from "./telegram-card-actions-menu";
-import { TelegramCrmAccountCapabilities } from "./telegram-crm-account-capabilities";
+import { TelegramCrmAccountCapabilitiesModal } from "./telegram-crm-account-capabilities";
 
 function displayName(account: TelegramUserAccount) {
   const username = String(account.username || "").replace(/^@/, "");
@@ -42,6 +49,7 @@ export function TelegramMtprotoAccountCard({
   onDelete: () => void;
   children?: ReactNode;
 }) {
+  const [capabilitiesOpen, setCapabilitiesOpen] = useState(false);
   const sessionRefreshRequired = requiresTelegramSessionRefresh(account);
   const fullName = [account.firstName, account.lastName]
     .filter(Boolean)
@@ -49,95 +57,147 @@ export function TelegramMtprotoAccountCard({
     .trim();
 
   return (
-    <article className="rounded-xl border border-neutral-800/80 bg-neutral-900/55 p-4 text-sm text-neutral-300">
-      <ChannelPreview
-        channel={{ title: displayName(account), photoUrl: account.photoUrl }}
-        avatarKind="mtproto"
-        subtitle={fullName || `Phone: ${account.phoneMasked || "-"}`}
-        badges={
-          account.isPremium ? (
-            <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.14em] text-amber-200">
-              Premium
-            </span>
-          ) : null
-        }
-        rightAction={
-          <TelegramCardActionsMenu
-            label={`Actions for ${displayName(account)}`}
-          >
-            <TelegramCardMenuAction
-              label="Check account"
-              icon={<SearchCheck size={17} />}
-              onClick={onCheck}
-            />
-            <TelegramCardMenuAction
-              label="Sync channels"
-              icon={<RefreshCw size={17} />}
-              onClick={onSync}
-            />
-            <TelegramCardMenuAction
-              danger
-              label="Delete account"
-              icon={<Trash2 size={17} />}
-              onClick={onDelete}
-            />
-          </TelegramCardActionsMenu>
-        }
-        className="!mb-0 !border-0 !bg-transparent !p-0"
-      />
+    <>
+      <article className="rounded-xl border border-neutral-800/80 bg-neutral-900/55 p-4 text-sm text-neutral-300">
+        <ChannelPreview
+          channel={{ title: displayName(account), photoUrl: account.photoUrl }}
+          avatarKind="mtproto"
+          subtitle={fullName || `Phone: ${account.phoneMasked || "-"}`}
+          badges={<AccountCapabilityBadges account={account} />}
+          rightAction={
+            <TelegramCardActionsMenu
+              label={`Actions for ${displayName(account)}`}
+            >
+              <TelegramCardMenuAction
+                label="Check account"
+                icon={<SearchCheck size={17} />}
+                onClick={onCheck}
+              />
+              <TelegramCardMenuAction
+                label="Sync channels"
+                icon={<RefreshCw size={17} />}
+                onClick={onSync}
+              />
+              <TelegramCardMenuAction
+                label="CRM & publishing"
+                icon={<Settings2 size={17} />}
+                onClick={() => setCapabilitiesOpen(true)}
+              />
+              <TelegramCardMenuAction
+                danger
+                label="Delete account"
+                icon={<Trash2 size={17} />}
+                onClick={onDelete}
+              />
+            </TelegramCardActionsMenu>
+          }
+          className="!mb-0 !border-0 !bg-transparent !p-0"
+        />
 
-      {account.status !== "connected" ? (
-        <div className="mb-1 mt-3 flex items-center gap-2 text-xs uppercase tracking-wide text-amber-300">
-          Status: {account.status}
+        {account.status !== "connected" ? (
+          <div className="mb-1 mt-3 flex items-center gap-2 text-xs uppercase tracking-wide text-amber-300">
+            Status: {account.status}
+          </div>
+        ) : null}
+        <div className="mt-3 space-y-1 text-sm">
+          <p>Phone: {account.phoneMasked || "-"}</p>
+          <p>
+            Last Check:{" "}
+            {account.lastCheckedAt
+              ? formatDateTime(account.lastCheckedAt)
+              : "-"}
+          </p>
+          {account.lastErrorMessage ? (
+            <p className="text-rose-300">{account.lastErrorMessage}</p>
+          ) : null}
         </div>
-      ) : null}
-      <div className="mt-3 space-y-1 text-sm">
-        <p>Phone: {account.phoneMasked || "-"}</p>
-        <p>
-          Last Check:{" "}
-          {account.lastCheckedAt
-            ? formatDateTime(account.lastCheckedAt)
-            : "-"}
-        </p>
-        {account.lastErrorMessage ? (
-          <p className="text-rose-300">{account.lastErrorMessage}</p>
-        ) : null}
-      </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        {account.status === "pending" ||
-        (account.status === "error" && !sessionRefreshRequired) ? (
-          <Button
-            variant="secondary"
-            disabled={isStartingLogin}
-            onClick={onStartLogin}
-          >
-            {isStartingLogin ? "Sending…" : "Start login"}
-          </Button>
-        ) : null}
-        {sessionRefreshRequired ? (
-          <Button variant="secondary" onClick={onRefreshQr}>
-            Refresh via QR
-          </Button>
-        ) : null}
-        {account.status === "needs_code" ? (
-          <>
-            <Button variant="secondary" onClick={onEnterCode}>
-              Enter code
+        <div className="mt-3 flex flex-wrap gap-2">
+          {account.status === "pending" ||
+          (account.status === "error" && !sessionRefreshRequired) ? (
+            <Button
+              variant="secondary"
+              disabled={isStartingLogin}
+              onClick={onStartLogin}
+            >
+              {isStartingLogin ? "Sending…" : "Start login"}
             </Button>
+          ) : null}
+          {sessionRefreshRequired ? (
             <Button variant="secondary" onClick={onRefreshQr}>
-              Login via QR
+              Refresh via QR
             </Button>
-          </>
-        ) : null}
-        {account.status === "needs_password" ? (
-          <Button variant="secondary" onClick={onPassword}>
-            2FA password
-          </Button>
-        ) : null}
-      </div>
-      <TelegramCrmAccountCapabilities account={account} />
+          ) : null}
+          {account.status === "needs_code" ? (
+            <>
+              <Button variant="secondary" onClick={onEnterCode}>
+                Enter code
+              </Button>
+              <Button variant="secondary" onClick={onRefreshQr}>
+                Login via QR
+              </Button>
+            </>
+          ) : null}
+          {account.status === "needs_password" ? (
+            <Button variant="secondary" onClick={onPassword}>
+              2FA password
+            </Button>
+          ) : null}
+        </div>
+        {children}
+      </article>
+      <TelegramCrmAccountCapabilitiesModal
+        account={account}
+        open={capabilitiesOpen}
+        onClose={() => setCapabilitiesOpen(false)}
+      />
+    </>
+  );
+}
+
+function AccountCapabilityBadges({
+  account,
+}: {
+  account: TelegramUserAccount;
+}) {
+  return (
+    <>
+      {account.isPremium ? (
+        <CapabilityBadge className="border-amber-500/40 bg-amber-500/15 text-amber-200">
+          Premium
+        </CapabilityBadge>
+      ) : null}
+      {account.crmSyncEnabled ? (
+        <CapabilityBadge className="border-emerald-500/40 bg-emerald-500/10 text-emerald-200">
+          <RefreshCw size={12} /> CRM sync
+        </CapabilityBadge>
+      ) : null}
+      {account.crmSendEnabled ? (
+        <CapabilityBadge className="border-sky-500/40 bg-sky-500/10 text-sky-200">
+          <Send size={12} /> CRM sender
+        </CapabilityBadge>
+      ) : null}
+      {account.mtprotoPublishingEnabled ? (
+        <CapabilityBadge className="border-violet-500/40 bg-violet-500/10 text-violet-200">
+          <Share2 size={12} /> Publishing
+        </CapabilityBadge>
+      ) : null}
+    </>
+  );
+}
+
+function CapabilityBadge({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className: string;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${className}`}
+    >
       {children}
-    </article>
+    </span>
   );
 }

@@ -2,69 +2,90 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  BarChart3,
+  CalendarRange,
+  CircleDollarSign,
+  MessagesSquare,
+  Users,
+} from "lucide-react";
 import { crmText } from "./crm-copy";
-import type { CrmListView } from "./crm-routes";
+import { useQuery } from "@tanstack/react-query";
+import { authApi } from "@/lib/api";
+import { authKeys } from "@/lib/query-keys";
+import { crmPermissions } from "./crm-permissions";
 
 const primary = [
-  ["nav.inbox", "/ad-sales/inbox"],
-  ["nav.contacts", "/ad-sales"],
-  ["nav.deals", "/ad-sales/sales"],
-  ["nav.calendar", "/ad-sales/calendar"],
-  ["nav.analytics", "/ad-sales/analytics"],
+  ["nav.inbox", "/ad-sales/inbox", MessagesSquare],
+  ["nav.contacts", "/ad-sales", Users],
+  ["nav.deals", "/ad-sales/sales", CircleDollarSign],
+  ["nav.calendar", "/ad-sales/calendar", CalendarRange],
+  ["nav.analytics", "/ad-sales/analytics", BarChart3],
 ] as const;
 
-const secondary = [
-  ["contacts.leads", "/ad-sales?view=leads", "LEADS"],
-  ["contacts.qualified", "/ad-sales?view=qualified", "QUALIFIED"],
-  ["contacts.followUp", "/ad-sales?view=follow-up&followUp=TODAY", "FOLLOW_UP"],
-  ["contacts.customers", "/ad-sales?view=customers", "CUSTOMERS"],
-  ["contacts.all", "/ad-sales", "ALL"],
-  ["contacts.lostArchived", "/ad-sales?view=lost", "LOST_ARCHIVED"],
-] as const;
-
-function linkClass(active: boolean, secondary = false) {
-  return `inline-flex min-h-9 items-center rounded-lg border px-3 text-sm transition ${
-    active
-      ? "border-teal-500/60 bg-teal-500/15 text-teal-100"
-      : "border-neutral-800 bg-neutral-950/40 text-neutral-400 hover:border-neutral-700 hover:text-white"
-  } ${secondary ? "min-h-8 px-2.5 text-xs" : ""}`;
-}
-
-export function CrmNavigation({ view, canViewInbox, canViewSales, inboxUnread = 0 }: { view?: CrmListView; canViewInbox: boolean; canViewSales: boolean; inboxUnread?: number }) {
+export function CrmNavigation({
+  canViewInbox,
+  canViewSales,
+  inboxUnread = 0,
+}: {
+  canViewInbox?: boolean;
+  canViewSales?: boolean;
+  inboxUnread?: number;
+}) {
   const pathname = usePathname();
+  const me = useQuery({
+    queryKey: authKeys.me(),
+    queryFn: authApi.me,
+    staleTime: 5 * 60_000,
+    enabled: canViewInbox === undefined || canViewSales === undefined,
+  });
+  const permissions = crmPermissions(me.data?.workspace.access);
+  const showInbox = canViewInbox ?? permissions.canViewAll;
+  const showSales = canViewSales ?? permissions.canViewSales;
   const contactsActive =
     pathname === "/ad-sales" ||
     pathname.startsWith("/ad-sales/contacts") ||
-    pathname.startsWith("/ad-sales/clients") ||
-    secondary.some(([, href]) => href !== "/ad-sales" && pathname === href.split("?")[0]);
+    pathname.startsWith("/ad-sales/clients");
   return (
-    <nav aria-label="CRM navigation" className="mb-5 space-y-3">
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {primary.filter(([copyKey]) => copyKey !== "nav.inbox" || canViewInbox).filter(([copyKey]) => !["nav.deals", "nav.calendar", "nav.analytics"].includes(copyKey) || canViewSales).map(([copyKey, href]) => {
-          const active =
-            copyKey === "nav.contacts"
-              ? contactsActive
-              : pathname === href || pathname.startsWith(`${href}/`);
-          return (
-            <Link key={href} href={href} className={linkClass(active)}>
-              {crmText(copyKey)}{copyKey === "nav.inbox" && inboxUnread ? ` (${inboxUnread})` : ""}
-            </Link>
-          );
-        })}
+    <nav
+      aria-label="CRM navigation"
+      className="mb-5 overflow-hidden rounded-[18px] border border-neutral-800 bg-[#111111]"
+    >
+      <div className="flex overflow-x-auto px-2">
+        {primary
+          .filter(([copyKey]) => copyKey !== "nav.inbox" || showInbox)
+          .filter(
+            ([copyKey]) =>
+              !["nav.deals", "nav.calendar", "nav.analytics"].includes(
+                copyKey,
+              ) || showSales,
+          )
+          .map(([copyKey, href, Icon]) => {
+            const active =
+              copyKey === "nav.contacts"
+                ? contactsActive
+                : pathname === href || pathname.startsWith(`${href}/`);
+            return (
+              <Link key={href} href={href} className={linkClass(active)}>
+                <Icon size={16} />
+                <span>{crmText(copyKey)}</span>
+                {copyKey === "nav.inbox" && inboxUnread ? (
+                  <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                    {inboxUnread}
+                  </span>
+                ) : null}
+              </Link>
+            );
+          })}
       </div>
-      {contactsActive ? (
-        <div className="flex gap-2 overflow-x-auto pb-1" aria-label="Contact views">
-          {secondary.map(([copyKey, href, itemView]) => (
-            <Link
-              key={href}
-              href={href}
-              className={linkClass(view === itemView, true)}
-            >
-              {crmText(copyKey)}
-            </Link>
-          ))}
-        </div>
-      ) : null}
     </nav>
   );
+}
+
+function linkClass(active: boolean) {
+  return `relative inline-flex h-14 shrink-0 items-center gap-2 px-4 text-sm font-medium transition ${
+    active
+      ? "text-white after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:bg-blue-500"
+      : "text-neutral-400 hover:text-white"
+  }`;
 }

@@ -73,6 +73,7 @@ import {
 import { resolveAdSalesPreferenceSelection } from "@/lib/features/growth/ad-sales-preferences-hydration";
 import { useAppToast } from "@/providers/toast-provider";
 import { CrmWorkspace } from "./crm/crm-workspace";
+import { CrmNavigation } from "./crm/crm-navigation";
 import { resolveAdSalesSurface } from "./crm/crm-routes";
 import { useCrmDealDeepLink } from "./use-crm-deal-deep-link";
 const adSalesDataCacheOptions = {
@@ -827,23 +828,22 @@ function LegacyAdSalesPage() {
         }
       />
 
-      <AdSalesWorkspaceHero
-        from={from}
-        to={to}
-        rangeMode={calendarRangeMode}
-        rangeSelection={calendarRangeSelection}
-        activeTab={tab}
-        onRangeModeChange={handleCalendarRangeModeChange}
-        onRangeChange={handleCalendarRangeChange}
-        onShiftRange={shiftCalendarRange}
-        onToday={() => {
-          setCalendarRangeSelection(null);
-          setCalendarCursor(new Date());
-        }}
-        onTabChange={(nextTab) => {
-          router.replace(tabRouteMap[nextTab]);
-        }}
-      />
+      <CrmNavigation />
+      {tab === "calendar" ? (
+        <AdSalesWorkspaceHero
+          from={from}
+          to={to}
+          rangeMode={calendarRangeMode}
+          rangeSelection={calendarRangeSelection}
+          onRangeModeChange={handleCalendarRangeModeChange}
+          onRangeChange={handleCalendarRangeChange}
+          onShiftRange={shiftCalendarRange}
+          onToday={() => {
+            setCalendarRangeSelection(null);
+            setCalendarCursor(new Date());
+          }}
+        />
+      ) : null}
 
       <AdSalesInventoryModal
         open={inventoryOpen}

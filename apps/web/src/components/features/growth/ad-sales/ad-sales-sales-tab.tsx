@@ -19,18 +19,29 @@ import { currenciesApi, type TelegramChannel } from "@/lib/api";
 import { nativeAdSalePayment } from "./ad-sale-native-payment";
 import { AdSalePostMetrics } from "./ad-sale-post-metrics";
 import { AdSalePlacementLifecyclePreview } from "./ad-sale-placement-lifecycle-preview";
+import { hasLinkedPlacementPost } from "./ad-placement-lifecycle";
 
 const panelClass = "rounded-[18px] border border-neutral-800 bg-[#111111]";
 
-function clientLabel(sale: TelegramAdSaleListItem) {
-  return (
+export function adSaleClientLabel(sale: TelegramAdSaleListItem) {
+  const label =
+    sale.advertiserSummary?.displayName ||
+    sale.advertiserSummary?.telegramUsername ||
     sale.advertiserTelegramSnapshot ||
     sale.advertiserTelegram ||
     sale.advertiserNameSnapshot ||
     sale.advertiserName ||
     sale.advertiserContact ||
-    "Client"
-  );
+    "Client";
+  return label.trim().replace(/^@+/, "");
+}
+
+function adSaleClientTelegramUsername(sale: TelegramAdSaleListItem) {
+  const username =
+    sale.advertiserSummary?.telegramUsername ||
+    sale.advertiserTelegramSnapshot ||
+    sale.advertiserTelegram;
+  return username?.trim().replace(/^@+/, "") || null;
 }
 
 function paymentLabel(sale: TelegramAdSaleListItem) {
@@ -39,16 +50,6 @@ function paymentLabel(sale: TelegramAdSaleListItem) {
   if (received <= 0) return "Not paid";
   if (outstanding > 0) return "Partially received";
   return "Money received";
-}
-
-type SalePlacement = TelegramAdSaleListItem["placements"][number];
-
-function hasLinkedPlacementPost(placement: SalePlacement) {
-  return Boolean(
-    placement.telegramPostId ||
-    placement.publishedAt ||
-    placement.managedPost?.telegramMessageIds?.length,
-  );
 }
 
 export function SalesTab(props: {
@@ -101,13 +102,14 @@ export function SalesTab(props: {
     const hasCountdown = props.sales.some((sale) =>
       sale.placements.some(
         (placement) =>
-          !placement.publishedAt ||
-          (placement.publishedAt &&
-            Date.now() - new Date(placement.publishedAt).getTime() < 3_000) ||
-          (placement.publishedAt &&
-            placement.plannedDeleteAt &&
-            !placement.deletedAt &&
-            new Date(placement.plannedDeleteAt).getTime() > Date.now()),
+          hasLinkedPlacementPost(placement) &&
+          (!placement.publishedAt ||
+            (placement.publishedAt &&
+              Date.now() - new Date(placement.publishedAt).getTime() < 3_000) ||
+            (placement.publishedAt &&
+              placement.plannedDeleteAt &&
+              !placement.deletedAt &&
+              new Date(placement.plannedDeleteAt).getTime() > Date.now())),
       ),
     );
     if (!hasCountdown) return;
@@ -164,6 +166,8 @@ export function SalesTab(props: {
               <tbody className="divide-y divide-neutral-800">
                 {props.sales.map((sale) => {
                   const receivedPayment = nativeAdSalePayment(sale);
+                  const clientTelegramUsername =
+                    adSaleClientTelegramUsername(sale);
                   const linkedPosts = sale.placements.filter(
                     hasLinkedPlacementPost,
                   ).length;
@@ -181,18 +185,17 @@ export function SalesTab(props: {
                         <div className="flex items-center gap-2.5">
                           <TelegramEntityAvatar
                             imageUrl={
-                              sale.advertiserTelegramSnapshot ||
-                              sale.advertiserTelegram
-                                ? `https://t.me/i/userpic/320/${(sale.advertiserTelegramSnapshot || sale.advertiserTelegram)!.replace(/^@+/, "")}.jpg`
+                              clientTelegramUsername
+                                ? `https://t.me/i/userpic/320/${clientTelegramUsername}.jpg`
                                 : null
                             }
                             kind="person"
-                            alt={clientLabel(sale)}
+                            alt={adSaleClientLabel(sale)}
                             size="sm"
                           />
                           <div className="min-w-0">
                             <p className="truncate font-medium text-white">
-                              {clientLabel(sale)}
+                              {adSaleClientLabel(sale)}
                             </p>
                             <p className="mt-1 text-xs text-neutral-500">
                               {linkedPosts}/{sale.placements.length} posts
@@ -261,7 +264,7 @@ export function SalesTab(props: {
                         >
                           <button
                             type="button"
-                            aria-label={`Actions for ${clientLabel(sale)}`}
+                            aria-label={`Actions for ${adSaleClientLabel(sale)}`}
                             className="rounded-md p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white"
                             onClick={() =>
                               setMenuSaleId((current) =>
@@ -333,7 +336,7 @@ export function SalesTab(props: {
       <ConfirmDeleteModal
         open={Boolean(deleteSale)}
         onClose={() => setDeleteSale(null)}
-        entityName={deleteSale ? clientLabel(deleteSale) : "deal"}
+        entityName={deleteSale ? adSaleClientLabel(deleteSale) : "deal"}
         description="The deal, its placements, finance transactions, and linked posts will be deleted from the system. Published posts will also be deleted from Telegram."
         onConfirm={async () => {
           if (!deleteSale) return;

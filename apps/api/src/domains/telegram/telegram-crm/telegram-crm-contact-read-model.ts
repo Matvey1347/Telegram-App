@@ -8,6 +8,7 @@ import type {
   CrmContactDetail,
   CrmContactListItem,
 } from '@telegram-system/shared';
+import type { CrmContactSalesSummary } from './telegram-crm-contact-sales-summary';
 import {
   ACTIVE_DEAL_STATUSES,
   crmContactSelect,
@@ -147,6 +148,7 @@ export function mapCrmContactListItem(
   row: ContactListRow,
   unreadByContact: Map<string, number>,
   dealTotals: Map<string, ActiveDealTotals>,
+  salesSummaries: Map<string, CrmContactSalesSummary>,
 ): CrmContactListItem {
   const accounts = new Map(
     row.crmConversations.map((conversation) => [
@@ -165,6 +167,14 @@ export function mapCrmContactListItem(
   const task = row.tasks[0];
   const deal = row.sales[0];
   const totals = deal ? dealTotals.get(deal.id) : null;
+  const salesSummary = salesSummaries.get(row.id) ?? {
+    totalSalesCount: 0,
+    paidSalesCount: 0,
+    completedSalesCount: 0,
+    totalPlacementsCount: 0,
+    revenueByCurrency: [],
+    lastDealAt: null,
+  };
   return {
     ...mapCrmContact(row),
     ownerMember: mapCrmMemberSummary(row.ownerMember),
@@ -190,6 +200,7 @@ export function mapCrmContactListItem(
           paymentStatus: totals?.paymentStatus ?? 'UNPAID',
         }
       : null,
+    salesSummary,
   };
 }
 

@@ -62,6 +62,12 @@ const SALE_LIST_SELECT = {
       user: { select: { name: true, email: true } },
     },
   },
+  advertiser: {
+    select: {
+      displayName: true,
+      telegramUsername: true,
+    },
+  },
   placements: {
     orderBy: { scheduledAt: 'asc' as const },
     select: {
@@ -293,6 +299,12 @@ export class TelegramAdSalesSaleReadService {
       advertiserNameSnapshot: sale.advertiserNameSnapshot,
       advertiserTelegramSnapshot: sale.advertiserTelegramSnapshot,
       advertiserCompanySnapshot: sale.advertiserCompanySnapshot,
+      advertiserSummary: sale.advertiser
+        ? {
+            displayName: sale.advertiser.displayName,
+            telegramUsername: sale.advertiser.telegramUsername,
+          }
+        : null,
       title: sale.title,
       notes: sale.notes,
       status: sale.status,

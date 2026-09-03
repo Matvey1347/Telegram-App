@@ -22,7 +22,6 @@ import { CrmContactList } from "./crm-contact-list";
 import { CrmInbox } from "./crm-inbox";
 import { CrmNavigation } from "./crm-navigation";
 import type { AdSalesSurface } from "./crm-routes";
-import { CrmContactDetail } from "./crm-contact-detail";
 import { authApi } from "@/lib/api";
 import { authKeys } from "@/lib/query-keys";
 import { crmPermissions } from "./crm-permissions";
@@ -136,13 +135,6 @@ export function CrmWorkspace({
         void queryClient.invalidateQueries({
           queryKey: telegramCrmKeys.inboxLists(),
         });
-      } else if (surface.kind === "contact") {
-        void queryClient.invalidateQueries({
-          queryKey: telegramCrmKeys.contactDetail(surface.contactId),
-        });
-        void queryClient.invalidateQueries({
-          queryKey: telegramCrmKeys.conversationLists(),
-        });
       } else {
         void queryClient.invalidateQueries({
           queryKey: telegramCrmKeys.contactLists(),
@@ -153,12 +145,7 @@ export function CrmWorkspace({
       });
     },
   });
-  const title =
-    surface.kind === "inbox"
-      ? "CRM inbox"
-      : surface.kind === "contact"
-        ? "Contact"
-        : "CRM contacts";
+  const title = surface.kind === "inbox" ? "CRM inbox" : "CRM contacts";
   const subtitle =
     surface.kind === "inbox"
       ? "Unclassified Telegram conversations awaiting a deliberate action."
@@ -191,14 +178,11 @@ export function CrmWorkspace({
         </p>
       ) : null}
       <CrmNavigation
-        view={surface.kind === "contacts" ? surface.view : undefined}
         canViewInbox={permissions.canViewAll}
         canViewSales={canViewSales}
         inboxUnread={unread.data?.inbox}
       />
-      {surface.kind === "contacts" ? (
-        <CrmContactList view={surface.view} />
-      ) : null}
+      {surface.kind === "contacts" ? <CrmContactList /> : null}
       {surface.kind === "inbox" ? (
         permissions.canViewAll ? (
           <CrmInbox
@@ -212,13 +196,6 @@ export function CrmWorkspace({
             Inbox requires permission to view all CRM contacts.
           </p>
         )
-      ) : null}
-      {surface.kind === "contact" ? (
-        <CrmContactDetail
-          contactId={surface.contactId}
-          conversationId={surface.conversationId}
-          canViewSales={canViewSales}
-        />
       ) : null}
     </AppShell>
   );

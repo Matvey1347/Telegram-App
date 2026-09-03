@@ -1,5 +1,6 @@
 import type { PaginatedResponse } from "../pagination";
 import type { CrmDealAutomationSummary } from "./telegram-crm-automations";
+import type { ResolvedEmoji } from "./resolved-emoji";
 
 export const CRM_CONTACT_STAGES = [
   "NEW",
@@ -56,6 +57,7 @@ export type CrmMemberSummary = {
   id: string;
   name: string;
   email: string | null;
+  avatarPresentation: ResolvedEmoji | null;
 };
 
 export type CrmAccountSummary = {
@@ -153,6 +155,14 @@ export type CrmContactListItem = CrmContact & {
   lastMessage: CrmMessagePreview | null;
   nextOpenTask: CrmTaskSummary | null;
   activeDeal: CrmActiveDealSummary | null;
+  salesSummary: {
+    totalSalesCount: number;
+    paidSalesCount: number;
+    completedSalesCount: number;
+    totalPlacementsCount: number;
+    revenueByCurrency: Array<{ currency: string; amount: string }>;
+    lastDealAt: string | null;
+  };
 };
 
 export type CrmContactDetail = CrmContact & {

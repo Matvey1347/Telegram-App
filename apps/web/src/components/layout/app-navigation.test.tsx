@@ -16,7 +16,7 @@ describe("AppNavigation permissions", () => {
     expect(screen.getByText("Overview")).toBeInTheDocument();
     expect(screen.getByText("Posts")).toBeInTheDocument();
     expect(screen.queryByText("Finance")).not.toBeInTheDocument();
-    expect(screen.queryByText("Channels")).not.toBeInTheDocument();
+    expect(screen.queryByText("Resources")).not.toBeInTheDocument();
   });
 
   it("keeps the legacy owner fallback when no access snapshot exists", () => {

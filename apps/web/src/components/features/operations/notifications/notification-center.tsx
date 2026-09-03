@@ -35,9 +35,11 @@ const PAGE_SIZE = 25;
 export function NotificationCenter({
   workspaceId,
   enabled,
+  compact = false,
 }: {
   workspaceId: string;
   enabled: boolean;
+  compact?: boolean;
 }) {
   const queryClient = useQueryClient();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -150,12 +152,12 @@ export function NotificationCenter({
           updateAnchor();
           setOpen((current) => !current);
         }}
-        className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-800 text-neutral-300 transition hover:bg-neutral-900 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        className={`relative flex items-center justify-center rounded-lg border border-neutral-800 text-neutral-300 transition hover:bg-neutral-900 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${compact ? "h-8 w-8" : "h-10 w-10"}`}
         aria-label={`Notifications, ${unread} unread`}
         aria-haspopup="dialog"
         aria-expanded={open}
       >
-        <Bell size={18} />
+        <Bell size={compact ? 16 : 18} />
         {unread ? (
           <span
             aria-hidden="true"

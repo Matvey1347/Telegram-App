@@ -1,5 +1,5 @@
 import { TransactionType } from '@prisma/client';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsDateString,
   IsEnum,
@@ -10,6 +10,10 @@ import {
   Min,
 } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/pagination/pagination-query.dto';
+
+function normalizeBlankMemberId(value: unknown, blankValue: null | undefined) {
+  return typeof value === 'string' && value.trim() === '' ? blankValue : value;
+}
 
 export class CreateTransactionDto {
   @IsOptional() @IsString() assignedMemberId?: string | null;
@@ -22,7 +26,10 @@ export class CreateTransactionDto {
   @Min(0)
   exchangeRateToPrimary?: number;
   @IsString() categoryId!: string;
-  @IsOptional() @IsString() memberId?: string;
+  @Transform(({ value }) => normalizeBlankMemberId(value as unknown, undefined))
+  @IsOptional()
+  @IsString()
+  memberId?: string;
   @IsOptional() @IsString() iconId?: string | null;
   @IsOptional() @IsString() telegramChannelId?: string | null;
   @IsOptional() @IsString() description?: string;
@@ -40,7 +47,10 @@ export class UpdateTransactionDto {
   @Min(0)
   exchangeRateToPrimary?: number;
   @IsOptional() @IsString() categoryId?: string;
-  @IsOptional() @IsString() memberId?: string | null;
+  @Transform(({ value }) => normalizeBlankMemberId(value as unknown, null))
+  @IsOptional()
+  @IsString()
+  memberId?: string | null;
   @IsOptional() @IsString() iconId?: string | null;
   @IsOptional() @IsString() telegramChannelId?: string | null;
   @IsOptional() @IsString() description?: string;

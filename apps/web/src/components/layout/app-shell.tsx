@@ -296,12 +296,6 @@ export function AppShell({ children }: PropsWithChildren) {
     );
   return (
     <div className="min-h-screen overflow-x-hidden bg-neutral-950 text-neutral-100">
-      <div className="fixed right-[3.75rem] top-2 z-30 lg:left-[9.5rem] lg:right-auto lg:top-5 lg:z-40">
-        <NotificationCenter
-          workspaceId={activeWorkspaceId}
-          enabled={canViewNotifications}
-        />
-      </div>
       <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-neutral-800 bg-neutral-950/95 px-3 backdrop-blur lg:hidden">
         <button
           type="button"
@@ -346,9 +340,14 @@ export function AppShell({ children }: PropsWithChildren) {
         </button>
         <div className="mb-4">
           <div className="flex items-center justify-between gap-2 pr-10 lg:pr-0">
-            <SystemBrandLogo />
-            <div className="flex items-center gap-1.5">
+            <SystemBrandLogo compact />
+            <div className="flex shrink-0 items-center gap-1">
               <LanguageSwitcher />
+              <NotificationCenter
+                workspaceId={activeWorkspaceId}
+                enabled={canViewNotifications}
+                compact
+              />
               <GlobalRefreshButton
                 compact
                 hidden={mobileMenuOpen}

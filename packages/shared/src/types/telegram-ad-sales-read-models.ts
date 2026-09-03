@@ -38,7 +38,13 @@ export type TelegramAdSaleListPlacement = Omit<
 export type TelegramAdSaleListItem = Omit<
   TelegramAdSale,
   "payments" | "advertiser" | "placements"
-> & { placements: TelegramAdSaleListPlacement[] };
+> & {
+  advertiserSummary?: {
+    displayName: string;
+    telegramUsername: string | null;
+  } | null;
+  placements: TelegramAdSaleListPlacement[];
+};
 
 export type TelegramAdSalesListResult =
   PaginatedResponse<TelegramAdSaleListItem>;

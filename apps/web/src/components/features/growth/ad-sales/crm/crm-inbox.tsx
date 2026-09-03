@@ -58,7 +58,7 @@ function InboxRow({
   const [stage, setStage] = useState<CrmInboxPromotionStage>("LEAD");
   const promote = useMutation({
     mutationFn: () => telegramCrmApi.promoteInboxPeer(item.peer.id, stage),
-    onSuccess: (result) => {
+    onSuccess: () => {
       removeCrmInboxPeer(queryClient, item.peer.id);
       void queryClient.invalidateQueries({
         queryKey: telegramCrmKeys.unread(),
@@ -66,12 +66,7 @@ function InboxRow({
       void queryClient.invalidateQueries({
         queryKey: telegramCrmKeys.contactLists(),
       });
-      const conversationId = item.latestConversation?.id;
-      router.push(
-        conversationId
-          ? `/ad-sales/contacts/${result.contact.id}/conversations/${conversationId}`
-          : `/ad-sales/contacts/${result.contact.id}`,
-      );
+      router.push("/ad-sales/clients");
     },
   });
   const state = useMutation({

@@ -154,6 +154,16 @@ export function createTelegramAdSalesApi({
           payload,
         )
       ).data,
+    createAdvertiserNote: async (
+      id: string,
+      payload: Record<string, unknown>,
+    ) =>
+      (
+        await api.post<TelegramAdvertiserActivity>(
+          `/telegram-ad-sales/advertisers/${id}/notes`,
+          payload,
+        )
+      ).data,
     listCrmTasks: async (
       params?: PaginationParams & {
         advertiserId?: string;
@@ -255,10 +265,10 @@ export function createTelegramAdSalesApi({
       signal?: AbortSignal,
     ) =>
       (
-        await api.get<TelegramAdSalesListResult>(
-          "/telegram-ad-sales",
-          { params, signal },
-        )
+        await api.get<TelegramAdSalesListResult>("/telegram-ad-sales", {
+          params,
+          signal,
+        })
       ).data,
     getSale: async (id: string) =>
       (await api.get<TelegramAdSale>(`/telegram-ad-sales/${id}`)).data,
