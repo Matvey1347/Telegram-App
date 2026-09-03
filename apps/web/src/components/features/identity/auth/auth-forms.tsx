@@ -11,6 +11,7 @@ import {
   setAccessToken,
 } from "@/lib/features/identity/auth";
 import { localizedAuthError } from "@/lib/features/identity/auth-error";
+import { resolveWorkspacePath } from "@/lib/features/workspace/workspace-route-access";
 import { clearPersistedQueryCache } from "@/providers/query-provider";
 import { APP_LOCALE_COOKIE, normalizeAppLocale } from "@/i18n/types";
 import type { TranslationKey } from "@/i18n/catalog";
@@ -54,7 +55,12 @@ export function LoginForm() {
       clearPersistedQueryCache();
       setAccessToken(result.accessToken);
       persistAuthenticatedLocale(result.user.locale);
-      router.replace(consumeAuthReturnTo(getAuthRedirectParam()));
+      router.replace(
+        resolveWorkspacePath(
+          consumeAuthReturnTo(getAuthRedirectParam()),
+          result.workspace.access,
+        ),
+      );
     } catch (caught) {
       setError(localizedAuthError(caught, t, "auth.errors.signIn"));
     }

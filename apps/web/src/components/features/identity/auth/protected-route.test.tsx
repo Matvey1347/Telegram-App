@@ -71,6 +71,53 @@ describe("ProtectedRoute", () => {
     expect(screen.queryByText("Settings page")).not.toBeInTheDocument();
   });
 
+  it("redirects a posts-only member away from dashboard", async () => {
+    vi.mocked(usePathname).mockReturnValue("/");
+    useAuthMock.mockReturnValue({
+      token: "content-manager-session",
+      isTokenReady: true,
+      isAuthResolved: true,
+      isLoading: false,
+      isAuthenticated: true,
+      error: null,
+      workspace: { access: { featureIds: ["posts"] } },
+    });
+
+    renderWithProviders(
+      <ProtectedRoute>
+        <div>Dashboard content</div>
+      </ProtectedRoute>,
+    );
+
+    expect(screen.queryByText("Dashboard content")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(navigationMocks.replace).toHaveBeenCalledWith("/telegram-posts");
+    });
+  });
+
+  it("allows a posts-only member to open publications", () => {
+    vi.mocked(usePathname).mockReturnValue("/telegram-posts");
+    useAuthMock.mockReturnValue({
+      token: "content-manager-session",
+      isTokenReady: true,
+      isAuthResolved: true,
+      isLoading: false,
+      isAuthenticated: true,
+      error: null,
+      workspace: { access: { featureIds: ["posts"] } },
+    });
+
+    renderWithProviders(
+      <ProtectedRoute>
+        <div>Publications</div>
+      </ProtectedRoute>,
+    );
+
+    expect(screen.getByText("Publications")).toBeInTheDocument();
+    expect(navigationMocks.replace).not.toHaveBeenCalled();
+  });
+
   it("redirects a resolved authenticated login visit to its safe return path", async () => {
     vi.mocked(usePathname).mockReturnValue("/login");
     window.history.replaceState({}, "", "/login?redirect=%2Fsettings");
@@ -159,7 +206,9 @@ describe("ProtectedRoute", () => {
       </ProtectedRoute>,
     );
 
-    expect(await screen.findByText("Authenticated reset page")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Authenticated reset page"),
+    ).toBeInTheDocument();
     expect(navigationMocks.replace).not.toHaveBeenCalled();
   });
 
@@ -182,7 +231,9 @@ describe("ProtectedRoute", () => {
     );
 
     await waitFor(() => {
-      expect(navigationMocks.replace).toHaveBeenCalledWith("/login?redirect=%2Fsettings");
+      expect(navigationMocks.replace).toHaveBeenCalledWith(
+        "/login?redirect=%2Fsettings",
+      );
     });
   });
 });

@@ -27,7 +27,39 @@ vi.mock("@/lib/api", () => ({
 }));
 
 describe("localized auth forms", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    window.history.replaceState({}, "", "/login");
+  });
+
+  it("opens publications after login when dashboard is not accessible", async () => {
+    mocks.login.mockResolvedValue({
+      accessToken: "content-manager-token",
+      user: { locale: "en" },
+      workspace: {
+        id: "workspace-1",
+        access: { featureIds: ["posts"] },
+      },
+    });
+    render(
+      <I18nProvider initialLocale="en" preloadedCatalogs={{ auth: authEn }}>
+        <LoginForm />
+      </I18nProvider>,
+    );
+
+    fireEvent.change(screen.getByLabelText(/^Email/), {
+      target: { value: "olga@gmail.com" },
+    });
+    fireEvent.change(screen.getByLabelText(/^Password/), {
+      target: { value: "password" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    await waitFor(() => {
+      expect(mocks.replace).toHaveBeenCalledWith("/telegram-posts");
+    });
+  });
 
   it("switches the whole login screen and existing validation errors to Russian", async () => {
     render(

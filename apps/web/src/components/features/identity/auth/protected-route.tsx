@@ -1,19 +1,23 @@
-'use client';
+"use client";
 
-import { PropsWithChildren, useEffect, useRef, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/use-auth';
-import { isApiNetworkError } from '@/lib/api';
+import { PropsWithChildren, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth";
+import { isApiNetworkError } from "@/lib/api";
 import {
   consumeAuthReturnTo,
   getAuthRedirectParam,
   getAuthRedirectPath,
   isAuthPath,
   rememberAuthReturnTo,
-} from '@/lib/features/identity/auth';
-import { useAppToast } from '@/providers/toast-provider';
-import { Skeleton } from '@/components/ui/primitives';
-import { useOptionalI18n } from '@/providers/i18n-provider';
+} from "@/lib/features/identity/auth";
+import { useAppToast } from "@/providers/toast-provider";
+import { Skeleton } from "@/components/ui/primitives";
+import { useOptionalI18n } from "@/providers/i18n-provider";
+import {
+  resolveWorkspacePath,
+  workspacePathIsAllowed,
+} from "@/lib/features/workspace/workspace-route-access";
 
 export function ProtectedRoute({ children }: PropsWithChildren) {
   const pathname = usePathname();
@@ -25,16 +29,23 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
     isLoading,
     isAuthenticated,
     error,
+    workspace,
   } = useAuth();
   const { pushToast } = useAppToast();
   const i18n = useOptionalI18n();
-  const networkError = i18n?.t('common.error.network') ?? 'Unable to connect to the server. Please try again later.';
-  const loadingLabel = i18n?.t('common.loading') ?? 'Loading…';
+  const networkError =
+    i18n?.t("common.error.network") ??
+    "Unable to connect to the server. Please try again later.";
+  const loadingLabel = i18n?.t("common.loading") ?? "Loading…";
   const isAuthPage = isAuthPath(pathname);
-  const isEntryAuthPage = pathname === '/login' || pathname === '/register';
+  const isEntryAuthPage = pathname === "/login" || pathname === "/register";
   const [mounted, setMounted] = useState(false);
   const hasShownConnectionAlertRef = useRef(false);
   const hasConnectionIssue = Boolean(token && isApiNetworkError(error));
+  const hasWorkspaceRouteAccess = workspacePathIsAllowed(
+    pathname,
+    workspace?.access,
+  );
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -47,7 +58,7 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
     if (hasConnectionIssue) {
       if (!hasShownConnectionAlertRef.current) {
         hasShownConnectionAlertRef.current = true;
-        pushToast(networkError, 'error');
+        pushToast(networkError, "error");
       }
       return;
     }
@@ -60,7 +71,8 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
 
     if (isAuthPage) {
       if (isEntryAuthPage && !isLoading && token && isAuthenticated) {
-        router.replace(consumeAuthReturnTo(getAuthRedirectParam()));
+        const requestedPath = consumeAuthReturnTo(getAuthRedirectParam());
+        router.replace(resolveWorkspacePath(requestedPath, workspace?.access));
       }
       return;
     }
@@ -80,8 +92,27 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
     if (!isLoading && token && !isAuthenticated) {
       rememberAuthReturnTo();
       router.replace(getAuthRedirectPath());
+      return;
     }
-  }, [mounted, isTokenReady, isAuthResolved, token, isLoading, isAuthenticated, isAuthPage, isEntryAuthPage, router, pathname, hasConnectionIssue]);
+
+    if (!isLoading && token && isAuthenticated && !hasWorkspaceRouteAccess) {
+      router.replace(resolveWorkspacePath(pathname, workspace?.access));
+    }
+  }, [
+    mounted,
+    isTokenReady,
+    isAuthResolved,
+    token,
+    isLoading,
+    isAuthenticated,
+    isAuthPage,
+    isEntryAuthPage,
+    router,
+    pathname,
+    hasConnectionIssue,
+    hasWorkspaceRouteAccess,
+    workspace?.access,
+  ]);
 
   // Public auth pages must be present in the very first client render. Token
   // state comes from localStorage after hydration, so using the protected-app
@@ -98,7 +129,7 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
     return <>{children}</>;
   }
 
-  if (isLoading || !token || !isAuthenticated) {
+  if (isLoading || !token || !isAuthenticated || !hasWorkspaceRouteAccess) {
     return <FullScreenLoader label={loadingLabel} />;
   }
 
@@ -107,7 +138,11 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
 
 function FullScreenLoader({ label }: { label: string }) {
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100" role="status" aria-label={label}>
+    <div
+      className="min-h-screen bg-neutral-950 text-neutral-100"
+      role="status"
+      aria-label={label}
+    >
       <span className="sr-only">{label}</span>
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-neutral-800 bg-neutral-950 p-5 lg:block">
         <Skeleton className="h-6 w-40" />
@@ -136,7 +171,10 @@ function FullScreenLoader({ label }: { label: string }) {
         </div>
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 8 }, (_, index) => (
-            <div key={index} className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 sm:p-5">
+            <div
+              key={index}
+              className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 sm:p-5"
+            >
               <Skeleton className="h-4 w-24" />
               <Skeleton className="mt-4 h-8 w-32" />
               <Skeleton className="mt-3 h-3 w-4/5" />
@@ -144,8 +182,14 @@ function FullScreenLoader({ label }: { label: string }) {
           ))}
         </div>
         <div className="mt-6 grid gap-6 xl:grid-cols-2">
-          <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 sm:p-5"><Skeleton className="h-5 w-32" /><Skeleton className="mt-5 h-64 w-full" /></div>
-          <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 sm:p-5"><Skeleton className="h-5 w-28" /><Skeleton className="mt-5 h-64 w-full" /></div>
+          <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 sm:p-5">
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="mt-5 h-64 w-full" />
+          </div>
+          <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 sm:p-5">
+            <Skeleton className="h-5 w-28" />
+            <Skeleton className="mt-5 h-64 w-full" />
+          </div>
         </div>
       </main>
     </div>
