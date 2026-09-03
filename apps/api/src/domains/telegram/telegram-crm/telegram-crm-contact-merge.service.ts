@@ -69,8 +69,6 @@ export class TelegramCrmContactMergeService {
           stage: true,
           archivedAt: true,
           ownerMemberId: true,
-          automatedMessagesEnabled: true,
-          automatedMessagesEnabledAt: true,
           lastContactAt: true,
           lastInboundAt: true,
           lastOutboundAt: true,
@@ -173,17 +171,9 @@ export class TelegramCrmContactMergeService {
           data: { advertiserId: targetContactId },
         }),
       );
-      await move(
-        'customerAutomationExecutions',
-        tx.telegramCrmCustomerAutomationExecution.updateMany({
-          where: { workspaceId, contactId: sourceContactId },
-          data: { contactId: targetContactId },
-        }),
-      );
       await tx.telegramAdvertiser.update({
         where: { id: targetContactId },
         data: {
-          // Fail closed: a merge can never turn automation on for the target.
           displayName: target.displayName || source.displayName,
           companyName: target.companyName ?? source.companyName,
           telegramUsername: target.telegramUsername ?? source.telegramUsername,
@@ -192,8 +182,6 @@ export class TelegramCrmContactMergeService {
           website: target.website ?? source.website,
           description: target.description ?? source.description,
           source: target.source ?? source.source,
-          automatedMessagesEnabled: target.automatedMessagesEnabled,
-          automatedMessagesEnabledAt: target.automatedMessagesEnabledAt,
           lastContactAt: latest(target.lastContactAt, source.lastContactAt),
           lastInboundAt: latest(target.lastInboundAt, source.lastInboundAt),
           lastOutboundAt: latest(target.lastOutboundAt, source.lastOutboundAt),
@@ -257,9 +245,6 @@ export class TelegramCrmContactMergeService {
               preferredCurrency: source.preferredCurrency,
               preferredContactMethod: source.preferredContactMethod,
               defaultFollowUpDays: source.defaultFollowUpDays,
-              automatedMessagesEnabled: source.automatedMessagesEnabled,
-              automatedMessagesEnabledAt:
-                source.automatedMessagesEnabledAt?.toISOString() ?? null,
               lastContactAt: source.lastContactAt?.toISOString() ?? null,
               lastInboundAt: source.lastInboundAt?.toISOString() ?? null,
               lastOutboundAt: source.lastOutboundAt?.toISOString() ?? null,

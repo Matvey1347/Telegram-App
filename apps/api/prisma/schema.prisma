@@ -248,7 +248,6 @@ enum TelegramCrmMessageDirection {
 
 enum TelegramCrmMessageOrigin {
   MANUAL
-  AUTOMATION
   SYSTEM
   TELEGRAM_SYNC
 }
@@ -279,28 +278,6 @@ enum TelegramCrmSyncStatus {
   SYNCING
   RECOVERING
   FAILED
-}
-
-enum TelegramCrmCustomerAutomationType {
-  PRE_PUBLICATION_REMINDER
-  PUBLISHED_LINKS
-  FOLLOW_UP
-}
-
-enum TelegramCrmAutomationOverride {
-  INHERIT
-  ENABLED
-  DISABLED
-}
-
-enum TelegramCrmCustomerAutomationExecutionStatus {
-  PENDING
-  PROCESSING
-  SENDING
-  SENT
-  SKIPPED
-  FAILED
-  CANCELLED
 }
 
 enum TelegramAdvertiserContactType {
@@ -383,7 +360,6 @@ enum TelegramAdvertiserTaskPriority {
 enum OperationsNotificationType {
   CRM_MESSAGE_RECEIVED
   CRM_FOLLOW_UP_DUE
-  CRM_AUTOMATION_BLOCKED
   CRM_PLACEMENT_FAILURE
 }
 
@@ -874,7 +850,6 @@ model Workspace {
   telegramCrmConversations                TelegramCrmConversation[]
   telegramCrmMessages                     TelegramCrmMessage[]
   telegramCrmAccountSyncStates            TelegramCrmAccountSyncState[]
-  telegramCrmCustomerAutomationExecutions TelegramCrmCustomerAutomationExecution[]
   telegramAdPlacementAdvertiserResults    TelegramAdPlacementAdvertiserResult[]
   postGroups                              PostGroup[]
   promos                                  Promo[]
@@ -948,7 +923,6 @@ model TelegramUserAccountIntegration {
   crmConversations         TelegramCrmConversation[]
   crmSyncState             TelegramCrmAccountSyncState?
   crmDefaultSenderSettings TelegramAdCrmWorkspaceSettings[] @relation("TelegramCrmDefaultSenderAccount")
-  crmAutomationExecutions  TelegramCrmCustomerAutomationExecution[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1104,7 +1078,7 @@ model OperationsNotification {
   createdAt         DateTime                       @default(now())
 
   workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  recipient WorkspaceMember @relation(fields: [recipientMemberId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  recipient WorkspaceMember @relation(fields: [recipientMemberId, workspaceId], references: [id, workspaceId], onDelete: Cascade, map: "OperationsNotification_recipient_workspace_fkey")
 
   @@unique([workspaceId, recipientMemberId, type, sourceKey], map: "OperationsNotification_workspace_recipient_type_source_key")
   @@index([workspaceId, recipientMemberId, createdAt, id], map: "OperationsNotification_recipient_list_idx")
@@ -1137,7 +1111,7 @@ model OperationsNotificationPreference {
   updatedAt      DateTime @updatedAt
 
   workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  member    WorkspaceMember @relation(fields: [memberId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  member    WorkspaceMember @relation(fields: [memberId, workspaceId], references: [id, workspaceId], onDelete: Cascade, map: "OperationsNotificationPreference_member_workspace_fkey")
 
   @@id([workspaceId, memberId])
   @@unique([memberId, workspaceId], map: "OperationsNotificationPreference_member_workspace_key")
@@ -1871,17 +1845,6 @@ model TelegramAdSale {
   reservedUntil                DateTime?
   idempotencyKey               String?
   financeSkipped               Boolean                       @default(false)
-  customerAutomationOverride   TelegramCrmAutomationOverride @default(INHERIT)
-  customerAutomationEligibleAt DateTime?
-  prePublicationAutomationOverride TelegramCrmAutomationOverride @default(INHERIT)
-  prePublicationAutomationEnabledAt DateTime?
-  publishedLinksAutomationOverride TelegramCrmAutomationOverride @default(INHERIT)
-  publishedLinksAutomationEnabledAt DateTime?
-  followUpAutomationOverride TelegramCrmAutomationOverride @default(INHERIT)
-  followUpAutomationEnabledAt DateTime?
-  crmConversationId            String?
-  customerFollowUpAt           DateTime?
-  customerFollowUpVersion      Int                           @default(0)
   sourceTaskId                 String?
   sourceAdvertiserActivityId   String?
   createdByUserId              String?
@@ -1900,8 +1863,6 @@ model TelegramAdSale {
   activities                   TelegramAdvertiserActivity[]
   tasks                        TelegramAdvertiserTask[]
   automationExecutions         TelegramAdvertiserAutomationExecution[]
-  customerAutomationExecutions TelegramCrmCustomerAutomationExecution[]
-  crmConversation              TelegramCrmConversation?                  @relation("TelegramCrmDealConversation", fields: [crmConversationId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "TelegramAdSale_crmConversation_workspace_fkey")
 
   @@unique([id, workspaceId])
   @@unique([workspaceId, idempotencyKey])
@@ -1910,8 +1871,6 @@ model TelegramAdSale {
   @@index([workspaceId, assignedMemberId])
   @@index([workspaceId, advertiserId, createdAt])
   @@index([workspaceId, crmDealStage, createdAt])
-  @@index([workspaceId, customerFollowUpAt])
-  @@index([workspaceId, crmConversationId])
   @@index([sourceTaskId])
 }
 
@@ -1970,7 +1929,6 @@ model TelegramAdSalePlacement {
   tasks                        TelegramAdvertiserTask[]
   advertiserResult             TelegramAdPlacementAdvertiserResult?
   automationExecutions         TelegramAdvertiserAutomationExecution[]
-  customerAutomationExecutions TelegramCrmCustomerAutomationExecution[]
 
   @@unique([id, workspaceId])
   @@unique([workspaceId, telegramChannelId, inventoryOpportunityKey], map: "TelegramAdSalePlacement_workspaceId_telegramChannelId_inventory")
@@ -2000,15 +1958,6 @@ model TelegramAdvertiser {
   description                        String?
   source                             String?
   stage                              TelegramCrmContactStage        @default(NEW)
-  automatedMessagesEnabled           Boolean                        @default(false)
-  automatedMessagesEnabledAt         DateTime?
-  automationLocale                   String?                        @db.VarChar(2)
-  prePublicationAutomationOverride   TelegramCrmAutomationOverride @default(INHERIT)
-  prePublicationAutomationEnabledAt  DateTime?
-  publishedLinksAutomationOverride   TelegramCrmAutomationOverride @default(INHERIT)
-  publishedLinksAutomationEnabledAt  DateTime?
-  followUpAutomationOverride         TelegramCrmAutomationOverride @default(INHERIT)
-  followUpAutomationEnabledAt        DateTime?
   ownerMemberId                      String?
   createdByUserId                    String?
   lastContactAt                      DateTime?
@@ -2041,7 +1990,6 @@ model TelegramAdvertiser {
   automationExecutions         TelegramAdvertiserAutomationExecution[]
   crmPeers                     TelegramCrmPeer[]
   crmConversations             TelegramCrmConversation[]
-  customerAutomationExecutions TelegramCrmCustomerAutomationExecution[]
 
   @@unique([id, workspaceId])
   @@index([workspaceId, stage, updatedAt, id])
@@ -2207,15 +2155,6 @@ model TelegramAdCrmWorkspaceSettings {
   inactivityThresholdDays              Int                    @default(60)
   highValueCustomerThreshold           Decimal                @default(0)
   defaultCrmSenderAccountId            String?
-  customerTelegramAutomationsEnabled   Boolean                @default(false)
-  customerTelegramAutomationsEnabledAt DateTime?
-  automationLocale                      String                 @default("en") @db.VarChar(2)
-  prePublicationReminderEnabled        Boolean                @default(false)
-  prePublicationReminderEnabledAt      DateTime?
-  publishedLinksEnabled                Boolean                @default(false)
-  publishedLinksEnabledAt              DateTime?
-  followUpEnabled                      Boolean                @default(false)
-  followUpEnabledAt                    DateTime?
   createdAt                            DateTime               @default(now())
   updatedAt                            DateTime               @updatedAt
 
@@ -2275,8 +2214,6 @@ model TelegramCrmConversation {
   contact        TelegramAdvertiser?            @relation(fields: [contactId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "TelegramCrmConversation_contact_workspace_fkey")
   mtprotoAccount TelegramUserAccountIntegration @relation(fields: [mtprotoAccountId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "TelegramCrmConversation_account_workspace_fkey")
   messages       TelegramCrmMessage[]
-  explicitDeals  TelegramAdSale[]                 @relation("TelegramCrmDealConversation")
-  automationExecutions TelegramCrmCustomerAutomationExecution[] @relation("TelegramCrmAutomationConversation")
 
   @@unique([workspaceId, telegramCrmPeerId, mtprotoAccountId], map: "TelegramCrmConversation_workspaceId_peer_account_key")
   @@unique([id, workspaceId], map: "TelegramCrmConversation_id_workspaceId_key")
@@ -2298,7 +2235,6 @@ model TelegramCrmMessage {
   direction                TelegramCrmMessageDirection
   origin                   TelegramCrmMessageOrigin
   sentByMemberId           String?
-  automationExecutionId    String?
   text                     String?
   contentMetadata          Json?
   sentAt                   DateTime
@@ -2310,11 +2246,9 @@ model TelegramCrmMessage {
   workspace           Workspace                               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   conversation        TelegramCrmConversation                 @relation(fields: [conversationId, workspaceId, mtprotoAccountId], references: [id, workspaceId, mtprotoAccountId], onDelete: Cascade, map: "TelegramCrmMessage_conversation_workspace_account_fkey")
   sentByMember        WorkspaceMember?                        @relation("TelegramCrmMessageSentByMember", fields: [sentByMemberId], references: [id], onDelete: SetNull)
-  automationExecution TelegramCrmCustomerAutomationExecution? @relation(fields: [automationExecutionId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "TelegramCrmMessage_automationExecution_workspace_fkey")
 
   @@unique([conversationId, telegramMessageId], map: "TelegramCrmMessage_conversation_telegramMessage_key")
   @@unique([conversationId, clientIdempotencyKey], map: "TelegramCrmMessage_conversation_clientIdempotency_key")
-  @@unique([automationExecutionId, workspaceId], map: "TelegramCrmMessage_automationExecution_workspace_key")
   @@index([conversationId, sentAt, id], map: "TelegramCrmMessage_conversation_sentAt_id_idx")
   @@index([conversationId, direction, telegramMessageIdNumeric], map: "TelegramCrmMessage_conversation_direction_numeric_idx")
 }
@@ -2337,53 +2271,6 @@ model TelegramCrmAccountSyncState {
   mtprotoAccount TelegramUserAccountIntegration @relation(fields: [mtprotoAccountId, workspaceId], references: [id, workspaceId], onDelete: Cascade, map: "TelegramCrmAccountSyncState_account_workspace_fkey")
 
   @@unique([mtprotoAccountId, workspaceId], map: "TelegramCrmAccountSyncState_account_workspace_key")
-}
-
-model TelegramCrmCustomerAutomationExecution {
-  id               String                                       @id @default(cuid())
-  workspaceId      String
-  automationType   TelegramCrmCustomerAutomationType
-  contactId        String
-  telegramAdSaleId String?
-  placementId      String?
-  eventKey         String
-  eventOccurredAt  DateTime
-  dueAt             DateTime?
-  nextAttemptAt     DateTime?
-  attempts          Int                                          @default(0)
-  maxAttempts       Int                                          @default(4)
-  leaseOwner        String?
-  leaseExpiresAt    DateTime?
-  conversationId    String?
-  mtprotoAccountId  String?
-  renderedText      String?
-  templateKey       String?
-  locale            String?                                      @db.VarChar(2)
-  stableRandomId    String?
-  sourceVersion     String                                       @default("1") @db.VarChar(64)
-  historical        Boolean                                      @default(false)
-  reason            String?
-  status           TelegramCrmCustomerAutomationExecutionStatus @default(PENDING)
-  attemptedAt      DateTime?
-  completedAt      DateTime?
-  lastError        String?
-  createdAt        DateTime                                     @default(now())
-  updatedAt        DateTime                                     @updatedAt
-
-  workspace Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  contact   TelegramAdvertiser       @relation(fields: [contactId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "TelegramCrmCustomerAutomationExecution_contact_workspace_fkey")
-  sale      TelegramAdSale?          @relation(fields: [telegramAdSaleId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "TelegramCrmCustomerAutomationExecution_saleId_fkey")
-  placement TelegramAdSalePlacement? @relation(fields: [placementId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "TelegramCrmCustomerAutomationExecution_placementId_fkey")
-  conversation TelegramCrmConversation? @relation("TelegramCrmAutomationConversation", fields: [conversationId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "TelegramCrmCustomerAutomationExecution_conversation_fkey")
-  mtprotoAccount TelegramUserAccountIntegration? @relation(fields: [mtprotoAccountId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "TelegramCrmCustomerAutomationExecution_account_fkey")
-  message   TelegramCrmMessage?
-
-  @@unique([id, workspaceId])
-  @@unique([workspaceId, automationType, eventKey], map: "TelegramCrmCustomerAutomationExecution_event_key")
-  @@index([workspaceId, createdAt, id], map: "TelegramCrmCustomerAutomationExecution_workspace_created_id_idx")
-  @@index([workspaceId, contactId, createdAt, id], map: "TelegramCrmCustomerAutomationExecution_contact_created_idx")
-  @@index([status, nextAttemptAt, id], map: "TelegramCrmCustomerAutomationExecution_due_claim_idx")
-  @@index([status, leaseExpiresAt, id], map: "TelegramCrmCustomerAutomationExecution_lease_idx")
 }
 
 model TelegramAdvertiserAutomationRule {

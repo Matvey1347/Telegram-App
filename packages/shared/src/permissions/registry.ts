@@ -130,7 +130,6 @@ export const WORKSPACE_FEATURE_REGISTRY = [
       { capability: "viewOwn", sensitivity: "standard" },
       { capability: "viewAny", sensitivity: "sensitive" },
       { capability: "sendManualMessages", sensitivity: "sensitive" },
-      { capability: "manageAutomation", sensitivity: "sensitive" },
     ],
   }),
   feature({

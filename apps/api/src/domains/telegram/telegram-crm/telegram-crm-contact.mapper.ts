@@ -20,8 +20,6 @@ export const crmContactSelect = {
   source: true,
   stage: true,
   ownerMemberId: true,
-  automatedMessagesEnabled: true,
-  automatedMessagesEnabledAt: true,
   lastContactAt: true,
   lastInboundAt: true,
   lastOutboundAt: true,
@@ -55,9 +53,6 @@ export function mapCrmContact(row: ContactRow): CrmContact {
     source: row.source,
     stage: row.stage,
     ownerMemberId: row.ownerMemberId,
-    automatedMessagesEnabled: row.automatedMessagesEnabled,
-    automatedMessagesEnabledAt:
-      row.automatedMessagesEnabledAt?.toISOString() ?? null,
     lastContactAt: row.lastContactAt?.toISOString() ?? null,
     lastInboundAt: row.lastInboundAt?.toISOString() ?? null,
     lastOutboundAt: row.lastOutboundAt?.toISOString() ?? null,

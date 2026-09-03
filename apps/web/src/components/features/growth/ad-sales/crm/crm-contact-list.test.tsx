@@ -16,8 +16,6 @@ const contact: CrmContactListItem = {
   source: null,
   stage: "CUSTOMER",
   ownerMemberId: "member-1",
-  automatedMessagesEnabled: true,
-  automatedMessagesEnabledAt: "2026-08-01T10:00:00.000Z",
   lastContactAt: "2026-08-31T12:00:00.000Z",
   lastInboundAt: "2026-08-31T12:00:00.000Z",
   lastOutboundAt: null,
@@ -123,6 +121,8 @@ describe("CrmContactCard", () => {
     );
     expect(screen.queryByRole("menuitem", { name: "Payments" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Tags" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Automation" })).toBeNull();
+    expect(screen.queryByText(/Automated messages/i)).toBeNull();
     fireEvent.click(screen.getByRole("menuitem", { name: "Deals" }));
     expect(onAction).toHaveBeenCalledWith("deals");
   });

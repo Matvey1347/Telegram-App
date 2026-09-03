@@ -4,15 +4,11 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { calculateAdPlacementDeleteAt } from './domain/sales-text';
 import { adPlacementLifecycleReadyWhere } from '../../operations/scheduled-tasks/due-work-predicates';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
-import { TelegramAdSalesCustomerAutomationFactsService } from './telegram-ad-sales-customer-automation-facts.service';
 
 /** Synchronizes the sales lifecycle only after the managed post identity is verified. */
 @Injectable()
 export class TelegramAdPlacementLifecycleService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly automationFacts?: TelegramAdSalesCustomerAutomationFactsService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async reconcilePublishedPlacements(limit = 100) {
     const placements = await this.prisma.telegramAdSalePlacement.findMany({
@@ -35,7 +31,6 @@ export class TelegramAdPlacementLifecycleService {
       take: Math.max(1, Math.min(500, limit)),
     });
     let reconciled = 0;
-    const publicationFacts: Array<{ workspaceId: string; dealId: string }> = [];
     for (const placement of placements) {
       const managedPost = placement.managedPost;
       const publishedAt =
@@ -69,14 +64,9 @@ export class TelegramAdPlacementLifecycleService {
         },
       });
       reconciled += 1;
-      publicationFacts.push({
-        workspaceId: placement.workspaceId,
-        dealId: placement.telegramAdSaleId,
-      });
     }
     if (reconciled) {
       notifyScheduledTaskDueWorkChanged('telegram_ad_sales.due_deletions');
-      await this.automationFacts?.verifiedPublications(publicationFacts);
     }
     return { reconciled };
   }

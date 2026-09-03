@@ -163,7 +163,6 @@ import {
   mapAdSalesWorkspaceSettings,
 } from './telegram-ad-sales-workspace-settings';
 import { TelegramAdSalesSaleReadService } from './telegram-ad-sales-sale-read.service';
-import { TelegramAdSalesCustomerAutomationFactsService } from './telegram-ad-sales-customer-automation-facts.service';
 import {
   assertNoActiveSalePayments,
   cancelAdSaleRecords,
@@ -197,7 +196,6 @@ export class TelegramAdSalesService {
     private readonly encryptionService: TokenEncryptionService,
     private readonly telegramChannelAccessService: TelegramChannelAccessService,
     private readonly telegramBotApiClient: TelegramBotApiClient,
-    private readonly automationFacts?: TelegramAdSalesCustomerAutomationFactsService,
     @Optional()
     private readonly notificationProjector?: TelegramCrmInternalNotificationProjector,
   ) {
@@ -3500,7 +3498,6 @@ export class TelegramAdSalesService {
   }
 
   async createSale(userId: string, dto: CreateTelegramAdSaleDto) {
-    const automationEligibleAt = new Date();
     const { workspaceId, assignedMemberId } =
       await this.workspaceService.resolveAssignedMemberId(
         userId,
@@ -3542,7 +3539,6 @@ export class TelegramAdSalesService {
         sourceAdvertiserActivityId: dto.sourceAdvertiserActivityId ?? null,
         createdByUserId: userId,
         assignedMemberId,
-        customerAutomationEligibleAt: automationEligibleAt,
       },
       include: this.includeSaleRelations(),
     });
@@ -3555,11 +3551,6 @@ export class TelegramAdSalesService {
         actorUserId: userId,
       });
     }
-    await this.automationFacts?.dealCreated(
-      workspaceId,
-      sale.id,
-      automationEligibleAt,
-    );
     return this.mapSale(sale);
   }
 
@@ -3764,7 +3755,6 @@ export class TelegramAdSalesService {
     const telegramPostIds = existing.placements.flatMap((placement) =>
       placement.telegramPost?.id ? [placement.telegramPost.id] : [],
     );
-    await this.automationFacts?.cancelled(workspaceId, id);
     await this.prisma.$transaction(async (tx) => {
       await deleteAdSaleRecords(tx, {
         workspaceId,
@@ -3894,7 +3884,6 @@ export class TelegramAdSalesService {
       throw error;
     }
     this.invalidateAvailabilityCache(workspaceId);
-    await this.automationFacts?.scheduleChanged(workspaceId, sale.id);
     return this.mapPlacement(placement);
   }
 
@@ -4064,7 +4053,6 @@ export class TelegramAdSalesService {
         });
     await this.notificationProjector?.publish(notificationIds);
     this.invalidateAvailabilityCache(workspaceId);
-    await this.automationFacts?.scheduleChanged(workspaceId, saleId);
     return {
       ...this.mapPlacement(updated),
       warnings: updated.agreedPrice.lt(updated.minimumPrice)
@@ -4575,7 +4563,6 @@ export class TelegramAdSalesService {
         },
       });
       this.notifyAdDeletionDueWorkChanged();
-      await this.automationFacts?.verifiedPublication(workspaceId, saleId);
       return this.mapPlacement(this.appendPlacementFinancials(updated));
     }
     const managedPost = await this.prisma.telegramManagedPost.findFirst({
@@ -4638,7 +4625,6 @@ export class TelegramAdSalesService {
     });
     if (isPublishedManagedPost) this.notifyAdDeletionDueWorkChanged();
     if (isPublishedManagedPost) {
-      await this.automationFacts?.verifiedPublication(workspaceId, saleId);
     }
     return this.mapPlacement(this.appendPlacementFinancials(updated));
   }
@@ -4666,7 +4652,6 @@ export class TelegramAdSalesService {
       where: { id: placementId },
       data: { managedPostId: null },
     });
-    await this.automationFacts?.scheduleChanged(workspaceId, saleId);
     return this.mapPlacement(this.appendPlacementFinancials(updated));
   }
 
@@ -4787,7 +4772,6 @@ export class TelegramAdSalesService {
         data: { status: TelegramAdSaleStatus.IN_PROGRESS },
       });
     }
-    await this.automationFacts?.scheduleChanged(workspaceId, saleId);
     return this.mapPlacement(this.appendPlacementFinancials(updated));
   }
 
@@ -4920,7 +4904,6 @@ export class TelegramAdSalesService {
       include: { paymentAllocations: { include: { payment: true } } },
     });
     this.notifyAdDeletionDueWorkChanged();
-    await this.automationFacts?.verifiedPublication(workspaceId, saleId);
     return this.mapPlacement(this.appendPlacementFinancials(updated));
   }
 
@@ -4968,7 +4951,6 @@ export class TelegramAdSalesService {
       data: { status: TelegramAdPlacementStatus.CANCELLED },
       include: { paymentAllocations: { include: { payment: true } } },
     });
-    await this.automationFacts?.scheduleChanged(workspaceId, saleId);
     return this.mapPlacement(this.appendPlacementFinancials(updated));
   }
 
@@ -5011,7 +4993,6 @@ export class TelegramAdSalesService {
       },
       include: { paymentAllocations: { include: { payment: true } } },
     });
-    await this.automationFacts?.verifiedPublication(workspaceId, saleId);
     return this.mapPlacement(this.appendPlacementFinancials(updated));
   }
 
@@ -5305,7 +5286,6 @@ export class TelegramAdSalesService {
     });
     if (dueWorkChanged) this.notifyAdDeletionDueWorkChanged();
     if (dueWorkChanged) {
-      await this.automationFacts?.verifiedPublication(workspaceId, saleId);
     }
     return this.getSale(userId, saleId);
   }
@@ -5452,9 +5432,6 @@ export class TelegramAdSalesService {
         placements: targetPlacements.map((placement) => placement.id),
       },
     });
-
-    await this.automationFacts?.scheduleChanged(workspaceId, saleId);
-
     return this.mapSale(reserved);
   }
 
@@ -5504,7 +5481,6 @@ export class TelegramAdSalesService {
       message: `Cancelled sale ${saleId}`,
       metadata: { saleId },
     });
-    await this.automationFacts?.cancelled(workspaceId, saleId);
     return this.mapSale(cancelledSale);
   }
 }

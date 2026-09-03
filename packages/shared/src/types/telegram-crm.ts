@@ -1,5 +1,4 @@
 import type { PaginatedResponse } from "../pagination";
-import type { CrmDealAutomationSummary } from "./telegram-crm-automations";
 import type { ResolvedEmoji } from "./resolved-emoji";
 
 export const CRM_CONTACT_STAGES = [
@@ -19,7 +18,6 @@ export type CrmMessageDirection = (typeof CRM_MESSAGE_DIRECTIONS)[number];
 
 export const CRM_MESSAGE_ORIGINS = [
   "MANUAL",
-  "AUTOMATION",
   "SYSTEM",
   "TELEGRAM_SYNC",
 ] as const;
@@ -65,6 +63,13 @@ export type CrmAccountSummary = {
   label: string;
   username: string | null;
   photoUrl: string | null;
+};
+
+export type CrmWorkspaceSettings = {
+  workspaceId: string;
+  defaultCrmSenderAccountId: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
 };
 
 export type CrmPeerSummary = {
@@ -133,8 +138,6 @@ export type CrmContact = {
   source: string | null;
   stage: CrmContactStage;
   ownerMemberId: string | null;
-  automatedMessagesEnabled: boolean;
-  automatedMessagesEnabledAt: string | null;
   lastContactAt: string | null;
   lastInboundAt: string | null;
   lastOutboundAt: string | null;
@@ -171,7 +174,6 @@ export type CrmContactDetail = CrmContact & {
   unreadCount: number;
   tags: CrmTagSummary[];
   paymentSummary: CrmContactPaymentSummary[];
-  dealAutomation: CrmDealAutomationSummary[];
   counts: {
     conversations: number;
     deals: number;
@@ -240,7 +242,6 @@ export type CrmMessage = {
   direction: CrmMessageDirection;
   origin: CrmMessageOrigin;
   sentByMemberId: string | null;
-  automationExecutionId: string | null;
   text: string | null;
   contentMetadata: Record<string, unknown> | null;
   sentAt: string;

@@ -16,7 +16,6 @@ const input = {
 const message = {
   id: 'message-1',
   ...input,
-  automationExecutionId: null,
   contentMetadata: null,
   sentAt: new Date(input.sentAt),
   editedAt: null,
@@ -41,7 +40,6 @@ describe('TelegramCrmMessageStoreService', () => {
       },
       telegramCrmMessage: { create: jest.fn().mockResolvedValue(message) },
       workspaceMember: { findFirst: jest.fn() },
-      telegramCrmCustomerAutomationExecution: { findFirst: jest.fn() },
     };
     const prisma = {
       $transaction: jest.fn((callback: (client: typeof tx) => unknown) =>
@@ -62,76 +60,6 @@ describe('TelegramCrmMessageStoreService', () => {
       }),
     );
     expect(tx.workspaceMember.findFirst).not.toHaveBeenCalled();
-    expect(
-      tx.telegramCrmCustomerAutomationExecution.findFirst,
-    ).not.toHaveBeenCalled();
-  });
-
-  it('rejects an Automation execution for another Contact', async () => {
-    const tx = {
-      telegramCrmConversation: {
-        findFirst: jest.fn().mockResolvedValue({
-          id: 'conversation-1',
-          contactId: 'contact-1',
-          lastMessageAt: null,
-          lastInboundAt: null,
-          lastOutboundAt: null,
-          unreadCount: 0,
-        }),
-      },
-      telegramCrmMessage: { create: jest.fn() },
-      workspaceMember: { findFirst: jest.fn() },
-      telegramCrmCustomerAutomationExecution: {
-        findFirst: jest.fn().mockResolvedValue(null),
-      },
-    };
-    const prisma = {
-      $transaction: jest.fn((callback: (client: typeof tx) => unknown) =>
-        callback(tx),
-      ),
-      telegramCrmMessage: { findUnique: jest.fn() },
-    };
-    const service = new TelegramCrmMessageStoreService(prisma as never);
-
-    await expect(
-      service.store({
-        ...input,
-        direction: 'OUTBOUND',
-        origin: 'AUTOMATION',
-        automationExecutionId: 'execution-for-contact-2',
-      }),
-    ).rejects.toThrow(
-      'Automation execution does not match the message Contact',
-    );
-    expect(
-      tx.telegramCrmCustomerAutomationExecution.findFirst,
-    ).toHaveBeenCalledWith({
-      where: {
-        id: 'execution-for-contact-2',
-        workspaceId: 'workspace-1',
-        contactId: 'contact-1',
-      },
-      select: { id: true },
-    });
-    expect(tx.telegramCrmMessage.create).not.toHaveBeenCalled();
-  });
-
-  it('rejects execution attribution on a non-Automation origin', async () => {
-    const prisma = {
-      $transaction: jest.fn(),
-      telegramCrmMessage: { findUnique: jest.fn() },
-    };
-    const service = new TelegramCrmMessageStoreService(prisma as never);
-
-    await expect(
-      service.store({
-        ...input,
-        automationExecutionId: 'execution-1',
-      }),
-    ).rejects.toThrow(
-      'Only Automation messages may reference an automation execution',
-    );
-    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('returns the existing Message after an idempotency conflict', async () => {
@@ -149,15 +77,5 @@ describe('TelegramCrmMessageStoreService', () => {
       id: 'message-1',
       telegramMessageId: '42',
     });
-    expect(prisma.telegramCrmMessage.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          conversationId_telegramMessageId: {
-            conversationId: 'conversation-1',
-            telegramMessageId: '42',
-          },
-        },
-      }),
-    );
   });
 });

@@ -35,7 +35,6 @@ const crm: FeatureDefinition = {
     { id: "adSales.crm.create", featureId: "adSales.crm", capability: "create", labelKey: "", descriptionKey: "", sensitivity: "standard" },
     { id: "adSales.crm.editOwn", featureId: "adSales.crm", capability: "editOwn", labelKey: "", descriptionKey: "", sensitivity: "standard" },
     { id: "adSales.crm.editAny", featureId: "adSales.crm", capability: "editAny", labelKey: "", descriptionKey: "", sensitivity: "standard" },
-    { id: "adSales.crm.manageAutomation", featureId: "adSales.crm", capability: "manageAutomation", labelKey: "", descriptionKey: "", sensitivity: "sensitive" },
   ],
 };
 

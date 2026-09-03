@@ -63,7 +63,6 @@ const CAPABILITY_COPY: Record<string, string> = {
   viewOwn: "View own",
   viewAny: "View all",
   sendManualMessages: "Send manual messages",
-  manageAutomation: "Manage automation",
   executeTransactions: "Execute transactions",
   manageCurrencies: "Manage currencies",
   assignRoles: "Assign roles",

@@ -49,7 +49,6 @@ const row = {
   direction: TelegramCrmMessageDirection.INBOUND,
   origin: TelegramCrmMessageOrigin.TELEGRAM_SYNC,
   sentByMemberId: null,
-  automationExecutionId: null,
   text: 'Hello',
   contentMetadata: null,
   sentAt,

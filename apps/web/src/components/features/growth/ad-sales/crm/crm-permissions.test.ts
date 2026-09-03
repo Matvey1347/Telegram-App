@@ -10,7 +10,7 @@ const access = (permissionKeys: string[], isOwner = false) => ({
 });
 
 describe("crmPermissions", () => {
-  it("keeps own, all, manual-send and automation capabilities independent", () => {
+  it("keeps own, all and manual-send capabilities independent", () => {
     const permissions = crmPermissions(access([
       "adSales.crm.viewOwn",
       "adSales.crm.editOwn",
@@ -23,7 +23,6 @@ describe("crmPermissions", () => {
       canEditOwn: true,
       canEditAll: false,
       canSendManual: true,
-      canManageAutomation: false,
     });
   });
 
@@ -34,7 +33,6 @@ describe("crmPermissions", () => {
       canEditOwn: true,
       canEditAll: true,
       canSendManual: true,
-      canManageAutomation: true,
       canViewSales: true,
       canCreateSales: true,
       canRegisterPayment: true,

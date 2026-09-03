@@ -18,8 +18,6 @@ const contact = {
   source: 'TELEGRAM_INBOX',
   stage: 'QUALIFIED',
   ownerMemberId: 'member-1',
-  automatedMessagesEnabled: false,
-  automatedMessagesEnabledAt: null,
   lastContactAt: null,
   lastInboundAt: null,
   lastOutboundAt: null,
@@ -86,7 +84,6 @@ describe('TelegramCrmInboxCommandService', () => {
       contact: {
         id: 'contact-1',
         stage: 'QUALIFIED',
-        automatedMessagesEnabled: false,
       },
     });
     const createContactCall = callArgument(tx.telegramAdvertiser.create);
@@ -95,8 +92,6 @@ describe('TelegramCrmInboxCommandService', () => {
         workspaceId: 'workspace-1',
         ownerMemberId: 'member-1',
         source: 'TELEGRAM_INBOX',
-        automatedMessagesEnabled: false,
-        automatedMessagesEnabledAt: null,
         lastContactAt: lastOutboundAt,
         lastInboundAt,
         lastOutboundAt,

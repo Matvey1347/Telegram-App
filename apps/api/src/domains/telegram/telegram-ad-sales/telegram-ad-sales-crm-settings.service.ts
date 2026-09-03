@@ -56,7 +56,7 @@ export class TelegramAdSalesCrmSettingsService {
     userId: string,
     dto: TelegramAdCrmWorkspaceSettingsDto,
   ) {
-    const { workspaceId } = await this.authorization.require(userId, 'adSales.crm.manageAutomation');
+    const { workspaceId } = await this.authorization.require(userId, 'adSales.crm.manage');
     const settings = await this.prisma.telegramAdCrmWorkspaceSettings.upsert({
       where: { workspaceId },
       create: { workspaceId, ...(dto as Record<string, unknown>) },

@@ -91,25 +91,6 @@ describe('TelegramCrmInternalNotificationProjector', () => {
     expect(store.insertMany).not.toHaveBeenCalled();
   });
 
-  it('materializes one idempotent terminal automation notification', async () => {
-    const { projector, store } = setup();
-    await projector.automationBlocked({} as never, [
-      {
-        id: 'execution-1',
-        workspaceId: 'workspace-1',
-        contactId: 'contact-1',
-        telegramAdSaleId: 'deal-1',
-        reason: 'RETRY_EXHAUSTED',
-      },
-    ]);
-    expect(store.insertMany).toHaveBeenCalledWith(expect.anything(), [
-      expect.objectContaining({
-        type: OperationsNotificationType.CRM_AUTOMATION_BLOCKED,
-        sourceKey: 'automation:execution-1',
-      }),
-    ]);
-  });
-
   it('re-resolves current Contact ownership before transferring visibility', async () => {
     const { projector, store } = setup();
     await expect(

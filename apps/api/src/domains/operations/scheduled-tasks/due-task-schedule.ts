@@ -107,8 +107,6 @@ export class DueTaskSchedule {
         return this.nextManagedPostDueAt(now);
       case 'telegram_ad_sales.due_deletions':
         return this.nextAdDeletionDueAt(now);
-      case 'telegram_crm.customer_automations':
-        return this.nextCrmAutomationDueAt(now);
       case 'operations.notifications.publish_due':
         return this.nextOperationsNotificationDueAt();
       case 'greeter.expire_pending':
@@ -197,31 +195,6 @@ export class DueTaskSchedule {
       readyAt,
       futureIdentity?.scheduledAt,
       backedOffAt,
-    ]);
-  }
-
-  private async nextCrmAutomationDueAt(now: Date) {
-    const [pending, processing, sending] = await Promise.all([
-      this.prisma.telegramCrmCustomerAutomationExecution.findFirst({
-        where: { status: 'PENDING', nextAttemptAt: { not: null } },
-        orderBy: [{ nextAttemptAt: 'asc' }, { id: 'asc' }],
-        select: { nextAttemptAt: true },
-      }),
-      this.prisma.telegramCrmCustomerAutomationExecution.findFirst({
-        where: { status: 'PROCESSING', leaseExpiresAt: { not: null } },
-        orderBy: [{ leaseExpiresAt: 'asc' }, { id: 'asc' }],
-        select: { leaseExpiresAt: true },
-      }),
-      this.prisma.telegramCrmCustomerAutomationExecution.findFirst({
-        where: { status: 'SENDING', leaseExpiresAt: { not: null } },
-        orderBy: [{ leaseExpiresAt: 'asc' }, { id: 'asc' }],
-        select: { leaseExpiresAt: true },
-      }),
-    ]);
-    return earliest([
-      pending?.nextAttemptAt,
-      processing?.leaseExpiresAt,
-      sending?.leaseExpiresAt,
     ]);
   }
 

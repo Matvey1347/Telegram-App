@@ -1,6 +1,26 @@
 # Project Refactor ExecPlan
 
-Updated: 2026-09-02
+Updated: 2026-09-03
+
+## 2026-09-03 CRM customer-message automation removal
+
+The customer-facing CRM automation product slice has been removed end to end.
+The Clients UI no longer exposes Automation controls or status copy; shared
+contracts and RBAC no longer publish the opt-in surface; API controllers,
+materializers, delivery services and Ad Sales fact callbacks are gone. The
+persisted one-shot scheduler no longer registers or executes the customer
+automation task.
+
+The schema migration removes the execution queue, opt-in/override fields,
+automation-specific notification type and permission rows. Existing automated
+Message history is retained as `SYSTEM` history before the obsolete origin and
+execution link are removed. Creating, promoting, merging, or changing a Contact
+or Deal therefore creates no customer-message work. Manual Message sending is
+unchanged and remains an explicit permissioned user action.
+
+This removal reduces idle Neon/Railway work: there is no customer-automation
+due lookup, timer, queue claim, write, or Telegram request at 1 or 100 channels,
+and no new runtime service or retention surface is introduced.
 
 ## 2026-09-01 CRM Notification Center and Web Push
 

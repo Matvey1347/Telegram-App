@@ -51,8 +51,6 @@ const contact: CrmContactDetail = {
   source: "Telegram",
   stage: "CUSTOMER",
   ownerMemberId: "member-1",
-  automatedMessagesEnabled: false,
-  automatedMessagesEnabledAt: null,
   lastContactAt: null,
   lastInboundAt: null,
   lastOutboundAt: null,
@@ -81,7 +79,6 @@ const contact: CrmContactDetail = {
   unreadCount: 0,
   tags: [],
   paymentSummary: [],
-  dealAutomation: [],
   counts: { conversations: 0, deals: 0, openTasks: 0, activities: 0 },
 };
 

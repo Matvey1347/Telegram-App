@@ -3,10 +3,9 @@
 ## Scope
 
 This document defines the Stage 1 persistence, contract, authorization, and
-rollout-safety foundation, the Stage 2 multi-account MTProto CRM runtime and
-Inbox use cases, the Stage 3 Contact-centered web application, the Stage 4
-customer-message automation layer, and the Stage 5 operations Notification
-Center and Web Push integration. It does not add a generic automation engine,
+the Stage 2 multi-account MTProto CRM runtime and Inbox use cases, the Stage 3
+Contact-centered web application, and the Stage 5 operations Notification
+Center and Web Push integration. It does not add customer-message automation,
 a new worker service, polling, historical event replay, or a background-sync
 PWA runtime.
 
@@ -37,7 +36,7 @@ allows it. A Conversation always keeps the account with which it was created.
 
 `apps/api/src/domains/telegram/telegram-crm` owns Contact-centered use cases,
 Telegram peer identity, Conversation/Message persistence, CRM settings, account
-capability policy, and customer-automation eligibility policy.
+and account capability policy.
 
 Ad Sales owns Deal creation and mutation. CRM reads compact Deal summaries
 directly through workspace-scoped Prisma projections and never injects the
@@ -68,17 +67,11 @@ Realtime events patch the affected Message, Conversation, Contact, Inbox, or
 unread cache; there is no API polling or root-wide CRM invalidation. After a
 bounded stream reconnect, only the active surface is revalidated.
 
-Manual Message composition is independent of customer automation. It replies
+Manual Message composition replies
 through the Conversation's fixed MTProto account, uses an idempotency key for
 optimistic reconciliation and retry, and becomes read-only when permission or
 account capability is missing. Starting a new Conversation is the only place
 where the workspace default CRM sender may be consulted.
-
-Automation controls display migrated Contacts as off and migrated Deals as
-protected. Contact enablement and Deal eligibility require separate explicit
-user actions guarded by automation-management permission. Inbox promotion,
-stage changes, Deal/payment/publication actions, CRM Sync, and CRM Send never
-enable customer automation.
 
 ## Contact and stage
 
@@ -123,15 +116,10 @@ and read checkpoints, active/archive state, and incremental/recovery metadata.
 The default CRM sender is consulted only when creating a new Conversation.
 
 A Message stores the Telegram message ID, fixed Conversation/account identity,
-direction, origin, optional Member/automation attribution, text and minimal
+direction, origin, optional Member attribution, text and minimal
 content metadata, timestamps, and read/delivery state. Historical messages
 found outside CRM use `TELEGRAM_SYNC` with no invented Member. Raw Telegram
 update payloads are not persisted.
-
-Automation attribution is valid only for an `AUTOMATION` origin. Its execution
-must belong to both the Message workspace and the Contact linked to the
-Conversation; the workspace relationship is also enforced by a composite
-foreign key.
 
 Messages are unique by `(conversationId, telegramMessageId)` and ordered with
 the `(conversationId, sentAt, id)` index. Conversation collections never include
@@ -162,7 +150,7 @@ unchanged profile, success, and checkpoint writes.
 ## Authorization
 
 The `adSales.crm` feature preserves `view` as CRM access and adds explicit
-view-own, view-any, manual-send, and automation-management permissions. Edit-own
+view-own, view-any, and manual-send permissions. Edit-own
 and edit-any continue to scope mutations by `TelegramAdvertiser.ownerMemberId`.
 The backend is authoritative; frontend permission checks are presentation only.
 The rule also covers the legacy advertiser, contact-detail, activity/note, and
@@ -170,159 +158,17 @@ CRM task endpoints; requested Contact owners are validated in the workspace.
 
 Deal/payment authorization remains in the existing Ad Sales permissions.
 
-## AUTOMATION ROLLOUT SAFETY
+## Customer messaging boundary
 
-Deployment alone must send zero customer Telegram messages.
+Customer-facing CRM automation is not part of the product. Creating, promoting,
+merging, or changing a Contact or Deal never schedules or sends a Telegram
+message. There is no customer-automation opt-in, template, execution queue,
+background task, or automation-management permission.
 
-The fail-closed gates are cumulative. A customer automation is eligible only
-when all are true:
-
-1. workspace customer Telegram automations were explicitly enabled;
-2. the Contact explicitly enabled automated messages;
-3. the machine-identified automation type is enabled;
-4. the Deal is not disabled;
-5. the Deal has an explicit immutable eligibility timestamp;
-6. the event is not historical and occurs after both rollout cutovers;
-7. a non-empty idempotency key identifies the business event.
-
-Migration safety invariants:
-
-- every existing and new Contact defaults to `automatedMessagesEnabled=false`;
-- every existing Deal is backfilled with `customerAutomationOverride=DISABLED`;
-- every existing Deal has no automation eligibility timestamp;
-- workspace and all per-type switches default to false;
-- migration creates zero customer automation executions, Messages, due events,
-  Conversations, or account sync-state rows;
-- historical placements/publications cannot become customer automation events;
-- enabling only the workspace does not enable an existing Contact;
-- manual CRM messaging is governed by manual-send permission and account send
-  capability, not by customer-automation switches.
-
-The existing `TelegramAdvertiserAutomationRule` and execution tables describe
-internal task creation. They are not customer-message consent or delivery
-records. Stage 4 evolves the already-existing, separately named
-`TelegramCrmCustomerAutomationExecution` as the durable customer occurrence,
-claim, send-envelope, idempotency, and delivery record. It does not create a
-parallel engine or broaden internal task actions into customer messaging.
-
-## Customer-message automation runtime
-
-Ad Sales reports typed business facts; it never decides or sends customer
-messages. CRM owns the complete path:
-
-```text
-fresh Ad Sales fact
-  -> CRM automation event materializer
-  -> fail-closed eligibility policy
-  -> durable due execution
-  -> Conversation resolver
-  -> localized template presenter
-  -> fixed-account CRM MTProto sender
-  -> CRM Message + terminal execution
-```
-
-Only fresh post-rollout mutations may materialize an occurrence: creation of
-an eligible Deal or placement, explicit activation of one protected Deal, a
-relevant schedule/placement change, cancellation, a verified actual
-publication transition, or explicit customer follow-up configuration.
-Application startup, migration, CRM Sync/import, Peer promotion, Contact stage
-changes, old `nextContactAt`, internal tasks, and historical placement state
-never invoke the materializer. Enabling a workspace, Contact, or type never
-scans or replays existing data.
-
-`eventOccurredAt` records the business occurrence, not evaluation or scheduler
-time. Eligibility rechecks it against every applicable durable activation
-boundary. Workspace, Contact, type, and Deal switches are cumulative; an
-explicit Deal `ENABLED` value never bypasses the workspace kill switch,
-Contact consent, account capability, or another negative gate. Any missing or
-inconsistent scope, cutover, Contact, Conversation, sender account, locale,
-template, or idempotency input fails closed.
-
-The final `PROCESSING -> SENDING` transition is the durable authorization
-point. In one serializable transaction it locks the execution and every
-current gate/source row, reloads Workspace, Contact, Deal, placements, channel
-and post identity, Conversation, and account state, reruns policy and source
-fingerprint checks, then applies a workspace-scoped compare-and-set. A state
-mutation that commits first is observed; one that waits commits only after the
-logical send was authorized. This closes the disable/reschedule/delete race
-without holding a database transaction open across the Telegram request.
-Both public Deal-cancellation paths converge on one transaction that cancels
-unsent executions before writing the Deal and placement terminal states. The
-final locked barrier also rejects a `CANCELLED` Deal directly, so a failed
-post-commit fact notification cannot allow a customer follow-up send.
-
-Pre-publication reminders use one stable logical key per Deal. Before the first
-send, a schedule change updates or invalidates the unsent occurrence; after a
-send, it cannot create an automatic second reminder. The default due time is
-one hour before the earliest relevant future placement, while the localized
-template lists every placement's real date, time, timezone, and channel. It
-uses the single-time key only when those times are actually the same.
-
-Customer copy is rendered and pinned from machine keys
-`crm.automation.prePublication.singleTime`,
-`crm.automation.prePublication.multiTime`, and
-`crm.automation.publishedLinks.complete`. The supported locales are `uk`,
-`ru`, and `en`; a Contact override wins, otherwise the workspace locale is
-used, with `en` as the final fail-safe fallback.
-
-Published-links occurrences are created only by a fresh verified publication
-transition after every required placement has a successful terminal state,
-actual publication time, Telegram post identity, and stable URL. Scheduled
-time is never publication proof. Pending, missed, failed, cancelled, or
-identity-less placements wait and never produce a false customer success.
-The occurrence time is the latest actual publication time, so reconciling an
-old Deal cannot turn history into a new event.
-
-Customer follow-up is independent of internal follow-up tasks. It requires a
-dedicated explicit Deal configuration and versioned occurrence. Existing
-`nextContactAt` values and `TelegramAdvertiserTask` rows remain available to
-internal CRM views but never become customer sends.
-
-Conversation resolution is deterministic: an explicit Deal Conversation,
-otherwise an existing active Contact Conversation, otherwise a newly created
-Conversation through a valid Default CRM sender. Once selected, the execution
-pins the Conversation and its `mtprotoAccountId`. A temporary account error
-retries the same frozen envelope and never fails over to another Telegram
-account.
-
-Before the Telegram request, the execution persists the selected Conversation,
-account, rendered text, template key/locale, and stable MTProto random ID.
-Claims are bounded and leased. A retry after a timeout, process exit, or
-database finalization failure uses that identical envelope; Message uniqueness
-by automation execution and the stable Telegram random ID converge duplicate
-claims and synchronized echoes into one `AUTOMATION` Message. Automated
-Messages always have `sentByMemberId=null` and retain the Conversation account.
-
-An expired `SENDING` lease is explicitly marked as ambiguous. It may retry only
-the same pinned idempotent envelope after current gates and source pass the
-atomic authorization point again. If they no longer pass, the execution ends
-as `FAILED` with an ambiguous-send audit reason and makes no new runtime call;
-it is never mislabeled as an ordinary policy skip. Retry exhaustion preserves
-the same `AMBIGUOUS_SEND_UNRESOLVED` audit meaning instead of reporting an
-ordinary recoverable failure.
-
-Execution-to-Deal and execution-to-placement foreign keys remain composite
-with `workspaceId`. Deal deletion first cancels unsent work and atomically
-unlinks the mutable Deal/placement references before deletion, preserving the
-immutable Message/execution audit record without weakening tenant isolation.
-
-## Customer automation scheduling and cost
-
-Customer executions reuse the system's persisted one-shot due scheduler. A
-new occurrence emits one in-process wake signal after commit; restart recovery
-performs bounded indexed nearest-due reads for pending work and expired leases.
-The scheduler then arms one timer for the earliest execution and atomically
-claims bounded due batches. It never scans workspaces, Contacts, Deals,
-placements, tasks, or historical Messages to discover work.
-
-With no persisted due execution, the Stage 4 incremental idle cost is zero
-recurring database reads/writes, zero Telegram requests, zero per-Deal timers,
-and no additional Railway service. Work scales with eligible occurrences: 100
-or 1,000 due Deals use one scheduler configuration and bounded indexed claims,
-with at most one customer send per unique event key. Successful executions are
-the customer-message audit record; they do not create per-item application log
-rows. Terminal execution history follows the CRM customer-history lifecycle
-and is not copied into a second technical log.
+Outbound customer messages are sent only through the explicit Manual Message
+workflow by a Member with `adSales.crm.sendManualMessages`. Manual sending
+continues to use the selected workspace, an enabled MTProto sender account, an
+idempotency key, and the existing Message/audit path.
 
 ## Operations notifications and Web Push
 
@@ -346,8 +192,8 @@ source idempotency key, publication time, and expiry. It never serializes a
 Contact, Conversation, Deal, Message, or Telegram update payload. Center unread
 is separate from Conversation/CRM unread.
 
-The supported types are `CRM_MESSAGE_RECEIVED`, `CRM_FOLLOW_UP_DUE`,
-`CRM_AUTOMATION_BLOCKED`, and `CRM_PLACEMENT_FAILURE`. Priority is deterministic:
+The supported types are `CRM_MESSAGE_RECEIVED`, `CRM_FOLLOW_UP_DUE`, and
+`CRM_PLACEMENT_FAILURE`. Priority is deterministic:
 an unclassified Inbox peer is `LOW`; a qualified Contact, active important Deal,
 or overdue high/urgent action is `HIGH`; other Contact activity is `NORMAL`. No
 AI participates in classification.
@@ -418,11 +264,9 @@ Follow-up notifications are materialized only by a fresh task create/reschedule
 mutation and use a task-and-due occurrence key; existing overdue tasks are never
 backfilled. At due publication, a narrow CRM-owned resolver reloads the current
 Contact owner, active Deal assignees, eligible workspace fallback, and RBAC
-before the generic operations service publishes or pushes the row. Terminal
-automation failure and fresh placement `MISSED` transitions create at most one
-internal notification and never a notification per retry or success step. These
-internal notifications do not change customer-automation eligibility or create
-customer Messages.
+before the generic operations service publishes or pushes the row. Fresh
+placement `MISSED` transitions create at most one internal notification.
+Internal notifications never create customer Messages.
 
 Scheduled publication and 90-to-91-day UTC-bucketed expiry reuse the persisted one-shot due
 scheduler. With no unpublished or expiring Notification, there is no recurring
@@ -487,9 +331,9 @@ that canonical Peer.
 
 Manual Contact merge is one transaction. It moves Telegram Peers,
 Conversations, Deals, tasks, activities, notes, tags, contact methods,
-preferences, and automation references before removing the source Contact.
-Conflicts are resolved explicitly and customer automation remains fail-closed;
-merge must not discard customer history or silently broaden consent.
+preferences, and internal advertiser-rule references before removing the source
+Contact. Conflicts are resolved explicitly; merge must not discard customer
+history.
 
 ## Manual messages, read state, and realtime events
 
@@ -497,8 +341,7 @@ Manual CRM sending requires the manual-send permission, a fixed Conversation
 account that is active, connected, session-backed, and `crmSendEnabled`, plus a
 non-empty client idempotency key. The key reserves one Message per Conversation
 and derives the stable MTProto `randomId`, so retries and a simultaneous live
-echo converge on one manually attributed Message. Customer-automation flags do
-not block manual sends and this stage never executes an automation.
+echo converge on one manually attributed Message.
 
 Mark-read uses the Conversation's fixed account and numeric Telegram message
 range. Conversation unread state and compact Contact last-inbound/last-outbound

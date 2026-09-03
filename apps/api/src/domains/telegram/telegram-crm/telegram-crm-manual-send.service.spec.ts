@@ -25,7 +25,6 @@ const messageRow = {
   direction: TelegramCrmMessageDirection.OUTBOUND,
   origin: TelegramCrmMessageOrigin.MANUAL,
   sentByMemberId: 'member-1',
-  automationExecutionId: null,
   text: 'Hello',
   contentMetadata: null,
   sentAt,
@@ -163,7 +162,6 @@ describe('TelegramCrmManualSendService', () => {
     if (!isRecord(createCall) || !isRecord(createCall.data)) {
       throw new Error('Expected a typed Message create call');
     }
-    expect(createCall.data).not.toHaveProperty('automationExecutionId');
     expect(events.emit).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'message.sent' }),
     );

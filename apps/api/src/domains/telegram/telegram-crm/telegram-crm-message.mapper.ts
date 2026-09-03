@@ -12,7 +12,6 @@ export const crmMessageSelect = {
   direction: true,
   origin: true,
   sentByMemberId: true,
-  automationExecutionId: true,
   text: true,
   contentMetadata: true,
   sentAt: true,

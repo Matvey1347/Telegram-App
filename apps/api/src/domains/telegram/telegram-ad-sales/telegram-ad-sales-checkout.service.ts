@@ -34,7 +34,6 @@ import {
 } from './dto';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
 import { TelegramAdvertiserCheckoutResolverService } from './telegram-advertiser-checkout-resolver.service';
-import { TelegramAdSalesCustomerAutomationFactsService } from './telegram-ad-sales-customer-automation-facts.service';
 
 type CheckoutProduct = Prisma.TelegramAdProductGetPayload<
   Record<string, never>
@@ -81,7 +80,6 @@ export class TelegramAdSalesCheckoutService {
     private readonly responseCache: ResponseCacheService,
     private readonly salesService: TelegramAdSalesService,
     private readonly advertiserResolver: TelegramAdvertiserCheckoutResolverService = new TelegramAdvertiserCheckoutResolverService(),
-    private readonly automationFacts?: TelegramAdSalesCustomerAutomationFactsService,
   ) {}
 
   async create(
@@ -486,7 +484,6 @@ export class TelegramAdSalesCheckoutService {
     if (payment && !category)
       throw new NotFoundException('Advertising revenue category not found');
 
-    const automationEligibleAt = new Date();
     const saleId = await this.prisma.$transaction(async (tx) => {
       const resolvedAdvertiser = await this.advertiserResolver.resolve(
         tx,
@@ -522,7 +519,6 @@ export class TelegramAdSalesCheckoutService {
           crmDealStage: TelegramAdCrmDealStage.SLOT_RESERVED,
           createdByUserId: userId,
           assignedMemberId,
-          customerAutomationEligibleAt: automationEligibleAt,
         },
       });
       if (advertiserId) {
@@ -669,11 +665,6 @@ export class TelegramAdSalesCheckoutService {
       return sale.id;
     });
 
-    await this.automationFacts?.dealCreated(
-      workspaceId,
-      saleId,
-      automationEligibleAt,
-    );
 
     this.responseCache.clearByPrefix(
       `telegram-ad-sales:availability:${workspaceId}:`,

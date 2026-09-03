@@ -20,8 +20,6 @@ const contact = (id: string, overrides: Record<string, unknown> = {}) => ({
   stage: 'LEAD',
   archivedAt: null,
   ownerMemberId: 'member-1',
-  automatedMessagesEnabled: false,
-  automatedMessagesEnabledAt: null,
   lastContactAt: null,
   lastInboundAt: null,
   lastOutboundAt: null,
@@ -41,10 +39,9 @@ const contact = (id: string, overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('TelegramCrmContactMergeService', () => {
-  it('moves the complete Contact graph transactionally and keeps target automation fail-closed', async () => {
+  it('moves the complete Contact graph transactionally', async () => {
     const target = contact('target', {
       companyName: 'Keep target',
-      automatedMessagesEnabled: false,
       totalSalesCount: 1,
       completedSalesCount: 1,
       totalPlacementsCount: 2,
@@ -53,8 +50,6 @@ describe('TelegramCrmContactMergeService', () => {
     const source = contact('source', {
       companyName: 'Source conflict',
       telegramUsername: 'fill_from_source',
-      automatedMessagesEnabled: true,
-      automatedMessagesEnabledAt: new Date('2026-01-01T00:00:00.000Z'),
       totalSalesCount: 3,
       completedSalesCount: 2,
       totalPlacementsCount: 4,
@@ -80,7 +75,6 @@ describe('TelegramCrmContactMergeService', () => {
       telegramAdvertiserActivity: { updateMany: moved(), create: jest.fn() },
       telegramAdvertiserContact: { updateMany: moved() },
       telegramAdvertiserAutomationExecution: { updateMany: moved() },
-      telegramCrmCustomerAutomationExecution: { updateMany: moved() },
     };
     const prisma = {
       $transaction: jest.fn(
@@ -112,7 +106,6 @@ describe('TelegramCrmContactMergeService', () => {
         contactMethods: 1,
         tags: 2,
         internalAutomationExecutions: 1,
-        customerAutomationExecutions: 1,
       },
     });
     expect(tx.telegramCrmPeer.updateMany).toHaveBeenCalledWith({
@@ -130,20 +123,11 @@ describe('TelegramCrmContactMergeService', () => {
       where: { workspaceId: 'workspace-1', advertiserId: 'source' },
       data: { advertiserId: 'target' },
     });
-    const customerAutomationCall = callArgument(
-      tx.telegramCrmCustomerAutomationExecution.updateMany,
-    );
-    expect(customerAutomationCall).toMatchObject({
-      where: { workspaceId: 'workspace-1', contactId: 'source' },
-      data: { contactId: 'target' },
-    });
     const targetUpdateCall = callArgument(tx.telegramAdvertiser.update);
     expect(targetUpdateCall).toMatchObject({
       data: {
         companyName: 'Keep target',
         telegramUsername: 'fill_from_source',
-        automatedMessagesEnabled: false,
-        automatedMessagesEnabledAt: null,
         totalSalesCount: 4,
         totalRevenueInPrimaryCurrency: new Prisma.Decimal(400),
         averageOrderValueInPrimaryCurrency: new Prisma.Decimal(100),

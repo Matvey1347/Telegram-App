@@ -16,8 +16,6 @@ const contactRow = () => ({
   source: null,
   stage: 'LEAD',
   ownerMemberId: 'member-1',
-  automatedMessagesEnabled: false,
-  automatedMessagesEnabledAt: null,
   lastContactAt: date,
   lastInboundAt: date,
   lastOutboundAt: date,
@@ -368,13 +366,6 @@ describe('TelegramCrmContactReadService', () => {
     const row = {
       ...contactRow(),
       tags: [{ tag: { id: 'tag-1', name: 'VIP', color: '#ff00ff' } }],
-      sales: [
-        {
-          id: 'deal-1',
-          customerAutomationOverride: 'DISABLED',
-          customerAutomationEligibleAt: null,
-        },
-      ],
       _count: {
         sales: 1,
         crmConversations: 2,
@@ -415,7 +406,6 @@ describe('TelegramCrmContactReadService', () => {
       peers: [{ id: 'peer-1' }],
       tags: [{ id: 'tag-1', name: 'VIP' }],
       paymentSummary: [{ currency: 'USD', outstandingAmount: '60' }],
-      dealAutomation: [{ dealId: 'deal-1', override: 'DISABLED' }],
       counts: { conversations: 2, deals: 5, openTasks: 3, activities: 4 },
     });
     expect(prisma.telegramAdvertiser.findFirst).toHaveBeenCalledWith(

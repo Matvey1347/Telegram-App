@@ -14,15 +14,10 @@ import {
 } from 'class-validator';
 import {
   CRM_CONTACT_STAGES,
-  CRM_AUTOMATION_OVERRIDES,
-  CRM_AUTOMATION_LOCALES,
   CRM_FOLLOW_UP_VIEWS,
   CRM_MESSAGE_DIRECTIONS,
   CRM_MESSAGE_ORIGINS,
   type CrmContactStage,
-  type CrmAutomationOverride,
-  type CrmAutomationLocale,
-  type CrmCustomerAutomationType,
   type CrmFollowUpView,
   type CrmMessageDirection,
   type CrmMessageOrigin,
@@ -177,50 +172,12 @@ export class CrmMessagesQueryDto {
 
 export class UpdateCrmWorkspaceSettingsDto {
   @IsOptional() @IsString() defaultCrmSenderAccountId?: string | null;
-  @IsOptional() @IsBoolean() customerTelegramAutomationsEnabled?: boolean;
-  @IsOptional() @IsBoolean() prePublicationReminderEnabled?: boolean;
-  @IsOptional() @IsBoolean() publishedLinksEnabled?: boolean;
-  @IsOptional() @IsBoolean() followUpEnabled?: boolean;
-  @IsOptional()
-  @IsIn(CRM_AUTOMATION_LOCALES)
-  automationLocale?: CrmAutomationLocale;
 }
 
 export class UpdateCrmAccountCapabilitiesDto {
   @IsOptional() @IsBoolean() crmSyncEnabled?: boolean;
   @IsOptional() @IsBoolean() crmSendEnabled?: boolean;
   @IsOptional() @IsBoolean() mtprotoPublishingEnabled?: boolean;
-}
-
-export class UpdateCrmDealAutomationDto {
-  @IsOptional()
-  @IsIn(CRM_AUTOMATION_OVERRIDES)
-  override?: CrmAutomationOverride;
-  @IsOptional() @IsString() conversationId?: string | null;
-  @IsOptional() @IsObject() typeOverrides?: Partial<
-    Record<CrmCustomerAutomationType, CrmAutomationOverride>
-  >;
-}
-
-export class UpdateCrmContactAutomationDto {
-  @IsOptional() @IsBoolean() enabled?: boolean;
-  @IsOptional()
-  @IsIn(CRM_AUTOMATION_LOCALES)
-  locale?: CrmAutomationLocale | null;
-  @IsOptional() @IsObject() typeOverrides?: Partial<
-    Record<CrmCustomerAutomationType, CrmAutomationOverride>
-  >;
-}
-
-export class UpdateCrmCustomerFollowUpDto {
-  @IsOptional() @IsDateString() dueAt!: string | null;
-}
-
-export class CrmAutomationStatusQueryDto {
-  @IsString() contactId!: string;
-  @IsOptional() @IsString() dealId?: string;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50) limit?: number =
-    20;
 }
 
 /** Internal-only input used by sync/sending adapters in later stages. */
@@ -232,7 +189,6 @@ export class StoreCrmMessageInput {
   @IsIn(CRM_MESSAGE_DIRECTIONS) direction!: CrmMessageDirection;
   @IsIn(CRM_MESSAGE_ORIGINS) origin!: CrmMessageOrigin;
   @IsOptional() @IsString() sentByMemberId?: string | null;
-  @IsOptional() @IsString() automationExecutionId?: string | null;
   @IsOptional() @IsString() @MaxLength(100_000) text?: string | null;
   @IsOptional() @IsObject() contentMetadata?: Record<string, unknown> | null;
   @IsDateString() sentAt!: string;

@@ -80,8 +80,6 @@ export class TelegramCrmInboxCommandService {
           ownerMemberId: access.memberId,
           createdByUserId: userId,
           source: 'TELEGRAM_INBOX',
-          automatedMessagesEnabled: false,
-          automatedMessagesEnabledAt: null,
           lastContactAt: latestDate(
             signals._max.lastMessageAt,
             signals._max.lastInboundAt,

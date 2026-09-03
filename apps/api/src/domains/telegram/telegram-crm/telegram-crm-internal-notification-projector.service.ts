@@ -172,36 +172,6 @@ export class TelegramCrmInternalNotificationProjector
     return true;
   }
 
-  async automationBlocked(
-    tx: Prisma.TransactionClient,
-    facts: readonly {
-      id: string;
-      workspaceId: string;
-      contactId: string;
-      telegramAdSaleId: string | null;
-      reason: string | null;
-    }[],
-  ) {
-    return this.immediate(
-      tx,
-      facts.map((fact) => ({
-        workspaceId: fact.workspaceId,
-        contactId: fact.contactId,
-        type: OperationsNotificationType.CRM_AUTOMATION_BLOCKED,
-        priority: 'HIGH' as const,
-        sourceKey: `automation:${fact.id}`,
-        copyKey: 'crm.notification.automationBlocked',
-        title: 'CRM automation needs attention',
-        body: 'A customer automation could not be delivered.',
-        metadata: {
-          automationExecutionId: fact.id,
-          dealId: fact.telegramAdSaleId,
-          reason: fact.reason,
-        },
-      })),
-    );
-  }
-
   async placementMissed(
     tx: Prisma.TransactionClient,
     fact: {
@@ -244,7 +214,7 @@ export class TelegramCrmInternalNotificationProjector
     facts: readonly {
       workspaceId: string;
       contactId: string;
-      type: 'CRM_AUTOMATION_BLOCKED' | 'CRM_PLACEMENT_FAILURE';
+      type: 'CRM_PLACEMENT_FAILURE';
       priority: 'HIGH';
       sourceKey: string;
       copyKey: string;

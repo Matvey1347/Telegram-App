@@ -23,14 +23,6 @@ describe('TelegramCrmSettingsService', () => {
     expect(result).toMatchObject({
       workspaceId: 'workspace-1',
       defaultCrmSenderAccountId: null,
-      automation: {
-        customerTelegramAutomationsEnabled: false,
-        typeEnabled: {
-          PRE_PUBLICATION_REMINDER: false,
-          PUBLISHED_LINKS: false,
-          FOLLOW_UP: false,
-        },
-      },
       createdAt: null,
       updatedAt: null,
     });

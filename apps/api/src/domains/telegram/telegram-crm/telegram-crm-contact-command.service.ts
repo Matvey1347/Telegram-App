@@ -42,8 +42,6 @@ export class TelegramCrmContactCommandService {
         ownerMemberId,
         createdByUserId: userId,
         nextContactAt: dto.nextContactAt ? new Date(dto.nextContactAt) : null,
-        automatedMessagesEnabled: false,
-        automatedMessagesEnabledAt: null,
         archivedAt:
           dto.stage === TelegramCrmContactStage.ARCHIVED ? new Date() : null,
       },

@@ -12,7 +12,6 @@ export function crmPermissions(access?: EffectiveWorkspaceAccess) {
     canEditOwn: has("editOwn"),
     canEditAll: has("editAny") || has("manage"),
     canSendManual: has("sendManualMessages"),
-    canManageAutomation: has("manageAutomation"),
     canViewSales: owner || permissions.has("adSales.sales.view"),
     canCreateSales:
       owner || permissions.has("adSales.sales.create") || permissions.has("adSales.sales.manage"),

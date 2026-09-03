@@ -40,7 +40,6 @@ function optimisticMessage(
     direction: "OUTBOUND",
     origin: "MANUAL",
     sentByMemberId: null,
-    automationExecutionId: null,
     text,
     contentMetadata: null,
     sentAt,

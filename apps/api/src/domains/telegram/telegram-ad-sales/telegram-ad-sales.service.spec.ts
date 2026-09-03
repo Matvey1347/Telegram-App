@@ -226,9 +226,6 @@ function createService() {
       delete: jest.fn(),
       findUniqueOrThrow: jest.fn(),
     },
-    telegramCrmCustomerAutomationExecution: {
-      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
-    },
     telegramAdProduct: {
       findFirst: jest.fn(),
       create: jest.fn(),
@@ -406,7 +403,6 @@ function createService() {
     encryptionService,
     telegramChannelAccessService,
     telegramBotApiClient,
-    undefined,
     notificationProjector,
   );
   return {
@@ -693,14 +689,10 @@ describe('TelegramAdSalesService', () => {
   });
 
   it.each(['dedicated endpoint', 'generic PATCH'] as const)(
-    '%s cancellation atomically blocks customer automations even when fact publication fails',
+    '%s cancellation does not invoke Telegram delivery',
     async (path) => {
       const { service, prisma, mtprotoClient, telegramBotApiClient } =
         createService();
-      const automationFacts = {
-        cancelled: jest.fn().mockResolvedValue(false),
-      };
-      (service as any).automationFacts = automationFacts;
       const existing = makeSale({
         status: TelegramAdSaleStatus.DRAFT,
         payments: [],
@@ -725,22 +717,6 @@ describe('TelegramAdSalesService', () => {
         await service.cancelSale('user-1', 'sale-1');
       }
 
-      expect(
-        prisma.telegramCrmCustomerAutomationExecution.updateMany,
-      ).toHaveBeenCalledWith({
-        where: {
-          workspaceId: 'ws-1',
-          telegramAdSaleId: 'sale-1',
-          status: { in: ['PENDING', 'PROCESSING'] },
-        },
-        data: expect.objectContaining({
-          status: 'CANCELLED',
-          reason: 'DEAL_CANCELLED',
-          leaseOwner: null,
-          leaseExpiresAt: null,
-        }),
-      });
-      expect(automationFacts.cancelled).toHaveBeenCalledWith('ws-1', 'sale-1');
       expect(mtprotoClient.deletePublishedMessages).not.toHaveBeenCalled();
       expect(telegramBotApiClient.deleteMessage).not.toHaveBeenCalled();
     },
@@ -779,12 +755,6 @@ describe('TelegramAdSalesService', () => {
     );
     expect(prisma.telegramAdSale.delete).toHaveBeenCalledWith({
       where: { id: 'sale-1', workspaceId: 'ws-1' },
-    });
-    expect(
-      prisma.telegramCrmCustomerAutomationExecution.updateMany,
-    ).toHaveBeenCalledWith({
-      where: { workspaceId: 'ws-1', telegramAdSaleId: 'sale-1' },
-      data: { telegramAdSaleId: null, placementId: null },
     });
     expect(prisma.transaction.deleteMany).toHaveBeenCalledWith({
       where: {

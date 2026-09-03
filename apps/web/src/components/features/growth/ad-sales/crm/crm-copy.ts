@@ -4,10 +4,6 @@ export const crmCopy = {
   "nav.deals": "Deals",
   "nav.calendar": "Calendar",
   "nav.analytics": "Analytics",
-  "automation.on": "Automated messages · ON",
-  "automation.off": "Automated messages · OFF",
-  "automation.confirm":
-    "Allow future automated Telegram messages for this customer.",
   "states.loadingContacts": "Loading contacts…",
   "states.emptyContacts": "No contacts match this view.",
   "states.loadingInbox": "Loading inbox…",

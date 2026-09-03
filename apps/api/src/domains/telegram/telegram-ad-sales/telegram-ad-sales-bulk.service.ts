@@ -26,7 +26,6 @@ import { utcDateKey, zonedDateTimeToUtc } from './domain/timezone';
 import { TelegramAdSalesBulkCreateDto } from './dto';
 import { telegramAdSalesAdvisoryLockKey } from './telegram-ad-sales-reservation';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
-import { TelegramAdSalesCustomerAutomationFactsService } from './telegram-ad-sales-customer-automation-facts.service';
 
 type ResolvedChannel = {
   id: string;
@@ -75,7 +74,6 @@ export class TelegramAdSalesBulkService {
     private readonly logger: ApplicationLoggerService,
     private readonly responseCache: ResponseCacheService,
     private readonly salesService: TelegramAdSalesService,
-    private readonly automationFacts?: TelegramAdSalesCustomerAutomationFactsService,
   ) {}
 
   async create(
@@ -100,7 +98,6 @@ export class TelegramAdSalesBulkService {
     this.assertBulkPriceRules(expanded);
 
     const saleIds = new Set<string>();
-    const automationEligibleAt = new Date();
     const rowResults = new Map<string, TelegramAdSalesBulkRowResult>();
     await this.prisma.$transaction(async (tx) => {
       const advertiserIdsByKey = await this.resolveAdvertisers(
@@ -131,7 +128,6 @@ export class TelegramAdSalesBulkService {
             settlementCurrency: dto.defaults.settlementCurrency,
             createdByUserId: userId,
             assignedMemberId,
-            customerAutomationEligibleAt: automationEligibleAt,
           },
         });
         saleIds.add(sale.id);
@@ -201,11 +197,6 @@ export class TelegramAdSalesBulkService {
       }
     });
 
-    await this.automationFacts?.dealsCreated(
-      workspaceId,
-      [...saleIds],
-      automationEligibleAt,
-    );
 
     this.responseCache.clearByPrefix(
       `telegram-ad-sales:availability:${workspaceId}:`,

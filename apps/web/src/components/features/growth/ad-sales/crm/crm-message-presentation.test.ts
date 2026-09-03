@@ -13,7 +13,6 @@ const message = (patch: Partial<CrmMessageListItem>): CrmMessageListItem => ({
   direction: "INBOUND",
   origin: "TELEGRAM_SYNC",
   sentByMemberId: null,
-  automationExecutionId: null,
   text: "Hello",
   contentMetadata: null,
   sentAt: "2026-08-31T12:00:00.000Z",
@@ -38,10 +37,7 @@ describe("crmMessageOriginLabel", () => {
     );
   });
 
-  it("labels automation, system and attributed manual messages explicitly", () => {
-    expect(crmMessageOriginLabel(message({ origin: "AUTOMATION" }))).toBe(
-      "Automated",
-    );
+  it("labels system and attributed manual messages explicitly", () => {
     expect(crmMessageOriginLabel(message({ origin: "SYSTEM" }))).toBe("System");
     expect(
       crmMessageOriginLabel(

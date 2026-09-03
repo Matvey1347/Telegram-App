@@ -16,7 +16,6 @@ export * from "./types/telegram-post-buttons";
 export * from "./types/telegram-capabilities";
 export * from "./types/telegram-user-account-login";
 export * from "./types/telegram-crm";
-export * from "./types/telegram-crm-automations";
 export * from "./types/telegram-crm-inbox";
 export * from "./types/telegram-crm-runtime";
 export * from "./types/telegram-ad-sales";

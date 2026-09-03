@@ -24,7 +24,6 @@ import { authKeys, memberKeys } from "@/lib/query-keys";
 import { crmPermissions } from "./crm-permissions";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 import { CrmConversations } from "./crm-conversations";
-import { CrmAutomationSection } from "./crm-automation";
 import { CrmContactDeals } from "./crm-contact-deals";
 import { CrmContactInfoForm } from "./crm-contact-info-form";
 import { CrmContactNotes } from "./crm-contact-notes";
@@ -39,8 +38,7 @@ export type CrmContactAction =
   | "deals"
   | "tasks"
   | "notes"
-  | "info"
-  | "automation";
+  | "info";
 
 export const crmContactActionLabels: Record<CrmContactAction, string> = {
   conversations: "Conversations",
@@ -48,7 +46,6 @@ export const crmContactActionLabels: Record<CrmContactAction, string> = {
   tasks: "Tasks",
   notes: "Notes / Activities",
   info: "Contact info",
-  automation: "Automation",
 };
 
 export function CrmContactActionModal({
@@ -137,7 +134,6 @@ export function CrmContactActionModal({
           contact={contact}
           canEdit={canEdit}
           canViewSales={permissions.canViewSales}
-          canManageAutomation={permissions.canManageAutomation}
           canEditAll={permissions.canEditAll}
           updatePending={update.isPending}
           updateError={Boolean(update.error)}
@@ -157,7 +153,6 @@ function ContactActionContent({
   contact,
   canEdit,
   canViewSales,
-  canManageAutomation,
   canEditAll,
   updatePending,
   updateError,
@@ -169,7 +164,6 @@ function ContactActionContent({
   contact: CrmContactDetail;
   canEdit: boolean;
   canViewSales: boolean;
-  canManageAutomation: boolean;
   canEditAll: boolean;
   updatePending: boolean;
   updateError: boolean;
@@ -191,15 +185,6 @@ function ContactActionContent({
     return <CrmContactTasks contact={contact} canEdit={canEdit} />;
   if (action === "notes")
     return <CrmContactNotes contact={contact} canEdit={canEdit} />;
-  if (action === "automation") {
-    return (
-      <CrmAutomationSection
-        contact={contact}
-        canManageWorkspace={canManageAutomation}
-        canManageContact={canManageAutomation && canEdit}
-      />
-    );
-  }
   return (
     <div className="space-y-4">
       {canEdit ? (

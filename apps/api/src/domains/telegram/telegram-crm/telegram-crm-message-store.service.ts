@@ -38,12 +38,6 @@ export class TelegramCrmMessageStoreService {
           );
         }
         await this.requireMember(tx, input.workspaceId, input.sentByMemberId);
-        await this.requireAutomationExecution(
-          tx,
-          input.workspaceId,
-          input.automationExecutionId,
-          conversation.contactId,
-        );
         const sentAt = new Date(input.sentAt);
         const created = await tx.telegramCrmMessage.create({
           data: {
@@ -54,7 +48,6 @@ export class TelegramCrmMessageStoreService {
             direction: input.direction,
             origin: input.origin,
             sentByMemberId: input.sentByMemberId ?? null,
-            automationExecutionId: input.automationExecutionId ?? null,
             text: input.text ?? null,
             contentMetadata:
               (input.contentMetadata as Prisma.InputJsonValue | undefined) ??
@@ -105,22 +98,6 @@ export class TelegramCrmMessageStoreService {
     ) {
       throw new BadRequestException('Manual messages require a sending Member');
     }
-    if (
-      input.origin === TelegramCrmMessageOrigin.AUTOMATION &&
-      !input.automationExecutionId
-    ) {
-      throw new BadRequestException(
-        'Automation messages require an idempotent execution',
-      );
-    }
-    if (
-      input.origin !== TelegramCrmMessageOrigin.AUTOMATION &&
-      input.automationExecutionId
-    ) {
-      throw new BadRequestException(
-        'Only Automation messages may reference an automation execution',
-      );
-    }
   }
 
   private async requireMember(
@@ -135,31 +112,6 @@ export class TelegramCrmMessageStoreService {
     });
     if (!member)
       throw new BadRequestException('Sending Member is not in workspace');
-  }
-
-  private async requireAutomationExecution(
-    tx: Prisma.TransactionClient,
-    workspaceId: string,
-    automationExecutionId: string | null | undefined,
-    contactId: string | null,
-  ) {
-    if (!automationExecutionId) return;
-    if (!contactId) {
-      throw new BadRequestException(
-        'Automation messages require a Contact-linked Conversation',
-      );
-    }
-    const execution = await tx.telegramCrmCustomerAutomationExecution.findFirst(
-      {
-        where: { id: automationExecutionId, workspaceId, contactId },
-        select: { id: true },
-      },
-    );
-    if (!execution) {
-      throw new BadRequestException(
-        'Automation execution does not match the message Contact',
-      );
-    }
   }
 
   private conversationUpdate(

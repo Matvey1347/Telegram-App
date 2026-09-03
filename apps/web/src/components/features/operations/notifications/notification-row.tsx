@@ -8,7 +8,6 @@ import { formatDateTime } from "@/lib/date-format";
 const TYPE_LABELS: Record<OperationsNotificationItem["type"], string> = {
   CRM_MESSAGE_RECEIVED: "Message received",
   CRM_FOLLOW_UP_DUE: "Follow-up due",
-  CRM_AUTOMATION_BLOCKED: "Automation blocked",
   CRM_PLACEMENT_FAILURE: "Placement failure",
 };
 

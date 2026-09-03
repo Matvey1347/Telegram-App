@@ -4,7 +4,6 @@ import { useDeferredValue, useMemo, useState, type ReactNode } from "react";
 import {
   Activity,
   ArrowUpRight,
-  Bot,
   CircleDollarSign,
   Contact,
   ListTodo,
@@ -207,20 +206,7 @@ export function CrmContactCard({
             }
           />
         ) : null}
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-          <span
-            className={
-              contact.automatedMessagesEnabled
-                ? "text-emerald-300"
-                : "text-neutral-500"
-            }
-          >
-            {crmText(
-              contact.automatedMessagesEnabled
-                ? "automation.on"
-                : "automation.off",
-            )}
-          </span>
+        <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
           {contact.conversationAccounts.length ? (
             <span className="truncate text-neutral-500">
               via{" "}
@@ -255,7 +241,6 @@ const contactActions: Array<{
   { id: "tasks", label: "Tasks", icon: ListTodo },
   { id: "notes", label: "Notes / Activities", icon: Activity },
   { id: "info", label: "Contact info", icon: Contact },
-  { id: "automation", label: "Automation", icon: Bot },
 ];
 
 function ContactActionsMenu({

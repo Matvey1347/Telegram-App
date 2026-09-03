@@ -9,6 +9,10 @@ describe('operations notifications migration', () => {
     ),
     'utf8',
   );
+  const schema = readFileSync(
+    join(process.cwd(), 'prisma/schema.prisma'),
+    'utf8',
+  );
 
   it('is schema-only and grants no notification or automation work', () => {
     expect(sql).not.toMatch(/INSERT INTO "OperationsNotification"/);
@@ -30,5 +34,15 @@ describe('operations notifications migration', () => {
     expect(sql).toContain(`r."mode" = 'DENYLIST'`);
     expect(sql).toContain(`r."systemKey" IS DISTINCT FROM 'OWNER'`);
     expect(sql).toContain(`'DENY'::"WorkspaceRolePermissionEffect"`);
+  });
+
+  it('keeps composite relation constraint names aligned with the migration', () => {
+    for (const constraintName of [
+      'OperationsNotification_recipient_workspace_fkey',
+      'OperationsNotificationPreference_member_workspace_fkey',
+    ]) {
+      expect(sql).toContain(`CONSTRAINT "${constraintName}"`);
+      expect(schema).toContain(`map: "${constraintName}"`);
+    }
   });
 });

@@ -108,15 +108,6 @@ export const crmContactDetailSelect = {
     take: CONTACT_DETAIL_RELATION_LIMIT,
     select: { tag: { select: { id: true, name: true, color: true } } },
   },
-  sales: {
-    orderBy: [{ updatedAt: 'desc' as const }, { id: 'desc' as const }],
-    take: CONTACT_DETAIL_RELATION_LIMIT,
-    select: {
-      id: true,
-      customerAutomationOverride: true,
-      customerAutomationEligibleAt: true,
-    },
-  },
   _count: {
     select: {
       sales: { where: { status: { in: [...ACTIVE_DEAL_STATUSES] } } },
@@ -221,11 +212,6 @@ export function mapCrmContactDetail(
       agreedAmount: String(item.agreedAmount),
       paidAmount: String(item.paidAmount),
       outstandingAmount: String(item.outstandingAmount),
-    })),
-    dealAutomation: row.sales.map((sale) => ({
-      dealId: sale.id,
-      override: sale.customerAutomationOverride,
-      eligibleAt: sale.customerAutomationEligibleAt?.toISOString() ?? null,
     })),
     counts: {
       conversations: row._count.crmConversations,

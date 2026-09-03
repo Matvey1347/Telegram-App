@@ -1,7 +1,6 @@
 export const OPERATIONS_NOTIFICATION_TYPES = [
   "CRM_MESSAGE_RECEIVED",
   "CRM_FOLLOW_UP_DUE",
-  "CRM_AUTOMATION_BLOCKED",
   "CRM_PLACEMENT_FAILURE",
 ] as const;
 
@@ -20,7 +19,6 @@ export type OperationsNotificationPriority =
 export const OPERATIONS_NOTIFICATION_COPY_KEYS = [
   "crm.notification.messageReceived",
   "crm.notification.followUpDue",
-  "crm.notification.automationBlocked",
   "crm.notification.placementFailure",
 ] as const;
 

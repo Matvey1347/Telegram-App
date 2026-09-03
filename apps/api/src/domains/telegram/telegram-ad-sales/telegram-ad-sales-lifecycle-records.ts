@@ -36,22 +36,6 @@ export async function cancelAdSaleRecords(
   saleId: string,
   include: Prisma.TelegramAdSaleInclude,
 ) {
-  const now = new Date();
-  await tx.telegramCrmCustomerAutomationExecution.updateMany({
-    where: {
-      workspaceId,
-      telegramAdSaleId: saleId,
-      status: { in: ['PENDING', 'PROCESSING'] },
-    },
-    data: {
-      status: 'CANCELLED',
-      completedAt: now,
-      reason: 'DEAL_CANCELLED',
-      nextAttemptAt: null,
-      leaseOwner: null,
-      leaseExpiresAt: null,
-    },
-  });
   await tx.telegramAdSale.update({
     where: { id: saleId, workspaceId },
     data: { status: 'CANCELLED' },
@@ -81,10 +65,6 @@ export async function deleteAdSaleRecords(
   },
 ) {
   const { workspaceId, saleId } = input;
-  await tx.telegramCrmCustomerAutomationExecution.updateMany({
-    where: { workspaceId, telegramAdSaleId: saleId },
-    data: { telegramAdSaleId: null, placementId: null },
-  });
   await tx.telegramAdSale.delete({ where: { id: saleId, workspaceId } });
   if (input.transactionIds.length) {
     await tx.transaction.deleteMany({

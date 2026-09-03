@@ -28,7 +28,6 @@ function message(id: string, key: string | null, deliveryState: CrmMessageListIt
     direction: "OUTBOUND",
     origin: "MANUAL",
     sentByMemberId: null,
-    automationExecutionId: null,
     text: "Hello",
     contentMetadata: null,
     sentAt: "2026-08-31T12:00:00.000Z",

@@ -26,9 +26,9 @@ describe('Telegram CRM Stage 2 migration safety', () => {
     );
   });
 
-  it('does not create domain rows or enable any automation/runtime switch', () => {
+  it('does not create domain rows or enable any runtime switch', () => {
     expect(migrationSql).not.toMatch(
-      /INSERT\s+INTO\s+"(?:TelegramAdvertiser|TelegramCrmPeer|TelegramCrmConversation|TelegramCrmMessage|TelegramCrmAccountSyncState|TelegramAdvertiserAutomationExecution|TelegramCrmCustomerAutomationExecution)"/i,
+      /INSERT\s+INTO\s+"(?:TelegramAdvertiser|TelegramCrmPeer|TelegramCrmConversation|TelegramCrmMessage|TelegramCrmAccountSyncState|TelegramAdvertiserAutomationExecution)"/i,
     );
     expect(migrationSql).not.toMatch(
       /UPDATE\s+"(?:TelegramAdvertiser|TelegramUserAccountIntegration|TelegramAdCrmWorkspaceSettings)"/i,

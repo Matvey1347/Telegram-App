@@ -13,7 +13,6 @@ const message = (id: string, timestamp = sentAt) => ({
   direction: 'INBOUND',
   origin: 'TELEGRAM_SYNC',
   sentByMemberId: null,
-  automationExecutionId: null,
   text: id,
   contentMetadata: null,
   sentAt: timestamp,
