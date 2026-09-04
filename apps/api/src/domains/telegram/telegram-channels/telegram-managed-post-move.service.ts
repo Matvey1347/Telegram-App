@@ -78,6 +78,7 @@ export class TelegramManagedPostMoveService {
     postId: string,
     targetTelegramChannelId: string,
     keepGroup: boolean,
+    actorUserId?: string,
   ) {
     const post = await this.prisma.telegramManagedPost.findFirst({
       where: { id: postId, workspaceId },
@@ -106,6 +107,12 @@ export class TelegramManagedPostMoveService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      await this.telegramManagedPostRevisionStore.createManagedPostRevision(
+        tx,
+        post,
+        'before_move',
+        actorUserId,
+      );
       await tx.telegramManagedPost.update({
         where: { id: post.id },
         data: {
@@ -163,6 +170,7 @@ export class TelegramManagedPostMoveService {
             post.publishMode === 'CAPTION_THEN_TEXT'
               ? 'CAPTION_THEN_TEXT'
               : 'IMAGES_THEN_TEXT',
+            actorUserId,
           );
         return {
           post: scheduledPost,
@@ -297,6 +305,7 @@ export class TelegramManagedPostMoveService {
       postId,
       targetChannel.id,
       false,
+      userId,
     );
     const results = [this.moveBulkResultItem(moved.result, 1, 1)];
     return {
@@ -365,6 +374,7 @@ export class TelegramManagedPostMoveService {
         post.id,
         targetChannel.id,
         true,
+        userId,
       );
       rawResults.push(moved.result);
       await onProgress?.(
@@ -385,6 +395,7 @@ export class TelegramManagedPostMoveService {
             movedPostId,
             originalChannelId,
             true,
+            userId,
           );
           if (!rolledBack.result.success) {
             rollbackFailures.push(
@@ -471,6 +482,7 @@ export class TelegramManagedPostMoveService {
         tx,
         post,
         'before_delete',
+        userId,
       );
       const deleted = await tx.telegramManagedPost.delete({
         where: { id: postId },

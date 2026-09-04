@@ -200,6 +200,41 @@ describe('TelegramManagedPostQueryService unified read model', () => {
     );
   });
 
+  it('returns every managed post without pagination when all is requested', async () => {
+    const managedPosts = Array.from({ length: 140 }, (_, index) => ({
+      id: `managed-${index}`,
+      workspaceId: 'workspace-1',
+      telegramChannelId: 'channel-1',
+      telegramMessageIds: [],
+      telegramMessageUrls: [],
+      assignedMember: null,
+      group: null,
+    }));
+    const { service, prisma } = setup(managedPosts, []);
+
+    const result = await service.managedPosts('user-1', 'channel-1', {
+      all: true,
+    });
+
+    expect(result.items).toHaveLength(140);
+    expect(result.pagination).toEqual(
+      expect.objectContaining({
+        page: 1,
+        pageSize: 140,
+        totalItems: 140,
+        totalPages: 1,
+        hasNextPage: false,
+      }),
+    );
+    expect(prisma.telegramManagedPost.count).not.toHaveBeenCalled();
+    expect(prisma.telegramManagedPost.findMany).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        skip: expect.anything(),
+        take: expect.anything(),
+      }),
+    );
+  });
+
   it('keeps collection GET pure and performs no source work for non-published filters', async () => {
     const { service, prisma, syntheticRead } = setup([], []);
 

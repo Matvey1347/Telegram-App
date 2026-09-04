@@ -52,6 +52,7 @@ export class TelegramManagedPostPublicationService {
     postId: string,
     scheduleAt?: Date,
     longTextMode: 'IMAGES_THEN_TEXT' | 'CAPTION_THEN_TEXT' = 'IMAGES_THEN_TEXT',
+    actorUserId?: string,
   ) {
     try {
       return await this.telegramManagedPostPublisherService.publishManagedPost(
@@ -60,6 +61,7 @@ export class TelegramManagedPostPublicationService {
         postId,
         scheduleAt,
         longTextMode,
+        actorUserId,
       );
     } catch (error) {
       const message =
@@ -83,7 +85,10 @@ export class TelegramManagedPostPublicationService {
               },
             ],
           },
-          data: { status: TelegramManagedPostStatus.FAILED, lastError: message },
+          data: {
+            status: TelegramManagedPostStatus.FAILED,
+            lastError: message,
+          },
         });
       } catch {
         // Failure observability is best effort and must never replace the
@@ -142,6 +147,7 @@ export class TelegramManagedPostPublicationService {
       undefined,
       (dto.longTextMode as 'IMAGES_THEN_TEXT' | 'CAPTION_THEN_TEXT') ||
         'IMAGES_THEN_TEXT',
+      userId,
     );
   }
 
@@ -166,6 +172,7 @@ export class TelegramManagedPostPublicationService {
       scheduledAt,
       (dto.longTextMode as 'IMAGES_THEN_TEXT' | 'CAPTION_THEN_TEXT') ||
         'IMAGES_THEN_TEXT',
+      userId,
     );
   }
 
@@ -240,6 +247,7 @@ export class TelegramManagedPostPublicationService {
         tx,
         post,
         'before_return_to_draft',
+        userId,
       );
       const updated = await tx.telegramManagedPost.update({
         where: { id: postId },

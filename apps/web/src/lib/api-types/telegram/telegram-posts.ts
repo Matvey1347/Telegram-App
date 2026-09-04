@@ -187,6 +187,8 @@ export type TelegramManagedPostRevision = {
   publishMode?: string | null;
   lastError?: string | null;
   assignedMemberId: string;
+  actorMemberId?: string | null;
+  actorMember?: MemberSummary | null;
   icon?: string | null;
   iconPresentation?: ResolvedEmoji | null;
   groupId?: string | null;

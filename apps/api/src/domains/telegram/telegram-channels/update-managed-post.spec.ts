@@ -94,6 +94,86 @@ describe('TelegramChannelsService updateManagedPost', () => {
     expect(editReplyMarkup).toHaveBeenCalled();
   });
 
+  it('passes the original schedule time when editing an MTProto scheduled message', async () => {
+    const scheduleAt = new Date('2026-09-06T15:15:00Z');
+    const editPostText = jest.fn().mockResolvedValue({
+      updatedCount: 1,
+      unchangedCount: 0,
+    });
+    const service = new TelegramManagedPostEditTransportService(
+      { editPostText } as never,
+      {
+        sourcesForChannel: jest.fn().mockResolvedValue([
+          {
+            sourceId: 'account-1',
+            sourceType: TelegramSourceType.MTPROTO,
+            permissions: { canEditMessages: true, canPostMessages: true },
+          },
+        ]),
+      } as never,
+      {} as never,
+      {
+        mtprotoChannelReference: jest.fn().mockReturnValue({
+          telegramChatId: '-100123',
+          username: 'example',
+        }),
+        connectedAccount: jest.fn().mockResolvedValue({ id: 'account-1' }),
+        accountCredentials: jest.fn().mockReturnValue({
+          apiId: '1',
+          apiHash: 'hash',
+          session: 'session',
+        }),
+      } as never,
+      { telegramTextEditNote: jest.fn().mockReturnValue('Updated.') } as never,
+      {
+        resolveInternalPostLinksForPublish: jest
+          .fn()
+          .mockResolvedValue('Updated text'),
+        renderManagedPostText: jest.fn().mockReturnValue({
+          richHtml: null,
+          publishMode: 'TEXT_ONLY',
+          captionHtml: '',
+          followupHtmlParts: [],
+          textHtmlParts: ['Updated text'],
+        }),
+      } as never,
+    );
+
+    await service.editManagedPostTextInTelegram({
+      workspaceId: 'workspace',
+      channelId: 'channel',
+      post: {
+        id: 'post-scheduled',
+        status: TelegramManagedPostStatus.SCHEDULED,
+        text: 'Old text',
+        imageUrls: [],
+        publishMode: 'TEXT_ONLY',
+        sourceId: 'account-1',
+        sourceType: TelegramSourceType.MTPROTO,
+        scheduledAt: scheduleAt,
+        telegramScheduledMessageIds: ['153'],
+        telegramMessageIds: [],
+        telegramMessageUrls: [],
+        buttonRows: [],
+      },
+      channel: {
+        id: 'channel',
+        workspaceId: 'workspace',
+        username: 'example',
+        telegramChatId: '-100123',
+      },
+      nextText: 'Updated text',
+      buttonRows: [],
+    });
+
+    expect(editPostText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageIds: ['153'],
+        scheduleAt,
+      }),
+    );
+  });
+
   it('updates an existing scheduled Telegram message instead of recreating it', async () => {
     const post = {
       id: 'post-scheduled',
@@ -174,12 +254,17 @@ describe('TelegramChannelsService updateManagedPost', () => {
         nextText: 'New text',
       }),
     );
+    expect(editManagedPostTextInTelegram).toHaveBeenCalledWith(
+      expect.objectContaining({
+        post: expect.objectContaining({ scheduledAt: post.scheduledAt }),
+      }),
+    );
     expect(prisma.telegramManagedPost.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: post.id } }),
     );
   });
 
-  it('recovers telegram message ids from the saved URL and reuses an editable source', async () => {
+  it('allows a member to edit text when the submitted assignee is unchanged', async () => {
     const post = {
       id: 'post-1',
       workspaceId: 'workspace',
@@ -229,6 +314,9 @@ describe('TelegramChannelsService updateManagedPost', () => {
         create: createRevision,
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
+      workspaceMember: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'member-olga' }),
+      },
       $queryRaw: jest
         .fn()
         .mockResolvedValue([{ exists: '"TelegramManagedPostRevision"' }]),
@@ -251,13 +339,16 @@ describe('TelegramChannelsService updateManagedPost', () => {
         },
       ]),
     };
+    const resolveAssignedMemberId = jest
+      .fn()
+      .mockRejectedValue(
+        new Error('Workspace members can only assign entities to themselves'),
+      );
     const service = createTelegramChannelsTestHarness(
       prisma as never,
       {
         resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace'),
-        resolveAssignedMemberId: jest.fn().mockResolvedValue({
-          assignedMemberId: 'member-1',
-        }),
+        resolveAssignedMemberId,
       } as never,
       { clearByPrefix: jest.fn() } as never,
       {} as never,
@@ -273,7 +364,6 @@ describe('TelegramChannelsService updateManagedPost', () => {
       apiHash: 'hash',
       session: 'session',
     });
-    service['createManagedPostRevision'] = createRevision;
     service['resolveInternalPostLinksForPublish'] = jest
       .fn()
       .mockResolvedValue('Updated text');
@@ -294,6 +384,12 @@ describe('TelegramChannelsService updateManagedPost', () => {
     expect(mtprotoClient.editPostText).toHaveBeenCalledWith(
       expect.objectContaining({
         messageIds: ['34'],
+      }),
+    );
+    expect(resolveAssignedMemberId).not.toHaveBeenCalled();
+    expect(createRevision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ actorMemberId: 'member-olga' }),
       }),
     );
     expect(update).toHaveBeenCalledWith(
@@ -655,8 +751,8 @@ describe('TelegramChannelsService updateManagedPost', () => {
         id: 'post-1',
         status: TelegramManagedPostStatus.PUBLISHED,
         text: 'Old text',
-        imageUrls: [],
-        publishMode: 'TEXT_ONLY',
+        imageUrls: ['https://cdn.example.com/post.jpg?size=large&fit=cover'],
+        publishMode: 'IMAGE_WITH_CAPTION',
         sourceId: 'account-1',
         sourceType: TelegramSourceType.MTPROTO,
         scheduledAt: null,
@@ -679,7 +775,7 @@ describe('TelegramChannelsService updateManagedPost', () => {
     expect(botCall).toHaveBeenCalledWith('bot-token', 'sendRichMessage', {
       chat_id: '-100123',
       rich_message: {
-        html: '<h1>Quote</h1>\n\n<table bordered><tr><th>Header 1</th><th>Header 2</th></tr><tr><td>Cell 1</td><td>Cell 2</td></tr></table>',
+        html: '<img src="https://cdn.example.com/post.jpg?size=large&amp;fit=cover"/>\n<h1>Quote</h1>\n\n<table bordered><tr><th>Header 1</th><th>Header 2</th></tr><tr><td>Cell 1</td><td>Cell 2</td></tr></table>',
       },
     });
     expect(deletePublishedMessages).toHaveBeenCalledWith(

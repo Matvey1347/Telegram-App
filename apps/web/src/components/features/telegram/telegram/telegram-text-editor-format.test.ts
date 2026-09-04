@@ -1,10 +1,29 @@
 import { describe, expect, it } from "vitest";
 import {
   editorHtmlToTelegramMarkup,
+  telegramPostLinkMarkup,
   telegramMarkupToEditorHtml,
 } from "./telegram-text-editor-format";
 
 describe("telegram-text-editor-format", () => {
+  it("uses the stable Telegram URL for a synchronized channel post", () => {
+    expect(
+      telegramPostLinkMarkup("тест 1", {
+        id: "telegram-post:source-post-id",
+        primaryTelegramMessageUrl: "https://t.me/c/3988203250/2",
+      }),
+    ).toBe("[тест 1](https://t.me/c/3988203250/2)");
+  });
+
+  it("keeps managed posts as deferred internal links", () => {
+    expect(
+      telegramPostLinkMarkup("Managed", {
+        id: "managed-post-id",
+        primaryTelegramMessageUrl: "https://t.me/c/3988203250/3",
+      }),
+    ).toBe("[Managed](tg-post:managed-post-id)");
+  });
+
   it("renders stored markup as formatted editor html", () => {
     expect(
       telegramMarkupToEditorHtml(

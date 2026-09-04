@@ -160,11 +160,13 @@ describe('TelegramChannelsService importManagedPosts', () => {
       id: 'channel',
       workspaceId: 'workspace',
     });
-    return { service, prisma, create, posts };
+    const createRevision = jest.fn().mockResolvedValue(undefined);
+    service['createManagedPostRevision'] = createRevision;
+    return { service, prisma, create, createRevision, posts };
   };
 
   it('creates selected rows in the selected group with managed-post defaults and normalized positions', async () => {
-    const { service, prisma, create, posts } = setup();
+    const { service, prisma, create, createRevision, posts } = setup();
 
     const result = await service.importManagedPosts('user', 'channel', {
       postGroupId: 'group-1',
@@ -204,6 +206,12 @@ describe('TelegramChannelsService importManagedPosts', () => {
           groupPosition: 1,
         }),
       }),
+    );
+    expect(createRevision).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'post-1' }),
+      'created',
+      'user',
     );
     expect(prisma.icon.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -346,7 +354,7 @@ describe('TelegramChannelsService importManagedPosts', () => {
       })),
     });
 
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(9);
     expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function));
   });
 

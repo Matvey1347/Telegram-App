@@ -221,6 +221,61 @@ describe('TelegramManagedPostIdentityService', () => {
     expect(data).not.toHaveProperty('imageUrls');
   });
 
+  it('verifies a Bot API rich message by its journaled id when GramJS has no rich text', async () => {
+    const update = jest.fn().mockResolvedValue({});
+    const richMessage = {
+      id: '10',
+      text: '',
+      date: '2026-09-04T00:31:00.000Z',
+      hasMedia: true,
+      groupedId: null,
+    };
+    const prisma = {
+      telegramManagedPost: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'rich-post',
+            workspaceId: 'workspace',
+            telegramChannelId: 'channel',
+            status: 'PUBLISHED',
+            text: '# Heading',
+            imageUrls: ['https://cdn.example.com/post.jpg'],
+            publishMode: 'RICH_MESSAGE',
+            scheduledAt: null,
+            publishedAt: new Date('2026-09-04T00:31:00.000Z'),
+            telegramScheduledMessageIds: [],
+            telegramMessageIds: ['10'],
+            telegramMessageUrls: ['https://t.me/c/3988203250/10'],
+            telegramIdVerificationStatus: 'UNVERIFIED',
+            telegramLinkSource: 'AUTO',
+            telegramChannel: { telegramChatId: '3988203250' },
+          },
+        ]),
+        update,
+      },
+    };
+    const identity = new TelegramManagedPostIdentityService(prisma as never);
+
+    await identity.reconcile({
+      workspaceId: 'workspace',
+      postId: 'rich-post',
+      explicit: true,
+      loadRemote: jest.fn().mockResolvedValue({
+        published: [richMessage],
+        recentPublished: [richMessage],
+      }),
+      repairDependants: jest.fn().mockResolvedValue(undefined),
+    });
+
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'rich-post' },
+      data: expect.objectContaining({
+        telegramIdVerificationStatus: 'VERIFIED',
+        telegramMessageIds: ['10'],
+      }),
+    });
+  });
+
   it('marks a manual mismatch without overwriting the manual id or url', async () => {
     const update = jest.fn().mockResolvedValue({});
     const post = {

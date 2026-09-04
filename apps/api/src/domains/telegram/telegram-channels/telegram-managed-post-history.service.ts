@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import {
   TelegramManagedPostIdVerificationStatus,
   TelegramManagedPostLinkSource,
@@ -95,15 +91,24 @@ export class TelegramManagedPostHistoryService {
       select: { id: true },
     });
     if (!post) throw managedPostNotFound();
-    return this.telegramManagedPostGroupPresentationService.attachManagedPostIcons(
-      await this.telegramManagedPostRevisionStore.listManagedPostRevisions(
-        this.prisma,
-        {
-          telegramManagedPostId: postId,
-          workspaceId,
-        },
-      ),
-    );
+    const revisions =
+      await this.telegramManagedPostGroupPresentationService.attachManagedPostIcons(
+        await this.telegramManagedPostRevisionStore.listManagedPostRevisions(
+          this.prisma,
+          {
+            telegramManagedPostId: postId,
+            workspaceId,
+          },
+        ),
+      );
+    return revisions.map(({ actorMember, ...revision }) => ({
+      ...revision,
+      actorMember: actorMember
+        ? this.telegramManagedPostGroupPresentationService.memberSummary(
+            actorMember,
+          )
+        : null,
+    }));
   }
 
   async restoreManagedPostRevision(
@@ -140,6 +145,7 @@ export class TelegramManagedPostHistoryService {
         tx,
         post,
         'before_restore',
+        userId,
       );
       const restored = await tx.telegramManagedPost.update({
         where: { id: postId },
@@ -256,7 +262,10 @@ export class TelegramManagedPostHistoryService {
       );
     }
     let assignedMemberId: string | undefined;
-    if (dto.assignedMemberId !== undefined) {
+    if (
+      dto.assignedMemberId !== undefined &&
+      dto.assignedMemberId !== post.assignedMemberId
+    ) {
       const resolved = await this.workspaceService.resolveAssignedMemberId(
         userId,
         dto.assignedMemberId,
@@ -324,7 +333,8 @@ export class TelegramManagedPostHistoryService {
     const nextText = dto.text ?? post.text ?? '';
     const canEditRemoteTelegramText =
       (post.status === TelegramManagedPostStatus.PUBLISHED &&
-        post.telegramRemoteStatus === TelegramManagedPostRemoteStatus.PUBLISHED) ||
+        post.telegramRemoteStatus ===
+          TelegramManagedPostRemoteStatus.PUBLISHED) ||
       (post.status === TelegramManagedPostStatus.SCHEDULED &&
         post.telegramScheduledMessageIds.length > 0);
     const channel =
@@ -363,6 +373,7 @@ export class TelegramManagedPostHistoryService {
         tx,
         post,
         'before_update',
+        userId,
       );
       return tx.telegramManagedPost.update({
         where: { id: postId },

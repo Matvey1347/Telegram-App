@@ -338,6 +338,11 @@ export class TelegramChannelInviteLinksQueryDto extends PaginationQueryDto {
 
 export class TelegramManagedPostsQueryDto extends PaginationQueryDto {
   @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  all?: boolean;
+
+  @IsOptional()
   @Transform(({ value }) => {
     const values = Array.isArray(value) ? value : [value];
     return values.flatMap((item) => String(item).split(',')).filter(Boolean);

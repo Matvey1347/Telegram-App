@@ -18,10 +18,12 @@ describe('telegramMarkupToHtml', () => {
     expect(telegramMarkupToHtml(':::pullquote credit="Ada"\nQuote\n:::')).toBe(
       '<blockquote>Quote\n<i>— Ada</i></blockquote>',
     );
-    expect(telegramMarkupToRichHtml(':::pullquote credit="Ada"\nQuote\n:::')).toBe(
-      '<aside>Quote<cite>Ada</cite></aside>',
+    expect(
+      telegramMarkupToRichHtml(':::pullquote credit="Ada"\nQuote\n:::'),
+    ).toBe('<aside>Quote<cite>Ada</cite></aside>');
+    expect(requiresNativeTelegramRichMessage(':::pullquote\nQuote\n:::')).toBe(
+      true,
     );
-    expect(requiresNativeTelegramRichMessage(':::pullquote\nQuote\n:::')).toBe(true);
     expect(
       telegramHtmlToMtprotoHtml('<aside>Quote<cite>Ada</cite></aside>'),
     ).toBe('<blockquote>Quote\n<i>— Ada</i></blockquote>');
@@ -75,6 +77,43 @@ describe('telegramMarkupToHtml', () => {
       requiresNativeTelegramRichMessage(':::table header\n| A | B |\n:::'),
     ).toBe(true);
     expect(requiresNativeTelegramRichMessage('**ordinary bold**')).toBe(false);
+  });
+  it('renders the reported combined rich post without leaking source directives', () => {
+    const source = [
+      ':::pullquote',
+      'Выносная цитата',
+      ':::',
+      '',
+      ':::pullquote credit="тест"',
+      'Выносная цитата',
+      ':::',
+      '',
+      '# Цитата',
+      '###### Цитата',
+      '',
+      ':::table header',
+      '| Заголовок 1 | Заголовок 2 |',
+      '| Ячейка 1 | Ячейка 2 |',
+      ':::',
+      '',
+      '[тест 1](https://t.me/c/3988203250/2)',
+    ].join('\n');
+
+    const richHtml = telegramMarkupToRichHtml(source);
+    expect(requiresNativeTelegramRichMessage(source)).toBe(true);
+    expect(richHtml).toContain('<aside>Выносная цитата</aside>');
+    expect(richHtml).toContain(
+      '<aside>Выносная цитата<cite>тест</cite></aside>',
+    );
+    expect(richHtml).toContain('<h1>Цитата</h1>');
+    expect(richHtml).toContain('<h6>Цитата</h6>');
+    expect(richHtml).toContain(
+      '<table bordered><tr><th>Заголовок 1</th><th>Заголовок 2</th></tr><tr><td>Ячейка 1</td><td>Ячейка 2</td></tr></table>',
+    );
+    expect(richHtml).toContain(
+      '<a href="https://t.me/c/3988203250/2">тест 1</a>',
+    );
+    expect(richHtml).not.toContain(':::');
   });
   it('does not convert unresolved internal post links', () => {
     expect(telegramMarkupToHtml('[Post](tg-post:post_1)')).toBe(

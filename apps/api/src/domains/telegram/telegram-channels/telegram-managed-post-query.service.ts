@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { TelegramManagedPostStatus, type Prisma } from '@prisma/client';
 import {
   createPaginatedResponse,
@@ -280,40 +280,40 @@ export class TelegramManagedPostQueryService {
     const includeSynthetic =
       !statuses.length ||
       statuses.includes(TelegramManagedPostStatus.PUBLISHED);
-    const [managedTotal, syntheticTotal] = await Promise.all([
-      this.prisma.telegramManagedPost.count({ where }),
+    const [syntheticTotal, managedTotal] = await Promise.all([
       includeSynthetic
         ? this.syntheticRead.count(workspaceId, channelId, query.search)
         : Promise.resolve(0),
+      query.all
+        ? Promise.resolve(null)
+        : this.prisma.telegramManagedPost.count({ where }),
     ]);
     const managedTake = Math.min(
       pagination.take,
-      Math.max(0, managedTotal - pagination.skip),
+      Math.max(0, (managedTotal ?? 0) - pagination.skip),
     );
-    const [managedRows, syntheticRows] = await Promise.all([
-      managedTake
-        ? this.prisma.telegramManagedPost.findMany({
+    const managedRows =
+      !query.all && managedTake === 0
+        ? []
+        : await this.prisma.telegramManagedPost.findMany({
             where,
             orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-            skip: pagination.skip,
-            take: managedTake,
+            ...(query.all ? {} : { skip: pagination.skip, take: managedTake }),
             include: this.managedPostInclude,
-          })
-        : Promise.resolve([]),
-      includeSynthetic
-        ? this.syntheticRead.findPage(
-            workspaceId,
-            channelId,
-            query.search,
-            Math.max(0, pagination.skip - managedTotal),
-            Math.max(0, pagination.take - managedTake),
-          )
-        : Promise.resolve([]),
-    ]);
-    const enriched = await this.enrichManaged(
-      managedRows as ManagedPostReadRow[],
-      channel,
-    );
+          });
+    const resolvedManagedTotal = managedTotal ?? managedRows.length;
+    const syntheticRows = includeSynthetic
+      ? await this.syntheticRead.findPage(
+          workspaceId,
+          channelId,
+          query.search,
+          query.all ? 0 : Math.max(0, pagination.skip - resolvedManagedTotal),
+          query.all
+            ? syntheticTotal
+            : Math.max(0, pagination.take - managedTake),
+        )
+      : [];
+    const enriched = await this.enrichManaged(managedRows, channel);
     const member = syntheticRows.length
       ? await this.syntheticMember(userId, workspaceId, channel)
       : null;
@@ -323,10 +323,11 @@ export class TelegramManagedPostQueryService {
         this.syntheticPost(workspaceId, channel, member!, post),
       ),
     ];
+    const totalItems = resolvedManagedTotal + syntheticTotal;
     return createPaginatedResponse(
       await this.presentation.attachManagedPostIcons(items),
-      managedTotal + syntheticTotal,
-      pagination,
+      totalItems,
+      query.all ? { page: 1, pageSize: Math.max(1, totalItems) } : pagination,
     );
   }
 

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -12,6 +12,7 @@ import { TelegramChannelsSupportService } from './telegram-channels-support.serv
 import { TelegramManagedPostGroupPresentationService } from './telegram-managed-post-group-presentation.service';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
 import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-media-storage.service';
+import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 import {
   telegramPostsBadRequest,
@@ -29,6 +30,7 @@ export class TelegramManagedPostCommandService {
     private readonly telegramPostGroupsService: TelegramPostGroupsService,
     private readonly telegramManagedPostPublicationService: TelegramManagedPostPublicationService,
     private readonly telegramManagedPostMediaStorageService: TelegramManagedPostMediaStorageService,
+    private readonly telegramManagedPostRevisionStore: TelegramManagedPostRevisionStore,
   ) {}
 
   private readonly iconSelect = {
@@ -209,34 +211,43 @@ export class TelegramManagedPostCommandService {
       client: Prisma.TransactionClient | PrismaService,
       groupId?: string | null,
       groupPosition?: number | null,
-    ) =>
-      this.createManagedPostRecord(client, {
+    ) => {
+      const created = await this.createManagedPostRecord(client, {
         ...prepared,
         groupId,
         groupPosition,
       });
+      await this.telegramManagedPostRevisionStore.createManagedPostRevision(
+        client,
+        created,
+        'created',
+        userId,
+      );
+      return created;
+    };
     const requestedGroupId = options.groupId?.trim() || null;
-    const post = requestedGroupId
-      ? await this.prisma.$transaction(async (tx) => {
-          const group = await tx.postGroup.findFirst({
-            where: {
-              id: requestedGroupId,
-              workspaceId: prepared.workspaceId,
-              telegramChannelId: channelId,
-            },
-            select: { id: true },
-          });
-          if (!group)
-            throw telegramPostsNotFound(
-              'TELEGRAM_POST_GROUP_NOT_FOUND',
-              'Post group is unavailable',
-            );
-          const groupPosition = await tx.telegramManagedPost.count({
-            where: { groupId: group.id },
-          });
-          return create(tx, group.id, groupPosition);
-        })
-      : await create(this.prisma);
+    const post = await this.prisma.$transaction(async (tx) => {
+      if (requestedGroupId) {
+        const group = await tx.postGroup.findFirst({
+          where: {
+            id: requestedGroupId,
+            workspaceId: prepared.workspaceId,
+            telegramChannelId: channelId,
+          },
+          select: { id: true },
+        });
+        if (!group)
+          throw telegramPostsNotFound(
+            'TELEGRAM_POST_GROUP_NOT_FOUND',
+            'Post group is unavailable',
+          );
+        const groupPosition = await tx.telegramManagedPost.count({
+          where: { groupId: group.id },
+        });
+        return create(tx, group.id, groupPosition);
+      }
+      return create(tx);
+    });
     const [hydrated] =
       await this.telegramManagedPostGroupPresentationService.attachManagedPostIcons(
         [post],

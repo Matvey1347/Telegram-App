@@ -31,6 +31,7 @@ import { editorCommandDetails, effectiveEditorShortcuts, shortcutFromEvent } fro
 import type { EditorCommandId } from "@telegram-system/shared";
 import { editorWrapActions } from "./telegram-text-editor-commands";
 import { TelegramTextEditorToolbar } from "./telegram-text-editor-toolbar";
+import { telegramPostLinkMarkup } from "./telegram-text-editor-format";
 import { useI18n } from "@/providers/i18n-provider";
 
 type TelegramTextEditorProps = {
@@ -433,7 +434,7 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
   const applyInternalLink = (target: TelegramManagedPostLinkTarget) => {
     const { start, end } = linkSelectionRef.current;
     const selected = value.slice(start, end) || target.title;
-    const markup = `[${selected}](tg-post:${target.id})`;
+    const markup = telegramPostLinkMarkup(selected, target);
     commitValue(
       `${value.slice(0, start)}${markup}${value.slice(end)}`,
       start,

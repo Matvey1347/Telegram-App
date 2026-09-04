@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { TelegramManagedPostStatus } from '@prisma/client';
 import { createHash } from 'crypto';
 import { WorkspaceService } from '../../../common/workspace.service';
@@ -18,6 +14,7 @@ import { TelegramManagedPostCommandService } from './telegram-managed-post-comma
 import { TelegramManagedPostImportParserService } from './telegram-managed-post-import-parser.service';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
 import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-media-storage.service';
+import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 import {
   postGroupNotFound,
@@ -36,6 +33,7 @@ export class TelegramManagedPostImportService {
     private readonly telegramManagedPostCommandService: TelegramManagedPostCommandService,
     private readonly telegramManagedPostImportParserService: TelegramManagedPostImportParserService,
     private readonly telegramManagedPostMediaStorageService: TelegramManagedPostMediaStorageService,
+    private readonly telegramManagedPostRevisionStore: TelegramManagedPostRevisionStore,
   ) {}
 
   private readonly iconSelect = {
@@ -234,6 +232,10 @@ export class TelegramManagedPostImportService {
                 channelId,
                 post.id,
                 row.value.scheduledAt,
+                post.publishMode === 'CAPTION_THEN_TEXT'
+                  ? 'CAPTION_THEN_TEXT'
+                  : 'IMAGES_THEN_TEXT',
+                userId,
               );
             rows.push({ index: row.index, status: 'scheduled', post });
           } catch (error) {
@@ -289,25 +291,34 @@ export class TelegramManagedPostImportService {
           await this.telegramManagedPostMediaStorageService.persistImageUrls(
             row.value.imageUrls,
           );
-        post =
-          await this.telegramManagedPostCommandService.createManagedPostRecord(
-            this.prisma,
-            {
-              workspaceId,
-              channelId,
-              assignedMemberId,
-              title: row.value.title,
-              text: row.value.text,
-              imageUrls,
-              icon: row.value.icon,
-              groupId: effectiveGroupId,
-              groupPosition:
-                effectiveGroupId === defaultGroup?.id
-                  ? defaultGroupPositionStart + defaultGroupPositionOffset++
-                  : null,
-              jsonImportKey: identity,
-            },
+        post = await this.prisma.$transaction(async (tx) => {
+          const created =
+            await this.telegramManagedPostCommandService.createManagedPostRecord(
+              tx,
+              {
+                workspaceId,
+                channelId,
+                assignedMemberId,
+                title: row.value.title,
+                text: row.value.text,
+                imageUrls,
+                icon: row.value.icon,
+                groupId: effectiveGroupId,
+                groupPosition:
+                  effectiveGroupId === defaultGroup?.id
+                    ? defaultGroupPositionStart + defaultGroupPositionOffset++
+                    : null,
+                jsonImportKey: identity,
+              },
+            );
+          await this.telegramManagedPostRevisionStore.createManagedPostRevision(
+            tx,
+            created,
+            'created',
+            userId,
           );
+          return created;
+        });
         if (effectiveGroupId) touchedGroupIds.add(effectiveGroupId);
         rows.push({ index: row.index, status: 'created', post });
         if (row.value.scheduledAt) {
@@ -318,6 +329,10 @@ export class TelegramManagedPostImportService {
                 channelId,
                 post.id,
                 row.value.scheduledAt,
+                post.publishMode === 'CAPTION_THEN_TEXT'
+                  ? 'CAPTION_THEN_TEXT'
+                  : 'IMAGES_THEN_TEXT',
+                userId,
               );
             rows[rows.length - 1] = {
               index: row.index,

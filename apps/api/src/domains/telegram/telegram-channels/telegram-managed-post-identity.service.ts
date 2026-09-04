@@ -8,7 +8,9 @@ import {
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   extractInternalPostLinkIds,
+  extractSynchronizedTelegramPostLinkIds,
   replaceInternalPostLinks,
+  replaceSynchronizedTelegramPostLinks,
 } from '../../../telegram/shared/internal-post-links';
 import { parseTelegramHtml } from '../../../telegram/shared/telegram-html-parser';
 import {
@@ -203,28 +205,64 @@ export class TelegramManagedPostIdentityService {
   }) {
     if (!this.prisma) throw new Error('Prisma is required for link resolution');
     const targetIds = extractInternalPostLinkIds(params.text);
-    if (!targetIds.length) return params.text;
+    const synchronizedTargetIds = extractSynchronizedTelegramPostLinkIds(
+      params.text,
+    );
+    if (!targetIds.length && !synchronizedTargetIds.length) return params.text;
     if (targetIds.includes(params.currentPostId)) {
       throw telegramPostsBadRequest(
         'TELEGRAM_POST_NOT_EDITABLE',
         'Cannot publish post because it contains an internal link to itself.',
       );
     }
-    const targets = await this.prisma.telegramManagedPost.findMany({
-      where: { workspaceId: params.workspaceId, id: { in: targetIds } },
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        telegramRemoteStatus: true,
-        lastError: true,
-        scheduledAt: true,
-        imageUrls: true,
-        telegramMessageIds: true,
-        telegramIdVerificationStatus: true,
-        telegramChannel: { select: { telegramChatId: true } },
-      },
-    });
+    const targets = targetIds.length
+      ? await this.prisma.telegramManagedPost.findMany({
+          where: { workspaceId: params.workspaceId, id: { in: targetIds } },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            telegramRemoteStatus: true,
+            lastError: true,
+            scheduledAt: true,
+            imageUrls: true,
+            telegramMessageIds: true,
+            telegramIdVerificationStatus: true,
+            telegramChannel: { select: { telegramChatId: true } },
+          },
+        })
+      : [];
+    const synchronizedTargets = synchronizedTargetIds.length
+      ? await this.prisma.telegramPost.findMany({
+          where: {
+            workspaceId: params.workspaceId,
+            id: { in: synchronizedTargetIds },
+          },
+          select: {
+            id: true,
+            telegramMessageId: true,
+            telegramChannel: { select: { telegramChatId: true } },
+          },
+        })
+      : [];
+    const synchronizedUrls = new Map<string, string>();
+    for (const target of synchronizedTargets) {
+      const url = buildStableTelegramPostUrl({
+        telegramChatId: target.telegramChannel.telegramChatId,
+        messageId: target.telegramMessageId,
+      });
+      if (url) synchronizedUrls.set(target.id, url);
+    }
+    const unresolvedSynchronizedIds = synchronizedTargetIds.filter(
+      (targetId) => !synchronizedUrls.has(targetId),
+    );
+    if (unresolvedSynchronizedIds.length) {
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_PUBLISH_FAILED',
+        `Cannot publish post because some synchronized Telegram post links are unresolved: ${unresolvedSynchronizedIds.join(', ')}.`,
+        { unresolvedCount: unresolvedSynchronizedIds.length },
+      );
+    }
     const byId = new Map(targets.map((target) => [target.id, target]));
     const errors = targetIds.flatMap((targetId) => {
       const target = byId.get(targetId);
@@ -248,7 +286,8 @@ export class TelegramManagedPostIdentityService {
         target.status === TelegramManagedPostStatus.PUBLISHED &&
         target.telegramIdVerificationStatus ===
           TelegramManagedPostIdVerificationStatus.VERIFIED &&
-        target.telegramRemoteStatus === TelegramManagedPostRemoteStatus.PUBLISHED;
+        target.telegramRemoteStatus ===
+          TelegramManagedPostRemoteStatus.PUBLISHED;
       if (!publishedAndVerified) {
         return [
           `"${target.title}" (${target.id}) is not published or has a broken Telegram link`,
@@ -296,7 +335,10 @@ export class TelegramManagedPostIdentityService {
         : null;
       if (url) urls.set(target.id, url);
     }
-    const rendered = replaceInternalPostLinks(params.text, urls);
+    const rendered = replaceInternalPostLinks(
+      replaceSynchronizedTelegramPostLinks(params.text, synchronizedUrls),
+      urls,
+    );
     return params.currentScheduleAt
       ? rendered.replace(/\[([^\]\n]+)\]\(tg-post:[a-zA-Z0-9_-]+\)/g, '$1')
       : rendered;
@@ -528,15 +570,34 @@ export class TelegramManagedPostIdentityService {
       }
       for (const post of channelPosts) {
         result.checked += 1;
-        const match = this.findPublishedIdentity(
-          {
-            text: post.text,
-            imageCount: post.imageUrls.length,
-            publishMode: post.publishMode,
-            scheduledAt: post.scheduledAt ?? post.publishedAt,
-          },
-          remote.recentPublished,
-        );
+        // GramJS currently exposes Bot API rich messages without their rich
+        // text blocks. Verify those messages by the exact journaled ID returned
+        // by sendRichMessage instead of incorrectly marking them as missing.
+        const richMessages =
+          post.publishMode === 'RICH_MESSAGE' &&
+          post.telegramMessageIds.length > 0
+            ? post.telegramMessageIds.map((messageId) =>
+                remote.published.find((message) => message.id === messageId),
+              )
+            : [];
+        const richMatch =
+          richMessages.length > 0 && richMessages.every(Boolean)
+            ? {
+                messageIds: [...post.telegramMessageIds],
+                matchedMessage: richMessages[0]!,
+              }
+            : null;
+        const match =
+          richMatch ??
+          this.findPublishedIdentity(
+            {
+              text: post.text,
+              imageCount: post.imageUrls.length,
+              publishMode: post.publishMode,
+              scheduledAt: post.scheduledAt ?? post.publishedAt,
+            },
+            remote.recentPublished,
+          );
         const currentIdsMatch =
           Boolean(match) &&
           match!.messageIds.length === post.telegramMessageIds.length &&

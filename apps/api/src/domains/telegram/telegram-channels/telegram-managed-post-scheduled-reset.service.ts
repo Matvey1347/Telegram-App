@@ -97,6 +97,7 @@ export class TelegramManagedPostScheduledResetService {
           tx,
           posts,
           'before_channel_scheduled_reset',
+          userId,
         );
         const updated = await tx.telegramManagedPost.updateMany({
           where: {

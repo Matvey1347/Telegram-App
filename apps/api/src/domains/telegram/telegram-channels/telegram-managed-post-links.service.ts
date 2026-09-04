@@ -109,6 +109,7 @@ export class TelegramManagedPostLinksService {
           tx,
           currentPost,
           'before_manual_link',
+          userId,
         );
         const updated = await tx.telegramManagedPost.update({
           where: { id: postId },
@@ -190,6 +191,7 @@ export class TelegramManagedPostLinksService {
         tx,
         currentPost,
         'before_manual_link',
+        userId,
       );
       const updated = await tx.telegramManagedPost.update({
         where: { id: postId },

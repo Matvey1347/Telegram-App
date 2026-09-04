@@ -528,9 +528,9 @@ describe('TelegramChannelsService characterization seams', () => {
       ),
     );
     expect(service['moveManagedPostInternal'].mock.calls).toEqual([
-      ['workspace', 'first', 'target', true],
-      ['workspace', 'second', 'target', true],
-      ['workspace', 'first', 'source', true],
+      ['workspace', 'first', 'target', true, 'user'],
+      ['workspace', 'second', 'target', true, 'user'],
+      ['workspace', 'first', 'source', true, 'user'],
     ]);
   });
 });

@@ -1,6 +1,8 @@
 import {
   extractInternalPostLinkIds,
+  extractSynchronizedTelegramPostLinkIds,
   replaceInternalPostLinks,
+  replaceSynchronizedTelegramPostLinks,
 } from './internal-post-links';
 
 describe('internal post links', () => {
@@ -28,5 +30,18 @@ describe('internal post links', () => {
         new Map<string, string>(),
       ),
     ).toBe('[First](tg-post:post_1)');
+  });
+
+  it('extracts and replaces a legacy double-prefixed synchronized post link', () => {
+    const text = '[тест 1](tg-post:telegram-post:source-post-id)';
+    expect(extractSynchronizedTelegramPostLinkIds(text)).toEqual([
+      'source-post-id',
+    ]);
+    expect(
+      replaceSynchronizedTelegramPostLinks(
+        text,
+        new Map([['source-post-id', 'https://t.me/c/3988203250/2']]),
+      ),
+    ).toBe('[тест 1](https://t.me/c/3988203250/2)');
   });
 });

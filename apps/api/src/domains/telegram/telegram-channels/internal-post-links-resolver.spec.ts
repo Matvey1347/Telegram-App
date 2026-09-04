@@ -7,7 +7,10 @@ import {
 } from './__fixtures__/telegram-channels.test-harness';
 
 describe('TelegramChannelsService internal post link resolver', () => {
-  const serviceWithTargets = (targets: unknown[]) => {
+  const serviceWithTargets = (
+    targets: unknown[],
+    synchronizedTargets: unknown[] = [],
+  ) => {
     const prisma = {
       telegramManagedPost: {
         findMany: jest.fn().mockResolvedValue(
@@ -16,6 +19,9 @@ describe('TelegramChannelsService internal post link resolver', () => {
             ...(target as Record<string, unknown>),
           })),
         ),
+      },
+      telegramPost: {
+        findMany: jest.fn().mockResolvedValue(synchronizedTargets),
       },
     };
     const responseCache = {
@@ -119,6 +125,37 @@ describe('TelegramChannelsService internal post link resolver', () => {
         '[Published](tg-post:published)',
       ),
     ).resolves.toBe('[Published](https://t.me/c/3976683330/33)');
+  });
+
+  it('repairs a saved double-prefixed link to a synchronized Telegram post', async () => {
+    const service = serviceWithTargets(
+      [],
+      [
+        {
+          id: 'source-post-id',
+          telegramMessageId: '2',
+          telegramChannel: { telegramChatId: '3988203250' },
+        },
+      ],
+    );
+    await expect(
+      service['resolveInternalPostLinksForPublish'](
+        'workspace',
+        'current',
+        '[тест 1](tg-post:telegram-post:source-post-id)',
+      ),
+    ).resolves.toBe('[тест 1](https://t.me/c/3988203250/2)');
+  });
+
+  it('rejects a missing synchronized Telegram post instead of publishing raw markup', async () => {
+    const service = serviceWithTargets([]);
+    await expect(
+      service['resolveInternalPostLinksForPublish'](
+        'workspace',
+        'current',
+        '[Missing](tg-post:telegram-post:missing-source)',
+      ),
+    ).rejects.toThrow('synchronized Telegram post links are unresolved');
   });
 
   it('ignores cached public telegramMessageUrls for internal link resolution', async () => {

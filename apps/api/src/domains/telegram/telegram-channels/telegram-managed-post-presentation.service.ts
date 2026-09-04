@@ -44,17 +44,28 @@ export class TelegramManagedPostPresentationService {
     longTextMode: 'IMAGES_THEN_TEXT' | 'CAPTION_THEN_TEXT' = 'IMAGES_THEN_TEXT',
   ): ManagedPostPublishRender {
     const html = telegramMarkupToHtml(text);
-    const richHtml =
-      !imageUrls.length && requiresNativeTelegramRichMessage(text)
-        ? telegramMarkupToRichHtml(text)
-        : null;
+    const richHtml = requiresNativeTelegramRichMessage(text)
+      ? [
+          ...imageUrls.map(
+            (url) =>
+              `<img src="${url.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"/>`,
+          ),
+          telegramMarkupToRichHtml(text),
+        ].join('\n')
+      : null;
     const [plainText] = parseTelegramHtml(html);
     let captionHtml = html;
     let followupHtmlParts: string[] = [];
     let textHtmlParts = [html];
     let publishMode = imageUrls.length ? 'IMAGE_WITH_CAPTION' : 'TEXT_ONLY';
 
-    if (imageUrls.length && plainText.length > limits.captionLengthMax) {
+    if (richHtml) publishMode = 'RICH_MESSAGE';
+
+    if (
+      !richHtml &&
+      imageUrls.length &&
+      plainText.length > limits.captionLengthMax
+    ) {
       publishMode = longTextMode;
       if (longTextMode === 'CAPTION_THEN_TEXT') {
         const [caption, remainder] = this.splitTelegramMarkupOnce(
@@ -74,6 +85,7 @@ export class TelegramManagedPostPresentationService {
         ).map((part) => telegramMarkupToHtml(part));
       }
     } else if (
+      !richHtml &&
       !imageUrls.length &&
       plainText.length > limits.messageLengthMax
     ) {

@@ -633,6 +633,7 @@ export class TelegramMtprotoClient {
     peerRef: unknown,
     messageId: string | number,
     html: string,
+    scheduleAt?: Date | null,
   ) {
     const { text, entities } = this.parseMtprotoHtml(html);
     try {
@@ -642,17 +643,17 @@ export class TelegramMtprotoClient {
           id: Number(messageId),
           message: text,
           entities,
+          scheduleDate: scheduleAt
+            ? Math.floor(scheduleAt.getTime() / 1000)
+            : undefined,
         }),
       );
       return true;
     } catch (error) {
-      if (this.isMessageNotModifiedError(error)) {
-        return false;
-      }
+      if (this.isMessageNotModifiedError(error)) return false;
       throw error;
     }
   }
-
   private toJsonSafe(value: unknown): unknown {
     if (
       value == null ||
@@ -2856,10 +2857,10 @@ export class TelegramMtprotoClient {
     channel?: StoredTelegramChannelReference;
     html: string;
     textHtmlParts?: string[];
+    scheduleAt?: Date | null;
     captionHtml?: string;
     followupHtmlParts?: string[];
     imageUrls: string[];
-    scheduleAt?: Date | null;
   }) {
     const client = await this.createClient(params);
     try {
@@ -2942,6 +2943,7 @@ export class TelegramMtprotoClient {
     captionHtml?: string;
     followupHtmlParts?: string[];
     textHtmlParts?: string[];
+    scheduleAt?: Date | null;
   }) {
     const client = await this.createClient(params);
     let updatedCount = 0;
@@ -2953,13 +2955,13 @@ export class TelegramMtprotoClient {
       const peerRef = resolved?.entity || params.channelRef;
       const mediaMessageIds = params.messageIds.slice(0, params.imageCount);
       const followupMessageIds = params.messageIds.slice(params.imageCount);
-
       if (params.imageCount > 0) {
         const captionUpdated = await this.editMessageWithEntities(
           client,
           peerRef,
           mediaMessageIds[0],
           params.captionHtml ?? '',
+          params.scheduleAt,
         );
         if (captionUpdated) updatedCount += 1;
         else unchangedCount += 1;
@@ -2969,19 +2971,20 @@ export class TelegramMtprotoClient {
             peerRef,
             followupMessageIds[index],
             params.followupHtmlParts?.[index] ?? '',
+            params.scheduleAt,
           );
           if (messageUpdated) updatedCount += 1;
           else unchangedCount += 1;
         }
         return { updatedCount, unchangedCount };
       }
-
       for (let index = 0; index < params.messageIds.length; index += 1) {
         const messageUpdated = await this.editMessageWithEntities(
           client,
           peerRef,
           params.messageIds[index],
           params.textHtmlParts?.[index] ?? '',
+          params.scheduleAt,
         );
         if (messageUpdated) updatedCount += 1;
         else unchangedCount += 1;
@@ -2991,17 +2994,14 @@ export class TelegramMtprotoClient {
       await this.closeClient(client);
     }
   }
-
   private convertImageBufferWithSips(buffer: Buffer, contentType: string) {
     return convertTelegramPublishImageWithSips(buffer, contentType);
   }
-
   private downloadPublishImage(url: string, index: number) {
     return downloadTelegramPublishImage(url, index, (buffer, contentType) =>
       this.convertImageBufferWithSips(buffer, contentType),
     );
   }
-
   async deleteScheduledPost(params: {
     apiId: string;
     apiHash: string;

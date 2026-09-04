@@ -33,6 +33,9 @@ describe('TelegramManagedPostCommandService group assignment', () => {
     const media = {
       persistImageUrls: jest.fn().mockResolvedValue([]),
     };
+    const revisions = {
+      createManagedPostRevision: jest.fn().mockResolvedValue(undefined),
+    };
     const service = new TelegramManagedPostCommandService(
       prisma as never,
       workspace as never,
@@ -42,12 +45,13 @@ describe('TelegramManagedPostCommandService group assignment', () => {
       {} as never,
       {} as never,
       media as never,
+      revisions as never,
     );
-    return { service, prisma, tx };
+    return { service, prisma, tx, revisions };
   }
 
   it('validates and assigns a group in the managed-post transaction', async () => {
-    const { service, prisma, tx } = setup();
+    const { service, prisma, tx, revisions } = setup();
 
     await service.createManagedPost(
       'user-1',
@@ -72,6 +76,12 @@ describe('TelegramManagedPostCommandService group assignment', () => {
           groupPosition: 3,
         }),
       }),
+    );
+    expect(revisions.createManagedPostRevision).toHaveBeenCalledWith(
+      tx,
+      { id: 'post-1' },
+      'created',
+      'user-1',
     );
   });
 

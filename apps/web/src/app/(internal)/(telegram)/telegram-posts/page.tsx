@@ -965,18 +965,14 @@ function TelegramPostWorkspace({
   const [creatingPostId, setCreatingPostId] = useState<string | null>(null);
   const creatingPostIdRef = useRef<string | null>(null);
   const [savingPostIds, setSavingPostIds] = useState<string[]>([]);
-  const postsPagination = usePagination({ initialPageSize: 50 });
   const postsPage = useQuery({
     queryKey: telegramPostKeys.managedList(channelId, {
-      page: postsPagination.page,
-      pageSize: postsPagination.pageSize,
+      all: true,
     }),
     queryFn: () =>
       telegramChannelsApi.managedPostsPage(channelId, {
-        page: postsPagination.page,
-        pageSize: postsPagination.pageSize,
+        all: true,
       }),
-    placeholderData: keepPreviousData,
   });
   const deepLinkedPost = useManagedPostDeepLink({
     channelId,
@@ -3174,11 +3170,12 @@ function TelegramPostWorkspace({
     const selectedMemberId =
       assignedMemberId ??
       (!editingPost && !memberSelectionTouched ? currentMemberId : null);
-    if (selectedMemberId) payload.assignedMemberId = selectedMemberId;
+    if (selectedMemberId && (!editingPost || memberSelectionTouched)) {
+      payload.assignedMemberId = selectedMemberId;
+    }
     const isPublishedEdit = editingMeta?.status === "PUBLISHED";
-    const shouldRepublishPublished = Boolean(
-      editingMeta?.status === "PUBLISHED" && telegramLinkBroken,
-    );
+    const shouldRepublishPublished =
+      editingMeta?.status === "PUBLISHED" && telegramLinkBroken;
     const pendingId =
       editingPost?.id ||
       `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -3197,7 +3194,6 @@ function TelegramPostWorkspace({
         : saveMode === "publish"
           ? "PUBLISHED"
           : "DRAFT";
-
     if (editingPost) {
       setSavingPostIds((current) => [...new Set([...current, pendingId])]);
     } else {
@@ -5969,14 +5965,6 @@ function TelegramPostWorkspace({
                         status: t(managedPostStatusKey(statusTab)),
                       })
                 }
-              />
-            ) : null}
-            {postsPage.data ? (
-              <Pagination
-                {...postsPage.data.pagination}
-                onPageChange={postsPagination.setPage}
-                onPageSizeChange={postsPagination.setPageSize}
-                loading={postsPage.isLoading || postsPage.isPlaceholderData}
               />
             ) : null}
           </Card>

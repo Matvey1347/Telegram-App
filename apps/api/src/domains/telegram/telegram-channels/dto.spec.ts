@@ -57,11 +57,13 @@ describe('TelegramManagedPostsQueryDto', () => {
   it('accepts repeated or comma-separated status filters and bounds page size', () => {
     const dto = plainToInstance(TelegramManagedPostsQueryDto, {
       status: ['DRAFT,SCHEDULED', 'FAILED'],
+      all: 'true',
       page: '2',
       pageSize: '100',
     });
 
     expect(dto.status).toEqual(['DRAFT', 'SCHEDULED', 'FAILED']);
+    expect(dto.all).toBe(true);
     expect(validateSync(dto)).toEqual([]);
 
     const oversized = plainToInstance(TelegramManagedPostsQueryDto, {

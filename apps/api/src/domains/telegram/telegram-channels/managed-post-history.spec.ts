@@ -9,6 +9,81 @@ import {
 } from './__fixtures__/telegram-channels.test-harness';
 
 describe('TelegramChannelsService managed post history', () => {
+  it('returns the member and resolved avatar for every recorded action', async () => {
+    const actorMember = {
+      id: 'member-olga',
+      role: 'MEMBER',
+      telegramUsername: 'olga',
+      avatarIconId: 'icon-olga',
+      avatarIcon: {
+        id: 'icon-olga',
+        type: 'image',
+        name: 'Olga avatar',
+        emoji: null,
+        imageUrl: 'https://example.com/olga.png',
+      },
+      user: { id: 'user-olga', name: 'Olga' },
+    };
+    const prisma = {
+      telegramManagedPost: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'post-1' }),
+      },
+    };
+    const service = createTelegramChannelsTestHarness(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    service['workspace'] = jest.fn().mockResolvedValue('workspace-1');
+    service['findOne'] = jest.fn().mockResolvedValue({ id: 'channel-1' });
+    service['listManagedPostRevisions'] = jest.fn().mockResolvedValue([
+      {
+        id: 'revision-1',
+        reason: 'before_update',
+        createdAt: new Date('2026-09-04T10:00:00.000Z'),
+        actorMemberId: 'member-olga',
+        actorMember,
+      },
+    ]);
+    service['attachManagedPostIcons'] = jest.fn(async (revisions) => revisions);
+    service['memberSummary'] = jest.fn((member) => ({
+      id: member.id,
+      role: member.role,
+      telegramUsername: member.telegramUsername,
+      user: member.user,
+      avatarPresentation: {
+        kind: 'image',
+        imageUrl: member.avatarIcon.imageUrl,
+      },
+    }));
+
+    const history = await service.managedPostHistory(
+      'user-olga',
+      'channel-1',
+      'post-1',
+    );
+
+    expect(history).toEqual([
+      expect.objectContaining({
+        id: 'revision-1',
+        actorMemberId: 'member-olga',
+        actorMember: expect.objectContaining({
+          id: 'member-olga',
+          user: { id: 'user-olga', name: 'Olga' },
+          avatarPresentation: {
+            kind: 'image',
+            imageUrl: 'https://example.com/olga.png',
+          },
+        }),
+      }),
+    ]);
+  });
+
   it('restores a revision into draft and keeps a backup of the current state', async () => {
     const currentPost = {
       id: 'post-1',

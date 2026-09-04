@@ -93,6 +93,7 @@ export class TelegramManagedPostDeletionService {
             tx,
             post,
             'before_delete',
+            userId,
           );
           await tx.telegramManagedPost.delete({ where: { id: post.id } });
         });

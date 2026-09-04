@@ -156,6 +156,21 @@ export type ManagedPostRevisionSource = {
 
 export type ManagedPostRevisionRecord = ManagedPostRevisionSource & {
   id: string;
+  actorMemberId: string | null;
+  actorMember?: {
+    id: string;
+    role: string;
+    telegramUsername: string | null;
+    avatarIconId: string | null;
+    avatarIcon: {
+      id: string;
+      type: 'emoji' | 'image';
+      name: string;
+      emoji: string | null;
+      imageUrl: string | null;
+    } | null;
+    user: { id: string; name: string };
+  } | null;
   reason: string;
   createdAt: Date;
 };

@@ -186,6 +186,7 @@ describe('TelegramManagedPostScheduledResetService', () => {
         expect.objectContaining({ id: 'post-2' }),
       ]),
       'before_channel_scheduled_reset',
+      'user-1',
     );
     const updateInput = updateInputs[0];
     expect(updateInput.where).toEqual({
@@ -239,6 +240,7 @@ describe('TelegramManagedPostScheduledResetService', () => {
       expect.anything(),
       [expect.objectContaining({ id: 'post-2' })],
       'before_channel_scheduled_reset',
+      'user-1',
     );
     expect(updateInputs[0]?.where).toMatchObject({
       id: { in: ['post-2'] },

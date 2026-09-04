@@ -113,6 +113,7 @@ export class TelegramManagedPostGroupBulkService {
             post.publishMode === 'CAPTION_THEN_TEXT'
               ? 'CAPTION_THEN_TEXT'
               : 'IMAGES_THEN_TEXT',
+            userId,
           );
         await this.appendBulkResult(
           results,
@@ -358,6 +359,7 @@ export class TelegramManagedPostGroupBulkService {
             post.publishMode === 'CAPTION_THEN_TEXT'
               ? 'CAPTION_THEN_TEXT'
               : 'IMAGES_THEN_TEXT',
+            userId,
           );
         await this.appendBulkResult(
           results,

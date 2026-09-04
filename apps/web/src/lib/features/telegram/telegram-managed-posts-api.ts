@@ -49,7 +49,11 @@ export function createTelegramManagedPostsApi({
   return {
     managedPostsPage: async (
       channelId: string,
-      params?: PaginationParams & { status?: string; search?: string },
+      params?: PaginationParams & {
+        status?: string;
+        search?: string;
+        all?: boolean;
+      },
     ) =>
       (
         await api.get<PaginatedResponse<TelegramManagedPost>>(

@@ -156,11 +156,29 @@ const messages = {
   "telegram.posts.support.downloadInstruction": "Скачать инструкцию для GPT",
   "telegram.posts.support.downloadingContextLabel": "Скачиваем контекст…",
   "telegram.posts.support.historyDescription":
-    "Перед потенциально опасными изменениями автоматические резервные копии хранятся 7 дней.",
+    "Здесь видно, кто и что сделал с публикацией. Копии для восстановления хранятся 7 дней.",
   "telegram.posts.support.loadingHistory": "Загружаем историю…",
   "telegram.posts.support.restore": "Восстановить",
   "telegram.posts.support.noBackups":
-    "Резервных копий пока нет. Они создаются перед публикацией, планированием, синхронизацией, восстановлением, удалением и ручным изменением.",
+    "Для этой публикации пока нет записанных действий.",
+  "telegram.posts.history.systemActor": "Система",
+  "telegram.posts.history.activity.created": "{name} создал(а) публикацию",
+  "telegram.posts.history.activity.updated": "{name} обновил(а) публикацию",
+  "telegram.posts.history.activity.published":
+    "{name} опубликовал(а) публикацию",
+  "telegram.posts.history.activity.scheduled":
+    "{name} запланировал(а) публикацию",
+  "telegram.posts.history.activity.linkChanged":
+    "{name} изменил(а) ссылку Telegram",
+  "telegram.posts.history.activity.restored":
+    "{name} восстановил(а) публикацию",
+  "telegram.posts.history.activity.deleted": "{name} удалил(а) публикацию",
+  "telegram.posts.history.activity.returnedToDraft":
+    "{name} вернул(а) публикацию в черновики",
+  "telegram.posts.history.activity.moved": "{name} переместил(а) публикацию",
+  "telegram.posts.history.activity.synchronized":
+    "{name} синхронизировал(а) публикацию с Telegram",
+  "telegram.posts.history.activity.changed": "{name} изменил(а) публикацию",
   "telegram.posts.support.readOnlyDescription":
     "«{title}» — публикация Telegram только для чтения. Содержимое и статистика обновляются из аналитики канала; здесь её нельзя изменить, запланировать, переместить, переупорядочить или удалить.",
   "telegram.posts.support.openOriginal":

@@ -146,11 +146,26 @@ const messages = {
   "telegram.posts.support.downloadInstruction": "Download GPT instruction",
   "telegram.posts.support.downloadingContextLabel": "Downloading Context…",
   "telegram.posts.support.historyDescription":
-    "Automatic backups are kept for 7 days before risky changes.",
+    "See who changed the post and what they did. Restorable copies are kept for 7 days.",
   "telegram.posts.support.loadingHistory": "Loading history…",
   "telegram.posts.support.restore": "Restore",
   "telegram.posts.support.noBackups":
-    "No backups yet. A backup is created before publish, schedule, sync changes, restore, delete, and manual edits.",
+    "No activity has been recorded for this post yet.",
+  "telegram.posts.history.systemActor": "System",
+  "telegram.posts.history.activity.created": "{name} created the post",
+  "telegram.posts.history.activity.updated": "{name} updated the post",
+  "telegram.posts.history.activity.published": "{name} published the post",
+  "telegram.posts.history.activity.scheduled": "{name} scheduled the post",
+  "telegram.posts.history.activity.linkChanged":
+    "{name} changed the Telegram link",
+  "telegram.posts.history.activity.restored": "{name} restored the post",
+  "telegram.posts.history.activity.deleted": "{name} deleted the post",
+  "telegram.posts.history.activity.returnedToDraft":
+    "{name} returned the post to drafts",
+  "telegram.posts.history.activity.moved": "{name} moved the post",
+  "telegram.posts.history.activity.synchronized":
+    "{name} synchronized the post with Telegram",
+  "telegram.posts.history.activity.changed": "{name} changed the post",
   "telegram.posts.support.readOnlyDescription":
     "“{title}” is a read-only Telegram post. Its content and engagement update from channel analytics and cannot be edited, scheduled, moved, reordered, or deleted here.",
   "telegram.posts.support.openOriginal": "Open original post in Telegram",

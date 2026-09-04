@@ -1,7 +1,7 @@
 "use client";
 
 
-import { Braces, ChevronDown, Heading, Link as LinkIcon, List, ListOrdered, MousePointerClick, Quote, Settings2, Sigma, SmilePlus, Table2, type LucideIcon } from "lucide-react";
+import { Braces, ChevronDown, Heading, Link as LinkIcon, MousePointerClick, Quote, Settings2, Sigma, SmilePlus, Table2, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import type { EditorCommandId } from "@telegram-system/shared";
 import { editorWrapActions } from "./telegram-text-editor-commands";
@@ -16,7 +16,7 @@ export function TelegramTextEditorToolbar({ disabled, hasButtons, onCommand, onH
   onConfigure: () => void;
 }) {
   const { t } = useI18n();
-  const [open, setOpen] = useState<"heading" | "quote" | "list" | null>(null);
+  const [open, setOpen] = useState<"heading" | "quote" | null>(null);
   const select = (action: () => void) => { action(); setOpen(null); };
   const wrapLabels: Partial<Record<EditorCommandId, string>> = {
     bold: t("telegram.posts.editorComponents.format.bold"),
@@ -37,10 +37,6 @@ export function TelegramTextEditorToolbar({ disabled, hasButtons, onCommand, onH
     </ToolbarMenu>
     <ToolbarMenu label={t("telegram.posts.editorComponents.format.heading")} icon={Heading} open={open === "heading"} disabled={disabled} onToggle={() => setOpen(open === "heading" ? null : "heading")}>
       {[1, 2, 3, 4, 5, 6].map((level) => <MenuItem key={level} icon={Heading} label={t("telegram.posts.editorComponents.format.headingLevel", { level })} onClick={() => select(() => onHeading(level))} />)}
-    </ToolbarMenu>
-    <ToolbarMenu label={t("telegram.posts.editorComponents.format.list")} icon={List} open={open === "list"} disabled={disabled} onToggle={() => setOpen(open === "list" ? null : "list")}>
-      <MenuItem icon={List} label={t("telegram.posts.editorComponents.format.bulletedList")} onClick={() => select(() => onCommand("bulletedList"))} />
-      <MenuItem icon={ListOrdered} label={t("telegram.posts.editorComponents.format.numberedList")} onClick={() => select(() => onCommand("numberedList"))} />
     </ToolbarMenu>
     <ToolbarButton label={t("telegram.posts.editorComponents.format.table")} icon={Table2} disabled={disabled} onClick={() => onCommand("table")} />
     <ToolbarButton label={t("telegram.posts.editorComponents.format.formula")} icon={Sigma} disabled={disabled} onClick={() => onCommand("formula")} />

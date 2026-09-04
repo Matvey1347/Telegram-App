@@ -165,9 +165,11 @@ export class TelegramManagedPostEditTransportService {
           ? 'CAPTION_THEN_TEXT'
           : 'IMAGES_THEN_TEXT',
       );
-    const expectedMessageCount = post.imageUrls.length
-      ? post.imageUrls.length + rendered.followupHtmlParts.length
-      : rendered.textHtmlParts.length;
+    const expectedMessageCount = rendered.richHtml
+      ? 1
+      : post.imageUrls.length
+        ? post.imageUrls.length + rendered.followupHtmlParts.length
+        : rendered.textHtmlParts.length;
 
     if (source.sourceType === TelegramSourceType.MTPROTO) {
       if (rendered.richHtml) {
@@ -291,6 +293,10 @@ export class TelegramManagedPostEditTransportService {
         captionHtml: rendered.captionHtml,
         followupHtmlParts: rendered.followupHtmlParts,
         textHtmlParts: rendered.textHtmlParts,
+        scheduleAt:
+          post.status === TelegramManagedPostStatus.SCHEDULED
+            ? post.scheduledAt
+            : undefined,
       });
       return {
         sourceId: source.sourceId,
@@ -360,7 +366,12 @@ export class TelegramManagedPostEditTransportService {
           .filter((entity): entity is BotMessageEntity => Boolean(entity)),
       };
     };
-    if (post.imageUrls.length) {
+    if (rendered.richHtml) {
+      await call('editMessageText', {
+        message_id: Number(effectiveMessageIds[0]),
+        rich_message: { html: rendered.richHtml },
+      });
+    } else if (post.imageUrls.length) {
       const caption = toBotFormattedText(rendered.captionHtml);
       await call('editMessageCaption', {
         message_id: Number(effectiveMessageIds[0]),
@@ -382,20 +393,13 @@ export class TelegramManagedPostEditTransportService {
         });
       }
     } else {
-      if (rendered.richHtml && rendered.textHtmlParts.length === 1) {
+      for (let index = 0; index < rendered.textHtmlParts.length; index += 1) {
+        const message = toBotFormattedText(rendered.textHtmlParts[index]);
         await call('editMessageText', {
-          message_id: Number(effectiveMessageIds[0]),
-          rich_message: { html: rendered.richHtml },
+          message_id: Number(effectiveMessageIds[index]),
+          text: message.text,
+          entities: message.entities,
         });
-      } else {
-        for (let index = 0; index < rendered.textHtmlParts.length; index += 1) {
-          const message = toBotFormattedText(rendered.textHtmlParts[index]);
-          await call('editMessageText', {
-            message_id: Number(effectiveMessageIds[index]),
-            text: message.text,
-            entities: message.entities,
-          });
-        }
       }
     }
     await this.botApiClient.editMessageReplyMarkup(token, {

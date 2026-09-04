@@ -25,6 +25,7 @@ export class TelegramManagedPostRevisionStore {
   public managedPostRevisionData(
     post: ManagedPostRevisionSource,
     reason: string,
+    actorMemberId: string | null = null,
   ) {
     return {
       telegramManagedPostId: post.id,
@@ -83,6 +84,7 @@ export class TelegramManagedPostRevisionStore {
       publishMode: post.publishMode,
       lastError: post.lastError,
       assignedMemberId: post.assignedMemberId,
+      actorMemberId,
       icon: post.icon,
       groupId: post.groupId,
       groupPosition: post.groupPosition,
@@ -127,6 +129,21 @@ export class TelegramManagedPostRevisionStore {
         ...values: unknown[]
       ): Promise<number>;
     };
+  }
+
+  private async resolveActorMemberId(
+    client: Prisma.TransactionClient | PrismaService,
+    workspaceId: string,
+    actorUserId?: string | null,
+  ) {
+    if (!actorUserId) return null;
+    const workspaceMember = client.workspaceMember;
+    if (!workspaceMember) return null;
+    const member = await workspaceMember.findFirst({
+      where: { workspaceId, userId: actorUserId },
+      select: { id: true },
+    });
+    return member?.id ?? null;
   }
 
   public isManagedPostRevisionTableMissing(error: unknown) {
@@ -207,6 +224,7 @@ export class TelegramManagedPostRevisionStore {
             "publishMode",
             "lastError",
             "assignedMemberId",
+            "actorMemberId",
             "icon",
             "groupId",
             "groupPosition",
@@ -243,6 +261,7 @@ export class TelegramManagedPostRevisionStore {
             ${data.publishMode},
             ${data.lastError},
             ${data.assignedMemberId},
+            ${data.actorMemberId},
             ${data.icon},
             ${data.groupId},
             ${data.groupPosition},
@@ -272,7 +291,26 @@ export class TelegramManagedPostRevisionStore {
         return (await delegate.findMany({
           where,
           orderBy: { createdAt: 'desc' },
-          take: 30,
+          include: {
+            actorMember: {
+              select: {
+                id: true,
+                role: true,
+                telegramUsername: true,
+                avatarIconId: true,
+                avatarIcon: {
+                  select: {
+                    id: true,
+                    type: true,
+                    name: true,
+                    emoji: true,
+                    imageUrl: true,
+                  },
+                },
+                user: { select: { id: true, name: true } },
+              },
+            },
+          },
         })) as ManagedPostRevisionRecord[];
       } catch (error) {
         if (this.isManagedPostRevisionTableMissing(error)) {
@@ -290,7 +328,6 @@ export class TelegramManagedPostRevisionStore {
           WHERE "telegramManagedPostId" = ${where.telegramManagedPostId}
             AND "workspaceId" = ${where.workspaceId}
           ORDER BY "createdAt" DESC
-          LIMIT 30
         `);
     } catch (error) {
       if (this.isManagedPostRevisionTableMissing(error)) {
@@ -389,10 +426,16 @@ export class TelegramManagedPostRevisionStore {
     client: Prisma.TransactionClient | PrismaService,
     post: ManagedPostRevisionSource,
     reason: string,
+    actorUserId?: string | null,
   ) {
     const storageAvailable = await this.hasManagedPostRevisionStorage();
     if (!storageAvailable) return;
-    const data = this.managedPostRevisionData(post, reason);
+    const actorMemberId = await this.resolveActorMemberId(
+      client,
+      post.workspaceId,
+      actorUserId,
+    );
+    const data = this.managedPostRevisionData(post, reason, actorMemberId);
     const delegate = this.managedPostRevisionDelegate(client);
     if (delegate) {
       try {
@@ -415,18 +458,26 @@ export class TelegramManagedPostRevisionStore {
     client: Prisma.TransactionClient | PrismaService,
     posts: ManagedPostRevisionSource[],
     reason: string,
+    actorUserId?: string | null,
   ) {
     if (!posts.length || !(await this.hasManagedPostRevisionStorage())) return;
     const delegate = this.managedPostRevisionDelegate(client);
     if (!delegate?.createMany) {
       for (const post of posts) {
-        await this.createManagedPostRevision(client, post, reason);
+        await this.createManagedPostRevision(client, post, reason, actorUserId);
       }
       return;
     }
+    const actorMemberId = await this.resolveActorMemberId(
+      client,
+      posts[0].workspaceId,
+      actorUserId,
+    );
     try {
       await delegate.createMany({
-        data: posts.map((post) => this.managedPostRevisionData(post, reason)),
+        data: posts.map((post) =>
+          this.managedPostRevisionData(post, reason, actorMemberId),
+        ),
       });
       const cutoff = new Date(Date.now() - this.managedPostRevisionRetentionMs);
       await delegate.deleteMany({

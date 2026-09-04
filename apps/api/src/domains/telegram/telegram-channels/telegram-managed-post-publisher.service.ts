@@ -110,6 +110,7 @@ export class TelegramManagedPostPublisherService {
     postId: string,
     scheduleAt?: Date,
     longTextMode: 'IMAGES_THEN_TEXT' | 'CAPTION_THEN_TEXT' = 'IMAGES_THEN_TEXT',
+    actorUserId?: string,
   ) {
     const [foundPost, channel, initialSources] = await Promise.all([
       this.prisma.telegramManagedPost.findFirst({
@@ -140,11 +141,12 @@ export class TelegramManagedPostPublisherService {
       this.prisma,
       post,
       scheduleAt ? 'before_schedule' : 'before_publish',
+      actorUserId,
     );
     const buttonRows = normalizeTelegramPostButtonRows(post.buttonRows);
-    const requiresRichMessage =
-      !post.imageUrls.length &&
-      requiresNativeTelegramRichMessage(post.text || '');
+    const requiresRichMessage = requiresNativeTelegramRichMessage(
+      post.text || '',
+    );
     const requiresBotApi = managedPostRequiresBotApi({
       hasInlineButtons: Boolean(buttonRows.length),
       requiresRichMessage,
@@ -414,7 +416,18 @@ export class TelegramManagedPostPublisherService {
           };
         };
         const operations: TelegramBotDeliveryOperation[] = [];
-        if (post.imageUrls.length > 1) {
+        if (richHtml) {
+          operations.push({
+            method: 'sendRichMessage',
+            body: {
+              rich_message: { html: richHtml },
+            },
+            expectedMessageCount: 1,
+            messageIds: (result) => [
+              String((result as { message_id: number }).message_id),
+            ],
+          });
+        } else if (post.imageUrls.length > 1) {
           const caption = toBotFormattedText(captionHtml);
           operations.push({
             method: 'sendMediaGroup',
@@ -479,29 +492,16 @@ export class TelegramManagedPostPublisherService {
             });
           }
         } else {
-          if (richHtml && textHtmlParts.length === 1) {
+          for (const textHtml of textHtmlParts) {
+            const message = toBotFormattedText(textHtml);
             operations.push({
-              method: 'sendRichMessage',
-              body: {
-                rich_message: { html: richHtml },
-              },
+              method: 'sendMessage',
+              body: { text: message.text, entities: message.entities },
               expectedMessageCount: 1,
               messageIds: (result) => [
                 String((result as { message_id: number }).message_id),
               ],
             });
-          } else {
-            for (const textHtml of textHtmlParts) {
-              const message = toBotFormattedText(textHtml);
-              operations.push({
-                method: 'sendMessage',
-                body: { text: message.text, entities: message.entities },
-                expectedMessageCount: 1,
-                messageIds: (result) => [
-                  String((result as { message_id: number }).message_id),
-                ],
-              });
-            }
           }
         }
         const journaledMessageIds =

@@ -106,10 +106,11 @@ export const telegramPostKeys = {
   managedList: (
     channelId: string,
     params: {
-      page: number;
-      pageSize: number;
+      page?: number;
+      pageSize?: number;
       status?: string;
       search?: string;
+      all?: boolean;
     },
   ) => [...telegramPostKeys.managedLists(channelId), params] as const,
   managedDetail: (channelId: string, postId: string) =>

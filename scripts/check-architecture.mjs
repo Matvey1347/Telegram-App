@@ -20,7 +20,7 @@ const STRICT_MODE = process.env.ARCHITECTURE_STRICT === "1";
 // Transitional baseline: these files must shrink and may never grow.
 // Final strict mode ignores this map and fails every production file above policy.
 const TRANSITION_BASELINE = new Map([
-  ["apps/web/src/app/(internal)/(telegram)/telegram-posts/page.tsx", 7843],
+  ["apps/web/src/app/(internal)/(telegram)/telegram-posts/page.tsx", 7831],
   [
     "apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.service.ts",
     5487,

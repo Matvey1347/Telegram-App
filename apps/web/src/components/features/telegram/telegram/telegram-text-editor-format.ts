@@ -12,6 +12,17 @@ const escapeHtml = (value: string) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
+export function telegramPostLinkMarkup(
+  label: string,
+  target: { id: string; primaryTelegramMessageUrl?: string | null },
+) {
+  const href =
+    target.id.startsWith("telegram-post:") && target.primaryTelegramMessageUrl
+      ? target.primaryTelegramMessageUrl
+      : `tg-post:${target.id}`;
+  return `[${label}](${href})`;
+}
+
 function parseFencedCodeBlock(info: string, lineBreak: string, code: string) {
   const normalizedInfo = info.replace(/\r/g, "");
   const normalizedLineBreak = lineBreak.replace(/\r/g, "\n");
