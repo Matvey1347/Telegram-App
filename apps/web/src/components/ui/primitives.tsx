@@ -205,20 +205,14 @@ export function TimeInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   );
 }
 function OptionIcon({
-  iconPresentation,
-  iconUrl,
-  iconEmoji,
-  premium,
-  fallback,
+  iconNode, iconPresentation, iconUrl, iconEmoji, premium, fallback,
 }: {
-  iconPresentation?: ResolvedEmoji;
-  iconUrl?: string;
-  iconEmoji?: string;
-  premium?: boolean;
-  fallback?: string;
+  iconNode?: React.ReactNode; iconPresentation?: ResolvedEmoji;
+  iconUrl?: string; iconEmoji?: string; premium?: boolean; fallback?: string;
 }) {
   const premiumLabel =
     useOptionalI18n()?.t("common.premiumEmoji") ?? "Telegram Premium emoji";
+  if (iconNode) return iconNode;
   if (iconPresentation)
     return (
       <IconAvatar
@@ -560,13 +554,9 @@ export function CurrencySelect({
 }
 
 type MultiSelectOption = {
-  value: string;
-  label: string;
-  selectedLabel?: string;
-  iconUrl?: string;
-  iconEmoji?: string;
-  iconPremium?: boolean;
-  iconFallback?: string;
+  value: string; label: string; selectedLabel?: string;
+  icon?: React.ReactNode; iconUrl?: string; iconEmoji?: string;
+  iconPremium?: boolean; iconFallback?: string;
 };
 
 export function MultiSelect({
@@ -706,6 +696,7 @@ export function MultiSelect({
                     className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-md border border-neutral-600 bg-neutral-800"
                   >
                     <OptionIcon
+                      iconNode={option.icon}
                       iconUrl={option.iconUrl}
                       iconEmoji={option.iconEmoji}
                       fallback={option.iconFallback}
@@ -727,6 +718,7 @@ export function MultiSelect({
                   className="inline-flex max-w-full items-center gap-1 rounded-full border border-neutral-700 bg-neutral-800 px-2 py-0.5 text-xs text-neutral-100"
                 >
                   <OptionIcon
+                    iconNode={option.icon}
                     iconUrl={option.iconUrl}
                     iconEmoji={option.iconEmoji}
                     fallback={option.iconFallback}
@@ -777,6 +769,7 @@ export function MultiSelect({
                     >
                       <span className="flex min-w-0 items-center gap-2">
                         <OptionIcon
+                          iconNode={option.icon}
                           iconUrl={option.iconUrl}
                           iconEmoji={option.iconEmoji}
                           fallback={option.iconFallback}
@@ -836,14 +829,10 @@ export function StatusPill({ value }: { value: string }) {
 }
 
 type SelectOption = {
-  value: string;
-  label: string;
-  meta?: string;
-  iconUrl?: string;
-  iconEmoji?: string;
-  iconPremium?: boolean;
-  iconPresentation?: ResolvedEmoji;
-  iconFallback?: string;
+  value: string; label: string; meta?: string;
+  iconUrl?: string; iconEmoji?: string;
+  iconPremium?: boolean; iconPresentation?: ResolvedEmoji;
+  iconFallback?: string; icon?: React.ReactNode;
   tone?: "success" | "warning" | "danger" | "muted" | "info";
 };
 
@@ -995,6 +984,7 @@ export function CustomSelect({
         <span className="flex min-w-0 flex-1 items-center gap-2">
           {selected ? (
             <OptionIcon
+              iconNode={selected.icon}
               iconPresentation={selected.iconPresentation}
               iconUrl={selected.iconUrl}
               iconEmoji={selected.iconEmoji}
@@ -1063,6 +1053,7 @@ export function CustomSelect({
                     >
                       <span className="flex min-w-0 flex-1 items-center gap-2">
                         <OptionIcon
+                          iconNode={opt.icon}
                           iconPresentation={opt.iconPresentation}
                           iconUrl={opt.iconUrl}
                           iconEmoji={opt.iconEmoji}

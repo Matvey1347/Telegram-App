@@ -6,7 +6,6 @@ import { useState, type ReactNode } from "react";
 import {
   RefreshCw,
   SearchCheck,
-  Send,
   Settings2,
   Share2,
   Trash2,
@@ -79,7 +78,7 @@ export function TelegramMtprotoAccountCard({
                 onClick={onSync}
               />
               <TelegramCardMenuAction
-                label="CRM & publishing"
+                label="Publishing settings"
                 icon={<Settings2 size={17} />}
                 onClick={() => setCapabilitiesOpen(true)}
               />
@@ -165,16 +164,6 @@ function AccountCapabilityBadges({
       {account.isPremium ? (
         <CapabilityBadge className="border-amber-500/40 bg-amber-500/15 text-amber-200">
           Premium
-        </CapabilityBadge>
-      ) : null}
-      {account.crmSyncEnabled ? (
-        <CapabilityBadge className="border-emerald-500/40 bg-emerald-500/10 text-emerald-200">
-          <RefreshCw size={12} /> CRM sync
-        </CapabilityBadge>
-      ) : null}
-      {account.crmSendEnabled ? (
-        <CapabilityBadge className="border-sky-500/40 bg-sky-500/10 text-sky-200">
-          <Send size={12} /> CRM sender
         </CapabilityBadge>
       ) : null}
       {account.mtprotoPublishingEnabled ? (

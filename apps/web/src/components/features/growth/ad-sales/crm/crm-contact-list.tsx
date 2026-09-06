@@ -1,9 +1,9 @@
 "use client";
 
 import { useDeferredValue, useMemo, useState, type ReactNode } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Activity,
-  ArrowUpRight,
   CircleDollarSign,
   Contact,
   ListTodo,
@@ -132,36 +132,6 @@ export function CrmContactCard({
           value={String(contact.salesSummary.totalPlacementsCount)}
         />
       </div>
-
-      {contact.lastMessage || contact.conversationCount ? (
-        <button
-          type="button"
-          onClick={() => onAction("conversations")}
-          className="mt-3 block w-full rounded-lg border border-neutral-900 bg-neutral-900/45 p-2.5 text-left transition hover:border-blue-500/60 hover:bg-neutral-900"
-        >
-          <div className="flex items-start gap-2">
-            <span className="relative mt-0.5 shrink-0">
-              <MessageSquare size={14} className="text-blue-400" />
-              {contact.unreadCount ? (
-                <span className="absolute -right-2 -top-2 min-w-4 rounded-full bg-blue-600 px-1 text-center text-[10px] font-semibold leading-4 text-white">
-                  {contact.unreadCount}
-                </span>
-              ) : null}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="line-clamp-2 text-xs leading-5 text-neutral-300">
-                {contact.lastMessage?.text || "Open conversations"}
-              </p>
-              <p className="mt-1 text-[11px] text-neutral-500">
-                {contact.lastMessage
-                  ? `${contact.lastMessage.direction} · ${formatDateTime(contact.lastMessage.sentAt)}`
-                  : `${contact.conversationCount} conversations`}
-              </p>
-            </div>
-            <ArrowUpRight size={14} className="shrink-0 text-neutral-500" />
-          </div>
-        </button>
-      ) : null}
 
       <div className="mt-3 border-t border-neutral-900 pt-2 text-xs">
         <InfoRow
@@ -329,14 +299,66 @@ function NativeMoney({
 }
 
 export function CrmContactList() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search.trim());
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [selectedAction, setSelectedAction] = useState<{
+  const [localSelectedAction, setLocalSelectedAction] = useState<{
     contactId: string;
     action: CrmContactAction;
   } | null>(null);
+  const persistedContactId = searchParams.get("crmContact");
+  const [openChatIds, setOpenChatIds] = useState<string[]>(() => {
+    const stored =
+      searchParams.get("crmChats")?.split(",").filter(Boolean) ?? [];
+    return stored.length
+      ? stored
+      : persistedContactId
+        ? [persistedContactId]
+        : [];
+  });
+  const [activeChatId, setActiveChatId] = useState<string | null>(() =>
+    searchParams.get("crmAction") === "conversations"
+      ? persistedContactId
+      : null,
+  );
+  const persistChats = (ids: string[], active: string | null) => {
+    const next = new URLSearchParams(searchParams.toString());
+    if (ids.length && active) {
+      next.set("crmChats", ids.join(","));
+      next.set("crmContact", active);
+      next.set("crmAction", "conversations");
+    } else {
+      next.delete("crmChats");
+      next.delete("crmContact");
+      next.delete("crmAction");
+    }
+    router.replace(next.size ? `${pathname}?${next.toString()}` : pathname, {
+      scroll: false,
+    });
+  };
+  const openAction = (contactId: string, action: CrmContactAction) => {
+    if (action !== "conversations") {
+      setLocalSelectedAction({ contactId, action });
+      return;
+    }
+    const nextIds = openChatIds.includes(contactId)
+      ? openChatIds
+      : [...openChatIds, contactId];
+    setOpenChatIds(nextIds);
+    setActiveChatId(contactId);
+    persistChats(nextIds, contactId);
+  };
+  const closeChat = (contactId: string) => {
+    const nextIds = openChatIds.filter((id) => id !== contactId);
+    const nextActive = nextIds.at(-1) ?? null;
+    setOpenChatIds(nextIds);
+    setActiveChatId(nextActive);
+    persistChats(nextIds, nextActive);
+  };
   const me = useQuery({
     queryKey: authKeys.me(),
     queryFn: authApi.me,
@@ -396,9 +418,7 @@ export function CrmContactList() {
                 contact={contact}
                 canViewSales={permissions.canViewSales}
                 canCreateSales={permissions.canCreateSales}
-                onAction={(action) =>
-                  setSelectedAction({ contactId: contact.id, action })
-                }
+                onAction={(action) => openAction(contact.id, action)}
               />
             ))}
           </MasonryGrid>
@@ -415,11 +435,24 @@ export function CrmContactList() {
           loading={query.isFetching}
         />
       ) : null}
-      {selectedAction ? (
+      {localSelectedAction ? (
         <CrmContactActionModal
-          contactId={selectedAction.contactId}
-          action={selectedAction.action}
-          onClose={() => setSelectedAction(null)}
+          contactId={localSelectedAction.contactId}
+          action={localSelectedAction.action}
+          onClose={() => setLocalSelectedAction(null)}
+        />
+      ) : null}
+      {activeChatId ? (
+        <CrmContactActionModal
+          contactId={activeChatId}
+          action="conversations"
+          chatContactIds={openChatIds}
+          onSelectChat={(contactId) => {
+            setActiveChatId(contactId);
+            persistChats(openChatIds, contactId);
+          }}
+          onCloseChat={closeChat}
+          onClose={() => closeChat(activeChatId)}
         />
       ) : null}
     </section>

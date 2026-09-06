@@ -96,7 +96,7 @@ export function CrmContactInfoForm({
             <Textarea
               {...field("description")}
               aria-label="Description"
-              rows={4}
+              rows={3}
             />
           </FormField>
         </div>

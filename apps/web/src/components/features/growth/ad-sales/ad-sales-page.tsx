@@ -16,10 +16,7 @@ import {
   type TelegramAdSale,
 } from "@telegram-system/shared";
 import { AppShell } from "@/components/layout/app-shell";
-import {
-  telegramChannelKeys,
-  telegramSystemBotKeys,
-} from "@/lib/query-keys";
+import { telegramChannelKeys, telegramSystemBotKeys } from "@/lib/query-keys";
 import { PageTabHead } from "@/components/layout/page-tab-head";
 import { Button, PageHeader } from "@/components/ui/primitives";
 import { AdSaleModal } from "@/components/features/growth/ad-sales/ad-sale-modal";
@@ -111,13 +108,17 @@ function LegacyAdSalesPage() {
   const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
   const [inventorySelectionMode, setInventorySelectionMode] =
     useState<AdSaleScopeMode>("channels");
-  const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [inventoryOpen, setInventoryOpen] = useState(() =>
+    searchParams.get("open") === "inventory",
+  );
   const [salesPage, setSalesPage] = useState(1);
   const [salesPageSize, setSalesPageSize] = useState(25);
   const [saleSearch, setSaleSearch] = useState("");
   const deferredSaleSearch = useDeferredValue(saleSearch.trim());
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(requestedSaleId);
-  const [adSaleModalOpen, setAdSaleModalOpen] = useState(false);
+  const [adSaleModalOpen, setAdSaleModalOpen] = useState(() =>
+    searchParams.get("open") === "sell",
+  );
   const initialAdvertiser = useCrmDealDeepLink(searchParams, setAdSaleModalOpen);
   const adSaleCheckoutIdempotencyKeyRef = useRef<string | null>(null);
   const [adSaleSeedSlot, setAdSaleSeedSlot] =
@@ -552,7 +553,6 @@ function LegacyAdSalesPage() {
   const productsByChannelId = channelProductsQuery.data ?? {};
 
   const filteredSales = salesQuery.data?.items ?? [];
-
   const calendarAvailabilityParams = useMemo(
     () => ({
       from: from.toISOString(),
@@ -794,10 +794,9 @@ function LegacyAdSalesPage() {
     });
   }
 
-  const selectedSale =
-    selectedSaleQuery.data?.id === selectedSaleId
-      ? selectedSaleQuery.data
-      : null;
+  const selectedSale = selectedSaleQuery.data?.id === selectedSaleId
+    ? selectedSaleQuery.data
+    : null;
   return (
     <AppShell>
       <PageTabHead title="Ad Sales" emoji="💼" color="#0f766e" />

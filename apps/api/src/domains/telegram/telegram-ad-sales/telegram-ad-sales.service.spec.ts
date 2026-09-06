@@ -533,7 +533,7 @@ describe('TelegramAdSalesService', () => {
     );
   });
 
-  it('includes unlinked legacy sales with the client Telegram username in the client order list', async () => {
+  it('strictly scopes a client deal list by advertiser id', async () => {
     const { service, prisma } = createService();
     prisma.telegramAdvertiser.findFirst.mockResolvedValue({
       telegramUsername: 'Artur_Pikhulia',
@@ -548,26 +548,7 @@ describe('TelegramAdSalesService', () => {
 
     expect(prisma.telegramAdSale.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {
-          workspaceId: 'ws-1',
-          OR: [
-            { advertiserId: 'advertiser-1' },
-            {
-              advertiserId: null,
-              advertiserTelegram: {
-                in: ['artur_pikhulia', '@artur_pikhulia'],
-                mode: 'insensitive',
-              },
-            },
-            {
-              advertiserId: null,
-              advertiserTelegramSnapshot: {
-                in: ['artur_pikhulia', '@artur_pikhulia'],
-                mode: 'insensitive',
-              },
-            },
-          ],
-        },
+        where: { workspaceId: 'ws-1', advertiserId: 'advertiser-1' },
       }),
     );
   });

@@ -16,16 +16,15 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 import { TelegramCrmEventHub } from './telegram-crm-event-hub.service';
 import { SendCrmManualMessageDto } from './telegram-crm-inbox.dto';
-import {
-  crmMessageSelect,
-  mapCrmMessage,
-} from './telegram-crm-message.mapper';
+import { crmMessageSelect, mapCrmMessage } from './telegram-crm-message.mapper';
 import {
   crmMemberSummarySelect,
   mapCrmMemberSummary,
 } from './telegram-crm-read-model.mapper';
 import { TelegramCrmRuntimeManager } from './telegram-crm-runtime-manager.service';
 import { isPrismaUniqueConflict } from './telegram-crm-prisma-errors';
+import { telegramMarkupToHtml } from '../../../telegram/shared/telegram-markup';
+import { parseTelegramHtml } from '../../../telegram/shared/telegram-html-parser';
 
 const crmManualMessageSelect = {
   ...crmMessageSelect,
@@ -60,6 +59,7 @@ export class TelegramCrmManualSendService {
       'adSales.crm.sendManualMessages',
     );
     const text = dto.text.trim();
+    const [telegramText] = parseTelegramHtml(telegramMarkupToHtml(text));
     const key = dto.clientIdempotencyKey.trim();
     if (!text) throw new BadRequestException('Message text is required');
     if (!key)
@@ -84,7 +84,7 @@ export class TelegramCrmManualSendService {
       'adSales.crm.viewOwn',
       'adSales.crm.viewAny',
     );
-    const replay = await this.findReplay(conversation.id, key, text);
+    const replay = await this.findReplay(conversation.id, key, telegramText);
     if (replay)
       return { message: mapCrmManualMessage(replay), idempotentReplay: true };
 

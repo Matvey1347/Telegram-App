@@ -2,8 +2,16 @@
 
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Plus } from "lucide-react";
 import type { CrmContactDetail } from "@telegram-system/shared";
-import { Button, EmptyState, Input } from "@/components/ui/primitives";
+import {
+  Button,
+  DateInput,
+  Input,
+  Modal,
+  TimeInput,
+  isValidTimeInputValue,
+} from "@/components/ui/primitives";
 import { telegramAdSalesApi } from "@/lib/api";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
 import { formatDateTime } from "@/lib/date-format";
@@ -19,8 +27,10 @@ export function CrmContactTasks({
   canEdit: boolean;
 }) {
   const queryClient = useQueryClient();
+  const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState("");
-  const [dueAt, setDueAt] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [dueTime, setDueTime] = useState("");
   const query = useQuery({
     queryKey: taskKey(contact.id),
     queryFn: () =>
@@ -30,8 +40,8 @@ export function CrmContactTasks({
         pageSize: 25,
       }),
   });
-  const refresh = async () => {
-    await Promise.all([
+  const refresh = async () =>
+    Promise.all([
       queryClient.invalidateQueries({ queryKey: taskKey(contact.id) }),
       queryClient.invalidateQueries({
         queryKey: telegramCrmKeys.contactDetail(contact.id),
@@ -40,7 +50,6 @@ export function CrmContactTasks({
         queryKey: telegramCrmKeys.contactLists(),
       }),
     ]);
-  };
   const create = useMutation({
     mutationFn: () =>
       telegramAdSalesApi.createAdvertiserTask(contact.id, {
@@ -48,11 +57,13 @@ export function CrmContactTasks({
         assignedMemberId: contact.ownerMemberId,
         priority: "NORMAL",
         title: title.trim(),
-        dueAt: new Date(dueAt).toISOString(),
+        dueAt: new Date(`${dueDate}T${dueTime}`).toISOString(),
       }),
     onSuccess: async () => {
       setTitle("");
-      setDueAt("");
+      setDueDate("");
+      setDueTime("");
+      setCreating(false);
       await refresh();
     },
   });
@@ -62,48 +73,86 @@ export function CrmContactTasks({
   });
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (title.trim() && dueAt && contact.ownerMemberId) create.mutate();
+    if (
+      title.trim() &&
+      dueDate &&
+      isValidTimeInputValue(dueTime) &&
+      contact.ownerMemberId
+    )
+      create.mutate();
   };
 
   return (
     <div className="space-y-4">
       {canEdit ? (
-        <form
-          onSubmit={submit}
-          className="grid gap-3 rounded-lg border border-neutral-800 bg-neutral-950 p-3 sm:grid-cols-[1fr_220px_auto]"
-        >
+        <div className="flex justify-end">
+          <Button onClick={() => setCreating(true)}>
+            <Plus size={16} /> Add task
+          </Button>
+        </div>
+      ) : null}
+      <Modal
+        open={creating}
+        onClose={() => setCreating(false)}
+        title="Create task"
+        size="sm"
+        allowOverflow
+        leadingHeaderAction={
+          <button
+            type="button"
+            aria-label="Back to tasks"
+            onClick={() => setCreating(false)}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-700 text-neutral-300 hover:bg-neutral-800"
+          >
+            <ArrowLeft size={17} />
+          </button>
+        }
+      >
+        <form onSubmit={submit} className="space-y-3">
           <Input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             placeholder="Task title"
             aria-label="Task title"
             required
+            autoFocus
           />
-          <Input
-            type="datetime-local"
-            value={dueAt}
-            onChange={(event) => setDueAt(event.target.value)}
+          <DateInput
+            value={dueDate}
+            onChange={(event) => setDueDate(event.target.value)}
             aria-label="Task due date"
             required
           />
-          <Button
-            type="submit"
-            disabled={create.isPending || !contact.ownerMemberId}
-          >
-            {create.isPending ? "Adding…" : "Add task"}
-          </Button>
+          <TimeInput
+            value={dueTime}
+            onChange={(event) => setDueTime(event.target.value)}
+            aria-label="Task due time"
+            required
+          />
           {!contact.ownerMemberId ? (
-            <p className="text-xs text-amber-300 sm:col-span-3">
+            <p className="text-xs text-amber-300">
               Assign an owner before creating a task.
             </p>
           ) : null}
           {create.error ? (
-            <p className="text-xs text-rose-300 sm:col-span-3">
-              Task could not be created.
-            </p>
+            <p className="text-xs text-rose-300">Task could not be created.</p>
           ) : null}
+          <div className="flex justify-end">
+            <Button
+              type="submit"
+              disabled={
+                create.isPending ||
+                !contact.ownerMemberId ||
+                !title.trim() ||
+                !dueDate ||
+                !isValidTimeInputValue(dueTime)
+              }
+            >
+              {create.isPending ? "Creating…" : "Create task"}
+            </Button>
+          </div>
         </form>
-      ) : null}
+      </Modal>
       {query.isLoading ? (
         <p className="py-6 text-sm text-neutral-500">Loading tasks…</p>
       ) : null}
@@ -118,7 +167,9 @@ export function CrmContactTasks({
         </div>
       ) : null}
       {!query.isLoading && !query.error && !query.data?.items.length ? (
-        <EmptyState text="No tasks yet." />
+        <p className="rounded-lg border border-dashed border-neutral-800 px-3 py-4 text-sm text-neutral-500">
+          No tasks yet.
+        </p>
       ) : null}
       {query.data?.items.length ? (
         <ol className="space-y-2">

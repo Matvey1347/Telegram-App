@@ -95,6 +95,9 @@ export interface TelegramCrmMtprotoHandle {
     telegramUserId: string;
     username?: string | null;
   }): Promise<TelegramCrmMtprotoPeer>;
+  resolvePrivatePeerReference(
+    reference: string,
+  ): Promise<TelegramCrmMtprotoPeer>;
   sendText(input: {
     telegramUserId: string;
     telegramAccessHash: string;

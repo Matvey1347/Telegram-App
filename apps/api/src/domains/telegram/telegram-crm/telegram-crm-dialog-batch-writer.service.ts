@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { Prisma, TelegramCrmReadState } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import type {
@@ -20,6 +21,7 @@ export class TelegramCrmDialogBatchWriter {
     dialogs: TelegramCrmMtprotoDialog[];
     checkpoint?: TelegramCrmMtprotoCheckpoint;
     preserveUnread?: boolean;
+    autoContact?: { ownerMemberId: string | null; createdByUserId: string };
     advanceCheckpoint: (
       tx: Prisma.TransactionClient,
       value?: TelegramCrmMtprotoCheckpoint,
@@ -94,13 +96,61 @@ export class TelegramCrmDialogBatchWriter {
           ];
         }),
       );
-      const peers = await tx.telegramCrmPeer.findMany({
+      let peers = await tx.telegramCrmPeer.findMany({
         where: {
           workspaceId: context.workspaceId,
           telegramUserId: { in: telegramUserIds },
         },
         select: { id: true, telegramUserId: true, contactId: true },
       });
+      const unlinkedPeers = context.autoContact
+        ? peers.filter((peer) => !peer.contactId)
+        : [];
+      if (unlinkedPeers.length && context.autoContact) {
+        const dialogByUserId = new Map(
+          context.dialogs.map((dialog) => [dialog.peer.telegramUserId, dialog]),
+        );
+        const contactIdByPeerId = new Map(
+          unlinkedPeers.map((peer) => [peer.id, randomUUID()]),
+        );
+        await tx.telegramAdvertiser.createMany({
+          data: unlinkedPeers.map((peer) => {
+            const dialog = dialogByUserId.get(peer.telegramUserId)!;
+            const displayName =
+              [dialog.peer.firstName, dialog.peer.lastName]
+                .filter(Boolean)
+                .join(' ')
+                .trim() ||
+              (dialog.peer.username ? `@${dialog.peer.username}` : null) ||
+              `Telegram ${dialog.peer.telegramUserId}`;
+            return {
+              id: contactIdByPeerId.get(peer.id)!,
+              workspaceId: context.workspaceId,
+              displayName,
+              telegramUsername: dialog.peer.username,
+              source: 'TELEGRAM_MTPROTO_IMPORT',
+              ownerMemberId: context.autoContact!.ownerMemberId,
+              createdByUserId: context.autoContact!.createdByUserId,
+            };
+          }),
+        });
+        await Promise.all(
+          unlinkedPeers.map((peer) =>
+            tx.telegramCrmPeer.updateMany({
+              where: {
+                id: peer.id,
+                workspaceId: context.workspaceId,
+                contactId: null,
+              },
+              data: { contactId: contactIdByPeerId.get(peer.id)! },
+            }),
+          ),
+        );
+        peers = peers.map((peer) => ({
+          ...peer,
+          contactId: peer.contactId ?? contactIdByPeerId.get(peer.id) ?? null,
+        }));
+      }
       const peerByTelegramId = new Map(
         peers.map((peer) => [peer.telegramUserId, peer]),
       );
@@ -153,8 +203,12 @@ export class TelegramCrmDialogBatchWriter {
         context.dialogs.flatMap((dialog) => {
           const peer = peerByTelegramId.get(dialog.peer.telegramUserId)!;
           const conversation = conversationByPeerId.get(peer.id)!;
-          const data: Prisma.TelegramCrmConversationUpdateManyMutationInput =
-            {};
+          const data: Prisma.TelegramCrmConversationUpdateInput = {};
+          if (conversation.contactId !== peer.contactId) {
+            data.contact = peer.contactId
+              ? { connect: { id: peer.contactId } }
+              : { disconnect: true };
+          }
           if (
             conversation.telegramAccessHash !== dialog.peer.telegramAccessHash
           ) {

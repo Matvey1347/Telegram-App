@@ -14,7 +14,11 @@ import type {
 import { TelegramCrmDialogBatchWriter } from './telegram-crm-dialog-batch-writer.service';
 import { TelegramCrmMessageBatchWriter } from './telegram-crm-message-batch-writer.service';
 
-type BatchContext = { workspaceId: string; accountId: string };
+type BatchContext = {
+  workspaceId: string;
+  accountId: string;
+  autoContact?: { ownerMemberId: string | null; createdByUserId: string };
+};
 const serializeCheckpoint = (value: TelegramCrmMtprotoCheckpoint) =>
   JSON.stringify(value);
 

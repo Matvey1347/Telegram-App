@@ -158,7 +158,7 @@ describe("CrmContactActionModal", () => {
   it("uses the shared Deals table filtered to the selected contact", async () => {
     renderModal("deals");
 
-    expect(await screen.findByText("All deals")).toBeInTheDocument();
+    expect(screen.queryByText("All deals")).not.toBeInTheDocument();
     expect(
       await screen.findByRole("columnheader", { name: "Client" }),
     ).toBeInTheDocument();

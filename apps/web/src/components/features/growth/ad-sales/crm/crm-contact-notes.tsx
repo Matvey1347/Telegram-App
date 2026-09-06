@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CrmContactDetail } from "@telegram-system/shared";
-import { Button, EmptyState, Textarea } from "@/components/ui/primitives";
+import { Button, Textarea } from "@/components/ui/primitives";
 import { telegramAdSalesApi } from "@/lib/api";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
 import { formatDateTime } from "@/lib/date-format";
@@ -61,7 +61,7 @@ export function CrmContactNotes({
             onChange={(event) => setNote(event.target.value)}
             placeholder="Add a note about this client…"
             aria-label="New contact note"
-            rows={3}
+            rows={2}
             required
           />
           <div className="mt-3 flex items-center justify-between gap-3">
@@ -90,7 +90,9 @@ export function CrmContactNotes({
         </div>
       ) : null}
       {!query.isLoading && !query.error && !query.data?.items.length ? (
-        <EmptyState text="No notes or activity yet." />
+        <p className="rounded-lg border border-dashed border-neutral-800 px-3 py-4 text-sm text-neutral-500">
+          No notes or activity yet.
+        </p>
       ) : null}
       {query.data?.items.length ? (
         <ol className="space-y-2">

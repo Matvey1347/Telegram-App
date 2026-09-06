@@ -16,6 +16,7 @@ import { TelegramCrmContactReadService } from './telegram-crm-contact-read.servi
 import { TelegramCrmConversationService } from './telegram-crm-conversation.service';
 import {
   CreateCrmContactDto,
+  AttachCrmConversationDto,
   CreateCrmConversationDto,
   CrmContactsQueryDto,
   CrmConversationsQueryDto,
@@ -27,6 +28,7 @@ import {
 import { TelegramCrmMessageReadService } from './telegram-crm-message-read.service';
 import { TelegramCrmPeerService } from './telegram-crm-peer.service';
 import { TelegramCrmSettingsService } from './telegram-crm-settings.service';
+import { TelegramCrmConversationAttachService } from './telegram-crm-conversation-attach.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('telegram-crm')
@@ -38,6 +40,7 @@ export class TelegramCrmController {
     private readonly conversations: TelegramCrmConversationService,
     private readonly messages: TelegramCrmMessageReadService,
     private readonly settings: TelegramCrmSettingsService,
+    private readonly conversationAttach: TelegramCrmConversationAttachService,
   ) {}
 
   @Get('contacts')
@@ -96,6 +99,15 @@ export class TelegramCrmController {
     @Body() dto: CreateCrmConversationDto,
   ) {
     return this.conversations.create(user.sub, dto);
+  }
+
+  @Post('contacts/:id/conversations/attach')
+  attachConversation(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: AttachCrmConversationDto,
+  ) {
+    return this.conversationAttach.attach(user.sub, id, dto);
   }
 
   @Get('conversations')

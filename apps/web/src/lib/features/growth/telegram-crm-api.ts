@@ -174,6 +174,16 @@ export const telegramCrmApi = {
         payload,
       )
     ).data,
+  attachConversation: async (
+    contactId: string,
+    payload: { accountId: string; reference: string },
+  ) =>
+    (
+      await api.post<CrmConversationListItem>(
+        `/telegram-crm/contacts/${contactId}/conversations/attach`,
+        payload,
+      )
+    ).data,
   listMessages: async (
     conversationId: string,
     cursor: string | null,

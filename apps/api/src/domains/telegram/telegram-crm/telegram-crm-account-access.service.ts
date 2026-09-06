@@ -48,4 +48,21 @@ export class TelegramCrmAccountAccessService {
     }
     return account;
   }
+
+  async requireUsableSession(workspaceId: string, accountId: string) {
+    const account = await this.find(workspaceId, accountId);
+    if (!account) throw new BadRequestException('MTProto account not found');
+    if (
+      account.status !== TelegramUserAccountStatus.connected ||
+      !account.isActive ||
+      !account.sessionEncrypted ||
+      !account.sessionIv ||
+      !account.sessionAuthTag
+    ) {
+      throw new BadRequestException(
+        'MTProto account must be connected, active, and session-backed',
+      );
+    }
+    return account;
+  }
 }

@@ -42,14 +42,16 @@ describe("TelegramMtprotoAccountCard capabilities", () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByText("CRM sync")).toBeInTheDocument();
     expect(screen.getByText("Publishing")).toBeInTheDocument();
+    expect(screen.queryByText("CRM sync")).toBeNull();
     expect(screen.queryByText("CRM sender")).toBeNull();
 
     fireEvent.click(
       screen.getByRole("button", { name: "Actions for @publisher" }),
     );
-    fireEvent.click(screen.getByRole("menuitem", { name: "CRM & publishing" }));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "Publishing settings" }),
+    );
 
     expect(screen.getByRole("dialog")).toHaveTextContent("Capability settings");
   });

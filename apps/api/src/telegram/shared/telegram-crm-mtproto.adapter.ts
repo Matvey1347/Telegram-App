@@ -26,6 +26,8 @@ import {
   telegramCrmCheckpoint,
   telegramLongString,
 } from './telegram-crm-mtproto.normalizer';
+import { telegramMarkupToHtml } from './telegram-markup';
+import { parseTelegramHtml } from './telegram-html-parser';
 
 class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
   private closePromise?: Promise<void>;
@@ -149,24 +151,47 @@ class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
     return peer;
   }
 
+  async resolvePrivatePeerReference(reference: string) {
+    const normalized = reference.trim();
+    if (!normalized) throw new BadRequestException('Telegram user is required');
+    const entity = (await this.client.getEntity(normalized)) as
+      | Api.User
+      | Api.Channel
+      | Api.Chat;
+    if (!(entity instanceof Api.User)) {
+      throw new BadRequestException('Telegram peer is not a private user');
+    }
+    const peer = parseTelegramCrmPeer(entity);
+    if (!peer) throw new BadRequestException('Telegram peer is not eligible');
+    return peer;
+  }
+
   async sendText(input: {
     telegramUserId: string;
     telegramAccessHash: string;
     text: string;
     randomId: bigint;
   }) {
+    const [message, entities] = parseTelegramHtml(
+      telegramMarkupToHtml(input.text),
+    );
     const result = await this.client.invoke(
       new Api.messages.SendMessage({
         peer: this.inputPeer(input.telegramUserId, input.telegramAccessHash),
-        message: input.text,
+        message,
+        entities,
         randomId: returnBigInt(input.randomId),
         noWebpage: false,
         silent: false,
       }),
     );
-    const message = extractTelegramCrmSentMessage(result, input.telegramUserId);
-    if (!message) throw new Error('Telegram did not return the sent message');
-    return message;
+    const sentMessage = extractTelegramCrmSentMessage(
+      result,
+      input.telegramUserId,
+    );
+    if (!sentMessage)
+      throw new Error('Telegram did not return the sent message');
+    return sentMessage;
   }
 
   async markRead(input: {

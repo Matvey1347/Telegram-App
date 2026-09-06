@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Plus, SlidersHorizontal } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CrmConversationListItem,
@@ -19,6 +21,7 @@ import {
 } from "@/lib/features/growth/telegram-crm-query";
 import { useTelegramCrmRealtime } from "@/lib/features/growth/use-telegram-crm-realtime";
 import { CrmContactList } from "./crm-contact-list";
+import { CrmAccountSyncPanel } from "./crm-account-sync-panel";
 import { CrmInbox } from "./crm-inbox";
 import { CrmNavigation } from "./crm-navigation";
 import type { AdSalesSurface } from "./crm-routes";
@@ -170,6 +173,22 @@ export function CrmWorkspace({
       <PageHeader
         title={title}
         subtitle={`${subtitle}${unread.data?.total ? ` ${unread.data.total} unread.` : ""}`}
+        action={
+          <div className="flex flex-wrap gap-2">
+            <Link
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-neutral-700 bg-neutral-900 px-4 text-sm font-medium hover:bg-neutral-800"
+              href="/ad-sales/calendar?open=inventory"
+            >
+              <SlidersHorizontal size={17} /> Inventory
+            </Link>
+            <Link
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-medium text-white hover:bg-blue-500"
+              href="/ad-sales/calendar?open=sell"
+            >
+              <Plus size={18} /> Sell ad
+            </Link>
+          </div>
+        }
       />
       {realtimeStatus === "paused" ? (
         <p className="mb-3 rounded-lg border border-amber-800 bg-amber-950/25 p-3 text-xs text-amber-200">
@@ -182,7 +201,12 @@ export function CrmWorkspace({
         canViewSales={canViewSales}
         inboxUnread={unread.data?.inbox}
       />
-      {surface.kind === "contacts" ? <CrmContactList /> : null}
+      {surface.kind === "contacts" ? (
+        <>
+          <CrmAccountSyncPanel canEdit={permissions.canEditAll} />
+          <CrmContactList />
+        </>
+      ) : null}
       {surface.kind === "inbox" ? (
         permissions.canViewAll ? (
           <CrmInbox

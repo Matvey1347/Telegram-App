@@ -66,6 +66,7 @@ export function CrmContactDeals({ contact }: { contact: CrmContactDetail }) {
           queryKey: telegramAdSalesKeys.listRoot(),
         });
       }}
+      embedded
     />
   );
 }

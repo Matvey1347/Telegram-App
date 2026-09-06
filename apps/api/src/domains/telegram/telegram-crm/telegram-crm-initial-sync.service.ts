@@ -28,11 +28,14 @@ export class TelegramCrmInitialSyncService {
     const key = `${access.workspaceId}:${accountId}`;
     const current = this.running.get(key);
     if (current) return current;
-    const operation = this.execute(access.workspaceId, accountId).finally(
-      () => {
-        this.running.delete(key);
-      },
-    );
+    const operation = this.execute(
+      access.workspaceId,
+      accountId,
+      userId,
+      access.memberId,
+    ).finally(() => {
+      this.running.delete(key);
+    });
     this.running.set(key, operation);
     return operation;
   }
@@ -40,29 +43,23 @@ export class TelegramCrmInitialSyncService {
   private async execute(
     workspaceId: string,
     accountId: string,
+    userId: string,
+    memberId: string,
   ): Promise<CrmInitialSyncResult> {
     const existing = await this.prisma.telegramCrmAccountSyncState.findFirst({
       where: { mtprotoAccountId: accountId, workspaceId },
       select: { initialImportStatus: true, initialImportCursor: true },
     });
-    if (existing?.initialImportStatus === 'COMPLETED') {
-      return {
-        accountId,
-        scannedDialogs: 0,
-        importedPeers: 0,
-        importedConversations: 0,
-        importedMessages: 0,
-        nextCursor: null,
-        exhausted: true,
-      };
-    }
+    const refresh = existing?.initialImportStatus === 'COMPLETED';
     await this.prisma.telegramCrmAccountSyncState.upsert({
       where: { mtprotoAccountId: accountId },
       create: {
         mtprotoAccountId: accountId,
         workspaceId,
         initialImportStatus: 'IN_PROGRESS',
-        initialImportCursor: existing?.initialImportCursor ?? null,
+        initialImportCursor: refresh
+          ? null
+          : (existing?.initialImportCursor ?? null),
         status: 'SYNCING',
       },
       update: {
@@ -77,7 +74,7 @@ export class TelegramCrmInitialSyncService {
     let importedConversations = 0;
     let processedEligibleDialogs = 0;
     let importedMessages = 0;
-    let cursor = existing?.initialImportCursor ?? null;
+    let cursor = refresh ? null : (existing?.initialImportCursor ?? null);
     let exhausted = false;
     try {
       await this.runtime.withAccountHandle(
@@ -103,6 +100,7 @@ export class TelegramCrmInitialSyncService {
               workspaceId,
               accountId,
               dialogs,
+              autoContact: { ownerMemberId: memberId, createdByUserId: userId },
             });
             importedPeers += stored.importedPeers;
             processedEligibleDialogs += dialogs.length;

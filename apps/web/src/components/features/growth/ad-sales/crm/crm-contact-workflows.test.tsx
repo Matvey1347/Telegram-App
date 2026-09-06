@@ -65,13 +65,17 @@ describe("CRM contact workflows", () => {
       expect(mocks.completeTask).toHaveBeenCalledWith("task-1"),
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+
     fireEvent.change(screen.getByLabelText("Task title"), {
       target: { value: "Prepare offer" },
     });
-    fireEvent.change(screen.getByLabelText("Task due date"), {
-      target: { value: "2026-09-05T12:00" },
+    fireEvent.click(screen.getByRole("button", { name: "Select start date" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "5" })[0]);
+    fireEvent.change(screen.getByLabelText("Task due time"), {
+      target: { value: "12:00" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create task" }));
     await waitFor(() =>
       expect(mocks.createTask).toHaveBeenCalledWith(
         "contact-1",

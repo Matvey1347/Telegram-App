@@ -95,14 +95,12 @@ describe("CrmContactCard", () => {
     expect(screen.getByText("735 UAH")).toBeTruthy();
     expect(screen.getByText("Orders")).toBeTruthy();
     expect(screen.getByText("Paid")).toBeTruthy();
-    expect(screen.getByText("Can we book the next placement?")).toBeTruthy();
+    expect(screen.queryByText("Can we book the next placement?")).toBeNull();
     expect(screen.getByRole("img", { name: "Ada Client" })).toHaveAttribute(
       "src",
       "https://t.me/i/userpic/320/ada.jpg",
     );
-    fireEvent.click(screen.getByText("Can we book the next placement?"));
-    expect(onAction).toHaveBeenCalledWith("conversations");
-    expect(screen.getByText("via @sales")).toBeTruthy();
+    expect(screen.queryByText("Open conversations")).toBeNull();
   });
 
   it("opens focused client actions from the shared three-dot menu", () => {

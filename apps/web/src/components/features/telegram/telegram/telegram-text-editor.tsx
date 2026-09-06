@@ -37,6 +37,8 @@ import { useI18n } from "@/providers/i18n-provider";
 type TelegramTextEditorProps = {
   value: string;
   onChange: (value: string) => void;
+  placeholder?: string;
+  characterCountLabel?: (count: number) => string;
   disabled?: boolean;
   rows?: number;
   channelId?: string;
@@ -72,6 +74,8 @@ type EditorSnapshot = {
 export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramTextEditorProps>(function TelegramTextEditor({
   value,
   onChange,
+  placeholder,
+  characterCountLabel,
   disabled,
   rows = 12,
   channelId,
@@ -90,7 +94,10 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
   customEmojiPacks,
   onManageCustomEmojiPacks,
 }, ref) {
-  const { t } = useI18n();
+  const { t, ensureNamespaces } = useI18n();
+  useEffect(() => {
+    void ensureNamespaces(["telegram/posts/editor"]);
+  }, [ensureNamespaces]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightedSelectionRef = useRef<{
     start: number;
@@ -725,12 +732,12 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
         }}
         onChange={(event) => commitValue(event.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={t("telegram.posts.editorComponents.text.placeholder")}
+        placeholder={placeholder ?? t("telegram.posts.editorComponents.text.placeholder")}
         className="block w-full resize-y bg-transparent px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-neutral-500 disabled:opacity-50"
       />
       {onButtonRowsChange ? <TelegramInlineKeyboardSummary rows={buttonRows} disabled={disabled} onEdit={() => setButtonsEditorOpen(true)} /> : null}
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-neutral-800 px-3 py-1.5 text-[11px] text-neutral-500">
-        <span>{t("telegram.posts.editorComponents.text.characterCount", { count: value.length })}</span>
+        <span>{characterCountLabel?.(value.length) ?? t("telegram.posts.editorComponents.text.characterCount", { count: value.length })}</span>
       </div>
     </div>
   );

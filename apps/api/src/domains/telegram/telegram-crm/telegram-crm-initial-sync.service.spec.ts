@@ -40,6 +40,59 @@ const dialog = (id: number) => ({
 });
 
 describe('TelegramCrmInitialSyncService', () => {
+  it('starts a fresh scan when a previous initial import is complete', async () => {
+    const listPrivateDialogs = jest.fn().mockResolvedValue({
+      dialogs: [dialog(1)],
+      scanned: 1,
+      nextCursor: null,
+      exhausted: true,
+    });
+    const prisma = {
+      telegramCrmAccountSyncState: {
+        findFirst: jest.fn().mockResolvedValue({
+          initialImportStatus: 'COMPLETED',
+          initialImportCursor: 'old-cursor',
+        }),
+        upsert: jest.fn(),
+        updateMany: jest.fn(),
+        update: jest.fn(),
+      },
+    };
+    const runtime = {
+      withAccountHandle: jest.fn(
+        (_workspaceId, _accountId, _purpose, operation) =>
+          operation({ listPrivateDialogs }),
+      ),
+      wakeAccount: jest.fn(),
+    };
+    const service = new TelegramCrmInitialSyncService(
+      prisma as never,
+      {
+        require: jest
+          .fn()
+          .mockResolvedValue({
+            workspaceId: 'workspace-1',
+            memberId: 'member-1',
+          }),
+      } as never,
+      runtime as never,
+      {
+        importDialogs: jest
+          .fn()
+          .mockResolvedValue({
+            importedPeers: 1,
+            importedConversations: 1,
+            importedMessages: 0,
+          }),
+      } as never,
+    );
+
+    await service.run('user-1', 'account-1');
+
+    expect(listPrivateDialogs).toHaveBeenCalledWith(
+      expect.objectContaining({ cursor: null }),
+    );
+  });
   it('bounds imported dialogs without advancing past an unprocessed page', async () => {
     let nextId = 1;
     const listPrivateDialogs = jest.fn<

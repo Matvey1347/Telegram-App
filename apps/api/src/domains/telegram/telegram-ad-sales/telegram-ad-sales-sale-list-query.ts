@@ -9,40 +9,10 @@ export function normalizeTelegramUsername(value?: string | null) {
 export function buildTelegramAdSaleListWhere(
   workspaceId: string,
   query: TelegramAdSalesQueryDto,
-  advertiserTelegramUsername?: string | null,
+  _advertiserTelegramUsername?: string | null,
 ): Prisma.TelegramAdSaleWhereInput {
-  const telegramUsername = normalizeTelegramUsername(
-    advertiserTelegramUsername,
-  );
-  const variants = telegramUsername
-    ? [telegramUsername, `@${telegramUsername}`]
-    : [];
   const advertiserFilter: Prisma.TelegramAdSaleWhereInput | null =
-    query.advertiserId
-      ? {
-          OR: [
-            { advertiserId: query.advertiserId },
-            ...(variants.length
-              ? [
-                  {
-                    advertiserId: null,
-                    advertiserTelegram: {
-                      in: variants,
-                      mode: 'insensitive' as const,
-                    },
-                  },
-                  {
-                    advertiserId: null,
-                    advertiserTelegramSnapshot: {
-                      in: variants,
-                      mode: 'insensitive' as const,
-                    },
-                  },
-                ]
-              : []),
-          ],
-        }
-      : null;
+    query.advertiserId ? { advertiserId: query.advertiserId } : null;
   const search = query.search?.trim();
   const searchFilter: Prisma.TelegramAdSaleWhereInput | null = search
     ? {

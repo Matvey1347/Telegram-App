@@ -142,6 +142,14 @@ export class CreateCrmConversationDto {
   @IsString() @MaxLength(128) telegramDialogId!: string;
 }
 
+export class AttachCrmConversationDto {
+  @IsString() accountId!: string;
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(128)
+  reference!: string;
+}
+
 export class CrmConversationsQueryDto extends PaginationQueryDto {
   @IsOptional() @IsString() contactId?: string;
   @IsOptional() @IsString() accountId?: string;

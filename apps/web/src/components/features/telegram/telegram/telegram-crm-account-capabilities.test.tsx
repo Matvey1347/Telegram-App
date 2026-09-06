@@ -94,17 +94,18 @@ describe("TelegramCrmAccountCapabilitiesModal", () => {
       </QueryClientProvider>,
     );
 
-    const syncToggle = await screen.findByRole("button", { name: "CRM sync" });
-    const sendToggle = screen.getByRole("button", { name: "CRM sender" });
-    expect(syncToggle).toHaveAttribute("aria-pressed", "true");
-    expect(sendToggle).toHaveAttribute("aria-pressed", "false");
+    const publishingToggle = await screen.findByRole("button", {
+      name: "Publishing",
+    });
+    expect(screen.queryByRole("button", { name: "CRM sync" })).toBeNull();
+    expect(publishingToggle).toHaveAttribute("aria-pressed", "true");
 
-    await waitFor(() => expect(sendToggle).toBeEnabled());
-    fireEvent.click(sendToggle);
+    await waitFor(() => expect(publishingToggle).toBeEnabled());
+    fireEvent.click(publishingToggle);
 
     await waitFor(() =>
       expect(mocks.updateCapabilities).toHaveBeenCalledWith("account-1", {
-        crmSendEnabled: true,
+        mtprotoPublishingEnabled: false,
       }),
     );
   });
