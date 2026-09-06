@@ -194,6 +194,11 @@ export function CrmConversations({
       : settings.isLoading
         ? "Loading workspace default…"
         : "Select an MTProto account";
+  const contactAvatarUrl =
+    contact.peers[0]?.photoUrl ??
+    (contact.telegramUsername
+      ? `https://t.me/i/userpic/320/${contact.telegramUsername.replace(/^@+/, "")}.jpg`
+      : null);
   return (
     <section className="flex h-full min-h-0 flex-col">
       {newOpen ? (
@@ -307,19 +312,27 @@ export function CrmConversations({
                   <button
                     type="button"
                     onClick={() => setSelectedConversationId(conversation.id)}
-                    className={`min-w-44 rounded-lg border p-3 text-left ${selected?.id === conversation.id ? "border-blue-500 bg-blue-950/25" : "border-neutral-800 bg-neutral-900/45"}`}
+                    aria-label={`${contact.displayName.replace(/^@+/, "")} · ${conversation.account.username ? `@${conversation.account.username.replace(/^@+/, "")}` : conversation.account.label}`}
+                    title={`${contact.displayName.replace(/^@+/, "")} · ${conversation.account.username ? `@${conversation.account.username.replace(/^@+/, "")}` : conversation.account.label}`}
+                    className={`relative flex items-center gap-1 rounded-xl border p-1.5 ${selected?.id === conversation.id ? "border-blue-500 bg-blue-950/25" : "border-neutral-800 bg-neutral-900/45 hover:border-neutral-700"}`}
                   >
-                    <span className="block text-sm text-white">
-                      via{" "}
-                      {conversation.account.username
-                        ? `@${conversation.account.username}`
-                        : conversation.account.label}
-                    </span>
-                    <span className="mt-1 block text-xs text-neutral-500">
-                      {conversation.unreadCount
-                        ? `${conversation.unreadCount} unread`
-                        : conversation.readState}
-                    </span>
+                    <TelegramEntityAvatar
+                      imageUrl={contactAvatarUrl}
+                      alt={contact.displayName}
+                      kind="person"
+                      size="sm"
+                    />
+                    <TelegramEntityAvatar
+                      imageUrl={conversation.account.photoUrl}
+                      alt={conversation.account.label}
+                      kind="mtproto"
+                      size="sm"
+                    />
+                    {conversation.unreadCount ? (
+                      <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-blue-500 px-1 text-center text-[10px] font-semibold text-white">
+                        {conversation.unreadCount}
+                      </span>
+                    ) : null}
                   </button>
                 </li>
               ))}

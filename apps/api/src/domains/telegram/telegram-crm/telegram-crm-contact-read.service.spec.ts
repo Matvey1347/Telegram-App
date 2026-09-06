@@ -404,6 +404,10 @@ describe('TelegramCrmContactReadService', () => {
       id: 'contact-1',
       unreadCount: 6,
       peers: [{ id: 'peer-1' }],
+      conversationAccounts: [
+        { id: 'account-1', username: 'manager_one' },
+        { id: 'account-2', username: 'manager_two' },
+      ],
       tags: [{ id: 'tag-1', name: 'VIP' }],
       paymentSummary: [{ currency: 'USD', outstandingAmount: '60' }],
       counts: { conversations: 2, deals: 5, openTasks: 3, activities: 4 },

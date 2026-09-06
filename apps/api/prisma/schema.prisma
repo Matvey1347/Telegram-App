@@ -4431,7 +4431,10 @@ model TelegramManagedPostRevision {
 
   @@index([telegramManagedPostId, createdAt])
   @@index([workspaceId, createdAt])
-  @@index([workspaceId, actorMemberId, createdAt])
+  // PostgreSQL truncated the original migration's 67-character index name to
+  // this 63-character identifier. Keep the physical name explicit so Prisma
+  // does not repeatedly propose a rename to its own shortened variant.
+  @@index([workspaceId, actorMemberId, createdAt], map: "TelegramManagedPostRevision_workspaceId_actorMemberId_createdAt")
   @@index([telegramChannelId, createdAt])
   @@index([groupId, status, statusPosition])
 }

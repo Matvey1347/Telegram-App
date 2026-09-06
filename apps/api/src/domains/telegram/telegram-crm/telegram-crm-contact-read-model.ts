@@ -103,6 +103,17 @@ export const crmContactDetailSelect = {
     take: CONTACT_DETAIL_RELATION_LIMIT,
     select: crmPeerSummarySelect,
   },
+  crmConversations: {
+    where: { state: TelegramCrmConversationState.ACTIVE },
+    orderBy: [
+      { lastMessageAt: { sort: 'desc' as const, nulls: 'last' as const } },
+      { id: 'desc' as const },
+    ],
+    take: CONTACT_SOURCE_SCAN_LIMIT,
+    select: {
+      mtprotoAccount: { select: crmAccountSummarySelect },
+    },
+  },
   tags: {
     orderBy: { createdAt: 'desc' as const },
     take: CONTACT_DETAIL_RELATION_LIMIT,
@@ -201,11 +212,21 @@ export function mapCrmContactDetail(
   dealCount: number,
   unreadCount: number,
 ): CrmContactDetail {
+  const accounts = new Map(
+    row.crmConversations.map((conversation) => [
+      conversation.mtprotoAccount.id,
+      mapCrmAccountSummary(conversation.mtprotoAccount),
+    ]),
+  );
   return {
     ...mapCrmContact(row),
     ownerMember: mapCrmMemberSummary(row.ownerMember),
     unreadCount,
     peers: row.crmPeers.map(mapCrmPeerSummary),
+    conversationAccounts: [...accounts.values()].slice(
+      0,
+      CONTACT_ACCOUNT_LIMIT,
+    ),
     tags: row.tags.map(({ tag }) => tag),
     paymentSummary: paymentSummary.map((item) => ({
       currency: item.currency,

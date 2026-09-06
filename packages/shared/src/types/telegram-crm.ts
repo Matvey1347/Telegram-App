@@ -171,6 +171,7 @@ export type CrmContactListItem = CrmContact & {
 export type CrmContactDetail = CrmContact & {
   ownerMember: CrmMemberSummary | null;
   peers: CrmPeerSummary[];
+  conversationAccounts: CrmAccountSummary[];
   unreadCount: number;
   tags: CrmTagSummary[];
   paymentSummary: CrmContactPaymentSummary[];

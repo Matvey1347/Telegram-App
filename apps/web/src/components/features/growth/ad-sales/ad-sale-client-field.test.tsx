@@ -34,6 +34,9 @@ describe("AdSaleClientField", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Existing client" }));
     await waitFor(() => expect(search).toHaveBeenCalledWith(""));
+    expect(
+      screen.queryByLabelText("Search existing clients"),
+    ).not.toBeInTheDocument();
     fireEvent.click(
       await screen.findByRole("button", { name: "Select client" }),
     );
@@ -47,8 +50,43 @@ describe("AdSaleClientField", () => {
     );
   });
 
-  it("searches existing clients on the server and follows an externally restored selection", async () => {
+  it("uses the select's built-in search when the client list is large", async () => {
     vi.useFakeTimers();
+    const search = vi.fn().mockResolvedValue(
+      Array.from({ length: 6 }, (_, index) => ({
+        id: `client-${index + 1}`,
+        displayName: `Client ${index + 1}`,
+        telegramUsername: `@client_${index + 1}`,
+        totalSalesCount: index,
+      })),
+    );
+    render(
+      <AdSaleClientField
+        contact=""
+        selectedAdvertiserId={null}
+        onContactChange={vi.fn()}
+        onTelegramChange={vi.fn()}
+        onSelect={vi.fn()}
+        onSearchAdvertisers={search}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Existing client" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    expect(search).toHaveBeenCalledOnce();
+    expect(search).toHaveBeenCalledWith("");
+
+    fireEvent.click(screen.getByRole("button", { name: "Select client" }));
+    const selectSearch = screen.getByPlaceholderText("Search…");
+    fireEvent.change(selectSearch, { target: { value: "Client 6" } });
+    expect(screen.getByRole("button", { name: /Client 6/ })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Client 1/ })).toBeNull();
+    expect(search).toHaveBeenCalledOnce();
+    vi.useRealTimers();
+  });
+
+  it("follows an externally restored client selection", async () => {
     const search = vi.fn().mockResolvedValue([]);
     const { rerender } = render(
       <AdSaleClientField
@@ -60,15 +98,6 @@ describe("AdSaleClientField", () => {
         onSearchAdvertisers={search}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Existing client" }));
-    fireEvent.change(screen.getByLabelText("Search existing clients"), {
-      target: { value: "Acme" },
-    });
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(250);
-    });
-    expect(search).toHaveBeenCalledWith("Acme");
-    fireEvent.click(screen.getByRole("button", { name: "New client" }));
     rerender(
       <AdSaleClientField
         contact="@restored"
@@ -98,6 +127,5 @@ describe("AdSaleClientField", () => {
       "aria-pressed",
       "true",
     );
-    vi.useRealTimers();
   });
 });

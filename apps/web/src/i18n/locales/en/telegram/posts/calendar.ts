@@ -17,7 +17,7 @@ const messages = {
   "telegram.posts.calendar.adSold": "Ad sold {count}",
   "telegram.posts.calendar.slotMatch": "Slot match: {time} {title}",
   "telegram.posts.calendar.scheduleMultiple": "Schedule multiple posts",
-  "telegram.posts.calendar.scheduleMultipleHint": "Uses this channel's configured publishing slots for the selected day.",
+  "telegram.posts.calendar.scheduleMultipleHint": "Choose this channel's publishing slot or set a custom time for each post.",
   "telegram.posts.calendar.noDrafts": "No drafts yet. Create a draft first.",
   "telegram.posts.calendar.selectFit": "Select fit",
   "telegram.posts.calendar.reroll": "Reroll",

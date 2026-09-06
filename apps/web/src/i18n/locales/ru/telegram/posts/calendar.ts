@@ -17,7 +17,7 @@ const messages = {
   "telegram.posts.calendar.adSold": "Реклама продана: {count}",
   "telegram.posts.calendar.slotMatch": "Подходящий слот: {time} {title}",
   "telegram.posts.calendar.scheduleMultiple": "Запланировать несколько публикаций",
-  "telegram.posts.calendar.scheduleMultipleHint": "Используются настроенные для этого канала слоты публикации на выбранный день.",
+  "telegram.posts.calendar.scheduleMultipleHint": "Выберите для каждой публикации слот этого канала или укажите своё время.",
   "telegram.posts.calendar.noDrafts": "Черновиков пока нет. Сначала создайте черновик.",
   "telegram.posts.calendar.selectFit": "Подобрать",
   "telegram.posts.calendar.reroll": "Подобрать заново",

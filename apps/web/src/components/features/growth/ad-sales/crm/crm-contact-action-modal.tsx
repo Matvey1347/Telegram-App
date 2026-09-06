@@ -66,14 +66,12 @@ export function CrmContactActionModal({
   onClose,
   chatContactIds = [],
   onSelectChat,
-  onCloseChat,
 }: {
   contactId: string;
   action: CrmContactAction;
   onClose: () => void;
   chatContactIds?: string[];
   onSelectChat?: (contactId: string) => void;
-  onCloseChat?: (contactId: string) => void;
 }) {
   const queryClient = useQueryClient();
   const detail = useQuery({
@@ -102,6 +100,9 @@ export function CrmContactActionModal({
     },
   });
   const contact = detail.data;
+  const visibleChatContactIds = chatContactIds.length
+    ? chatContactIds
+    : [contactId];
   const currentMemberId = members.data?.find(
     (member) => member.isCurrentUser,
   )?.id;
@@ -119,22 +120,20 @@ export function CrmContactActionModal({
         aria-label="Contact conversations"
         className="fixed bottom-4 right-4 z-50 flex h-[min(720px,calc(100dvh-2rem))] w-[min(440px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-neutral-700 bg-neutral-950 shadow-2xl"
       >
-        <header className="flex shrink-0 items-center justify-between border-b border-neutral-800 px-4 py-3">
-          <span className="flex min-w-0 items-center gap-2.5 font-semibold text-white">
-            {contact ? (
-              <TelegramEntityAvatar
-                imageUrl={contactAvatarUrl(contact)}
-                alt=""
-                kind="person"
-                size="sm"
+        <header className="flex shrink-0 items-center gap-2 border-b border-neutral-800 px-3 py-2">
+          <nav
+            className="flex min-w-0 flex-1 gap-2 overflow-x-auto"
+            aria-label="Open chats"
+          >
+            {visibleChatContactIds.map((id) => (
+              <CrmChatTab
+                key={id}
+                contactId={id}
+                active={id === contactId}
+                onSelect={() => onSelectChat?.(id)}
               />
-            ) : null}
-            <span className="truncate">
-              {contact
-                ? `${contact.displayName.replace(/^@+/, "")} · Chat`
-                : "Chat"}
-            </span>
-          </span>
+            ))}
+          </nav>
           <button
             type="button"
             onClick={onClose}
@@ -144,22 +143,6 @@ export function CrmContactActionModal({
             <X size={18} />
           </button>
         </header>
-        {chatContactIds.length > 1 ? (
-          <nav
-            className="flex shrink-0 gap-1 overflow-x-auto border-b border-neutral-800 px-3 py-2"
-            aria-label="Open chats"
-          >
-            {chatContactIds.map((id) => (
-              <CrmChatTab
-                key={id}
-                contactId={id}
-                active={id === contactId}
-                onSelect={() => onSelectChat?.(id)}
-                onClose={() => onCloseChat?.(id)}
-              />
-            ))}
-          </nav>
-        ) : null}
         <div className="min-h-0 flex-1 overflow-hidden p-4">
           {detail.isLoading ? <CrmConversationsSkeleton /> : null}
           {detail.error || (!detail.isLoading && !contact) ? (
@@ -239,46 +222,51 @@ function CrmChatTab({
   contactId,
   active,
   onSelect,
-  onClose,
 }: {
   contactId: string;
   active: boolean;
   onSelect: () => void;
-  onClose: () => void;
 }) {
   const contact = useQuery({
     queryKey: telegramCrmKeys.contactDetail(contactId),
     queryFn: ({ signal }) => telegramCrmApi.getContact(contactId, signal),
     staleTime: 60_000,
   });
+  const account = contact.data?.conversationAccounts?.[0] ?? null;
+  const contactLabel = contact.data?.displayName.replace(/^@+/, "") ?? "chat";
+  const accountLabel = account
+    ? account.username
+      ? `@${account.username.replace(/^@+/, "")}`
+      : account.label
+    : "Telegram account";
   return (
-    <span
-      className={`flex min-w-36 items-center rounded-lg border ${active ? "border-blue-500 bg-blue-950/30" : "border-neutral-800 bg-neutral-900"}`}
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-label={
+        contact.isLoading
+          ? "Loading chat"
+          : `Open chat ${contactLabel} via ${accountLabel}`
+      }
+      aria-current={active ? "true" : undefined}
+      title={`${contactLabel} · ${accountLabel}`}
+      className={`flex shrink-0 items-center gap-1 rounded-xl border p-1.5 transition ${active ? "border-blue-500 bg-blue-950/30" : "border-neutral-800 bg-neutral-900 hover:border-neutral-700"}`}
     >
-      <button
-        type="button"
-        onClick={onSelect}
-        className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left text-xs text-white"
-      >
+      <TelegramEntityAvatar
+        imageUrl={contact.data ? contactAvatarUrl(contact.data) : null}
+        alt={contactLabel}
+        kind="person"
+        size="sm"
+      />
+      {account ? (
         <TelegramEntityAvatar
-          imageUrl={contact.data ? contactAvatarUrl(contact.data) : null}
-          alt=""
-          kind="person"
-          size="xs"
+          imageUrl={account.photoUrl}
+          alt={accountLabel}
+          kind="mtproto"
+          size="sm"
         />
-        <span className="truncate">
-          {contact.data?.displayName.replace(/^@+/, "") ?? "Loading…"}
-        </span>
-      </button>
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label={`Close ${contact.data?.displayName ?? "chat"}`}
-        className="mr-1 rounded p-1 text-neutral-500 hover:bg-neutral-800 hover:text-white"
-      >
-        <X size={13} />
-      </button>
-    </span>
+      ) : null}
+    </button>
   );
 }
 

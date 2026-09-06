@@ -38,6 +38,11 @@ vi.mock("@/lib/api", () => ({
   telegramChannelsApi: { list: mocks.listChannels },
 }));
 
+vi.mock("./crm-conversations", () => ({
+  CrmConversations: () => <div>Conversation content</div>,
+  CrmConversationsSkeleton: () => <div>Loading conversation</div>,
+}));
+
 const contact: CrmContactDetail = {
   id: "contact-1",
   workspaceId: "workspace-1",
@@ -74,6 +79,14 @@ const contact: CrmContactDetail = {
       firstName: "Ada",
       lastName: null,
       photoUrl: null,
+    },
+  ],
+  conversationAccounts: [
+    {
+      id: "account-1",
+      label: "Telegram manager",
+      username: "tgManage770",
+      photoUrl: "https://cdn.example/manager.jpg",
     },
   ],
   unreadCount: 0,
@@ -179,5 +192,62 @@ describe("CrmContactActionModal", () => {
       await screen.findByText("Contact could not be loaded."),
     ).toBeTruthy();
     expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+  });
+
+  it("shows paired client and MTProto avatars as the top chat switcher", async () => {
+    const secondContact: CrmContactDetail = {
+      ...contact,
+      id: "contact-2",
+      displayName: "Grace Client",
+      telegramUsername: "grace",
+      peers: [
+        {
+          ...contact.peers[0],
+          id: "peer-2",
+          username: "grace",
+          photoUrl: "https://cdn.example/grace.jpg",
+        },
+      ],
+      conversationAccounts: [
+        {
+          id: "account-2",
+          label: "Second manager",
+          username: "manager_two",
+          photoUrl: "https://cdn.example/manager-two.jpg",
+        },
+      ],
+    };
+    mocks.getContact.mockImplementation((contactId: string) =>
+      Promise.resolve(contactId === secondContact.id ? secondContact : contact),
+    );
+    const onSelectChat = vi.fn();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={client}>
+        <CrmContactActionModal
+          contactId="contact-1"
+          action="conversations"
+          chatContactIds={["contact-1", "contact-2"]}
+          onSelectChat={onSelectChat}
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    const adaChat = await screen.findByRole("button", {
+      name: "Open chat Ada Client via @tgManage770",
+    });
+    const graceChat = await screen.findByRole("button", {
+      name: "Open chat Grace Client via @manager_two",
+    });
+    expect(adaChat.querySelectorAll("img")).toHaveLength(2);
+    expect(graceChat.querySelectorAll("img")).toHaveLength(2);
+    expect(screen.queryByText(/Ada Client · Chat/)).not.toBeInTheDocument();
+
+    fireEvent.click(graceChat);
+    expect(onSelectChat).toHaveBeenCalledWith("contact-2");
   });
 });

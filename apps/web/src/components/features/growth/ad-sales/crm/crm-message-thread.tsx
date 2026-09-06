@@ -228,33 +228,24 @@ export function CrmMessageThread({
   };
   return (
     <section className="flex h-full min-h-0 flex-col">
-      <header className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800 pb-3">
-        <div>
-          <h3 className="font-medium text-white">
-            via{" "}
-            {conversation.account.username
-              ? `@${conversation.account.username}`
-              : conversation.account.label}
-          </h3>
-          <p className="text-xs text-neutral-500">
-            Replies stay on this Telegram account.
-          </p>
+      {(query.isSuccess && conversation.unreadCount > 0) || markRead.error ? (
+        <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
+          {query.isSuccess && conversation.unreadCount > 0 ? (
+            <Button
+              variant="secondary"
+              disabled={markRead.isPending}
+              onClick={() => markRead.mutate()}
+            >
+              {markRead.isPending ? "Marking…" : "Mark read"}
+            </Button>
+          ) : null}
+          {markRead.error ? (
+            <span className="text-xs text-rose-300">
+              Could not mark this conversation read. Try again.
+            </span>
+          ) : null}
         </div>
-        {query.isSuccess && conversation.unreadCount > 0 ? (
-          <Button
-            variant="secondary"
-            disabled={markRead.isPending}
-            onClick={() => markRead.mutate()}
-          >
-            {markRead.isPending ? "Marking…" : "Mark read"}
-          </Button>
-        ) : null}
-        {markRead.error ? (
-          <span className="text-xs text-rose-300">
-            Could not mark this conversation read. Try again.
-          </span>
-        ) : null}
-      </header>
+      ) : null}
       {query.isLoading ? (
         <p className="py-8 text-center text-sm text-neutral-500">
           {crmText("states.loadingConversation")}

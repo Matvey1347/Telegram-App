@@ -42,7 +42,6 @@ import {
   Rocket,
   Trash2,
   Upload,
-  X,
 } from "lucide-react";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { IconPicker } from "@/components/icons/icon-picker";
@@ -62,6 +61,7 @@ import {
   TelegramCardMenuAction,
 } from "@/components/features/telegram/telegram/telegram-card-actions-menu";
 import { CalendarPostGroupSection } from "@/components/features/telegram/telegram/calendar-post-group-section";
+import { CalendarManualSchedulerPanel } from "@/components/features/telegram/telegram/calendar-manual-scheduler-panel";
 import { AutoCalendarPlannerPreview } from "@/components/features/telegram/telegram/auto-calendar-planner-preview";
 import { CalendarPlanImport } from "@/components/features/telegram/telegram/calendar-plan-import";
 import { serializeCalendarPlanImport } from "@/components/features/telegram/telegram/calendar-plan-import-model";
@@ -136,7 +136,6 @@ import {
   buildCalendarDayScheduleSlots,
   getCalendarSchedulablePosts,
   localTimeKey,
-  shuffleCalendarSchedulablePosts,
   sortScheduleManagedPostAssignments,
 } from "@/lib/features/telegram/telegram-calendar-scheduler";
 import {
@@ -872,11 +871,6 @@ function TelegramPostWorkspace({
     useState<TelegramPostPlannerFormat | null>(null);
   const [deletingPlannerSlotGroup, setDeletingPlannerSlotGroup] =
     useState<PlannerSlotDisplayGroup | null>(null);
-  const [calendarPlannerFitFormatId, setCalendarPlannerFitFormatId] = useState<
-    string | null
-  >(null);
-  const [calendarPlannerFitRerollOffset, setCalendarPlannerFitRerollOffset] =
-    useState(0);
   const [plannerFormatWeights, setPlannerFormatWeights] = useState<
     Record<string, number>
   >(() => {
@@ -2373,93 +2367,10 @@ function TelegramPostWorkspace({
     });
   };
 
-  const selectCalendarBatchFit = (
-    formatId: string | null = null,
-    rerollOffset = 0,
-  ) => {
-    const visiblePostIds = new Set(
-      calendarFilteredSchedulablePosts.map((post) => post.id),
-    );
-    const weightedFormatSlots = () => {
-      const enabledFormats = plannerFormatsWithWeights.filter(
-        (item) => item.weight > 0 && item.slots.length,
-      );
-      if (!enabledFormats.length) return [];
-      const weightedQueue = enabledFormats.flatMap((item) =>
-        Array.from({ length: Math.max(1, Math.round(item.weight / 10)) }, () => item),
-      );
-      const usedSlotIds = new Set<string>();
-      const sequence: TelegramPostPlannerSlot[] = [];
-      let guard = 0;
-      while (
-        usedSlotIds.size <
-          enabledFormats.reduce((total, item) => total + item.slots.length, 0) &&
-        guard < 500
-      ) {
-        const item = weightedQueue[guard % weightedQueue.length];
-        const slot = item.slots.find((candidate) => !usedSlotIds.has(candidate.id));
-        if (slot) {
-          usedSlotIds.add(slot.id);
-          sequence.push(slot);
-        }
-        guard += 1;
-      }
-      return sequence;
-    };
-    const sourceSlots = formatId
-      ? plannerSlotsByFormatId.get(formatId) || []
-      : weightedFormatSlots();
-    const fitSlots = sourceSlots.length
-      ? sourceSlots.map((slot) => ({
-          id: slot.id,
-          time: slot.time,
-          postGroupIds: slot.postGroupIds,
-        }))
-      : availableCalendarScheduleSlots.map((slot) => ({
-          id: slot.id,
-          time: slot.time,
-          postGroupIds: [] as string[],
-        }));
-    const remainingPosts = shuffleCalendarSchedulablePosts(
-      calendarSchedulablePosts.filter((post) => visiblePostIds.has(post.id)),
-    );
-    const selectedIds: string[] = [];
-    const timeChoices: Record<string, string> = {};
-    const customTimes: Record<string, string> = {};
-    const availableTimes = new Set(
-      availableCalendarScheduleSlots.map((slot) => slot.time),
-    );
-    for (const slot of fitSlots) {
-      const postIndex = remainingPosts.findIndex((post) => {
-        const groupId = effectivePostGroupId(post);
-        return (
-          !slot.postGroupIds.length ||
-          (groupId != null && slot.postGroupIds.includes(groupId))
-        );
-      });
-      if (postIndex < 0) continue;
-      const [post] = remainingPosts.splice(postIndex, 1);
-      selectedIds.push(post.id);
-      if (availableTimes.has(slot.time)) {
-        timeChoices[post.id] = `slot:${slot.time}`;
-      } else {
-        timeChoices[post.id] = "custom";
-        customTimes[post.id] = slot.time;
-      }
-    }
-    setCalendarBatchSelectedPostIds(selectedIds);
-    setCalendarBatchTimeChoiceByPostId(timeChoices);
-    setCalendarBatchCustomTimeByPostId(customTimes);
-    setCalendarPlannerFitFormatId(formatId);
-    setCalendarPlannerFitRerollOffset(rerollOffset);
-  };
-
   const clearCalendarBatchSelection = () => {
     setCalendarBatchSelectedPostIds([]);
     setCalendarBatchTimeChoiceByPostId({});
     setCalendarBatchCustomTimeByPostId({});
-    setCalendarPlannerFitFormatId(null);
-    setCalendarPlannerFitRerollOffset(0);
   };
 
   const scheduleCalendarBatch = async () => {
@@ -4667,113 +4578,13 @@ function TelegramPostWorkspace({
                 </div>
               ) : null}
             </div>
-            <div className="hidden">
-              <div>
-                <h4 className="text-sm font-semibold text-white">
-                  {t("telegram.posts.calendar.scheduleMultiple")}
-                </h4>
-                <p className="mt-1 text-xs text-neutral-400">
-                  {t("telegram.posts.calendar.scheduleMultipleHint")}
-                </p>
-              </div>
-              {!calendarSchedulablePosts.length ? (
-                <div className="mt-4 rounded-xl border border-dashed border-neutral-800 px-4 py-5 text-sm text-neutral-500">
-                  {t("telegram.posts.calendar.noDrafts")}
-                </div>
-              ) : (
-                <>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {(plannerFormats.data || []).map((format) => {
-                      const selected = calendarPlannerFitFormatId === format.id;
-                      return (
-                        <Button
-                          key={format.id}
-                          variant={selected ? "primary" : "secondary"}
-                          onClick={() => selectCalendarBatchFit(format.id, 0)}
-                          disabled={
-                            calendarBatchBusy ||
-                            !plannerSlotsByFormatId.get(format.id)?.length
-                          }
-                          className={`h-9 px-3 ${
-                            selected
-                              ? "ring-1 ring-blue-300/60"
-                              : "border-neutral-700 bg-neutral-900 hover:border-blue-700 hover:bg-blue-950/25"
-                          }`}
-                        >
-                          <span className="inline-flex min-w-0 items-center gap-1.5">
-                            {selected ? (
-                              <CheckCircle2 size={14} />
-                            ) : (
-                              <span className="text-neutral-400">
-                                {format.icon || "◌"}
-                              </span>
-                            )}
-                            <span className="truncate">{format.name}</span>
-                          </span>
-                        </Button>
-                      );
-                    })}
-                    <Button
-                      variant="primary"
-                      onClick={() => selectCalendarBatchFit(null, 0)}
-                      disabled={
-                        calendarBatchBusy ||
-                        !availableCalendarScheduleSlots.length ||
-                        !canUsePlannerFormatSlots
-                      }
-                      className="h-9 px-3"
-                    >
-                      <span className="inline-flex items-center gap-1.5">
-                        <ListPlus size={15} />
-                        {t("telegram.posts.calendar.selectFit")}
-                      </span>
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={() =>
-                        selectCalendarBatchFit(
-                          calendarPlannerFitFormatId,
-                          calendarPlannerFitRerollOffset + 1,
-                        )
-                      }
-                      disabled={
-                        calendarBatchBusy ||
-                        !canUsePlannerFormatSlots ||
-                        (!calendarPlannerFitFormatId &&
-                          !calendarBatchSelectedPostIds.length)
-                      }
-                      className="h-9 border-amber-800/60 bg-amber-950/25 px-3 text-amber-100 hover:bg-amber-900/35 disabled:border-neutral-800 disabled:bg-neutral-900 disabled:text-neutral-500"
-                    >
-                      <span className="inline-flex items-center gap-1.5">
-                        <RotateCcw size={15} />
-                        {t("telegram.posts.calendar.reroll")}
-                      </span>
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={clearCalendarBatchSelection}
-                      disabled={
-                        calendarBatchBusy || !calendarBatchSelectedPostIds.length
-                      }
-                      className="h-9 border-neutral-700 bg-neutral-950 px-3 text-neutral-300 hover:border-red-800 hover:bg-red-950/30 hover:text-red-100"
-                    >
-                      <span className="inline-flex items-center gap-1.5">
-                        <X size={15} />
-                        {t("common.clear")}
-                      </span>
-                    </Button>
-                  </div>
+            <CalendarManualSchedulerPanel
+              candidateCount={calendarSchedulablePosts.length}
+              selectedCount={calendarBatchSelectedPosts.length}
+              busy={calendarBatchBusy}
+              onClear={clearCalendarBatchSelection}
+            >
                   <div className="mt-4 space-y-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-[11px] font-medium uppercase tracking-[0.24em] text-neutral-500">
-                        {t("telegram.posts.calendar.postsToSchedule")}
-                      </div>
-                      <div className="text-xs text-neutral-500">
-                        {t("telegram.posts.calendar.selected", {
-                          count: calendarBatchSelectedPosts.length,
-                        })}
-                      </div>
-                    </div>
                     <Input
                       value={calendarPostSearch}
                       onChange={(event) => setCalendarPostSearch(event.target.value)}
@@ -5007,11 +4818,11 @@ function TelegramPostWorkspace({
                     )}
                   </div>
                   <div className="mt-4 rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-[11px] font-medium uppercase tracking-[0.24em] text-neutral-500">
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium text-neutral-300">
                         {t("telegram.posts.calendar.schedulePreview")}
                       </div>
-                      <div className="text-xs text-neutral-500">
+                      <div className="whitespace-nowrap text-xs tabular-nums text-neutral-500">
                         {t("telegram.posts.calendar.willBeScheduled", {
                           assigned: calendarBatchPlan.assignments.length,
                           selected: calendarBatchSelectedPostIds.length,
@@ -5077,7 +4888,7 @@ function TelegramPostWorkspace({
                         })}
                       </div>
                     ) : (
-                      <div className="mt-3 text-sm text-neutral-500">
+                      <div className="mt-2 text-sm text-neutral-500">
                         {t("telegram.posts.calendar.assignHint")}
                       </div>
                     )}
@@ -5110,9 +4921,7 @@ function TelegramPostWorkspace({
                       </Button>
                     </div>
                   </div>
-                </>
-              )}
-            </div>
+            </CalendarManualSchedulerPanel>
           </Card>
         </div>
       ) : (

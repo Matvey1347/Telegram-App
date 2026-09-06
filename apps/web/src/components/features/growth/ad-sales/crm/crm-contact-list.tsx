@@ -451,7 +451,6 @@ export function CrmContactList() {
             setActiveChatId(contactId);
             persistChats(openChatIds, contactId);
           }}
-          onCloseChat={closeChat}
           onClose={() => closeChat(activeChatId)}
         />
       ) : null}

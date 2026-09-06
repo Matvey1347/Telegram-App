@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { TelegramAdvertiser } from "@telegram-system/shared";
 import { CustomSelect, FormField, Input } from "@/components/ui/primitives";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -35,27 +35,25 @@ export function AdSaleClientField(props: {
   const [mode, setMode] = useState<"new" | "existing">(
     props.selectedAdvertiserId ? "existing" : "new",
   );
+  const [previousSelectedId, setPreviousSelectedId] = useState(
+    props.selectedAdvertiserId,
+  );
   const [advertisers, setAdvertisers] = useState<TelegramAdvertiser[]>([]);
   const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState("");
-  const previousSelectedId = useRef(props.selectedAdvertiserId);
 
-  useEffect(() => {
-    if (props.selectedAdvertiserId) {
-      setMode("existing");
-    } else if (previousSelectedId.current) {
-      setMode("new");
-    }
-    previousSelectedId.current = props.selectedAdvertiserId;
-  }, [props.selectedAdvertiserId]);
+  if (props.selectedAdvertiserId !== previousSelectedId) {
+    setPreviousSelectedId(props.selectedAdvertiserId);
+    setMode(props.selectedAdvertiserId ? "existing" : "new");
+  }
+
+  const onSearchAdvertisers = props.onSearchAdvertisers;
 
   useEffect(() => {
     if (mode !== "existing") return;
     let active = true;
     const timeout = window.setTimeout(() => {
       setLoading(true);
-      void props
-        .onSearchAdvertisers(search.trim())
+      void onSearchAdvertisers("")
         .then((items) => {
           if (active) setAdvertisers(items);
         })
@@ -70,7 +68,7 @@ export function AdSaleClientField(props: {
       active = false;
       window.clearTimeout(timeout);
     };
-  }, [mode, props.onSearchAdvertisers, search]);
+  }, [mode, onSearchAdvertisers]);
 
   const invalidUsername =
     mode === "new" &&
@@ -96,7 +94,6 @@ export function AdSaleClientField(props: {
           ]}
           onChange={(next) => {
             setMode(next);
-            setSearch("");
             props.onSelect(null);
             props.onContactChange("");
             props.onTelegramChange("");
@@ -115,49 +112,40 @@ export function AdSaleClientField(props: {
             placeholder="@username or username"
           />
         ) : (
-          <div className="space-y-2">
-            <Input
-              aria-label="Search existing clients"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search clients"
-            />
-            <CustomSelect
-              value={props.selectedAdvertiserId ?? ""}
-              placeholder={loading ? "Loading clients..." : "Select client"}
-              disabled={loading}
-              searchable={false}
-              options={advertisers.map((advertiser) => {
-                const username = advertiser.telegramUsername?.replace(
-                  /^@+/,
-                  "",
-                );
-                return {
-                  value: advertiser.id,
-                  label: advertiser.displayName,
-                  meta:
-                    advertiser.telegramUsername ||
-                    advertiser.email ||
-                    advertiser.phone ||
-                    `${advertiser.totalSalesCount} sales`,
-                  iconUrl: username
-                    ? `https://t.me/i/userpic/320/${username}.jpg`
-                    : undefined,
-                  iconFallback: advertiser.displayName,
-                };
-              })}
-              onChange={(id) => {
-                const advertiser = advertisers.find((item) => item.id === id);
-                if (!advertiser) return;
-                const contact = advertiserContact(advertiser);
-                props.onSelect(advertiser);
-                props.onContactChange(contact);
-                props.onTelegramChange(
-                  canonicalTelegramUsername(advertiser.telegramUsername ?? ""),
-                );
-              }}
-            />
-          </div>
+          <CustomSelect
+            value={props.selectedAdvertiserId ?? ""}
+            placeholder={loading ? "Loading clients..." : "Select client"}
+            disabled={loading}
+            options={advertisers.map((advertiser) => {
+              const username = advertiser.telegramUsername?.replace(
+                /^@+/,
+                "",
+              );
+              return {
+                value: advertiser.id,
+                label: advertiser.displayName,
+                meta:
+                  advertiser.telegramUsername ||
+                  advertiser.email ||
+                  advertiser.phone ||
+                  `${advertiser.totalSalesCount} sales`,
+                iconUrl: username
+                  ? `https://t.me/i/userpic/320/${username}.jpg`
+                  : undefined,
+                iconFallback: advertiser.displayName,
+              };
+            })}
+            onChange={(id) => {
+              const advertiser = advertisers.find((item) => item.id === id);
+              if (!advertiser) return;
+              const contact = advertiserContact(advertiser);
+              props.onSelect(advertiser);
+              props.onContactChange(contact);
+              props.onTelegramChange(
+                canonicalTelegramUsername(advertiser.telegramUsername ?? ""),
+              );
+            }}
+          />
         )}
       </div>
     </FormField>
