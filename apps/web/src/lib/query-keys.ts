@@ -10,6 +10,8 @@ export const workspaceKeys = {
   roles: () => ["workspace-roles"] as const,
   role: (roleId: string) => ["workspace-roles", roleId] as const,
   roleRegistry: () => ["workspace-roles", "registry"] as const,
+  telegramCustomEmojiPacks: () =>
+    ["workspace", "telegram-custom-emoji-packs"] as const,
 };
 
 export const currencyKeys = {
@@ -87,8 +89,6 @@ export const telegramChannelKeys = {
   sources: () => ["telegram-channel-sources"] as const,
   sourceChannels: () => ["telegram-source-channels"] as const,
   publishingCapabilities: () => ["telegram-publishing-capabilities"] as const,
-  customEmojiPacks: (channelId: string) =>
-    ["telegram-channel-custom-emoji-packs", channelId] as const,
   campaigns: (channelId: string) =>
     ["telegram-channel-campaigns", channelId] as const,
   campaignsPage: (

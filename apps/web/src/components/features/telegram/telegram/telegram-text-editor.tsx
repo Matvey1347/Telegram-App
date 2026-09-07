@@ -21,8 +21,7 @@ import {
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { TelegramInlineKeyboardEditor, TelegramInlineKeyboardSummary } from "./telegram-inline-keyboard-editor";
 import { TelegramCustomEmojiPickerModal } from "./telegram-custom-emoji-picker-modal";
-import { telegramChannelKeys } from "@/lib/query-keys";
-import { authKeys } from "@/lib/query-keys";
+import { authKeys, workspaceKeys } from "@/lib/query-keys";
 import { customEmojiToken } from "./telegram-custom-emoji";
 import type { TelegramCustomEmojiPackSummary } from "@telegram-system/shared";
 import type { TelegramPostButtonRows } from "@telegram-system/shared";
@@ -53,7 +52,7 @@ type TelegramTextEditorProps = {
   onButtonRowsChange?: (rows: TelegramPostButtonRows) => void;
   canPublishInlineButtons?: boolean;
   onCheckInlineButtonPublishingAccess?: () => Promise<boolean>;
-  /** Enables channel-scoped custom emoji loading only after the picker opens. */
+  /** Enables workspace custom emoji loading after the Premium tab opens. */
   enableCustomEmoji?: boolean;
   customEmojiPacks?: TelegramCustomEmojiPackSummary[];
   onManageCustomEmojiPacks?: () => void;
@@ -112,6 +111,7 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
   const [linkEditorOpen, setLinkEditorOpen] = useState(false);
   const [buttonsEditorOpen, setButtonsEditorOpen] = useState(false);
   const [customEmojiPickerOpen, setCustomEmojiPickerOpen] = useState(false);
+  const [premiumEmojiRequested, setPremiumEmojiRequested] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [pullQuoteAuthorOpen, setPullQuoteAuthorOpen] = useState(false);
   const [pullQuoteAuthor, setPullQuoteAuthor] = useState("");
@@ -122,13 +122,13 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
   );
   const [internalSearch, setInternalSearch] = useState("");
   const internalLinksEnabled = enableInternalPostLinks && Boolean(channelId);
-  const customEmojiEnabled = enableCustomEmoji && Boolean(channelId);
+  const customEmojiEnabled = enableCustomEmoji;
   const meQuery = useQuery({ queryKey: authKeys.me(), queryFn: authApi.me });
   const shortcuts = effectiveEditorShortcuts(meQuery.data?.user.editorShortcuts);
   const customEmojiPacksQuery = useQuery({
-    queryKey: telegramChannelKeys.customEmojiPacks(channelId!),
-    queryFn: () => telegramChannelsApi.customEmojiPacks(channelId!),
-    enabled: customEmojiEnabled && customEmojiPickerOpen && !customEmojiPacks,
+    queryKey: workspaceKeys.telegramCustomEmojiPacks(),
+    queryFn: () => telegramChannelsApi.customEmojiPacks(),
+    enabled: customEmojiEnabled && customEmojiPickerOpen && premiumEmojiRequested && !customEmojiPacks,
   });
   const effectiveCustomEmojiPacks = customEmojiPacks ?? customEmojiPacksQuery.data?.packs ?? [];
   const localLinkTargets = useCallback((): TelegramManagedPostLinkTarget[] => {
@@ -558,6 +558,10 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
           setCustomEmojiPickerOpen(false);
         }}
         onManage={onManageCustomEmojiPacks}
+        onPremiumTabOpen={() => setPremiumEmojiRequested(true)}
+        premiumLoading={customEmojiPacksQuery.isLoading}
+        premiumError={customEmojiPacksQuery.isError}
+        onRetryPremium={() => void customEmojiPacksQuery.refetch()}
       />
       <TelegramTextEditorShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       {pullQuoteAuthorOpen ? <div className="absolute left-2 right-2 top-12 z-30 rounded-lg border border-neutral-700 bg-neutral-950 p-3 shadow-2xl"><p className="text-sm font-medium text-white">{t("telegram.posts.editorComponents.format.pullQuoteWithAuthor")}</p><p className="mt-1 text-xs text-neutral-400">{t("telegram.posts.editorComponents.pullQuote.authorHelp")}</p><div className="mt-3 flex gap-2"><input autoFocus value={pullQuoteAuthor} onChange={(event) => setPullQuoteAuthor(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") applyPullQuoteWithAuthor(); if (event.key === "Escape") setPullQuoteAuthorOpen(false); }} placeholder={t("telegram.posts.editorComponents.pullQuote.authorPlaceholder")} className="min-w-0 flex-1 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500" /><button type="button" onClick={applyPullQuoteWithAuthor} className="inline-flex shrink-0 items-center whitespace-nowrap rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500">{t("telegram.posts.editorComponents.actions.insert")}</button></div></div> : null}

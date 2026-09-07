@@ -11,6 +11,7 @@ import {
 } from '@prisma/client';
 import type {
   CrmContactDetail,
+  CrmChatContactContext,
   CrmContactsListResult,
   CrmUnreadSummary,
 } from '@telegram-system/shared';
@@ -24,15 +25,21 @@ import {
   type ActiveDealTotals,
   CRM_OPEN_TASK_STATUSES,
   type ContactListRow,
+  crmChatContactContextSelect,
   crmContactDetailSelect,
   crmContactListSelect,
   mapCrmContactDetail,
+  mapCrmChatContactContext,
   mapCrmContactListItem,
   type PaymentSummaryRow,
 } from './telegram-crm-contact-read-model';
 import { CrmContactsQueryDto } from './telegram-crm.dto';
 import { loadCrmReadNoReplyPage } from './telegram-crm-follow-up-read';
-import { loadCrmContactSalesSummaries } from './telegram-crm-contact-sales-summary';
+import {
+  isUnassignedCrmContact,
+  loadCrmContactSalesSummaries,
+} from './telegram-crm-contact-sales-summary';
+import { loadCrmReplySummaries } from './telegram-crm-reply-summary';
 
 @Injectable()
 export class TelegramCrmContactReadService {
@@ -94,11 +101,7 @@ export class TelegramCrmContactReadService {
         this.prisma.telegramAdvertiser.count({ where: baseWhere }),
       ]);
     }
-    const [unreadByContact, dealTotals, salesSummaries] = await Promise.all([
-      this.unreadByContact(
-        access.workspaceId,
-        rows.map((row) => row.id),
-      ),
+    const [dealTotals, salesSummaries, replySummaries] = await Promise.all([
       this.activeDealTotals(
         access.workspaceId,
         rows.flatMap((row) => (row.sales[0] ? [row.sales[0].id] : [])),
@@ -106,17 +109,22 @@ export class TelegramCrmContactReadService {
       loadCrmContactSalesSummaries(
         this.prisma,
         access.workspaceId,
-        rows.map((row) => ({
-          id: row.id,
-          displayName: row.displayName,
-          companyName: row.companyName,
-          telegramUsername: row.telegramUsername,
-        })),
+        rows
+          .filter(
+            (row) => row.totalSalesCount > 0 || isUnassignedCrmContact(row),
+          )
+          .map((row) => ({
+            id: row.id,
+            displayName: row.displayName,
+            companyName: row.companyName,
+            telegramUsername: row.telegramUsername,
+          })),
       ),
+      loadCrmReplySummaries(this.prisma, access.workspaceId, rows),
     ]);
     return createPaginatedResponse(
       rows.map((row) =>
-        mapCrmContactListItem(row, unreadByContact, dealTotals, salesSummaries),
+        mapCrmContactListItem(row, dealTotals, salesSummaries, replySummaries),
       ),
       totalItems,
       pagination,
@@ -161,6 +169,30 @@ export class TelegramCrmContactReadService {
       dealCount,
       unread._sum.unreadCount ?? 0,
     );
+  }
+
+  async getChatContext(
+    userId: string,
+    contactId: string,
+  ): Promise<CrmChatContactContext> {
+    const access = await this.authorization.require(userId, 'adSales.crm.view');
+    const ownership = await this.authorization.scope(
+      userId,
+      'adSales.crm.viewOwn',
+      'adSales.crm.viewAny',
+    );
+    const row = await this.prisma.telegramAdvertiser.findFirst({
+      where: {
+        id: contactId,
+        workspaceId: access.workspaceId,
+        ...('assignedMemberId' in ownership
+          ? { ownerMemberId: ownership.assignedMemberId }
+          : {}),
+      },
+      select: crmChatContactContextSelect,
+    });
+    if (!row) throw new NotFoundException('CRM Contact not found');
+    return mapCrmChatContactContext(row);
   }
 
   async unread(userId: string): Promise<CrmUnreadSummary> {
@@ -291,24 +323,6 @@ export class TelegramCrmContactReadService {
     };
     if (query.followUpView === 'WROTE_NO_REPLY') return wroteNoReply;
     return wroteNoReply;
-  }
-
-  private async unreadByContact(workspaceId: string, contactIds: string[]) {
-    if (!contactIds.length) return new Map<string, number>();
-    const rows = await this.prisma.telegramCrmConversation.groupBy({
-      by: ['contactId'],
-      where: {
-        workspaceId,
-        contactId: { in: contactIds },
-        state: TelegramCrmConversationState.ACTIVE,
-      },
-      _sum: { unreadCount: true },
-    });
-    return new Map(
-      rows.flatMap((row) =>
-        row.contactId ? [[row.contactId, row._sum.unreadCount ?? 0]] : [],
-      ),
-    );
   }
 
   private async activeDealTotals(workspaceId: string, dealIds: string[]) {

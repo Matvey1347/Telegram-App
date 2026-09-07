@@ -15,7 +15,10 @@ type PaginationProps = {
   onPageSizeChange: (pageSize: number) => void;
   loading?: boolean;
   disabled?: boolean;
+  pageSizeOptions?: readonly number[];
 };
+
+export const THREE_COLUMN_GRID_PAGE_SIZES = [12, 24, 48, 96] as const;
 
 function buildPageItems(page: number, totalPages: number) {
   if (totalPages <= 7) {
@@ -60,6 +63,7 @@ export function Pagination({
   onPageSizeChange,
   loading = false,
   disabled = false,
+  pageSizeOptions = [10, 25, 50, 100],
 }: PaginationProps) {
   const i18n = useOptionalI18n();
   const t = i18n?.t;
@@ -155,7 +159,7 @@ export function Pagination({
           onChange={(value) => onPageSizeChange(Number(value))}
           disabled={disabled || loading}
           searchable={false}
-          options={[10, 25, 50, 100].map((size) => ({
+          options={pageSizeOptions.map((size) => ({
             value: String(size),
             label: String(size),
           }))}

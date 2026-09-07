@@ -11,8 +11,8 @@
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "prisma": "prisma",
     "start": "nest start",
-    "start:dev": "nest start --watch",
-    "start:debug": "nest start --debug --watch",
+    "start:dev": "nest start --watch --config nest-cli.dev.json",
+    "start:debug": "nest start --debug --watch --config nest-cli.dev.json",
     "start:prod": "node dist/main.js",
     "start:prod:render": "node dist/main.js",
     "start:prod:railway": "node dist/main.js",
@@ -23,7 +23,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "dev": "nest start --watch",
+    "dev": "nest start --watch --config nest-cli.dev.json",
     "backfill:telegram-post-media": "node dist/maintenance/backfill-telegram-post-media.js"
   },
   "dependencies": {

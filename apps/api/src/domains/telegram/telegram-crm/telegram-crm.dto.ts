@@ -114,6 +114,10 @@ export class UpdateCrmContactDto {
   @IsOptional() @IsDateString() nextContactAt?: string | null;
 }
 
+export class SetCrmReplyAlertMuteDto {
+  @IsBoolean() muted!: boolean;
+}
+
 export class UpsertCrmPeerDto {
   @IsString() @Matches(/^\d+$/) telegramUserId!: string;
   @IsOptional() @Transform(trimNullable) @IsString() @MaxLength(64) username?:

@@ -21,6 +21,8 @@ const contactRow = () => ({
   lastOutboundAt: date,
   lastPurchaseAt: null,
   nextContactAt: null,
+  replyAlertMutedAt: null,
+  totalSalesCount: 1,
   archivedAt: null,
   createdAt: date,
   updatedAt: date,
@@ -205,7 +207,7 @@ describe('TelegramCrmContactReadService', () => {
     expect(query.text).not.toMatch(/message\."readState"[^)]*(?:<>|NOT)/);
   });
 
-  it('returns enriched multi-account cards with authoritative aggregates and an active Deal independent of Contact stage', async () => {
+  it('returns compact cards with authoritative Deal aggregates independent of Contact stage', async () => {
     const row = contactRow();
     const prisma = {
       $transaction: jest.fn().mockResolvedValue([[row], 1]),
@@ -214,6 +216,17 @@ describe('TelegramCrmContactReadService', () => {
         count: jest.fn().mockReturnValue('count'),
       },
       telegramCrmConversation: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            contactId: 'contact-1',
+            inboundMessageCount: 2,
+            outboundMessageCount: 1,
+            historyExhausted: true,
+            lastInboundAt: date,
+            lastOutboundAt: new Date('2026-08-31T11:00:00.000Z'),
+            unreadCount: 1,
+          },
+        ]),
         groupBy: jest
           .fn()
           .mockResolvedValue([
@@ -254,6 +267,11 @@ describe('TelegramCrmContactReadService', () => {
                 currency: 'UAH',
               },
             ],
+            assignedMember: {
+              id: 'member-2',
+              user: { name: 'Deal owner', email: null },
+              avatarIcon: null,
+            },
           },
         ]),
       },
@@ -274,6 +292,7 @@ describe('TelegramCrmContactReadService', () => {
 
     expect(result.items[0]).toMatchObject({
       stage: 'LEAD',
+      isUnassignedClient: false,
       ownerMember: {
         id: 'member-1',
         name: 'Owner',
@@ -284,13 +303,6 @@ describe('TelegramCrmContactReadService', () => {
         },
       },
       peer: { id: 'peer-1', photoUrl: 'https://cdn.example/ada.jpg' },
-      unreadCount: 7,
-      conversationCount: 101,
-      conversationAccounts: [
-        { id: 'account-1', username: 'manager_one' },
-        { id: 'account-2', username: 'manager_two' },
-      ],
-      lastMessage: { id: 'message-1', text: 'Hello' },
       activeDeal: {
         id: 'deal-1',
         placementCount: 2,
@@ -306,14 +318,71 @@ describe('TelegramCrmContactReadService', () => {
         totalPlacementsCount: 2,
         revenueByCurrency: [{ currency: 'UAH', amount: '735' }],
         lastDealAt: '2026-08-31T12:00:00.000Z',
+        dealMembers: [expect.objectContaining({ id: 'member-2' })],
+      },
+      replySummary: {
+        status: 'CONVERSATION_UNANSWERED_UNREAD',
+        inboundMessageCount: 2,
+        outboundMessageCount: 1,
+        countsComplete: true,
+        unreadCount: 1,
+        muted: false,
       },
     });
     const select = prisma.telegramAdvertiser.findMany.mock.calls[0][0].select;
     expect(select.sales.where).toEqual(
-      expect.objectContaining({ status: expect.any(Object) }),
+      expect.objectContaining({
+        status: expect.any(Object),
+        placements: {
+          some: {
+            deletedAt: null,
+            status: {
+              in: ['DRAFT', 'RESERVED', 'SCHEDULED', 'PUBLISHED'],
+            },
+          },
+        },
+      }),
     );
-    expect(select.crmConversations.take).toBe(12);
-    expect(prisma.telegramCrmConversation.groupBy).toHaveBeenCalledTimes(1);
+    expect(select.crmConversations).toBeUndefined();
+    expect(prisma.telegramCrmConversation.groupBy).not.toHaveBeenCalled();
+  });
+
+  it('skips expensive Deal summaries for a page of contacts without Deals', async () => {
+    const row = {
+      ...contactRow(),
+      totalSalesCount: 0,
+      sales: [],
+      _count: { sales: 0 },
+    };
+    const findSales = jest.fn();
+    const prisma = {
+      $transaction: jest.fn().mockResolvedValue([[row], 1]),
+      telegramAdvertiser: {
+        findMany: jest.fn().mockReturnValue('rows'),
+        count: jest.fn().mockReturnValue('count'),
+      },
+      telegramCrmConversation: {
+        findMany: jest.fn().mockResolvedValue([]),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+      telegramAdSale: { findMany: findSales },
+    };
+    const service = new TelegramCrmContactReadService(
+      prisma as never,
+      {
+        require: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
+        scope: jest.fn().mockResolvedValue({}),
+      } as never,
+    );
+
+    const result = await service.list('user-1', {
+      page: 1,
+      pageSize: 12,
+      stage: 'NEW',
+    });
+
+    expect(result.items[0].salesSummary.totalSalesCount).toBe(0);
+    expect(findSales).not.toHaveBeenCalled();
   });
 
   it('does not expose Inbox unread to a view-own member', async () => {
@@ -428,6 +497,42 @@ describe('TelegramCrmContactReadService', () => {
         state: 'ACTIVE',
       },
       _sum: { unreadCount: true },
+    });
+  });
+
+  it('loads chat context without Deal, payment, task, or activity aggregates', async () => {
+    const row = contactRow();
+    const findFirstArgs: Array<{ where: Record<string, unknown> }> = [];
+    const findFirst = jest.fn((args: { where: Record<string, unknown> }) => {
+      findFirstArgs.push(args);
+      return Promise.resolve(row);
+    });
+    const prisma = {
+      telegramAdvertiser: { findFirst },
+      telegramAdSale: { count: jest.fn() },
+      telegramCrmConversation: { aggregate: jest.fn() },
+    };
+    const service = new TelegramCrmContactReadService(
+      prisma as never,
+      {
+        require: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
+        scope: jest.fn().mockResolvedValue({}),
+      } as never,
+    );
+
+    await expect(
+      service.getChatContext('user-1', 'contact-1'),
+    ).resolves.toMatchObject({
+      id: 'contact-1',
+      displayName: 'Ada Client',
+      peers: [{ id: 'peer-1' }],
+      conversationAccounts: [{ id: 'account-1' }, { id: 'account-2' }],
+    });
+    expect(prisma.telegramAdSale.count).not.toHaveBeenCalled();
+    expect(prisma.telegramCrmConversation.aggregate).not.toHaveBeenCalled();
+    expect(findFirstArgs[0].where).toEqual({
+      id: 'contact-1',
+      workspaceId: 'workspace-1',
     });
   });
 });

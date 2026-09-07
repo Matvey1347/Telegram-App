@@ -186,6 +186,7 @@ enum TelegramAdSaleStatus {
 
 enum TelegramAdSaleOrigin {
   DIRECT
+  DIRECT_EXTERNAL
   REPEAT
   ADSELL_IO
   COLLABORATOR_PRO
@@ -1083,6 +1084,7 @@ model OperationsNotification {
 
   @@unique([workspaceId, recipientMemberId, type, sourceKey], map: "OperationsNotification_workspace_recipient_type_source_key")
   @@index([workspaceId, recipientMemberId, createdAt, id], map: "OperationsNotification_recipient_list_idx")
+  @@index([workspaceId, type, sourceKey], map: "OperationsNotification_workspace_type_source_idx")
   @@index([expiresAt, id], map: "OperationsNotification_expiry_idx")
   @@index([workspaceId, visibilityResourceKey, publishedAt], map: "OperationsNotification_visibility_resource_idx")
 }
@@ -1415,8 +1417,6 @@ model TelegramChannel {
   greeterBroadcasts          GreeterBroadcast[]
   greeterBroadcastRecipients GreeterBroadcastRecipient[]
   greeterTestSessions        GreeterTestSession[]
-  customEmojiPackLinks       TelegramChannelCustomEmojiPack[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1437,11 +1437,12 @@ model TelegramCustomEmojiPack {
   metadata      Json?
   workspace     Workspace                        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   emojis        TelegramCustomEmoji[]
-  channelLinks  TelegramChannelCustomEmojiPack[]
+  archivedAt    DateTime?
   createdAt     DateTime                         @default(now())
   updatedAt     DateTime                         @updatedAt
 
   @@unique([workspaceId, shortName])
+  @@index([workspaceId, archivedAt, updatedAt])
   @@index([workspaceId, updatedAt])
 }
 
@@ -1468,18 +1469,6 @@ model TelegramCustomEmoji {
   @@unique([packId, documentId])
   @@index([packId, position])
   @@index([documentId])
-}
-
-model TelegramChannelCustomEmojiPack {
-  id        String                  @id @default(cuid())
-  channelId String
-  packId    String
-  channel   TelegramChannel         @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  pack      TelegramCustomEmojiPack @relation(fields: [packId], references: [id], onDelete: Cascade)
-  createdAt DateTime                @default(now())
-
-  @@unique([channelId, packId])
-  @@index([packId])
 }
 
 model TelegramChannelTimePost {
@@ -1976,6 +1965,7 @@ model TelegramAdvertiser {
   averageOrderValueInPrimaryCurrency Decimal                        @default(0)
   firstPurchaseAt                    DateTime?
   repeatCustomerAt                   DateTime?
+  replyAlertMutedAt                  DateTime?
   archivedAt                         DateTime?
   createdAt                          DateTime                       @default(now())
   updatedAt                          DateTime                       @updatedAt
@@ -2198,6 +2188,8 @@ model TelegramCrmConversation {
   lastMessageAt                   DateTime?
   lastInboundAt                   DateTime?
   lastOutboundAt                  DateTime?
+  inboundMessageCount             Int                          @default(0)
+  outboundMessageCount            Int                          @default(0)
   unreadCount                     Int                          @default(0)
   readState                       TelegramCrmReadState         @default(UNKNOWN)
   lastReadTelegramMessageId       String?

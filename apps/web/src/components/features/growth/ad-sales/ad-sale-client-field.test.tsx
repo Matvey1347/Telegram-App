@@ -1,4 +1,10 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import {
   AdSaleClientField,
@@ -6,6 +12,26 @@ import {
 } from "./ad-sale-client-field";
 
 describe("AdSaleClientField", () => {
+  it("keeps the label and client mode control in one header row", () => {
+    render(
+      <AdSaleClientField
+        contact=""
+        selectedAdvertiserId={null}
+        onContactChange={vi.fn()}
+        onTelegramChange={vi.fn()}
+        onSelect={vi.fn()}
+        onSearchAdvertisers={vi.fn().mockResolvedValue([])}
+      />,
+    );
+
+    const header = screen.getByText("Client").parentElement;
+    expect(header).toHaveClass("flex", "h-7", "items-center", "gap-2");
+    expect(header).toContainElement(
+      screen.getByRole("button", { name: "New client" }),
+    );
+    expect(screen.getByLabelText("Telegram username")).toHaveClass("h-[42px]");
+  });
+
   it("canonicalizes Telegram usernames with and without @ identically", () => {
     expect(canonicalTelegramUsername("Buyer_Name")).toBe("@buyer_name");
     expect(canonicalTelegramUsername("@@Buyer_Name")).toBe("@buyer_name");

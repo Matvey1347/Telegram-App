@@ -4,6 +4,7 @@ import type { OperationsNotificationItem } from "@telegram-system/shared";
 import { AlertTriangle, ArrowUpRight, BellRing } from "lucide-react";
 import Link from "next/link";
 import { formatDateTime } from "@/lib/date-format";
+import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 
 const TYPE_LABELS: Record<OperationsNotificationItem["type"], string> = {
   CRM_MESSAGE_RECEIVED: "Message received",
@@ -20,6 +21,10 @@ export function NotificationRow({
 }) {
   const unread = !notification.readAt;
   const lowPriority = notification.priority === "LOW";
+  const crmMessage =
+    notification.presentation?.kind === "crm-message"
+      ? notification.presentation
+      : null;
   return (
     <Link
       href={notification.targetUrl}
@@ -30,13 +35,22 @@ export function NotificationRow({
       } ${lowPriority ? "opacity-75" : ""}`}
     >
       <div className="flex items-start gap-3">
-        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-300">
-          {notification.priority === "HIGH" ? (
-            <AlertTriangle size={16} aria-hidden="true" />
-          ) : (
-            <BellRing size={15} aria-hidden="true" />
-          )}
-        </span>
+        {crmMessage ? (
+          <TelegramEntityAvatar
+            imageUrl={crmMessage.avatarUrl}
+            alt={crmMessage.senderName}
+            kind="person"
+            size="sm"
+          />
+        ) : (
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-300">
+            {notification.priority === "HIGH" ? (
+              <AlertTriangle size={16} aria-hidden="true" />
+            ) : (
+              <BellRing size={15} aria-hidden="true" />
+            )}
+          </span>
+        )}
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-neutral-500">
             {notification.priority === "HIGH" ? (
@@ -56,8 +70,15 @@ export function NotificationRow({
               <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-400" />
             ) : null}
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold text-neutral-100">
-                {notification.title}
+              <span className="flex items-center gap-2 text-sm font-semibold text-neutral-100">
+                <span className="truncate">
+                  {crmMessage?.senderName ?? notification.title}
+                </span>
+                {crmMessage && crmMessage.messageCount > 1 ? (
+                  <span className="shrink-0 rounded-full border border-blue-800 bg-blue-950/40 px-1.5 py-0.5 text-[10px] text-blue-200">
+                    {crmMessage.messageCount} messages
+                  </span>
+                ) : null}
               </span>
               <span className="mt-0.5 block text-sm leading-5 text-neutral-400">
                 {notification.body}

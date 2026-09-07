@@ -35,6 +35,71 @@ const conversation = (accountId: string) => ({
 });
 
 describe('TelegramCrmDialogBatchWriter', () => {
+  it('links an imported peer to the single existing workspace contact with the same normalized username', async () => {
+    const tx = {
+      telegramCrmPeer: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([peer]),
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn(),
+      },
+      telegramAdvertiser: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([
+            { id: 'contact-existing', telegramUsername: '@ALICE' },
+          ]),
+        createMany: jest.fn(),
+      },
+      telegramCrmConversation: {
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findMany: jest
+          .fn()
+          .mockResolvedValue([
+            { ...conversation('account-1'), contactId: 'contact-existing' },
+          ]),
+        update: jest.fn(),
+      },
+      $executeRaw: jest.fn().mockResolvedValue(1),
+    };
+    const messages = {
+      store: jest
+        .fn()
+        .mockResolvedValue({ created: [], edited: 0, inputs: [] }),
+      emitAfterCommit: jest.fn(),
+      reconcileIncomingNotificationGroups: jest.fn().mockResolvedValue([]),
+      invalidateContactReadCache: jest.fn(),
+      emitNotificationInvalidationsAfterCommit: jest.fn(),
+    };
+    const writer = new TelegramCrmDialogBatchWriter(
+      {
+        $transaction: jest.fn(
+          async (operation: (value: typeof tx) => Promise<unknown>) =>
+            operation(tx),
+        ),
+      } as never,
+      messages as never,
+    );
+
+    await writer.store({
+      workspaceId: 'workspace-1',
+      accountId: 'account-1',
+      dialogs: [dialog],
+      autoContact: { ownerMemberId: 'member-1', createdByUserId: 'user-1' },
+      advanceCheckpoint: jest.fn(),
+    });
+
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(tx.telegramAdvertiser.createMany).not.toHaveBeenCalled();
+    expect(tx.telegramCrmConversation.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: [expect.objectContaining({ contactId: 'contact-existing' })],
+      }),
+    );
+  });
+
   it('reuses one workspace Peer across accounts, keeps exact unread, and never auto-creates a Contact', async () => {
     const tx = {
       telegramCrmPeer: {
@@ -67,6 +132,9 @@ describe('TelegramCrmDialogBatchWriter', () => {
         .fn()
         .mockResolvedValue({ created: [], edited: 0, inputs: [] }),
       emitAfterCommit: jest.fn(),
+      reconcileIncomingNotificationGroups: jest.fn().mockResolvedValue([]),
+      invalidateContactReadCache: jest.fn(),
+      emitNotificationInvalidationsAfterCommit: jest.fn(),
     };
     const writer = new TelegramCrmDialogBatchWriter(
       prisma as never,

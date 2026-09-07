@@ -4,11 +4,27 @@ import Image from "next/image";
 export const adSaleOriginOptions: Array<{
   value: TelegramAdSaleOrigin;
   label: string;
+  meta?: "Internal" | "External";
   iconEmoji?: string;
   iconUrl?: string;
 }> = [
-  { value: "DIRECT", label: "New sales", iconEmoji: "✨" },
-  { value: "REPEAT", label: "Repeat sales", iconEmoji: "🔁" },
+  {
+    value: "DIRECT",
+    label: "New sales",
+    meta: "Internal",
+    iconEmoji: "✨",
+  },
+  {
+    value: "DIRECT_EXTERNAL",
+    label: "New sales",
+    meta: "External",
+    iconEmoji: "✨",
+  },
+  {
+    value: "REPEAT",
+    label: "Repeat sales",
+    iconEmoji: "🔁",
+  },
   {
     value: "ADSELL_IO",
     label: "adsell.io",
@@ -46,6 +62,11 @@ export function AdSaleOriginPreview({
         </span>
       )}
       <span>{option.label}</span>
+      {option.meta ? (
+        <span className="rounded-md bg-neutral-800 px-2 py-0.5 text-xs text-neutral-400">
+          {option.meta}
+        </span>
+      ) : null}
     </span>
   );
 }

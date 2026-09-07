@@ -149,6 +149,36 @@ describe("NotificationCenter", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders a grouped CRM message with the client avatar and message count", async () => {
+    vi.spyOn(operationsNotificationsApi, "list").mockResolvedValue({
+      items: [
+        {
+          ...item("conversation-1", "NORMAL"),
+          presentation: {
+            kind: "crm-message",
+            conversationId: "conversation-1",
+            contactId: "contact-1",
+            senderName: "Ada Client",
+            avatarUrl: "https://cdn.example/ada.jpg",
+            messageCount: 4,
+          },
+        },
+      ],
+      nextCursor: null,
+    });
+    renderCenter();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Notifications, 101 unread" }),
+    );
+
+    expect(await screen.findByText("Ada Client")).toBeInTheDocument();
+    expect(screen.getByText("4 messages")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Ada Client" })).toHaveAttribute(
+      "src",
+      "https://cdn.example/ada.jpg",
+    );
+  });
+
   it("shows an initial error with a retry", async () => {
     const list = vi
       .spyOn(operationsNotificationsApi, "list")

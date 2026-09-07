@@ -63,6 +63,7 @@ const context = { workspaceId: 'workspace-1', accountId: 'account-1' };
 describe('TelegramCrmMessageBatchWriter', () => {
   it('deduplicates a live batch, stores TELEGRAM_SYNC attribution, and increments unread exactly once', async () => {
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       telegramCrmMessage: {
         findMany: jest
           .fn()
@@ -109,15 +110,7 @@ describe('TelegramCrmMessageBatchWriter', () => {
     }
     const createdData: unknown = createCall.data[0];
     expect(createdData).not.toHaveProperty('sentByMemberId');
-    const conversationUpdateCall = callArgument(
-      tx.telegramCrmConversation.update,
-    );
-    expect(conversationUpdateCall).toMatchObject({
-      data: {
-        unreadCount: { increment: 1 },
-        readState: TelegramCrmReadState.UNREAD,
-      },
-    });
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
     expect(events.emit).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'message.received' }),
     );
@@ -131,6 +124,7 @@ describe('TelegramCrmMessageBatchWriter', () => {
 
   it('does not mutate compact or unread state during lazy history import', async () => {
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       telegramCrmMessage: {
         findMany: jest
           .fn()
@@ -159,7 +153,7 @@ describe('TelegramCrmMessageBatchWriter', () => {
     );
     writer.emitAfterCommit(context.workspaceId, stored, 'history');
 
-    expect(tx.telegramCrmConversation.update).not.toHaveBeenCalled();
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
     expect(events.emit).not.toHaveBeenCalled();
   });
 
@@ -170,6 +164,7 @@ describe('TelegramCrmMessageBatchWriter', () => {
       readState: TelegramCrmReadState.UNKNOWN,
     };
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       telegramCrmMessage: {
         findMany: jest
           .fn()
@@ -206,13 +201,7 @@ describe('TelegramCrmMessageBatchWriter', () => {
       origin: TelegramCrmMessageOrigin.TELEGRAM_SYNC,
     });
     expect(data).not.toHaveProperty('sentByMemberId');
-    const conversationUpdateCall = callArgument(
-      tx.telegramCrmConversation.update,
-    );
-    if (!isRecord(conversationUpdateCall)) {
-      throw new Error('Expected a typed Conversation update call');
-    }
-    expect(conversationUpdateCall.data).not.toHaveProperty('unreadCount');
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
     expect(events.emit).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'message.sent' }),
     );
@@ -224,6 +213,7 @@ describe('TelegramCrmMessageBatchWriter', () => {
   it('updates an edited Telegram message without inserting a duplicate and emits a compact invalidation', async () => {
     const editedAt = new Date('2026-08-31T11:00:00.000Z');
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       telegramCrmMessage: {
         findMany: jest.fn().mockResolvedValue([
           {
@@ -267,6 +257,7 @@ describe('TelegramCrmMessageBatchWriter', () => {
 
   it('updates snapshot compacts without incrementing dialog unread', async () => {
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       telegramCrmMessage: {
         findMany: jest
           .fn()
@@ -313,14 +304,7 @@ describe('TelegramCrmMessageBatchWriter', () => {
       'snapshot',
     );
 
-    const conversationUpdateCall = callArgument(
-      tx.telegramCrmConversation.update,
-    );
-    if (!isRecord(conversationUpdateCall)) {
-      throw new Error('Expected a typed Conversation update call');
-    }
-    expect(conversationUpdateCall.data).not.toHaveProperty('unreadCount');
-    expect(conversationUpdateCall.data).not.toHaveProperty('readState');
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
     expect(events.emit).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: 'message.received' }),
     );
@@ -340,6 +324,7 @@ describe('TelegramCrmMessageBatchWriter', () => {
 
   it('publishes exactly one same-transaction notification only after the live batch commits', async () => {
     const tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       telegramCrmMessage: {
         findMany: jest
           .fn()
@@ -359,6 +344,7 @@ describe('TelegramCrmMessageBatchWriter', () => {
     };
     const events = { emit: jest.fn() };
     const publisher = { publish: jest.fn().mockResolvedValue(undefined) };
+    const responseCache = { clearWorkspacePath: jest.fn() };
     const projector = {
       project: jest.fn().mockResolvedValue([{ id: 'notification-1' }]),
     };
@@ -366,6 +352,7 @@ describe('TelegramCrmMessageBatchWriter', () => {
       events as never,
       publisher as never,
       projector as never,
+      responseCache as never,
     );
 
     const stored = await writer.store(tx as never, context, [input()], 'live');
@@ -375,8 +362,13 @@ describe('TelegramCrmMessageBatchWriter', () => {
     writer.emitAfterCommit(context.workspaceId, stored, 'live');
     expect(publisher.publish).toHaveBeenCalledTimes(1);
     expect(publisher.publish).toHaveBeenCalledWith(['notification-1']);
+    expect(responseCache.clearWorkspacePath).toHaveBeenCalledWith(
+      'workspace-1',
+      '/telegram-crm/conversations/conversation-1/messages',
+    );
 
     const duplicateTx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       telegramCrmMessage: {
         findMany: jest.fn().mockResolvedValue([]),
         createManyAndReturn: jest.fn().mockResolvedValue([]),

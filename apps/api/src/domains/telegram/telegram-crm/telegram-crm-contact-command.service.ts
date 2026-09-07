@@ -3,13 +3,20 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma, TelegramCrmContactStage } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
-import { CreateCrmContactDto, UpdateCrmContactDto } from './telegram-crm.dto';
+import {
+  CreateCrmContactDto,
+  SetCrmReplyAlertMuteDto,
+  UpdateCrmContactDto,
+} from './telegram-crm.dto';
 import { crmContactSelect, mapCrmContact } from './telegram-crm-contact.mapper';
 import { TelegramCrmInternalNotificationProjector } from './telegram-crm-internal-notification-projector.service';
+import { loadCrmReplySummaries } from './telegram-crm-reply-summary';
+import { ResponseCacheService } from '../../../common/response-cache.service';
 
 @Injectable()
 export class TelegramCrmContactCommandService {
@@ -17,6 +24,7 @@ export class TelegramCrmContactCommandService {
     private readonly prisma: PrismaService,
     private readonly authorization: WorkspaceAuthorizationService,
     private readonly notifications: TelegramCrmInternalNotificationProjector,
+    @Optional() private readonly responseCache?: ResponseCacheService,
   ) {}
 
   async create(userId: string, dto: CreateCrmContactDto) {
@@ -150,6 +158,38 @@ export class TelegramCrmContactCommandService {
 
   restore(userId: string, contactId: string) {
     return this.setArchiveState(userId, contactId, false);
+  }
+
+  async setReplyAlertMuted(
+    userId: string,
+    contactId: string,
+    dto: SetCrmReplyAlertMuteDto,
+  ) {
+    const existing = await this.requireWritableContact(userId, contactId);
+    const contact = await this.prisma.telegramAdvertiser.update({
+      where: { id: existing.id },
+      data: { replyAlertMutedAt: dto.muted ? new Date() : null },
+      select: { id: true, replyAlertMutedAt: true },
+    });
+    const summaries = await loadCrmReplySummaries(
+      this.prisma,
+      existing.workspaceId,
+      [contact],
+    );
+    this.responseCache?.clearWorkspacePath(
+      existing.workspaceId,
+      '/telegram-crm/contacts',
+    );
+    return {
+      replySummary: summaries.get(contact.id) ?? {
+        status: 'NONE' as const,
+        inboundMessageCount: 0,
+        outboundMessageCount: 0,
+        countsComplete: false,
+        unreadCount: 0,
+        muted: false,
+      },
+    };
   }
 
   private async setArchiveState(

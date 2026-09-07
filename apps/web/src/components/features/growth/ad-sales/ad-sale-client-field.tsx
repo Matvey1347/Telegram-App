@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { TelegramAdvertiser } from "@telegram-system/shared";
-import { CustomSelect, FormField, Input } from "@/components/ui/primitives";
+import { CustomSelect, Input } from "@/components/ui/primitives";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 
 export function canonicalTelegramUsername(value: string) {
@@ -76,15 +76,9 @@ export function AdSaleClientField(props: {
     !isValidTelegramUsernameInput(props.contact);
 
   return (
-    <FormField
-      label="Client"
-      error={
-        invalidUsername
-          ? "Telegram username must contain 5–32 letters, numbers, or underscores"
-          : undefined
-      }
-    >
-      <div className="space-y-2">
+    <div className="min-w-0 space-y-1 text-sm">
+      <div className="flex h-7 items-center gap-2">
+        <span className="text-sm text-neutral-300">Client</span>
         <SegmentedControl
           value={mode}
           ariaLabel="Client source"
@@ -99,8 +93,11 @@ export function AdSaleClientField(props: {
             props.onTelegramChange("");
           }}
         />
+      </div>
+      <div className="[&>div>button]:h-[42px] [&>div>button]:min-h-0">
         {mode === "new" ? (
           <Input
+            className="h-[42px]"
             aria-label="Telegram username"
             value={props.contact}
             onChange={(event) => {
@@ -117,10 +114,7 @@ export function AdSaleClientField(props: {
             placeholder={loading ? "Loading clients..." : "Select client"}
             disabled={loading}
             options={advertisers.map((advertiser) => {
-              const username = advertiser.telegramUsername?.replace(
-                /^@+/,
-                "",
-              );
+              const username = advertiser.telegramUsername?.replace(/^@+/, "");
               return {
                 value: advertiser.id,
                 label: advertiser.displayName,
@@ -148,6 +142,11 @@ export function AdSaleClientField(props: {
           />
         )}
       </div>
-    </FormField>
+      {invalidUsername ? (
+        <p className="text-xs text-red-400">
+          Telegram username must contain 5–32 letters, numbers, or underscores
+        </p>
+      ) : null}
+    </div>
   );
 }

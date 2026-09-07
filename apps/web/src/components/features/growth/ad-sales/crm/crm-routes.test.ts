@@ -23,7 +23,7 @@ describe("resolveAdSalesSurface", () => {
     ).toEqual({ kind: "contacts" });
   });
 
-  it("collapses old filters and detail links back to the clients surface", () => {
+  it("collapses old filters and preserves an exact contact conversation link", () => {
     expect(
       resolveAdSalesSurface(
         "/ad-sales",
@@ -35,7 +35,11 @@ describe("resolveAdSalesSurface", () => {
         "/ad-sales/contacts/contact-1/conversations/conversation-2",
         new URLSearchParams(),
       ),
-    ).toEqual({ kind: "contacts" });
+    ).toEqual({
+      kind: "contacts",
+      contactId: "contact-1",
+      conversationId: "conversation-2",
+    });
   });
 
   it("preserves an exact unassigned inbox thread deep link", () => {

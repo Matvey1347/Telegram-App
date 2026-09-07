@@ -125,6 +125,11 @@ export class TelegramCrmMessageStoreService {
     sentAt: Date,
   ): Prisma.TelegramCrmConversationUpdateInput {
     const update: Prisma.TelegramCrmConversationUpdateInput = {};
+    if (input.direction === TelegramCrmMessageDirection.INBOUND) {
+      update.inboundMessageCount = { increment: 1 };
+    } else {
+      update.outboundMessageCount = { increment: 1 };
+    }
     if (!conversation.lastMessageAt || sentAt > conversation.lastMessageAt) {
       update.lastMessageAt = sentAt;
     }

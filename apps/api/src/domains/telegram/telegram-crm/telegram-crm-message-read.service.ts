@@ -12,18 +12,11 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 import { CrmMessagesQueryDto } from './telegram-crm.dto';
 import { crmMessageSelect, mapCrmMessage } from './telegram-crm-message.mapper';
-import {
-  crmAccountSummarySelect,
-  crmMemberSummarySelect,
-  mapCrmAccountSummary,
-  mapCrmMemberSummary,
-} from './telegram-crm-read-model.mapper';
 
 const DEFAULT_MESSAGE_PAGE_SIZE = 50;
 
 const crmMessageListSelect = {
   ...crmMessageSelect,
-  sentByMember: { select: crmMemberSummarySelect },
 } satisfies Prisma.TelegramCrmMessageSelect;
 
 type MessageListRow = Prisma.TelegramCrmMessageGetPayload<{
@@ -43,35 +36,26 @@ export class TelegramCrmMessageReadService {
     conversationId: string,
     query: CrmMessagesQueryDto,
   ): Promise<CrmMessagesCursorPage> {
-    const access = await this.authorization.require(userId, 'adSales.crm.view');
-    const ownership = await this.authorization.scope(
-      userId,
-      'adSales.crm.viewOwn',
-      'adSales.crm.viewAny',
-    );
-    const conversation = await this.prisma.telegramCrmConversation.findFirst({
-      where: {
-        id: conversationId,
-        workspaceId: access.workspaceId,
-        ...('assignedMemberId' in ownership
-          ? { contact: { ownerMemberId: ownership.assignedMemberId } }
-          : {}),
-      },
-      select: {
-        id: true,
-        mtprotoAccount: { select: crmAccountSummarySelect },
-      },
-    });
-    if (!conversation) {
-      throw new NotFoundException('CRM Conversation not found');
-    }
-
+    const [access, ownership] = await Promise.all([
+      this.authorization.require(userId, 'adSales.crm.view'),
+      this.authorization.scope(
+        userId,
+        'adSales.crm.viewOwn',
+        'adSales.crm.viewAny',
+      ),
+    ]);
     const cursor = query.cursor ? this.decodeCursor(query.cursor) : null;
     const limit = query.limit ?? query.pageSize ?? DEFAULT_MESSAGE_PAGE_SIZE;
     const rows = await this.prisma.telegramCrmMessage.findMany({
       where: {
         conversationId,
         workspaceId: access.workspaceId,
+        conversation: {
+          workspaceId: access.workspaceId,
+          ...('assignedMemberId' in ownership
+            ? { contact: { ownerMemberId: ownership.assignedMemberId } }
+            : {}),
+        },
         ...(cursor
           ? {
               OR: [
@@ -85,28 +69,33 @@ export class TelegramCrmMessageReadService {
       orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
+    if (!rows.length) {
+      const conversation = await this.prisma.telegramCrmConversation.findFirst({
+        where: {
+          id: conversationId,
+          workspaceId: access.workspaceId,
+          ...('assignedMemberId' in ownership
+            ? { contact: { ownerMemberId: ownership.assignedMemberId } }
+            : {}),
+        },
+        select: { id: true },
+      });
+      if (!conversation) {
+        throw new NotFoundException('CRM Conversation not found');
+      }
+    }
     const hasMore = rows.length > limit;
     const pageRows = rows.slice(0, limit);
     return {
-      items: pageRows.map((row) =>
-        this.mapListItem(row, conversation.mtprotoAccount),
-      ),
+      items: pageRows.map((row) => ({
+        ...mapCrmMessage(row),
+        sentByMember: null,
+      })),
       hasMore,
       nextCursor:
         hasMore && pageRows.length
           ? this.encodeCursor(pageRows[pageRows.length - 1])
           : null,
-    };
-  }
-
-  private mapListItem(
-    row: MessageListRow,
-    account: Parameters<typeof mapCrmAccountSummary>[0],
-  ): CrmMessageListItem {
-    return {
-      ...mapCrmMessage(row),
-      account: mapCrmAccountSummary(account),
-      sentByMember: mapCrmMemberSummary(row.sentByMember),
     };
   }
 

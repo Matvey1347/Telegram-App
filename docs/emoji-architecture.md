@@ -11,6 +11,16 @@ Frontend rendering must use `IconAvatar` and pass the hydrated `ResolvedEmoji` p
 
 `IconPicker` may load `/icons`, upload icons, create emoji icons, and lazily fetch `/icons/:id` only while the picker is open and no hydrated display data is available. It is a selection/editing path, not the default display architecture.
 
+Telegram Premium emoji packs are workspace-owned resources. Importing a pack
+makes it available to every Telegram editor in the current workspace, including
+post and CRM message editors; it is not attached to individual channels. The
+frontend loads the workspace pack list lazily when the Premium picker tab is
+opened and reuses the workspace query cache across editors. This flow must not
+introduce per-channel reads, joins, polling, or display-only asset requests.
+Removing a pack archives it instead of deleting its database rows or immutable
+Backblaze assets. Re-importing the same Telegram pack reactivates those assets
+without another Telegram download or storage upload.
+
 When adding a new icon-enabled entity:
 
 1. Store icon references according to the domain schema.

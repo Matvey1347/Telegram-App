@@ -43,6 +43,33 @@ export type CrmInitialImportStatus =
   | "FAILED";
 export type CrmSyncStatus = "IDLE" | "SYNCING" | "RECOVERING" | "FAILED";
 
+export const CRM_REPLY_STATUSES = [
+  "NONE",
+  "FIRST_INBOUND_READ",
+  "FIRST_INBOUND_UNREAD",
+  "CONVERSATION_UNANSWERED_READ",
+  "CONVERSATION_UNANSWERED_UNREAD",
+] as const;
+
+export type CrmReplyStatus = (typeof CRM_REPLY_STATUSES)[number];
+
+export type CrmReplySummary = {
+  status: CrmReplyStatus;
+  inboundMessageCount: number;
+  outboundMessageCount: number;
+  countsComplete: boolean;
+  unreadCount: number;
+  muted: boolean;
+};
+
+export type CrmReplyAlertMuteInput = {
+  muted: boolean;
+};
+
+export type CrmReplyAlertMuteResult = {
+  replySummary: CrmReplySummary;
+};
+
 export const CRM_FOLLOW_UP_VIEWS = [
   "TODAY",
   "WAITING_FOR_REPLY",
@@ -150,12 +177,10 @@ export type CrmContact = {
 };
 
 export type CrmContactListItem = CrmContact & {
+  isUnassignedClient: boolean;
+  replySummary: CrmReplySummary;
   ownerMember: CrmMemberSummary | null;
   peer: CrmPeerSummary | null;
-  unreadCount: number;
-  conversationCount: number;
-  conversationAccounts: CrmAccountSummary[];
-  lastMessage: CrmMessagePreview | null;
   nextOpenTask: CrmTaskSummary | null;
   activeDeal: CrmActiveDealSummary | null;
   salesSummary: {
@@ -165,6 +190,7 @@ export type CrmContactListItem = CrmContact & {
     totalPlacementsCount: number;
     revenueByCurrency: Array<{ currency: string; amount: string }>;
     lastDealAt: string | null;
+    dealMembers: CrmMemberSummary[];
   };
 };
 
@@ -181,6 +207,14 @@ export type CrmContactDetail = CrmContact & {
     openTasks: number;
     activities: number;
   };
+};
+
+export type CrmChatContactContext = Pick<
+  CrmContact,
+  "id" | "workspaceId" | "displayName" | "telegramUsername" | "ownerMemberId"
+> & {
+  peers: CrmPeerSummary[];
+  conversationAccounts: CrmAccountSummary[];
 };
 
 export type CrmContactsListResult = PaginatedResponse<CrmContactListItem>;
@@ -257,7 +291,9 @@ export type CrmMessageWithAttribution = CrmMessage & {
 };
 
 export type CrmMessageListItem = CrmMessageWithAttribution & {
-  account: CrmAccountSummary;
+  /** Optional legacy attribution; compact chat pages intentionally omit joins. */
+  account?: CrmAccountSummary;
+  sentByMember: CrmMemberSummary | null;
 };
 
 export type CrmMessagesCursorPage = {

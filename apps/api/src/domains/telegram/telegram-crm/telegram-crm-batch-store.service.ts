@@ -81,7 +81,15 @@ export class TelegramCrmBatchStoreService {
           lastMessageAt: true,
           lastReadInboxTelegramMessageId: true,
           lastReadOutboxTelegramMessageId: true,
-          peer: { select: { telegramUserId: true } },
+          peer: {
+            select: {
+              telegramUserId: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              photoUrl: true,
+            },
+          },
           contact: { select: { ownerMemberId: true } },
         },
       });
@@ -200,12 +208,17 @@ export class TelegramCrmBatchStoreService {
           update.type === 'history.inboxRead'
             ? conversation.lastReadInboxTelegramMessageId
             : conversation.lastReadOutboxTelegramMessageId;
-        if (previous != null && previous >= update.maxTelegramMessageId)
-          continue;
         const inbox = update.type === 'history.inboxRead';
         const unreadCount = inbox
           ? Math.max(0, update.stillUnreadCount ?? 0)
           : conversation.unreadCount;
+        if (
+          previous != null &&
+          previous >= update.maxTelegramMessageId &&
+          (!inbox || unreadCount === conversation.unreadCount)
+        ) {
+          continue;
+        }
         await tx.telegramCrmConversation.update({
           where: { id: conversation.id },
           data: inbox
@@ -244,11 +257,25 @@ export class TelegramCrmBatchStoreService {
       if (!unresolved) {
         await this.advanceCheckpoint(tx, context, context.checkpoint);
       }
+      const readNotificationStates = readEvents
+        .filter((event) => event.unreadChanged)
+        .map((event) => ({
+          conversationId: event.conversationId,
+          contactId: event.contactId,
+          unreadCount: event.unreadCount,
+        }));
+      const invalidatedNotificationMemberIds =
+        await this.messages.reconcileIncomingNotificationGroups(
+          tx,
+          context.workspaceId,
+          readNotificationStates,
+        );
       return {
         stored,
         readEvents,
         changedPeers: [...changedPeers.values()],
         unresolved,
+        invalidatedNotificationMemberIds,
       };
     });
     this.messages.emitAfterCommit(context.workspaceId, result.stored, 'live');
@@ -256,6 +283,10 @@ export class TelegramCrmBatchStoreService {
     this.messages.emitPeerMetadataAfterCommit(
       context.workspaceId,
       result.changedPeers,
+    );
+    this.messages.emitNotificationInvalidationsAfterCommit(
+      context.workspaceId,
+      result.invalidatedNotificationMemberIds,
     );
     return {
       changed:
@@ -316,6 +347,59 @@ export class TelegramCrmBatchStoreService {
       return stored;
     });
     return { imported: result.created.length, edited: result.edited };
+  }
+
+  async importHistoryBatch(
+    input: BatchContext & {
+      histories: Array<{
+        conversation: { id: string; contactId: string | null };
+        messages: TelegramCrmMtprotoMessage[];
+        nextBeforeTelegramMessageId: number | null;
+        exhausted: boolean;
+      }>;
+    },
+  ) {
+    if (!input.histories.length) return { imported: 0, edited: 0 };
+    const stored = await this.prisma.$transaction(
+      async (tx) => {
+        const result = await this.messages.store(
+          tx,
+          input,
+          input.histories.flatMap((history) =>
+            history.messages.map((message) => ({
+              conversation: history.conversation,
+              message,
+            })),
+          ),
+          'history',
+        );
+        await tx.$executeRaw(Prisma.sql`
+        UPDATE "TelegramCrmConversation" AS conversation
+        SET
+          "historyCursorTelegramMessageId" = incoming."cursor",
+          "historyExhausted" = incoming."exhausted",
+          "updatedAt" = NOW()
+        FROM (
+          VALUES ${Prisma.join(
+            input.histories.map(
+              (history) => Prisma.sql`(
+                CAST(${history.conversation.id} AS TEXT),
+                CAST(${history.nextBeforeTelegramMessageId} AS BIGINT),
+                CAST(${history.exhausted} AS BOOLEAN)
+              )`,
+            ),
+          )}
+        ) AS incoming("conversationId", "cursor", "exhausted")
+        WHERE conversation."id" = incoming."conversationId"
+          AND conversation."workspaceId" = ${input.workspaceId}
+          AND conversation."mtprotoAccountId" = ${input.accountId}
+        `);
+        return result;
+      },
+      { timeout: 30_000 },
+    );
+    this.messages.emitAfterCommit(input.workspaceId, stored, 'history');
+    return { imported: stored.created.length, edited: stored.edited };
   }
 
   private async advanceCheckpoint(

@@ -22,6 +22,8 @@ function metadata(value: unknown): OperationsNotificationMetadata {
 export function mapOperationsNotification(
   row: OperationsNotification,
 ): OperationsNotificationItem {
+  const normalizedMetadata = metadata(row.metadata);
+  const presentation = crmMessagePresentation(row, normalizedMetadata);
   return {
     id: row.id,
     workspaceId: row.workspaceId,
@@ -31,10 +33,34 @@ export function mapOperationsNotification(
     copyKey: row.copyKey as OperationsNotificationCopyKey,
     title: row.title,
     body: row.body,
-    metadata: metadata(row.metadata),
+    metadata: normalizedMetadata,
+    presentation,
     targetUrl: requireInternalNotificationTarget(row.targetUrl),
     readAt: row.readAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     expiresAt: row.expiresAt.toISOString(),
+  };
+}
+
+function crmMessagePresentation(
+  row: OperationsNotification,
+  value: OperationsNotificationMetadata,
+): OperationsNotificationItem['presentation'] {
+  if (
+    row.type !== 'CRM_MESSAGE_RECEIVED' ||
+    value.presentationKind !== 'crm-message' ||
+    typeof value.conversationId !== 'string' ||
+    typeof value.senderName !== 'string' ||
+    typeof value.messageCount !== 'number'
+  ) {
+    return null;
+  }
+  return {
+    kind: 'crm-message',
+    conversationId: value.conversationId,
+    contactId: typeof value.contactId === 'string' ? value.contactId : null,
+    senderName: value.senderName,
+    avatarUrl: typeof value.avatarUrl === 'string' ? value.avatarUrl : null,
+    messageCount: value.messageCount,
   };
 }

@@ -30,8 +30,10 @@ export class ResponseCacheService {
     const inFlight = this.pending.get(key) as Promise<T> | undefined;
     if (inFlight) return inFlight;
 
-    const request = load()
+    let request!: Promise<T>;
+    request = load()
       .then((value) => {
+        if (this.pending.get(key) !== request) return value;
         const createdAt = Date.now();
         this.entries.set(key, {
           value,
@@ -42,7 +44,9 @@ export class ResponseCacheService {
         this.prune();
         return value;
       })
-      .finally(() => this.pending.delete(key));
+      .finally(() => {
+        if (this.pending.get(key) === request) this.pending.delete(key);
+      });
 
     this.pending.set(key, request);
     return request;
@@ -58,6 +62,20 @@ export class ResponseCacheService {
     }
     for (const key of this.pending.keys()) {
       if (key.startsWith(prefix)) this.pending.delete(key);
+    }
+  }
+
+  clearWorkspacePath(workspaceId: string, path: string) {
+    const workspaceScope = `:${workspaceId}:GET:`;
+    for (const key of this.entries.keys()) {
+      if (key.includes(workspaceScope) && key.includes(path)) {
+        this.entries.delete(key);
+      }
+    }
+    for (const key of this.pending.keys()) {
+      if (key.includes(workspaceScope) && key.includes(path)) {
+        this.pending.delete(key);
+      }
     }
   }
 

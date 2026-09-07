@@ -39,6 +39,56 @@ describe('TelegramCrmMtprotoAdapter', () => {
     expect(closeTelegramMtprotoSession).toHaveBeenCalledWith(client);
   });
 
+  it('loads private users without GramJS migrated-dialog filtering and reports Telegram total', async () => {
+    const user = new Api.User({
+      id: 42 as never,
+      accessHash: 420 as never,
+      username: 'alice',
+      firstName: 'Alice',
+    });
+    const message = new Api.Message({
+      id: 7,
+      peerId: new Api.PeerUser({ userId: 42 as never }),
+      message: 'hello',
+      date: 1_788_000_000,
+    });
+    const rows = Object.assign(
+      [{ entity: user, message, id: 42, unreadCount: 3 }],
+      { total: 17 },
+    );
+    const client = {
+      getDialogs: jest.fn().mockResolvedValue(rows),
+      addEventHandler: jest.fn(),
+      removeEventHandler: jest.fn(),
+    };
+    jest
+      .mocked(createTelegramMtprotoSession)
+      .mockResolvedValue(client as never);
+    const handle = await new TelegramCrmMtprotoAdapter().open({
+      apiId: '1',
+      apiHash: 'hash',
+      session: 'session',
+    });
+
+    await expect(
+      handle.listPrivateDialogs({ limit: 100 }),
+    ).resolves.toMatchObject({
+      scanned: 1,
+      total: 17,
+      dialogs: [
+        expect.objectContaining({
+          peer: expect.objectContaining({ username: 'alice' }),
+        }),
+      ],
+    });
+    expect(client.getDialogs).toHaveBeenCalledWith(
+      expect.objectContaining({ offsetDate: undefined }),
+    );
+    expect(client.getDialogs).toHaveBeenCalledWith(
+      expect.not.objectContaining({ ignoreMigrated: true }),
+    );
+  });
+
   it('returns only eligible users referenced by normalized private updates', async () => {
     const difference = new Api.updates.Difference({
       newMessages: [

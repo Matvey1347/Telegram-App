@@ -45,7 +45,9 @@ class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
     const offset = decodeTelegramCrmDialogCursor(cursor);
     const rows = await this.client.getDialogs({
       limit: pageSize,
-      offsetDate: offset.offsetDate,
+      // GramJS treats even zero as an active date filter and then discards
+      // every normal dialog whose message date is greater than zero.
+      offsetDate: cursor ? offset.offsetDate : undefined,
       offsetId: offset.offsetId,
       offsetPeer:
         offset.offsetUserId && offset.offsetAccessHash
@@ -54,7 +56,6 @@ class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
               accessHash: returnBigInt(offset.offsetAccessHash),
             })
           : undefined,
-      ignoreMigrated: true,
     });
     const dialogs: TelegramCrmMtprotoDialog[] = [];
     for (const dialog of rows) {
@@ -81,6 +82,7 @@ class GramJsTelegramCrmHandle implements TelegramCrmMtprotoHandle {
     return {
       dialogs,
       scanned: rows.length,
+      total: rows.total ?? rows.length,
       exhausted,
       nextCursor:
         exhausted || !lastMessage

@@ -172,7 +172,7 @@ import {
   toLocalDateKey,
 } from "@/components/features/telegram/telegram/telegram-posts-calendar-view";
 import { telegramSyncedPostGroup } from "@/components/features/telegram/telegram/telegram-synced-post-group";
-import { memberKeys, telegramChannelKeys, telegramPostKeys } from "@/lib/query-keys";
+import { memberKeys, telegramChannelKeys, telegramPostKeys, workspaceKeys } from "@/lib/query-keys";
 import {
   type ScheduleManagedPostsBatchItem,
   type TelegramManagedPostCalendarResult,
@@ -206,7 +206,7 @@ import { useAppToast } from "@/providers/toast-provider";
 import { useI18n, type TranslationFunction } from "@/providers/i18n-provider";
 import type { I18nNamespace } from "@/i18n/catalog";
 import { safeApiErrorMessage } from "@/i18n/error-localization";
-import { Pagination } from "@/components/ui/pagination";
+import { Pagination, THREE_COLUMN_GRID_PAGE_SIZES } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
 import {
   BulkProgressOverlay,
@@ -982,15 +982,15 @@ function TelegramPostWorkspace({
     data: postsData,
   };
   const customEmojiPacks = useQuery({
-    queryKey: telegramChannelKeys.customEmojiPacks(channelId),
-    queryFn: () => telegramChannelsApi.customEmojiPacks(channelId),
-    enabled: Boolean(channelId) && workspaceView === "posts" && postView === "editor",
+    queryKey: workspaceKeys.telegramCustomEmojiPacks(),
+    queryFn: () => telegramChannelsApi.customEmojiPacks(),
+    enabled: customEmojiPacksOpen,
   });
   const refreshCustomEmojiPacks = useCallback(async () => {
     await queryClient.invalidateQueries({
-      queryKey: telegramChannelKeys.customEmojiPacks(channelId),
+      queryKey: workspaceKeys.telegramCustomEmojiPacks(),
     });
-  }, [channelId, queryClient]);
+  }, [queryClient]);
   const calendarRange = useMemo(
     () => ({
       from: startOfDay(calendarGridStart(calendarMonth)).toISOString(),
@@ -4112,38 +4112,20 @@ function TelegramPostWorkspace({
       <TelegramCustomEmojiPacksModal
         open={customEmojiPacksOpen}
         onClose={() => setCustomEmojiPacksOpen(false)}
-        currentChannelId={channelId}
-        channels={channels.map((channel) => ({
-          id: channel.id,
-          title: channel.title,
-        }))}
         packs={customEmojiPacks.data?.packs || []}
         onImport={async (input) => {
-          const response = await telegramChannelsApi.importCustomEmojiPack(
-            channelId,
-            input,
-          );
+          const response = await telegramChannelsApi.importCustomEmojiPack(input);
           queryClient.setQueryData(
-            telegramChannelKeys.customEmojiPacks(channelId),
+            workspaceKeys.telegramCustomEmojiPacks(),
             response,
           );
-          await queryClient.invalidateQueries({
-            queryKey: ["telegram-channel-custom-emoji-packs"],
-          });
         }}
-        onDetach={async (packId, target) => {
-          const response = await telegramChannelsApi.detachCustomEmojiPack(
-            channelId,
-            packId,
-            target,
-          );
+        onDetach={async (packId) => {
+          const response = await telegramChannelsApi.detachCustomEmojiPack(packId);
           queryClient.setQueryData(
-            telegramChannelKeys.customEmojiPacks(channelId),
+            workspaceKeys.telegramCustomEmojiPacks(),
             response,
           );
-          await queryClient.invalidateQueries({
-            queryKey: ["telegram-channel-custom-emoji-packs"],
-          });
         }}
       />
       <ConfirmDeleteModal
@@ -5116,7 +5098,6 @@ function TelegramPostWorkspace({
                 highlightRequestKey={highlightRequestKey}
                 availableInternalPosts={posts.data || []}
                 enableCustomEmoji
-                customEmojiPacks={customEmojiPacks.data?.packs}
                 onManageCustomEmojiPacks={() => setCustomEmojiPacksOpen(true)}
                 buttonRows={buttonRows}
                 onButtonRowsChange={setButtonRows}
@@ -6115,9 +6096,8 @@ function PostGroupsWorkspace({
   const [addPostsOpen, setAddPostsOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [movingListGroup, setMovingListGroup] = useState<PostGroup | null>(null);
-  const [movingGroupPost, setMovingGroupPost] = useState<TelegramManagedPost | null>(
-    null,
-  );
+  const [movingGroupPost, setMovingGroupPost] =
+    useState<TelegramManagedPost | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [resetDraftsOpen, setResetDraftsOpen] = useState(false);
@@ -6126,7 +6106,7 @@ function PostGroupsWorkspace({
   const reorderTimerRef = useRef<number | null>(null);
   const reorderVersionRef = useRef(0);
   const reorderQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const groupsPagination = usePagination({ initialPageSize: 10 });
+  const groupsPagination = usePagination({ initialPageSize: 12 });
   const groups = useQuery({
     queryKey: [
       "post-groups",
@@ -6911,6 +6891,7 @@ function PostGroupsWorkspace({
           totalPages={groups.data.pagination.totalPages}
           hasNextPage={groups.data.pagination.hasNextPage}
           hasPreviousPage={groups.data.pagination.hasPreviousPage}
+          pageSizeOptions={THREE_COLUMN_GRID_PAGE_SIZES}
           onPageChange={groupsPagination.setPage}
           onPageSizeChange={groupsPagination.setPageSize}
           loading={groupsLoading}

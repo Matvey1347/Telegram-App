@@ -606,14 +606,14 @@ describe('TelegramAdSalesService', () => {
     jest.restoreAllMocks();
   });
 
-  it('persists and returns the selected sale origin', async () => {
+  it('persists and returns an external new-sale origin', async () => {
     const { service, prisma } = createService();
     prisma.telegramAdSale.create.mockImplementation(({ data }: any) =>
       Promise.resolve(
         makeSale({
           ...data,
           advertiserId: null,
-          origin: TelegramAdSaleOrigin.ADSELL_IO,
+          origin: TelegramAdSaleOrigin.DIRECT_EXTERNAL,
           placements: [],
         }),
       ),
@@ -623,17 +623,17 @@ describe('TelegramAdSalesService', () => {
       advertiserId: null,
       advertiserName: 'Exchange advertiser',
       settlementCurrency: 'USD',
-      origin: TelegramAdSaleOrigin.ADSELL_IO,
+      origin: TelegramAdSaleOrigin.DIRECT_EXTERNAL,
     });
 
     expect(prisma.telegramAdSale.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          origin: TelegramAdSaleOrigin.ADSELL_IO,
+          origin: TelegramAdSaleOrigin.DIRECT_EXTERNAL,
         }),
       }),
     );
-    expect(sale.origin).toBe(TelegramAdSaleOrigin.ADSELL_IO);
+    expect(sale.origin).toBe(TelegramAdSaleOrigin.DIRECT_EXTERNAL);
   });
 
   it('replaces stale buyer snapshots when a deal buyer is edited', async () => {

@@ -118,7 +118,7 @@ function OperationHarness() {
         type="button"
         onClick={() =>
           setProgress({
-            id: "progress-mixed",
+            id: "progress-1",
             title: "Sync channel",
             current: 9,
             total: 9,
@@ -331,13 +331,16 @@ describe("ToastProvider", () => {
     expect(screen.getByText("2/4")).toBeInTheDocument();
   });
 
-  it("keeps completed mixed progress as informational instead of success", async () => {
+  it("keeps the error alert and final failure count for completed failed progress", async () => {
     renderWithProviders(<OperationHarness />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Legacy progress" }));
     fireEvent.click(screen.getByRole("button", { name: "Legacy mixed complete" }));
 
     expect(await screen.findByText("Channel sync completed")).toBeInTheDocument();
     expect(screen.getByText("8 success · 1 failed · 0 skipped")).toBeInTheDocument();
+    expect(screen.getByText("1 failed")).toBeInTheDocument();
+    expect(screen.queryByText("2/4")).not.toBeInTheDocument();
   });
 
   it("deduplicates identical toasts fired within a short window", async () => {

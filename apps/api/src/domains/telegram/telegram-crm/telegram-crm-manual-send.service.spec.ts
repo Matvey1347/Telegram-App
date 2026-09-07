@@ -110,11 +110,13 @@ describe('TelegramCrmManualSendService', () => {
       ),
     };
     const events = { emit: jest.fn() };
+    const responseCache = { clearWorkspacePath: jest.fn() };
     const service = new TelegramCrmManualSendService(
       prisma as never,
       authorization as never,
       runtime as never,
       events as never,
+      responseCache as never,
     );
 
     await expect(
@@ -164,6 +166,14 @@ describe('TelegramCrmManualSendService', () => {
     }
     expect(events.emit).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'message.sent' }),
+    );
+    expect(responseCache.clearWorkspacePath).toHaveBeenCalledWith(
+      'workspace-1',
+      '/telegram-crm/conversations/conversation-1/messages',
+    );
+    expect(responseCache.clearWorkspacePath).toHaveBeenCalledWith(
+      'workspace-1',
+      '/telegram-crm/contacts',
     );
   });
 

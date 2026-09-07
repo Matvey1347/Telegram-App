@@ -10,7 +10,7 @@ import type {
   TransactionCategory,
   WorkspaceMemberSelectOption as WorkspaceMember,
 } from "@/lib/api";
-import { telegramChannelsApi, transactionCategoriesApi } from "@/lib/api";
+import { telegramChannelsApi } from "@/lib/api";
 import { accountDisplayName } from "@/lib/features/finance/account-display";
 import {
   Button,
@@ -38,6 +38,7 @@ type CategoryPurpose =
   | "investment"
   | "salary"
   | "buy-channels"
+  | "advertising-expense"
   | "channel-advertising-revenue"
   | "standard";
 
@@ -86,6 +87,12 @@ export function transactionCategoryPurpose(
       name === "channel advertising revenue")
   ) {
     return "channel-advertising-revenue";
+  }
+  if (
+    category.type === "expense" &&
+    (category.key === "advertising" || name === "advertising")
+  ) {
+    return "advertising-expense";
   }
   return "standard";
 }
@@ -166,6 +173,7 @@ export function InternalTransactionModal({
   onSubmit,
   title,
   accounts,
+  categories,
   members,
   initial,
 }: {
@@ -174,6 +182,7 @@ export function InternalTransactionModal({
   onSubmit: (values: InternalTransactionValues) => void;
   title: string;
   accounts: Account[];
+  categories?: TransactionCategory[];
   members: WorkspaceMember[];
   initial?: Transaction;
 }) {
@@ -194,28 +203,29 @@ export function InternalTransactionModal({
   const categoryId = watch("categoryId");
   const memberId = watch("memberId") ?? "";
   const telegramChannelId = watch("telegramChannelId") ?? "";
-  const { data: categories } = useQuery({
-    queryKey: ["transaction-categories", type],
-    queryFn: () => transactionCategoriesApi.list(type),
-    enabled: open && Boolean(type),
-  });
+  const availableCategories = useMemo(
+    () => (categories ?? []).filter((category) => category.type === type),
+    [categories, type],
+  );
   const { data: telegramChannels } = useQuery({
     queryKey: ["telegram-channels", "select", "transactions-modal"],
     queryFn: () => telegramChannelsApi.select(),
     enabled: open,
   });
   const selectedCategory = useMemo(
-    () => categories?.find((category) => category.id === categoryId),
-    [categories, categoryId],
+    () => availableCategories.find((category) => category.id === categoryId),
+    [availableCategories, categoryId],
   );
   const categoryPurpose = transactionCategoryPurpose(selectedCategory);
   const isInvestment = categoryPurpose === "investment";
   const requiresMember = isInvestment || categoryPurpose === "salary";
   const isBuyChannels = categoryPurpose === "buy-channels";
+  const isAdvertisingExpense = categoryPurpose === "advertising-expense";
   const isChannelAdvertisingRevenue =
     categoryPurpose === "channel-advertising-revenue";
-  const requiresTelegramChannel = isBuyChannels || isChannelAdvertisingRevenue;
-  const hasCategoryExtraField = requiresMember || requiresTelegramChannel;
+  const showsTelegramChannel =
+    isBuyChannels || isAdvertisingExpense || isChannelAdvertisingRevenue;
+  const hasCategoryExtraField = requiresMember || showsTelegramChannel;
   const ownChannels = useMemo(
     () =>
       (telegramChannels ?? []).filter((channel) => channel.isActive !== false),
@@ -240,8 +250,8 @@ export function InternalTransactionModal({
   }, [requiresMember, setValue]);
 
   useEffect(() => {
-    if (!requiresTelegramChannel) setValue("telegramChannelId", "");
-  }, [requiresTelegramChannel, setValue]);
+    if (!showsTelegramChannel) setValue("telegramChannelId", "");
+  }, [showsTelegramChannel, setValue]);
 
   useEffect(() => {
     if (!requiresMember) return;
@@ -268,11 +278,11 @@ export function InternalTransactionModal({
   useEffect(() => {
     const selected = getValues("categoryId");
     if (!selected || categories === undefined) return;
-    if (!categories.some((category) => category.id === selected)) {
+    if (!availableCategories.some((category) => category.id === selected)) {
       setValue("categoryId", "");
       setValue("memberId", "");
     }
-  }, [categories, getValues, setValue, type]);
+  }, [availableCategories, categories, getValues, setValue]);
 
   return (
     <Modal open={open} onClose={onClose} title={title} size="xs">
@@ -334,7 +344,7 @@ export function InternalTransactionModal({
                 <option value="" disabled hidden>
                   Select category
                 </option>
-                {categories?.map((category) => (
+                {availableCategories.map((category) => (
                   <option
                     key={category.id}
                     value={category.id}
@@ -379,7 +389,7 @@ export function InternalTransactionModal({
               </FormField>
             </div>
           ) : null}
-          {requiresTelegramChannel ? (
+          {showsTelegramChannel ? (
             <div data-transaction-field="channel">
               <FormField
                 label={

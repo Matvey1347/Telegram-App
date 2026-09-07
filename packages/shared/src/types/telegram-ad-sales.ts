@@ -22,6 +22,7 @@ export type TelegramAdSaleStatus =
 
 export type TelegramAdSaleOrigin =
   | "DIRECT"
+  | "DIRECT_EXTERNAL"
   | "REPEAT"
   | "ADSELL_IO"
   | "COLLABORATOR_PRO";

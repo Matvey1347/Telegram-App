@@ -252,7 +252,7 @@ export function AdSaleModal(props: AdSaleModalProps) {
           <>
             <div className="space-y-4 pr-1">
               <section className="space-y-3">
-                <div className="grid gap-3 xl:grid-cols-4 xl:items-start">
+                <div className="grid gap-3 [&>div>span:first-child]:flex [&>div>span:first-child]:h-7 [&>div>span:first-child]:items-center xl:grid-cols-4 xl:items-start">
                   <AdSaleClientField
                     key={open ? "open" : "closed"}
                     contact={advertiserContact}
@@ -268,46 +268,52 @@ export function AdSaleModal(props: AdSaleModalProps) {
                   />
 
                   <FormField label="Financial account" required>
-                    <CustomSelect
-                      value={accountId}
-                      onChange={(nextAccountId) => {
-                        accountManuallySelectedRef.current = true;
-                        setAccountId(nextAccountId);
-                      }}
-                      placeholder="Select account"
-                      options={accounts
-                        .filter((account) => account.isActive)
-                        .map((account) => ({
-                          value: account.id,
-                          label: `${accountDisplayName(account)} (${account.currency})`,
-                          iconUrl:
-                            account.iconPresentation?.type === "image"
-                              ? account.iconPresentation.url
-                              : undefined,
-                          iconEmoji:
-                            account.iconPresentation?.type === "unicode"
-                              ? account.iconPresentation.value
-                              : undefined,
-                          iconFallback: account.name,
-                        }))}
-                    />
+                    <div className="[&>div>button]:h-[42px] [&>div>button]:min-h-0">
+                      <CustomSelect
+                        value={accountId}
+                        onChange={(nextAccountId) => {
+                          accountManuallySelectedRef.current = true;
+                          setAccountId(nextAccountId);
+                        }}
+                        placeholder="Select account"
+                        options={accounts
+                          .filter((account) => account.isActive)
+                          .map((account) => ({
+                            value: account.id,
+                            label: `${accountDisplayName(account)} (${account.currency})`,
+                            iconUrl:
+                              account.iconPresentation?.type === "image"
+                                ? account.iconPresentation.url
+                                : undefined,
+                            iconEmoji:
+                              account.iconPresentation?.type === "unicode"
+                                ? account.iconPresentation.value
+                                : undefined,
+                            iconFallback: account.name,
+                          }))}
+                      />
+                    </div>
                   </FormField>
 
                   <FormField label="Sale origin">
-                    <CustomSelect
-                      value={saleOrigin}
-                      onChange={(value) =>
-                        setSaleOrigin(value as TelegramAdSaleOrigin)
-                      }
-                      options={adSaleOriginOptions}
-                    />
+                    <div className="[&>div>button]:h-[42px] [&>div>button]:min-h-0">
+                      <CustomSelect
+                        value={saleOrigin}
+                        onChange={(value) =>
+                          setSaleOrigin(value as TelegramAdSaleOrigin)
+                        }
+                        options={adSaleOriginOptions}
+                      />
+                    </div>
                   </FormField>
                   <FormField label="Member">
-                    <MemberSelect
-                      value={assignedMemberId}
-                      onChange={setAssignedMemberId}
-                      defaultToCurrent
-                    />
+                    <div className="[&>div>button]:h-[42px] [&>div>button]:min-h-0">
+                      <MemberSelect
+                        value={assignedMemberId}
+                        onChange={setAssignedMemberId}
+                        defaultToCurrent
+                      />
+                    </div>
                   </FormField>
                 </div>
               </section>

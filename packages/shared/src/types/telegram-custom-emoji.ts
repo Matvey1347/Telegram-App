@@ -1,6 +1,6 @@
 /** Serializable Custom Emoji contracts. Telegram document identifiers are strings
  * because Telegram uses signed 64-bit identifiers. */
-export type TelegramCustomEmojiKind = 'STATIC' | 'ANIMATED' | 'VIDEO';
+export type TelegramCustomEmojiKind = "STATIC" | "ANIMATED" | "VIDEO";
 
 export interface TelegramCustomEmoji {
   id: string;
@@ -24,17 +24,10 @@ export interface TelegramCustomEmojiPackSummary {
   emojis: TelegramCustomEmoji[];
 }
 
-export interface TelegramChannelCustomEmojiPacksResponse {
-  channelId: string;
+export interface TelegramWorkspaceCustomEmojiPacksResponse {
   packs: TelegramCustomEmojiPackSummary[];
 }
 
 export interface ImportTelegramCustomEmojiPackInput {
   source: string;
-  scope: "CHANNELS" | "ALL_CHANNELS";
-  channelIds?: string[];
 }
-
-export type TelegramCustomEmojiPackTarget =
-  | { scope: "CHANNELS"; channelIds: string[] }
-  | { scope: "ALL_CHANNELS" };

@@ -2,8 +2,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { TransactionCategory } from "@/lib/api";
-import { telegramChannelsApi, transactionCategoriesApi } from "@/lib/api";
+import type { Transaction, TransactionCategory } from "@/lib/api";
+import { telegramChannelsApi } from "@/lib/api";
 import {
   InternalTransactionModal,
   transactionCategoryPurpose,
@@ -43,6 +43,13 @@ const categories: TransactionCategory[] = [
     key: null,
   },
   {
+    id: "advertising",
+    name: "Advertising",
+    type: "expense",
+    isSystem: true,
+    key: "advertising",
+  },
+  {
     id: "salary",
     name: "Salaries",
     type: "expense",
@@ -51,7 +58,7 @@ const categories: TransactionCategory[] = [
   },
 ];
 
-function renderModal() {
+function renderModal(initial?: Transaction) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -62,6 +69,7 @@ function renderModal() {
         title="Create Transaction"
         onClose={vi.fn()}
         onSubmit={vi.fn()}
+        initial={initial}
         accounts={[
           {
             id: "account",
@@ -72,6 +80,7 @@ function renderModal() {
             assignedMemberId: "member",
           },
         ]}
+        categories={categories}
         members={[
           {
             id: "member",
@@ -104,7 +113,6 @@ afterEach(() => {
 
 describe("internal transaction modal category fields", () => {
   it("uses the standard compact modal width", () => {
-    vi.spyOn(transactionCategoriesApi, "list").mockResolvedValue([]);
     vi.spyOn(telegramChannelsApi, "select").mockResolvedValue([]);
     renderModal();
 
@@ -125,18 +133,12 @@ describe("internal transaction modal category fields", () => {
   });
 
   it("pairs Category with Member and Account with Amount for Investment", async () => {
-    vi.spyOn(transactionCategoriesApi, "list").mockImplementation(
-      async (type) => categories.filter((category) => category.type === type),
-    );
     vi.spyOn(telegramChannelsApi, "select").mockResolvedValue([]);
     const user = userEvent.setup();
     renderModal();
 
     await user.click(screen.getByRole("button", { name: "Expense" }));
     await user.click(await screen.findByRole("button", { name: "Income" }));
-    await waitFor(() =>
-      expect(transactionCategoriesApi.list).toHaveBeenCalledWith("income"),
-    );
     await user.click(screen.getByRole("button", { name: "Select category" }));
     await user.click(await screen.findByRole("button", { name: /Investment/ }));
 
@@ -159,9 +161,6 @@ describe("internal transaction modal category fields", () => {
   });
 
   it("shows Channel for Buy Channels before Account and hides it for a standard category", async () => {
-    vi.spyOn(transactionCategoriesApi, "list").mockImplementation(
-      async (type) => categories.filter((category) => category.type === type),
-    );
     vi.spyOn(telegramChannelsApi, "select").mockResolvedValue([
       {
         id: "channel",
@@ -174,9 +173,6 @@ describe("internal transaction modal category fields", () => {
     const user = userEvent.setup();
     renderModal();
 
-    await waitFor(() =>
-      expect(transactionCategoriesApi.list).toHaveBeenCalledWith("expense"),
-    );
     await user.click(screen.getByRole("button", { name: "Select category" }));
     await user.click(
       await screen.findByRole("button", { name: /Buy Channels/ }),
@@ -211,10 +207,38 @@ describe("internal transaction modal category fields", () => {
     ).not.toHaveClass("md:col-span-2");
   });
 
-  it("requires the member for the Salaries system expense", async () => {
-    vi.spyOn(transactionCategoriesApi, "list").mockImplementation(
-      async (type) => categories.filter((category) => category.type === type),
+  it("shows an optional channel selector for Advertising expenses", async () => {
+    vi.spyOn(telegramChannelsApi, "select").mockResolvedValue([
+      {
+        id: "channel",
+        title: "Business Patterns",
+        isActive: true,
+        canPostMessages: true,
+        publishingCapabilities: {} as never,
+      },
+    ]);
+    const user = userEvent.setup();
+    renderModal();
+
+    await user.click(screen.getByRole("button", { name: "Select category" }));
+    await user.click(await screen.findByRole("button", { name: /Advertising/ }));
+
+    expect(transactionCategoryPurpose(categories[4])).toBe(
+      "advertising-expense",
     );
+    expect(primaryFieldLabels()).toEqual([
+      "Type",
+      "Category",
+      "Channel",
+      "Account",
+      "Amount",
+    ]);
+    expect(
+      screen.getByRole("button", { name: "No channel" }),
+    ).toBeInTheDocument();
+  });
+
+  it("requires the member for the Salaries system expense", async () => {
     vi.spyOn(telegramChannelsApi, "select").mockResolvedValue([]);
     const user = userEvent.setup();
     renderModal();
@@ -225,6 +249,32 @@ describe("internal transaction modal category fields", () => {
       within(screen.getByTestId("transaction-primary-fields")).getByText(
         "Member",
       ),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the loaded category selected while editing a transaction", async () => {
+    vi.spyOn(telegramChannelsApi, "select").mockResolvedValue([]);
+    const user = userEvent.setup();
+    renderModal({
+      id: "transaction",
+      accountId: "account",
+      type: "expense",
+      amount: 200,
+      currency: "UAH",
+      exchangeRateToPrimary: 1,
+      amountInPrimaryCurrency: 200,
+      category: "Advertising",
+      categoryId: "advertising",
+      description: "buy two places in folders",
+      date: "2026-09-04T00:00:00.000Z",
+    } as Transaction);
+
+    expect(
+      await screen.findByRole("button", { name: /Advertising/ }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Advertising/ }));
+    expect(
+      await screen.findByRole("button", { name: /Operations/ }),
     ).toBeInTheDocument();
   });
 });

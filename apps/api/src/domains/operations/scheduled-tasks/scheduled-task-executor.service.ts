@@ -17,6 +17,7 @@ import type {
   ScheduledTaskExecutionResult,
 } from './scheduled-task.types';
 import { OperationsNotificationDueService } from '../notifications/operations-notification-due.service';
+import { TelegramCrmInitialSyncService } from '../../telegram/telegram-crm/telegram-crm-initial-sync.service';
 
 @Injectable()
 export class ScheduledTaskExecutorService {
@@ -49,6 +50,10 @@ export class ScheduledTaskExecutorService {
       ),
     'telegram.daily_analytics.sync': (context: ScheduledTaskExecutionContext) =>
       this.runDailyAnalytics(context),
+    'telegram.crm.sync': (context: ScheduledTaskExecutionContext) =>
+      this.telegramCrmInitialSyncService().then((service) =>
+        service.runWorkspace(this.requireWorkspace(context)),
+      ),
     'currencies.rates.sync': (context: ScheduledTaskExecutionContext) =>
       this.currenciesService().then(async (service) => {
         const result = await service.syncRatesForWorkspaceTask(
@@ -202,6 +207,12 @@ export class ScheduledTaskExecutorService {
 
   private dailyAnalyticsSyncService() {
     return this.moduleRef.resolve(DailyAnalyticsSyncService, undefined, {
+      strict: false,
+    });
+  }
+
+  private telegramCrmInitialSyncService() {
+    return this.moduleRef.resolve(TelegramCrmInitialSyncService, undefined, {
       strict: false,
     });
   }

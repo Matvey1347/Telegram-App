@@ -402,22 +402,18 @@ export class TelegramChannelGptContextExporter {
         select: telegramPostEngagementSelect,
         orderBy: [{ postDate: 'asc' }, { id: 'asc' }],
       }),
-      this.prisma.telegramChannelCustomEmojiPack.findMany({
-        where: { channelId, pack: { workspaceId } },
+      this.prisma.telegramCustomEmojiPack.findMany({
+        where: { workspaceId, archivedAt: null },
         select: {
-          pack: {
-            select: {
-              title: true,
-              shortName: true,
-              telegramLink: true,
-              emojis: {
-                orderBy: { position: 'asc' },
-                select: { documentId: true, alt: true },
-              },
-            },
+          title: true,
+          shortName: true,
+          telegramLink: true,
+          emojis: {
+            orderBy: { position: 'asc' },
+            select: { documentId: true, alt: true },
           },
         },
-        orderBy: { createdAt: 'asc' },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       }),
       this.prisma.postGroup.findMany({
         where: { workspaceId, telegramChannelId: channelId },
@@ -535,7 +531,7 @@ export class TelegramChannelGptContextExporter {
       TELEGRAM_RICH_FORMATTING_GUIDE,
       '',
       'PREMIUM EMOJI',
-      ...links.flatMap(({ pack }) => [
+      ...links.flatMap((pack) => [
         `PACK\ntitle: ${pack.title}\nshort_name: ${pack.shortName}\ntelegram_link: ${pack.telegramLink}`,
         ...pack.emojis.map(
           (emoji) =>

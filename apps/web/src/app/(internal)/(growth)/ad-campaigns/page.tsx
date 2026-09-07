@@ -48,7 +48,7 @@ import { CircleHelp, TrendingUp } from 'lucide-react';
 import { accountDisplayName } from '@/lib/features/finance/account-display';
 import { NativeMoney } from '@/components/ui/native-money';
 import { formatAdCampaignLocalDate as formatLocalDate, isAdCampaignsViewMode, resolveInitialAdCampaignsView, toAdCampaignInputDate as toInputDate, type AdCampaignsViewMode } from '@/components/features/growth/ad-campaigns/ad-campaign-route-state';
-import { Pagination } from '@/components/ui/pagination';
+import { Pagination, THREE_COLUMN_GRID_PAGE_SIZES } from '@/components/ui/pagination';
 import { usePagination } from '@/hooks/use-pagination';
 
 type CampaignValues = {
@@ -122,7 +122,7 @@ export default function AdCampaignsPage() {
   const deferredSearch = useDeferredValue(search.trim());
   const campaignsPagination = usePagination({ initialPageSize: 50 });
   const hypothesesPagination = usePagination({ initialPageSize: 50 });
-  const promosPagination = usePagination({ initialPageSize: 50 });
+  const promosPagination = usePagination({ initialPageSize: 48 });
 
   const financialViewVisible = viewMode !== 'promos' || createOpen || Boolean(editing) || hypothesisFormOpen;
   const { data: workspace } = useQuery({ queryKey: ['workspace-selected'], queryFn: workspacesApi.selected, enabled: financialViewVisible });
@@ -449,7 +449,7 @@ export default function AdCampaignsPage() {
         onDelete={setDeletingPromo}
       />
     ) : null}
-    {viewMode === 'promos' && promosPage ? <Pagination {...promosPage.pagination} onPageChange={promosPagination.setPage} onPageSizeChange={promosPagination.setPageSize} loading={promosLoading} /> : null}
+    {viewMode === 'promos' && promosPage ? <Pagination {...promosPage.pagination} pageSizeOptions={THREE_COLUMN_GRID_PAGE_SIZES} onPageChange={promosPagination.setPage} onPageSizeChange={promosPagination.setPageSize} loading={promosLoading} /> : null}
 
     <CampaignModal
       open={createOpen}

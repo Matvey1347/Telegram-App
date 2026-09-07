@@ -1,4 +1,7 @@
-import type { CrmConversation, CrmMessageWithAttribution } from "./telegram-crm";
+import type {
+  CrmConversation,
+  CrmMessageWithAttribution,
+} from "./telegram-crm";
 
 export type CrmTelegramCheckpoint = {
   pts: number;
@@ -48,4 +51,16 @@ export type CrmRealtimeEvent =
       contactId: null;
       ownerMemberId: null;
       conversation: CrmConversation | null;
+    })
+  | (CrmRealtimeBase & {
+      type: "sync.progress";
+      accountId: string;
+      ownerMemberId: string;
+      phase: "STARTED" | "RUNNING" | "COMPLETED" | "FAILED";
+      scannedDialogs: number;
+      importedPeers: number;
+      importedConversations: number;
+      importedMessages: number;
+      current: number;
+      total: number;
     });

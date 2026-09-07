@@ -8,6 +8,10 @@ import {
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { PropsWithChildren, useState } from "react";
+import {
+  queryRetryDelay,
+  shouldRetryQuery,
+} from "@/lib/http/development-query-retry";
 
 const PERSISTED_QUERY_KEYS = [
   "auth",
@@ -132,7 +136,8 @@ export function QueryProvider({ children }: PropsWithChildren) {
             placeholderData: keepPreviousData,
             refetchOnWindowFocus: false,
             refetchOnReconnect: true,
-            retry: 1,
+            retry: shouldRetryQuery,
+            retryDelay: queryRetryDelay,
           },
         },
       }),

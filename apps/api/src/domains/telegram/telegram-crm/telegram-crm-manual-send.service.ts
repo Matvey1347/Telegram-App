@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   Prisma,
@@ -25,6 +26,7 @@ import { TelegramCrmRuntimeManager } from './telegram-crm-runtime-manager.servic
 import { isPrismaUniqueConflict } from './telegram-crm-prisma-errors';
 import { telegramMarkupToHtml } from '../../../telegram/shared/telegram-markup';
 import { parseTelegramHtml } from '../../../telegram/shared/telegram-html-parser';
+import { ResponseCacheService } from '../../../common/response-cache.service';
 
 const crmManualMessageSelect = {
   ...crmMessageSelect,
@@ -47,6 +49,7 @@ export class TelegramCrmManualSendService {
     private readonly authorization: WorkspaceAuthorizationService,
     private readonly runtime: TelegramCrmRuntimeManager,
     private readonly events: TelegramCrmEventHub,
+    @Optional() private readonly responseCache?: ResponseCacheService,
   ) {}
 
   async send(
@@ -202,6 +205,7 @@ export class TelegramCrmManualSendService {
           data: {
             lastMessageAt: sent.sentAt,
             lastOutboundAt: sent.sentAt,
+            ...(!echo ? { outboundMessageCount: { increment: 1 } } : {}),
             lastMeaningfulSyncAt: new Date(),
           },
         });
@@ -225,6 +229,16 @@ export class TelegramCrmManualSendService {
     const message = mapCrmManualMessage(transactionResult.row);
     if (transactionResult.replay) {
       return { message, idempotentReplay: true };
+    }
+    this.responseCache?.clearWorkspacePath(
+      access.workspaceId,
+      `/telegram-crm/conversations/${conversation.id}/messages`,
+    );
+    if (conversation.contactId) {
+      this.responseCache?.clearWorkspacePath(
+        access.workspaceId,
+        '/telegram-crm/contacts',
+      );
     }
     this.events.emit({
       type: 'message.sent',

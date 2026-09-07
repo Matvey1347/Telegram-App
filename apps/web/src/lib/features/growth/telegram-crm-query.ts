@@ -25,6 +25,9 @@ export const telegramCrmKeys = {
   contactDetails: () => ["telegram-crm", "contacts", "detail"] as const,
   contactDetail: (contactId: string) =>
     ["telegram-crm", "contacts", "detail", contactId] as const,
+  chatContexts: () => ["telegram-crm", "contacts", "chat-context"] as const,
+  chatContext: (contactId: string) =>
+    ["telegram-crm", "contacts", "chat-context", contactId] as const,
   inboxLists: () => ["telegram-crm", "inbox", "list"] as const,
   inboxList: (params: CrmInboxParams) =>
     ["telegram-crm", "inbox", "list", params] as const,
@@ -78,10 +81,10 @@ export function patchCrmContactCaches(
   );
 }
 
-export function changeCrmContactUnread(
+export function applyCrmReplyMessage(
   queryClient: QueryClient,
   contactId: string,
-  delta: number,
+  direction: CrmMessageListItem["direction"],
 ) {
   queryClient.setQueriesData<CrmContactsListResult>(
     { queryKey: telegramCrmKeys.contactLists() },
@@ -89,17 +92,45 @@ export function changeCrmContactUnread(
       current
         ? {
             ...current,
-            items: current.items.map((item) =>
-              item.id === contactId
-                ? {
-                    ...item,
-                    unreadCount: Math.max(0, item.unreadCount + delta),
-                  }
-                : item,
-            ),
+            items: current.items.map((item) => {
+              if (item.id !== contactId) return item;
+              const inboundMessageCount =
+                item.replySummary.inboundMessageCount +
+                (direction === "INBOUND" ? 1 : 0);
+              const outboundMessageCount =
+                item.replySummary.outboundMessageCount +
+                (direction === "OUTBOUND" ? 1 : 0);
+              const firstInbound =
+                inboundMessageCount === 1 && outboundMessageCount === 0;
+              return {
+                ...item,
+                replySummary: {
+                  ...item.replySummary,
+                  inboundMessageCount,
+                  outboundMessageCount,
+                  muted: false,
+                  unreadCount:
+                    item.replySummary.unreadCount +
+                    (direction === "INBOUND" ? 1 : 0),
+                  status:
+                    direction === "OUTBOUND"
+                      ? "NONE"
+                      : firstInbound
+                        ? "FIRST_INBOUND_UNREAD"
+                        : "CONVERSATION_UNANSWERED_UNREAD",
+                },
+              };
+            }),
           }
         : current,
   );
+}
+
+export function changeCrmContactUnread(
+  queryClient: QueryClient,
+  contactId: string,
+  delta: number,
+) {
   queryClient.setQueryData<CrmContactDetail>(
     telegramCrmKeys.contactDetail(contactId),
     (current) =>

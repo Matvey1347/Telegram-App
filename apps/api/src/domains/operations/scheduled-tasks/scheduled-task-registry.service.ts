@@ -115,6 +115,28 @@ export class ScheduledTaskRegistryService {
         execute: this.executor.executors['telegram.daily_analytics.sync'],
       },
       {
+        key: 'telegram.crm.sync',
+        group: {
+          key: 'TELEGRAM',
+          name: 'Telegram sync',
+          description:
+            'Independent Telegram synchronization tasks and notifications.',
+        },
+        name: 'Telegram CRM sync',
+        description:
+          'Synchronizes CRM dialogs for every selected connected MTProto account in the workspace.',
+        scope: 'WORKSPACE_OPERATION',
+        defaultSchedule: {
+          frequency: 'DAILY',
+          time: '06:00',
+          timezone: 'Europe/Warsaw',
+        },
+        scheduleEditable: true,
+        supportedFrequencies: ['DAILY'],
+        notificationSupported: true,
+        execute: this.executor.executors['telegram.crm.sync'],
+      },
+      {
         key: 'currencies.rates.sync',
         name: 'Currency rates sync',
         description:

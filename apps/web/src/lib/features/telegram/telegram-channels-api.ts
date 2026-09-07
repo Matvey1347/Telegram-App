@@ -17,12 +17,10 @@ import type {
   TelegramPostPlannerSlot,
   TelegramPublishingCapabilities,
   TelegramPostButtonRows,
-  TelegramCustomEmojiPackSummary,
-  TelegramChannelCustomEmojiPacksResponse,
+  TelegramWorkspaceCustomEmojiPacksResponse,
   TelegramWorkspaceFullSyncResult,
   TelegramWorkspaceManualSyncRequest,
   ImportTelegramCustomEmojiPackInput,
-  TelegramCustomEmojiPackTarget,
   SyncOperationResult,
 } from "@telegram-system/shared";
 import type {
@@ -152,54 +150,25 @@ export function createTelegramChannelsApi({
     restore: async (id: string) =>
       (await api.post<TelegramChannel>(`/telegram-channels/${id}/restore`))
         .data,
-    customEmojiPacks: async (channelId: string) =>
+    customEmojiPacks: async () =>
       (
-        await api.get<TelegramChannelCustomEmojiPacksResponse>(
-          `/telegram-channels/${channelId}/custom-emoji-packs`,
+        await api.get<TelegramWorkspaceCustomEmojiPacksResponse>(
+          "/telegram-custom-emoji-packs",
         )
       ).data,
     importCustomEmojiPack: async (
-      channelId: string,
       payload: ImportTelegramCustomEmojiPackInput,
     ) =>
       (
-        await api.post<TelegramChannelCustomEmojiPacksResponse>(
-          `/telegram-channels/${channelId}/custom-emoji-packs/import`,
+        await api.post<TelegramWorkspaceCustomEmojiPacksResponse>(
+          "/telegram-custom-emoji-packs/import",
           payload,
         )
       ).data,
-    attachCustomEmojiPack: async (
-      channelId: string,
-      packId: string,
-      target: TelegramCustomEmojiPackTarget,
-    ) =>
+    detachCustomEmojiPack: async (packId: string) =>
       (
-        await api.post<TelegramChannelCustomEmojiPacksResponse>(
-          `/telegram-channels/${channelId}/custom-emoji-packs/${packId}/attach`,
-          {
-            scope: target.scope,
-            ...(target.scope === "CHANNELS"
-              ? { channelIds: target.channelIds }
-              : {}),
-          },
-        )
-      ).data,
-    detachCustomEmojiPack: async (
-      channelId: string,
-      packId: string,
-      target: TelegramCustomEmojiPackTarget,
-    ) =>
-      (
-        await api.delete<TelegramChannelCustomEmojiPacksResponse>(
-          `/telegram-channels/${channelId}/custom-emoji-packs/${packId}`,
-          {
-            data: {
-              scope: target.scope,
-              ...(target.scope === "CHANNELS"
-                ? { channelIds: target.channelIds }
-                : {}),
-            },
-          },
+        await api.delete<TelegramWorkspaceCustomEmojiPacksResponse>(
+          `/telegram-custom-emoji-packs/${packId}`,
         )
       ).data,
     updateQuiet: async (id: string, payload: Record<string, unknown>) =>

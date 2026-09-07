@@ -1,6 +1,76 @@
 # Project Refactor ExecPlan
 
-Updated: 2026-09-03
+Updated: 2026-09-06
+
+## 2026-09-06 CRM reply attention and grouped notifications
+
+CRM Contact cards now consume persisted per-Conversation inbound/outbound
+Message counters and existing read/last-direction compacts instead of scanning
+Message history. The reply summary distinguishes a first inbound Message from
+an unanswered established Conversation and distinguishes Telegram-read from
+Telegram-unread state. A Contact-level `replyAlertMutedAt` suppresses only the
+visual urgency treatment; it does not delete Messages or falsify the underlying
+reply status.
+
+The forward migration initializes both counters with one grouped scan of
+`TelegramCrmMessage`. Thereafter live ingest, history import, and manual sends
+update counters only when a Message is newly persisted, while sync reconciles
+the compact facts without unchanged-state writes. Counts are marked complete
+only after Conversation history is exhausted.
+
+Fresh inbound notification projection keeps at most one active CRM Message
+group per Contact (falling back to Conversation before Contact promotion) and
+carries compact sender/avatar/count presentation. Telegram read synchronization
+reconciles the Contact's aggregate unread count and removes the group when it
+reaches zero, so already-read Messages do not remain in Notifications. This is
+event-driven: there is no
+polling, timer, heartbeat, per-card aggregate, or additional Railway service.
+At 100 active Conversations, one page still performs bounded Contact and
+notification reads; cost grows with newly persisted/read Messages rather than
+idle time or stored history.
+
+## 2026-09-06 Scheduled Telegram CRM source sync
+
+Telegram CRM source selection remains owned by the CRM account capability
+contract (`crmSyncEnabled`). The contacts surface now exposes that selection in
+a compact modal, while both manual imports and the scheduled task consume the
+same selected connected MTProto accounts.
+
+The existing persisted scheduled-task runner now registers
+`telegram.crm.sync` as a workspace operation with a daily schedule. It runs
+accounts sequentially, records results in the shared Scheduled Tasks history,
+and is automatically disarmed when no eligible CRM source exists. Capability
+changes signal the existing one-shot scheduler wake path, so this adds no cron,
+polling loop, or idle database wake. At 100 selected accounts one daily run is
+bounded to 100 sequential MTProto imports; idle workspaces perform no scheduled
+CRM sync and unchanged account selection creates no capability write.
+
+For a Conversation that has not yet been history-warmed, the same sync fetches
+51 newest Telegram Messages with concurrency capped at four and stores no more
+than 20 Conversations per database transaction. The first chat request can
+therefore return 50 rows entirely from Neon and expose `Load older` only when a
+51st row exists. A persisted history cursor/exhausted marker prevents later
+daily runs from downloading that page again.
+
+## 2026-09-06 Workspace-wide Telegram Premium emoji
+
+Premium emoji packs now use their existing `workspaceId` ownership directly.
+The legacy channel-pack join table and channel-targeting API are removed by a
+forward migration that preserves every pack and emoji, so existing imports
+become available to current and future channels in the owning workspace.
+
+Post and CRM message editors share one compact Standard/Premium picker. Premium
+packs are fetched only when the user opens the Premium tab, cached under one
+workspace query key, and imported or deleted through workspace-level endpoints.
+GPT context export reads the same workspace pack set. The change adds no timer,
+polling, background task, recurring database write, or per-channel request; at
+100 channels, opening Premium remains one bounded workspace query and importing
+a pack no longer creates 100 attachment rows.
+
+Pack removal is reversible archival. Archived packs are excluded from editors
+and GPT context but retain their database-owned immutable B2 asset references;
+re-import restores them without Telegram or B2 traffic, avoiding orphaned
+storage objects and requiring no background cleanup job.
 
 ## 2026-09-03 CRM customer-message automation removal
 

@@ -272,24 +272,30 @@ describe("AdSaleModal", () => {
       name: /Repeat sales/,
     });
     expect(repeatOption.textContent).toContain("🔁");
+    expect(repeatOption.textContent).not.toContain("Internal");
+    expect(repeatOption.textContent).not.toContain("External");
+    const externalNewSaleOption = screen.getByRole("button", {
+      name: /New sales External/,
+    });
     const collaboratorOption = screen.getByRole("button", {
-      name: "Collaborator.pro",
+      name: /Collaborator\.pro/,
     });
     expect(collaboratorOption.querySelector("img")?.getAttribute("src")).toBe(
       "https://collaborator.pro/favicon-collaborator.ico",
     );
-    const adsellOption = screen.getByRole("button", { name: "adsell.io" });
+    const adsellOption = screen.getByRole("button", { name: /adsell\.io/ });
+    expect(adsellOption.textContent).not.toContain("External");
     expect(adsellOption.querySelector("img")?.getAttribute("src")).toBe(
       "https://adsell.io/assets/img/favicon.png",
     );
-    fireEvent.click(adsellOption);
+    fireEvent.click(externalNewSaleOption);
     await screen.findByText(/1\/24 · 125 UAH/);
     fireEvent.click(screen.getByRole("button", { name: "Create sale" }));
 
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
         expect.objectContaining({
-          origin: "ADSELL_IO",
+          origin: "DIRECT_EXTERNAL",
           advertiserId: null,
           advertiserName: "Direct sale",
           createAdvertiser: false,
@@ -310,6 +316,20 @@ describe("AdSaleModal", () => {
     expect(detailsRow?.textContent).toContain("Sale origin");
     expect(screen.getByText("Client").parentElement?.textContent).toContain(
       "New client",
+    );
+    const accountHeightWrapper = screen.getByRole("button", {
+      name: /Operating account.*UAH/,
+    }).parentElement?.parentElement;
+    const originHeightWrapper = screen.getByRole("button", {
+      name: /New sales/,
+    }).parentElement?.parentElement;
+    expect(accountHeightWrapper).toHaveClass(
+      "[&>div>button]:h-[42px]",
+      "[&>div>button]:min-h-0",
+    );
+    expect(originHeightWrapper).toHaveClass(
+      "[&>div>button]:h-[42px]",
+      "[&>div>button]:min-h-0",
     );
     expect(screen.queryByText(/Currency is taken automatically/)).toBeNull();
     expect(screen.queryByText("Network sale price")).toBeNull();

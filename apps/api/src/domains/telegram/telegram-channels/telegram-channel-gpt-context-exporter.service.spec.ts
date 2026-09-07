@@ -43,7 +43,7 @@ function setup(
     },
     telegramManagedPost: { findMany: jest.fn().mockResolvedValue([]) },
     telegramPost: { findMany: jest.fn().mockResolvedValue([syncedPost]) },
-    telegramChannelCustomEmojiPack: {
+    telegramCustomEmojiPack: {
       findMany: jest.fn().mockResolvedValue([]),
     },
     postGroup: { findMany: jest.fn().mockResolvedValue([]) },
@@ -238,6 +238,11 @@ describe('TelegramChannelGptContextExporter', () => {
       telegramChannelId: 'channel-1',
     });
     expect(telegramPostRead?.select).not.toHaveProperty('rawMessage');
+    expect(prisma.telegramCustomEmojiPack.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { workspaceId: 'workspace-1', archivedAt: null },
+      }),
+    );
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
   });
 

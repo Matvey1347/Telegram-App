@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/providers/i18n-provider";
-import { Pagination } from "./pagination";
+import { Pagination, THREE_COLUMN_GRID_PAGE_SIZES } from "./pagination";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/telegram-posts/channel/groups",
@@ -65,5 +65,31 @@ describe("Pagination", () => {
     expect(screen.getByText("Страница 2 из 10")).toBeInTheDocument();
     expect(screen.getByText("Показано с 11 по 20 из 95")).toBeInTheDocument();
     expect(screen.getByText("Строк на странице")).toBeInTheDocument();
+  });
+
+  it("uses page-size choices divisible by three for three-column card grids", () => {
+    const onPageSizeChange = vi.fn();
+    render(
+      <Pagination
+        {...props}
+        pageSize={24}
+        totalItems={120}
+        totalPages={5}
+        pageSizeOptions={THREE_COLUMN_GRID_PAGE_SIZES}
+        onPageSizeChange={onPageSizeChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "24" }));
+
+    for (const size of THREE_COLUMN_GRID_PAGE_SIZES) {
+      expect(
+        screen.getAllByRole("button", { name: String(size) }).length,
+      ).toBeGreaterThan(0);
+      expect(size % 3).toBe(0);
+    }
+    expect(screen.queryByRole("button", { name: "25" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "48" }));
+    expect(onPageSizeChange).toHaveBeenCalledWith(48);
   });
 });

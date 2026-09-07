@@ -30,6 +30,18 @@ export type OperationsNotificationMetadata = Record<
   string | number | boolean | null
 >;
 
+export type OperationsCrmMessageGroupPresentation = {
+  kind: "crm-message";
+  conversationId: string;
+  contactId: string | null;
+  senderName: string;
+  avatarUrl: string | null;
+  messageCount: number;
+};
+
+export type OperationsNotificationPresentation =
+  OperationsCrmMessageGroupPresentation;
+
 export type OperationsNotificationItem = {
   id: string;
   workspaceId: string;
@@ -40,6 +52,7 @@ export type OperationsNotificationItem = {
   title: string;
   body: string;
   metadata: OperationsNotificationMetadata;
+  presentation?: OperationsNotificationPresentation | null;
   targetUrl: string;
   readAt: string | null;
   createdAt: string;

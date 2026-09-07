@@ -12,7 +12,7 @@ import { ArrowRight, Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { formatDate } from "@/lib/date-format";
-import { accountKeys, currencyKeys } from "@/lib/query-keys";
+import { accountKeys, currencyKeys, telegramChannelKeys } from "@/lib/query-keys";
 import { financeOverviewQuery } from "@/lib/features/finance/finance-overview-query";
 import {
   accountsApi,
@@ -126,7 +126,10 @@ export function InternalFinanceOverview() {
     queryKey: ["transaction-categories-admin", "income"],
     queryFn: () => transactionCategoriesApi.list("income"),
   });
-  const categories = [...(expenses.data ?? []), ...(incomes.data ?? [])];
+  const categories =
+    expenses.data && incomes.data
+      ? [...expenses.data, ...incomes.data]
+      : undefined;
   const currentCategories = categoryType === "expense" ? expenses : incomes;
   const pagedCategories =
     currentCategories.data?.slice(
@@ -183,8 +186,26 @@ export function InternalFinanceOverview() {
     },
     onSuccess: async (_, variables) => {
       setEditor(null);
-      if (variables.target.kind === "transaction")
+      if (variables.target.kind === "transaction") {
         setTransactionPage((value) => ({ ...value, page: 1 }));
+        const nextChannelId = (variables.value as InternalTransactionValues)
+          .telegramChannelId;
+        const previousChannelIds = [
+          variables.target.item?.telegramChannel?.id,
+          variables.target.item?.purchasedTelegramChannel?.id,
+        ];
+        const affectedChannelIds = [
+          ...new Set([...previousChannelIds, nextChannelId].filter(Boolean)),
+        ] as string[];
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+          ...affectedChannelIds.map((channelId) =>
+            qc.invalidateQueries({
+              queryKey: telegramChannelKeys.financialSummary(channelId),
+            }),
+          ),
+        ]);
+      }
       if (variables.target.kind === "transfer")
         setTransferPage((value) => ({ ...value, page: 1 }));
       if (variables.target.kind === "account")
@@ -510,6 +531,7 @@ export function InternalFinanceOverview() {
         }
         initial={editor?.kind === "transaction" ? editor.item : undefined}
         accounts={allAccounts.data ?? accounts.data?.items ?? []}
+        categories={categories}
         members={transactionMembers.data ?? []}
         onClose={() => setEditor(null)}
         onSubmit={(value) =>

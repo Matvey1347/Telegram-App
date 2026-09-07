@@ -45,6 +45,33 @@ describe('OperationsNotificationStoreService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('reactivates one stable grouped notification instead of appending rows', async () => {
+    const queryRaw = jest.fn().mockResolvedValue([{ id: 'notification-1' }]);
+    const service = new OperationsNotificationStoreService();
+
+    await expect(
+      service.upsertMany({ $queryRaw: queryRaw } as never, [
+        { ...input, sourceKey: 'conversation:conversation-1' },
+      ]),
+    ).resolves.toEqual([{ id: 'notification-1' }]);
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('upserts many grouped conversations in one database statement', async () => {
+    const queryRaw = jest
+      .fn()
+      .mockResolvedValue([{ id: 'notification-1' }, { id: 'notification-2' }]);
+    const service = new OperationsNotificationStoreService();
+
+    await expect(
+      service.upsertMany({ $queryRaw: queryRaw } as never, [
+        { ...input, sourceKey: 'conversation:conversation-1' },
+        { ...input, sourceKey: 'conversation:conversation-2' },
+      ]),
+    ).resolves.toHaveLength(2);
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+  });
+
   it('revokes published previews and transfers only pending rows on resource reassignment', async () => {
     const operationsNotification = {
       findMany: jest
@@ -64,15 +91,23 @@ describe('OperationsNotificationStoreService', () => {
       }),
     ).resolves.toEqual(['member-old']);
 
-    expect(operationsNotification.deleteMany).toHaveBeenCalledWith({
-      where: expect.objectContaining({ publishedAt: { not: null } }),
-    });
-    expect(operationsNotification.updateMany).toHaveBeenCalledWith({
-      where: expect.objectContaining({ publishedAt: null }),
+    const deleteInput = (
+      operationsNotification.deleteMany.mock.calls as unknown[][]
+    )[0]?.[0] as { where: { publishedAt: unknown } };
+    const updateInput = (
+      operationsNotification.updateMany.mock.calls as unknown[][]
+    )[0]?.[0] as {
+      where: { publishedAt: unknown };
       data: {
-        recipientMemberId: 'member-new',
-        visibilityMemberId: 'member-new',
-      },
+        recipientMemberId: 'member-new';
+        visibilityMemberId: 'member-new';
+      };
+    };
+    expect(deleteInput.where.publishedAt).toEqual({ not: null });
+    expect(updateInput.where.publishedAt).toBeNull();
+    expect(updateInput.data).toEqual({
+      recipientMemberId: 'member-new',
+      visibilityMemberId: 'member-new',
     });
   });
 });

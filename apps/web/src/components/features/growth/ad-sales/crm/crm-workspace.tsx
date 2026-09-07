@@ -14,6 +14,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { PageTabHead } from "@/components/layout/page-tab-head";
 import { LoadingState, PageHeader } from "@/components/ui/primitives";
 import {
+  applyCrmReplyMessage,
   appendCrmMessage,
   patchCrmConversation,
   reconcileCrmConversationUnread,
@@ -30,6 +31,8 @@ import { authKeys } from "@/lib/query-keys";
 import { crmPermissions } from "./crm-permissions";
 import { patchCrmContactCaches } from "@/lib/features/growth/telegram-crm-query";
 import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
+import { useAppToast } from "@/providers/toast-provider";
+import { crmSyncProgress } from "./crm-sync-progress";
 
 export function CrmWorkspace({
   surface,
@@ -37,6 +40,7 @@ export function CrmWorkspace({
   surface: Exclude<AdSalesSurface, { kind: "legacy" }>;
 }) {
   const queryClient = useQueryClient();
+  const { setProgress } = useAppToast();
   const router = useRouter();
   const me = useQuery({
     queryKey: authKeys.me(),
@@ -57,6 +61,15 @@ export function CrmWorkspace({
   }, [canViewSales, hasCrmView, me.isSuccess, router]);
   const onEvent = useCallback(
     (event: CrmRealtimeEvent) => {
+      if (event.type === "sync.progress") {
+        setProgress(crmSyncProgress(event));
+        if (event.phase === "COMPLETED") {
+          void queryClient.invalidateQueries({
+            queryKey: telegramCrmKeys.contactLists(),
+          });
+        }
+        return;
+      }
       if (event.type === "message.received" || event.type === "message.sent") {
         const listedConversation = queryClient
           .getQueriesData<CrmConversationsListResult>({
@@ -89,17 +102,13 @@ export function CrmWorkspace({
         if (event.contactId) {
           patchCrmContactCaches(queryClient, {
             id: event.contactId,
-            lastMessage: {
-              id: event.message.id,
-              conversationId: event.conversationId,
-              direction: event.message.direction,
-              origin: event.message.origin,
-              text: event.message.text,
-              sentAt: event.message.sentAt,
-              readState: event.message.readState,
-            },
             lastContactAt: event.message.sentAt,
           });
+          applyCrmReplyMessage(
+            queryClient,
+            event.contactId,
+            event.message.direction,
+          );
         }
         return;
       }
@@ -113,6 +122,11 @@ export function CrmWorkspace({
           event.contactId,
           event.unreadCount,
         );
+        if (event.contactId) {
+          void queryClient.invalidateQueries({
+            queryKey: telegramCrmKeys.contactLists(),
+          });
+        }
         void queryClient.invalidateQueries({
           queryKey: telegramCrmKeys.unread(),
         });
@@ -128,7 +142,7 @@ export function CrmWorkspace({
         queryKey: telegramCrmKeys.inboxLists(),
       });
     },
-    [queryClient],
+    [queryClient, setProgress],
   );
   const realtimeStatus = useTelegramCrmRealtime({
     active: hasCrmView,
@@ -175,6 +189,9 @@ export function CrmWorkspace({
         subtitle={`${subtitle}${unread.data?.total ? ` ${unread.data.total} unread.` : ""}`}
         action={
           <div className="flex flex-wrap gap-2">
+            {surface.kind === "contacts" ? (
+              <CrmAccountSyncPanel canEdit={permissions.canEditAll} />
+            ) : null}
             <Link
               className="inline-flex h-11 items-center gap-2 rounded-xl border border-neutral-700 bg-neutral-900 px-4 text-sm font-medium hover:bg-neutral-800"
               href="/ad-sales/calendar?open=inventory"
@@ -202,10 +219,10 @@ export function CrmWorkspace({
         inboxUnread={unread.data?.inbox}
       />
       {surface.kind === "contacts" ? (
-        <>
-          <CrmAccountSyncPanel canEdit={permissions.canEditAll} />
-          <CrmContactList />
-        </>
+        <CrmContactList
+          initialContactId={surface.contactId}
+          initialConversationId={surface.conversationId}
+        />
       ) : null}
       {surface.kind === "inbox" ? (
         permissions.canViewAll ? (

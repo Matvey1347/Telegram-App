@@ -83,3 +83,16 @@ test("local System Bot has an explicit opt-in development command", () => {
     /TELEGRAM_BOT_RUNTIME_ENVIRONMENT:\s*withWorkspaceBots\s*\?\s*"LOCAL"\s*:\s*""/u,
   );
 });
+
+test("local bot development survives Prisma schema and tunnel transport changes", () => {
+  const runner = readFileSync("scripts/dev-tunnel.mjs", "utf8");
+  const apiPackage = JSON.parse(readFileSync("apps/api/package.json", "utf8"));
+  const developmentNestConfig = JSON.parse(
+    readFileSync("apps/api/nest-cli.dev.json", "utf8"),
+  );
+
+  assert.match(runner, /"prisma",\s*"generate",\s*"--watch"/u);
+  assert.match(runner, /TUNNEL_TRANSPORT_PROTOCOL:\s*"http2"/u);
+  assert.match(apiPackage.scripts.dev, /--config nest-cli\.dev\.json/u);
+  assert.equal(developmentNestConfig.compilerOptions.deleteOutDir, false);
+});

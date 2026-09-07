@@ -1,4 +1,5 @@
 import type { OperationsNotificationPublisherService } from '../../operations/notifications/operations-notification-publisher.service';
+import type { ResponseCacheService } from '../../../common/response-cache.service';
 import type {
   CrmMessageBatchInput,
   CrmMessageBatchMode,
@@ -20,6 +21,7 @@ export class TelegramCrmMessageAfterCommitPublisher {
   constructor(
     private readonly events: TelegramCrmEventHub,
     private readonly notifications?: OperationsNotificationPublisherService,
+    private readonly responseCache?: ResponseCacheService,
   ) {}
 
   messages(
@@ -27,12 +29,45 @@ export class TelegramCrmMessageAfterCommitPublisher {
     stored: StoredCrmMessageBatch,
     mode: CrmMessageBatchMode,
   ) {
+    const touchedConversationIds = [
+      ...new Set(stored.inputs.map((input) => input.conversation.id)),
+    ];
+    const touchedContacts = [
+      ...new Set(
+        stored.inputs.flatMap((input) =>
+          input.conversation.contactId ? [input.conversation.contactId] : [],
+        ),
+      ),
+    ];
+    if (touchedContacts.length) {
+      this.responseCache?.clearWorkspacePath(
+        workspaceId,
+        '/telegram-crm/contacts',
+      );
+    }
+    for (const conversationId of touchedConversationIds) {
+      this.responseCache?.clearWorkspacePath(
+        workspaceId,
+        `/telegram-crm/conversations/${conversationId}/messages`,
+      );
+    }
     if (stored.notificationIds?.length) {
       void this.notifications
         ?.publish(stored.notificationIds)
         .catch(() => undefined);
     }
-    if (mode === 'history') return;
+    if (mode === 'history') {
+      for (const contactId of touchedContacts) {
+        this.events.emit({
+          type: 'contact.updated',
+          workspaceId,
+          occurredAt: new Date().toISOString(),
+          contactId,
+          ownerMemberId: null,
+        });
+      }
+      return;
+    }
     const inputByConversation = new Map(
       stored.inputs.map((input) => [input.conversation.id, input]),
     );
@@ -98,6 +133,13 @@ export class TelegramCrmMessageAfterCommitPublisher {
     }
   }
 
+  contactsChanged(workspaceId: string) {
+    this.responseCache?.clearWorkspacePath(
+      workspaceId,
+      '/telegram-crm/contacts',
+    );
+  }
+
   reads(
     workspaceId: string,
     reads: Array<{
@@ -109,6 +151,20 @@ export class TelegramCrmMessageAfterCommitPublisher {
       unreadChanged: boolean;
     }>,
   ) {
+    if (reads.some((read) => read.contactId)) {
+      this.responseCache?.clearWorkspacePath(
+        workspaceId,
+        '/telegram-crm/contacts',
+      );
+    }
+    for (const conversationId of new Set(
+      reads.map((read) => read.conversationId),
+    )) {
+      this.responseCache?.clearWorkspacePath(
+        workspaceId,
+        `/telegram-crm/conversations/${conversationId}/messages`,
+      );
+    }
     for (const read of reads) {
       this.events.emit({
         type: 'readChanged',
@@ -173,6 +229,13 @@ export class TelegramCrmMessageAfterCommitPublisher {
             },
       );
     }
+  }
+
+  notificationInvalidations(
+    workspaceId: string,
+    recipientMemberIds: readonly string[],
+  ) {
+    this.notifications?.invalidate(workspaceId, recipientMemberIds);
   }
 
   private touched(inputs: CrmMessageBatchInput[]) {

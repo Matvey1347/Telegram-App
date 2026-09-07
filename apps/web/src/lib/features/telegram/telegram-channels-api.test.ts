@@ -55,3 +55,33 @@ describe("telegramChannelsApi.syncWorkspaceChannels", () => {
     expect(result.total).toBe(100);
   });
 });
+
+describe("telegramChannelsApi workspace custom emoji packs", () => {
+  it("uses workspace endpoints without channel targeting", async () => {
+    const get = vi.fn().mockResolvedValue({ data: { packs: [] } });
+    const post = vi.fn().mockResolvedValue({ data: { packs: [] } });
+    const remove = vi.fn().mockResolvedValue({ data: { packs: [] } });
+    const client = createTelegramChannelsApi({
+      api: { get, post, delete: remove } as unknown as AxiosInstance,
+      crud: vi.fn(() => ({
+        list: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(),
+      })),
+      getPaginated: vi.fn(),
+      getAllPaginatedItems: vi.fn(),
+      streamBulkAction: vi.fn(),
+      streamProgressAction: vi.fn(),
+      silentFeedbackConfig: {},
+      quietMutationConfig: {},
+    });
+
+    await client.customEmojiPacks();
+    await client.importCustomEmojiPack({ source: "https://t.me/addemoji/team" });
+    await client.detachCustomEmojiPack("pack_1");
+
+    expect(get).toHaveBeenCalledWith("/telegram-custom-emoji-packs");
+    expect(post).toHaveBeenCalledWith("/telegram-custom-emoji-packs/import", {
+      source: "https://t.me/addemoji/team",
+    });
+    expect(remove).toHaveBeenCalledWith("/telegram-custom-emoji-packs/pack_1");
+  });
+});

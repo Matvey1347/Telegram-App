@@ -48,6 +48,7 @@ type OperationStartInput = {
   icon?: ToastIcon;
   current?: number;
   total?: number;
+  clearProgress?: boolean;
   onCancel?: () => void;
 };
 
@@ -57,6 +58,7 @@ type OperationUpdateInput = {
   icon?: ToastIcon;
   current?: number;
   total?: number;
+  clearProgress?: boolean;
   details?: string;
   progressSummary?: { successful: number; failed: number };
   cancelable?: boolean;
@@ -66,6 +68,7 @@ type OperationResultInput = {
   title?: string;
   message: string;
   details?: string;
+  progressSummary?: { successful: number; failed: number };
   code?: string;
   correlationId?: string;
   icon?: ToastIcon;
@@ -219,7 +222,8 @@ export function ToastProvider({ children }: PropsWithChildren) {
       },
     ) => {
       clearDismissTimer(id);
-      const rawMessage = input.message ?? entriesRef.current.get(id)?.message ?? "Working…";
+      const rawMessage =
+        input.message ?? entriesRef.current.get(id)?.message ?? "Working…";
       upsertEntry(id, (existing) => ({
         id,
         createdAt: existing?.createdAt ?? Date.now(),
@@ -235,7 +239,10 @@ export function ToastProvider({ children }: PropsWithChildren) {
                 : "info",
         iconEmoji: input.icon?.emoji ?? existing?.iconEmoji,
         iconUrl: input.icon?.imageUrl ?? existing?.iconUrl,
-        progress: normalizeProgress(input.current, input.total) ?? existing?.progress,
+        progress: input.clearProgress
+          ? undefined
+          : (normalizeProgress(input.current, input.total) ??
+            existing?.progress),
         progressSummary: input.progressSummary ?? existing?.progressSummary,
         cancelable: input.cancelable ?? existing?.cancelable,
         details:
@@ -254,7 +261,8 @@ export function ToastProvider({ children }: PropsWithChildren) {
 
   const startOperation = useCallback(
     (input: OperationStartInput): OperationHandle => {
-      if (input.onCancel) cancelHandlersRef.current.set(input.id, input.onCancel);
+      if (input.onCancel)
+        cancelHandlersRef.current.set(input.id, input.onCancel);
       transitionOperation(input.id, "loading", {
         title: input.title,
         message: input.message,
@@ -268,11 +276,17 @@ export function ToastProvider({ children }: PropsWithChildren) {
         update: (next) => transitionOperation(input.id, "loading", next),
         succeed: (next) => {
           cancelHandlersRef.current.delete(input.id);
-          transitionOperation(input.id, "success", { ...next, cancelable: false });
+          transitionOperation(input.id, "success", {
+            ...next,
+            cancelable: false,
+          });
         },
         fail: (next) => {
           cancelHandlersRef.current.delete(input.id);
-          transitionOperation(input.id, "error", { ...next, cancelable: false });
+          transitionOperation(input.id, "error", {
+            ...next,
+            cancelable: false,
+          });
         },
         dismiss: () => {
           cancelHandlersRef.current.delete(input.id);
@@ -335,35 +349,23 @@ export function ToastProvider({ children }: PropsWithChildren) {
         },
         current: progress.current,
         total: progress.total,
+        clearProgress: progress.current == null || progress.total == null,
       });
       if (progress.completed) {
-        const complete = progress.failedCount
-          ? handle.update
-          : handle.succeed;
+        const complete = progress.failedCount ? handle.fail : handle.succeed;
         complete({
           title: progress.title,
           message: progress.message || "Completed",
           details: `${progress.successCount || 0} success · ${progress.failedCount || 0} failed · ${progress.skippedCount || 0} skipped`,
-          ...(progress.failedCount
-            ? {}
-            : {
-                icon: {
-                  emoji: progress.iconEmoji,
-                  imageUrl: progress.iconUrl,
-                },
-              }),
+          progressSummary: {
+            successful: progress.successCount || 0,
+            failed: progress.failedCount || 0,
+          },
+          icon: {
+            emoji: progress.iconEmoji,
+            imageUrl: progress.iconUrl,
+          },
         });
-        if (progress.failedCount) {
-          handle.update({
-            title: progress.title,
-            message: progress.message || "Completed",
-            details: `${progress.successCount || 0} success · ${progress.failedCount || 0} failed · ${progress.skippedCount || 0} skipped`,
-            icon: {
-              emoji: progress.iconEmoji,
-              imageUrl: progress.iconUrl,
-            },
-          });
-        }
         return;
       }
       handle.update({
@@ -401,7 +403,11 @@ export function ToastProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     const handleMutation = (event: Event) => {
       const detail = (event as CustomEvent<ApiMutationEventDetail>).detail;
-      if (!detail?.id || detail.mode === "managed" || detail.mode === "silent") {
+      if (
+        !detail?.id ||
+        detail.mode === "managed" ||
+        detail.mode === "silent"
+      ) {
         return;
       }
       if (detail.phase === "start") {
@@ -432,13 +438,16 @@ export function ToastProvider({ children }: PropsWithChildren) {
       }
       handle.fail({
         title: detail.title,
-        message: locale === "ru" && detail.code && detail.code in TELEGRAM_POSTS_ERROR_KEYS
-          ? t(
-              TELEGRAM_POSTS_ERROR_KEYS[
-                detail.code as keyof typeof TELEGRAM_POSTS_ERROR_KEYS
-              ] as TranslationKey,
-            )
-          : detail.message || "The operation could not be completed.",
+        message:
+          locale === "ru" &&
+          detail.code &&
+          detail.code in TELEGRAM_POSTS_ERROR_KEYS
+            ? t(
+                TELEGRAM_POSTS_ERROR_KEYS[
+                  detail.code as keyof typeof TELEGRAM_POSTS_ERROR_KEYS
+                ] as TranslationKey,
+              )
+            : detail.message || "The operation could not be completed.",
         details: locale === "ru" ? undefined : detail.details,
         code: detail.code,
         correlationId: detail.correlationId,
@@ -457,18 +466,20 @@ export function ToastProvider({ children }: PropsWithChildren) {
 
   const items = useMemo<ToastItem[]>(
     () =>
-      [...entries].sort((a, b) => a.createdAt - b.createdAt).map((entry) => ({
-        id: entry.id,
-        title: entry.title,
-        message: entry.message,
-        tone: entry.tone,
-        iconEmoji: entry.iconEmoji,
-        iconUrl: entry.iconUrl,
-        progress: entry.progress,
-        progressSummary: entry.progressSummary,
-        cancelable: entry.cancelable,
-        details: entry.details,
-      })),
+      [...entries]
+        .sort((a, b) => a.createdAt - b.createdAt)
+        .map((entry) => ({
+          id: entry.id,
+          title: entry.title,
+          message: entry.message,
+          tone: entry.tone,
+          iconEmoji: entry.iconEmoji,
+          iconUrl: entry.iconUrl,
+          progress: entry.progress,
+          progressSummary: entry.progressSummary,
+          cancelable: entry.cancelable,
+          details: entry.details,
+        })),
     [entries],
   );
 

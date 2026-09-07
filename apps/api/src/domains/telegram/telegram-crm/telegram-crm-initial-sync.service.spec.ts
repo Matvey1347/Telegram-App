@@ -6,7 +6,8 @@ import { TelegramCrmInitialSyncService } from './telegram-crm-initial-sync.servi
 
 type ListPrivateDialogs = TelegramCrmMtprotoHandle['listPrivateDialogs'];
 type HandleOperation = (
-  handle: Pick<TelegramCrmMtprotoHandle, 'listPrivateDialogs'>,
+  handle: Pick<TelegramCrmMtprotoHandle, 'listPrivateDialogs'> &
+    Partial<Pick<TelegramCrmMtprotoHandle, 'getHistory'>>,
 ) => Promise<unknown>;
 type WithAccountHandle = (
   workspaceId: string,
@@ -39,7 +40,241 @@ const dialog = (id: number) => ({
   lastMessage: null,
 });
 
+const noHistoryCandidates = () => ({
+  telegramCrmConversation: { findMany: jest.fn().mockResolvedValue([]) },
+});
+
 describe('TelegramCrmInitialSyncService', () => {
+  it('emits workspace-visible progress after each page and on completion', async () => {
+    const events = { emit: jest.fn() };
+    const prisma = {
+      ...noHistoryCandidates(),
+      telegramCrmAccountSyncState: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        upsert: jest.fn(),
+        updateMany: jest.fn(),
+        update: jest.fn(),
+      },
+    };
+    const service = new TelegramCrmInitialSyncService(
+      prisma as never,
+      {
+        require: jest.fn().mockResolvedValue({
+          workspaceId: 'workspace-1',
+          memberId: 'member-1',
+        }),
+      } as never,
+      {
+        withAccountHandle: jest.fn(
+          (_workspaceId, _accountId, _purpose, operation) =>
+            operation({
+              listPrivateDialogs: jest.fn().mockResolvedValue({
+                dialogs: [dialog(1)],
+                scanned: 1,
+                nextCursor: null,
+                exhausted: true,
+              }),
+            }),
+        ),
+        wakeAccount: jest.fn(),
+      } as never,
+      {
+        importDialogs: jest.fn().mockResolvedValue({
+          importedPeers: 1,
+          importedConversations: 1,
+          importedMessages: 2,
+        }),
+      } as never,
+      events as never,
+    );
+
+    await service.run('user-1', 'account-1');
+
+    expect(events.emit.mock.calls.map(([event]) => event.phase)).toEqual([
+      'STARTED',
+      'RUNNING',
+      'COMPLETED',
+    ]);
+    expect(events.emit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'sync.progress',
+        workspaceId: 'workspace-1',
+        accountId: 'account-1',
+        ownerMemberId: 'member-1',
+        scannedDialogs: 1,
+        importedPeers: 1,
+        importedConversations: 1,
+        importedMessages: 2,
+        current: 1,
+        total: 1,
+      }),
+    );
+  });
+
+  it('does not invent a dialog total when sync fails before Telegram responds', async () => {
+    const events = { emit: jest.fn() };
+    const service = new TelegramCrmInitialSyncService(
+      {
+        telegramCrmAccountSyncState: {
+          findFirst: jest.fn().mockResolvedValue(null),
+          upsert: jest.fn(),
+          updateMany: jest.fn(),
+        },
+      } as never,
+      {
+        require: jest.fn().mockResolvedValue({
+          workspaceId: 'workspace-1',
+          memberId: 'member-1',
+        }),
+      } as never,
+      {
+        withAccountHandle: jest.fn().mockRejectedValue(new Error('offline')),
+      } as never,
+      {} as never,
+      events as never,
+    );
+
+    await expect(service.run('user-1', 'account-1')).rejects.toThrow('offline');
+
+    expect(events.emit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        phase: 'FAILED',
+        current: 0,
+        total: 0,
+      }),
+    );
+  });
+
+  it('still emits failed progress and preserves the sync error when failure state persistence fails', async () => {
+    const events = { emit: jest.fn() };
+    const service = new TelegramCrmInitialSyncService(
+      {
+        telegramCrmAccountSyncState: {
+          findFirst: jest.fn().mockResolvedValue(null),
+          upsert: jest.fn(),
+          updateMany: jest
+            .fn()
+            .mockRejectedValue(new Error('database offline')),
+        },
+      } as never,
+      {
+        require: jest.fn().mockResolvedValue({
+          workspaceId: 'workspace-1',
+          memberId: 'member-1',
+        }),
+      } as never,
+      {
+        withAccountHandle: jest
+          .fn()
+          .mockRejectedValue(new Error('MTProto offline')),
+      } as never,
+      {} as never,
+      events as never,
+    );
+
+    await expect(service.run('user-1', 'account-1')).rejects.toThrow(
+      'MTProto offline',
+    );
+    expect(events.emit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ phase: 'FAILED' }),
+    );
+  });
+
+  it('syncs only selected connected workspace accounts sequentially', async () => {
+    const order: string[] = [];
+    const prisma = {
+      ...noHistoryCandidates(),
+      telegramUserAccountIntegration: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'account-1',
+            assignedMember: { id: 'member-1', userId: 'user-1' },
+          },
+          { id: 'account-2', assignedMember: null },
+        ]),
+      },
+      workspaceMember: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'owner-1', userId: 'owner-user-1' }),
+      },
+      telegramCrmAccountSyncState: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        upsert: jest.fn(),
+        updateMany: jest.fn(),
+        update: jest.fn(),
+      },
+    };
+    const runtime = {
+      withAccountHandle: jest.fn(
+        (_workspaceId, accountId, _purpose, operation) => {
+          order.push(`start:${accountId}`);
+          return operation({
+            listPrivateDialogs: jest.fn().mockImplementation(async () => {
+              order.push(`finish:${accountId}`);
+              return {
+                dialogs: [],
+                scanned: 0,
+                nextCursor: null,
+                exhausted: true,
+              };
+            }),
+          });
+        },
+      ),
+      wakeAccount: jest.fn(),
+    };
+    const service = new TelegramCrmInitialSyncService(
+      prisma as never,
+      {} as never,
+      runtime as never,
+      {
+        importDialogs: jest.fn().mockResolvedValue({
+          importedPeers: 0,
+          importedConversations: 0,
+          importedMessages: 0,
+        }),
+      } as never,
+    );
+
+    await expect(service.runWorkspace('workspace-1')).resolves.toMatchObject({
+      details: { accountsProcessed: 2, accountsFailed: 0 },
+    });
+    expect(prisma.telegramUserAccountIntegration.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          workspaceId: 'workspace-1',
+          crmSyncEnabled: true,
+          status: 'connected',
+        }),
+      }),
+    );
+    expect(order).toEqual([
+      'start:account-1',
+      'finish:account-1',
+      'start:account-2',
+      'finish:account-2',
+    ]);
+  });
+
+  it('skips a scheduled workspace sync when it has no selected source', async () => {
+    const service = new TelegramCrmInitialSyncService(
+      {
+        telegramUserAccountIntegration: {
+          findMany: jest.fn().mockResolvedValue([]),
+        },
+      } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(service.runWorkspace('workspace-1')).resolves.toMatchObject({
+      skipped: true,
+      details: { accountsProcessed: 0 },
+    });
+  });
+
   it('starts a fresh scan when a previous initial import is complete', async () => {
     const listPrivateDialogs = jest.fn().mockResolvedValue({
       dialogs: [dialog(1)],
@@ -48,6 +283,7 @@ describe('TelegramCrmInitialSyncService', () => {
       exhausted: true,
     });
     const prisma = {
+      ...noHistoryCandidates(),
       telegramCrmAccountSyncState: {
         findFirst: jest.fn().mockResolvedValue({
           initialImportStatus: 'COMPLETED',
@@ -68,22 +304,18 @@ describe('TelegramCrmInitialSyncService', () => {
     const service = new TelegramCrmInitialSyncService(
       prisma as never,
       {
-        require: jest
-          .fn()
-          .mockResolvedValue({
-            workspaceId: 'workspace-1',
-            memberId: 'member-1',
-          }),
+        require: jest.fn().mockResolvedValue({
+          workspaceId: 'workspace-1',
+          memberId: 'member-1',
+        }),
       } as never,
       runtime as never,
       {
-        importDialogs: jest
-          .fn()
-          .mockResolvedValue({
-            importedPeers: 1,
-            importedConversations: 1,
-            importedMessages: 0,
-          }),
+        importDialogs: jest.fn().mockResolvedValue({
+          importedPeers: 1,
+          importedConversations: 1,
+          importedMessages: 0,
+        }),
       } as never,
     );
 
@@ -105,11 +337,13 @@ describe('TelegramCrmInitialSyncService', () => {
       return Promise.resolve({
         dialogs,
         scanned: dialogs.length,
+        total: 1_500,
         nextCursor: `cursor-${nextId}`,
         exhausted: false,
       });
     });
     const prisma = {
+      ...noHistoryCandidates(),
       telegramCrmAccountSyncState: {
         findFirst: jest.fn().mockResolvedValue(null),
         upsert: jest.fn(),
@@ -168,6 +402,7 @@ describe('TelegramCrmInitialSyncService', () => {
 
   it('marks completion and wakes live sync only after Telegram is exhausted', async () => {
     const prisma = {
+      ...noHistoryCandidates(),
       telegramCrmAccountSyncState: {
         findFirst: jest.fn().mockResolvedValue(null),
         upsert: jest.fn(),
@@ -189,6 +424,7 @@ describe('TelegramCrmInitialSyncService', () => {
             .mockResolvedValue({
               dialogs: [dialog(1)],
               scanned: 1,
+              total: 1,
               nextCursor: null,
               exhausted: true,
             }),
@@ -225,5 +461,102 @@ describe('TelegramCrmInitialSyncService', () => {
     expect(completedUpdate).toMatchObject({
       data: { initialImportStatus: 'COMPLETED' },
     });
+  });
+
+  it('imports the latest 51 Telegram messages once so the first DB page knows whether older messages exist', async () => {
+    const messages = Array.from({ length: 51 }, (_, index) => ({
+      telegramMessageId: 100 - index,
+      telegramUserId: '1',
+      direction: 'INBOUND' as const,
+      text: `message-${index}`,
+      sentAt: new Date(2026, 8, 6, 12, index),
+      editedAt: null,
+      contentMetadata: null,
+    }));
+    const prisma = {
+      telegramCrmAccountSyncState: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        upsert: jest.fn(),
+        updateMany: jest.fn(),
+        update: jest.fn(),
+      },
+      telegramCrmConversation: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'conversation-1',
+            contactId: 'contact-1',
+            telegramAccessHash: 'stored-hash',
+            peer: { telegramUserId: '1' },
+          },
+        ]),
+      },
+    };
+    const getHistory = jest.fn().mockResolvedValue({
+      messages,
+      nextBeforeTelegramMessageId: 49,
+      exhausted: false,
+    });
+    const batchStore = {
+      importDialogs: jest.fn().mockResolvedValue({
+        importedPeers: 1,
+        importedConversations: 1,
+        importedMessages: 1,
+      }),
+      importHistoryBatch: jest
+        .fn()
+        .mockResolvedValue({ imported: 50, edited: 0 }),
+    };
+    const service = new TelegramCrmInitialSyncService(
+      prisma as never,
+      {
+        require: jest.fn().mockResolvedValue({
+          workspaceId: 'workspace-1',
+          memberId: 'member-1',
+        }),
+      } as never,
+      {
+        withAccountHandle: jest.fn(
+          (_workspaceId, _accountId, _purpose, operation) =>
+            operation({
+              listPrivateDialogs: jest.fn().mockResolvedValue({
+                dialogs: [dialog(1)],
+                scanned: 1,
+                total: 1,
+                nextCursor: null,
+                exhausted: true,
+              }),
+              getHistory,
+            }),
+        ),
+        wakeAccount: jest.fn(),
+      } as never,
+      batchStore as never,
+    );
+
+    await expect(service.run('user-1', 'account-1')).resolves.toMatchObject({
+      importedMessages: 51,
+    });
+    expect(getHistory).toHaveBeenCalledWith({
+      telegramUserId: '1',
+      telegramAccessHash: 'stored-hash',
+      beforeTelegramMessageId: null,
+      limit: 51,
+    });
+    expect(batchStore.importHistoryBatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'workspace-1',
+        accountId: 'account-1',
+        histories: [
+          expect.objectContaining({
+            conversation: {
+              id: 'conversation-1',
+              contactId: 'contact-1',
+            },
+            messages,
+            exhausted: false,
+          }),
+        ],
+      }),
+    );
   });
 });

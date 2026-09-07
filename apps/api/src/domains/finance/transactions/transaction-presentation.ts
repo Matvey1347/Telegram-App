@@ -35,6 +35,20 @@ export const isChannelAdvertisingRevenueCategory = (category: {
   );
 };
 
+export const isAdvertisingExpenseCategory = (category: {
+  key?: string | null;
+  name?: string | null;
+  type: 'income' | 'expense';
+}) => {
+  const name = String(category.name ?? '')
+    .trim()
+    .toLowerCase();
+  return (
+    category.type === 'expense' &&
+    (category.key === 'advertising' || name === 'advertising')
+  );
+};
+
 export const withTransactionIconPresentation = <
   T extends {
     icon?: Parameters<typeof iconToResolvedEmoji>[0];

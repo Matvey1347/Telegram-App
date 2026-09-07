@@ -21,6 +21,7 @@ import {
   CrmContactsQueryDto,
   CrmConversationsQueryDto,
   CrmMessagesQueryDto,
+  SetCrmReplyAlertMuteDto,
   UpdateCrmContactDto,
   UpdateCrmWorkspaceSettingsDto,
   UpsertCrmPeerDto,
@@ -56,6 +57,11 @@ export class TelegramCrmController {
     return this.contactRead.get(user.sub, id);
   }
 
+  @Get('contacts/:id/chat-context')
+  getChatContext(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.contactRead.getChatContext(user.sub, id);
+  }
+
   @Get('unread')
   unread(@CurrentUser() user: JwtUser) {
     return this.contactRead.unread(user.sub);
@@ -76,6 +82,15 @@ export class TelegramCrmController {
     @Body() dto: UpdateCrmContactDto,
   ) {
     return this.contactCommands.update(user.sub, id, dto);
+  }
+
+  @Patch('contacts/:id/reply-alert')
+  setReplyAlertMuted(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: SetCrmReplyAlertMuteDto,
+  ) {
+    return this.contactCommands.setReplyAlertMuted(user.sub, id, dto);
   }
 
   @Post('contacts/:id/archive')

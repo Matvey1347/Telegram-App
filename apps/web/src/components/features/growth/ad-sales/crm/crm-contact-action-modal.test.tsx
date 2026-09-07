@@ -9,6 +9,8 @@ import {
 
 const mocks = vi.hoisted(() => ({
   getContact: vi.fn(),
+  getChatContext: vi.fn(),
+  listConversations: vi.fn(),
   updateContact: vi.fn(),
   me: vi.fn(),
   members: vi.fn(),
@@ -24,6 +26,8 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/features/growth/telegram-crm-api", () => ({
   telegramCrmApi: {
     getContact: mocks.getContact,
+    getChatContext: mocks.getChatContext,
+    listConversations: mocks.listConversations,
     updateContact: mocks.updateContact,
   },
 }));
@@ -113,6 +117,18 @@ function renderModal(action: CrmContactAction = "info") {
 describe("CrmContactActionModal", () => {
   beforeEach(() => {
     mocks.getContact.mockReset().mockResolvedValue(contact);
+    mocks.getChatContext.mockReset().mockResolvedValue(contact);
+    mocks.listConversations.mockReset().mockResolvedValue({
+      items: [],
+      pagination: {
+        page: 1,
+        pageSize: 50,
+        totalItems: 0,
+        totalPages: 0,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+    });
     mocks.updateContact.mockReset().mockResolvedValue(contact);
     mocks.me.mockReset().mockResolvedValue({
       user: { id: "user-1", name: "Owner", email: "owner@example.com" },
@@ -217,12 +233,15 @@ describe("CrmContactActionModal", () => {
         },
       ],
     };
-    mocks.getContact.mockImplementation((contactId: string) =>
+    mocks.getChatContext.mockImplementation((contactId: string) =>
       Promise.resolve(contactId === secondContact.id ? secondContact : contact),
     );
     const onSelectChat = vi.fn();
     const client = new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
     });
 
     render(
@@ -240,14 +259,96 @@ describe("CrmContactActionModal", () => {
     const adaChat = await screen.findByRole("button", {
       name: "Open chat Ada Client via @tgManage770",
     });
+    expect(
+      screen.getByRole("dialog", { name: "Contact conversations" }),
+    ).toHaveClass("w-[min(640px,calc(100vw-2rem))]");
     const graceChat = await screen.findByRole("button", {
       name: "Open chat Grace Client via @manager_two",
     });
     expect(adaChat.querySelectorAll("img")).toHaveLength(2);
     expect(graceChat.querySelectorAll("img")).toHaveLength(2);
     expect(screen.queryByText(/Ada Client · Chat/)).not.toBeInTheDocument();
+    expect(mocks.getContact).not.toHaveBeenCalled();
+    expect(mocks.listConversations).toHaveBeenCalledWith(
+      {
+        contactId: "contact-1",
+        page: 1,
+        pageSize: 50,
+        state: "ACTIVE",
+      },
+      expect.any(AbortSignal),
+    );
 
     fireEvent.click(graceChat);
     expect(onSelectChat).toHaveBeenCalledWith("contact-2");
+  });
+
+  it("shows the contact avatar from the list immediately while chat context loads", () => {
+    mocks.getChatContext.mockReturnValue(new Promise(() => undefined));
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <CrmContactActionModal
+          contactId="contact-1"
+          action="conversations"
+          chatContactIds={["contact-1"]}
+          chatPreviews={{
+            "contact-1": {
+              id: "contact-1",
+              displayName: "Ada Client",
+              telegramUsername: "ada",
+              photoUrl: "https://cdn.example/ada.jpg",
+            },
+          }}
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByRole("img", { name: "Ada Client" })).toHaveAttribute(
+      "src",
+      "https://cdn.example/ada.jpg",
+    );
+    expect(screen.getByText("MTP")).toBeInTheDocument();
+  });
+
+  it("minimizes from the header or outside click and closes separately", async () => {
+    const onMinimize = vi.fn();
+    const onClose = vi.fn();
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+
+    render(
+      <QueryClientProvider client={client}>
+        <CrmContactActionModal
+          contactId="contact-1"
+          action="conversations"
+          onMinimize={onMinimize}
+          onClose={onClose}
+        />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByRole("dialog", { name: "Contact conversations" });
+    fireEvent.click(screen.getByTitle("Minimize chat"));
+    expect(onMinimize).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Minimize chat" })[0],
+    );
+    expect(onMinimize).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Close current chat" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

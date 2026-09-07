@@ -23,6 +23,9 @@ import {
 } from "@/lib/features/growth/telegram-crm-query";
 import { crmText } from "./crm-copy";
 
+const MESSAGE_PAGE_SIZE = 50;
+const INITIAL_HISTORY_IMPORT_SIZE = MESSAGE_PAGE_SIZE + 1;
+
 function optimisticMessage(
   conversation: CrmConversationListItem,
   text: string,
@@ -98,7 +101,6 @@ export function CrmMessageThread({
 }) {
   const queryClient = useQueryClient();
   const messageListRef = useRef<HTMLOListElement>(null);
-  const historyRequestedFor = useRef<string | null>(null);
   const initialScrollFor = useRef<string | null>(null);
   const [text, setText] = useState("");
   const [atHistoryBoundary, setAtHistoryBoundary] = useState(false);
@@ -111,9 +113,17 @@ export function CrmMessageThread({
   const query = useInfiniteQuery({
     queryKey: telegramCrmKeys.messagesInfinite(conversation.id),
     queryFn: ({ pageParam, signal }) =>
-      telegramCrmApi.listMessages(conversation.id, pageParam, 50, signal),
+      telegramCrmApi.listMessages(
+        conversation.id,
+        pageParam,
+        MESSAGE_PAGE_SIZE,
+        signal,
+      ),
     initialPageParam: null as string | null,
     getNextPageParam: (page) => (page.hasMore ? page.nextCursor : undefined),
+    // Live events and mutations reconcile this cache. Keep a recently opened
+    // thread in memory instead of repeating the same Neon read on every mount.
+    staleTime: 60_000,
   });
   const messages = useMemo(
     () =>
@@ -124,7 +134,9 @@ export function CrmMessageThread({
   );
   const history = useMutation({
     mutationFn: () =>
-      telegramCrmApi.importHistory(conversation.id, { limit: 100 }),
+      telegramCrmApi.importHistory(conversation.id, {
+        limit: INITIAL_HISTORY_IMPORT_SIZE,
+      }),
     onSuccess: async (result) => {
       setTelegramHistoryExhausted(result.exhausted);
       await queryClient.invalidateQueries({
@@ -135,24 +147,6 @@ export function CrmMessageThread({
       });
     },
   });
-  useEffect(() => {
-    if (
-      !query.isSuccess ||
-      messages.length ||
-      conversation.historyExhausted ||
-      historyRequestedFor.current === conversation.id
-    ) {
-      return;
-    }
-    historyRequestedFor.current = conversation.id;
-    history.mutate();
-  }, [
-    conversation.historyExhausted,
-    conversation.id,
-    history,
-    messages.length,
-    query.isSuccess,
-  ]);
   useEffect(() => {
     if (!messages.length || initialScrollFor.current === conversation.id)
       return;
@@ -246,86 +240,93 @@ export function CrmMessageThread({
           ) : null}
         </div>
       ) : null}
-      {query.isLoading ? (
-        <p className="py-8 text-center text-sm text-neutral-500">
-          {crmText("states.loadingConversation")}
-        </p>
-      ) : null}
-      {query.error ? (
-        <div className="py-5 text-center">
-          <p className="mb-2 text-sm text-rose-300">
-            Conversation could not be loaded.
-          </p>
-          <Button variant="secondary" onClick={() => query.refetch()}>
-            Retry
-          </Button>
-        </div>
-      ) : null}
-      {history.isPending ? (
-        <p className="py-8 text-center text-sm text-neutral-500">
-          Loading Telegram history…
-        </p>
-      ) : null}
-      {history.error ? (
-        <div className="py-5 text-center">
-          <p className="mb-2 text-sm text-rose-300">
-            Telegram history could not be loaded.
-          </p>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              historyRequestedFor.current = null;
-              history.mutate();
-            }}
-          >
-            Retry
-          </Button>
-        </div>
-      ) : null}
-      {!query.isLoading &&
-      !query.error &&
-      !history.isPending &&
-      !history.error &&
-      !messages.length ? (
-        <EmptyState text={crmText("states.emptyConversation")} />
-      ) : null}
-      {messages.length ? (
-        <div className="relative min-h-0 flex-1">
-          {atHistoryBoundary &&
-          (query.hasNextPage || !telegramHistoryExhausted) ? (
-            <div className="absolute left-1/2 top-2 z-10 -translate-x-1/2">
-              <Button
-                variant="secondary"
-                disabled={query.isFetchingNextPage || history.isPending}
-                onClick={loadOlder}
-              >
-                {query.isFetchingNextPage || history.isPending
-                  ? "Loading…"
-                  : "Load older"}
-              </Button>
-            </div>
-          ) : null}
-          <ol
-            ref={messageListRef}
-            onScroll={(event) =>
-              setAtHistoryBoundary(event.currentTarget.scrollTop <= 8)
-            }
-            className="h-full space-y-2 overflow-y-auto pr-1 pt-2"
-          >
-            {messages.map((message) => (
-              <MessageRow
-                key={message.id}
-                message={message}
-                onRetry={
-                  failed?.key === message.clientIdempotencyKey
-                    ? () => send.mutate(failed)
-                    : undefined
-                }
-              />
-            ))}
-          </ol>
-        </div>
-      ) : null}
+      <div className="relative min-h-0 flex-1">
+        {query.isLoading ? (
+          <div className="flex h-full items-center justify-center">
+            <p className="text-center text-sm text-neutral-500">
+              {crmText("states.loadingConversation")}
+            </p>
+          </div>
+        ) : null}
+        {query.error ? (
+          <div className="flex h-full flex-col items-center justify-center text-center">
+            <p className="mb-2 text-sm text-rose-300">
+              Conversation could not be loaded.
+            </p>
+            <Button variant="secondary" onClick={() => query.refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : null}
+        {history.isPending ? (
+          <div className="flex h-full items-center justify-center">
+            <p className="text-center text-sm text-neutral-500">
+              Loading Telegram history…
+            </p>
+          </div>
+        ) : null}
+        {history.error ? (
+          <div className="flex h-full flex-col items-center justify-center text-center">
+            <p className="mb-2 text-sm text-rose-300">
+              Telegram history could not be loaded.
+            </p>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                history.mutate();
+              }}
+            >
+              Retry
+            </Button>
+          </div>
+        ) : null}
+        {!query.isLoading &&
+        !query.error &&
+        !history.isPending &&
+        !history.error &&
+        !messages.length ? (
+          <div className="h-full">
+            <EmptyState text={crmText("states.emptyConversation")} />
+          </div>
+        ) : null}
+        {messages.length ? (
+          <>
+            {atHistoryBoundary &&
+            (query.hasNextPage || !telegramHistoryExhausted) ? (
+              <div className="absolute left-1/2 top-2 z-10 -translate-x-1/2">
+                <Button
+                  variant="secondary"
+                  disabled={query.isFetchingNextPage || history.isPending}
+                  onClick={loadOlder}
+                >
+                  {query.isFetchingNextPage || history.isPending
+                    ? "Loading…"
+                    : "Load older"}
+                </Button>
+              </div>
+            ) : null}
+            <ol
+              ref={messageListRef}
+              onScroll={(event) =>
+                setAtHistoryBoundary(event.currentTarget.scrollTop <= 8)
+              }
+              className="h-full space-y-2 overflow-y-auto pr-1 pt-2"
+            >
+              {messages.map((message) => (
+                <MessageRow
+                  key={message.id}
+                  message={message}
+                  onRetry={
+                    failed?.key === message.clientIdempotencyKey
+                      ? () => send.mutate(failed)
+                      : undefined
+                  }
+                />
+              ))}
+            </ol>
+          </>
+        ) : null}
+      </div>
       {canSendManual ? (
         <div className="mt-3 shrink-0 border-t border-neutral-800 bg-neutral-950 pt-3">
           <TelegramTextEditor
@@ -335,6 +336,7 @@ export function CrmMessageThread({
             rows={3}
             placeholder="Write a message…"
             characterCountLabel={(count) => `${count} characters`}
+            enableCustomEmoji
           />
           <div className="mt-2 flex justify-end">
             <Button disabled={!text.trim() || send.isPending} onClick={submit}>

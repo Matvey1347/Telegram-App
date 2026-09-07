@@ -5,15 +5,21 @@ import { ApplicationLoggerService } from './domains/operations/application-logs/
 import { corsOrigins, webCorsOrigins } from './common/http/cors-origins';
 import {
   apiPort,
+  configuredRuntimeEnvironmentName,
   publicWebOrigin,
   trustedProxyHops,
 } from './config/deployment-config';
+import { installDevelopmentConnectionDrain } from './common/http/development-connection-drain';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
     rawBody: true,
   });
+  installDevelopmentConnectionDrain(
+    app.getHttpServer(),
+    configuredRuntimeEnvironmentName(),
+  );
   app.enableShutdownHooks();
   app.useLogger(app.get(ApplicationLoggerService));
 

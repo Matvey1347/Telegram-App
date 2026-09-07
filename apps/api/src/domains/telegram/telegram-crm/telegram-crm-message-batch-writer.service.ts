@@ -6,6 +6,7 @@ import {
 } from '@prisma/client';
 import type { TelegramCrmMtprotoMessage } from '../../../telegram/shared/telegram-crm-mtproto.types';
 import { OperationsNotificationPublisherService } from '../../operations/notifications/operations-notification-publisher.service';
+import { ResponseCacheService } from '../../../common/response-cache.service';
 import { TelegramCrmEventHub } from './telegram-crm-event-hub.service';
 import { TelegramCrmIncomingNotificationProjector } from './telegram-crm-incoming-notification-projector.service';
 import { TelegramCrmMessageAfterCommitPublisher } from './telegram-crm-message-after-commit-publisher.service';
@@ -22,6 +23,13 @@ export type CrmMessageBatchInput = {
     lastOutboundAt?: Date | null;
     lastMessageAt?: Date | null;
     contact?: { ownerMemberId: string | null } | null;
+    peer?: {
+      telegramUserId: string;
+      username: string | null;
+      firstName: string | null;
+      lastName: string | null;
+      photoUrl: string | null;
+    };
   };
   message: TelegramCrmMtprotoMessage;
   edited?: boolean;
@@ -41,10 +49,12 @@ export class TelegramCrmMessageBatchWriter {
     @Optional() notifications?: OperationsNotificationPublisherService,
     @Optional()
     private readonly projector?: TelegramCrmIncomingNotificationProjector,
+    @Optional() responseCache?: ResponseCacheService,
   ) {
     this.afterCommit = new TelegramCrmMessageAfterCommitPublisher(
       events,
       notifications,
+      responseCache,
     );
   }
 
@@ -136,9 +146,7 @@ export class TelegramCrmMessageBatchWriter {
       edited += 1;
       editedInputs.push(input);
     }
-    if (mode !== 'history') {
-      await this.updateCompacts(tx, insertedInputs, mode);
-    }
+    await this.updateCompacts(tx, context.workspaceId, insertedInputs, mode);
     const created = inserted.length
       ? await tx.telegramCrmMessage.findMany({
           where: { id: { in: inserted.map((message) => message.id) } },
@@ -203,88 +211,157 @@ export class TelegramCrmMessageBatchWriter {
     this.afterCommit.peers(workspaceId, peers);
   }
 
+  removeIncomingNotificationGroups(
+    tx: Prisma.TransactionClient,
+    workspaceId: string,
+    conversationIds: readonly string[],
+  ) {
+    return (
+      this.projector?.removeConversationGroups(
+        tx,
+        workspaceId,
+        conversationIds,
+      ) ?? Promise.resolve([])
+    );
+  }
+
+  reconcileIncomingNotificationGroups(
+    tx: Prisma.TransactionClient,
+    workspaceId: string,
+    reads: readonly {
+      conversationId: string;
+      contactId: string | null;
+      unreadCount: number;
+    }[],
+  ) {
+    return (
+      this.projector?.reconcileConversationGroups(tx, workspaceId, reads) ??
+      Promise.resolve([])
+    );
+  }
+
+  emitNotificationInvalidationsAfterCommit(
+    workspaceId: string,
+    recipientMemberIds: readonly string[],
+  ) {
+    this.afterCommit.notificationInvalidations(workspaceId, recipientMemberIds);
+  }
+
+  invalidateContactReadCache(workspaceId: string) {
+    this.afterCommit.contactsChanged(workspaceId);
+  }
+
   private async updateCompacts(
     tx: Prisma.TransactionClient,
+    workspaceId: string,
     fresh: CrmMessageBatchInput[],
-    mode: Exclude<CrmMessageBatchMode, 'history'>,
+    mode: CrmMessageBatchMode,
   ) {
-    for (const input of this.touchedConversations(fresh)) {
-      const group = fresh.filter(
-        (item) => item.conversation.id === input.conversation.id,
-      );
-      const newestInbound = this.newest(group, 'INBOUND');
-      const newestOutbound = this.newest(group, 'OUTBOUND');
-      const newest = group.reduce(
-        (result, item) =>
-          item.message.sentAt > result ? item.message.sentAt : result,
-        group[0].message.sentAt,
-      );
-      const data: Prisma.TelegramCrmConversationUpdateInput = {
-        ...(!input.conversation.lastMessageAt ||
-        newest > input.conversation.lastMessageAt
-          ? { lastMessageAt: newest }
-          : {}),
-        ...(newestInbound &&
-        (!input.conversation.lastInboundAt ||
-          newestInbound > input.conversation.lastInboundAt)
-          ? { lastInboundAt: newestInbound }
-          : {}),
-        ...(newestOutbound &&
-        (!input.conversation.lastOutboundAt ||
-          newestOutbound > input.conversation.lastOutboundAt)
-          ? { lastOutboundAt: newestOutbound }
-          : {}),
-        ...(mode === 'live' && newestInbound
-          ? {
-              unreadCount: {
-                increment: group.filter(
-                  (item) => item.message.direction === 'INBOUND',
-                ).length,
-              },
-              readState: TelegramCrmReadState.UNREAD,
-            }
-          : {}),
-        lastMeaningfulSyncAt: new Date(),
-      };
-      await tx.telegramCrmConversation.update({
-        where: { id: input.conversation.id },
-        data,
-      });
-      if (input.conversation.contactId) {
-        const contact = await tx.telegramAdvertiser.findUnique({
-          where: { id: input.conversation.contactId },
-          select: {
-            lastContactAt: true,
-            lastInboundAt: true,
-            lastOutboundAt: true,
-          },
-        });
-        if (contact) {
-          const contactData: Prisma.TelegramAdvertiserUpdateInput = {};
-          if (!contact.lastContactAt || newest > contact.lastContactAt) {
-            contactData.lastContactAt = newest;
-          }
-          if (
-            newestInbound &&
-            (!contact.lastInboundAt || newestInbound > contact.lastInboundAt)
-          ) {
-            contactData.lastInboundAt = newestInbound;
-          }
-          if (
-            newestOutbound &&
-            (!contact.lastOutboundAt || newestOutbound > contact.lastOutboundAt)
-          ) {
-            contactData.lastOutboundAt = newestOutbound;
-          }
-          if (Object.keys(contactData).length) {
-            await tx.telegramAdvertiser.update({
-              where: { id: input.conversation.contactId },
-              data: contactData,
-            });
-          }
-        }
-      }
-    }
+    if (!fresh.length) return;
+    const groups = this.messageGroups(fresh);
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "TelegramCrmConversation" AS conversation
+      SET
+        "inboundMessageCount" = conversation."inboundMessageCount" + incoming."inboundCount",
+        "outboundMessageCount" = conversation."outboundMessageCount" + incoming."outboundCount",
+        "lastMessageAt" = CASE
+          WHEN ${mode === 'history'} THEN conversation."lastMessageAt"
+          WHEN conversation."lastMessageAt" IS NULL OR incoming."lastMessageAt" > conversation."lastMessageAt"
+            THEN incoming."lastMessageAt"
+          ELSE conversation."lastMessageAt"
+        END,
+        "lastInboundAt" = CASE
+          WHEN ${mode === 'history'} OR incoming."lastInboundAt" IS NULL THEN conversation."lastInboundAt"
+          WHEN conversation."lastInboundAt" IS NULL OR incoming."lastInboundAt" > conversation."lastInboundAt"
+            THEN incoming."lastInboundAt"
+          ELSE conversation."lastInboundAt"
+        END,
+        "lastOutboundAt" = CASE
+          WHEN ${mode === 'history'} OR incoming."lastOutboundAt" IS NULL THEN conversation."lastOutboundAt"
+          WHEN conversation."lastOutboundAt" IS NULL OR incoming."lastOutboundAt" > conversation."lastOutboundAt"
+            THEN incoming."lastOutboundAt"
+          ELSE conversation."lastOutboundAt"
+        END,
+        "unreadCount" = conversation."unreadCount" + incoming."unreadIncrement",
+        "readState" = CASE
+          WHEN incoming."unreadIncrement" > 0 THEN ${TelegramCrmReadState.UNREAD}::"TelegramCrmReadState"
+          ELSE conversation."readState"
+        END,
+        "lastMeaningfulSyncAt" = CASE
+          WHEN ${mode === 'history'} THEN conversation."lastMeaningfulSyncAt"
+          ELSE NOW()
+        END,
+        "updatedAt" = NOW()
+      FROM (
+        VALUES ${Prisma.join(
+          groups.map(
+            (group) => Prisma.sql`(
+              CAST(${group.conversationId} AS TEXT),
+              CAST(${group.inboundCount} AS INTEGER),
+              CAST(${group.outboundCount} AS INTEGER),
+              CAST(${group.lastMessageAt} AS TIMESTAMPTZ),
+              CAST(${group.lastInboundAt} AS TIMESTAMPTZ),
+              CAST(${group.lastOutboundAt} AS TIMESTAMPTZ),
+              CAST(${mode === 'live' ? group.inboundCount : 0} AS INTEGER)
+            )`,
+          ),
+        )}
+      ) AS incoming(
+        "conversationId",
+        "inboundCount",
+        "outboundCount",
+        "lastMessageAt",
+        "lastInboundAt",
+        "lastOutboundAt",
+        "unreadIncrement"
+      )
+      WHERE conversation."id" = incoming."conversationId"
+        AND conversation."workspaceId" = ${workspaceId}
+    `);
+    if (mode === 'history') return;
+    const contacts = this.contactGroups(fresh);
+    if (!contacts.length) return;
+    await tx.$executeRaw(Prisma.sql`
+      UPDATE "TelegramAdvertiser" AS contact
+      SET
+        "lastContactAt" = CASE
+          WHEN contact."lastContactAt" IS NULL OR incoming."lastMessageAt" > contact."lastContactAt"
+            THEN incoming."lastMessageAt"
+          ELSE contact."lastContactAt"
+        END,
+        "lastInboundAt" = CASE
+          WHEN incoming."lastInboundAt" IS NULL THEN contact."lastInboundAt"
+          WHEN contact."lastInboundAt" IS NULL OR incoming."lastInboundAt" > contact."lastInboundAt"
+            THEN incoming."lastInboundAt"
+          ELSE contact."lastInboundAt"
+        END,
+        "lastOutboundAt" = CASE
+          WHEN incoming."lastOutboundAt" IS NULL THEN contact."lastOutboundAt"
+          WHEN contact."lastOutboundAt" IS NULL OR incoming."lastOutboundAt" > contact."lastOutboundAt"
+            THEN incoming."lastOutboundAt"
+          ELSE contact."lastOutboundAt"
+        END,
+        "updatedAt" = NOW()
+      FROM (
+        VALUES ${Prisma.join(
+          contacts.map(
+            (group) => Prisma.sql`(
+              CAST(${group.contactId} AS TEXT),
+              CAST(${group.lastMessageAt} AS TIMESTAMPTZ),
+              CAST(${group.lastInboundAt} AS TIMESTAMPTZ),
+              CAST(${group.lastOutboundAt} AS TIMESTAMPTZ)
+            )`,
+          ),
+        )}
+      ) AS incoming(
+        "contactId",
+        "lastMessageAt",
+        "lastInboundAt",
+        "lastOutboundAt"
+      )
+      WHERE contact."id" = incoming."contactId"
+        AND contact."workspaceId" = ${workspaceId}
+    `);
   }
 
   private dedupe(inputs: CrmMessageBatchInput[]) {
@@ -316,5 +393,50 @@ export class TelegramCrmMessageBatchWriter {
           !value || input.message.sentAt > value ? input.message.sentAt : value,
         null,
       );
+  }
+
+  private messageGroups(inputs: CrmMessageBatchInput[]) {
+    const grouped = new Map<string, CrmMessageBatchInput[]>();
+    for (const input of inputs) {
+      const values = grouped.get(input.conversation.id) ?? [];
+      values.push(input);
+      grouped.set(input.conversation.id, values);
+    }
+    return [...grouped].map(([conversationId, values]) => ({
+      conversationId,
+      inboundCount: values.filter(
+        (input) => input.message.direction === 'INBOUND',
+      ).length,
+      outboundCount: values.filter(
+        (input) => input.message.direction === 'OUTBOUND',
+      ).length,
+      lastMessageAt: values.reduce(
+        (latest, input) =>
+          input.message.sentAt > latest ? input.message.sentAt : latest,
+        values[0].message.sentAt,
+      ),
+      lastInboundAt: this.newest(values, 'INBOUND'),
+      lastOutboundAt: this.newest(values, 'OUTBOUND'),
+    }));
+  }
+
+  private contactGroups(inputs: CrmMessageBatchInput[]) {
+    const grouped = new Map<string, CrmMessageBatchInput[]>();
+    for (const input of inputs) {
+      if (!input.conversation.contactId) continue;
+      const values = grouped.get(input.conversation.contactId) ?? [];
+      values.push(input);
+      grouped.set(input.conversation.contactId, values);
+    }
+    return [...grouped].map(([contactId, values]) => ({
+      contactId,
+      lastMessageAt: values.reduce(
+        (latest, input) =>
+          input.message.sentAt > latest ? input.message.sentAt : latest,
+        values[0].message.sentAt,
+      ),
+      lastInboundAt: this.newest(values, 'INBOUND'),
+      lastOutboundAt: this.newest(values, 'OUTBOUND'),
+    }));
   }
 }

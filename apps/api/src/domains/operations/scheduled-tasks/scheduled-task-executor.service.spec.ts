@@ -9,6 +9,7 @@ import { TelegramWorkspaceFullSyncService } from '../../telegram/telegram-sync/t
 import { ScheduledTaskExecutorService } from './scheduled-task-executor.service';
 import { ScheduledTaskRegistryService } from './scheduled-task-registry.service';
 import { TelegramManagedPostReconciliationService } from '../../telegram/telegram-channels/telegram-managed-post-reconciliation.service';
+import { TelegramCrmInitialSyncService } from '../../telegram/telegram-crm/telegram-crm-initial-sync.service';
 
 describe('scheduled task registry executors', () => {
   function setup() {
@@ -48,6 +49,12 @@ describe('scheduled task registry executors', () => {
         localDelivery: { considered: 2, published: 1, failed: 1 },
       }),
     };
+    const crmSync = {
+      runWorkspace: jest.fn().mockResolvedValue({
+        summary: 'Synchronized 2 MTProto CRM sources.',
+        details: { accountsProcessed: 2 },
+      }),
+    };
     const services = new Map<unknown, unknown>([
       [TelegramWorkspaceFullSyncService, fullSync],
       [GreeterExpiryService, greeter],
@@ -58,6 +65,7 @@ describe('scheduled task registry executors', () => {
       [TelegramAdSalesService, {}],
       [ApplicationLogsService, {}],
       [TelegramManagedPostReconciliationService, managedPosts],
+      [TelegramCrmInitialSyncService, crmSync],
     ]);
     const moduleRef = {
       resolve: jest.fn((token: unknown) =>
@@ -73,6 +81,7 @@ describe('scheduled task registry executors', () => {
       automations,
       retention,
       managedPosts,
+      crmSync,
     };
   }
 
@@ -89,6 +98,19 @@ describe('scheduled task registry executors', () => {
     });
     expect(result).toMatchObject({
       summary: expect.stringContaining('2 successful'),
+    });
+  });
+
+  it('runs the workspace-scoped Telegram CRM sync', async () => {
+    const { executor, crmSync } = setup();
+    const result = await executor.executors['telegram.crm.sync']({
+      taskKey: 'telegram.crm.sync',
+      workspaceId: 'workspace-1',
+      trigger: 'SCHEDULE',
+    });
+    expect(crmSync.runWorkspace).toHaveBeenCalledWith('workspace-1');
+    expect(result).toMatchObject({
+      summary: expect.stringContaining('2 MTProto CRM sources'),
     });
   });
 
@@ -155,6 +177,14 @@ describe('scheduled task registry executors', () => {
     ).toMatchObject({
       group: { key: 'TELEGRAM' },
       defaultSchedule: { frequency: 'INTERVAL', intervalMinutes: 120 },
+    });
+    expect(
+      definitions.find((item) => item.key === 'telegram.crm.sync'),
+    ).toMatchObject({
+      scope: 'WORKSPACE_OPERATION',
+      group: { key: 'TELEGRAM' },
+      defaultSchedule: { frequency: 'DAILY', time: '06:00' },
+      supportedFrequencies: ['DAILY'],
     });
     expect(
       definitions.find((item) => item.key === 'greeter.expire_pending'),

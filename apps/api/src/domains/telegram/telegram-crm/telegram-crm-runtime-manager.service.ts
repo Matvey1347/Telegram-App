@@ -92,18 +92,9 @@ export class TelegramCrmRuntimeManager
     const managed = this.accounts.get(accountId);
     if (managed?.connecting) await managed.connecting;
     if (managed?.handle) return operation(managed.handle);
-    if (managed?.retryTimer) {
-      clearTimeout(managed.retryTimer);
-      managed.retryTimer = undefined;
-      managed.abort = new AbortController();
-      managed.generation += 1;
-      managed.connecting = this.connect(managed).finally(() => {
-        managed.connecting = undefined;
-      });
-      await managed.connecting;
-      if (managed.handle) return operation(managed.handle);
-      throw new Error('Telegram CRM account is reconnecting');
-    }
+    // A failed live-update transport may be waiting for its bounded backoff.
+    // Manual work must not turn that expected state into HTTP 500: use an
+    // isolated handle now and leave the live runtime's retry schedule intact.
     const handle = await this.adapter.open(resolved.credentials);
     try {
       return await operation(handle);

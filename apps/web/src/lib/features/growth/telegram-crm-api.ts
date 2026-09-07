@@ -1,6 +1,7 @@
 import type {
   CrmAccountCapabilities,
   CrmAccountSyncState,
+  CrmChatContactContext,
   CrmContact,
   CrmContactDetail,
   CrmContactMergeResult,
@@ -19,6 +20,8 @@ import type {
   CrmManualMessageResult,
   CrmMessagesCursorPage,
   CrmPeer,
+  CrmReplyAlertMuteInput,
+  CrmReplyAlertMuteResult,
   CrmRealtimeEvent,
   CrmUnreadSummary,
   CrmWorkspaceSettings,
@@ -96,12 +99,29 @@ export const telegramCrmApi = {
         signal,
       })
     ).data,
+  getChatContext: async (contactId: string, signal?: AbortSignal) =>
+    (
+      await api.get<CrmChatContactContext>(
+        `/telegram-crm/contacts/${contactId}/chat-context`,
+        { signal },
+      )
+    ).data,
   createContact: async (payload: CreateCrmContactPayload) =>
     (await api.post<CrmContact>("/telegram-crm/contacts", payload)).data,
   updateContact: async (contactId: string, payload: UpdateCrmContactPayload) =>
     (
       await api.patch<CrmContact>(
         `/telegram-crm/contacts/${contactId}`,
+        payload,
+      )
+    ).data,
+  setReplyAlertMuted: async (
+    contactId: string,
+    payload: CrmReplyAlertMuteInput,
+  ) =>
+    (
+      await api.patch<CrmReplyAlertMuteResult>(
+        `/telegram-crm/contacts/${contactId}/reply-alert`,
         payload,
       )
     ).data,
@@ -260,6 +280,8 @@ export const telegramCrmApi = {
     (
       await api.post<CrmInitialSyncResult>(
         `/telegram-crm/accounts/${accountId}/initial-sync`,
+        undefined,
+        { feedback: { mode: "managed" } } as Parameters<typeof api.post>[2],
       )
     ).data,
 };

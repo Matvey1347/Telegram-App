@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CrmContactDetail } from "@telegram-system/shared";
+import type { CrmChatContactContext } from "@telegram-system/shared";
 import { authApi, telegramUserAccountsApi } from "@/lib/api";
 import {
   Button,
@@ -50,14 +50,16 @@ export function CrmConversationsSkeleton() {
 export function CrmConversations({
   contact,
   canEditContact,
+  initialConversationId,
 }: {
-  contact: CrmContactDetail;
+  contact: CrmChatContactContext;
   canEditContact: boolean;
+  initialConversationId?: string;
 }) {
   const queryClient = useQueryClient();
   const [selectedConversationId, setSelectedConversationId] = useState<
     string | null
-  >(null);
+  >(initialConversationId ?? null);
   const [newOpen, setNewOpen] = useState(contact.peers.length === 0);
   const [accountId, setAccountId] = useState("");
   const [peerId, setPeerId] = useState(contact.peers[0]?.id ?? "");
@@ -80,19 +82,28 @@ export function CrmConversations({
   const conversations = useQuery({
     queryKey: telegramCrmKeys.conversationList(params),
     queryFn: ({ signal }) => telegramCrmApi.listConversations(params, signal),
+    staleTime: 30_000,
   });
+  const listedSelected = conversations.data?.items.find(
+    (item) => item.id === selectedConversationId,
+  );
   const directConversation = useQuery({
     queryKey: selectedConversationId
       ? telegramCrmKeys.conversationDetail(selectedConversationId)
       : telegramCrmKeys.conversationDetail("none"),
     queryFn: ({ signal }) =>
       telegramCrmApi.getConversation(selectedConversationId!, signal),
-    enabled: Boolean(selectedConversationId),
+    enabled: Boolean(
+      selectedConversationId && conversations.isSuccess && !listedSelected,
+    ),
   });
   const accounts = useQuery({
     queryKey: telegramAccountKeys.accounts(),
     queryFn: telegramUserAccountsApi.list,
-    enabled: newOpen || Boolean(selectedConversationId),
+    enabled:
+      newOpen ||
+      Boolean(selectedConversationId) ||
+      Boolean(conversations.data?.items.length),
   });
   const settings = useQuery({
     queryKey: telegramCrmKeys.settings(),
@@ -157,10 +168,8 @@ export function CrmConversations({
   );
   const selected = directMismatch
     ? null
-    : (directConversation.data ??
-      conversations.data?.items.find(
-        (item) => item.id === selectedConversationId,
-      ) ??
+    : (listedSelected ??
+      directConversation.data ??
       (conversations.data?.items.length === 1
         ? conversations.data.items[0]
         : null) ??

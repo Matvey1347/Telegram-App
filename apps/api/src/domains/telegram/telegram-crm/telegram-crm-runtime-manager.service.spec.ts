@@ -360,4 +360,54 @@ describe('TelegramCrmRuntimeManager', () => {
     expect(recovery.recover).toHaveBeenCalledTimes(1);
     await manager.onApplicationShutdown();
   });
+
+  it('uses an isolated handle for manual sync while the live runtime is backing off', async () => {
+    jest.useFakeTimers();
+    jest.spyOn(Math, 'random').mockReturnValue(0.5);
+    const sessions = {
+      startupAccounts: jest.fn().mockResolvedValue([account]),
+      requireForSync: jest.fn().mockResolvedValue({
+        credentials: { apiId: '1', apiHash: 'hash', session: 'session' },
+      }),
+      credentials: jest.fn().mockReturnValue({
+        apiId: '1',
+        apiHash: 'hash',
+        session: 'session',
+      }),
+    };
+    const isolatedHandle = {
+      close: jest.fn().mockResolvedValue(undefined),
+    };
+    const adapter = {
+      open: jest
+        .fn()
+        .mockRejectedValueOnce(new Error('temporary live connection failure'))
+        .mockResolvedValueOnce(isolatedHandle),
+    };
+    const manager = new TelegramCrmRuntimeManager(
+      { telegramUserAccountIntegration: { updateMany: jest.fn() } } as never,
+      sessions as never,
+      adapter as never,
+      {} as never,
+      new TelegramAccountRuntimeNotifier(),
+      {} as never,
+    );
+
+    await manager.onApplicationBootstrap();
+    await expect(
+      manager.withAccountHandle(
+        account.workspaceId,
+        account.id,
+        'sync',
+        async (handle) => {
+          expect(handle).toBe(isolatedHandle);
+          return 'synchronized';
+        },
+      ),
+    ).resolves.toBe('synchronized');
+
+    expect(isolatedHandle.close).toHaveBeenCalledTimes(1);
+    expect(adapter.open).toHaveBeenCalledTimes(2);
+    await manager.onApplicationShutdown();
+  });
 });

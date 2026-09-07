@@ -5,6 +5,7 @@ import {
   canonicalizeTimeInputValue,
   CustomSelect,
   CurrencySelect,
+  DateRangeInput,
   isValidTimeInputValue,
   Input,
   MasonryGrid,
@@ -155,6 +156,7 @@ describe("CustomSelect", () => {
     expect(container).not.toContainElement(option);
     expect(option.closest("div")?.className).toContain("z-[120]");
   });
+
 });
 
 describe("MultiSelect", () => {
@@ -251,6 +253,23 @@ describe("Tooltip", () => {
 
     await user.keyboard("{Escape}");
     expect(screen.queryByText("Helpful tab description")).toBeNull();
+  });
+});
+
+describe("DateRangeInput", () => {
+  it("renders its calendar through a portal outside clipping containers", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <div className="overflow-hidden">
+        <DateRangeInput from="" to="" onChange={() => {}} />
+      </div>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Select period" }));
+
+    const calendar = screen.getByRole("dialog", { name: "Select period" });
+    expect(container).not.toContainElement(calendar);
+    expect(calendar).toHaveStyle({ position: "fixed" });
   });
 });
 

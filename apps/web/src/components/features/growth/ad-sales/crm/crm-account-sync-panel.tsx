@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, Save } from "lucide-react";
+import { RefreshCw, Save, Settings2 } from "lucide-react";
 import type { TelegramUserAccount } from "@/lib/api";
 import { telegramUserAccountsApi } from "@/lib/api";
-import { Button, MultiSelect } from "@/components/ui/primitives";
-import { telegramAccountKeys } from "@/lib/query-keys";
+import { Button, Modal, MultiSelect } from "@/components/ui/primitives";
+import { scheduledTaskKeys, telegramAccountKeys } from "@/lib/query-keys";
 import { telegramCrmApi } from "@/lib/features/growth/telegram-crm-api";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
@@ -21,12 +21,12 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
   const connected = (accounts.data ?? []).filter(
     (account) => account.status === "connected",
   );
-  const [selected, setSelected] = useState<string[]>([]);
-  useEffect(() => {
-    setSelected(
-      connected.filter((item) => item.crmSyncEnabled).map((item) => item.id),
-    );
-  }, [accounts.data]);
+  const savedSelected = connected
+    .filter((item) => item.crmSyncEnabled)
+    .map((item) => item.id);
+  const [selectedDraft, setSelectedDraft] = useState<string[] | null>(null);
+  const selected = selectedDraft ?? savedSelected;
+  const [open, setOpen] = useState(false);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -58,6 +58,7 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
           queryKey: telegramCrmKeys.inboxLists(),
         }),
         queryClient.invalidateQueries({ queryKey: telegramCrmKeys.unread() }),
+        queryClient.invalidateQueries({ queryKey: scheduledTaskKeys.root }),
       ]);
     },
     onSettled: async () => {
@@ -100,20 +101,35 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
   );
 
   return (
-    <section className="mb-4 rounded-xl border border-neutral-800 bg-neutral-900/55 p-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold text-white">
-            Telegram CRM sources
-          </h2>
-          <p className="mb-2 mt-1 text-xs text-neutral-500">
-            Select one or more connected MTProto accounts. Imports run
-            sequentially and live updates stay enabled for the selected
-            accounts.
-          </p>
+    <>
+      <Button
+        variant="secondary"
+        className="h-11 rounded-xl border border-neutral-700 bg-neutral-900 px-4 hover:bg-neutral-800"
+        onClick={() => setOpen(true)}
+        disabled={!canEdit}
+      >
+        <Settings2 size={17} />
+        Manage sources
+      </Button>
+      <Modal
+        open={open}
+        onClose={() => {
+          if (save.isPending || sync.isPending) return;
+          setSelectedDraft(null);
+          setOpen(false);
+        }}
+        title="Telegram CRM sources"
+        size="sm"
+        allowOverflow
+      >
+        <p className="mb-3 text-sm text-neutral-400">
+          Selected MTProto accounts keep live updates enabled and sync
+          automatically once a day. Manual imports run sequentially.
+        </p>
+        <div className="min-w-0">
           <MultiSelect
             value={selected}
-            onChange={setSelected}
+            onChange={setSelectedDraft}
             disabled={
               !canEdit || accounts.isLoading || save.isPending || sync.isPending
             }
@@ -139,7 +155,7 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
             allSelectedLabel="All connected accounts"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="mt-4 flex justify-end gap-2">
           <Button
             variant="secondary"
             disabled={
@@ -172,27 +188,27 @@ export function CrmAccountSyncPanel({ canEdit }: { canEdit: boolean }) {
             {sync.isPending ? "Syncing…" : "Sync"}
           </Button>
         </div>
-      </div>
-      {!accounts.isLoading && !connected.length ? (
-        <p className="mt-3 text-sm text-amber-300">
-          Connect an MTProto account in Telegram resources first.
-        </p>
-      ) : null}
-      {save.error ? (
-        <p className="mt-3 text-sm text-rose-300">
-          CRM sources could not be saved.
-        </p>
-      ) : null}
-      {hasUnsavedChanges ? (
-        <p className="mt-3 text-xs text-amber-300">
-          Save the selected sources before syncing.
-        </p>
-      ) : null}
-      {sync.error ? (
-        <p className="mt-3 text-sm text-rose-300">
-          Conversation sync failed. You can safely retry it.
-        </p>
-      ) : null}
-    </section>
+        {!accounts.isLoading && !connected.length ? (
+          <p className="mt-3 text-sm text-amber-300">
+            Connect an MTProto account in Telegram resources first.
+          </p>
+        ) : null}
+        {save.error ? (
+          <p className="mt-3 text-sm text-rose-300">
+            CRM sources could not be saved.
+          </p>
+        ) : null}
+        {hasUnsavedChanges ? (
+          <p className="mt-3 text-xs text-amber-300">
+            Save the selected sources before syncing.
+          </p>
+        ) : null}
+        {sync.error ? (
+          <p className="mt-3 text-sm text-rose-300">
+            Conversation sync failed. You can safely retry it.
+          </p>
+        ) : null}
+      </Modal>
+    </>
   );
 }

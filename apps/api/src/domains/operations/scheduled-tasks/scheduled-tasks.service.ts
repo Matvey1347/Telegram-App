@@ -265,8 +265,7 @@ export class ScheduledTasksService
   private readonly onDueWorkChanged = (taskKey: string) => {
     if (taskKey.startsWith('workspace-auto-sync:')) {
       const workspaceId = taskKey.slice('workspace-auto-sync:'.length);
-      void this.automaticEligibility
-        .refreshWorkspace(workspaceId)
+      void this.materializeWorkspaceDefaults(workspaceId)
         .then(() => this.scheduleNextWake())
         .catch((error) => {
           this.logger.warn(

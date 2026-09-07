@@ -125,6 +125,33 @@ Messages are unique by `(conversationId, telegramMessageId)` and ordered with
 the `(conversationId, sentAt, id)` index. Conversation collections never include
 unbounded Message history.
 
+Each Conversation also persists inbound and outbound Message counts. The
+counters are incremented only when the corresponding unique Message insert
+succeeds, and sync may reconcile them in a bounded batch without writing
+unchanged values. The migration backfills them with one grouped Message scan.
+They describe persisted history and are exposed as complete only when
+`historyExhausted=true`; partial imports must not present them as lifetime
+totals.
+
+Contact collections derive one compact reply summary without joining or
+counting Message rows. `NONE` means that no inbound reply currently requires
+attention (including when the newest Message is outbound). A sole inbound
+Message with no outbound history is `FIRST_INBOUND_READ` or
+`FIRST_INBOUND_UNREAD`; a newest inbound Message in an established
+Conversation is `CONVERSATION_UNANSWERED_READ` or
+`CONVERSATION_UNANSWERED_UNREAD`. Telegram unread state selects the read/unread
+variant. Multiple account Conversations are reduced deterministically from
+their newest relevant Message while their persisted counts are summed. The
+first-message variants require exhausted history; an incomplete one-row import
+is treated as an established/unknown Conversation and never falsely claims to
+be the first Message.
+
+`TelegramAdvertiser.replyAlertMutedAt` is the Contact-level acknowledgement for
+cases where no reply is intentionally required. Muting preserves the status,
+counters, unread state, and Message history and suppresses only the card's
+urgency treatment. A later explicit unmute clears the timestamp; receiving a
+Message does not create background work merely to toggle the preference.
+
 ## MTProto account capabilities and sync state
 
 Each `TelegramUserAccountIntegration` has independent capabilities:
@@ -192,6 +219,20 @@ source idempotency key, publication time, and expiry. It never serializes a
 Contact, Conversation, Deal, Message, or Telegram update payload. Center unread
 is separate from Conversation/CRM unread.
 
+For CRM inbound Messages, Notifications expose an optional typed presentation
+containing only the Conversation/Contact identifiers, sender name, sender
+avatar URL, and grouped Message count. There is at most one active unread CRM
+Message group per recipient and Conversation. A subsequent inbound Message
+updates that compact group after its Message insert commits rather than adding
+another visible row; other notification types remain independent.
+
+Telegram read checkpoints are authoritative for CRM Message groups. When sync
+observes that the inbound Messages have been read in Telegram, it removes the
+corresponding active group and emits the existing narrow invalidation event.
+This cleanup is part of meaningful read-state synchronization, not a poll or a
+periodic notification scan. Initial/history imports still do not manufacture
+Notification groups.
+
 The supported types are `CRM_MESSAGE_RECEIVED`, `CRM_FOLLOW_UP_DUE`, and
 `CRM_PLACEMENT_FAILURE`. Priority is deterministic:
 an unclassified Inbox peer is `LOW`; a qualified Contact, active important Deal,
@@ -223,12 +264,14 @@ fresh live inbound Telegram Message
   -> optional best-effort Web Push to enabled User devices
 ```
 
-The notification uniqueness key includes workspace, recipient, type, and the
-stable source Message/event key. Only rows returned by the conflict-safe insert
-are dispatched after commit. Snapshot import, lazy history, edits, outbound and
+The notification uniqueness key includes workspace, recipient, type, and a
+stable source key. `CRM_MESSAGE_RECEIVED` uses the Conversation key so unread
+Messages from one client coalesce into one row; other notification types keep
+their domain event key. Only rows returned by the conflict-safe write are
+dispatched after commit. Snapshot import, lazy history, edits, outbound and
 manual Messages create no incoming notification. A duplicate Telegram update
-therefore produces one Message, one Notification, and at most one logical push
-attempt per active device.
+therefore produces one Message, one active Notification group, and at most one
+logical push attempt per active device.
 
 Web Push subscriptions are User/device-owned because browser endpoints are not
 workspace identities. Endpoint uniqueness is global and can never silently
@@ -301,9 +344,15 @@ Initial import is an explicit, bounded command. It scans Telegram dialogs in
 bounded pages and accepts only private human-user dialogs. Groups, channels,
 bots, self, deleted users, Telegram support/system identities, and service
 messages are excluded. Import creates or updates the canonical workspace Peer
-and the account-specific Conversation, but never promotes a Peer to Contact.
-The initial window and lazy history pages have hard limits and persist a cursor
-instead of loading unbounded history.
+and the account-specific Conversation. For the selected CRM source flow it
+links a unique normalized username to the
+existing Contact, otherwise creates the imported Contact explicitly. The first
+sync fetches 51 recent Messages only for Conversations without a persisted
+history cursor; four Telegram requests may run concurrently and at most 20
+Conversation histories share one database transaction. The chat then serves
+50-row pages from Neon and shows `Load older` only when the stored 51st row
+proves that older history exists. Later daily syncs reuse the persisted cursor
+instead of downloading that page again.
 
 Telegram access hashes are account-scoped and therefore live on Conversation,
 not on the workspace Peer. Numeric Telegram message IDs are stored beside the

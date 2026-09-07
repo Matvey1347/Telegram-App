@@ -833,7 +833,7 @@ type SelectOption = {
   iconUrl?: string; iconEmoji?: string;
   iconPremium?: boolean; iconPresentation?: ResolvedEmoji;
   iconFallback?: string; icon?: React.ReactNode;
-  tone?: "success" | "warning" | "danger" | "muted" | "info";
+  tone?: "success" | "warning" | "danger" | "muted" | "info"; badgeClassName?: string;
 };
 
 export function CustomSelect({
@@ -1060,7 +1060,7 @@ export function CustomSelect({
                           premium={opt.iconPremium}
                           fallback={opt.iconFallback}
                         />
-                        <span className={`truncate ${toneClass(opt.tone)}`}>
+                        <span className={`${opt.badgeClassName ? "" : "truncate"} ${toneClass(opt.tone)} ${opt.badgeClassName ?? ""}`}>
                           {opt.label}
                         </span>
                         {opt.meta ? (

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   TelegramCrmMessageDirection,
@@ -12,6 +13,9 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 import { TelegramCrmEventHub } from './telegram-crm-event-hub.service';
 import { TelegramCrmRuntimeManager } from './telegram-crm-runtime-manager.service';
+import { TelegramCrmIncomingNotificationProjector } from './telegram-crm-incoming-notification-projector.service';
+import { OperationsNotificationPublisherService } from '../../operations/notifications/operations-notification-publisher.service';
+import { ResponseCacheService } from '../../../common/response-cache.service';
 
 @Injectable()
 export class TelegramCrmReadService {
@@ -20,6 +24,12 @@ export class TelegramCrmReadService {
     private readonly authorization: WorkspaceAuthorizationService,
     private readonly runtime: TelegramCrmRuntimeManager,
     private readonly events: TelegramCrmEventHub,
+    @Optional()
+    private readonly notificationProjector?: TelegramCrmIncomingNotificationProjector,
+    @Optional()
+    private readonly notificationPublisher?: OperationsNotificationPublisherService,
+    @Optional()
+    private readonly responseCache?: ResponseCacheService,
   ) {}
 
   async markRead(
@@ -61,6 +71,35 @@ export class TelegramCrmReadService {
       if (conversation.unreadCount > 0) {
         throw new BadRequestException(
           'Import current Telegram history before marking this Conversation read',
+        );
+      }
+      const invalidatedNotificationMemberIds = this.notificationProjector
+        ? await this.prisma.$transaction((tx) =>
+            this.notificationProjector!.reconcileConversationGroups(
+              tx,
+              access.workspaceId,
+              [
+                {
+                  conversationId,
+                  contactId: conversation.contactId,
+                  unreadCount: 0,
+                },
+              ],
+            ),
+          )
+        : [];
+      this.notificationPublisher?.invalidate(
+        access.workspaceId,
+        invalidatedNotificationMemberIds,
+      );
+      this.responseCache?.clearWorkspacePath(
+        access.workspaceId,
+        `/telegram-crm/conversations/${conversationId}/messages`,
+      );
+      if (conversation.contactId) {
+        this.responseCache?.clearWorkspacePath(
+          access.workspaceId,
+          '/telegram-crm/contacts',
         );
       }
       return {
@@ -135,12 +174,38 @@ export class TelegramCrmReadService {
           },
         });
       }
+      const invalidatedNotificationMemberIds = this.notificationProjector
+        ? await this.notificationProjector.reconcileConversationGroups(
+            tx,
+            access.workspaceId,
+            [
+              {
+                conversationId,
+                contactId: conversation.contactId,
+                unreadCount: 0,
+              },
+            ],
+          )
+        : [];
       return {
         count: messages.count,
         changed,
         unreadChanged: conversation.unreadCount !== 0,
+        invalidatedNotificationMemberIds,
       };
     });
+    this.notificationPublisher?.invalidate(
+      access.workspaceId,
+      result.invalidatedNotificationMemberIds,
+    );
+    this.responseCache?.clearWorkspacePath(
+      access.workspaceId,
+      '/telegram-crm/contacts',
+    );
+    this.responseCache?.clearWorkspacePath(
+      access.workspaceId,
+      `/telegram-crm/conversations/${conversationId}/messages`,
+    );
     if (result.changed) {
       this.events.emit({
         type: 'readChanged',

@@ -26,7 +26,7 @@ export function TelegramTextEditorToolbar({ disabled, hasButtons, onCommand, onH
     spoiler: t("telegram.posts.editorComponents.format.spoiler"),
     inlineCode: t("telegram.posts.editorComponents.format.inlineCode"),
   };
-  return <div className="flex flex-wrap items-center gap-1 border-b border-neutral-700 bg-neutral-950/70 p-2">
+  return <div className="flex flex-nowrap items-center gap-1 overflow-x-auto border-b border-neutral-700 bg-neutral-950/70 p-2">
     {editorWrapActions.map(({ id, icon }) => <ToolbarButton key={id} label={wrapLabels[id]!} icon={icon} disabled={disabled} onClick={() => onCommand(id)} />)}
     <span className="mx-1 h-6 w-px bg-neutral-700" />
     <ToolbarButton label={t("telegram.posts.editorComponents.format.codeBlock")} icon={Braces} disabled={disabled} onClick={() => onCommand("codeBlock")} />

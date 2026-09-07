@@ -33,6 +33,7 @@ export type TelegramCrmMtprotoDialog = {
 export type TelegramCrmMtprotoDialogPage = {
   dialogs: TelegramCrmMtprotoDialog[];
   scanned: number;
+  total: number;
   nextCursor: string | null;
   exhausted: boolean;
 };

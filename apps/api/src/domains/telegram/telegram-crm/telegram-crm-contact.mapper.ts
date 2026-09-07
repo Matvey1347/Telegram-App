@@ -1,4 +1,8 @@
-import { Prisma, TelegramAdSaleStatus } from '@prisma/client';
+import {
+  Prisma,
+  TelegramAdPlacementStatus,
+  TelegramAdSaleStatus,
+} from '@prisma/client';
 import type { CrmContact } from '@telegram-system/shared';
 
 export const ACTIVE_DEAL_STATUSES = [
@@ -6,6 +10,23 @@ export const ACTIVE_DEAL_STATUSES = [
   TelegramAdSaleStatus.CONFIRMED,
   TelegramAdSaleStatus.IN_PROGRESS,
 ] as const;
+
+export const ACTIVE_DEAL_WHERE = {
+  status: { in: [...ACTIVE_DEAL_STATUSES] },
+  placements: {
+    some: {
+      deletedAt: null,
+      status: {
+        in: [
+          TelegramAdPlacementStatus.DRAFT,
+          TelegramAdPlacementStatus.RESERVED,
+          TelegramAdPlacementStatus.SCHEDULED,
+          TelegramAdPlacementStatus.PUBLISHED,
+        ],
+      },
+    },
+  },
+} satisfies Prisma.TelegramAdSaleWhereInput;
 
 export const crmContactSelect = {
   id: true,
@@ -25,12 +46,13 @@ export const crmContactSelect = {
   lastOutboundAt: true,
   lastPurchaseAt: true,
   nextContactAt: true,
+  replyAlertMutedAt: true,
   archivedAt: true,
   createdAt: true,
   updatedAt: true,
   _count: {
     select: {
-      sales: { where: { status: { in: [...ACTIVE_DEAL_STATUSES] } } },
+      sales: { where: ACTIVE_DEAL_WHERE },
     },
   },
 } satisfies Prisma.TelegramAdvertiserSelect;

@@ -48,6 +48,13 @@ describe('TelegramCrmReadService', () => {
       ),
     };
     const events = { emit: jest.fn() };
+    const notificationProjector = {
+      reconcileConversationGroups: jest
+        .fn()
+        .mockResolvedValue(['recipient-member-1']),
+    };
+    const notificationPublisher = { invalidate: jest.fn() };
+    const responseCache = { clearWorkspacePath: jest.fn() };
     const service = new TelegramCrmReadService(
       prisma as never,
       {
@@ -56,6 +63,9 @@ describe('TelegramCrmReadService', () => {
       } as never,
       runtime as never,
       events as never,
+      notificationProjector as never,
+      notificationPublisher as never,
+      responseCache as never,
     );
 
     await expect(service.markRead('user-1', 'conversation-1')).resolves.toEqual(
@@ -94,6 +104,23 @@ describe('TelegramCrmReadService', () => {
         type: 'conversation.unreadChanged',
         unreadCount: 0,
       }),
+    );
+    expect(
+      notificationProjector.reconcileConversationGroups,
+    ).toHaveBeenCalledWith(transaction, 'workspace-1', [
+      {
+        conversationId: 'conversation-1',
+        contactId: null,
+        unreadCount: 0,
+      },
+    ]);
+    expect(notificationPublisher.invalidate).toHaveBeenCalledWith(
+      'workspace-1',
+      ['recipient-member-1'],
+    );
+    expect(responseCache.clearWorkspacePath).toHaveBeenCalledWith(
+      'workspace-1',
+      '/telegram-crm/conversations/conversation-1/messages',
     );
   });
 });

@@ -8,6 +8,7 @@ const CHANNEL_AUTO_SYNC_KEYS = [
   'telegram.broadcast_stats.sync',
   'telegram.daily_analytics.sync',
 ];
+const CRM_SYNC_KEY = 'telegram.crm.sync';
 
 export class ScheduledTaskAutomaticEligibility {
   constructor(private readonly prisma: PrismaService) {}
@@ -15,7 +16,7 @@ export class ScheduledTaskAutomaticEligibility {
   async recover() {
     const configs = await this.prisma.scheduledTaskConfig.findMany({
       where: {
-        taskKey: { in: CHANNEL_AUTO_SYNC_KEYS },
+        taskKey: { in: [...CHANNEL_AUTO_SYNC_KEYS, CRM_SYNC_KEY] },
         workspaceId: { not: null },
       },
       select: { workspaceId: true },
@@ -29,14 +30,41 @@ export class ScheduledTaskAutomaticEligibility {
   }
 
   async refreshWorkspace(workspaceId: string) {
-    const eligible = await this.prisma.telegramChannel.count({
-      where: { workspaceId, isActive: true, autoSyncEnabled: true },
-    });
+    const [eligibleChannels, eligibleCrmAccounts] = await Promise.all([
+      this.prisma.telegramChannel.count({
+        where: { workspaceId, isActive: true, autoSyncEnabled: true },
+      }),
+      this.prisma.telegramUserAccountIntegration.count({
+        where: {
+          workspaceId,
+          isActive: true,
+          status: 'connected',
+          crmSyncEnabled: true,
+        },
+      }),
+    ]);
+    await this.refreshKeys(
+      workspaceId,
+      CHANNEL_AUTO_SYNC_KEYS,
+      eligibleChannels > 0,
+    );
+    await this.refreshKeys(
+      workspaceId,
+      [CRM_SYNC_KEY],
+      eligibleCrmAccounts > 0,
+    );
+  }
+
+  private async refreshKeys(
+    workspaceId: string,
+    taskKeys: string[],
+    eligible: boolean,
+  ) {
     if (eligible) {
       const configs = await this.prisma.scheduledTaskConfig.findMany({
         where: {
           workspaceId,
-          taskKey: { in: CHANNEL_AUTO_SYNC_KEYS },
+          taskKey: { in: taskKeys },
           enabled: false,
           autoDisarmed: true,
         },
@@ -62,7 +90,7 @@ export class ScheduledTaskAutomaticEligibility {
     await this.prisma.scheduledTaskConfig.updateMany({
       where: {
         workspaceId,
-        taskKey: { in: CHANNEL_AUTO_SYNC_KEYS },
+        taskKey: { in: taskKeys },
         enabled: true,
       },
       data: {

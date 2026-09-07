@@ -126,6 +126,31 @@ function start(name, command, args, env, required = true, onLine) {
   return child;
 }
 
+function runOnce(name, command, args, env = {}) {
+  return new Promise((resolve, reject) => {
+    const recentLines = [];
+    const child = spawn(command, args, {
+      cwd: process.cwd(),
+      env: { ...process.env, ...env },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    relayErrors(name, child.stdout, recentLines);
+    relayErrors(name, child.stderr, recentLines);
+    child.once("error", reject);
+    child.once("exit", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(
+        new Error(
+          `stopped (code ${code ?? "unknown"})${recentLines.length ? `\n${recentLines.join("\n")}` : ""}`,
+        ),
+      );
+    });
+  });
+}
+
 async function waitFor(name, url) {
   for (let attempt = 0; attempt < 240; attempt += 1) {
     try {
@@ -201,7 +226,12 @@ async function startCloudflareTunnel() {
     "Cloudflare",
     "cloudflared",
     ["tunnel", "--no-autoupdate", "--url", `http://127.0.0.1:${targetPort}`],
-    {},
+    {
+      // QUIC is unreliable on some local/VPN networks and can leave a quick
+      // tunnel alive but unable to serve requests. HTTP/2 keeps the same
+      // public URL while cloudflared reconnects its transport.
+      TUNNEL_TRANSPORT_PROTOCOL: "http2",
+    },
     true,
     (line) => {
       const match = line.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/iu);
@@ -214,7 +244,7 @@ async function startCloudflareTunnel() {
     `  Tunnel target: http://localhost:${targetPort}${withBotRuntime ? " (API + web gateway)" : tunnelTargetPort === 4000 ? "/api" : ""}`,
   );
   console.log(
-    `  ${withBotRuntime ? "Telegram calls this HTTPS URL; the browser app calls" : "The local web app continues to call"} ${withBotRuntime ? `${url}/api` : "http://localhost:4000/api"}.`,
+    `  ${withBotRuntime ? "Telegram calls this HTTPS URL; the localhost browser continues to call http://localhost:4000/api directly." : "The local web app continues to call http://localhost:4000/api."}`,
   );
   return url;
 }
@@ -297,6 +327,34 @@ try {
 } catch (error) {
   failure("Local development", error);
   process.exit(1);
+}
+
+try {
+  // Nest watches application sources, but it cannot regenerate Prisma's
+  // generated TypeScript contract after schema.prisma changes. Generate once
+  // before compilation and keep Prisma's own watcher beside Nest so schema
+  // edits recover without restarting the whole local-bot stack.
+  await runOnce("Prisma", "pnpm", [
+    "--filter",
+    "api",
+    "exec",
+    "prisma",
+    "generate",
+    "--no-hints",
+  ]);
+  start("Prisma", "pnpm", [
+    "--filter",
+    "api",
+    "exec",
+    "prisma",
+    "generate",
+    "--watch",
+    "--no-hints",
+  ]);
+  status("Prisma", "client generated; schema watcher active");
+} catch (error) {
+  failure("Prisma", error);
+  await stop(1);
 }
 if (withBotRuntime) startBotGateway();
 let publicApiUrl = null;

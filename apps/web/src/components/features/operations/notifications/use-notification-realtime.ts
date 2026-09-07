@@ -38,10 +38,17 @@ export function useNotificationRealtime({
         signal: controller.signal,
         onEvent: (event) => {
           if (event.type === "notifications.invalidated") {
-            queryClient.removeQueries({
-              queryKey: operationsNotificationKeys.list(workspaceId),
-              exact: true,
-            });
+            if (panelOpenRef.current) {
+              void queryClient.invalidateQueries({
+                queryKey: operationsNotificationKeys.list(workspaceId),
+                exact: true,
+              });
+            } else {
+              queryClient.removeQueries({
+                queryKey: operationsNotificationKeys.list(workspaceId),
+                exact: true,
+              });
+            }
             void queryClient.invalidateQueries({
               queryKey: operationsNotificationKeys.unread(workspaceId),
               exact: true,

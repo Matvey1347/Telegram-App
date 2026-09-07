@@ -1,14 +1,16 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { uiCopy, type UiLocale } from "@/lib/ui-i18n";
 import { useOptionalI18n } from "@/providers/i18n-provider";
 
 export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   const i18n = useOptionalI18n();
-  const locale = props.lang === "ru" || i18n?.locale === "ru" ? "ru-RU" : "en-GB";
+  const locale =
+    props.lang === "ru" || i18n?.locale === "ru" ? "ru-RU" : "en-GB";
   const ui = uiCopy(i18n?.locale);
   const formatLocalDate = (date: Date) => {
     const y = date.getFullYear();
@@ -289,8 +291,11 @@ export function DateRangeInput({
   const effectiveLocale = uiLocale ?? i18n?.locale;
   const ui = uiCopy(effectiveLocale);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
-  const [openUp, setOpenUp] = useState(false);
+  const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties | null>(
+    null,
+  );
   const [cursor, setCursor] = useState(() => {
     const base = from || to;
     const date = base ? new Date(`${base}T00:00:00`) : new Date();
@@ -301,22 +306,50 @@ export function DateRangeInput({
   useEffect(() => {
     const onDocClick = (event: MouseEvent) => {
       if (!rootRef.current) return;
-      if (!rootRef.current.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (
+        !rootRef.current.contains(target) &&
+        !popoverRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     const recalc = () => {
       if (!rootRef.current) return;
       const rect = rootRef.current.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
+      const viewportPadding = 8;
+      const gap = 4;
+      const width = Math.min(320, viewportWidth - viewportPadding * 2);
       const estimatedHeight = 360;
-      const spaceBelow = viewportHeight - rect.bottom;
-      const spaceAbove = rect.top;
-      setOpenUp(spaceBelow < estimatedHeight && spaceAbove > spaceBelow);
+      const spaceBelow = viewportHeight - rect.bottom - gap - viewportPadding;
+      const spaceAbove = rect.top - gap - viewportPadding;
+      const openUp = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
+      const left = Math.min(
+        Math.max(rect.right - width, viewportPadding),
+        viewportWidth - width - viewportPadding,
+      );
+      const maxHeight = Math.max(
+        180,
+        Math.min(estimatedHeight, openUp ? spaceAbove : spaceBelow),
+      );
+
+      setPopoverStyle({
+        position: "fixed",
+        left,
+        ...(openUp
+          ? { bottom: viewportHeight - rect.top + gap }
+          : { top: rect.bottom + gap }),
+        width,
+        maxHeight,
+      });
     };
     recalc();
     window.addEventListener("resize", recalc);
@@ -362,99 +395,106 @@ export function DateRangeInput({
         </span>
         <CalendarDays size={16} className="text-neutral-400" />
       </button>
-      {open ? (
-        <div
-          className={`absolute right-0 z-50 w-[min(320px,calc(100vw-2rem))] rounded-lg border border-neutral-700 bg-neutral-900 p-3 shadow-xl ${openUp ? "bottom-full mb-1" : "mt-1"}`}
-        >
-          <div className="mb-2 flex items-center justify-between">
-            <button
-              type="button"
-              className="rounded p-1 hover:bg-neutral-800"
-              onClick={() =>
-                setCursor(
-                  new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1),
-                )
-              }
+      {open && popoverStyle
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              role="dialog"
+              aria-label={ui.selectPeriod}
+              style={popoverStyle}
+              className="z-[120] overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 p-3 shadow-xl"
             >
-              <ChevronLeft size={16} />
-            </button>
-            <p className="text-sm font-medium">
-              {cursor.toLocaleString(
-                effectiveLocale === "uk"
-                  ? "uk-UA"
-                  : effectiveLocale === "ru"
-                    ? "ru-RU"
-                    : "en-US",
-                {
-                  month: "long",
-                  year: "numeric",
-                },
-              )}
-            </p>
-            <button
-              type="button"
-              className="rounded p-1 hover:bg-neutral-800"
-              onClick={() =>
-                setCursor(
-                  new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1),
-                )
-              }
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-          <div className="mb-2 text-xs text-neutral-400">
-            {selectingEnd ? ui.selectEndDate : ui.selectStartDate}
-          </div>
-          <div className="mb-1 grid grid-cols-7 gap-1 text-center text-xs text-neutral-400">
-            {ui.weekdays.map((d) => (
-              <span key={d}>{d}</span>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-1">
-            {cells.map((cell) => {
-              const selected = cell.iso === start || cell.iso === end;
-              const inRange = Boolean(
-                start && end && cell.iso > start && cell.iso < end,
-              );
-              return (
+              <div className="mb-2 flex items-center justify-between">
                 <button
-                  key={`${cell.iso}-${cell.day}`}
                   type="button"
-                  onClick={() => pick(cell.iso)}
-                  className={`rounded px-1 py-1.5 text-sm ${selected ? "bg-blue-600 text-white" : inRange ? "bg-blue-950 text-blue-100" : cell.muted ? "text-neutral-500 hover:bg-neutral-800" : "text-white hover:bg-neutral-800"}`}
+                  className="rounded p-1 hover:bg-neutral-800"
+                  onClick={() =>
+                    setCursor(
+                      new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1),
+                    )
+                  }
                 >
-                  {cell.day}
+                  <ChevronLeft size={16} />
                 </button>
-              );
-            })}
-          </div>
-          <div className="mt-3 flex justify-between text-xs">
-            <button
-              type="button"
-              className="text-neutral-400 hover:text-white"
-              onClick={() => {
-                onChange({ from: "", to: "" });
-                setSelectingEnd(false);
-              }}
-            >
-              {ui.clear}
-            </button>
-            <button
-              type="button"
-              className="text-blue-300 hover:text-blue-200"
-              onClick={() => {
-                const iso = formatLocalDateValue(new Date());
-                onChange({ from: iso, to: iso });
-                setSelectingEnd(false);
-                setOpen(false);
-              }}
-            >
-              {ui.today}
-            </button>
-          </div>
-        </div>
-      ) : null}
+                <p className="text-sm font-medium">
+                  {cursor.toLocaleString(
+                    effectiveLocale === "uk"
+                      ? "uk-UA"
+                      : effectiveLocale === "ru"
+                        ? "ru-RU"
+                        : "en-US",
+                    {
+                      month: "long",
+                      year: "numeric",
+                    },
+                  )}
+                </p>
+                <button
+                  type="button"
+                  className="rounded p-1 hover:bg-neutral-800"
+                  onClick={() =>
+                    setCursor(
+                      new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1),
+                    )
+                  }
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+              <div className="mb-2 text-xs text-neutral-400">
+                {selectingEnd ? ui.selectEndDate : ui.selectStartDate}
+              </div>
+              <div className="mb-1 grid grid-cols-7 gap-1 text-center text-xs text-neutral-400">
+                {ui.weekdays.map((d) => (
+                  <span key={d}>{d}</span>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {cells.map((cell) => {
+                  const selected = cell.iso === start || cell.iso === end;
+                  const inRange = Boolean(
+                    start && end && cell.iso > start && cell.iso < end,
+                  );
+                  return (
+                    <button
+                      key={`${cell.iso}-${cell.day}`}
+                      type="button"
+                      onClick={() => pick(cell.iso)}
+                      className={`rounded px-1 py-1.5 text-sm ${selected ? "bg-blue-600 text-white" : inRange ? "bg-blue-950 text-blue-100" : cell.muted ? "text-neutral-500 hover:bg-neutral-800" : "text-white hover:bg-neutral-800"}`}
+                    >
+                      {cell.day}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-3 flex justify-between text-xs">
+                <button
+                  type="button"
+                  className="text-neutral-400 hover:text-white"
+                  onClick={() => {
+                    onChange({ from: "", to: "" });
+                    setSelectingEnd(false);
+                  }}
+                >
+                  {ui.clear}
+                </button>
+                <button
+                  type="button"
+                  className="text-blue-300 hover:text-blue-200"
+                  onClick={() => {
+                    const iso = formatLocalDateValue(new Date());
+                    onChange({ from: iso, to: iso });
+                    setSelectingEnd(false);
+                    setOpen(false);
+                  }}
+                >
+                  {ui.today}
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

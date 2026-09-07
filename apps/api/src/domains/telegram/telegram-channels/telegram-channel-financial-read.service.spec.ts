@@ -121,13 +121,13 @@ describe('TelegramChannelFinancialReadService', () => {
           },
           {
             id: 'ad-expense-1',
-            telegramChannelId: null,
+            telegramChannelId: 'channel-1',
             type: 'expense',
             amount: 11_400,
             currency: 'UAH',
             amountInPrimaryCurrency: 255.29,
             categoryRef: { key: 'advertising', name: 'Advertising' },
-            adCampaign: { telegramChannelId: 'channel-1' },
+            adCampaign: null,
           },
           {
             id: 'revenue-1',
@@ -189,6 +189,7 @@ describe('TelegramChannelFinancialReadService', () => {
         where: expect.objectContaining({
           workspaceId: 'workspace-1',
           OR: expect.arrayContaining([
+            { telegramChannelId: { in: ['channel-1'] } },
             { id: { in: ['purchase-1'] } },
             {
               adCampaign: {

@@ -4,6 +4,11 @@ import {
   TelegramAdSaleStatus,
 } from '@prisma/client';
 import type { PrismaService } from '../../../prisma/prisma.service';
+import type { CrmMemberSummary } from '@telegram-system/shared';
+import {
+  crmMemberSummarySelect,
+  mapCrmMemberSummary,
+} from './telegram-crm-read-model.mapper';
 
 export type CrmContactSalesSummary = {
   totalSalesCount: number;
@@ -12,6 +17,7 @@ export type CrmContactSalesSummary = {
   totalPlacementsCount: number;
   revenueByCurrency: Array<{ currency: string; amount: string }>;
   lastDealAt: string | null;
+  dealMembers: CrmMemberSummary[];
 };
 
 type ContactIdentity = {
@@ -34,6 +40,7 @@ const emptySummary = (): CrmContactSalesSummary => ({
   totalPlacementsCount: 0,
   revenueByCurrency: [],
   lastDealAt: null,
+  dealMembers: [],
 });
 
 const normalizeUsername = (value: string | null | undefined) =>
@@ -52,12 +59,7 @@ export async function loadCrmContactSalesSummaries(
   const usernameVariants = [...contactIdByUsername.keys()].flatMap(
     (username) => [username, `@${username}`],
   );
-  const anonymousContactId = contacts.find(
-    (contact) =>
-      contact.displayName.trim().toLowerCase() === 'advertiser' &&
-      !contact.companyName &&
-      !contact.telegramUsername,
-  )?.id;
+  const anonymousContactId = contacts.find(isUnassignedCrmContact)?.id;
   const sales = await prisma.telegramAdSale.findMany({
     where: {
       workspaceId,
@@ -108,6 +110,7 @@ export async function loadCrmContactSalesSummaries(
       advertiserTelegramSnapshot: true,
       status: true,
       createdAt: true,
+      assignedMember: { select: crmMemberSummarySelect },
       placements: { select: { agreedPrice: true } },
       payments: {
         where: { status: { not: TelegramAdSalePaymentStatus.VOIDED } },
@@ -129,6 +132,10 @@ export async function loadCrmContactSalesSummaries(
     summary.totalSalesCount += 1;
     summary.totalPlacementsCount += sale.placements.length;
     summary.lastDealAt = sale.createdAt.toISOString();
+    const member = mapCrmMemberSummary(sale.assignedMember);
+    if (member && !summary.dealMembers.some(({ id }) => id === member.id)) {
+      summary.dealMembers.push(member);
+    }
     if (completedStatuses.has(sale.status)) summary.completedSalesCount += 1;
     const agreed = sale.placements.reduce(
       (sum, placement) => sum.add(placement.agreedPrice ?? 0),
@@ -148,6 +155,14 @@ export async function loadCrmContactSalesSummaries(
     summaries.set(contactId, summary);
   }
   return summaries;
+}
+
+export function isUnassignedCrmContact(contact: ContactIdentity) {
+  return (
+    contact.displayName.trim().toLowerCase() === 'advertiser' &&
+    !contact.companyName &&
+    !contact.telegramUsername
+  );
 }
 
 function uniqueContactIdsByUsername(contacts: ContactIdentity[]) {
