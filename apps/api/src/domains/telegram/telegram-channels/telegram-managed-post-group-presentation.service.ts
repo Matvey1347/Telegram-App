@@ -6,6 +6,8 @@ import { normalizeTelegramPostButtonRows } from '../../../telegram/shared/telegr
 import {
   ADVERTISE_SYSTEM_GROUP_ICON,
   ADVERTISE_SYSTEM_GROUP_KEY,
+  MUTUAL_PROMOTION_SYSTEM_GROUP_ICON,
+  MUTUAL_PROMOTION_SYSTEM_GROUP_KEY,
   SYSTEM_BOT_POSTS_GROUP_ICON_IMAGE_URL,
   SYSTEM_BOT_POSTS_GROUP_ICON_NAME,
   SYSTEM_BOT_POSTS_GROUP_KEY,
@@ -61,6 +63,15 @@ export class TelegramManagedPostGroupPresentationService {
         type: 'emoji',
         name: ADVERTISE_SYSTEM_GROUP_ICON,
         emoji: ADVERTISE_SYSTEM_GROUP_ICON,
+        imageUrl: null,
+      });
+    }
+    if (group?.systemKey === MUTUAL_PROMOTION_SYSTEM_GROUP_KEY) {
+      return iconToResolvedEmoji({
+        id: MUTUAL_PROMOTION_SYSTEM_GROUP_ICON,
+        type: 'emoji',
+        name: MUTUAL_PROMOTION_SYSTEM_GROUP_ICON,
+        emoji: MUTUAL_PROMOTION_SYSTEM_GROUP_ICON,
         imageUrl: null,
       });
     }

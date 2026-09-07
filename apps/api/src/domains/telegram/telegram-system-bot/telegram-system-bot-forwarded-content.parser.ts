@@ -1,3 +1,5 @@
+import { telegramHtmlToManagedMarkup } from '../../../telegram/shared/telegram-markup';
+
 export type TelegramSystemBotIncomingButton = {
   text?: string;
   url?: string;
@@ -178,7 +180,7 @@ export function parseTelegramSystemBotForwardedContent(
         : null;
   const text = normalizeText(rawText);
   const photo = bestPhoto(message.photo);
-  if (!text && !photo) {
+  if (!text.trim() && !photo) {
     return {
       ok: false,
       reason: 'EMPTY_MESSAGE',
@@ -224,6 +226,7 @@ type BotEntity = {
   url?: string;
   language?: string;
   custom_emoji_id?: string;
+  user?: { id?: number | string };
 };
 
 function entitiesToManagedMarkup(text: string, rawEntities: unknown[] = []) {
@@ -272,7 +275,7 @@ function entitiesToManagedMarkup(text: string, rawEntities: unknown[] = []) {
       .join('');
     if (index < text.length) html += escapeHtml(text[index]);
   }
-  return telegramHtmlToManagedMarkup(html).replace(/\r\n?/g, '\n').trim();
+  return telegramHtmlToManagedMarkup(html).replace(/\r\n?/g, '\n');
 }
 
 function entityTags(entity: BotEntity) {
@@ -299,6 +302,15 @@ function entityTags(entity: BotEntity) {
   }
   if (entity.type === 'text_link' && safeEntityUrl(entity.url)) {
     return { open: `<a href="${escapeHtml(entity.url!)}">`, close: '</a>' };
+  }
+  if (
+    entity.type === 'text_mention' &&
+    /^\d+$/.test(String(entity.user?.id ?? ''))
+  ) {
+    return {
+      open: `<a href="tg://user?id=${String(entity.user!.id)}">`,
+      close: '</a>',
+    };
   }
   if (
     entity.type === 'custom_emoji' &&
@@ -330,7 +342,7 @@ function escapeHtml(value: string) {
 }
 
 function normalizeText(value: string | undefined) {
-  return value?.replace(/\r\n?/g, '\n').trim() ?? '';
+  return value?.replace(/\r\n?/g, '\n') ?? '';
 }
 
 function bestPhoto(messagePhotos: TelegramSystemBotIncomingMessage['photo']) {
@@ -422,4 +434,3 @@ function telegramDate(value: number | undefined) {
   const date = new Date(value * 1_000);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
-import { telegramHtmlToManagedMarkup } from '../../../telegram/shared/telegram-markup';

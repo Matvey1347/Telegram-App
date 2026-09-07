@@ -134,8 +134,12 @@ export function createTelegramSourcesApi({
         onProgress,
         { signal },
       ),
-    check: async (id: string) =>
-      (await api.post(`/telegram-user-accounts/${id}/check`)).data,
+    synchronizeProfile: async (id: string) =>
+      (
+        await api.post<TelegramUserAccount>(
+          `/telegram-user-accounts/${id}/check`,
+        )
+      ).data,
     syncDialogs: async (id: string) =>
       (
         await api.post<TelegramUserAccountSyncDialogsResponse>(

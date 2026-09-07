@@ -11,6 +11,9 @@ import {
   ADVERTISE_SYSTEM_GROUP_KEY,
   ADVERTISE_SYSTEM_GROUP_ICON,
   ADVERTISE_SYSTEM_GROUP_TITLE,
+  MUTUAL_PROMOTION_SYSTEM_GROUP_ICON,
+  MUTUAL_PROMOTION_SYSTEM_GROUP_KEY,
+  MUTUAL_PROMOTION_SYSTEM_GROUP_TITLE,
   SYSTEM_BOT_POSTS_GROUP_KEY,
   SYSTEM_BOT_POSTS_GROUP_TITLE,
   TELEGRAM_IMPORTED_SYSTEM_GROUP_ICON_FALLBACK_ID,
@@ -232,6 +235,76 @@ export class TelegramPostGroupStore {
     });
   }
 
+  public async ensureMutualPromotionSystemGroup(
+    client: Prisma.TransactionClient | PrismaService,
+    workspaceId: string,
+    channelId: string,
+    preferredMemberId?: string | null,
+  ) {
+    const channel = await client.telegramChannel.findFirst({
+      where: { id: channelId, workspaceId },
+      select: { id: true },
+    });
+    if (!channel) throw telegramChannelNotFound();
+    const existing = await client.postGroup.findFirst({
+      where: {
+        workspaceId,
+        telegramChannelId: channelId,
+        systemKey: MUTUAL_PROMOTION_SYSTEM_GROUP_KEY,
+      },
+    });
+    if (existing) {
+      if (
+        existing.isSystem &&
+        existing.title === MUTUAL_PROMOTION_SYSTEM_GROUP_TITLE &&
+        existing.icon === MUTUAL_PROMOTION_SYSTEM_GROUP_ICON
+      ) {
+        return existing;
+      }
+      return client.postGroup.update({
+        where: { id: existing.id },
+        data: {
+          title: MUTUAL_PROMOTION_SYSTEM_GROUP_TITLE,
+          icon: MUTUAL_PROMOTION_SYSTEM_GROUP_ICON,
+          isSystem: true,
+        },
+      });
+    }
+    const createdByMemberId = await this.resolveSystemGroupCreator(
+      client,
+      workspaceId,
+      preferredMemberId,
+    );
+    if (!createdByMemberId) {
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_ASSIGNED_MEMBER_REQUIRED',
+        'Workspace member is required to create the mutual promotion system group',
+      );
+    }
+    return client.postGroup.upsert({
+      where: {
+        telegramChannelId_systemKey: {
+          telegramChannelId: channelId,
+          systemKey: MUTUAL_PROMOTION_SYSTEM_GROUP_KEY,
+        },
+      },
+      update: {
+        title: MUTUAL_PROMOTION_SYSTEM_GROUP_TITLE,
+        icon: MUTUAL_PROMOTION_SYSTEM_GROUP_ICON,
+        isSystem: true,
+      },
+      create: {
+        workspaceId,
+        telegramChannelId: channelId,
+        title: MUTUAL_PROMOTION_SYSTEM_GROUP_TITLE,
+        icon: MUTUAL_PROMOTION_SYSTEM_GROUP_ICON,
+        isSystem: true,
+        systemKey: MUTUAL_PROMOTION_SYSTEM_GROUP_KEY,
+        createdByMemberId,
+      },
+    });
+  }
+
   public async ensureRequiredChannelSystemGroups(
     client: Prisma.TransactionClient | PrismaService,
     workspaceId: string,
@@ -250,7 +323,13 @@ export class TelegramPostGroupStore {
       channelId,
       preferredMemberId,
     );
-    return { advertise, systemBotPosts };
+    const mutualPromotion = await this.ensureMutualPromotionSystemGroup(
+      client,
+      workspaceId,
+      channelId,
+      preferredMemberId,
+    );
+    return { advertise, systemBotPosts, mutualPromotion };
   }
 
   private async resolveSystemGroupCreator(

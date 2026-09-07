@@ -3,7 +3,13 @@ import type {
   TelegramPostPlannerPreviewResult,
 } from "@telegram-system/shared";
 
-type PlanPost = { id: string; title: string; groupId?: string | null };
+type PlanPost = {
+  id: string;
+  title: string;
+  groupId?: string | null;
+  status?: string;
+  scheduledAt?: string | null;
+};
 
 export function parseCalendarPlanImport(
   content: string,
@@ -72,6 +78,8 @@ export function parseCalendarPlanImport(
       return {
         postId,
         title: post.title,
+        currentStatus: post.status,
+        currentScheduledAt: normalizedExistingSchedule(post.scheduledAt),
         scheduledAt: normalizedTime,
         date,
         slotId: `import:${index}`,
@@ -93,6 +101,7 @@ export function parseCalendarPlanImport(
       new Date(left.scheduledAt).getTime() -
       new Date(right.scheduledAt).getTime(),
   );
+  assertOccupiedTimesCanMove(assignments, posts);
   const dates = assignments.map((assignment) => assignment.date).sort();
   return {
     from: dates[0],
@@ -106,6 +115,41 @@ export function parseCalendarPlanImport(
       unfilledSlots: 0,
     },
   };
+}
+
+function normalizedExistingSchedule(value?: string | null) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function assertOccupiedTimesCanMove(
+  assignments: TelegramPostPlannerAssignment[],
+  posts: PlanPost[],
+) {
+  const scheduledOwnerByTime = new Map(
+    posts.flatMap((post) => {
+      if (post.status !== "SCHEDULED") return [];
+      const scheduledAt = normalizedExistingSchedule(post.scheduledAt);
+      return scheduledAt ? [[scheduledAt, post] as const] : [];
+    }),
+  );
+  const assignmentByPostId = new Map(
+    assignments.map((assignment) => [assignment.postId, assignment]),
+  );
+  for (const assignment of assignments) {
+    const owner = scheduledOwnerByTime.get(assignment.scheduledAt);
+    if (!owner || owner.id === assignment.postId) continue;
+    const ownerAssignment = assignmentByPostId.get(owner.id);
+    if (
+      !ownerAssignment ||
+      ownerAssignment.scheduledAt === assignment.scheduledAt
+    ) {
+      throw new Error(
+        `${assignment.scheduledAt} is occupied by scheduled post ${owner.id}. Move that post in the same plan first.`,
+      );
+    }
+  }
 }
 
 export function serializeCalendarPlanImport(

@@ -149,16 +149,25 @@ describe('TelegramChannelGptContextExporter', () => {
     expect(result.filename).toMatch(
       /^CH_\d{2}-\d{2}_calendar-plan-instruction\.txt$/,
     );
-    expect(text).toContain('FORMAT VERSION: 2');
+    expect(text).toContain('FORMAT VERSION: 3');
     expect(text).toContain('TIMEZONE: Europe/Warsaw');
     expect(text).toContain('- 09:00 — Morning — slot_id: morning');
     expect(text).toContain('postId: available\navailability: AVAILABLE');
+    expect(text).toContain(
+      'postId: reserved\navailability: AVAILABLE\nreasons: none\nstatus: SCHEDULED\ntitle: Reserved post\ncurrent_scheduled_at: 2026-08-25T07:00:00.000Z',
+    );
     expect(text).toContain('postId: blocked\navailability: BLOCKED');
     expect(text).toContain(
       'internal link target "Future target" is not published',
     );
     expect(text).toContain(
-      'OCCUPIED POST\nscheduled_at: 2026-08-25T07:00:00.000Z\npostId: reserved\ntitle: Reserved post',
+      'CURRENT SCHEDULED POST\ncurrent_scheduled_at: 2026-08-25T07:00:00.000Z\npostId: reserved\ntitle: Reserved post',
+    );
+    expect(text).toContain(
+      'A scheduled post may be returned with another scheduledAt to reschedule it',
+    );
+    expect(text).toContain(
+      'A timestamp occupied by another post may be used only when that owning post is also included',
     );
     expect(text).toContain('images:\n- https://cdn.test/reserved.jpg');
     expect(text).toContain(

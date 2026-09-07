@@ -11,6 +11,10 @@ import {
 } from '@prisma/client';
 import { sanitizeOperationalError } from '../../../common/security/operational-error';
 import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
+import {
+  normalizeTelegramPostButtonRows,
+  toTelegramBotInlineKeyboard,
+} from '../../../telegram/shared/telegram-inline-keyboard';
 import { telegramMarkupToHtml } from '../../../telegram/shared/telegram-markup';
 import { TelegramManagedPostCommandService } from '../telegram-channels/telegram-managed-post-command.service';
 import { TelegramManagedPostPublicationService } from '../telegram-channels/telegram-managed-post-publication.service';
@@ -29,6 +33,7 @@ import {
   telegramSystemBotPostPayload,
   type TelegramSystemBotPostFlowScope,
   type TelegramSystemBotPostPayload,
+  type TelegramSystemBotPostPreviewDraft,
   type TelegramSystemBotPostWorkflow,
 } from './telegram-system-bot-post-flow.types';
 import { TelegramSystemBotWorkflowStore } from './telegram-system-bot-workflow.store';
@@ -91,34 +96,29 @@ export class TelegramSystemBotPostFlowService {
     return { workflowId: workflow.id };
   }
 
-  async sendAdSalePreview(
+  async sendPostPreview(
     scope: TelegramSystemBotPostFlowScope,
-    draft: {
-      text?: string;
-      imageUrls?: string[];
-      buttonRows?: Array<Array<{ text?: string; url?: string }>>;
-    },
+    draft: TelegramSystemBotPostPreviewDraft,
   ) {
-    const text = String(draft.text ?? '').trim();
+    const text = String(draft.text ?? '');
     const formattedText = telegramMarkupToHtml(text);
     const imageUrls = (draft.imageUrls ?? [])
       .map((url) => String(url).trim())
       .filter(Boolean)
       .slice(0, 10);
-    if (!text && !imageUrls.length)
-      throw new ConflictException('Advertising post is empty');
-    const replyMarkup = {
-      inline_keyboard: (draft.buttonRows ?? [])
-        .map((row) =>
-          row
-            .map((button) => ({
-              text: String(button.text ?? '').trim(),
-              url: String(button.url ?? '').trim(),
-            }))
-            .filter((button) => button.text && button.url),
-        )
-        .filter((row) => row.length),
-    };
+    if (!text.trim() && !imageUrls.length)
+      throw new ConflictException('Telegram post is empty');
+    const replyMarkup = toTelegramBotInlineKeyboard(
+      normalizeTelegramPostButtonRows(
+        (draft.buttonRows ?? []).map((row) =>
+          row.map((button) => ({
+            text: String(button.text ?? '').trim(),
+            url: String(button.url ?? '').trim(),
+            style: button.style ?? 'default',
+          })),
+        ),
+      ),
+    ) ?? { inline_keyboard: [] };
     const token = this.config.token!;
     if (imageUrls.length === 1 && text.length <= 1024) {
       await this.api.sendPhoto(token, {

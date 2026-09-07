@@ -4,6 +4,7 @@ export type BulkActionResultItem = {
   index: number;
   total: number;
   previousStatus?: string;
+  previousScheduledAt?: string | null;
   newStatus?: string;
   scheduledAt?: string | null;
   action:

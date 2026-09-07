@@ -8,6 +8,25 @@ import { CustomFile } from 'telegram/client/uploads';
 
 const execFile = promisify(execFileCallback);
 const maxBytes = 10 * 1024 * 1024;
+const protectedImageProxy = 'https://images.weserv.nl/';
+
+const imageRequestHeaders = {
+  Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+  'User-Agent':
+    'Mozilla/5.0 (compatible; TelegramSystemImageFetcher/1.0; +https://telegram.org)',
+} as const;
+
+const fetchImage = (url: URL) =>
+  fetch(url, {
+    headers: imageRequestHeaders,
+    signal: AbortSignal.timeout(20_000),
+  });
+
+const protectedImageProxyUrl = (source: URL) => {
+  const proxy = new URL(protectedImageProxy);
+  proxy.searchParams.set('url', source.toString());
+  return proxy;
+};
 
 export const convertTelegramPublishImageWithSips = async (
   buffer: Buffer,
@@ -113,7 +132,13 @@ export const downloadTelegramPublishImage = async (
   }
   let response: Response;
   try {
-    response = await fetch(parsedUrl, { signal: AbortSignal.timeout(20_000) });
+    response = await fetchImage(parsedUrl);
+    // Some public image CDNs reject server IPs through anti-hotlink or
+    // Cloudflare rules. The proxy is only a retrieval fallback; Telegram still
+    // receives uploaded bytes, never the proxy URL.
+    if (response.status === 401 || response.status === 403) {
+      response = await fetchImage(protectedImageProxyUrl(parsedUrl));
+    }
   } catch {
     throw new Error(`Could not download image ${index + 1} before publishing`);
   }

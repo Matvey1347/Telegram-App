@@ -212,6 +212,8 @@ export type TelegramPostPlannerSlot = {
 export type TelegramPostPlannerAssignment = {
   postId: string;
   title: string;
+  currentStatus?: string;
+  currentScheduledAt?: string | null;
   scheduledAt: string;
   date: string;
   slotId: string;

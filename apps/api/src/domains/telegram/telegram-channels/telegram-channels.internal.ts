@@ -29,6 +29,12 @@ export const ADVERTISE_SYSTEM_GROUP_TITLE = 'Advertise';
 
 export const ADVERTISE_SYSTEM_GROUP_ICON = '💰';
 
+export const MUTUAL_PROMOTION_SYSTEM_GROUP_KEY = 'MUTUAL_PROMOTION';
+
+export const MUTUAL_PROMOTION_SYSTEM_GROUP_TITLE = 'Mutual promotion';
+
+export const MUTUAL_PROMOTION_SYSTEM_GROUP_ICON = '🤝';
+
 export const SYSTEM_BOT_POSTS_GROUP_KEY = 'SYSTEM_BOT_POSTS';
 
 export const SYSTEM_BOT_POSTS_GROUP_TITLE = 'System Bot posts';

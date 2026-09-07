@@ -21,7 +21,12 @@ export class DueTaskSchedule {
     { rawDueAt: number; unchangedRuns: number }
   >();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly domainDueResolver?: {
+      nextDueAt(taskKey: string): Promise<Date | null | undefined>;
+    },
+  ) {}
 
   async refresh(taskKey: string, attempted = false) {
     const rawDueAt = await this.nextDueAt(taskKey);
@@ -93,14 +98,20 @@ export class DueTaskSchedule {
     };
     this.progress.set(taskKey, state);
     state.unchangedRuns += 1;
+    const maxBackoff =
+      taskKey === 'mutual_promotion.lifecycle'
+        ? NO_PROGRESS_MIN_BACKOFF_MS
+        : NO_PROGRESS_MAX_BACKOFF_MS;
     const delay = Math.min(
-      NO_PROGRESS_MAX_BACKOFF_MS,
+      maxBackoff,
       NO_PROGRESS_MIN_BACKOFF_MS * 2 ** (state.unchangedRuns - 1),
     );
     return new Date(Date.now() + delay);
   }
 
   async nextDueAt(taskKey: string): Promise<Date | null> {
+    const domainDueAt = await this.domainDueResolver?.nextDueAt(taskKey);
+    if (domainDueAt !== undefined) return domainDueAt;
     const now = new Date();
     switch (taskKey) {
       case 'telegram.managed_posts.reconcile_due':

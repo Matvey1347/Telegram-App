@@ -3,8 +3,21 @@ import type { TelegramSystemBotWorkflowStore } from './telegram-system-bot-workf
 
 export type TelegramSystemBotPostAction = 'DRAFT' | 'PUBLISH_NOW' | 'SCHEDULE';
 
+export type TelegramSystemBotPostPreviewDraft = {
+  text?: string;
+  imageUrls?: string[];
+  buttonRows?: Array<
+    Array<{
+      text?: string;
+      url?: string;
+      style?: 'default' | 'primary' | 'success' | 'danger';
+    }>
+  >;
+};
+
 export type TelegramSystemBotCapturedPostContent = {
   text: string;
+  plainText?: string;
   imageUrls: string[];
   buttonRows: Array<
     Array<{

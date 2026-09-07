@@ -495,14 +495,17 @@ export class TelegramMtprotoClient {
       ) ??
       0;
 
+    const username = me.username || null;
+    const photoUrl =
+      (await this.profilePhotoDataUrl(client, me)) ||
+      this.telegramPublicPhotoUrl(username);
+
     return {
       id: String(me.id),
-      username: me.username || null,
+      username,
       firstName: me.firstName || null,
       lastName: me.lastName || null,
-      photoUrl: me.username
-        ? `https://t.me/i/userpic/320/${me.username}.jpg`
-        : null,
+      photoUrl,
       nameColor: this.extractNameColor(me),
       capabilities: {
         isPremium,

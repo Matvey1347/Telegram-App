@@ -16,6 +16,7 @@ import {
   type PlacementManagedPostDraft,
 } from "./placement-post/placement-post-composer";
 import { hasPlacementPostContent } from "./placement-post/placement-post-content";
+import { useTransientActionStatus } from "@/hooks/use-transient-action-status";
 
 export function AdSaleSharedPost({
   placements,
@@ -45,34 +46,18 @@ export function AdSaleSharedPost({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [botOpenError, setBotOpenError] = useState("");
-  const [botSendStatus, setBotSendStatus] = useState<
-    "idle" | "sending" | "sent"
-  >("idle");
-  const [botSendingDots, setBotSendingDots] = useState(1);
+  const botSend = useTransientActionStatus();
   const [previewSendStatus, setPreviewSendStatus] = useState<
     "idle" | "sending" | "sent"
   >("idle");
   const waitingForBotRef = useRef(false);
   const botWorkflowIdRef = useRef("");
   useEffect(() => {
-    if (botSendStatus !== "sending") return;
-    const interval = window.setInterval(
-      () => setBotSendingDots((current) => (current % 3) + 1),
-      350,
-    );
-    return () => window.clearInterval(interval);
-  }, [botSendStatus]);
-  useEffect(() => {
     if (previewSendStatus !== "sent") return;
     const timeout = window.setTimeout(() => setPreviewSendStatus("idle"), 1800);
     return () => window.clearTimeout(timeout);
   }, [previewSendStatus]);
 
-  useEffect(() => {
-    if (botSendStatus !== "sent") return;
-    const timeout = window.setTimeout(() => setBotSendStatus("idle"), 1800);
-    return () => window.clearTimeout(timeout);
-  }, [botSendStatus]);
   useEffect(() => {
     const handleFocus = () => {
       if (!waitingForBotRef.current) return;
@@ -202,40 +187,39 @@ export function AdSaleSharedPost({
               type="button"
               variant="secondary"
               className="h-8 px-3 text-xs"
-              disabled={botSendStatus !== "idle"}
+              disabled={botSend.status !== "idle"}
               aria-label={
-                botSendStatus === "sending"
+                botSend.status === "sending"
                   ? "Sending to bot"
-                  : botSendStatus === "sent"
+                  : botSend.status === "sent"
                     ? "Sent to bot"
                     : "Add new post from bot"
               }
               onClick={() => {
                 setBotOpenError("");
-                setBotSendingDots(1);
-                setBotSendStatus("sending");
+                botSend.start();
                 void (onPrepareSystemBot?.() ?? Promise.resolve())
                   .then((workflowId) => {
                     if (!workflowId)
                       throw new Error("Post import was not prepared");
                     botWorkflowIdRef.current = workflowId;
                     waitingForBotRef.current = true;
-                    setBotSendStatus("sent");
+                    botSend.sent();
                   })
                   .catch(() => {
                     waitingForBotRef.current = false;
-                    setBotSendStatus("idle");
+                    botSend.reset();
                     setBotOpenError(
                       "Could not prepare the bot workspace. Try again.",
                     );
                   });
               }}
             >
-              {botSendStatus === "sending" ? (
+              {botSend.status === "sending" ? (
                 <span className="inline-flex min-w-[4.5rem] items-center justify-center gap-1">
-                  Sending{".".repeat(botSendingDots)}
+                  Sending{".".repeat(botSend.dots)}
                 </span>
-              ) : botSendStatus === "sent" ? (
+              ) : botSend.status === "sent" ? (
                 <span className="inline-flex items-center gap-1 text-emerald-300">
                   ✅ Added from bot
                 </span>

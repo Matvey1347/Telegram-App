@@ -22,6 +22,9 @@ export type TelegramSystemBotAdSalePostDraft = {
   >;
 };
 
+export type TelegramSystemBotMutualPromotionPostDraft =
+  TelegramSystemBotAdSalePostDraft;
+
 export function createTelegramSystemBotApi(api: AxiosInstance) {
   const silentFeedback = {
     feedback: { mode: "silent" },
@@ -78,10 +81,40 @@ export function createTelegramSystemBotApi(api: AxiosInstance) {
           params: { workflowId },
         })
       ).data,
+    prepareMutualPromotionPostImport: async (folderId: string) =>
+      (
+        await api.post<{ workflowId: string }>(
+          "/telegram/system-bot/mutual-promotion-post-import",
+          { folderId },
+          silentFeedback,
+        )
+      ).data,
+    mutualPromotionPostImportResult: async (workflowId: string) =>
+      (
+        await api.get<
+          | { ready: false }
+          | {
+              ready: true;
+              drafts: TelegramSystemBotMutualPromotionPostDraft[];
+            }
+        >("/telegram/system-bot/mutual-promotion-post-import", {
+          params: { workflowId },
+        })
+      ).data,
     sendAdSalePostPreview: async (draft: TelegramSystemBotAdSalePostDraft) =>
       (
         await api.post<{ status: "SENT" }>(
           "/telegram/system-bot/ad-sale-post-preview",
+          draft,
+          silentFeedback,
+        )
+      ).data,
+    sendMutualPromotionPostPreview: async (
+      draft: TelegramSystemBotMutualPromotionPostDraft,
+    ) =>
+      (
+        await api.post<{ status: "SENT" }>(
+          "/telegram/system-bot/mutual-promotion-post-preview",
           draft,
           silentFeedback,
         )

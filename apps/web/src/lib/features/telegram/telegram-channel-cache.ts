@@ -6,18 +6,36 @@ import type {
 import { telegramChannelKeys } from "@/lib/query-keys";
 
 type ChannelPatch = Partial<TelegramChannel> & Pick<TelegramChannel, "id">;
+type ChannelListCache = TelegramChannel[] | TelegramChannelListResponse;
 
-function mergeChannel(existing: TelegramChannel, patch: ChannelPatch): TelegramChannel {
+function mergeChannel(
+  existing: TelegramChannel,
+  patch: ChannelPatch,
+): TelegramChannel {
   return { ...existing, ...patch };
 }
 
+function updateCachedList(
+  current: ChannelListCache | undefined,
+  update: (channels: TelegramChannel[]) => TelegramChannel[],
+): ChannelListCache | undefined {
+  if (!current) return current;
+  if (Array.isArray(current)) return update(current);
+  return { ...current, items: update(current.items) };
+}
+
 /** Updates every cached channel list plus the matching detail read model. */
-export function patchTelegramChannelCaches(queryClient: QueryClient, patch: ChannelPatch) {
-  queryClient.setQueriesData<TelegramChannel[]>(
+export function patchTelegramChannelCaches(
+  queryClient: QueryClient,
+  patch: ChannelPatch,
+) {
+  queryClient.setQueriesData<ChannelListCache>(
     { queryKey: telegramChannelKeys.lists() },
-    (channels) =>
-      channels?.map((channel) =>
-        channel.id === patch.id ? mergeChannel(channel, patch) : channel,
+    (current) =>
+      updateCachedList(current, (channels) =>
+        channels.map((channel) =>
+          channel.id === patch.id ? mergeChannel(channel, patch) : channel,
+        ),
       ),
   );
   queryClient.setQueryData<TelegramChannel>(
@@ -26,19 +44,35 @@ export function patchTelegramChannelCaches(queryClient: QueryClient, patch: Chan
   );
 }
 
-export function prependTelegramChannelToCaches(queryClient: QueryClient, channel: TelegramChannel) {
-  queryClient.setQueriesData<TelegramChannel[]>(
+export function prependTelegramChannelToCaches(
+  queryClient: QueryClient,
+  channel: TelegramChannel,
+) {
+  queryClient.setQueriesData<ChannelListCache>(
     { queryKey: telegramChannelKeys.lists() },
-    (channels) => [channel, ...(channels ?? []).filter((item) => item.id !== channel.id)],
+    (current) =>
+      updateCachedList(current, (channels) => [
+        channel,
+        ...channels.filter((item) => item.id !== channel.id),
+      ]),
   );
 }
 
-export function removeTelegramChannelFromCaches(queryClient: QueryClient, channelId: string) {
-  queryClient.setQueriesData<TelegramChannel[]>(
+export function removeTelegramChannelFromCaches(
+  queryClient: QueryClient,
+  channelId: string,
+) {
+  queryClient.setQueriesData<ChannelListCache>(
     { queryKey: telegramChannelKeys.lists() },
-    (channels) => channels?.filter((channel) => channel.id !== channelId),
+    (current) =>
+      updateCachedList(current, (channels) =>
+        channels.filter((channel) => channel.id !== channelId),
+      ),
   );
-  queryClient.removeQueries({ queryKey: telegramChannelKeys.detail(channelId), exact: true });
+  queryClient.removeQueries({
+    queryKey: telegramChannelKeys.detail(channelId),
+    exact: true,
+  });
 }
 
 /**
@@ -51,8 +85,10 @@ export function moveTelegramChannelBetweenLifecycleCaches(
 ) {
   const activeKey = telegramChannelKeys.list(false, true);
   const archivedKey = telegramChannelKeys.list(true, true);
-  const active = queryClient.getQueryData<TelegramChannelListResponse>(activeKey);
-  const archived = queryClient.getQueryData<TelegramChannelListResponse>(archivedKey);
+  const active =
+    queryClient.getQueryData<TelegramChannelListResponse>(activeKey);
+  const archived =
+    queryClient.getQueryData<TelegramChannelListResponse>(archivedKey);
   const source = [...(active?.items ?? []), ...(archived?.items ?? [])].find(
     (item) => item.id === channel.id,
   );
@@ -74,7 +110,10 @@ export function moveTelegramChannelBetweenLifecycleCaches(
       items,
       pagination: {
         ...current.pagination,
-        totalItems: Math.max(0, current.pagination.totalItems + (destination ? 1 : -1)),
+        totalItems: Math.max(
+          0,
+          current.pagination.totalItems + (destination ? 1 : -1),
+        ),
       },
       counts: {
         active: Math.max(0, current.counts.active + activeDelta),
@@ -83,34 +122,49 @@ export function moveTelegramChannelBetweenLifecycleCaches(
     };
   };
 
-  queryClient.setQueryData<TelegramChannelListResponse>(
-    activeKey,
-    (current) => updateList(current, !isArchived),
+  queryClient.setQueryData<TelegramChannelListResponse>(activeKey, (current) =>
+    updateList(current, !isArchived),
   );
   queryClient.setQueryData<TelegramChannelListResponse>(
     archivedKey,
     (current) => updateList(current, isArchived),
   );
-  queryClient.setQueryData<TelegramChannel>(telegramChannelKeys.detail(channel.id), channel);
+  queryClient.setQueryData<TelegramChannel>(
+    telegramChannelKeys.detail(channel.id),
+    channel,
+  );
 }
 
 export function restoreTelegramChannelCacheSnapshots(
   queryClient: QueryClient,
   snapshots: ReturnType<QueryClient["getQueriesData"]>,
 ) {
-  for (const [queryKey, data] of snapshots) queryClient.setQueryData(queryKey, data);
+  for (const [queryKey, data] of snapshots)
+    queryClient.setQueryData(queryKey, data);
 }
 
-export async function cancelTelegramChannelCacheUpdates(queryClient: QueryClient, channelId: string) {
+export async function cancelTelegramChannelCacheUpdates(
+  queryClient: QueryClient,
+  channelId: string,
+) {
   await Promise.all([
     queryClient.cancelQueries({ queryKey: telegramChannelKeys.lists() }),
-    queryClient.cancelQueries({ queryKey: telegramChannelKeys.detail(channelId), exact: true }),
+    queryClient.cancelQueries({
+      queryKey: telegramChannelKeys.detail(channelId),
+      exact: true,
+    }),
   ]);
 }
 
-export function getTelegramChannelCacheSnapshots(queryClient: QueryClient, channelId: string) {
+export function getTelegramChannelCacheSnapshots(
+  queryClient: QueryClient,
+  channelId: string,
+) {
   return [
     ...queryClient.getQueriesData({ queryKey: telegramChannelKeys.lists() }),
-    ...queryClient.getQueriesData({ queryKey: telegramChannelKeys.detail(channelId), exact: true }),
+    ...queryClient.getQueriesData({
+      queryKey: telegramChannelKeys.detail(channelId),
+      exact: true,
+    }),
   ];
 }

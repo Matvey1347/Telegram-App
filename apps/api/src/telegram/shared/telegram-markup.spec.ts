@@ -177,6 +177,17 @@ describe('telegramMarkupToHtml', () => {
     );
   });
 
+  it('round-trips Telegram text mentions and expandable blockquotes', () => {
+    const managed = telegramHtmlToManagedMarkup(
+      '<a href="tg://user?id=42">Ada</a>\n<blockquote expandable>Hidden\nDetails</blockquote>',
+    );
+
+    expect(managed).toBe('[Ada](tg://user?id=42)\n>> Hidden\n>> Details');
+    expect(telegramMarkupToHtml(managed)).toBe(
+      '<a href="tg://user?id=42">Ada</a>\n<blockquote expandable>Hidden\nDetails</blockquote>',
+    );
+  });
+
   it('does not create links for unsafe protocols or markup inside code', () => {
     expect(
       telegramMarkupToHtml(

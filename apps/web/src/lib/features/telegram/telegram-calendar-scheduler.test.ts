@@ -4,6 +4,7 @@ import {
   buildCalendarDaySchedulePlan,
   buildCalendarDayScheduleSlots,
   getCalendarSchedulablePosts,
+  getCalendarPlanImportPosts,
   mergeCalendarScheduleSlots,
   shuffleCalendarSchedulablePosts,
   sortScheduleManagedPostAssignments,
@@ -71,6 +72,20 @@ describe("telegram-calendar-scheduler", () => {
     expect(getCalendarSchedulablePosts(posts).map((post) => post.id)).toEqual([
       "draft-1",
       "failed-1",
+    ]);
+  });
+
+  it("includes existing scheduled system posts only for calendar-plan imports", () => {
+    const posts: TelegramManagedPost[] = [
+      makePost({ id: "draft-1", status: "DRAFT", origin: "SYSTEM" }),
+      makePost({ id: "scheduled-1", status: "SCHEDULED", origin: "SYSTEM" }),
+      makePost({ id: "published-1", status: "PUBLISHED", origin: "SYSTEM" }),
+      makePost({ id: "telegram-1", status: "SCHEDULED", origin: "TELEGRAM" }),
+    ];
+
+    expect(getCalendarPlanImportPosts(posts).map((post) => post.id)).toEqual([
+      "draft-1",
+      "scheduled-1",
     ]);
   });
 

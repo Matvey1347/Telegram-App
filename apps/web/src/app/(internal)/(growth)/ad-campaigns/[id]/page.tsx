@@ -12,6 +12,7 @@ import { PageTabHead } from '@/components/layout/page-tab-head';
 import { MoneyStack } from '@/components/ui/money-stack';
 import { Button, Card, LoadingState, PageHeader } from '@/components/ui/primitives';
 import { TelegramEntityAvatar } from '@/components/features/telegram/telegram/telegram-entity-avatar';
+import { resolveTitleTemplate } from '@telegram-system/shared';
 import { adCampaignsApi, currenciesApi, type AdCampaign } from '@/lib/api';
 import { useAppToast } from '@/providers/toast-provider';
 
@@ -193,21 +194,11 @@ function formatMoneyValue(value: unknown, currency: string) {
   return `${formatNumber(parsed, 2)} ${currency}`;
 }
 
-function resolveCampaignCustomTitle(
-  customTitleTemplate?: string | null,
-  dateValue?: string | null,
-) {
-  const template = String(customTitleTemplate ?? '').trim();
-  if (!template) return '';
-  if (!dateValue) return template.replace(/\[date\]/gi, '').trim();
-  return template.replace(/\[date\]/gi, dateValue).trim();
-}
-
 function displayCampaignTitle(campaign: any) {
   const date = campaign?.placementDate || campaign?.startedAt || campaign?.createdAt
     ? new Date(campaign.placementDate || campaign.startedAt || campaign.createdAt).toISOString().slice(0, 10)
     : '';
-  const customTitle = resolveCampaignCustomTitle(campaign?.customTitleTemplate, date);
+  const customTitle = resolveTitleTemplate(campaign?.customTitleTemplate, { date });
   if (customTitle) return customTitle;
   let title = String(campaign?.title || '').trim();
   title = title.replace(/^Telegram ad campaign:\s*/i, '').trim();

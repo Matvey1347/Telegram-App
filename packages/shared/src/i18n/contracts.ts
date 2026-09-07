@@ -97,6 +97,7 @@ export const TELEGRAM_MANAGED_POST_STATUS_KEYS = {
 export const TELEGRAM_POST_GROUP_SYSTEM_TITLE_KEYS = {
   TELEGRAM_IMPORTED: "telegramPosts.systemGroup.createdInTelegram",
   ADVERTISE: "telegramPosts.systemGroup.advertise",
+  MUTUAL_PROMOTION: "telegramPosts.systemGroup.mutualPromotion",
   SYSTEM_BOT_POSTS: "telegramPosts.systemGroup.systemBotPosts",
 } as const;
 

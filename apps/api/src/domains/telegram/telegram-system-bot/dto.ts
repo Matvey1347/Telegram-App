@@ -39,3 +39,9 @@ export class UpdateTelegramSystemBotGroupSubscriptionsDto {
   @IsBoolean()
   notifyOnFailure!: boolean;
 }
+
+export class PrepareMutualPromotionPostImportDto {
+  @IsString()
+  @MinLength(1)
+  folderId!: string;
+}

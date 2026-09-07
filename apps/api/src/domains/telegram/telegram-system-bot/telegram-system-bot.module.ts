@@ -26,6 +26,7 @@ import { TelegramSystemBotPostContentService } from './telegram-system-bot-post-
 import { TelegramSystemBotPostFlowOptions } from './telegram-system-bot-post-flow.options';
 import { TelegramBotIconCaptureService } from '../../../telegram/shared/telegram-bot-icon-capture.service';
 import { TelegramSystemBotWorkspaceFlowService } from './telegram-system-bot-workspace-flow.service';
+import { TelegramSystemBotMutualPromotionPostFlowService } from './telegram-system-bot-mutual-promotion-post-flow.service';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { TelegramSystemBotWorkspaceFlowService } from './telegram-system-bot-wor
     TelegramSystemBotPostFlowOptions,
     TelegramBotIconCaptureService,
     TelegramSystemBotWorkspaceFlowService,
+    TelegramSystemBotMutualPromotionPostFlowService,
   ],
   exports: [TelegramSystemBotNotificationsService],
 })

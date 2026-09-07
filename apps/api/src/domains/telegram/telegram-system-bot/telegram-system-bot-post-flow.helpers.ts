@@ -37,7 +37,7 @@ export function telegramSystemBotPostTitle(
   content: TelegramSystemBotCapturedPostContent,
 ) {
   return (
-    content.text
+    (content.plainText ?? content.text)
       .split('\n')
       .find((line) => line.trim())
       ?.trim()
@@ -55,6 +55,7 @@ export function mergeTelegramSystemBotAlbumContent(
   return {
     ...current,
     text: current.text || incoming.text,
+    plainText: current.plainText || incoming.plainText,
     imageUrls: [...new Set([...current.imageUrls, ...incoming.imageUrls])],
     buttonRows: current.buttonRows.length
       ? current.buttonRows

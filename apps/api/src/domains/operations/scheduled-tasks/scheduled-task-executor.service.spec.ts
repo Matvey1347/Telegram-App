@@ -10,6 +10,7 @@ import { ScheduledTaskExecutorService } from './scheduled-task-executor.service'
 import { ScheduledTaskRegistryService } from './scheduled-task-registry.service';
 import { TelegramManagedPostReconciliationService } from '../../telegram/telegram-channels/telegram-managed-post-reconciliation.service';
 import { TelegramCrmInitialSyncService } from '../../telegram/telegram-crm/telegram-crm-initial-sync.service';
+import { MutualPromotionLifecycleService } from '../../growth/mutual-promotion-folders/mutual-promotion-lifecycle.service';
 
 describe('scheduled task registry executors', () => {
   function setup() {
@@ -55,6 +56,16 @@ describe('scheduled task registry executors', () => {
         details: { accountsProcessed: 2 },
       }),
     };
+    const mutualPromotion = {
+      processDueActions: jest.fn().mockResolvedValue({
+        considered: 5,
+        processed: 4,
+        completed: 3,
+        retried: 1,
+        failed: 0,
+        nextDueAt: null,
+      }),
+    };
     const services = new Map<unknown, unknown>([
       [TelegramWorkspaceFullSyncService, fullSync],
       [GreeterExpiryService, greeter],
@@ -66,6 +77,7 @@ describe('scheduled task registry executors', () => {
       [ApplicationLogsService, {}],
       [TelegramManagedPostReconciliationService, managedPosts],
       [TelegramCrmInitialSyncService, crmSync],
+      [MutualPromotionLifecycleService, mutualPromotion],
     ]);
     const moduleRef = {
       resolve: jest.fn((token: unknown) =>
@@ -82,6 +94,7 @@ describe('scheduled task registry executors', () => {
       retention,
       managedPosts,
       crmSync,
+      mutualPromotion,
     };
   }
 
@@ -129,6 +142,16 @@ describe('scheduled task registry executors', () => {
     const result = await executor.executors['greeter.expire_pending']();
     expect(greeter.processDueBatch).toHaveBeenCalledWith(50);
     expect(result.summary).toContain('1 failed');
+  });
+
+  it('runs the due-driven mutual-promotion lifecycle with one aggregate summary', async () => {
+    const { executor, mutualPromotion } = setup();
+    const result = await executor.executors['mutual_promotion.lifecycle']();
+
+    expect(mutualPromotion.processDueActions).toHaveBeenCalledTimes(1);
+    expect(result.summary).toContain('processed 4');
+    expect(result.summary).toContain('retried 1');
+    expect(result.details).toMatchObject({ considered: 5, completed: 3 });
   });
 
   it('dispatches due Greeter broadcasts through persistent maintenance', async () => {
@@ -198,5 +221,12 @@ describe('scheduled task registry executors', () => {
     expect(
       definitions.find((item) => item.key === 'operational_history.cleanup'),
     ).toMatchObject({ scope: 'SYSTEM_MAINTENANCE' });
+    expect(
+      definitions.find((item) => item.key === 'mutual_promotion.lifecycle'),
+    ).toMatchObject({
+      scope: 'SYSTEM_MAINTENANCE',
+      dueDriven: true,
+      scheduleEditable: false,
+    });
   });
 });

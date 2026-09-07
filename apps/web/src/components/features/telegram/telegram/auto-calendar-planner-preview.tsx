@@ -1,6 +1,5 @@
 "use client";
 
-
 import type {
   ResolvedEmoji,
   TelegramPostPlannerPreviewResult,
@@ -46,7 +45,15 @@ export function AutoCalendarPlannerPreview({
   ) => void;
   onOpenPostInNewTab?: (postId: string) => void;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  const scheduleLabel = (value: string) =>
+    new Date(value).toLocaleString(locale === "ru" ? "ru-RU" : "en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   const assignmentsByDate = new Map<string, typeof preview.assignments>();
   for (const assignment of preview.assignments) {
     assignmentsByDate.set(assignment.date, [
@@ -58,7 +65,9 @@ export function AutoCalendarPlannerPreview({
   return (
     <div className="mt-4 space-y-3 rounded-lg border border-blue-900/60 bg-blue-950/10 p-3">
       <div>
-        <h4 className="text-sm font-semibold text-white">{t("telegram.posts.support.planPreview")}</h4>
+        <h4 className="text-sm font-semibold text-white">
+          {t("telegram.posts.support.planPreview")}
+        </h4>
         <p className="mt-0.5 text-xs text-neutral-400">
           {t("telegram.posts.support.planNotScheduled")}
         </p>
@@ -66,19 +75,25 @@ export function AutoCalendarPlannerPreview({
 
       <div className="grid gap-2 text-sm sm:grid-cols-3">
         <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-3">
-          <div className="text-neutral-500">{t("telegram.posts.support.selectedPosts")}</div>
+          <div className="text-neutral-500">
+            {t("telegram.posts.support.selectedPosts")}
+          </div>
           <div className="mt-1 text-xl font-semibold text-white">
             {preview.summary.plannedPosts}
           </div>
         </div>
         <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-3">
-          <div className="text-neutral-500">{t("telegram.posts.support.availableTimes")}</div>
+          <div className="text-neutral-500">
+            {t("telegram.posts.support.availableTimes")}
+          </div>
           <div className="mt-1 text-xl font-semibold text-white">
             {preview.summary.availableSlots}
           </div>
         </div>
         <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-3">
-          <div className="text-neutral-500">{t("telegram.posts.support.openTimes")}</div>
+          <div className="text-neutral-500">
+            {t("telegram.posts.support.openTimes")}
+          </div>
           <div className="mt-1 text-xl font-semibold text-amber-200">
             {preview.summary.unfilledSlots}
           </div>
@@ -100,7 +115,9 @@ export function AutoCalendarPlannerPreview({
                 })}
               </div>
               <div className="text-xs text-neutral-500">
-                {t("telegram.posts.support.postsCount", { count: assignments.length })}
+                {t("telegram.posts.support.postsCount", {
+                  count: assignments.length,
+                })}
               </div>
             </div>
             {onRerollDay ? (
@@ -126,10 +143,10 @@ export function AutoCalendarPlannerPreview({
             {assignments.map((assignment) => (
               <div
                 key={`${assignment.postId}:${assignment.scheduledAt}`}
-                className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+                className="flex items-start justify-between gap-3 px-3 py-2 text-sm"
               >
-                {availablePosts && onReplaceAssignmentPost ? (
-                  <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1">
+                  {availablePosts && onReplaceAssignmentPost ? (
                     <CustomSelect
                       value={assignment.postId}
                       onChange={(nextPostId) =>
@@ -154,16 +171,36 @@ export function AutoCalendarPlannerPreview({
                               : "📝",
                       }))}
                     />
-                  </div>
-                ) : (
-                  <span className="min-w-0 truncate text-neutral-200">
-                    {assignment.title}
-                  </span>
-                )}
+                  ) : (
+                    <span className="block truncate text-neutral-200">
+                      {assignment.title}
+                    </span>
+                  )}
+                  {assignment.currentScheduledAt ? (
+                    <p className="mt-1 text-xs text-blue-300">
+                      {assignment.currentScheduledAt === assignment.scheduledAt
+                        ? t("telegram.posts.support.scheduleUnchanged", {
+                            time: scheduleLabel(assignment.scheduledAt),
+                          })
+                        : t("telegram.posts.support.scheduleChanges", {
+                            from: scheduleLabel(assignment.currentScheduledAt),
+                            to: scheduleLabel(assignment.scheduledAt),
+                          })}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-neutral-500">
+                      {t("telegram.posts.support.scheduleNew", {
+                        time: scheduleLabel(assignment.scheduledAt),
+                      })}
+                    </p>
+                  )}
+                </div>
                 {onOpenPostInNewTab ? (
                   <button
                     type="button"
-                    aria-label={t("telegram.posts.support.openNamed", { title: assignment.title })}
+                    aria-label={t("telegram.posts.support.openNamed", {
+                      title: assignment.title,
+                    })}
                     title={t("telegram.posts.support.openNewTab")}
                     onClick={() => onOpenPostInNewTab(assignment.postId)}
                     className="shrink-0 rounded-md p-1.5 text-blue-300 hover:bg-blue-950/50 hover:text-blue-200"
@@ -180,7 +217,9 @@ export function AutoCalendarPlannerPreview({
                 {onRemoveAssignment ? (
                   <button
                     type="button"
-                    aria-label={t("telegram.posts.support.removeNamed", { title: assignment.title })}
+                    aria-label={t("telegram.posts.support.removeNamed", {
+                      title: assignment.title,
+                    })}
                     onClick={() =>
                       onRemoveAssignment(
                         assignment.postId,
@@ -216,7 +255,9 @@ export function AutoCalendarPlannerPreview({
             ) : (
               <CalendarCheck2 size={15} />
             )}
-            {t("telegram.posts.support.scheduleAll", { count: preview.assignments.length })}
+            {t("telegram.posts.support.scheduleAll", {
+              count: preview.assignments.length,
+            })}
           </span>
         </Button>
       </div>

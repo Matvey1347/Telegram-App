@@ -1466,7 +1466,14 @@ export default function TelegramChannelsPage() {
       ),
     enabled: tab === "channels" || networkFormOpen || Boolean(editingNetwork),
   });
-  const channels = channelsResponse?.items;
+  // Older hot caches can contain the legacy array shape under this key.
+  // Keep this page render-safe while React Query replaces it with the read model.
+  const channels = Array.isArray(channelsResponse)
+    ? channelsResponse
+    : channelsResponse?.items;
+  const channelCounts = Array.isArray(channelsResponse)
+    ? undefined
+    : channelsResponse?.counts;
   const {
     data: networks = [],
     isLoading: networksLoading,
@@ -1962,8 +1969,8 @@ export default function TelegramChannelsPage() {
                   }
                 >
                   {item === "active"
-                    ? `Active (${channelsResponse?.counts.active ?? 0})`
-                    : `Archive (${channelsResponse?.counts.archived ?? 0})`}
+                    ? `Active (${channelCounts?.active ?? 0})`
+                    : `Archive (${channelCounts?.archived ?? 0})`}
                 </button>
               ))}
             </div>

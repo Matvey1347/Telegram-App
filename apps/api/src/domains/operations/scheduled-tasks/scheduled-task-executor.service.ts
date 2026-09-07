@@ -18,6 +18,7 @@ import type {
 } from './scheduled-task.types';
 import { OperationsNotificationDueService } from '../notifications/operations-notification-due.service';
 import { TelegramCrmInitialSyncService } from '../../telegram/telegram-crm/telegram-crm-initial-sync.service';
+import { MutualPromotionLifecycleService } from '../../growth/mutual-promotion-folders/mutual-promotion-lifecycle.service';
 
 @Injectable()
 export class ScheduledTaskExecutorService {
@@ -72,6 +73,15 @@ export class ScheduledTaskExecutorService {
       ).processDueDeletionBatch(20);
       return {
         summary: `Reconciled ${lifecycleResult.reconciled} published placements; processed ${result.processed} placements, ${result.failed} failed.`,
+      };
+    },
+    'mutual_promotion.lifecycle': async () => {
+      const result = await (
+        await this.mutualPromotionLifecycleService()
+      ).processDueActions();
+      return {
+        summary: `Considered ${result.considered} mutual-promotion actions; processed ${result.processed}, completed ${result.completed}, retried ${result.retried}, failed ${result.failed}.`,
+        details: result,
       };
     },
     'operations.notifications.publish_due': async () => {
@@ -237,6 +247,12 @@ export class ScheduledTaskExecutorService {
 
   private operationsNotificationDueService() {
     return this.moduleRef.resolve(OperationsNotificationDueService, undefined, {
+      strict: false,
+    });
+  }
+
+  private mutualPromotionLifecycleService() {
+    return this.moduleRef.resolve(MutualPromotionLifecycleService, undefined, {
       strict: false,
     });
   }

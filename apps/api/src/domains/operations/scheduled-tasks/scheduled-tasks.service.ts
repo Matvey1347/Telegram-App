@@ -30,6 +30,7 @@ import { DueTaskSchedule } from './due-task-schedule';
 import { ScheduledTaskAutomaticEligibility } from './scheduled-task-automatic-eligibility';
 import { scheduledTaskWakeNotifier } from '../../../common/scheduled-task-wake-notifier';
 import { ScheduledTaskWakeTimer } from './scheduled-task-wake-timer';
+import { ScheduledTaskDomainDueResolverService } from './scheduled-task-domain-due-resolver.service';
 
 const SCHEDULER_RECOVERY_BACKOFF_MS = 30_000;
 
@@ -46,9 +47,10 @@ export class ScheduledTasksService
     private readonly prisma: PrismaService,
     private readonly registry: ScheduledTaskRegistryService,
     private readonly runner: ScheduledTaskRunnerService,
+    domainDueResolver: ScheduledTaskDomainDueResolverService,
   ) {
     this.automaticEligibility = new ScheduledTaskAutomaticEligibility(prisma);
-    this.dueSchedule = new DueTaskSchedule(prisma);
+    this.dueSchedule = new DueTaskSchedule(prisma, domainDueResolver);
     this.wakeTimer = new ScheduledTaskWakeTimer(
       prisma,
       () => this.tick(),

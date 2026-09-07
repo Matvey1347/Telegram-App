@@ -67,6 +67,9 @@ describe('ScheduledTasksService', () => {
           ]),
       },
       telegramChannel: { count: jest.fn().mockResolvedValue(1) },
+      telegramUserAccountIntegration: {
+        count: jest.fn().mockResolvedValue(0),
+      },
       telegramManagedPost: { findFirst: jest.fn().mockResolvedValue(null) },
       telegramAdSalePlacement: { findFirst: jest.fn().mockResolvedValue(null) },
       greeterJoinRequest: { findFirst: jest.fn().mockResolvedValue(null) },
@@ -114,6 +117,7 @@ describe('ScheduledTasksService', () => {
       prisma as never,
       registry as never,
       runner as never,
+      { nextDueAt: jest.fn().mockResolvedValue(undefined) } as never,
     );
     return { service, prisma, registry, runner, definition, config };
   }
@@ -310,7 +314,9 @@ describe('ScheduledTasksService', () => {
 
   it('rejects a cadence edit when a claim wins after the config read', async () => {
     const { service, prisma } = setup();
-    prisma.scheduledTaskConfig.updateMany.mockResolvedValueOnce({ count: 0 });
+    prisma.scheduledTaskConfig.updateMany.mockImplementation(({ where }) =>
+      Promise.resolve({ count: where?.id === 'config-1' ? 0 : 1 }),
+    );
     await expect(
       service.updateForMembership(
         { workspaceId: 'workspace-1', role: WorkspaceRole.admin },

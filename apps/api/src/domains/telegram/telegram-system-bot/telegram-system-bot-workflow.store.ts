@@ -33,6 +33,7 @@ export class TelegramSystemBotWorkflowStore {
         step: input.step,
         payload: input.payload,
         controlMessageId: input.controlMessageId ?? null,
+        mutualPromotionFolderId: input.mutualPromotionFolderId ?? null,
         expiresAt: input.expiresAt,
       },
     });

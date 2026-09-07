@@ -1,6 +1,7 @@
 "use client";
 
 import type { ResolvedEmoji } from "@/lib/api";
+import { useState } from "react";
 import { PremiumEmoji } from "./premium-emoji";
 
 const sizes = {
@@ -23,12 +24,14 @@ export function IconAvatar({
   size = "sm",
   className = "",
   bordered = true,
+  decorative = false,
 }: {
   icon?: ResolvedEmoji | null;
   label?: string;
   size?: keyof typeof sizes;
   className?: string;
   bordered?: boolean;
+  decorative?: boolean;
 }) {
   const hasEmoji = icon?.type === "unicode";
   const base = `inline-flex shrink-0 items-center justify-center overflow-hidden rounded-md ${
@@ -37,12 +40,16 @@ export function IconAvatar({
       : "bg-neutral-800"
   } text-white ${sizes[size]} ${className}`;
 
+  const fallback = (label?.trim()?.[0] || "·").toUpperCase();
+
   if (icon?.type === "image") {
     return (
-      <img
-        src={icon.url}
-        alt={label ?? icon.name ?? ""}
-        className={`${base} object-cover`}
+      <AvatarImage
+        key={icon.url}
+        url={icon.url}
+        alt={decorative ? "" : (label ?? icon.name ?? "")}
+        className={base}
+        fallback={fallback}
       />
     );
   }
@@ -53,6 +60,28 @@ export function IconAvatar({
     );
   }
 
-  const fallback = (label?.trim()?.[0] || "·").toUpperCase();
   return <span className={base}>{fallback}</span>;
+}
+
+function AvatarImage({
+  url,
+  alt,
+  className,
+  fallback,
+}: {
+  url: string;
+  alt: string;
+  className: string;
+  fallback: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <span className={className}>{fallback}</span>;
+  return (
+    <img
+      src={url}
+      alt={alt}
+      className={`${className} object-cover`}
+      onError={() => setFailed(true)}
+    />
+  );
 }

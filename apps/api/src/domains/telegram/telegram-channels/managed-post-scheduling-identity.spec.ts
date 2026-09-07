@@ -248,6 +248,128 @@ describe('Telegram managed post scheduled identity', () => {
     expect(execution).toEqual(['a', 'b']);
   });
 
+  it('reports scheduled posts as unchanged or explicitly rescheduled', async () => {
+    const posts = [
+      {
+        id: 'unchanged',
+        title: 'Unchanged',
+        status: TelegramManagedPostStatus.SCHEDULED,
+        origin: 'SYSTEM',
+        scheduledAt: new Date('2026-08-10T09:00:00.000Z'),
+      },
+      {
+        id: 'moved',
+        title: 'Moved',
+        status: TelegramManagedPostStatus.SCHEDULED,
+        origin: 'SYSTEM',
+        scheduledAt: new Date('2026-08-10T10:00:00.000Z'),
+      },
+    ];
+    const prisma = {
+      telegramManagedPost: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce(posts)
+          .mockResolvedValueOnce([]),
+      },
+    };
+    const service = createTelegramChannelsTestHarness(
+      prisma as never,
+      {} as never,
+      { clearByPrefix: jest.fn() } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    service['workspace'] = jest.fn().mockResolvedValue('workspace');
+    service['findOne'] = jest.fn().mockResolvedValue({ id: 'channel' });
+    service['publishManagedPost'] = jest.fn(
+      async (_workspace, _channel, _postId, at) => ({
+        status: TelegramManagedPostStatus.SCHEDULED,
+        scheduledAt: at,
+      }),
+    ) as never;
+
+    const result = await service.scheduleManagedPostsBatch('user', 'channel', {
+      items: [
+        {
+          postId: 'unchanged',
+          scheduledAt: '2026-08-10T09:00:00.000Z',
+        },
+        { postId: 'moved', scheduledAt: '2026-08-10T12:00:00.000Z' },
+      ],
+    });
+
+    expect(service['publishManagedPost']).toHaveBeenCalledTimes(1);
+    expect(result.results).toEqual([
+      expect.objectContaining({
+        postId: 'unchanged',
+        action: 'SCHEDULED',
+        previousScheduledAt: '2026-08-10T09:00:00.000Z',
+        message: 'Post 1/2 already scheduled at 2026-08-10T09:00:00.000Z',
+      }),
+      expect.objectContaining({
+        postId: 'moved',
+        action: 'MOVED',
+        previousScheduledAt: '2026-08-10T10:00:00.000Z',
+        scheduledAt: '2026-08-10T12:00:00.000Z',
+        message:
+          'Post 2/2 rescheduled from 2026-08-10T10:00:00.000Z to 2026-08-10T12:00:00.000Z',
+      }),
+    ]);
+  });
+
+  it('does not release an imported Telegram reservation that cannot be moved', async () => {
+    const imported = {
+      id: 'imported',
+      title: 'Imported scheduled post',
+      status: TelegramManagedPostStatus.SCHEDULED,
+      origin: 'TELEGRAM',
+      scheduledAt: new Date('2026-08-10T10:00:00.000Z'),
+    };
+    const draft = {
+      id: 'draft',
+      title: 'Draft',
+      status: TelegramManagedPostStatus.DRAFT,
+      origin: 'SYSTEM',
+      scheduledAt: null,
+    };
+    const prisma = {
+      telegramManagedPost: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([imported, draft])
+          .mockResolvedValueOnce([{ scheduledAt: imported.scheduledAt }]),
+      },
+    };
+    const service = createTelegramChannelsTestHarness(
+      prisma as never,
+      {} as never,
+      { clearByPrefix: jest.fn() } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    service['workspace'] = jest.fn().mockResolvedValue('workspace');
+    service['findOne'] = jest.fn().mockResolvedValue({ id: 'channel' });
+
+    await expect(
+      service.scheduleManagedPostsBatch('user', 'channel', {
+        items: [
+          { postId: 'imported', scheduledAt: '2026-08-10T12:00:00.000Z' },
+          { postId: 'draft', scheduledAt: '2026-08-10T10:00:00.000Z' },
+        ],
+      }),
+    ).rejects.toThrow('already occupied');
+    expect(prisma.telegramManagedPost.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { notIn: [] } }),
+      }),
+    );
+  });
+
   it('repairs an A-to-B-to-C chain with exact tokens and more than 25 dependants', async () => {
     const makePost = (id: string, target: string) => ({
       id,

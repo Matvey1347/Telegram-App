@@ -14,6 +14,8 @@ import { ScheduledTaskRunnerService } from './scheduled-task-runner.service';
 import { ScheduledTasksController } from './scheduled-tasks.controller';
 import { ScheduledTasksService } from './scheduled-tasks.service';
 import { OperationsNotificationsModule } from '../notifications/operations-notifications.module';
+import { MutualPromotionFoldersModule } from '../../growth/mutual-promotion-folders/mutual-promotion-folders.module';
+import { ScheduledTaskDomainDueResolverService } from './scheduled-task-domain-due-resolver.service';
 
 @Module({
   imports: [
@@ -25,6 +27,7 @@ import { OperationsNotificationsModule } from '../notifications/operations-notif
     TelegramBotsModule,
     ApplicationLogsModule,
     OperationsNotificationsModule,
+    MutualPromotionFoldersModule,
   ],
   controllers: [ScheduledTasksController],
   providers: [
@@ -34,6 +37,7 @@ import { OperationsNotificationsModule } from '../notifications/operations-notif
     ScheduledTaskLockService,
     ScheduledTaskRunnerService,
     ScheduledTaskNotificationsService,
+    ScheduledTaskDomainDueResolverService,
   ],
   exports: [ScheduledTasksService, ScheduledTaskRegistryService],
 })

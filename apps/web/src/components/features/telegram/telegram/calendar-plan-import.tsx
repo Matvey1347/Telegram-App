@@ -1,6 +1,5 @@
 "use client";
 
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Download } from "lucide-react";
 import {
@@ -14,7 +13,13 @@ import { useI18n } from "@/providers/i18n-provider";
 import { ManagedPostsImportSource } from "./managed-posts-import-source";
 import { parseCalendarPlanImport } from "./calendar-plan-import-model";
 
-type PlanPost = { id: string; title: string; groupId?: string | null };
+type PlanPost = {
+  id: string;
+  title: string;
+  groupId?: string | null;
+  status?: string;
+  scheduledAt?: string | null;
+};
 
 export function CalendarPlanImport({
   channelId,
@@ -52,7 +57,7 @@ export function CalendarPlanImport({
         preview: parseCalendarPlanImport(content, posts, timezone),
         error: "",
       };
-    } catch (error) {
+    } catch {
       return {
         preview: null,
         error: t("telegram.posts.import.parsePlanError"),
@@ -63,7 +68,13 @@ export function CalendarPlanImport({
   const previewInputKey = JSON.stringify({
     content,
     error,
-    posts: posts.map(({ id, title, groupId }) => ({ id, title, groupId })),
+    posts: posts.map(({ id, title, groupId, status, scheduledAt }) => ({
+      id,
+      title,
+      groupId,
+      status,
+      scheduledAt,
+    })),
     timezone,
   });
 
@@ -77,7 +88,9 @@ export function CalendarPlanImport({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-white">{t("telegram.posts.support.importJsonPlan")}</h3>
+          <h3 className="text-sm font-semibold text-white">
+            {t("telegram.posts.support.importJsonPlan")}
+          </h3>
           <p className="mt-0.5 text-xs text-neutral-400">
             {t("telegram.posts.support.planUploadHint")}
           </p>
@@ -103,9 +116,15 @@ export function CalendarPlanImport({
               link.click();
               link.remove();
               URL.revokeObjectURL(url);
-              pushToast(t("telegram.posts.support.plannerDownloaded"), "success");
+              pushToast(
+                t("telegram.posts.support.plannerDownloaded"),
+                "success",
+              );
             } catch {
-              pushToast(t("telegram.posts.support.plannerDownloadError"), "error");
+              pushToast(
+                t("telegram.posts.support.plannerDownloadError"),
+                "error",
+              );
             } finally {
               setInstructionLoading(false);
             }
@@ -134,7 +153,9 @@ export function CalendarPlanImport({
               setFileName(file.name);
               setFileError("");
             })
-            .catch(() => setFileError(t("telegram.posts.support.fileReadError")));
+            .catch(() =>
+              setFileError(t("telegram.posts.support.fileReadError")),
+            );
         }}
         onClear={() => {
           onContentChange("");

@@ -6,6 +6,7 @@ import { AdCampaignAdmissionBackfillService } from './ad-campaign-admission-back
 import { AdCampaignsController } from './ad-campaigns.controller';
 import { AdCampaignsService } from './ad-campaigns.service';
 import { AdCampaignListReadService } from './ad-campaign-list-read.service';
+import { GrowthInviteLinkReservationService } from '../invite-link-reservation.service';
 
 @Module({
   imports: [FinanceCategoriesModule],
@@ -16,6 +17,7 @@ import { AdCampaignListReadService } from './ad-campaign-list-read.service';
     AdCampaignAnalyticsService,
     AdCampaignAdmissionAnalyticsService,
     AdCampaignAdmissionBackfillService,
+    GrowthInviteLinkReservationService,
   ],
   exports: [
     AdCampaignsService,

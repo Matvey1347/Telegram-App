@@ -51,6 +51,7 @@ export class TelegramSystemBotPostContentService {
       ok: true as const,
       content: {
         text: parsed.content.managedText,
+        plainText: parsed.content.text,
         imageUrls,
         buttonRows: parsed.content.buttonRows,
         mediaGroupId: parsed.content.mediaGroupId,

@@ -132,6 +132,10 @@ export function createTelegramChannelsApi({
       ).data,
     list: async () =>
       getAllPaginatedItems<TelegramChannel>("/telegram-channels"),
+    listOwned: async () =>
+      getAllPaginatedItems<TelegramChannel>("/telegram-channels", {
+        owned: true,
+      }),
     syncWorkspaceChannels: async (selection: TelegramChannelSyncSelection) =>
       (
         await api.post<TelegramWorkspaceFullSyncResult>(

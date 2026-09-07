@@ -118,7 +118,9 @@ export function ToggleRow({
 }
 export const Input = forwardRef<
   HTMLInputElement,
-  React.InputHTMLAttributes<HTMLInputElement> & { passwordToggleLabels?: { show: string; hide: string } }
+  React.InputHTMLAttributes<HTMLInputElement> & {
+    passwordToggleLabels?: { show: string; hide: string };
+  }
 >(function Input({ className, type, passwordToggleLabels, ...props }, ref) {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const isPassword = type === "password";
@@ -140,7 +142,11 @@ export const Input = forwardRef<
         disabled={props.disabled}
         onClick={() => setPasswordVisible((visible) => !visible)}
         className="absolute right-1 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-neutral-400 transition hover:bg-neutral-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:pointer-events-none disabled:opacity-50"
-        aria-label={passwordVisible ? (passwordToggleLabels?.hide ?? "Hide password") : (passwordToggleLabels?.show ?? "Show password")}
+        aria-label={
+          passwordVisible
+            ? (passwordToggleLabels?.hide ?? "Hide password")
+            : (passwordToggleLabels?.show ?? "Show password")
+        }
         aria-pressed={passwordVisible}
       >
         {passwordVisible ? <EyeOff size={17} /> : <Eye size={17} />}
@@ -205,10 +211,19 @@ export function TimeInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   );
 }
 function OptionIcon({
-  iconNode, iconPresentation, iconUrl, iconEmoji, premium, fallback,
+  iconNode,
+  iconPresentation,
+  iconUrl,
+  iconEmoji,
+  premium,
+  fallback,
 }: {
-  iconNode?: React.ReactNode; iconPresentation?: ResolvedEmoji;
-  iconUrl?: string; iconEmoji?: string; premium?: boolean; fallback?: string;
+  iconNode?: React.ReactNode;
+  iconPresentation?: ResolvedEmoji;
+  iconUrl?: string;
+  iconEmoji?: string;
+  premium?: boolean;
+  fallback?: string;
 }) {
   const premiumLabel =
     useOptionalI18n()?.t("common.premiumEmoji") ?? "Telegram Premium emoji";
@@ -219,15 +234,18 @@ function OptionIcon({
         icon={iconPresentation}
         size="xs"
         bordered={false}
+        decorative
         className="!rounded-md"
       />
     );
   if (iconUrl)
     return (
-      <img
-        src={iconUrl}
-        alt=""
-        className="h-5 w-5 shrink-0 rounded-md object-cover"
+      <IconAvatar
+        icon={{ type: "image", id: iconUrl, url: iconUrl }}
+        label={fallback}
+        size="xs"
+        bordered={false}
+        decorative
       />
     );
   if (iconEmoji)
@@ -554,9 +572,14 @@ export function CurrencySelect({
 }
 
 type MultiSelectOption = {
-  value: string; label: string; selectedLabel?: string;
-  icon?: React.ReactNode; iconUrl?: string; iconEmoji?: string;
-  iconPremium?: boolean; iconFallback?: string;
+  value: string;
+  label: string;
+  selectedLabel?: string;
+  icon?: React.ReactNode;
+  iconUrl?: string;
+  iconEmoji?: string;
+  iconPremium?: boolean;
+  iconFallback?: string;
 };
 
 export function MultiSelect({
@@ -829,11 +852,17 @@ export function StatusPill({ value }: { value: string }) {
 }
 
 type SelectOption = {
-  value: string; label: string; meta?: string;
-  iconUrl?: string; iconEmoji?: string;
-  iconPremium?: boolean; iconPresentation?: ResolvedEmoji;
-  iconFallback?: string; icon?: React.ReactNode;
-  tone?: "success" | "warning" | "danger" | "muted" | "info"; badgeClassName?: string;
+  value: string;
+  label: string;
+  meta?: string;
+  iconUrl?: string;
+  iconEmoji?: string;
+  iconPremium?: boolean;
+  iconPresentation?: ResolvedEmoji;
+  iconFallback?: string;
+  icon?: React.ReactNode;
+  tone?: "success" | "warning" | "danger" | "muted" | "info";
+  badgeClassName?: string;
 };
 
 export function CustomSelect({
@@ -1060,7 +1089,9 @@ export function CustomSelect({
                           premium={opt.iconPremium}
                           fallback={opt.iconFallback}
                         />
-                        <span className={`${opt.badgeClassName ? "" : "truncate"} ${toneClass(opt.tone)} ${opt.badgeClassName ?? ""}`}>
+                        <span
+                          className={`${opt.badgeClassName ? "" : "truncate"} ${toneClass(opt.tone)} ${opt.badgeClassName ?? ""}`}
+                        >
                           {opt.label}
                         </span>
                         {opt.meta ? (
@@ -1388,7 +1419,11 @@ export function ConfirmDeleteModal({
   }, [open]);
   if (!open) return null;
   return (
-    <Modal open={open} onClose={onClose} title={t?.("common.confirmDeletion") ?? "Confirm deletion"}>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={t?.("common.confirmDeletion") ?? "Confirm deletion"}
+    >
       <p className="mb-2 text-sm text-neutral-300">
         {t?.("common.typeToConfirm", { name: entityName }) ??
           `Type ${entityName} to confirm deletion.`}
@@ -1420,7 +1455,9 @@ export function ConfirmDeleteModal({
             void Promise.resolve(onConfirm()).catch(() => undefined);
           }}
         >
-          <span className="inline-flex items-center gap-2">{resolvedLabel}</span>
+          <span className="inline-flex items-center gap-2">
+            {resolvedLabel}
+          </span>
         </Button>
       </div>
     </Modal>
@@ -1718,8 +1755,17 @@ export function ToastStack({
               {tone !== "loading" || item.cancelable ? (
                 <button
                   type="button"
-                  aria-label={item.cancelable ? (t?.("common.stopOperation") ?? "Stop operation") : (t?.("common.closeNotification") ?? "Close notification")}
-                  title={item.cancelable ? (t?.("common.stopOperation") ?? "Stop operation") : undefined}
+                  aria-label={
+                    item.cancelable
+                      ? (t?.("common.stopOperation") ?? "Stop operation")
+                      : (t?.("common.closeNotification") ??
+                        "Close notification")
+                  }
+                  title={
+                    item.cancelable
+                      ? (t?.("common.stopOperation") ?? "Stop operation")
+                      : undefined
+                  }
                   className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-neutral-400 hover:bg-white/10 hover:text-white"
                   onClick={() => onClose(item.id)}
                 >

@@ -134,14 +134,21 @@ export function MtprotoAccountsPanel({
     onError: (error: unknown) =>
       pushToast(errorMessage(error, "Failed to create account."), "error"),
   });
-  const checkMutation = useMutation({
-    mutationFn: (id: string) => telegramUserAccountsApi.check(id),
-    onSuccess: () => {
+  const synchronizeAccountMutation = useMutation({
+    mutationFn: (id: string) => telegramUserAccountsApi.synchronizeProfile(id),
+    onSuccess: (updatedAccount: TelegramUserAccount) => {
+      qc.setQueryData<TelegramUserAccount[]>(
+        telegramAccountKeys.accounts(),
+        (current = []) =>
+          current.map((account) =>
+            account.id === updatedAccount.id ? updatedAccount : account,
+          ),
+      );
       void invalidateTelegramAccessQueries(qc);
-      pushToast("Account checked.", "success");
+      pushToast("Account synchronized with Telegram.", "success");
     },
     onError: (error: unknown) =>
-      pushToast(errorMessage(error, "Failed to check account."), "error"),
+      pushToast(errorMessage(error, "Failed to synchronize account."), "error"),
   });
   const syncMutation = useMutation<
     { accountId: string; response: TelegramUserAccountSyncDialogsResponse },
@@ -292,7 +299,9 @@ export function MtprotoAccountsPanel({
               onRefreshQr={() => qrRecovery.openQr(account)}
               onEnterCode={() => setCodeTarget(account)}
               onPassword={() => setPasswordTarget(account)}
-              onCheck={() => checkMutation.mutate(account.id)}
+              onSynchronize={() =>
+                synchronizeAccountMutation.mutate(account.id)
+              }
               onSync={() => syncMutation.mutate(account)}
               onDelete={() => setDeleting(account)}
             >

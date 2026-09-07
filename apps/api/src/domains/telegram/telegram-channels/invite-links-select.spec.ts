@@ -53,6 +53,7 @@ describe('TelegramChannelsService inviteLinksForSelect', () => {
               telegramChannelId: 'channel-1',
             },
             { adCampaignId: null },
+            { mutualPromotionParticipants: { none: {} } },
           ],
         },
       }),
@@ -121,6 +122,7 @@ describe('TelegramChannelsService inviteLinksForSelect', () => {
               workspaceId: 'ws-1',
               telegramChannelId: 'channel-1',
             },
+            { mutualPromotionParticipants: { none: {} } },
             {
               OR: [{ adCampaignId: null }, { adCampaignId: 'campaign-1' }],
             },

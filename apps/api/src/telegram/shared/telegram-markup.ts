@@ -117,8 +117,12 @@ export function telegramMarkupToHtml(raw: string, rich = false) {
       /^:::(quote|pullquote)(?:[ \t]+([^\n]*))?\n([\s\S]*?)\n:::/gm,
       (_match, kind: string, options: string, body: string) => {
         const credit = options?.match(/credit="([^"]+)"/)?.[1];
-        const richAttribution = credit ? `<cite>${escapeHtml(credit)}</cite>` : '';
-        const fallbackAttribution = credit ? `\n<i>— ${escapeHtml(credit)}</i>` : '';
+        const richAttribution = credit
+          ? `<cite>${escapeHtml(credit)}</cite>`
+          : '';
+        const fallbackAttribution = credit
+          ? `\n<i>— ${escapeHtml(credit)}</i>`
+          : '';
         return token(
           kind === 'pullquote'
             ? rich
@@ -171,13 +175,14 @@ export function telegramMarkupToHtml(raw: string, rich = false) {
     token(`<code>${escapeHtml(code)}</code>`),
   );
   value = value.replace(
-    /\[([^\]\n]+)\]\((https?:\/\/[^\s<>()]+)\)/gi,
+    /\[([^\]\n]+)\]\(((?:https?:\/\/|tg:\/\/)[^\s<>()]+)\)/gi,
     (_match, label: string, href: string) => {
       try {
         const url = new URL(href);
+        const webUrl = url.protocol === 'http:' || url.protocol === 'https:';
         if (
-          (url.protocol !== 'http:' && url.protocol !== 'https:') ||
-          !url.hostname.includes('.')
+          (!webUrl && url.protocol !== 'tg:') ||
+          (webUrl && !url.hostname.includes('.'))
         ) {
           return _match;
         }
@@ -217,7 +222,9 @@ export function telegramMarkupToRichHtml(raw: string) {
 }
 
 export function requiresNativeTelegramRichMessage(raw: string) {
-  return /^(?:#{1,6}\s+|:::(?:table|pullquote)(?:\s|$))/m.test(raw.replace(/\r\n?/g, '\n'));
+  return /^(?:#{1,6}\s+|:::(?:table|pullquote)(?:\s|$))/m.test(
+    raw.replace(/\r\n?/g, '\n'),
+  );
 }
 
 export function telegramHtmlToMtprotoHtml(html: string) {
@@ -270,11 +277,11 @@ export function telegramHtmlToManagedMarkup(html: string) {
       (_match, href: string, label: string) => `[${label}](${href})`,
     )
     .replace(
-      /<blockquote(?: expandable)?>([\s\S]*?)<\/blockquote>/gi,
-      (_match, content: string) =>
+      /<blockquote( expandable)?>([\s\S]*?)<\/blockquote>/gi,
+      (_match, expandable: string | undefined, content: string) =>
         content
           .split('\n')
-          .map((line: string) => `> ${line}`)
+          .map((line: string) => `${expandable ? '>>' : '>'} ${line}`)
           .join('\n'),
     )
     .replace(/&lt;/g, '<')

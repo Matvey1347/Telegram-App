@@ -13,6 +13,7 @@ import { TelegramChannelsSupportService } from './telegram-channels-support.serv
 import { TelegramInviteHistoryService } from './telegram-invite-history.service';
 import { TelegramInvitePersistenceService } from './telegram-invite-persistence.service';
 import { TelegramInviteSnapshotStore } from './telegram-invite-snapshot.store';
+import { hydrateTelegramInviteCreatorProfiles } from '../../../telegram/shared/telegram-invite-creator-profile';
 
 @Injectable()
 export class TelegramChannelReadModelsService {
@@ -81,6 +82,7 @@ export class TelegramChannelReadModelsService {
       ? {
           AND: [
             baseWhere,
+            { mutualPromotionParticipants: { none: {} } },
             {
               OR: [
                 { adCampaignId: null },
@@ -90,7 +92,11 @@ export class TelegramChannelReadModelsService {
           ],
         }
       : {
-          AND: [baseWhere, { adCampaignId: null }],
+          AND: [
+            baseWhere,
+            { adCampaignId: null },
+            { mutualPromotionParticipants: { none: {} } },
+          ],
         };
     const links =
       await this.telegramInvitePersistenceService.findInviteLinksWithRequestedCountFallback(
@@ -100,10 +106,15 @@ export class TelegramChannelReadModelsService {
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         },
       );
+    const hydratedLinks = await hydrateTelegramInviteCreatorProfiles(
+      this.prisma,
+      workspaceId,
+      links,
+    );
     return this.telegramInviteHistoryService.attachInviteLinkHistories(
       workspaceId,
       channelId,
-      links,
+      hydratedLinks,
     );
   }
 

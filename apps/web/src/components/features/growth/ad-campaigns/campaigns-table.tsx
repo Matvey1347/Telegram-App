@@ -1,11 +1,17 @@
 "use client";
 
-import { type MouseEventHandler, type ReactNode, useMemo, useState } from "react";
+import {
+  type MouseEventHandler,
+  type ReactNode,
+  useMemo,
+  useState,
+} from "react";
 import { TrendingUp } from "lucide-react";
 import { Line, LineChart, ResponsiveContainer } from "recharts";
 import { CampaignAdmissionViewAnalyticsModal } from "@/components/features/growth/ad-campaigns/campaign-admission-view-analytics-modal";
 import { CampaignInviteLinkHistoryModal } from "@/components/features/growth/ad-campaigns/campaign-invite-link-history-modal";
 import { PromoPreviewModal } from "@/components/features/growth/ad-campaigns/promo-preview-modal";
+import { resolveTitleTemplate } from "@telegram-system/shared";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { IconButton } from "@/components/ui/primitives";
 import { InviteLinkPreviewModal } from "@/components/features/telegram/telegram/invite-link-preview-modal";
@@ -14,6 +20,8 @@ import {
   resolveMetricPreviewIcon,
 } from "@/lib/metric-preview-icons";
 import { convertMoney, formatMoney } from "@/lib/features/finance/money";
+import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
+import { TelegramInviteLinkCreatorAvatar as SharedInviteLinkCreatorAvatar } from "@/components/features/telegram/telegram/telegram-invite-link-creator-avatar";
 import type {
   AdCampaign,
   AdCampaignKpiStatus,
@@ -27,36 +35,12 @@ function InviteLinkCreatorAvatar({
 }: {
   inviteLink: TelegramInviteLink;
 }) {
-  if (inviteLink.creatorMember) {
-    return (
-      <IconAvatar
-        icon={inviteLink.creatorMember.avatarPresentation}
-        label={inviteLink.creatorMember.user?.name || inviteLink.name}
-        size="xs"
-        className="rounded-full"
-      />
-    );
-  }
-  if (inviteLink.creatorPhotoUrl) {
-    return (
-      <img
-        src={inviteLink.creatorPhotoUrl}
-        alt=""
-        className="h-4 w-4 shrink-0 rounded-full object-cover"
-      />
-    );
-  }
   return (
-    <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-slate-700 text-[10px] text-slate-400">
-      {String(
-        inviteLink.creatorFirstName ||
-          inviteLink.creatorUsername ||
-          inviteLink.name ||
-          "A",
-      )
-        .slice(0, 1)
-        .toUpperCase()}
-    </span>
+    <SharedInviteLinkCreatorAvatar
+      photoUrl={inviteLink.creatorPhotoUrl}
+      memberAvatar={inviteLink.creatorMember?.avatarPresentation}
+      label={inviteLinkCreatorFallback(inviteLink)}
+    />
   );
 }
 
@@ -126,30 +110,18 @@ function effectiveCampaignKpiStatus(
   const cpaInKpiCurrency = kpiCurrency
     ? convertMoney(costPerJoined, campaign.currency, kpiCurrency, rates)
     : costPerJoined;
-  return calculatedKpiStatus(
-    cpaInKpiCurrency,
-    campaign.telegramChannel,
-  );
-}
-
-function resolveCampaignCustomTitle(
-  customTitleTemplate?: string | null,
-  dateValue?: string | null,
-) {
-  const template = String(customTitleTemplate ?? "").trim();
-  if (!template) return "";
-  if (!dateValue) return template.replace(/\[date\]/gi, "").trim();
-  return template.replace(/\[date\]/gi, dateValue).trim();
+  return calculatedKpiStatus(cpaInKpiCurrency, campaign.telegramChannel);
 }
 
 function displayCampaignTitle(campaign: AdCampaign) {
   const date = toInputDate(
-    campaign?.placementDate || campaign?.startedAt || (campaign as any)?.createdAt,
+    campaign?.placementDate ||
+      campaign?.startedAt ||
+      (campaign as any)?.createdAt,
   );
-  const customTitle = resolveCampaignCustomTitle(
-    campaign?.customTitleTemplate,
+  const customTitle = resolveTitleTemplate(campaign?.customTitleTemplate, {
     date,
-  );
+  });
   if (customTitle) return customTitle;
   let title = String(campaign?.title || "").trim();
   title = title.replace(/^Telegram ad campaign:\s*/i, "").trim();
@@ -170,9 +142,13 @@ function displayCampaignTitleWithDate(campaign: AdCampaign) {
     return displayCampaignTitle(campaign);
   }
   const date = toInputDate(
-    campaign?.placementDate || campaign?.startedAt || (campaign as any)?.createdAt,
+    campaign?.placementDate ||
+      campaign?.startedAt ||
+      (campaign as any)?.createdAt,
   );
-  return date ? `${date} | ${displayCampaignTitle(campaign)}` : displayCampaignTitle(campaign);
+  return date
+    ? `${date} | ${displayCampaignTitle(campaign)}`
+    : displayCampaignTitle(campaign);
 }
 
 function generatedCampaignDisplayTitle(campaign: AdCampaign) {
@@ -225,7 +201,10 @@ function campaignMetrics(campaign: AdCampaign) {
 
   return metrics
     .filter((metric) => hasValue(metric.value))
-    .map((metric) => ({ label: metric.label, value: metric.format(metric.value) }));
+    .map((metric) => ({
+      label: metric.label,
+      value: metric.format(metric.value),
+    }));
 }
 
 function kpiMetricTextClass(status?: AdCampaignKpiStatus | null) {
@@ -274,7 +253,15 @@ function hypothesisStatusClass(status?: string) {
 }
 
 function PromoVisual({ promo }: { promo: Promo }) {
-  return <IconAvatar icon={promo.iconPresentation} label={promo.title} size="xs" bordered={false} className="!bg-transparent" />;
+  return (
+    <IconAvatar
+      icon={promo.iconPresentation}
+      label={promo.title}
+      size="xs"
+      bordered={false}
+      className="!bg-transparent"
+    />
+  );
 }
 
 function SourceChip({
@@ -336,8 +323,14 @@ function MemberChip({
   member: NonNullable<AdCampaign["assignedMember"]>;
 }) {
   const label = member.user?.name || "Member";
-  const avatarImageUrl = member.avatarPresentation?.type === "image" ? member.avatarPresentation.url : undefined;
-  const avatarEmoji = member.avatarPresentation?.type === "unicode" ? member.avatarPresentation.value : undefined;
+  const avatarImageUrl =
+    member.avatarPresentation?.type === "image"
+      ? member.avatarPresentation.url
+      : undefined;
+  const avatarEmoji =
+    member.avatarPresentation?.type === "unicode"
+      ? member.avatarPresentation.value
+      : undefined;
   return (
     <a
       href="/workspace-members"
@@ -378,7 +371,9 @@ function KpiRangeChip({
     ok: "border-yellow-700 bg-yellow-950/50 text-yellow-200",
     stop: "border-rose-700 bg-rose-950/50 text-rose-200",
   }[tone];
-  return <span className={`rounded border px-2 py-1 ${className}`}>{label}</span>;
+  return (
+    <span className={`rounded border px-2 py-1 ${className}`}>{label}</span>
+  );
 }
 
 function KpiTooltip({
@@ -471,7 +466,10 @@ function PerformanceCell({
   moneySettings: any;
   kpiStatus: AdCampaignKpiStatus;
   metrics: Array<{ label: string; value: string }>;
-  onShowKpiTooltip: (channel: TelegramChannel | undefined, element: HTMLElement) => void;
+  onShowKpiTooltip: (
+    channel: TelegramChannel | undefined,
+    element: HTMLElement,
+  ) => void;
   onHideKpiTooltip: () => void;
   onOpenHistory?: () => void;
   onOpenAdmissionAnalytics?: () => void;
@@ -483,8 +481,13 @@ function PerformanceCell({
   const peakJoined = joined + Math.max(0, left);
   const unsubscribedPercent =
     peakJoined > 0 ? (Math.max(0, left) / peakJoined) * 100 : 0;
-  const historySummary = campaign.inviteLinkHistorySummary ?? campaign.inviteLinkHistory?.summary ?? null;
-  const historyPeakAttributed = Number(historySummary?.peakTotalAttributed ?? 0);
+  const historySummary =
+    campaign.inviteLinkHistorySummary ??
+    campaign.inviteLinkHistory?.summary ??
+    null;
+  const historyPeakAttributed = Number(
+    historySummary?.peakTotalAttributed ?? 0,
+  );
   const historyCurrentAttributed = Number(
     historySummary?.currentTotalAttributed ?? 0,
   );
@@ -562,7 +565,9 @@ function PerformanceCell({
           )}
           {showPeakCost ? (
             <div className="mt-1 space-y-0.5 text-xs leading-snug text-slate-500">
-              <p>Peak {formatMoney(peakCostPerJoined, currency, displayMode)}</p>
+              <p>
+                Peak {formatMoney(peakCostPerJoined, currency, displayMode)}
+              </p>
             </div>
           ) : null}
         </div>
@@ -589,7 +594,8 @@ function PerformanceCell({
             ) : null}
             {historySummary != null || resolvedDropPercent > 0 ? (
               <span className="rounded border border-amber-700/80 bg-amber-950/20 px-2 py-0.5 text-amber-200">
-                Drop from peak {formatMetric(resolvedDropAbsolute)} · {formatPercent(resolvedDropPercent)}
+                Drop from peak {formatMetric(resolvedDropAbsolute)} ·{" "}
+                {formatPercent(resolvedDropPercent)}
               </span>
             ) : null}
             <button
@@ -682,7 +688,8 @@ function AdmissionViewUpliftBlock({
               metricKey="views"
             >
               <span className="text-slate-100">
-                {formatMetric(batch.baselineAvgViews)} → {formatMetric(currentAvgViews)}
+                {formatMetric(batch.baselineAvgViews)} →{" "}
+                {formatMetric(currentAvgViews)}
               </span>
             </MetricRow>
           ) : null}
@@ -693,7 +700,10 @@ function AdmissionViewUpliftBlock({
             >
               <span className="text-emerald-200">+{formatMetric(uplift)}</span>
               {incremental != null ? (
-                <span className="text-slate-500"> · Last sync +{formatMetric(incremental)}</span>
+                <span className="text-slate-500">
+                  {" "}
+                  · Last sync +{formatMetric(incremental)}
+                </span>
               ) : null}
             </MetricRow>
           ) : (
@@ -749,11 +759,13 @@ function admissionDataQualityMessage(reason?: string | null) {
     missing_pre_admission_post_metrics:
       "Not enough historical post measurements.",
   };
-  return reason
-    .split("; ")
-    .map((item) => messages[item] ?? null)
-    .filter(Boolean)
-    .join(" ") || null;
+  return (
+    reason
+      .split("; ")
+      .map((item) => messages[item] ?? null)
+      .filter(Boolean)
+      .join(" ") || null
+  );
 }
 
 function MetricRow({
@@ -858,7 +870,9 @@ function InviteLinkList({
   inline?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [previewLink, setPreviewLink] = useState<TelegramInviteLink | null>(null);
+  const [previewLink, setPreviewLink] = useState<TelegramInviteLink | null>(
+    null,
+  );
 
   if (!inviteLinks.length) return null;
   const visible = expanded ? inviteLinks : inviteLinks.slice(0, 3);
@@ -994,7 +1008,10 @@ export function AdCampaignsTable({
   rates: any[] | undefined;
   onEdit?: (campaign: AdCampaign) => void;
   onDelete?: (campaign: AdCampaign) => void;
-  onToggleExclude?: (campaign: AdCampaign, excludeFromAnalytics: boolean) => void;
+  onToggleExclude?: (
+    campaign: AdCampaign,
+    excludeFromAnalytics: boolean,
+  ) => void;
   onOpenPromo?: (promo: Promo) => void;
   showActions?: boolean;
   showHypotheses?: boolean;
@@ -1004,7 +1021,9 @@ export function AdCampaignsTable({
     left: number;
     top: number;
   } | null>(null);
-  const [historyCampaign, setHistoryCampaign] = useState<AdCampaign | null>(null);
+  const [historyCampaign, setHistoryCampaign] = useState<AdCampaign | null>(
+    null,
+  );
   const [admissionAnalyticsCampaign, setAdmissionAnalyticsCampaign] =
     useState<AdCampaign | null>(null);
 
@@ -1029,7 +1048,9 @@ export function AdCampaignsTable({
         const joined =
           inviteLinkJoined > 0
             ? inviteLinkJoined
-            : Number(campaign.analytics?.joinedCount ?? campaign.joinedCount ?? 0);
+            : Number(
+                campaign.analytics?.joinedCount ?? campaign.joinedCount ?? 0,
+              );
         const pending =
           inviteLinkAttributed > 0
             ? Math.max(0, inviteLinkAttributed - inviteLinkJoined)
@@ -1038,7 +1059,8 @@ export function AdCampaignsTable({
           inviteLinkAttributed > 0
             ? inviteLinkAttributed
             : Number(campaign.analytics?.attributedCount ?? joined + pending);
-        const net = campaign.analytics?.netGrowth ?? campaign.netGrowthCount ?? joined;
+        const net =
+          campaign.analytics?.netGrowth ?? campaign.netGrowthCount ?? joined;
         const left = campaign.analytics?.leftCount ?? campaign.leftCount ?? 0;
         const cost = Number(campaign.price || campaign.costAmount || 0);
         const primaryCost = Number(campaign.priceInPrimaryCurrency ?? 0);
@@ -1080,7 +1102,10 @@ export function AdCampaignsTable({
       Math.max(16, rect.left),
       Math.max(16, window.innerWidth - width - 16),
     );
-    const top = Math.min(rect.bottom + 10, Math.max(16, window.innerHeight - 96));
+    const top = Math.min(
+      rect.bottom + 10,
+      Math.max(16, window.innerHeight - 96),
+    );
     setKpiTooltip({ channel, left, top });
   };
 
@@ -1097,9 +1122,7 @@ export function AdCampaignsTable({
           <thead className="bg-slate-950 text-xs uppercase text-neutral-400">
             <tr>
               <th className="px-4 py-3 font-medium">Campaign</th>
-              <th className="px-4 py-3 font-medium">
-                Performance
-              </th>
+              <th className="px-4 py-3 font-medium">Performance</th>
               {showHypotheses ? (
                 <th className="px-4 py-3 font-medium">Hypotheses</th>
               ) : null}
@@ -1143,7 +1166,8 @@ export function AdCampaignsTable({
                     <div className="flex max-w-full flex-wrap items-center gap-1.5">
                       <PromoList
                         promos={
-                          row.campaign.promos || (row.campaign.promo ? [row.campaign.promo] : [])
+                          row.campaign.promos ||
+                          (row.campaign.promo ? [row.campaign.promo] : [])
                         }
                         onOpenPromo={onOpenPromo}
                         inline
@@ -1153,7 +1177,9 @@ export function AdCampaignsTable({
                         inline
                       />
                     </div>
-                    <SourceList sources={row.campaign.advertisingChannels || []} />
+                    <SourceList
+                      sources={row.campaign.advertisingChannels || []}
+                    />
                   </div>
                 </td>
                 <td className="px-4 py-4">
@@ -1181,7 +1207,9 @@ export function AdCampaignsTable({
                 </td>
                 {showHypotheses ? (
                   <td className="px-4 py-4">
-                    <HypothesisLinks links={row.campaign.hypothesisLinks || []} />
+                    <HypothesisLinks
+                      links={row.campaign.hypothesisLinks || []}
+                    />
                   </td>
                 ) : null}
                 {showActions ? (
@@ -1196,7 +1224,10 @@ export function AdCampaignsTable({
                             type="checkbox"
                             checked={Boolean(row.campaign.excludeFromAnalytics)}
                             onChange={(event) =>
-                              onToggleExclude(row.campaign, event.target.checked)
+                              onToggleExclude(
+                                row.campaign,
+                                event.target.checked,
+                              )
                             }
                           />
                         </label>

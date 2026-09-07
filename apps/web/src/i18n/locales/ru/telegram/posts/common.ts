@@ -15,6 +15,7 @@ const messages = {
   "telegramPosts.systemGroup.createdInTelegram": "Созданные в Telegram",
   "telegramPosts.systemGroup.advertise": "Реклама",
   "telegramPosts.systemGroup.systemBotPosts": "Публикации системного бота",
+  "telegramPosts.systemGroup.mutualPromotion": "Взаимный пиар",
   "telegramPosts.status.draft": "Черновик",
   "telegramPosts.status.publishing": "Публикуется",
   "telegramPosts.status.scheduled": "Запланировано",
@@ -24,7 +25,8 @@ const messages = {
   "telegram.posts.remoteStatus.unknown": "Статус в Telegram неизвестен",
   "telegram.posts.remoteStatus.missing": "Не найдено в Telegram",
   "telegram.posts.remoteStatus.broken": "Ссылка на Telegram не работает",
-  "telegram.posts.remoteStatus.autoDeleted": "Опубликовано, затем удалено автоматически",
+  "telegram.posts.remoteStatus.autoDeleted":
+    "Опубликовано, затем удалено автоматически",
   "telegram.posts.search": "Поиск по названию, тексту, группе или участнику",
   "telegram.posts.total": "Всего: {count}",
   "telegram.posts.created": "создано {date}",
@@ -142,17 +144,22 @@ const messages = {
   "telegram.posts.support.addSelected": "Добавить выбранные",
   "telegram.posts.support.planNotScheduled":
     "Ничего не будет запланировано, пока вы не подтвердите весь план.",
+  "telegram.posts.support.scheduleChanges":
+    "Уже запланировано · время изменится с {from} на {to}",
+  "telegram.posts.support.scheduleUnchanged":
+    "Уже запланировано · время останется {time}",
+  "telegram.posts.support.scheduleNew": "Будет запланировано на {time}",
   "telegram.posts.support.postsCount": "Публикаций: {count}",
   "telegram.posts.support.rerollDay": "Пересобрать день",
   "telegram.posts.support.openNamed": "Открыть «{title}» в новой вкладке",
   "telegram.posts.support.removeNamed": "Убрать «{title}» из плана",
   "telegram.posts.support.noMatchingDrafts":
-    "Для доступного времени не найдено подходящих черновиков.",
+    "Для доступного времени не найдено подходящих публикаций.",
   "telegram.posts.support.scheduleAll": "Запланировать публикации: {count}",
   "telegram.posts.support.planUploadHint":
-    "Загрузите или вставьте postId с scheduledAt либо датой и временем.",
+    "Загрузите или вставьте postId черновика или запланированной публикации с scheduledAt либо датой и временем.",
   "telegram.posts.support.planInstructionHint":
-    "Инструкция для GPT включает постоянное время канала, тексты публикаций, ограничения публикации, занятые слоты и недавнюю историю.",
+    "Инструкция для GPT включает черновики, текущие бронирования запланированных публикаций, постоянное время канала, ограничения и недавнюю историю.",
   "telegram.posts.support.preparingInstruction": "Готовим инструкцию…",
   "telegram.posts.support.downloadInstruction": "Скачать инструкцию для GPT",
   "telegram.posts.support.downloadingContextLabel": "Скачиваем контекст…",
@@ -288,7 +295,8 @@ const messages = {
   "telegram.posts.telegramLink.verifyError":
     "Не удалось проверить идентификатор публикации Telegram.",
   "telegram.posts.telegramLink.open": "Открыть в Telegram",
-  "telegram.posts.telegramLink.autoDeleted": "Опубликовано · удалено автоматически",
+  "telegram.posts.telegramLink.autoDeleted":
+    "Опубликовано · удалено автоматически",
   "telegram.posts.telegramLink.autoDeletedDescription":
     "Этот рекламный пост был успешно опубликован, а затем автоматически удалён после завершения срока размещения.",
   "telegram.posts.telegramLink.viewSchedule":

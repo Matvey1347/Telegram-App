@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import {
   TelegramManagedPostIdVerificationStatus,
   TelegramManagedPostLinkSource,
@@ -53,6 +49,7 @@ export class TelegramManagedPostPublicationService {
     scheduleAt?: Date,
     longTextMode: 'IMAGES_THEN_TEXT' | 'CAPTION_THEN_TEXT' = 'IMAGES_THEN_TEXT',
     actorUserId?: string,
+    requireTelegramNativeSchedule = false,
   ) {
     try {
       return await this.telegramManagedPostPublisherService.publishManagedPost(
@@ -62,6 +59,7 @@ export class TelegramManagedPostPublicationService {
         scheduleAt,
         longTextMode,
         actorUserId,
+        requireTelegramNativeSchedule,
       );
     } catch (error) {
       const message =
@@ -96,6 +94,23 @@ export class TelegramManagedPostPublicationService {
       }
       throw error;
     }
+  }
+
+  async scheduleManagedPostNatively(
+    workspaceId: string,
+    channelId: string,
+    postId: string,
+    scheduledAt: Date,
+  ) {
+    return this.publishManagedPost(
+      workspaceId,
+      channelId,
+      postId,
+      scheduledAt,
+      'IMAGES_THEN_TEXT',
+      undefined,
+      true,
+    );
   }
 
   private readonly iconSelect = {

@@ -59,6 +59,28 @@ describe("telegramSystemBotApi subscriptions", () => {
     );
   });
 
+  it("sends an edited mutual-promotion post to the bot preview endpoint", async () => {
+    const draft = {
+      title: "Post",
+      text: "**Preview**",
+      imageUrls: ["https://cdn.test/post.jpg"],
+      buttonRows: [],
+    };
+    const post = vi.fn().mockResolvedValue({ data: { status: "SENT" } });
+    const client = createTelegramSystemBotApi({
+      post,
+    } as unknown as AxiosInstance);
+
+    await expect(client.sendMutualPromotionPostPreview(draft)).resolves.toEqual(
+      { status: "SENT" },
+    );
+    expect(post).toHaveBeenCalledWith(
+      "/telegram/system-bot/mutual-promotion-post-preview",
+      draft,
+      { feedback: { mode: "silent" } },
+    );
+  });
+
   it("updates all subscriptions in a task group with one request", async () => {
     const payload = {
       workspaceId: "workspace-a",
@@ -67,7 +89,9 @@ describe("telegramSystemBotApi subscriptions", () => {
       notifyOnFailure: false,
     };
     const post = vi.fn().mockResolvedValue({ data: { items: [] } });
-    const client = createTelegramSystemBotApi({ post } as unknown as AxiosInstance);
+    const client = createTelegramSystemBotApi({
+      post,
+    } as unknown as AxiosInstance);
 
     await client.updateGroupSubscriptions(payload);
 

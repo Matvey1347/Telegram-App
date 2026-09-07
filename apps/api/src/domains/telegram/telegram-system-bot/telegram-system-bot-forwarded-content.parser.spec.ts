@@ -1,40 +1,38 @@
 import { parseTelegramSystemBotForwardedContent } from './telegram-system-bot-forwarded-content.parser';
 
 describe('parseTelegramSystemBotForwardedContent', () => {
-  it('normalizes forwarded text and source metadata', () => {
-    expect(
-      parseTelegramSystemBotForwardedContent({
-        message_id: 44,
-        text: '  First line\r\nSecond line  ',
-        entities: [{ type: 'bold', offset: 2, length: 5 }],
-        forward_origin: {
+  it('normalizes line endings without dropping forwarded whitespace or source metadata', () => {
+    const result = parseTelegramSystemBotForwardedContent({
+      message_id: 44,
+      text: '  First line\r\nSecond line  ',
+      entities: [{ type: 'bold', offset: 2, length: 5 }],
+      forward_origin: {
+        type: 'channel',
+        date: 1_700_000_000,
+        message_id: 101,
+        chat: {
+          id: -100123,
           type: 'channel',
-          date: 1_700_000_000,
-          message_id: 101,
-          chat: {
-            id: -100123,
-            type: 'channel',
-            title: 'Source',
-            username: 'source_channel',
-          },
+          title: 'Source',
+          username: 'source_channel',
         },
-      }),
-    ).toEqual({
-      ok: true,
-      warnings: [],
-      content: expect.objectContaining({
-        telegramMessageId: 44,
-        text: 'First line\nSecond line',
-        managedText: expect.any(String),
-        textSource: 'text',
-        entities: [{ type: 'bold', offset: 2, length: 5 }],
-        forward: expect.objectContaining({
-          type: 'channel',
-          sourceChatId: '-100123',
-          sourceMessageId: 101,
-          sourceChatUsername: 'source_channel',
-        }),
-      }),
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('Expected forwarded content');
+    expect(result.warnings).toEqual([]);
+    expect(result.content.telegramMessageId).toBe(44);
+    expect(result.content.text).toBe('  First line\nSecond line  ');
+    expect(result.content.managedText).toBe('  **First** line\nSecond line  ');
+    expect(result.content.textSource).toBe('text');
+    expect(result.content.entities).toEqual([
+      { type: 'bold', offset: 2, length: 5 },
+    ]);
+    expect(result.content.forward).toMatchObject({
+      type: 'channel',
+      sourceChatId: '-100123',
+      sourceMessageId: 101,
+      sourceChatUsername: 'source_channel',
     });
   });
 
@@ -61,6 +59,48 @@ describe('parseTelegramSystemBotForwardedContent', () => {
     });
   });
 
+  it('preserves every Bot API formatting entity supported by Telegram posts', () => {
+    const text =
+      '😀 Bold Italic Under Strike Secret Code Pre\nQuote\nHidden\nPerson Premium';
+    const entity = (
+      type: string,
+      value: string,
+      extra: Record<string, unknown> = {},
+    ) => ({
+      type,
+      offset: text.indexOf(value),
+      length: value.length,
+      ...extra,
+    });
+    const result = parseTelegramSystemBotForwardedContent({
+      text,
+      entities: [
+        entity('bold', 'Bold'),
+        entity('italic', 'Italic'),
+        entity('underline', 'Under'),
+        entity('strikethrough', 'Strike'),
+        entity('spoiler', 'Secret'),
+        entity('code', 'Code'),
+        entity('pre', 'Pre', { language: 'ts' }),
+        entity('blockquote', 'Quote'),
+        entity('expandable_blockquote', 'Hidden'),
+        entity('text_mention', 'Person', { user: { id: 42 } }),
+        entity('custom_emoji', 'Premium', {
+          custom_emoji_id: '5368324170671202286',
+        }),
+      ],
+      forward_date: 1_700_000_000,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      content: {
+        managedText:
+          '😀 **Bold** __Italic__ ++Under++ ~~Strike~~ ||Secret|| `Code` ```ts\nPre```\n> Quote\n>> Hidden\n[Person](tg://user?id=42) ![Premium](tg://emoji?id=5368324170671202286)',
+      },
+    });
+  });
+
   it.each([
     [
       { type: 'bold', offset: 0, length: 16 },
@@ -80,21 +120,23 @@ describe('parseTelegramSystemBotForwardedContent', () => {
       },
       { type: 'bold', offset: 0, length: 16 },
     ],
-  ])('keeps bold and link markup nested regardless of entity order', (...entities) => {
-    const result = parseTelegramSystemBotForwardedContent({
-      text: 'Mental mentality',
-      entities,
-      forward_date: 1_700_000_000,
-    });
+  ])(
+    'keeps bold and link markup nested regardless of entity order',
+    (...entities) => {
+      const result = parseTelegramSystemBotForwardedContent({
+        text: 'Mental mentality',
+        entities,
+        forward_date: 1_700_000_000,
+      });
 
-    expect(result).toMatchObject({
-      ok: true,
-      content: {
-        managedText:
-          '**[Mental mentality](https://t.me/mental_mentality)**',
-      },
-    });
-  });
+      expect(result).toMatchObject({
+        ok: true,
+        content: {
+          managedText: '**[Mental mentality](https://t.me/mental_mentality)**',
+        },
+      });
+    },
+  );
 
   it('selects the best photo and uses its caption', () => {
     const result = parseTelegramSystemBotForwardedContent({
@@ -116,7 +158,7 @@ describe('parseTelegramSystemBotForwardedContent', () => {
     expect(result).toMatchObject({
       ok: true,
       content: {
-        text: 'Photo caption',
+        text: ' Photo caption ',
         textSource: 'caption',
         mediaGroupId: 'album-1',
         photo: { fileId: 'large', fileUniqueId: 'stable' },
@@ -140,22 +182,22 @@ describe('parseTelegramSystemBotForwardedContent', () => {
       },
     });
 
-    expect(result).toEqual({
-      ok: true,
-      warnings: ['UNSUPPORTED_BUTTONS_REMOVED', 'INVALID_URL_BUTTONS_REMOVED'],
-      content: expect.objectContaining({
-        buttonRows: [
-          [{ text: 'Website', url: 'https://example.com', style: 'primary' }],
-          [
-            {
-              text: 'Telegram',
-              url: 'tg://resolve?domain=example',
-              style: 'default',
-            },
-          ],
-        ],
-      }),
-    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('Expected forwarded content');
+    expect(result.warnings).toEqual([
+      'UNSUPPORTED_BUTTONS_REMOVED',
+      'INVALID_URL_BUTTONS_REMOVED',
+    ]);
+    expect(result.content.buttonRows).toEqual([
+      [{ text: 'Website', url: 'https://example.com', style: 'primary' }],
+      [
+        {
+          text: 'Telegram',
+          url: 'tg://resolve?domain=example',
+          style: 'default',
+        },
+      ],
+    ]);
   });
 
   it.each(['video', 'document', 'sticker'] as const)(

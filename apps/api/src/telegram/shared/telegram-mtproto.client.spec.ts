@@ -35,6 +35,35 @@ describe('TelegramMtprotoClient import resolution', () => {
       .mockResolvedValue(null as never);
   });
 
+  it('downloads the current account avatar through the authorized session', async () => {
+    const me = new Api.User({
+      id: returnBigInt('42'),
+      firstName: 'Admin',
+      username: 'tgManage770',
+      self: true,
+    });
+    fakeClient.getMe.mockResolvedValue(me);
+    fakeClient.invoke.mockImplementation((request: unknown) => {
+      if (request instanceof Api.users.GetFullUser) return { users: [me] };
+      if (request instanceof Api.help.GetConfig) return {};
+      throw new Error('Unexpected invoke');
+    });
+    jest
+      .spyOn(client as never, 'profilePhotoDataUrl' as never)
+      .mockResolvedValue('data:image/jpeg;base64,telegram-avatar' as never);
+
+    await expect(
+      client.getAccountProfile({
+        apiId: '1',
+        apiHash: 'hash',
+        session: 'session',
+      }),
+    ).resolves.toMatchObject({
+      username: 'tgManage770',
+      photoUrl: 'data:image/jpeg;base64,telegram-avatar',
+    });
+  });
+
   it('resolves a public username to a real entity', async () => {
     const entity = new Api.Channel({
       id: '123456' as any,

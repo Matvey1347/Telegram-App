@@ -561,7 +561,52 @@ enum TelegramSystemBotFinanceDraftKind {
 enum TelegramSystemBotWorkflowKind {
   POST_IMPORT
   AD_SALE
+  MUTUAL_PROMOTION_POST
   WORKSPACE_SETTINGS
+}
+
+enum MutualPromotionFolderStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  DELETING
+  COMPLETED
+  CANCELLED
+}
+
+enum MutualPromotionParticipantRole {
+  PUBLISHER
+  PAID
+}
+
+enum MutualPromotionInviteLinkMode {
+  FOLDER_ONLY
+  REUSABLE
+}
+
+enum MutualPromotionDeliveryStatus {
+  PENDING
+  PUBLISHING
+  PUBLISHED
+  DELETING
+  DELETED
+  FAILED
+  SKIPPED
+}
+
+enum MutualPromotionWorkKind {
+  CAPTURE_START_BASELINE
+  PUBLISH_POST
+  FINISH_FOLDER
+}
+
+enum MutualPromotionWorkStatus {
+  PENDING
+  PROCESSING
+  RETRY
+  COMPLETED
+  FAILED
+  CANCELLED
 }
 
 enum TelegramSystemBotWorkflowStatus {
@@ -737,6 +782,7 @@ model User {
   createdPromos                             Promo[]                               @relation("PromoCreatedBy")
   createdAdvertisingSources                 AdvertisingSource[]                   @relation("AdvertisingSourceCreatedBy")
   createdAdCampaigns                        AdCampaign[]                          @relation("AdCampaignCreatedBy")
+  createdMutualPromotionFolders             MutualPromotionFolder[]               @relation("MutualPromotionFolderCreatedBy")
   createdAdHypotheses                       AdHypothesis[]                        @relation("AdHypothesisCreatedBy")
   createdTelegramChannelNetworks            TelegramChannelNetwork[]              @relation("TelegramChannelNetworkCreatedBy")
   createdTelegramAdSales                    TelegramAdSale[]                      @relation("TelegramAdSaleCreatedBy")
@@ -857,6 +903,11 @@ model Workspace {
   promos                                 Promo[]
   advertisingSources                     AdvertisingSource[]
   adCampaigns                            AdCampaign[]
+  mutualPromotionFolders                 MutualPromotionFolder[]
+  mutualPromotionParticipants            MutualPromotionFolderParticipant[]
+  mutualPromotionPosts                   MutualPromotionFolderPost[]
+  mutualPromotionDeliveries              MutualPromotionPostDelivery[]
+  mutualPromotionWorkItems               MutualPromotionWorkItem[]
   adHypotheses                           AdHypothesis[]
   adHypothesisCampaigns                  AdHypothesisCampaign[]
   dailyAnalyticsSyncRuns                 DailyAnalyticsSyncRun[]
@@ -1028,6 +1079,7 @@ model WorkspaceMember {
   assignedPromos                            Promo[]                            @relation("PromoAssignedMember")
   assignedAdvertisingSources                AdvertisingSource[]                @relation("AdvertisingSourceAssignedMember")
   assignedAdCampaigns                       AdCampaign[]                       @relation("AdCampaignAssignedMember")
+  assignedMutualPromotionFolders            MutualPromotionFolder[]            @relation("MutualPromotionFolderAssignedMember")
   assignedAdHypotheses                      AdHypothesis[]                     @relation("AdHypothesisAssignedMember")
   assignedTelegramChannelNetworks           TelegramChannelNetwork[]           @relation("TelegramChannelNetworkAssignedMember")
   assignedTelegramChannelAdAnalyses         TelegramChannelAdAnalysis[]        @relation("TelegramChannelAdAnalysisAssignedMember")
@@ -1191,40 +1243,42 @@ model Account {
 }
 
 model Transaction {
-  id                      String          @id @default(cuid())
-  workspaceId             String
-  accountId               String
-  telegramChannelId       String?
-  type                    TransactionType
-  amount                  Decimal
-  currency                String          @db.VarChar(3)
-  amountInPrimaryCurrency Decimal
-  exchangeRateToPrimary   Decimal
-  category                String
-  categoryId              String?
-  memberId                String?
-  description             String?
-  date                    DateTime
-  adCampaignId            String?         @unique
-  createdByUserId         String?
-  iconId                  String?
-  assignedMemberId        String?
-  deletedAt               DateTime?
+  id                           String          @id @default(cuid())
+  workspaceId                  String
+  accountId                    String
+  telegramChannelId            String?
+  type                         TransactionType
+  amount                       Decimal
+  currency                     String          @db.VarChar(3)
+  amountInPrimaryCurrency      Decimal
+  exchangeRateToPrimary        Decimal
+  category                     String
+  categoryId                   String?
+  memberId                     String?
+  description                  String?
+  date                         DateTime
+  adCampaignId                 String?         @unique
+  mutualPromotionParticipantId String?         @unique
+  createdByUserId              String?
+  iconId                       String?
+  assignedMemberId             String?
+  deletedAt                    DateTime?
 
   workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   account         Account          @relation(fields: [accountId], references: [id], onDelete: Restrict)
   telegramChannel TelegramChannel? @relation("TelegramChannelRevenueTransactions", fields: [telegramChannelId], references: [id], onDelete: SetNull)
 
-  adCampaign                    AdCampaign?            @relation("CampaignExpenseTransaction", fields: [adCampaignId], references: [id])
+  adCampaign                    AdCampaign?                       @relation("CampaignExpenseTransaction", fields: [adCampaignId], references: [id])
+  mutualPromotionParticipant    MutualPromotionFolderParticipant? @relation("MutualPromotionParticipantExpense", fields: [mutualPromotionParticipantId], references: [id], onDelete: SetNull)
   investment                    Investment?
   telegramAdSalePayment         TelegramAdSalePayment?
-  telegramAdSalePaymentReversal TelegramAdSalePayment? @relation("TelegramAdSalePaymentReversalTransaction")
-  purchasedTelegramChannel      TelegramChannel?       @relation("TelegramChannelPurchaseTransaction")
-  categoryRef                   TransactionCategory?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  member                        WorkspaceMember?       @relation("MemberInvestmentTransactions", fields: [memberId], references: [id], onDelete: SetNull)
-  icon                          Icon?                  @relation(fields: [iconId], references: [id], onDelete: SetNull)
-  assignedMember                WorkspaceMember?       @relation("TransactionAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
-  createdByUser                 User?                  @relation("TransactionCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  telegramAdSalePaymentReversal TelegramAdSalePayment?            @relation("TelegramAdSalePaymentReversalTransaction")
+  purchasedTelegramChannel      TelegramChannel?                  @relation("TelegramChannelPurchaseTransaction")
+  categoryRef                   TransactionCategory?              @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  member                        WorkspaceMember?                  @relation("MemberInvestmentTransactions", fields: [memberId], references: [id], onDelete: SetNull)
+  icon                          Icon?                             @relation(fields: [iconId], references: [id], onDelete: SetNull)
+  assignedMember                WorkspaceMember?                  @relation("TransactionAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdByUser                 User?                             @relation("TransactionCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1382,44 +1436,46 @@ model TelegramChannel {
   purchaseTransaction Transaction?     @relation("TelegramChannelPurchaseTransaction", fields: [purchaseTransactionId], references: [id], onDelete: SetNull)
   revenueTransactions Transaction[]    @relation("TelegramChannelRevenueTransactions")
 
-  promos                     Promo[]
-  adCampaigns                AdCampaign[]
-  adHypotheses               AdHypothesis[]                       @relation("AdHypothesisTelegramChannel")
-  adPlacements               AdCampaignTelegramChannelPlacement[]
-  inviteLinks                TelegramInviteLink[]
-  inviteLinkSnapshots        TelegramInviteLinkSnapshot[]
-  dailyStats                 TelegramChannelDailyStats[]
-  adminLinks                 TelegramChannelAdminLink[]
-  sourceAccesses             TelegramChannelSourceAccess[]
-  dataSources                TelegramChannelDataSource[]
-  posts                      TelegramPost[]
-  managedPosts               TelegramManagedPost[]
-  managedPostRevisions       TelegramManagedPostRevision[]
-  postPlannerFormats         TelegramPostPlannerFormat[]
-  postPlannerSlots           TelegramPostPlannerSlot[]
-  postGroups                 PostGroup[]
-  statsSnapshots             TelegramChannelStatsSnapshot[]
-  audienceSnapshots          TelegramChannelAudienceSnapshot[]
-  networkMembers             TelegramChannelNetworkMember[]
-  statsPoints                TelegramChannelStatsPoint[]
-  adAnalyses                 TelegramChannelAdAnalysis[]
-  timePosts                  TelegramChannelTimePost[]
-  adProducts                 TelegramAdProduct[]
-  admissionBatches           AdCampaignAdmissionBatch[]
-  admissionBackfillStates    AdCampaignAdmissionBackfillState[]
-  adSchedulePolicy           TelegramAdSchedulePolicy?
-  adPriceSnapshots           TelegramAdPriceSnapshot[]
-  adInventoryDailySnapshots  TelegramAdInventoryDailySnapshot[]
-  adSalePlacements           TelegramAdSalePlacement[]
-  greeterAcquiredEnrollments GreeterSequenceEnrollment[]          @relation("GreeterEnrollmentChannel")
-  greeterSequences           GreeterSequence[]                    @relation("GreeterSequenceChannel")
-  greeterChannels            GreeterChannel[]
-  greeterJoinRequests        GreeterJoinRequest[]
-  greeterBroadcasts          GreeterBroadcast[]
-  greeterBroadcastRecipients GreeterBroadcastRecipient[]
-  greeterTestSessions        GreeterTestSession[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  promos                      Promo[]
+  adCampaigns                 AdCampaign[]
+  mutualPromotionParticipants MutualPromotionFolderParticipant[]
+  mutualPromotionDeliveries   MutualPromotionPostDelivery[]
+  adHypotheses                AdHypothesis[]                       @relation("AdHypothesisTelegramChannel")
+  adPlacements                AdCampaignTelegramChannelPlacement[]
+  inviteLinks                 TelegramInviteLink[]
+  inviteLinkSnapshots         TelegramInviteLinkSnapshot[]
+  dailyStats                  TelegramChannelDailyStats[]
+  adminLinks                  TelegramChannelAdminLink[]
+  sourceAccesses              TelegramChannelSourceAccess[]
+  dataSources                 TelegramChannelDataSource[]
+  posts                       TelegramPost[]
+  managedPosts                TelegramManagedPost[]
+  managedPostRevisions        TelegramManagedPostRevision[]
+  postPlannerFormats          TelegramPostPlannerFormat[]
+  postPlannerSlots            TelegramPostPlannerSlot[]
+  postGroups                  PostGroup[]
+  statsSnapshots              TelegramChannelStatsSnapshot[]
+  audienceSnapshots           TelegramChannelAudienceSnapshot[]
+  networkMembers              TelegramChannelNetworkMember[]
+  statsPoints                 TelegramChannelStatsPoint[]
+  adAnalyses                  TelegramChannelAdAnalysis[]
+  timePosts                   TelegramChannelTimePost[]
+  adProducts                  TelegramAdProduct[]
+  admissionBatches            AdCampaignAdmissionBatch[]
+  admissionBackfillStates     AdCampaignAdmissionBackfillState[]
+  adSchedulePolicy            TelegramAdSchedulePolicy?
+  adPriceSnapshots            TelegramAdPriceSnapshot[]
+  adInventoryDailySnapshots   TelegramAdInventoryDailySnapshot[]
+  adSalePlacements            TelegramAdSalePlacement[]
+  greeterAcquiredEnrollments  GreeterSequenceEnrollment[]          @relation("GreeterEnrollmentChannel")
+  greeterSequences            GreeterSequence[]                    @relation("GreeterSequenceChannel")
+  greeterChannels             GreeterChannel[]
+  greeterJoinRequests         GreeterJoinRequest[]
+  greeterBroadcasts           GreeterBroadcast[]
+  greeterBroadcastRecipients  GreeterBroadcastRecipient[]
+  greeterTestSessions         GreeterTestSession[]
+  createdAt                   DateTime                             @default(now())
+  updatedAt                   DateTime                             @updatedAt
 
   @@index([workspaceId, username])
   @@index([workspaceId, telegramChatId])
@@ -1429,18 +1485,18 @@ model TelegramChannel {
 }
 
 model TelegramCustomEmojiPack {
-  id            String                           @id @default(cuid())
+  id            String                @id @default(cuid())
   workspaceId   String
   telegramSetId String?
   shortName     String
   title         String
   telegramLink  String
   metadata      Json?
-  workspace     Workspace                        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace     Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   emojis        TelegramCustomEmoji[]
   archivedAt    DateTime?
-  createdAt     DateTime                         @default(now())
-  updatedAt     DateTime                         @updatedAt
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
 
   @@unique([workspaceId, shortName])
   @@index([workspaceId, archivedAt, updatedAt])
@@ -2883,10 +2939,11 @@ model TelegramInviteLink {
   creatorMatchSource    TelegramInviteLinkCreatorMatchSource?
   telegramCreatedAt     DateTime?
 
-  telegramChannel TelegramChannel              @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
-  adCampaign      AdCampaign?                  @relation(fields: [adCampaignId], references: [id], onDelete: SetNull)
-  creatorMember   WorkspaceMember?             @relation("TelegramInviteLinkCreatorMember", fields: [creatorMemberId, workspaceId], references: [id, workspaceId], onDelete: SetNull)
-  snapshots       TelegramInviteLinkSnapshot[]
+  telegramChannel             TelegramChannel                    @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  adCampaign                  AdCampaign?                        @relation(fields: [adCampaignId], references: [id], onDelete: SetNull)
+  creatorMember               WorkspaceMember?                   @relation("TelegramInviteLinkCreatorMember", fields: [creatorMemberId, workspaceId], references: [id, workspaceId], onDelete: SetNull)
+  snapshots                   TelegramInviteLinkSnapshot[]
+  mutualPromotionParticipants MutualPromotionFolderParticipant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2919,6 +2976,148 @@ model TelegramInviteLinkSnapshot {
   @@index([workspaceId, telegramChannelId, syncedAt], map: "TelegramInviteLinkSnapshot_workspaceId_telegramChannelId_synced")
   @@index([workspaceId, adCampaignId, syncedAt], map: "TelegramInviteLinkSnapshot_workspaceId_adCampaignId_syncedAt_id")
   @@index([workspaceId, inviteLinkId, syncedAt], map: "TelegramInviteLinkSnapshot_workspaceId_inviteLinkId_syncedAt_id")
+}
+
+model MutualPromotionFolder {
+  id               String                      @id @default(cuid())
+  workspaceId      String
+  title            String
+  titleTemplate    String?
+  status           MutualPromotionFolderStatus @default(DRAFT)
+  startsAt         DateTime
+  endsAt           DateTime
+  notes            String?
+  assignedMemberId String?
+  createdByUserId  String
+  activatedAt      DateTime?
+  cancelledAt      DateTime?
+  completedAt      DateTime?
+  nextDueAt        DateTime?
+
+  workspace          Workspace                          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignedMember     WorkspaceMember?                   @relation("MutualPromotionFolderAssignedMember", fields: [assignedMemberId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "MutualPromotionFolder_assignedMember_fkey")
+  createdByUser      User                               @relation("MutualPromotionFolderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  participants       MutualPromotionFolderParticipant[]
+  posts              MutualPromotionFolderPost[]
+  workItems          MutualPromotionWorkItem[]
+  systemBotWorkflows TelegramSystemBotWorkflow[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, status, startsAt, id], map: "MutualPromotionFolder_workspace_status_idx")
+  @@index([status, nextDueAt, id], map: "MutualPromotionFolder_due_idx")
+  @@index([workspaceId, assignedMemberId], map: "MutualPromotionFolder_workspace_assignee_idx")
+}
+
+model MutualPromotionFolderParticipant {
+  id                  String                         @id @default(cuid())
+  workspaceId         String
+  folderId            String
+  telegramChannelId   String
+  inviteLinkId        String
+  role                MutualPromotionParticipantRole
+  inviteLinkMode      MutualPromotionInviteLinkMode
+  subscribersAtStart  Int?
+  subscribersAtEnd    Int?
+  inviteJoinedAtStart Int?
+  inviteJoinedAtEnd   Int?
+  baselineCapturedAt  DateTime?
+  finalCapturedAt     DateTime?
+
+  workspace       Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  folder          MutualPromotionFolder         @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel               @relation(fields: [telegramChannelId], references: [id], onDelete: Restrict, map: "MutualPromotionFolderParticipant_channelId_fkey")
+  inviteLink      TelegramInviteLink            @relation(fields: [inviteLinkId], references: [id], onDelete: Restrict)
+  expense         Transaction?                  @relation("MutualPromotionParticipantExpense")
+  deliveries      MutualPromotionPostDelivery[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([folderId, telegramChannelId], map: "MutualPromotionFolderParticipant_folder_channel_key")
+  @@unique([folderId, inviteLinkId], map: "MutualPromotionFolderParticipant_folder_invite_key")
+  @@index([workspaceId, telegramChannelId], map: "MutualPromotionFolderParticipant_workspace_channel_idx")
+  @@index([workspaceId, inviteLinkId], map: "MutualPromotionFolderParticipant_workspace_invite_idx")
+}
+
+model MutualPromotionFolderPost {
+  id          String   @id @default(cuid())
+  workspaceId String
+  folderId    String
+  title       String
+  text        String?
+  imageUrls   String[] @default([])
+  buttonRows  Json?
+  scheduledAt DateTime
+  position    Int
+
+  workspace      Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  folder         MutualPromotionFolder         @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  deliveries     MutualPromotionPostDelivery[]
+  workItems      MutualPromotionWorkItem[]
+  sourceWorkflow TelegramSystemBotWorkflow?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([folderId, position], map: "MutualPromotionFolderPost_folder_position_key")
+  @@index([workspaceId, scheduledAt], map: "MutualPromotionFolderPost_workspace_scheduled_idx")
+}
+
+model MutualPromotionPostDelivery {
+  id                String                        @id @default(cuid())
+  workspaceId       String
+  folderPostId      String
+  participantId     String
+  telegramChannelId String
+  managedPostId     String?                       @unique
+  status            MutualPromotionDeliveryStatus @default(PENDING)
+  publishedAt       DateTime?
+  deletedAt         DateTime?
+  lastError         String?
+
+  workspace       Workspace                        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  folderPost      MutualPromotionFolderPost        @relation(fields: [folderPostId], references: [id], onDelete: Cascade)
+  participant     MutualPromotionFolderParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel                  @relation(fields: [telegramChannelId], references: [id], onDelete: Restrict, map: "MutualPromotionPostDelivery_channelId_fkey")
+  managedPost     TelegramManagedPost?             @relation(fields: [managedPostId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([folderPostId, participantId], map: "MutualPromotionPostDelivery_post_participant_key")
+  @@index([workspaceId, status, updatedAt], map: "MutualPromotionPostDelivery_workspace_status_idx")
+  @@index([participantId, status], map: "MutualPromotionPostDelivery_participant_status_idx")
+}
+
+model MutualPromotionWorkItem {
+  id             String                    @id @default(cuid())
+  workspaceId    String
+  folderId       String
+  folderPostId   String?
+  kind           MutualPromotionWorkKind
+  status         MutualPromotionWorkStatus @default(PENDING)
+  idempotencyKey String                    @unique
+  dueAt          DateTime
+  nextAttemptAt  DateTime
+  attemptCount   Int                       @default(0)
+  maxAttempts    Int                       @default(8)
+  claimedAt      DateTime?
+  leaseExpiresAt DateTime?
+  lastError      String?
+  completedAt    DateTime?
+
+  workspace  Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  folder     MutualPromotionFolder      @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  folderPost MutualPromotionFolderPost? @relation(fields: [folderPostId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, nextAttemptAt, id], map: "MutualPromotionWorkItem_due_idx")
+  @@index([folderId, status, dueAt], map: "MutualPromotionWorkItem_folder_status_idx")
+  @@index([workspaceId, status, nextAttemptAt], map: "MutualPromotionWorkItem_workspace_due_idx")
 }
 
 model TelegramBotIntegration {
@@ -4178,30 +4377,35 @@ model TelegramSystemBotFinanceDraft {
 }
 
 model TelegramSystemBotWorkflow {
-  id                      String                          @id @default(cuid())
-  connectionId            String
-  workspaceId             String
-  kind                    TelegramSystemBotWorkflowKind
-  step                    String
-  status                  TelegramSystemBotWorkflowStatus @default(ACTIVE)
-  version                 Int                             @default(1)
-  controlMessageId        Int?
-  payload                 Json
-  resultManagedPostId     String?
-  resultAdSaleId          String?
-  resultAdSalePlacementId String?
-  lastError               String?
-  expiresAt               DateTime
-  completedAt             DateTime?
-  createdAt               DateTime                        @default(now())
-  updatedAt               DateTime                        @updatedAt
+  id                          String                          @id @default(cuid())
+  connectionId                String
+  workspaceId                 String
+  kind                        TelegramSystemBotWorkflowKind
+  step                        String
+  status                      TelegramSystemBotWorkflowStatus @default(ACTIVE)
+  version                     Int                             @default(1)
+  controlMessageId            Int?
+  payload                     Json
+  resultManagedPostId         String?
+  resultAdSaleId              String?
+  resultAdSalePlacementId     String?
+  mutualPromotionFolderId     String?
+  resultMutualPromotionPostId String?                         @unique
+  lastError                   String?
+  expiresAt                   DateTime
+  completedAt                 DateTime?
+  createdAt                   DateTime                        @default(now())
+  updatedAt                   DateTime                        @updatedAt
 
-  connection TelegramSystemBotConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
-  workspace  Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connection                TelegramSystemBotConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  workspace                 Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  mutualPromotionFolder     MutualPromotionFolder?      @relation(fields: [mutualPromotionFolderId], references: [id], onDelete: SetNull)
+  resultMutualPromotionPost MutualPromotionFolderPost?  @relation(fields: [resultMutualPromotionPostId], references: [id], onDelete: SetNull)
 
   @@index([connectionId, workspaceId, status, expiresAt], map: "TelegramSystemBotWorkflow_active_idx")
   @@index([status, expiresAt], map: "TelegramSystemBotWorkflow_expiry_idx")
   @@index([workspaceId, kind, status, updatedAt], map: "TelegramSystemBotWorkflow_workspace_kind_idx")
+  @@index([workspaceId, mutualPromotionFolderId, status], map: "TelegramSystemBotWorkflow_mutual_promotion_idx")
 }
 
 model TelegramSystemBotUpdateLog {
@@ -4296,14 +4500,15 @@ model TelegramManagedPost {
   statusPosition               Int?
   sidebarPosition              Int?
 
-  workspace        Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  telegramChannel  TelegramChannel               @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
-  assignedMember   WorkspaceMember               @relation("TelegramManagedPostAssignedMember", fields: [assignedMemberId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "TelegramManagedPost_assignedMemberId_fkey")
-  group            PostGroup?                    @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  plannerFormat    TelegramPostPlannerFormat?    @relation(fields: [plannerFormatId], references: [id], onDelete: SetNull)
-  plannerSlot      TelegramPostPlannerSlot?      @relation(fields: [plannerSlotId], references: [id], onDelete: SetNull)
-  revisions        TelegramManagedPostRevision[]
-  adSalePlacements TelegramAdSalePlacement[]     @relation("TelegramAdPlacementManagedPost")
+  workspace               Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel         TelegramChannel               @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  assignedMember          WorkspaceMember               @relation("TelegramManagedPostAssignedMember", fields: [assignedMemberId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "TelegramManagedPost_assignedMemberId_fkey")
+  group                   PostGroup?                    @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  plannerFormat           TelegramPostPlannerFormat?    @relation(fields: [plannerFormatId], references: [id], onDelete: SetNull)
+  plannerSlot             TelegramPostPlannerSlot?      @relation(fields: [plannerSlotId], references: [id], onDelete: SetNull)
+  revisions               TelegramManagedPostRevision[]
+  adSalePlacements        TelegramAdSalePlacement[]     @relation("TelegramAdPlacementManagedPost")
+  mutualPromotionDelivery MutualPromotionPostDelivery?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

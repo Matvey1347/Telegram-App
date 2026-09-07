@@ -41,6 +41,33 @@ describe('DueTaskSchedule', () => {
     );
   });
 
+  it('delegates mutual-promotion due time to the domain lifecycle resolver', async () => {
+    const { prisma } = setup();
+    const dueAt = new Date(now.getTime() + 60_000);
+    const resolver = { nextDueAt: jest.fn().mockResolvedValue(dueAt) };
+    const schedule = new DueTaskSchedule(prisma as never, resolver);
+
+    await expect(
+      schedule.nextDueAt('mutual_promotion.lifecycle'),
+    ).resolves.toEqual(dueAt);
+    expect(resolver.nextDueAt).toHaveBeenCalledWith(
+      'mutual_promotion.lifecycle',
+    );
+    expect(prisma.telegramManagedPost.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('uses a short fixed continuation while a same-time folder batch drains', () => {
+    const { schedule } = setup();
+    const staleDue = new Date(now.getTime() - 60_000);
+
+    expect(
+      schedule.guardNoProgress('mutual_promotion.lifecycle', staleDue, true),
+    ).toEqual(new Date(now.getTime() + 5_000));
+    expect(
+      schedule.guardNoProgress('mutual_promotion.lifecycle', staleDue, true),
+    ).toEqual(new Date(now.getTime() + 5_000));
+  });
+
   it('backs off the first attempted stale occurrence immediately', () => {
     const { schedule } = setup();
     const staleDue = new Date(now.getTime() - 60_000);

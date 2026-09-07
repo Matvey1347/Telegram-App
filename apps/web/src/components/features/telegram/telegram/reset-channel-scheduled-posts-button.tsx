@@ -1,6 +1,5 @@
 "use client";
 
-
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { RotateCcw } from "lucide-react";
@@ -61,7 +60,12 @@ export function ResetChannelScheduledPostsButton({
     },
     onError: (error) => {
       pushToast(
-        safeApiErrorMessage(error, locale, t, t("telegram.posts.support.resetError")),
+        safeApiErrorMessage(
+          error,
+          locale,
+          t,
+          t("telegram.posts.support.resetError"),
+        ),
         "error",
         7000,
       );
@@ -72,8 +76,12 @@ export function ResetChannelScheduledPostsButton({
     <>
       {presentation === "menu" ? (
         <TelegramCardMenuAction
-          label={resetScheduled.isPending ? t("telegram.posts.support.returning") : t("telegram.posts.support.returnDrafts")}
-          icon={<RotateCcw size={15} />}
+          label={
+            resetScheduled.isPending
+              ? t("telegram.posts.support.returning")
+              : t("telegram.posts.support.returnDrafts")
+          }
+          icon={<RotateCcw size={17} className="shrink-0" />}
           danger
           disabled={resetScheduled.isPending}
           onClick={() => setConfirmationOpen(true)}
@@ -86,8 +94,10 @@ export function ResetChannelScheduledPostsButton({
           onClick={() => setConfirmationOpen(true)}
         >
           <span className="inline-flex items-center gap-2">
-            <RotateCcw size={15} />
-            {resetScheduled.isPending ? t("telegram.posts.support.returning") : t("telegram.posts.support.returnDrafts")}
+            <RotateCcw size={17} className="shrink-0" />
+            {resetScheduled.isPending
+              ? t("telegram.posts.support.returning")
+              : t("telegram.posts.support.returnDrafts")}
           </span>
         </Button>
       )}

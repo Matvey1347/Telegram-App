@@ -157,10 +157,18 @@ describe('TelegramSystemBotPostFlowService', () => {
     const state = setup();
 
     await expect(
-      state.service.sendAdSalePreview(scope, {
+      state.service.sendPostPreview(scope, {
         text: '**Please** approve',
         imageUrls: ['https://cdn.test/post.jpg'],
-        buttonRows: [[{ text: 'Open', url: 'https://example.com' }]],
+        buttonRows: [
+          [
+            {
+              text: 'Open',
+              url: 'https://example.com',
+              style: 'primary',
+            },
+          ],
+        ],
       }),
     ).resolves.toEqual({ status: 'SENT' });
 
@@ -170,7 +178,15 @@ describe('TelegramSystemBotPostFlowService', () => {
       caption: '<b>Please</b> approve',
       parse_mode: 'HTML',
       reply_markup: {
-        inline_keyboard: [[{ text: 'Open', url: 'https://example.com' }]],
+        inline_keyboard: [
+          [
+            {
+              text: 'Open',
+              url: 'https://example.com',
+              style: 'primary',
+            },
+          ],
+        ],
       },
     });
   });

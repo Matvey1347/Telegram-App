@@ -13,6 +13,7 @@ describe('TelegramSyncController workspace sync', () => {
       {} as never,
       {} as never,
       fullSync as never,
+      {} as never,
     );
     const selection = {
       syncIncludePublicInfo: true,

@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Megaphone,
   MessageCircle,
+  Repeat2,
   Settings,
   Trash2,
 } from "lucide-react";
@@ -91,6 +92,12 @@ const groups: readonly NavigationGroup[] = [
         icon: workspaceFeatureIcons.advertising,
         featureId: "advertising",
       },
+      {
+        label: "navigation.mutualPromotion",
+        href: "/ad-campaigns/mutual-promotion",
+        icon: Repeat2,
+        featureId: "advertising",
+      },
     ],
   },
   {
@@ -137,6 +144,7 @@ const groups: readonly NavigationGroup[] = [
 
 function routeIsActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
+  if (href === "/ad-campaigns") return pathname === href;
   if (href === "/settings") {
     return (
       pathname === "/settings" || pathname.startsWith("/workspace-members")

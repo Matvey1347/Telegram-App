@@ -30,6 +30,8 @@ export * from "./telegram-ad-sales-price-allocation";
 export * from "./types/resolved-emoji";
 export * from "./types/telegram-custom-emoji";
 export * from "./types/editor-shortcuts";
+export * from "./types/mutual-promotion-folders";
+export * from "./title-template";
 export * from "./telegram-spoilers";
 export * from "./telegram-table-markup";
 export * from "./pagination";

@@ -35,7 +35,7 @@ describe("TelegramMtprotoAccountCard capabilities", () => {
           onRefreshQr={vi.fn()}
           onEnterCode={vi.fn()}
           onPassword={vi.fn()}
-          onCheck={vi.fn()}
+          onSynchronize={vi.fn()}
           onSync={vi.fn()}
           onDelete={vi.fn()}
         />
@@ -54,5 +54,34 @@ describe("TelegramMtprotoAccountCard capabilities", () => {
     );
 
     expect(screen.getByRole("dialog")).toHaveTextContent("Capability settings");
+  });
+
+  it("offers account synchronization as a profile refresh action", () => {
+    const onSynchronize = vi.fn();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TelegramMtprotoAccountCard
+          account={account}
+          isStartingLogin={false}
+          onStartLogin={vi.fn()}
+          onRefreshQr={vi.fn()}
+          onEnterCode={vi.fn()}
+          onPassword={vi.fn()}
+          onSynchronize={onSynchronize}
+          onSync={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Actions for @publisher" }),
+    );
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "Synchronize account" }),
+    );
+
+    expect(onSynchronize).toHaveBeenCalledOnce();
+    expect(screen.queryByText("Check account")).toBeNull();
   });
 });

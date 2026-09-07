@@ -19,6 +19,7 @@ import {
 import { compactSystemBotInlineKeyboard } from './telegram-system-bot-inline-keyboard';
 import { TelegramSystemBotChannelAccessService } from './telegram-system-bot-channel-access.service';
 import { TelegramSystemBotWorkspaceFlowService } from './telegram-system-bot-workspace-flow.service';
+import { TelegramSystemBotMutualPromotionPostFlowService } from './telegram-system-bot-mutual-promotion-post-flow.service';
 import {
   resolveSystemBotAction,
   systemBotWorkflowScope,
@@ -48,6 +49,8 @@ export class TelegramSystemBotHandlerService {
     private readonly channelAccess?: TelegramSystemBotChannelAccessService,
     @Optional()
     private readonly workspaceFlow?: TelegramSystemBotWorkspaceFlowService,
+    @Optional()
+    private readonly mutualPromotionPostFlow?: TelegramSystemBotMutualPromotionPostFlowService,
   ) {}
 
   async handle(update: TelegramSystemBotUpdate) {
@@ -153,6 +156,8 @@ export class TelegramSystemBotHandlerService {
         return this.postFlow.callback(workflowScope, callback);
       if (callback && this.adSaleFlow?.isCallback(callback))
         return this.adSaleFlow.callback(workflowScope, callback);
+      if (callback && this.mutualPromotionPostFlow?.isCallback(callback))
+        return this.mutualPromotionPostFlow.callback(workflowScope, callback);
       if (callback === 'posts:new') return this.postFlow?.begin(workflowScope);
       if (callback && this.posts?.isCallback(callback))
         return this.posts.callback(
@@ -177,6 +182,12 @@ export class TelegramSystemBotHandlerService {
           update.message,
         );
         if (workspaceResult) return workspaceResult;
+        const mutualPromotionPostResult =
+          await this.mutualPromotionPostFlow?.input(
+            workflowScope,
+            update.message,
+          );
+        if (mutualPromotionPostResult) return mutualPromotionPostResult;
         const postResult = await this.postFlow?.input(
           workflowScope,
           update.message,
@@ -286,6 +297,16 @@ export class TelegramSystemBotHandlerService {
         return this.postFlow.resumeAdSaleImport(
           systemBotWorkflowScope(chatId, connection, workspace),
           adSalePostMatch[1],
+        );
+      }
+      const mutualPromotionPostMatch =
+        /^\/start mutual_promotion_post_([A-Za-z0-9_-]+)$/.exec(command);
+      if (mutualPromotionPostMatch && this.mutualPromotionPostFlow) {
+        const workspace =
+          await this.connections.requireCurrentWorkspace(connection);
+        return this.mutualPromotionPostFlow.resume(
+          systemBotWorkflowScope(chatId, connection, workspace),
+          mutualPromotionPostMatch[1],
         );
       }
       const workspaces =

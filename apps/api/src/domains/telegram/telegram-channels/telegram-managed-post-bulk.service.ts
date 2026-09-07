@@ -107,13 +107,28 @@ export class TelegramManagedPostBulkService {
       }
       return parsed;
     });
+    const requestedDateByPostId = new Map(
+      items.map((item, index) => [item.postId, requestedDates[index]] as const),
+    );
+    const releasableReservationOwnerIds = posts.flatMap((post) => {
+      if (
+        post.status !== TelegramManagedPostStatus.SCHEDULED ||
+        !post.scheduledAt
+      ) {
+        return [];
+      }
+      const requestedDate = requestedDateByPostId.get(post.id);
+      const keepsCurrentTime =
+        requestedDate?.toISOString() === post.scheduledAt.toISOString();
+      return keepsCurrentTime || post.origin !== 'TELEGRAM' ? [post.id] : [];
+    });
     const occupiedPosts = await this.prisma.telegramManagedPost.findMany({
       where: {
         workspaceId,
         telegramChannelId: channelId,
         status: TelegramManagedPostStatus.SCHEDULED,
         scheduledAt: { in: requestedDates },
-        id: { notIn: items.map((item) => item.postId) },
+        id: { notIn: releasableReservationOwnerIds },
       },
       select: { scheduledAt: true },
     });
@@ -169,6 +184,30 @@ export class TelegramManagedPostBulkService {
         );
         continue;
       }
+      const previousScheduledAt = post.scheduledAt?.toISOString() ?? null;
+      if (
+        post.status === TelegramManagedPostStatus.SCHEDULED &&
+        previousScheduledAt === scheduledAt.toISOString()
+      ) {
+        await this.appendBulkResult(
+          results,
+          {
+            postId: post.id,
+            title: post.title,
+            index: index + 1,
+            total,
+            previousStatus: post.status,
+            previousScheduledAt,
+            newStatus: post.status,
+            scheduledAt: previousScheduledAt,
+            action: 'SCHEDULED',
+            success: true,
+            message: `Post ${index + 1}/${total} already scheduled at ${previousScheduledAt}`,
+          },
+          onProgress,
+        );
+        continue;
+      }
       try {
         const scheduled =
           await this.telegramManagedPostPublicationService.publishManagedPost(
@@ -189,11 +228,19 @@ export class TelegramManagedPostBulkService {
             index: index + 1,
             total,
             previousStatus: post.status,
+            previousScheduledAt,
             newStatus: scheduled.status,
             scheduledAt: scheduled.scheduledAt?.toISOString() ?? null,
-            action: 'SCHEDULED',
+            action:
+              post.status === TelegramManagedPostStatus.SCHEDULED
+                ? 'MOVED'
+                : 'SCHEDULED',
             success: true,
-            message: `Post ${index + 1}/${total} scheduled`,
+            message:
+              post.status === TelegramManagedPostStatus.SCHEDULED &&
+              previousScheduledAt
+                ? `Post ${index + 1}/${total} rescheduled from ${previousScheduledAt} to ${scheduledAt.toISOString()}`
+                : `Post ${index + 1}/${total} scheduled`,
           },
           onProgress,
         );
@@ -212,6 +259,7 @@ export class TelegramManagedPostBulkService {
             index: index + 1,
             total,
             previousStatus: post.status,
+            previousScheduledAt,
             newStatus: TelegramManagedPostStatus.FAILED,
             scheduledAt: scheduledAt.toISOString(),
             action: 'FAILED',
@@ -265,6 +313,7 @@ export class TelegramManagedPostBulkService {
       index,
       total,
       previousStatus: post.status,
+      previousScheduledAt: post.scheduledAt?.toISOString() ?? null,
       newStatus: post.status,
       scheduledAt: post.scheduledAt?.toISOString() ?? null,
       action: 'SKIPPED',

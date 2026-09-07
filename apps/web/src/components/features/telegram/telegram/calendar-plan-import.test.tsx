@@ -128,7 +128,14 @@ describe("CalendarPlanImport", () => {
       <CalendarPlanImportHarness
         channelId="channel-1"
         channelTitle="Business"
-        posts={[{ id: "post-1", title: "Post" }]}
+        posts={[
+          {
+            id: "post-1",
+            title: "Post",
+            status: "SCHEDULED",
+            scheduledAt: "2099-08-09T08:30:00.000Z",
+          },
+        ]}
         timezone="Europe/Warsaw"
         disabled={false}
         onPreview={onPreview}
@@ -152,6 +159,8 @@ describe("CalendarPlanImport", () => {
           assignments: [
             expect.objectContaining({
               postId: "post-1",
+              currentStatus: "SCHEDULED",
+              currentScheduledAt: "2099-08-09T08:30:00.000Z",
               scheduledAt: "2099-08-10T09:30:00.000Z",
             }),
           ],

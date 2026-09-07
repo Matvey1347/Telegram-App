@@ -10,6 +10,7 @@ import type {
   OperationsNotificationUnreadCount,
 } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 import {
   OperationsPushSubscriptionDto,
@@ -223,8 +224,9 @@ export class OperationsNotificationsService {
   async subscribe(userId: string, dto: OperationsPushSubscriptionDto) {
     await this.access(userId);
     await this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw(
-        Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`operations-push-user:${userId}`}, 0))`,
+      await acquirePostgresTransactionLock(
+        tx,
+        `operations-push-user:${userId}`,
       );
       const current = await tx.operationsPushSubscription.findUnique({
         where: { endpoint: dto.endpoint },

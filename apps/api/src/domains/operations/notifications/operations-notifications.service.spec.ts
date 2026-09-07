@@ -12,7 +12,7 @@ describe('OperationsNotificationsService', () => {
       ]),
     };
     const prisma: any = {
-      $queryRaw: jest.fn(),
+      $executeRaw: jest.fn(),
       $transaction: jest.fn(),
       operationsNotification: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -122,7 +122,7 @@ describe('OperationsNotificationsService', () => {
       keys: { p256dh: 'key', auth: 'auth' },
     });
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
     expect(prisma.operationsPushSubscription.create).toHaveBeenCalled();
   });
 

@@ -230,3 +230,56 @@ describe('TelegramPostGroupStore System Bot posts group', () => {
     expect(client.postGroup.findFirst).not.toHaveBeenCalled();
   });
 });
+
+describe('TelegramPostGroupStore mutual promotion group', () => {
+  const client = {
+    telegramChannel: { findFirst: jest.fn() },
+    postGroup: {
+      findFirst: jest.fn(),
+      update: jest.fn(),
+      upsert: jest.fn(),
+    },
+    workspaceMember: { findFirst: jest.fn() },
+  };
+  const store = new TelegramPostGroupStore(
+    client as never,
+    {} as never,
+    {} as never,
+  );
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    client.telegramChannel.findFirst.mockResolvedValue({ id: 'channel-1' });
+    client.postGroup.findFirst.mockResolvedValue(null);
+    client.workspaceMember.findFirst.mockResolvedValue({ id: 'member-1' });
+    client.postGroup.upsert.mockResolvedValue({ id: 'mutual-group' });
+  });
+
+  it('creates the localized system-group identity with stable key and icon', async () => {
+    await store.ensureMutualPromotionSystemGroup(
+      client as never,
+      'workspace-1',
+      'channel-1',
+      'member-1',
+    );
+
+    expect(client.postGroup.upsert).toHaveBeenCalledWith({
+      where: {
+        telegramChannelId_systemKey: {
+          telegramChannelId: 'channel-1',
+          systemKey: 'MUTUAL_PROMOTION',
+        },
+      },
+      update: { title: 'Mutual promotion', icon: '🤝', isSystem: true },
+      create: {
+        workspaceId: 'workspace-1',
+        telegramChannelId: 'channel-1',
+        title: 'Mutual promotion',
+        icon: '🤝',
+        isSystem: true,
+        systemKey: 'MUTUAL_PROMOTION',
+        createdByMemberId: 'member-1',
+      },
+    });
+  });
+});

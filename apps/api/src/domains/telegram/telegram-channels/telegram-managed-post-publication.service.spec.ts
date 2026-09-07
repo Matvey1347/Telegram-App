@@ -4,6 +4,45 @@ import { TelegramManagedPostPublicationService } from './telegram-managed-post-p
 import { TelegramManagedPostPublisherService } from './telegram-managed-post-publisher.service';
 
 describe('TelegramManagedPostPublicationService failure persistence', () => {
+  it('requires the publisher to create a real Telegram native schedule', async () => {
+    const scheduled = { id: 'post-1', scheduleMode: 'TELEGRAM_NATIVE' };
+    const publisher = {
+      publishManagedPost: jest.fn().mockResolvedValue(scheduled),
+    };
+    const service = new TelegramManagedPostPublicationService(
+      { telegramManagedPost: { updateMany: jest.fn() } } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      publisher as never,
+    );
+    const scheduledAt = new Date('2026-09-08T12:00:00.000Z');
+
+    await expect(
+      service.scheduleManagedPostNatively(
+        'workspace-1',
+        'channel-1',
+        'post-1',
+        scheduledAt,
+      ),
+    ).resolves.toBe(scheduled);
+    expect(publisher.publishManagedPost).toHaveBeenCalledWith(
+      'workspace-1',
+      'channel-1',
+      'post-1',
+      scheduledAt,
+      'IMAGES_THEN_TEXT',
+      undefined,
+      true,
+    );
+  });
+
   it('makes a publisher preflight failure visible and retryable', async () => {
     const updateMany = jest.fn().mockResolvedValue({ count: 1 });
     const publisher = {

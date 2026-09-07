@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { IconAvatar } from "./icon-avatar";
 
@@ -41,5 +41,23 @@ describe("IconAvatar", () => {
       "src",
       "https://cdn.example.com/emoji.webp",
     );
+  });
+
+  it("renders the standard fallback when an avatar URL cannot be loaded", () => {
+    render(
+      <IconAvatar
+        label="Admin"
+        icon={{
+          type: "image",
+          id: "broken-avatar",
+          url: "https://invalid.test/avatar.jpg",
+        }}
+      />,
+    );
+
+    fireEvent.error(screen.getByRole("img", { name: "Admin" }));
+
+    expect(screen.queryByRole("img", { name: "Admin" })).toBeNull();
+    expect(screen.getByText("A")).toBeInTheDocument();
   });
 });

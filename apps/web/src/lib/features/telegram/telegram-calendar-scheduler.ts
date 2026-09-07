@@ -150,6 +150,20 @@ export function getCalendarSchedulablePosts(posts: TelegramManagedPost[]) {
     );
 }
 
+export function getCalendarPlanImportPosts(posts: TelegramManagedPost[]) {
+  return [...posts]
+    .filter(
+      (post) =>
+        post.origin !== "TELEGRAM" &&
+        ["DRAFT", "FAILED", "SCHEDULED"].includes(post.status),
+    )
+    .sort(
+      (left, right) =>
+        new Date(left.createdAt).getTime() -
+        new Date(right.createdAt).getTime(),
+    );
+}
+
 export function shuffleCalendarSchedulablePosts<T>(
   posts: T[],
   random: () => number = Math.random,

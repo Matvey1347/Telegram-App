@@ -134,6 +134,7 @@ import {
 } from "@/lib/api";
 import {
   buildCalendarDayScheduleSlots,
+  getCalendarPlanImportPosts,
   getCalendarSchedulablePosts,
   localTimeKey,
   sortScheduleManagedPostAssignments,
@@ -1467,6 +1468,10 @@ function TelegramPostWorkspace({
       canScheduleManagedPost(post, managedPosts, channelTelegramChatId),
     );
   }, [channelTelegramChatId, posts.data]);
+  const calendarPlanImportPosts = useMemo(
+    () => getCalendarPlanImportPosts(posts.data || []).filter((post) =>
+      canScheduleManagedPost(post, posts.data || [], channelTelegramChatId)),
+    [channelTelegramChatId, posts.data]);
   const calendarFilteredSchedulablePosts = useMemo(() => {
     const search = calendarPostSearch.trim().toLocaleLowerCase();
     if (!search) return calendarSchedulablePosts;
@@ -2317,7 +2322,8 @@ function TelegramPostWorkspace({
     scheduledAt: string,
     nextPostId: string,
   ) => {
-    const nextPost = calendarSchedulablePosts.find((post) => post.id === nextPostId);
+    const nextPost = (autoPlannerPreviewSource === "import" ? calendarPlanImportPosts
+      : calendarSchedulablePosts).find((post) => post.id === nextPostId);
     if (!nextPost) return;
     if (
       autoPlannerPreview?.assignments.some(
@@ -2337,6 +2343,7 @@ function TelegramPostWorkspace({
               ...assignment,
               postId: nextPost.id,
               title: nextPost.title,
+              currentScheduledAt: nextPost.scheduledAt ?? null,
               groupId: effectivePostGroupId(nextPost),
               provenance: {
                 ...assignment.provenance,
@@ -3434,16 +3441,12 @@ function TelegramPostWorkspace({
               <CalendarPlanImport
                 channelId={channelId}
                 channelTitle={channelTitle}
-                posts={calendarSchedulablePosts.map((post) => ({
-                  id: post.id,
-                  title: post.title,
-                  groupId: effectivePostGroupId(post),
-                }))}
+                posts={calendarPlanImportPosts.map((post) => ({ ...post, groupId: effectivePostGroupId(post) }))}
                 timezone={Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"}
                 disabled={autoPlannerBusy}
                 content={calendarPlanImportContent}
                 onContentChange={setCalendarPlanImportContent}
-                onPreview={setAutoPlannerPreview}
+                onPreview={(preview) => { setAutoPlannerPreview(preview); setAutoPlannerPreviewSource("import"); }}
               />
               {autoPlannerPreview && autoPlannerPreviewSource === "import" ? (
                 <AutoCalendarPlannerPreview
@@ -3451,15 +3454,11 @@ function TelegramPostWorkspace({
                   busy={autoPlannerBusy}
                   rerollingDate={null}
                   onScheduleAll={scheduleAutoPlannerPreview}
-                  availablePosts={calendarSchedulablePosts.map((post) => ({
-                    id: post.id,
-                    title: post.title,
-                    iconPresentation: post.iconPresentation,
-                  }))}
+                  availablePosts={calendarPlanImportPosts}
                   onRemoveAssignment={removeAutoPlannerAssignment}
                   onReplaceAssignmentPost={replaceAutoPlannerAssignmentPost}
                   onOpenPostInNewTab={(postId) => {
-                    const post = calendarSchedulablePosts.find(
+                    const post = calendarPlanImportPosts.find(
                       (item) => item.id === postId,
                     );
                     if (post) openPostInNewTab(post);

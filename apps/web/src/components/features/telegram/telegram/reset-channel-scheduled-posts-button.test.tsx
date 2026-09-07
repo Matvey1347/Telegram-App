@@ -1,10 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  fireEvent,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderWithI18n as render } from "@/test/render-with-i18n";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { telegramPostKeys } from "@/lib/query-keys";
@@ -31,6 +26,25 @@ describe("ResetChannelScheduledPostsButton", () => {
     pushToast.mockReset();
   });
 
+  it("uses the same 17px icon size as the other channel menu actions", () => {
+    const client = new QueryClient();
+    render(
+      <QueryClientProvider client={client}>
+        <ResetChannelScheduledPostsButton
+          channelId="channel-1"
+          channelTitle="Mentor"
+          presentation="menu"
+        />
+      </QueryClientProvider>,
+    );
+
+    const action = screen.getByRole("menuitem", {
+      name: "Return all scheduled posts to drafts",
+    });
+    expect(action.querySelector("svg")).toHaveAttribute("width", "17");
+    expect(action.querySelector("svg")).toHaveAttribute("height", "17");
+  });
+
   it("requires confirmation before resetting the selected channel", async () => {
     resetScheduled.mockResolvedValue({
       action: "RESET_CHANNEL_SCHEDULED_TO_DRAFT",
@@ -53,7 +67,9 @@ describe("ResetChannelScheduledPostsButton", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Return all to drafts" }),
+      screen.getByRole("button", {
+        name: "Return all scheduled posts to drafts",
+      }),
     );
     expect(resetScheduled).not.toHaveBeenCalled();
     fireEvent.change(screen.getByPlaceholderText("Mentor"), {
@@ -61,7 +77,7 @@ describe("ResetChannelScheduledPostsButton", () => {
     });
     fireEvent.click(
       within(screen.getByRole("dialog")).getByRole("button", {
-        name: "Return all to drafts",
+        name: "Return all scheduled posts to drafts",
       }),
     );
 
@@ -94,14 +110,16 @@ describe("ResetChannelScheduledPostsButton", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Return all to drafts" }),
+      screen.getByRole("button", {
+        name: "Return all scheduled posts to drafts",
+      }),
     );
     fireEvent.change(screen.getByPlaceholderText("Mentor"), {
       target: { value: "Mentor" },
     });
     fireEvent.click(
       within(screen.getByRole("dialog")).getByRole("button", {
-        name: "Return all to drafts",
+        name: "Return all scheduled posts to drafts",
       }),
     );
 
@@ -113,7 +131,9 @@ describe("ResetChannelScheduledPostsButton", () => {
       ),
     );
     expect(
-      screen.getByRole("button", { name: "Return all to drafts" }),
+      screen.getByRole("button", {
+        name: "Return all scheduled posts to drafts",
+      }),
     ).toBeEnabled();
   });
 });

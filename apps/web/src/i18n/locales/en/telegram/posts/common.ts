@@ -15,6 +15,7 @@ const messages = {
   "telegramPosts.systemGroup.createdInTelegram": "Created in Telegram",
   "telegramPosts.systemGroup.advertise": "Advertise",
   "telegramPosts.systemGroup.systemBotPosts": "System Bot posts",
+  "telegramPosts.systemGroup.mutualPromotion": "Mutual promotion",
   "telegramPosts.status.draft": "Draft",
   "telegramPosts.status.publishing": "Publishing",
   "telegramPosts.status.scheduled": "Scheduled",
@@ -24,7 +25,8 @@ const messages = {
   "telegram.posts.remoteStatus.unknown": "Telegram status unknown",
   "telegram.posts.remoteStatus.missing": "Missing in Telegram",
   "telegram.posts.remoteStatus.broken": "Telegram link broken",
-  "telegram.posts.remoteStatus.autoDeleted": "Published, then automatically deleted",
+  "telegram.posts.remoteStatus.autoDeleted":
+    "Published, then automatically deleted",
   "telegram.posts.search": "Search title, text, group or member",
   "telegram.posts.total": "{count} total",
   "telegram.posts.created": "created {date}",
@@ -125,24 +127,29 @@ const messages = {
   "telegram.posts.support.fileReadError": "Could not read this file.",
   "telegram.posts.support.importGroups": "Import groups",
   "telegram.posts.support.promptCopied": "Prompt copied.",
-  "telegram.posts.support.returnDrafts": "Return all to drafts",
+  "telegram.posts.support.returnDrafts": "Return all scheduled posts to drafts",
   "telegram.posts.support.returnDraftsDescription":
     "This permanently deletes every scheduled message currently queued in this Telegram channel. All scheduled posts in Telegram System will become clean drafts and lose their Telegram message IDs and links. Published messages are not affected.",
   "telegram.posts.support.noPostsAvailable": "No posts available to add.",
   "telegram.posts.support.addSelected": "Add selected",
   "telegram.posts.support.planNotScheduled":
     "Nothing is scheduled until you confirm the complete plan.",
+  "telegram.posts.support.scheduleChanges":
+    "Already scheduled · time changes from {from} to {to}",
+  "telegram.posts.support.scheduleUnchanged":
+    "Already scheduled · time remains {time}",
+  "telegram.posts.support.scheduleNew": "Will be scheduled for {time}",
   "telegram.posts.support.postsCount": "Posts: {count}",
   "telegram.posts.support.rerollDay": "Reroll day",
   "telegram.posts.support.openNamed": "Open {title} in a new tab",
   "telegram.posts.support.removeNamed": "Remove {title} from plan",
   "telegram.posts.support.noMatchingDrafts":
-    "No matching draft posts were found for the available times.",
+    "No matching posts were found for the available times.",
   "telegram.posts.support.scheduleAll": "Schedule all {count} posts",
   "telegram.posts.support.planUploadHint":
-    "Upload or paste postId with scheduledAt, or date and time.",
+    "Upload or paste draft or scheduled postId with scheduledAt, or date and time.",
   "telegram.posts.support.planInstructionHint":
-    "The GPT instruction includes stable channel times, post texts, publishing blockers, occupied slots, and recent history.",
+    "The GPT instruction includes drafts, current scheduled bookings, stable channel times, publishing blockers, and recent history.",
   "telegram.posts.support.preparingInstruction": "Preparing instruction…",
   "telegram.posts.support.downloadInstruction": "Download GPT instruction",
   "telegram.posts.support.downloadingContextLabel": "Downloading Context…",

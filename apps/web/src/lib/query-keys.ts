@@ -178,6 +178,28 @@ export const adCampaignKeys = {
     ["campaign-invite-link-history", campaignId] as const,
 };
 
+export const mutualPromotionFolderKeys = {
+  all: ["mutual-promotion-folders"] as const,
+  list: (params?: { page?: number; pageSize?: number }) =>
+    ["mutual-promotion-folders", "list", params ?? {}] as const,
+  detail: (folderId: string) =>
+    ["mutual-promotion-folders", "detail", folderId] as const,
+  inviteOptions: (input: {
+    folderId?: string;
+    channelIds: string[];
+    startsAt?: string;
+    endsAt: string;
+  }) =>
+    [
+      "mutual-promotion-folders",
+      "invite-options",
+      input.folderId ?? null,
+      input.channelIds,
+      input.startsAt ?? null,
+      input.endsAt,
+    ] as const,
+};
+
 export const networkKeys = {
   list: () => ["telegram-channel-networks"] as const,
   detail: (networkId: string) =>

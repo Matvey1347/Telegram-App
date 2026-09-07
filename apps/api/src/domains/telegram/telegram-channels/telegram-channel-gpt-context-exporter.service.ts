@@ -99,6 +99,7 @@ export class TelegramChannelGptContextExporter {
       group: { title: string } | null;
       text: string | null;
       createdAt: Date;
+      scheduledAt: Date | null;
     },
     availability: 'AVAILABLE' | 'BLOCKED',
     reasons: string[],
@@ -109,6 +110,8 @@ export class TelegramChannelGptContextExporter {
       `availability: ${availability}`,
       `reasons: ${reasons.length ? reasons.join('; ') : 'none'}`,
       `status: ${post.status}`,
+      `title: ${post.title}`,
+      `current_scheduled_at: ${post.scheduledAt?.toISOString() ?? 'null'}`,
       `group: ${post.group?.title || 'Ungrouped'}`,
       `created_at: ${post.createdAt.toISOString()}`,
       'text:',
@@ -125,8 +128,8 @@ export class TelegramChannelGptContextExporter {
   }) {
     const imageUrls = post.imageUrls.filter((url) => /^https?:\/\//i.test(url));
     return [
-      'OCCUPIED POST',
-      `scheduled_at: ${post.scheduledAt.toISOString()}`,
+      'CURRENT SCHEDULED POST',
+      `current_scheduled_at: ${post.scheduledAt.toISOString()}`,
       `postId: ${post.id}`,
       `title: ${post.title}`,
       'images:',
@@ -210,7 +213,8 @@ export class TelegramChannelGptContextExporter {
       if (
         post.origin !== TelegramManagedPostOrigin.SYSTEM ||
         (post.status !== TelegramManagedPostStatus.DRAFT &&
-          post.status !== TelegramManagedPostStatus.FAILED)
+          post.status !== TelegramManagedPostStatus.FAILED &&
+          post.status !== TelegramManagedPostStatus.SCHEDULED)
       ) {
         excluded.push(
           `- ${post.id} — ${post.title} — ${post.origin}/${post.status}`,
@@ -281,7 +285,7 @@ export class TelegramChannelGptContextExporter {
     const planningTo = this.localDateTime(horizonEnd, timezone).slice(0, 10);
     const content = [
       'TELEGRAM CALENDAR PLAN — GPT INSTRUCTION',
-      'FORMAT VERSION: 2',
+      'FORMAT VERSION: 3',
       `CHANNEL: ${channel.title}`,
       `CHANNEL_ID: ${channel.id}`,
       `TIMEZONE: ${timezone}`,
@@ -289,12 +293,12 @@ export class TelegramChannelGptContextExporter {
       `PLANNING_WINDOW: ${planningFrom} through ${planningTo}`,
       '',
       'TASK',
-      'Build a Telegram publication plan using only AVAILABLE POSTS and only the stable publication times listed below. Choose post order and time by learning from RECENT PUBLISHED HISTORY. Avoid repeating similar topics consecutively. Never invent a post ID or publication time.',
+      'Build a Telegram publication plan using only AVAILABLE POSTS and only the stable publication times listed below. AVAILABLE POSTS include both drafts and posts that are already scheduled. A scheduled post may be returned with another scheduledAt to reschedule it; if it is omitted, its current booking stays unchanged. Choose post order and time by learning from RECENT PUBLISHED HISTORY. Avoid repeating similar topics consecutively. Never invent a post ID or publication time.',
       '',
       'MANDATORY OUTPUT',
       'Return only valid JSON without markdown fences or commentary.',
       'Schema: {"items":[{"postId":"exact available post ID","scheduledAt":"ISO 8601 timestamp with the correct explicit UTC offset"}]}',
-      'Use every post at most once. Use every timestamp at most once. Keep every timestamp inside PLANNING_WINDOW, in TIMEZONE, and at an exact STABLE PUBLICATION TIME. Do not use FUTURE OCCUPIED TIMES. If no valid assignment exists, return {"items":[]}.',
+      'Use every post at most once. Use every timestamp at most once. Keep every timestamp inside PLANNING_WINDOW, in TIMEZONE, and at an exact STABLE PUBLICATION TIME. CURRENT SCHEDULED RESERVATIONS describe the existing calendar, not immutable slots: you may keep a scheduled post at its current time or move it. A timestamp occupied by another post may be used only when that owning post is also included in the same output and moved to a different timestamp. Never create a collision. If no valid assignment exists, return {"items":[]}.',
       '',
       'STABLE PUBLICATION TIMES',
       ...(channel.timePosts.length
@@ -303,7 +307,7 @@ export class TelegramChannelGptContextExporter {
           )
         : ['[] — no publication times are configured; return {"items":[]}']),
       '',
-      'FUTURE OCCUPIED TIMES',
+      'CURRENT SCHEDULED RESERVATIONS',
       ...(occupied.length ? occupied : ['[]']),
       '',
       `AVAILABLE POSTS (${available.length})`,
@@ -314,7 +318,7 @@ export class TelegramChannelGptContextExporter {
       ...(blocked.length ? blocked : ['[]']),
       '',
       `EXCLUDED POSTS (${excluded.length})`,
-      'These posts are already scheduled/published, read-only imports, or otherwise outside the candidate pool.',
+      'These posts are published, read-only imports, or otherwise outside the candidate pool.',
       ...(excluded.length ? excluded : ['[]']),
       '',
       `RECENT PUBLISHED HISTORY — LAST 30 DAYS, MAX 60 (${history.length})`,

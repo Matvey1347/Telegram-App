@@ -5,6 +5,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { AccountsModule } from './domains/finance/accounts/accounts.module';
 import { AdCampaignsModule } from './domains/growth/ad-campaigns/ad-campaigns.module';
 import { AdHypothesesModule } from './domains/growth/ad-hypotheses/ad-hypotheses.module';
+import { MutualPromotionFoldersModule } from './domains/growth/mutual-promotion-folders/mutual-promotion-folders.module';
 import { AdvertisingSourcesModule } from './domains/growth/advertising-sources/advertising-sources.module';
 import { AppController } from './app.controller';
 import { AuthModule } from './domains/identity/auth/auth.module';
@@ -66,6 +67,7 @@ import { OperationsNotificationsModule } from './domains/operations/notification
     AdvertisingSourcesModule,
     AdCampaignsModule,
     AdHypothesesModule,
+    MutualPromotionFoldersModule,
     DashboardModule,
     GlobalSearchModule,
     FinanceCategoriesModule,

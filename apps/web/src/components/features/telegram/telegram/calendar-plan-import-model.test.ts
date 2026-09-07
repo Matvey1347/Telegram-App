@@ -45,9 +45,7 @@ describe("parseCalendarPlanImport", () => {
   it("serializes the current edited assignments back into import JSON", () => {
     const result = parseCalendarPlanImport(
       JSON.stringify({
-        items: [
-          { postId: "post-1", scheduledAt: "2099-08-10T09:30:00Z" },
-        ],
+        items: [{ postId: "post-1", scheduledAt: "2099-08-10T09:30:00Z" }],
       }),
       posts,
       "Europe/Warsaw",
@@ -69,5 +67,57 @@ describe("parseCalendarPlanImport", () => {
         },
       ],
     });
+  });
+
+  it("keeps the previous schedule so preview can describe a reschedule", () => {
+    const result = parseCalendarPlanImport(
+      '[{"postId":"scheduled","scheduledAt":"2099-08-11T10:15:00Z"}]',
+      [
+        {
+          id: "scheduled",
+          title: "Scheduled post",
+          status: "SCHEDULED",
+          scheduledAt: "2099-08-10T09:30:00Z",
+        },
+      ],
+      "UTC",
+      new Date("2099-08-01T00:00:00Z"),
+    );
+
+    expect(result.assignments[0]).toMatchObject({
+      currentStatus: "SCHEDULED",
+      currentScheduledAt: "2099-08-10T09:30:00.000Z",
+      scheduledAt: "2099-08-11T10:15:00.000Z",
+    });
+  });
+
+  it("rejects a reserved time unless its scheduled owner moves in the same plan", () => {
+    const scheduledPosts = [
+      {
+        id: "scheduled",
+        title: "Scheduled post",
+        status: "SCHEDULED",
+        scheduledAt: "2099-08-10T09:30:00Z",
+      },
+      { id: "draft", title: "Draft", status: "DRAFT" },
+    ];
+
+    expect(() =>
+      parseCalendarPlanImport(
+        '[{"postId":"draft","scheduledAt":"2099-08-10T09:30:00Z"}]',
+        scheduledPosts,
+        "UTC",
+        new Date("2099-08-01T00:00:00Z"),
+      ),
+    ).toThrow("occupied by scheduled post scheduled");
+
+    expect(() =>
+      parseCalendarPlanImport(
+        '[{"postId":"draft","scheduledAt":"2099-08-10T09:30:00Z"},{"postId":"scheduled","scheduledAt":"2099-08-11T09:30:00Z"}]',
+        scheduledPosts,
+        "UTC",
+        new Date("2099-08-01T00:00:00Z"),
+      ),
+    ).not.toThrow();
   });
 });

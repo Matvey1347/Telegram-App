@@ -24,7 +24,7 @@ import {
   type CampaignInviteLinkHistoryPayload,
 } from './invite-link-history';
 import { AdCampaignListReadService } from './ad-campaign-list-read.service';
-
+import { GrowthInviteLinkReservationService } from '../invite-link-reservation.service';
 @Injectable()
 export class AdCampaignsService {
   private campaignPromoStorageState: 'unknown' | 'available' | 'missing' =
@@ -40,6 +40,7 @@ export class AdCampaignsService {
     private workspaceService: WorkspaceService,
     private financeCategoriesService: FinanceCategoriesService,
     private campaignAnalyticsService: AdCampaignAnalyticsService,
+    private inviteReservation: GrowthInviteLinkReservationService = new GrowthInviteLinkReservationService(),
   ) {
     this.listReadService = new AdCampaignListReadService(
       prisma,
@@ -740,25 +741,13 @@ export class AdCampaignsService {
     telegramChannelId: string,
     currentCampaignId?: string,
   ) {
-    if (!inviteLinkIds.length) return;
-    const links = await tx.telegramInviteLink.findMany({
-      where: { id: { in: inviteLinkIds }, workspaceId, telegramChannelId },
-      select: { id: true, adCampaignId: true },
-    });
-    if (links.length !== inviteLinkIds.length) {
-      throw new BadRequestException(
-        'One or more invite links do not belong to selected Telegram channel',
-      );
-    }
-    const conflictingLink = links.find(
-      (link: any) =>
-        link.adCampaignId && link.adCampaignId !== currentCampaignId,
+    return this.inviteReservation.assertAvailableForAds(
+      tx,
+      workspaceId,
+      inviteLinkIds,
+      telegramChannelId,
+      currentCampaignId,
     );
-    if (conflictingLink) {
-      throw new BadRequestException(
-        'One or more invite links are already linked to another campaign',
-      );
-    }
   }
 
   private async replaceCampaignInviteLinks(

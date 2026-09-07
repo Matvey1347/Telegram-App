@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { BotBillingProviderMode, BotSubscriptionStatus, FinanceAiProvider, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../../prisma/prisma.service';
+import { acquirePostgresTransactionLock } from '../../../../prisma/postgres-advisory-lock';
 import { BotEntitlementsService } from '../../bot-billing/bot-entitlements.service';
 
 /**
@@ -93,7 +94,10 @@ export class FinanceEntitlementService {
     const periodStart = resolved.tier === 'FREE' ? undefined : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     const pendingAfter = new Date(now.getTime() - 5 * 60_000);
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`${input.profileId}:${feature}`}))`);
+      await acquirePostgresTransactionLock(
+        tx,
+        `${input.profileId}:${feature}`,
+      );
       const reserved = await tx.aiUsageEvent.count({
         where: {
           profileId: input.profileId,

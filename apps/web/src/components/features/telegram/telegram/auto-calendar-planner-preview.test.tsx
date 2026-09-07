@@ -115,4 +115,28 @@ describe("AutoCalendarPlannerPreview", () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
+
+  it("shows the old and new time for an already scheduled post", () => {
+    render(
+      <AutoCalendarPlannerPreview
+        preview={{
+          ...preview,
+          assignments: [
+            {
+              ...preview.assignments[0],
+              currentStatus: "SCHEDULED",
+              currentScheduledAt: "2099-08-09T07:30:00.000Z",
+            },
+          ],
+        }}
+        busy={false}
+        rerollingDate={null}
+        onScheduleAll={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText(/Already scheduled · time changes from/i),
+    ).toHaveClass("text-blue-300");
+  });
 });

@@ -17,7 +17,7 @@ describe('TelegramManagedPostGroupPresentationService system groups', () => {
     prisma.icon.findMany.mockResolvedValue([]);
   });
 
-  it('presents the service logo and money emoji for their system groups', async () => {
+  it('presents stable icons for all required system groups', async () => {
     const groups = await service.attachPostGroupIcons([
       {
         id: 'system-bot',
@@ -35,6 +35,14 @@ describe('TelegramManagedPostGroupPresentationService system groups', () => {
         systemKey: 'ADVERTISE',
         title: 'Advertise',
       },
+      {
+        id: 'mutual-promotion',
+        workspaceId: 'workspace-1',
+        icon: '🤝',
+        isSystem: true,
+        systemKey: 'MUTUAL_PROMOTION',
+        title: 'Mutual promotion',
+      },
     ]);
 
     expect(groups[0]?.iconPresentation).toMatchObject({
@@ -44,6 +52,10 @@ describe('TelegramManagedPostGroupPresentationService system groups', () => {
     expect(groups[1]?.iconPresentation).toMatchObject({
       type: 'unicode',
       value: '💰',
+    });
+    expect(groups[2]?.iconPresentation).toMatchObject({
+      type: 'unicode',
+      value: '🤝',
     });
     expect(prisma.icon.findFirst).not.toHaveBeenCalled();
   });

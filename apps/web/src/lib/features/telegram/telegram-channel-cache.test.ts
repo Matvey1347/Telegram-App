@@ -16,20 +16,52 @@ const channel = {
 };
 
 describe("telegram channel cache helpers", () => {
+  it("preserves the paginated read-model shape while patching list caches", () => {
+    const client = new QueryClient();
+    const key = telegramChannelKeys.list(false, true);
+    client.setQueryData(key, {
+      items: [channel],
+      pagination: {
+        page: 1,
+        pageSize: 100,
+        totalItems: 1,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+      counts: { active: 1, archived: 0 },
+    });
+
+    patchTelegramChannelCaches(client, {
+      id: channel.id,
+      autoSyncEnabled: false,
+    });
+
+    expect(client.getQueryData(key)).toMatchObject({
+      items: [{ ...channel, autoSyncEnabled: false }],
+      counts: { active: 1, archived: 0 },
+    });
+  });
+
   it("reconciles an entity in list and detail caches without fetching", () => {
     const client = new QueryClient();
     client.setQueryData(telegramChannelKeys.list(), [channel]);
     client.setQueryData(telegramChannelKeys.detail(channel.id), channel);
 
-    patchTelegramChannelCaches(client, { id: channel.id, autoSyncEnabled: false });
+    patchTelegramChannelCaches(client, {
+      id: channel.id,
+      autoSyncEnabled: false,
+    });
 
     expect(client.getQueryData(telegramChannelKeys.list())).toEqual([
       { ...channel, autoSyncEnabled: false },
     ]);
-    expect(client.getQueryData(telegramChannelKeys.detail(channel.id))).toEqual({
-      ...channel,
-      autoSyncEnabled: false,
-    });
+    expect(client.getQueryData(telegramChannelKeys.detail(channel.id))).toEqual(
+      {
+        ...channel,
+        autoSyncEnabled: false,
+      },
+    );
   });
 
   it("inserts and removes deterministic collection items locally", () => {
@@ -41,12 +73,18 @@ describe("telegram channel cache helpers", () => {
     removeTelegramChannelFromCaches(client, channel.id);
 
     expect(client.getQueryData(telegramChannelKeys.list())).toEqual([created]);
-    expect(client.getQueryData(telegramChannelKeys.detail(channel.id))).toBeUndefined();
+    expect(
+      client.getQueryData(telegramChannelKeys.detail(channel.id)),
+    ).toBeUndefined();
   });
 
   it("moves an archived channel locally without invalidating either lifecycle list", () => {
     const client = new QueryClient();
-    const list = (items: typeof channel[], active: number, archived: number) => ({
+    const list = (
+      items: (typeof channel)[],
+      active: number,
+      archived: number,
+    ) => ({
       items,
       pagination: {
         page: 1,
@@ -58,7 +96,10 @@ describe("telegram channel cache helpers", () => {
       },
       counts: { active, archived },
     });
-    client.setQueryData(telegramChannelKeys.list(false, true), list([channel], 1, 0));
+    client.setQueryData(
+      telegramChannelKeys.list(false, true),
+      list([channel], 1, 0),
+    );
     client.setQueryData(telegramChannelKeys.list(true, true), list([], 1, 0));
 
     moveTelegramChannelBetweenLifecycleCaches(client, {
@@ -66,11 +107,15 @@ describe("telegram channel cache helpers", () => {
       archivedAt: "2026-08-21T00:00:00.000Z",
     });
 
-    expect(client.getQueryData(telegramChannelKeys.list(false, true))).toMatchObject({
+    expect(
+      client.getQueryData(telegramChannelKeys.list(false, true)),
+    ).toMatchObject({
       items: [],
       counts: { active: 0, archived: 1 },
     });
-    expect(client.getQueryData(telegramChannelKeys.list(true, true))).toMatchObject({
+    expect(
+      client.getQueryData(telegramChannelKeys.list(true, true)),
+    ).toMatchObject({
       items: [{ id: channel.id, archivedAt: "2026-08-21T00:00:00.000Z" }],
       counts: { active: 0, archived: 1 },
     });

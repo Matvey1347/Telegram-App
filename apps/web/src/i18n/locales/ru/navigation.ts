@@ -12,6 +12,7 @@ const navigation = {
   "navigation.adSales": "Продажа рекламы",
   "navigation.crm": "CRM",
   "navigation.adCampaigns": "Рекламные кампании",
+  "navigation.mutualPromotion": "Взаимный пиар",
   "navigation.operations": "Операции",
   "navigation.scheduledTasks": "Запланированные задачи",
   "navigation.trash": "Корзина",

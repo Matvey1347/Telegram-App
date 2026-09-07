@@ -3,13 +3,7 @@
 import { formatDateTime } from "@/lib/date-format";
 
 import { useState, type ReactNode } from "react";
-import {
-  RefreshCw,
-  SearchCheck,
-  Settings2,
-  Share2,
-  Trash2,
-} from "lucide-react";
+import { RefreshCw, Settings2, Share2, Trash2 } from "lucide-react";
 import type { TelegramUserAccount } from "@/lib/api";
 import { Button } from "@/components/ui/primitives";
 import { ChannelPreview } from "./channel-preview";
@@ -32,7 +26,7 @@ export function TelegramMtprotoAccountCard({
   onRefreshQr,
   onEnterCode,
   onPassword,
-  onCheck,
+  onSynchronize,
   onSync,
   onDelete,
   children,
@@ -43,7 +37,7 @@ export function TelegramMtprotoAccountCard({
   onRefreshQr: () => void;
   onEnterCode: () => void;
   onPassword: () => void;
-  onCheck: () => void;
+  onSynchronize: () => void;
   onSync: () => void;
   onDelete: () => void;
   children?: ReactNode;
@@ -68,9 +62,9 @@ export function TelegramMtprotoAccountCard({
               label={`Actions for ${displayName(account)}`}
             >
               <TelegramCardMenuAction
-                label="Check account"
-                icon={<SearchCheck size={17} />}
-                onClick={onCheck}
+                label="Synchronize account"
+                icon={<RefreshCw size={17} />}
+                onClick={onSynchronize}
               />
               <TelegramCardMenuAction
                 label="Sync channels"

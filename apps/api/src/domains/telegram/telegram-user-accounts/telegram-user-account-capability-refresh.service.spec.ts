@@ -24,6 +24,59 @@ const account = {
 };
 
 describe('TelegramUserAccountCapabilityRefreshService', () => {
+  it('stores the current Telegram username, name, and avatar on a forced refresh', async () => {
+    const profile = {
+      id: 'telegram-user-42',
+      username: 'current_username',
+      firstName: 'Current',
+      lastName: 'Name',
+      photoUrl: 'data:image/jpeg;base64,current-avatar',
+      nameColor: 5,
+      capabilities: {
+        isPremium: false,
+        captionLengthMax: 1_024,
+        messageLengthMax: 4_096,
+        maxUploadFileSizeMb: 2_000,
+        supportsCustomEmoji: false,
+        checkedAt: '2026-09-07T20:00:00.000Z',
+        limitsSource: 'telegram_config',
+      },
+    };
+    const update = jest.fn().mockResolvedValue({
+      ...account,
+      telegramUserId: profile.id,
+      username: profile.username,
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      photoUrl: profile.photoUrl,
+    });
+    const service = new TelegramUserAccountCapabilityRefreshService(
+      {
+        telegramUserAccountIntegration: { update },
+      } as never,
+      { decrypt: jest.fn().mockReturnValue('decrypted') } as never,
+      { getAccountProfile: jest.fn().mockResolvedValue(profile) } as never,
+      { writeStructured: jest.fn() } as never,
+      { wake: jest.fn() } as never,
+    );
+
+    await service.refreshOne(account, { force: true });
+
+    const updateInput = callArgument(update) as {
+      where: { id: string };
+      data: Record<string, unknown>;
+    };
+    expect(updateInput.where).toEqual({ id: account.id });
+    expect(updateInput.data).toMatchObject({
+      telegramUserId: profile.id,
+      username: profile.username,
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      photoUrl: profile.photoUrl,
+      label: '@current_username',
+    });
+  });
+
   it('marks a revoked account ineligible and wakes the event-driven runtime', async () => {
     const prisma = {
       telegramUserAccountIntegration: {

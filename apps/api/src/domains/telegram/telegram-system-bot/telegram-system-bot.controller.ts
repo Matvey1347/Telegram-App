@@ -18,8 +18,11 @@ import { TelegramSystemBotConnectionsService } from './telegram-system-bot-conne
 import { TelegramSystemBotHandlerService } from './telegram-system-bot-handler.service';
 import { TelegramSystemBotRuntimeService } from './telegram-system-bot-runtime.service';
 import { TelegramSystemBotPostFlowService } from './telegram-system-bot-post-flow.service';
+import type { TelegramSystemBotPostPreviewDraft } from './telegram-system-bot-post-flow.types';
+import { TelegramSystemBotMutualPromotionPostFlowService } from './telegram-system-bot-mutual-promotion-post-flow.service';
 import type { TelegramSystemBotUpdate } from './telegram-system-bot-handler.service';
 import {
+  PrepareMutualPromotionPostImportDto,
   TelegramSystemBotSubscriptionsQueryDto,
   UpdateTelegramSystemBotGroupSubscriptionsDto,
   UpdateTelegramSystemBotSubscriptionDto,
@@ -32,6 +35,7 @@ export class TelegramSystemBotController {
     private readonly runtime: TelegramSystemBotRuntimeService,
     private readonly handler: TelegramSystemBotHandlerService,
     private readonly postFlow: TelegramSystemBotPostFlowService,
+    private readonly mutualPromotionPostFlow: TelegramSystemBotMutualPromotionPostFlowService,
     private readonly workspace: WorkspaceService,
   ) {}
 
@@ -121,15 +125,30 @@ export class TelegramSystemBotController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Post('ad-sale-post-preview')
-  async sendAdSalePostPreview(
+  @Post('mutual-promotion-post-import')
+  async prepareMutualPromotionPostImport(
     @CurrentUser() user: JwtUser,
-    @Body()
-    draft: {
-      text?: string;
-      imageUrls?: string[];
-      buttonRows?: Array<Array<{ text?: string; url?: string }>>;
-    },
+    @Body() dto: PrepareMutualPromotionPostImportDto,
+  ) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
+      user.sub,
+    );
+    await this.connections.switchWorkspaceForUser(user.sub, workspaceId);
+    const connection = await this.connections.workflowScopeForUser(
+      user.sub,
+      workspaceId,
+    );
+    return this.mutualPromotionPostFlow.prepare(
+      { ...connection, timezone: 'UTC' },
+      dto.folderId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('mutual-promotion-post-import')
+  async mutualPromotionPostImportResult(
+    @CurrentUser() user: JwtUser,
+    @Query('workflowId') workflowId: string,
   ) {
     const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
       user.sub,
@@ -138,7 +157,47 @@ export class TelegramSystemBotController {
       user.sub,
       workspaceId,
     );
-    return this.postFlow.sendAdSalePreview(
+    return this.mutualPromotionPostFlow.result(
+      { ...connection, timezone: 'UTC' },
+      workflowId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('ad-sale-post-preview')
+  async sendAdSalePostPreview(
+    @CurrentUser() user: JwtUser,
+    @Body()
+    draft: TelegramSystemBotPostPreviewDraft,
+  ) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
+      user.sub,
+    );
+    const connection = await this.connections.workflowScopeForUser(
+      user.sub,
+      workspaceId,
+    );
+    return this.postFlow.sendPostPreview(
+      { ...connection, timezone: 'UTC' },
+      draft,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('mutual-promotion-post-preview')
+  async sendMutualPromotionPostPreview(
+    @CurrentUser() user: JwtUser,
+    @Body()
+    draft: TelegramSystemBotPostPreviewDraft,
+  ) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
+      user.sub,
+    );
+    const connection = await this.connections.workflowScopeForUser(
+      user.sub,
+      workspaceId,
+    );
+    return this.postFlow.sendPostPreview(
       { ...connection, timezone: 'UTC' },
       draft,
     );

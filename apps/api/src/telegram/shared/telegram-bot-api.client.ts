@@ -246,6 +246,7 @@ export class TelegramBotApiClient {
       text: string;
       parse_mode?: string;
       reply_markup?: unknown;
+      link_preview_options?: unknown;
     },
   ) {
     return this.call<unknown>(token, 'editMessageText', payload);

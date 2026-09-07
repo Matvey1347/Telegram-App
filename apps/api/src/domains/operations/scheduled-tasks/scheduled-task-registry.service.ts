@@ -170,6 +170,23 @@ export class ScheduledTaskRegistryService {
         execute: this.executor.executors['telegram_ad_sales.due_deletions'],
       },
       {
+        key: 'mutual_promotion.lifecycle',
+        name: 'Mutual promotion lifecycle',
+        description:
+          'Publishes due mutual-promotion posts, captures boundaries, and removes Telegram copies at folder end.',
+        scope: 'SYSTEM_MAINTENANCE',
+        defaultSchedule: {
+          frequency: 'INTERVAL',
+          intervalMinutes: 1,
+          timezone: 'Europe/Warsaw',
+        },
+        scheduleEditable: false,
+        supportedFrequencies: ['INTERVAL'],
+        notificationSupported: false,
+        dueDriven: true,
+        execute: this.executor.executors['mutual_promotion.lifecycle'],
+      },
+      {
         key: 'application_logs.cleanup',
         name: 'Application logs cleanup',
         description:

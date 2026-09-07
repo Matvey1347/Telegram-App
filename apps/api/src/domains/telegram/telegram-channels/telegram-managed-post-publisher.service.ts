@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   TelegramManagedPostIdVerificationStatus,
   TelegramManagedPostLinkSource,
@@ -111,6 +107,7 @@ export class TelegramManagedPostPublisherService {
     scheduleAt?: Date,
     longTextMode: 'IMAGES_THEN_TEXT' | 'CAPTION_THEN_TEXT' = 'IMAGES_THEN_TEXT',
     actorUserId?: string,
+    requireTelegramNativeSchedule = false,
   ) {
     const [foundPost, channel, initialSources] = await Promise.all([
       this.prisma.telegramManagedPost.findFirst({
@@ -144,18 +141,26 @@ export class TelegramManagedPostPublisherService {
       actorUserId,
     );
     const buttonRows = normalizeTelegramPostButtonRows(post.buttonRows);
+    if (requireTelegramNativeSchedule && buttonRows.length) {
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_NOT_SCHEDULED',
+        'Posts with inline buttons must use local scheduled delivery',
+      );
+    }
     const requiresRichMessage = requiresNativeTelegramRichMessage(
       post.text || '',
     );
-    const requiresBotApi = managedPostRequiresBotApi({
-      hasInlineButtons: Boolean(buttonRows.length),
-      requiresRichMessage,
-      isAdvertisingPost: (_count?.adSalePlacements ?? 0) > 0,
-      existingSourceType: post.sourceType,
-      hasExistingPublication: Boolean(
-        post.publishedAt || post.telegramMessageIds.length,
-      ),
-    });
+    const requiresBotApi = requireTelegramNativeSchedule
+      ? false
+      : managedPostRequiresBotApi({
+          hasInlineButtons: Boolean(buttonRows.length),
+          requiresRichMessage,
+          isAdvertisingPost: (_count?.adSalePlacements ?? 0) > 0,
+          existingSourceType: post.sourceType,
+          hasExistingPublication: Boolean(
+            post.publishedAt || post.telegramMessageIds.length,
+          ),
+        });
     const preferredBotSourceId =
       (_count?.adSalePlacements ?? 0) > 0
         ? TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID
@@ -220,6 +225,16 @@ export class TelegramManagedPostPublisherService {
       throw telegramPostsBadRequest(
         'TELEGRAM_POST_PUBLISH_SOURCE_UNAVAILABLE',
         'No connected source has posting permission',
+      );
+    }
+    if (
+      requireTelegramNativeSchedule &&
+      (source.sourceType !== TelegramSourceType.MTPROTO ||
+        !source.permissions.canDeleteMessages)
+    ) {
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_PUBLISH_SOURCE_UNAVAILABLE',
+        'A connected Telegram user account with publishing and deletion permission is required to add this post to Telegram Scheduled Messages and remove it when the folder ends',
       );
     }
     if (scheduleAt && source.sourceType !== TelegramSourceType.MTPROTO) {

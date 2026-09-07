@@ -43,6 +43,14 @@ describe('TelegramSystemBotHandlerService', () => {
       callback: jest.fn(),
       input: jest.fn().mockResolvedValue(null),
     } as any;
+    const mutualPromotionPostFlow = {
+      resume: jest
+        .fn()
+        .mockResolvedValue({ handled: 'mutual-promotion-post-import' }),
+      isCallback: jest.fn().mockReturnValue(false),
+      callback: jest.fn(),
+      input: jest.fn().mockResolvedValue(null),
+    } as any;
     const service = new TelegramSystemBotHandlerService(
       { token: 'token' } as any,
       api,
@@ -51,8 +59,20 @@ describe('TelegramSystemBotHandlerService', () => {
       finance,
       postFlow,
       adSaleFlow,
+      undefined,
+      undefined,
+      undefined,
+      mutualPromotionPostFlow,
     );
-    return { service, api, connections, finance, postFlow, adSaleFlow };
+    return {
+      service,
+      api,
+      connections,
+      finance,
+      postFlow,
+      adSaleFlow,
+      mutualPromotionPostFlow,
+    };
   }
 
   it('opens the Ad Sale workflow from the website deep link', async () => {
@@ -113,6 +133,25 @@ describe('TelegramSystemBotHandlerService', () => {
       'workflow-1',
     );
     expect(test.postFlow.begin).not.toHaveBeenCalled();
+  });
+
+  it('resumes a prepared mutual-promotion post import from its deep link', async () => {
+    const test = workflowHarness();
+
+    await expect(
+      test.service.handle({
+        message: {
+          chat: { id: 44, type: 'private' },
+          from: { id: 44 },
+          text: '/start mutual_promotion_post_workflow-1',
+        },
+      }),
+    ).resolves.toEqual({ handled: 'mutual-promotion-post-import' });
+
+    expect(test.mutualPromotionPostFlow.resume).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: 'workspace' }),
+      'workflow-1',
+    );
   });
 
   it('stores the Telegram message id for a connection prompt', async () => {

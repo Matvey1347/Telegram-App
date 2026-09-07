@@ -6,6 +6,7 @@ const translations: Partial<Record<TranslationKey, string>> = {
   "telegramPosts.systemGroup.createdInTelegram": "Созданные в Telegram",
   "telegramPosts.systemGroup.advertise": "Реклама",
   "telegramPosts.systemGroup.systemBotPosts": "Публикации системного бота",
+  "telegramPosts.systemGroup.mutualPromotion": "Взаимный пиар",
 };
 const translate = (key: TranslationKey) => translations[key] ?? key;
 
@@ -14,6 +15,7 @@ describe("telegramPostGroupTitle", () => {
     ["TELEGRAM_IMPORTED", "Созданные в Telegram"],
     ["ADVERTISE", "Реклама"],
     ["SYSTEM_BOT_POSTS", "Публикации системного бота"],
+    ["MUTUAL_PROMOTION", "Взаимный пиар"],
   ])("translates the stable system group key %s", (systemKey, expected) => {
     expect(
       telegramPostGroupTitle({ title: "Stored title", systemKey }, translate),
