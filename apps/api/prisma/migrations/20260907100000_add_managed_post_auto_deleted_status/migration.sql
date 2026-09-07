@@ -1,0 +1,1 @@
+ALTER TYPE "TelegramManagedPostRemoteStatus" ADD VALUE IF NOT EXISTS 'AUTO_DELETED';

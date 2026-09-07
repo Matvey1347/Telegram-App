@@ -476,6 +476,11 @@ export type TelegramAdSalePayment = {
   allocations: TelegramAdSalePaymentAllocation[];
 };
 
+export type TelegramAdSalePaymentDeletionResult = {
+  paymentId: string;
+  transactionId: string | null;
+};
+
 export type TelegramAdSaleChannelBreakdown = {
   placementId: string;
   channelId: string;

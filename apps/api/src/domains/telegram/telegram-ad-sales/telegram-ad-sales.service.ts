@@ -15,7 +15,6 @@ import {
   TelegramAdSaleOrigin,
   TelegramAdSaleStatus,
   TelegramManagedPostIdVerificationStatus,
-  TelegramManagedPostRemoteStatus,
   TelegramManagedPostStatus,
   TelegramSourceType,
   TelegramAdSlotStrategy,
@@ -33,6 +32,7 @@ import { ResponseCacheService } from '../../../common/response-cache.service';
 import { CurrencyConversionService } from '../../../common/currency-conversion.service';
 import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
 import { WorkspaceService } from '../../../common/workspace.service';
+import { completedAdvertisingPostUpdate } from '../telegram-channels/completed-advertising-managed-post';
 import { runBounded } from '../../../common/run-bounded';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -861,7 +861,7 @@ export class TelegramAdSalesService {
     });
   }
 
-  private async recalculateAdvertiserStats(
+  async recalculateAdvertiserStats(
     workspaceId: string,
     advertiserId: string,
     tx: Prisma.TransactionClient | PrismaService = this.prisma,
@@ -5015,7 +5015,7 @@ export class TelegramAdSalesService {
     const placement = await this.prisma.telegramAdSalePlacement.findFirst({
       where: { id: placementId, workspaceId },
       include: {
-        managedPost: true,
+        managedPost: { include: { group: true } },
         telegramPost: true,
         telegramChannel: true,
       },
@@ -5101,12 +5101,7 @@ export class TelegramAdSalesService {
         ? [
             this.prisma.telegramManagedPost.update({
               where: { id: placement.managedPost.id },
-              data: {
-                telegramRemoteStatus: TelegramManagedPostRemoteStatus.MISSING,
-                lastTelegramSyncedAt: new Date(),
-                lastTelegramSyncNote:
-                  'Placement deleted after ad format expiry.',
-              },
+              data: completedAdvertisingPostUpdate(placement, new Date()),
             }),
           ]
         : []),

@@ -198,6 +198,7 @@ export type AdCampaign = AdCampaignAnalyticsFields & {
   assignedMember?: WorkspaceMember | null;
   hypothesisLinks?: AdCampaignHypothesisLink[];
   inviteLinkHistory?: AdCampaignInviteLinkHistory | null;
+  inviteLinkHistorySummary?: AdCampaignInviteLinkHistory['summary'] | null;
   admissionViewAnalytics?: AdCampaignAdmissionViewAnalytics | null;
   analytics?: {
     joinedCount: number;

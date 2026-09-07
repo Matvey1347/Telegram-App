@@ -206,6 +206,20 @@ export class TelegramInviteSyncService {
       0,
       (params.remote.expectedTotalLinks ?? 0) - fetchedTotalLinks,
     );
+    if (params.remote.scope === 'ALL_ADMINS' && missingTotalLinks === 0) {
+      const pendingJoinRequestsCount = params.remote.links.reduce(
+        (sum, link) => sum + Math.max(0, Number(link.requested) || 0),
+        0,
+      );
+      await this.prisma.telegramChannel.updateMany({
+        where: {
+          id: params.channelId,
+          workspaceId: params.workspaceId,
+          pendingJoinRequestsCount: { not: pendingJoinRequestsCount },
+        },
+        data: { pendingJoinRequestsCount },
+      });
+    }
     await this.sourceAccessService.recordDataSource({
       workspaceId: params.workspaceId,
       channelId: params.channelId,

@@ -63,6 +63,34 @@ describe("AdCampaignsTable admission view analytics", () => {
     expect(screen.queryByText(/255\.29 USD/)).not.toBeInTheDocument();
   });
 
+  it("renders the aggregate absolute and percentage drop from peak", () => {
+    renderTable([
+      campaign({
+        inviteLinks: [
+          {
+            id: "link-1",
+            joinedCount: 80,
+            requestedCount: 10,
+          } as NonNullable<AdCampaign["inviteLinks"]>[number],
+        ],
+        inviteLinkHistorySummary: {
+          currentJoinedCount: 80,
+          currentRequestedCount: 10,
+          currentTotalAttributed: 90,
+          peakJoinedCount: 100,
+          peakRequestedCount: 10,
+          peakTotalAttributed: 110,
+          drawdownFromPeak: 20,
+          drawdownPercent: 18.1818,
+          hasHighDropoff: true,
+          inviteLinksCount: 1,
+        },
+      }),
+    ]);
+
+    expect(screen.getByText(/Drop from peak 20 · 18\.2%/)).toBeInTheDocument();
+  });
+
   it("renders exact batch uplift, estimated active and activation", () => {
     renderTable([
       campaign({

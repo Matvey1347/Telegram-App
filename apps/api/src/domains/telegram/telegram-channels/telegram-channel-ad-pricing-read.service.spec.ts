@@ -8,29 +8,21 @@ describe('TelegramChannelAdPricingReadService', () => {
       const postDate = new Date(
         now.getTime() - (10 + index) * 24 * 60 * 60 * 1000,
       );
-      const at = (hours: number) =>
-        new Date(postDate.getTime() + hours * 60 * 60 * 1000);
       return {
         id: `post-${index}`,
         telegramChannelId: 'channel-1',
         postDate,
-        viewsCount: 260 + index,
         manualOwnViews: 0,
         excludeFromAnalytics: false,
-        adSalePlacements: [],
-        metricSnapshots: [
-          { viewsCount: 120 + index * 4, collectedAt: at(24) },
-          { viewsCount: 160 + index * 8, collectedAt: at(48) },
-          { viewsCount: 175 + index * 3, collectedAt: at(72) },
-          { viewsCount: 240 + index * 4, collectedAt: at(168) },
-        ],
+        adPlacementLinked: false,
+        h24Views: 120 + index * 4,
+        h48Views: 160 + index * 8,
+        h72Views: 175 + index * 3,
+        permanentViews: 240 + index * 4,
       };
     });
     const prisma = {
-      $queryRaw: jest
-        .fn()
-        .mockResolvedValue(posts.map((post) => ({ id: post.id }))),
-      telegramPost: { findMany: jest.fn().mockResolvedValue(posts) },
+      $queryRaw: jest.fn().mockResolvedValue(posts),
     };
     const service = new TelegramChannelAdPricingReadService(prisma as never);
 
@@ -51,21 +43,11 @@ describe('TelegramChannelAdPricingReadService', () => {
       },
     });
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
-    expect(prisma.telegramPost.findMany).toHaveBeenCalledTimes(1);
-    expect(prisma.telegramPost.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          workspaceId: 'workspace-1',
-          id: { in: posts.map((p) => p.id) },
-        },
-      }),
-    );
   });
 
   it('returns an explicit insufficient-data state without a detail query', async () => {
     const prisma = {
       $queryRaw: jest.fn().mockResolvedValue([]),
-      telegramPost: { findMany: jest.fn() },
     };
     const service = new TelegramChannelAdPricingReadService(prisma as never);
 
@@ -80,13 +62,12 @@ describe('TelegramChannelAdPricingReadService', () => {
       postsSampleCount: 0,
       dataQuality: 'NOT_ENOUGH_DATA',
     });
-    expect(prisma.telegramPost.findMany).not.toHaveBeenCalled();
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
   });
 
   it('propagates a failed pricing read instead of showing stale estimates', async () => {
     const prisma = {
       $queryRaw: jest.fn().mockRejectedValue(new Error('database unavailable')),
-      telegramPost: { findMany: jest.fn() },
     };
     const service = new TelegramChannelAdPricingReadService(prisma as never);
 

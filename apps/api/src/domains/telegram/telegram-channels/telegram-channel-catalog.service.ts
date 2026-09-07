@@ -157,7 +157,12 @@ export class TelegramChannelCatalogService {
               },
             },
             _count: { select: { adAnalyses: true } },
-            adminLinks: { include: { telegramUserAccountIntegration: true } },
+            adminLinks: {
+              select: {
+                id: true,
+                telegramUserAccountIntegrationId: true,
+              },
+            },
             sourceAccesses: {
               select: {
                 id: true,

@@ -140,6 +140,24 @@ describe("managed post Telegram identity presentation", () => {
     );
   });
 
+  it("presents an automatically expired advertising post as completed without a dead link", () => {
+    const post = scheduledPost({
+      status: "PUBLISHED",
+      telegramMessageUrls: ["https://t.me/c/123/4427"],
+      telegramIdVerificationStatus: "MISSING",
+      telegramRemoteStatus: "AUTO_DELETED",
+    });
+
+    expect(managedPostTelegramIdentityTone(post)).toBe("normal");
+    expect(managedPostPublishedTelegramUrl(post)).toBeNull();
+    renderLink(post);
+    expect(
+      screen.getByText("Published · auto-deleted"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open in TG" })).toBeNull();
+    expect(screen.queryByLabelText("Telegram post was not found")).toBeNull();
+  });
+
   it("keeps a scheduled missing identity red without exposing a permalink", () => {
     const post = scheduledPost({
       telegramIdVerificationStatus: "MISSING",

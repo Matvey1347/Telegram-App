@@ -483,7 +483,7 @@ function PerformanceCell({
   const peakJoined = joined + Math.max(0, left);
   const unsubscribedPercent =
     peakJoined > 0 ? (Math.max(0, left) / peakJoined) * 100 : 0;
-  const historySummary = campaign.inviteLinkHistory?.summary ?? null;
+  const historySummary = campaign.inviteLinkHistorySummary ?? campaign.inviteLinkHistory?.summary ?? null;
   const historyPeakAttributed = Number(historySummary?.peakTotalAttributed ?? 0);
   const historyCurrentAttributed = Number(
     historySummary?.currentTotalAttributed ?? 0,
@@ -587,12 +587,9 @@ function PerformanceCell({
                 Peak {formatMetric(resolvedPeakAttributed)}
               </span>
             ) : null}
-            {resolvedDropPercent > 0 ? (
+            {historySummary != null || resolvedDropPercent > 0 ? (
               <span className="rounded border border-amber-700/80 bg-amber-950/20 px-2 py-0.5 text-amber-200">
-                Drop {formatPercent(resolvedDropPercent)}
-                {resolvedDropAbsolute > 0
-                  ? ` · ${formatMetric(resolvedDropAbsolute)}`
-                  : ""}
+                Drop from peak {formatMetric(resolvedDropAbsolute)} · {formatPercent(resolvedDropPercent)}
               </span>
             ) : null}
             <button

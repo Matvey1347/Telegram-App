@@ -20,6 +20,7 @@ import type {
   TelegramWorkspaceCustomEmojiPacksResponse,
   TelegramWorkspaceFullSyncResult,
   TelegramWorkspaceManualSyncRequest,
+  TelegramWorkspaceSyncProgressItem,
   ImportTelegramCustomEmojiPackInput,
   SyncOperationResult,
 } from "@telegram-system/shared";
@@ -138,6 +139,18 @@ export function createTelegramChannelsApi({
           quietMutationConfig,
         )
       ).data,
+    syncWorkspaceChannelsWithProgress: async (
+      selection: TelegramChannelSyncSelection,
+      onProgress: StreamProgressHandler<TelegramWorkspaceSyncProgressItem>,
+    ) =>
+      streamProgressAction<
+        TelegramWorkspaceFullSyncResult,
+        TelegramWorkspaceSyncProgressItem
+      >(
+        "/telegram-sync/workspace-channels/run-stream",
+        { selection } satisfies TelegramWorkspaceManualSyncRequest,
+        onProgress,
+      ),
     checkSystemBotAccess: async (channelId: string) =>
       (
         await api.post<TelegramChannelSystemBotConnection>(

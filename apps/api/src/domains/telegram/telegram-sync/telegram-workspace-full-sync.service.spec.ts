@@ -254,4 +254,91 @@ describe('TelegramWorkspaceFullSyncService', () => {
     expect(result.failures[0]?.reason).toContain('post_metrics');
     expect(result.failures[0]?.reason).not.toContain('private-value');
   });
+
+  it('streams the current channel, nested sync step, and completed channel count', async () => {
+    const syncNow = jest.fn().mockImplementation(
+      async (
+        _userId: string,
+        _channelId: string,
+        _selection: unknown,
+        onProgress: (item: unknown, current: number, total: number) => void,
+      ) => {
+        onProgress(
+          {
+            phase: 'saving_invite_links',
+            message: 'Saving invite links…',
+            stageCurrent: 3,
+            stageTotal: 8,
+          },
+          3,
+          8,
+        );
+        return { status: 'success' };
+      },
+    );
+    const prisma = {
+      workspace: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ name: 'Business' }),
+      },
+      workspaceMember: {
+        findFirst: jest.fn().mockResolvedValue({ userId: 'actor-1' }),
+      },
+      telegramChannel: {
+        findMany: jest.fn().mockResolvedValue([channel('channel-1', 'One')]),
+      },
+    };
+    const moduleRef = {
+      registerRequestByContextId: jest.fn(),
+      resolve: jest.fn().mockResolvedValue({ syncNow }),
+    };
+    const service = new TelegramWorkspaceFullSyncService(
+      prisma as never,
+      moduleRef as never,
+    );
+    const onProgress = jest.fn();
+
+    await service.syncWorkspace({
+      workspaceId: 'workspace-1',
+      actor: { type: 'MANUAL', userId: 'actor-1' },
+      selection: {
+        syncIncludePublicInfo: false,
+        syncIncludeInviteLinks: true,
+        syncIncludeHistoricalPosts: false,
+        syncIncludePostMetrics: false,
+        syncIncludeOlderPosts: false,
+        syncIncludeChannelStats: false,
+        syncIncludeManagedPosts: false,
+        syncIncludeAudienceSnapshot: false,
+      },
+      onProgress,
+    });
+
+    expect(onProgress).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        phase: 'channel_started',
+        channelTitle: 'One',
+      }),
+      1,
+      1,
+    );
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phase: 'channel_progress',
+        message: 'Saving invite links…',
+        stageCurrent: 3,
+        stageTotal: 8,
+      }),
+      1,
+      1,
+    );
+    expect(onProgress).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        phase: 'channel_completed',
+        successful: 1,
+      }),
+      1,
+      1,
+    );
+  });
 });

@@ -5,7 +5,10 @@ import {
 } from '@nestjs/common';
 import { ContextIdFactory, ModuleRef } from '@nestjs/core';
 import type {
+  BulkActionResultItem,
+  TelegramChannelSyncProgressItem,
   TelegramWorkspaceFullSyncResult,
+  TelegramWorkspaceSyncProgressItem,
   TelegramWorkspaceSyncSelection,
 } from '@telegram-system/shared';
 import { sanitizeOperationalError } from '../../../common/security/operational-error';
@@ -28,6 +31,12 @@ export class TelegramWorkspaceFullSyncService {
     workspaceId: string;
     actor: TelegramWorkspaceFullSyncActor;
     selection?: TelegramWorkspaceSyncSelection;
+    onProgress?: (
+      item: TelegramWorkspaceSyncProgressItem,
+      current: number,
+      total: number,
+    ) => void;
+    signal?: AbortSignal;
   }): Promise<TelegramWorkspaceFullSyncResult> {
     if (input.selection && !Object.values(input.selection).some(Boolean)) {
       throw new BadRequestException('Select at least one sync section');
@@ -77,7 +86,27 @@ export class TelegramWorkspaceFullSyncService {
     let skipped = 0;
     const failures: TelegramWorkspaceFullSyncResult['failures'] = [];
 
-    for (const channel of channels) {
+    for (const [index, channel] of channels.entries()) {
+      input.signal?.throwIfAborted();
+      const current = index + 1;
+      const notify = (
+        item: Omit<
+          TelegramWorkspaceSyncProgressItem,
+          "channelId" | "channelTitle" | "successful" | "failed" | "skipped"
+        >,
+      ) =>
+        input.onProgress?.(
+          {
+            ...item,
+            channelId: channel.id,
+            channelTitle: channel.title,
+            successful,
+            failed,
+            skipped,
+          },
+          current,
+          channels.length,
+        );
       const hasSelection = input.selection
         ? Object.values(input.selection).some(Boolean)
         : [
@@ -92,16 +121,48 @@ export class TelegramWorkspaceFullSyncService {
           ].some(Boolean);
       if (!hasSelection) {
         skipped += 1;
+        notify({
+          phase: 'channel_skipped',
+          message: 'No synchronization sections selected for this channel.',
+        });
         continue;
       }
+      notify({
+        phase: 'channel_started',
+        message: 'Starting channel synchronization…',
+      });
       try {
-        const outcome = await channelService.syncNow(
-          actorUserId,
-          channel.id,
-          input.selection
-            ? { ...input.selection, saveSelection: false }
-            : undefined,
-        );
+        const payload = input.selection
+          ? { ...input.selection, saveSelection: false }
+          : undefined;
+        const channelProgress = input.onProgress
+          ? (
+              item: BulkActionResultItem | TelegramChannelSyncProgressItem,
+              stepCurrent: number,
+              stepTotal: number,
+            ) =>
+              notify({
+                phase: 'channel_progress',
+                message:
+                  item.message ||
+                  ('action' in item ? item.action : 'Synchronizing channel…'),
+                stepPhase: 'phase' in item ? item.phase : undefined,
+                stageCurrent:
+                  ('stageCurrent' in item ? item.stageCurrent : undefined) ??
+                  stepCurrent,
+                stageTotal:
+                  ('stageTotal' in item ? item.stageTotal : undefined) ??
+                  stepTotal,
+              })
+          : undefined;
+        const outcome = channelProgress
+          ? await channelService.syncNow(
+              actorUserId,
+              channel.id,
+              payload,
+              channelProgress,
+            )
+          : await channelService.syncNow(actorUserId, channel.id, payload);
         if (outcome.status !== 'success') {
           failed += 1;
           failures.push({
@@ -109,8 +170,16 @@ export class TelegramWorkspaceFullSyncService {
             channelTitle: channel.title,
             reason: this.outcomeFailureReason(outcome),
           });
+          notify({
+            phase: 'channel_failed',
+            message: this.outcomeFailureReason(outcome),
+          });
         } else {
           successful += 1;
+          notify({
+            phase: 'channel_completed',
+            message: 'Channel synchronization completed.',
+          });
         }
       } catch (error) {
         failed += 1;
@@ -118,6 +187,10 @@ export class TelegramWorkspaceFullSyncService {
           channelId: channel.id,
           channelTitle: channel.title,
           reason: sanitizeOperationalError(error, 'Channel sync failed'),
+        });
+        notify({
+          phase: 'channel_failed',
+          message: sanitizeOperationalError(error, 'Channel sync failed'),
         });
       }
     }

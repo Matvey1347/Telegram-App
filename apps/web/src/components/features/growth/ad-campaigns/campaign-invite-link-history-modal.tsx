@@ -124,8 +124,8 @@ export function CampaignInviteLinkHistoryModal({
                           </p>
                           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
                             <p>
-                              current {formatNumber(link.summary.currentJoinedCount)} /
-                              peak {formatNumber(link.summary.peakJoinedCount)}
+                              current {formatNumber(link.summary.currentTotalAttributed)} /
+                              peak {formatNumber(link.summary.peakTotalAttributed)}
                             </p>
                             {showDrop ? (
                               <p>

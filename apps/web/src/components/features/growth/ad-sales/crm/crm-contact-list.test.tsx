@@ -10,6 +10,8 @@ import {
   CrmContactStageFilters,
   crmContactStageFromSearchParams,
   crmContactStageSearchParams,
+  readCrmContactStagePreference,
+  writeCrmContactStagePreference,
 } from "./crm-contact-list";
 
 const contact: CrmContactListItem = {
@@ -163,6 +165,22 @@ describe("CrmContactCard", () => {
     const all = crmContactStageSearchParams(selected, "ALL");
     expect(all.has("stage")).toBe(false);
     expect(crmContactStageFromSearchParams(all)).toBe("ALL");
+  });
+
+  it("persists the last status separately for each workspace", () => {
+    const values = new Map<string, string>([
+      ["selected-workspace-id", "workspace-1"],
+    ]);
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+
+    writeCrmContactStagePreference(storage, "CUSTOMER");
+    expect(readCrmContactStagePreference(storage)).toBe("CUSTOMER");
+
+    values.set("selected-workspace-id", "workspace-2");
+    expect(readCrmContactStagePreference(storage)).toBe("ALL");
   });
 
   it("restores every preserved chat from the minimized launcher", () => {
@@ -386,5 +404,8 @@ describe("CrmContactCard", () => {
     );
     expect(screen.queryByText("CUSTOMER")).toBeNull();
     expect(screen.queryByText("No username")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Actions for Advertiser" }),
+    ).toBeNull();
   });
 });

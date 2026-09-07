@@ -432,6 +432,9 @@ describe("AdSaleModal", () => {
     fireEvent.click(await screen.findByRole("button", { name: "2/48" }));
 
     await screen.findByText(/2\/48 · 250 UAH/);
+
+    fireEvent.click(screen.getByRole("button", { name: "Format for all" }));
+    expect(screen.getAllByRole("button", { name: "2/48" })).toHaveLength(1);
   });
 
   it("creates placement rows for every selected date without a separate bulk mode", async () => {

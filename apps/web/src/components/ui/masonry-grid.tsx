@@ -47,7 +47,7 @@ export function MasonryGrid({
   return (
     <div
       ref={gridRef}
-      className={`grid grid-cols-1 gap-x-4 [grid-auto-rows:1px] md:grid-cols-2 xl:grid-cols-3 ${className}`}
+      className={`grid grid-flow-row-dense grid-cols-1 gap-x-4 [grid-auto-rows:1px] md:grid-cols-2 xl:grid-cols-3 ${className}`}
     >
       {Children.map(children, (child, index) => (
         <MasonryGridItem
@@ -56,15 +56,7 @@ export function MasonryGrid({
               ? String(child.key)
               : index
           }
-          className={`col-start-1 ${
-            index % 2 === 0 ? "md:col-start-1" : "md:col-start-2"
-          } ${
-            index % 3 === 0
-              ? "xl:col-start-1"
-              : index % 3 === 1
-                ? "xl:col-start-2"
-                : "xl:col-start-3"
-          } ${itemClassName}`}
+          className={itemClassName}
         >
           {child}
         </MasonryGridItem>

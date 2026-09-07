@@ -24,6 +24,7 @@ const messages = {
   "telegram.posts.remoteStatus.unknown": "Статус в Telegram неизвестен",
   "telegram.posts.remoteStatus.missing": "Не найдено в Telegram",
   "telegram.posts.remoteStatus.broken": "Ссылка на Telegram не работает",
+  "telegram.posts.remoteStatus.autoDeleted": "Опубликовано, затем удалено автоматически",
   "telegram.posts.search": "Поиск по названию, тексту, группе или участнику",
   "telegram.posts.total": "Всего: {count}",
   "telegram.posts.created": "создано {date}",
@@ -287,6 +288,9 @@ const messages = {
   "telegram.posts.telegramLink.verifyError":
     "Не удалось проверить идентификатор публикации Telegram.",
   "telegram.posts.telegramLink.open": "Открыть в Telegram",
+  "telegram.posts.telegramLink.autoDeleted": "Опубликовано · удалено автоматически",
+  "telegram.posts.telegramLink.autoDeletedDescription":
+    "Этот рекламный пост был успешно опубликован, а затем автоматически удалён после завершения срока размещения.",
   "telegram.posts.telegramLink.viewSchedule":
     "Посмотреть состояние запланированной публикации Telegram",
   "telegram.posts.telegramLink.setOrVerify":

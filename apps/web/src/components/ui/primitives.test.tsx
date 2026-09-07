@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 describe("MasonryGrid", () => {
-  it("measures every card independently instead of using the tallest row", () => {
+  it("measures cards independently and leaves their column available for dense packing", () => {
     vi.stubGlobal(
       "ResizeObserver",
       class ResizeObserverMock {
@@ -58,11 +58,16 @@ describe("MasonryGrid", () => {
     const shortItem =
       screen.getByText("Short card").parentElement?.parentElement;
 
-    expect(grid).toHaveClass("grid", "[grid-auto-rows:1px]", "gap-x-4");
+    expect(grid).toHaveClass(
+      "grid",
+      "grid-flow-row-dense",
+      "[grid-auto-rows:1px]",
+      "gap-x-4",
+    );
     expect(tallItem).toHaveStyle({ gridRowEnd: "span 220" });
     expect(shortItem).toHaveStyle({ gridRowEnd: "span 120" });
-    expect(tallItem).toHaveClass("md:col-start-1", "xl:col-start-1");
-    expect(shortItem).toHaveClass("md:col-start-2", "xl:col-start-2");
+    expect(tallItem).not.toHaveClass("md:col-start-1", "xl:col-start-1");
+    expect(shortItem).not.toHaveClass("md:col-start-2", "xl:col-start-2");
   });
 });
 

@@ -17,6 +17,10 @@ import {
   buildAdCampaignPageIdQuery,
   type AdCampaignPageId,
 } from './ad-campaign-list-query';
+import {
+  CampaignListHistorySummary,
+  loadCampaignListHistorySummaries,
+} from './ad-campaign-list-history-summary';
 
 const CAMPAIGN_LIST_SELECT = {
   id: true,
@@ -204,9 +208,12 @@ export class AdCampaignListReadService {
         this.prisma.adCampaign.count({ where }),
       ]);
     }
-    const legacyChannels = await this.resolveLegacyChannels(workspaceId, rows);
+    const [legacyChannels, historySummaries] = await Promise.all([
+      this.resolveLegacyChannels(workspaceId, rows),
+      loadCampaignListHistorySummaries(this.prisma, workspaceId, rows),
+    ]);
     return createPaginatedResponse(
-      rows.map((row) => this.mapRow(row, legacyChannels)),
+      rows.map((row) => this.mapRow(row, legacyChannels, historySummaries)),
       totalItems,
       pagination,
     );
@@ -264,6 +271,7 @@ export class AdCampaignListReadService {
   private mapRow(
     row: CampaignListRow,
     legacyChannels: Map<string, TelegramSource>,
+    historySummaries: Map<string, CampaignListHistorySummary>,
   ) {
     const linkedPromos = new Map(
       [row.promo, ...row.promos.map((link) => link.promo)]
@@ -317,6 +325,7 @@ export class AdCampaignListReadService {
       advertisingChannels: sources,
       attributionType: attributionCount > 1 ? 'mixed' : 'clean',
       isMixedAttribution: attributionCount > 1,
+      inviteLinkHistorySummary: historySummaries.get(row.id) ?? null,
       analytics: {
         joinedCount: effectiveJoined,
         requestedCount,

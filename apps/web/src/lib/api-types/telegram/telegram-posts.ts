@@ -39,6 +39,7 @@ export type TelegramManagedPostRemoteStatus =
   | "PUBLISHED"
   | "BROKEN"
   | "MISSING"
+  | "AUTO_DELETED"
   | "UNKNOWN";
 export type TelegramManagedPostScheduleMode = "TELEGRAM_NATIVE" | "LOCAL";
 export type TelegramManagedPostGroupSummary = {

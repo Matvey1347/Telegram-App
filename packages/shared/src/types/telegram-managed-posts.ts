@@ -21,6 +21,7 @@ export type TelegramManagedPostLookupItem = {
     | "PUBLISHED"
     | "BROKEN"
     | "MISSING"
+    | "AUTO_DELETED"
     | "UNKNOWN";
   telegramMessageIds: string[];
   telegramIdVerificationStatus: TelegramManagedPostIdVerificationStatus;

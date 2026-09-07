@@ -397,7 +397,7 @@ function remoteStatusKey(status: string) {
   if (status === "SCHEDULED") return "telegramPosts.status.scheduled" as const;
   if (status === "MISSING") return "telegram.posts.remoteStatus.missing" as const;
   if (status === "BROKEN") return "telegram.posts.remoteStatus.broken" as const;
-  return "telegram.posts.remoteStatus.unknown" as const;
+  return status === "AUTO_DELETED" ? "telegram.posts.remoteStatus.autoDeleted" as const : "telegram.posts.remoteStatus.unknown" as const;
 }
 
 function formatManagedPostRevisionReason(t: TranslationFunction, reason: string) {

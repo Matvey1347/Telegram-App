@@ -1,9 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import {
-  calculateExpectedViews,
-  selectExpectedViewsAtWindow,
-} from '../../../common/analytics/telegram-post-expected-views';
+import { calculateExpectedViews } from '../../../common/analytics/telegram-post-expected-views';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 const PRICING_WINDOW_DAYS = 50;
@@ -42,6 +39,19 @@ type PricingChannel = {
   ownViewsPerPost?: number | null;
 };
 
+type PricingPost = {
+  id: string;
+  telegramChannelId: string;
+  postDate: Date;
+  manualOwnViews: number;
+  excludeFromAnalytics: boolean;
+  adPlacementLinked: boolean;
+  h24Views: number | null;
+  h48Views: number | null;
+  h72Views: number | null;
+  permanentViews: number | null;
+};
+
 @Injectable()
 export class TelegramChannelAdPricingReadService {
   constructor(private readonly prisma: PrismaService) {}
@@ -56,12 +66,15 @@ export class TelegramChannelAdPricingReadService {
     const cutoff = new Date(
       now.getTime() - PRICING_WINDOW_DAYS * 24 * 60 * 60 * 1000,
     );
-    const recentIds = await this.prisma.$queryRaw<Array<{ id: string }>>(
+    const posts = await this.prisma.$queryRaw<PricingPost[]>(
       Prisma.sql`
-        SELECT ranked."id"
-        FROM (
+        WITH ranked AS (
           SELECT
             post."id",
+            post."telegramChannelId",
+            post."postDate",
+            post."manualOwnViews",
+            post."excludeFromAnalytics",
             ROW_NUMBER() OVER (
               PARTITION BY post."telegramChannelId"
               ORDER BY post."postDate" DESC, post."id" DESC
@@ -71,30 +84,75 @@ export class TelegramChannelAdPricingReadService {
             AND post."telegramChannelId" IN (${Prisma.join(channelIds)})
             AND post."postDate" >= ${cutoff}
             AND post."postDate" <= ${now}
-        ) AS ranked
-        WHERE ranked."rowNumber" <= ${MAX_POSTS_PER_CHANNEL}
+        ), bounded AS (
+          SELECT * FROM ranked WHERE ranked."rowNumber" <= ${MAX_POSTS_PER_CHANNEL}
+        )
+        SELECT
+          bounded."id",
+          bounded."telegramChannelId",
+          bounded."postDate",
+          bounded."manualOwnViews",
+          bounded."excludeFromAnalytics",
+          EXISTS (
+            SELECT 1
+            FROM "TelegramAdSalePlacement" placement
+            WHERE placement."telegramPostId" = bounded."id"
+          ) AS "adPlacementLinked",
+          h24."viewsCount" AS "h24Views",
+          h48."viewsCount" AS "h48Views",
+          h72."viewsCount" AS "h72Views",
+          permanent."viewsCount" AS "permanentViews"
+        FROM bounded
+        LEFT JOIN LATERAL (
+          SELECT snapshot."viewsCount"
+          FROM "TelegramPostMetricSnapshot" snapshot
+          WHERE snapshot."telegramPostId" = bounded."id"
+            AND snapshot."viewsCount" IS NOT NULL
+            AND bounded."postDate" + INTERVAL '24 hours' <= ${now}
+            AND snapshot."collectedAt" BETWEEN bounded."postDate" + INTERVAL '16 hours'
+              AND bounded."postDate" + INTERVAL '32 hours'
+            AND snapshot."collectedAt" <= ${now}
+          ORDER BY ABS(EXTRACT(EPOCH FROM (snapshot."collectedAt" - (bounded."postDate" + INTERVAL '24 hours')))), snapshot."collectedAt" ASC
+          LIMIT 1
+        ) h24 ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT snapshot."viewsCount"
+          FROM "TelegramPostMetricSnapshot" snapshot
+          WHERE snapshot."telegramPostId" = bounded."id"
+            AND snapshot."viewsCount" IS NOT NULL
+            AND bounded."postDate" + INTERVAL '48 hours' <= ${now}
+            AND snapshot."collectedAt" BETWEEN bounded."postDate" + INTERVAL '36 hours'
+              AND bounded."postDate" + INTERVAL '60 hours'
+            AND snapshot."collectedAt" <= ${now}
+          ORDER BY ABS(EXTRACT(EPOCH FROM (snapshot."collectedAt" - (bounded."postDate" + INTERVAL '48 hours')))), snapshot."collectedAt" ASC
+          LIMIT 1
+        ) h48 ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT snapshot."viewsCount"
+          FROM "TelegramPostMetricSnapshot" snapshot
+          WHERE snapshot."telegramPostId" = bounded."id"
+            AND snapshot."viewsCount" IS NOT NULL
+            AND bounded."postDate" + INTERVAL '72 hours' <= ${now}
+            AND snapshot."collectedAt" BETWEEN bounded."postDate" + INTERVAL '48 hours'
+              AND bounded."postDate" + INTERVAL '96 hours'
+            AND snapshot."collectedAt" <= ${now}
+          ORDER BY ABS(EXTRACT(EPOCH FROM (snapshot."collectedAt" - (bounded."postDate" + INTERVAL '72 hours')))), snapshot."collectedAt" ASC
+          LIMIT 1
+        ) h72 ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT snapshot."viewsCount"
+          FROM "TelegramPostMetricSnapshot" snapshot
+          WHERE snapshot."telegramPostId" = bounded."id"
+            AND snapshot."viewsCount" IS NOT NULL
+            AND bounded."postDate" + INTERVAL '168 hours' <= ${now}
+            AND snapshot."collectedAt" BETWEEN bounded."postDate" + INTERVAL '144 hours'
+              AND bounded."postDate" + INTERVAL '192 hours'
+            AND snapshot."collectedAt" <= ${now}
+          ORDER BY ABS(EXTRACT(EPOCH FROM (snapshot."collectedAt" - (bounded."postDate" + INTERVAL '168 hours')))), snapshot."collectedAt" ASC
+          LIMIT 1
+        ) permanent ON TRUE
       `,
     );
-    const postIds = recentIds.map((row) => row.id);
-    const posts = postIds.length
-      ? await this.prisma.telegramPost.findMany({
-          where: { workspaceId, id: { in: postIds } },
-          select: {
-            id: true,
-            telegramChannelId: true,
-            postDate: true,
-            viewsCount: true,
-            manualOwnViews: true,
-            excludeFromAnalytics: true,
-            adSalePlacements: { select: { id: true }, take: 1 },
-            metricSnapshots: {
-              where: { collectedAt: { gte: cutoff, lte: now } },
-              select: { viewsCount: true, collectedAt: true },
-              orderBy: { collectedAt: 'asc' },
-            },
-          },
-        })
-      : [];
     const postsByChannel = new Map<string, typeof posts>();
     for (const post of posts) {
       const list = postsByChannel.get(post.telegramChannelId) ?? [];
@@ -119,28 +177,28 @@ export class TelegramChannelAdPricingReadService {
 
   private window(
     channel: PricingChannel,
-    posts: Array<{
-      id: string;
-      postDate: Date;
-      viewsCount: number | null;
-      manualOwnViews: number;
-      excludeFromAnalytics: boolean;
-      adSalePlacements: Array<{ id: string }>;
-      metricSnapshots: Array<{ viewsCount: number | null; collectedAt: Date }>;
-    }>,
+    posts: PricingPost[],
     hours: number,
     now: Date,
   ): ChannelAdPricingWindow {
+    const viewsKey =
+      hours === 24
+        ? 'h24Views'
+        : hours === 48
+          ? 'h48Views'
+          : hours === 72
+            ? 'h72Views'
+            : 'permanentViews';
     const result = calculateExpectedViews({
       now,
       maxPostsForPrimary: 3,
       posts: posts.map((post) => ({
         id: post.id,
         postDate: post.postDate,
-        viewsCount: selectExpectedViewsAtWindow(post, hours, now),
+        viewsCount: post[viewsKey],
         manualOwnViews: post.manualOwnViews,
         excludeFromAnalytics: post.excludeFromAnalytics,
-        adPlacementLinked: post.adSalePlacements.length > 0,
+        adPlacementLinked: post.adPlacementLinked,
       })),
       currentSubscribersCount: channel.currentSubscribersCount,
       ownViewsPerPost: channel.ownViewsPerPost,

@@ -43,6 +43,8 @@ import {
   CrmContactStageFilters,
   crmContactStageFromSearchParams,
   crmContactStageSearchParams,
+  useCrmContactStagePreference,
+  writeCrmContactStagePreference,
 } from "./crm-contact-stage-filter";
 import {
   CrmContactsSkeleton,
@@ -54,6 +56,9 @@ export {
   CrmContactStageFilters,
   crmContactStageFromSearchParams,
   crmContactStageSearchParams,
+  readCrmContactStagePreference,
+  useCrmContactStagePreference,
+  writeCrmContactStagePreference,
 } from "./crm-contact-stage-filter";
 
 export function CrmContactList({
@@ -68,7 +73,11 @@ export function CrmContactList({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
-  const stageFilter = crmContactStageFromSearchParams(searchParams);
+  const urlStageFilter = crmContactStageFromSearchParams(searchParams);
+  const storedStageFilter = useCrmContactStagePreference();
+  const stageFilter = searchParams.has("stage")
+    ? urlStageFilter
+    : storedStageFilter;
   const deferredSearch = useDeferredValue(search.trim());
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
@@ -175,14 +184,15 @@ export function CrmContactList({
       page,
       pageSize,
       search: deferredSearch || undefined,
-      stage: stageFilter === "ALL" ? undefined : stageFilter,
-      archived: stageFilter === "ALL" ? false : undefined,
+      stage: !stageFilter || stageFilter === "ALL" ? undefined : stageFilter,
+      archived: !stageFilter || stageFilter === "ALL" ? false : undefined,
     }),
     [deferredSearch, page, pageSize, stageFilter],
   );
   const query = useQuery({
     queryKey: telegramCrmKeys.contactList(params),
     queryFn: ({ signal }) => telegramCrmApi.listContacts(params, signal),
+    enabled: stageFilter !== null,
   });
   const visibleChatPreviews = useMemo(() => {
     const result = { ...chatPreviews };
@@ -193,7 +203,8 @@ export function CrmContactList({
     }
     return result;
   }, [chatPreviews, openChatIds, query.data?.items]);
-  const showContactsSkeleton = query.isLoading || query.isFetching;
+  const showContactsSkeleton =
+    stageFilter === null || query.isLoading || query.isFetching;
   const updateStage = useMutation({
     mutationFn: ({
       contactId,
@@ -203,10 +214,6 @@ export function CrmContactList({
       stage: CrmContactStage;
     }) => telegramCrmApi.updateContact(contactId, { stage }),
     onSuccess: (contact) => patchCrmContactCaches(queryClient, contact),
-    onSettled: () =>
-      queryClient.invalidateQueries({
-        queryKey: telegramCrmKeys.contactLists(),
-      }),
   });
   const replyMute = useMutation({
     mutationFn: ({ contactId, muted }: { contactId: string; muted: boolean }) =>
@@ -260,9 +267,10 @@ export function CrmContactList({
       <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0 flex-1">
           <CrmContactStageFilters
-            value={stageFilter}
+            value={stageFilter ?? "ALL"}
             onChange={(stage) => {
               setPage(1);
+              writeCrmContactStagePreference(window.localStorage, stage);
               const next = crmContactStageSearchParams(searchParams, stage);
               router.replace(
                 next.size ? `${pathname}?${next.toString()}` : pathname,

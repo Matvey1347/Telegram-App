@@ -54,6 +54,41 @@ describe("telegramChannelsApi.syncWorkspaceChannels", () => {
     );
     expect(result.total).toBe(100);
   });
+
+  it("streams workspace channel and step progress", async () => {
+    const streamProgressAction = vi.fn().mockResolvedValue({ total: 25 });
+    const client = createTelegramChannelsApi({
+      api: {} as AxiosInstance,
+      crud: vi.fn(() => ({
+        list: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(),
+      })),
+      getPaginated: vi.fn(),
+      getAllPaginatedItems: vi.fn(),
+      streamBulkAction: vi.fn(),
+      streamProgressAction,
+      silentFeedbackConfig: {},
+      quietMutationConfig: {},
+    });
+    const selection = {
+      syncIncludePublicInfo: false,
+      syncIncludeInviteLinks: true,
+      syncIncludeHistoricalPosts: false,
+      syncIncludePostMetrics: false,
+      syncIncludeOlderPosts: false,
+      syncIncludeChannelStats: false,
+      syncIncludeManagedPosts: false,
+      syncIncludeAudienceSnapshot: false,
+    };
+    const onProgress = vi.fn();
+
+    await client.syncWorkspaceChannelsWithProgress(selection, onProgress);
+
+    expect(streamProgressAction).toHaveBeenCalledWith(
+      "/telegram-sync/workspace-channels/run-stream",
+      { selection },
+      onProgress,
+    );
+  });
 });
 
 describe("telegramChannelsApi workspace custom emoji packs", () => {

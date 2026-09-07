@@ -120,7 +120,7 @@ export default function AdCampaignsPage() {
   const [deletingPromo, setDeletingPromo] = useState<Promo | null>(null);
   const [previewPromo, setPreviewPromo] = useState<Promo | null>(null);
   const deferredSearch = useDeferredValue(search.trim());
-  const campaignsPagination = usePagination({ initialPageSize: 50 });
+  const campaignsPagination = usePagination({ initialPageSize: 5 });
   const hypothesesPagination = usePagination({ initialPageSize: 50 });
   const promosPagination = usePagination({ initialPageSize: 48 });
 
@@ -400,7 +400,7 @@ export default function AdCampaignsPage() {
       />
     ) : null}
     {viewMode === 'campaigns' && !showCampaignsInitialLoading && !error && !visibleCampaigns.length ? <EmptyState text="No campaigns" /> : null}
-    {viewMode === 'campaigns' && data ? <Pagination {...data.pagination} onPageChange={campaignsPagination.setPage} onPageSizeChange={campaignsPagination.setPageSize} loading={isLoading} /> : null}
+    {viewMode === 'campaigns' && data ? <Pagination {...data.pagination} pageSizeOptions={[5]} onPageChange={campaignsPagination.setPage} onPageSizeChange={campaignsPagination.setPageSize} loading={isLoading} /> : null}
 
     {viewMode === 'hypotheses' ? (
       <HypothesesSection

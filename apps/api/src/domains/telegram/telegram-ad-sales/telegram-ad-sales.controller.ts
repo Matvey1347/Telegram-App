@@ -76,6 +76,7 @@ import { TelegramAdSalesCrmAdvertisersService } from './telegram-ad-sales-crm-ad
 import { TelegramAdSalesCrmSettingsService } from './telegram-ad-sales-crm-settings.service';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
 import { TelegramAdSalesLegacyCrmService } from './telegram-ad-sales-legacy-crm.service';
+import { TelegramAdSalePaymentDeletionService } from './telegram-ad-sale-payment-deletion.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('telegram-ad-sales')
@@ -87,6 +88,7 @@ export class TelegramAdSalesController {
     private readonly crmAdvertisersService: TelegramAdSalesCrmAdvertisersService,
     private readonly crmSettingsService: TelegramAdSalesCrmSettingsService,
     private readonly legacyCrmService: TelegramAdSalesLegacyCrmService,
+    private readonly paymentDeletion: TelegramAdSalePaymentDeletionService,
     private readonly streamResponse: StreamResponseService,
   ) {}
 
@@ -634,6 +636,19 @@ export class TelegramAdSalesController {
     @Body() dto: VoidTelegramAdSalePaymentDto,
   ) {
     return this.service.voidPayment(user.sub, saleId, paymentId, dto);
+  }
+
+  @Delete(':saleId/payments/:paymentId')
+  deletePayment(
+    @CurrentUser() user: JwtUser,
+    @Param('saleId') saleId: string,
+    @Param('paymentId') paymentId: string,
+  ) {
+    return this.paymentDeletion.deleteActivePayment(
+      user.sub,
+      saleId,
+      paymentId,
+    );
   }
 
   @Post(':id/reserve')

@@ -61,24 +61,51 @@ export function patchCrmContactCaches(
   queryClient: QueryClient,
   contact: Partial<CrmContactListItem> & Pick<CrmContact, "id">,
 ) {
-  queryClient.setQueriesData<CrmContactsListResult>(
-    { queryKey: telegramCrmKeys.contactLists() },
-    (current) =>
-      current
-        ? {
-            ...current,
-            items: patchPage(
-              current.items,
-              contact.id,
-              contact as Partial<CrmContactListItem>,
-            ),
-          }
-        : current,
-  );
+  const lists = queryClient.getQueriesData<CrmContactsListResult>({
+    queryKey: telegramCrmKeys.contactLists(),
+  });
+  for (const [queryKey, current] of lists) {
+    if (!current || !current.items.some((item) => item.id === contact.id)) {
+      continue;
+    }
+    const params = queryKey[3] as CrmContactsParams | undefined;
+    const leavesFilteredStage = Boolean(
+      params?.stage && contact.stage && params.stage !== contact.stage,
+    );
+    queryClient.setQueryData<CrmContactsListResult>(queryKey, {
+      ...current,
+      items: leavesFilteredStage
+        ? current.items.filter((item) => item.id !== contact.id)
+        : patchPage(
+            current.items,
+            contact.id,
+            contact as Partial<CrmContactListItem>,
+          ),
+      pagination: leavesFilteredStage
+        ? paginationAfterRemoval(current.pagination)
+        : current.pagination,
+    });
+  }
   queryClient.setQueryData<CrmContactDetail>(
     telegramCrmKeys.contactDetail(contact.id),
     (current) => (current ? { ...current, ...contact } : current),
   );
+}
+
+function paginationAfterRemoval(
+  pagination: CrmContactsListResult["pagination"],
+) {
+  const totalItems = Math.max(0, pagination.totalItems - 1);
+  const totalPages = totalItems
+    ? Math.ceil(totalItems / pagination.pageSize)
+    : 0;
+  return {
+    ...pagination,
+    totalItems,
+    totalPages,
+    hasNextPage: totalPages > 0 && pagination.page < totalPages,
+    hasPreviousPage: totalPages > 0 && pagination.page > 1,
+  };
 }
 
 export function applyCrmReplyMessage(

@@ -36,6 +36,7 @@ type ManagedPostIdentityPresentation = {
 export function managedPostTelegramIdentityTone(
   post: ManagedPostIdentityPresentation,
 ): IdentityTone {
+  if (post.telegramRemoteStatus === "AUTO_DELETED") return "normal";
   if (
     post.telegramIdVerificationStatus === "MISSING" ||
     post.telegramRemoteStatus === "BROKEN" ||
@@ -55,9 +56,13 @@ export function managedPostTelegramIdentityTone(
 }
 
 export function managedPostPublishedTelegramUrl(
-  post: Pick<TelegramManagedPost, "status" | "telegramMessageUrls">,
+  post: Pick<TelegramManagedPost, "status" | "telegramMessageUrls"> &
+    Partial<Pick<TelegramManagedPost, "telegramRemoteStatus">>,
 ) {
-  if (post.status !== "PUBLISHED") return null;
+  if (
+    post.status !== "PUBLISHED" ||
+    post.telegramRemoteStatus === "AUTO_DELETED"
+  ) return null;
   return post.telegramMessageUrls[0] ?? null;
 }
 
@@ -89,6 +94,9 @@ export function ManagedPostTelegramIdentityIndicator({
 }
 
 function verificationDescription(t: TranslationFunction, post: TelegramManagedPost) {
+  if (post.telegramRemoteStatus === "AUTO_DELETED") {
+    return t("telegram.posts.telegramLink.autoDeletedDescription");
+  }
   switch (post.telegramIdVerificationStatus) {
     case "VERIFIED":
       return t("telegram.posts.telegramLink.verifiedDescription");
@@ -213,6 +221,24 @@ export function ManagedPostTelegramLink({
       setVerifying(false);
     }
   };
+
+  if (post.telegramRemoteStatus === "AUTO_DELETED") {
+    return (
+      <span className="group relative inline-flex">
+        <span className="inline-flex h-8 items-center gap-1.5 rounded-md border border-emerald-800/70 bg-emerald-950/20 px-2.5 text-xs font-medium text-emerald-200">
+          <CheckCircle2 size={13} />
+          {t("telegram.posts.telegramLink.autoDeleted")}
+        </span>
+        <TooltipBubble
+          side="top"
+          align="center"
+          className="max-w-72 px-2.5 py-1.5 text-neutral-200 opacity-0 transition-opacity group-hover:opacity-100"
+        >
+          {t("telegram.posts.telegramLink.autoDeletedDescription")}
+        </TooltipBubble>
+      </span>
+    );
+  }
 
   if (!canManage) return null;
 

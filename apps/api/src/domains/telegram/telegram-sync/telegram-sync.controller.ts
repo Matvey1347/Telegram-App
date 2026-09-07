@@ -1,9 +1,11 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { CurrentUser } from '../../../common/current-user.decorator';
 import type { JwtUser } from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { StreamResponseService } from '../../../common/stream/stream-response.service';
 import { DailyAnalyticsSyncService } from './daily-analytics-sync.service';
 import { TelegramWorkspaceFullSyncService } from './telegram-workspace-full-sync.service';
 import { TelegramWorkspaceManualSyncDto } from './telegram-workspace-sync.dto';
@@ -16,6 +18,7 @@ export class TelegramSyncController {
     private prisma: PrismaService,
     private dailyAnalyticsSyncService: DailyAnalyticsSyncService,
     private telegramWorkspaceFullSyncService: TelegramWorkspaceFullSyncService,
+    private streamResponse: StreamResponseService,
   ) {}
 
   @Post('workspace-channels/run')
@@ -30,6 +33,28 @@ export class TelegramSyncController {
       workspaceId,
       actor: { type: 'MANUAL', userId: user.sub },
       selection: dto.selection,
+    });
+  }
+
+  @Post('workspace-channels/run-stream')
+  async streamWorkspaceSync(
+    @CurrentUser() user: JwtUser,
+    @Body() dto: TelegramWorkspaceManualSyncDto,
+    @Res() response: Response,
+  ) {
+    const workspaceId = await this.workspaceService.resolveWorkspaceIdForUser(
+      user.sub,
+    );
+    return this.streamResponse.stream(response, {
+      eventPrefix: 'telegram_workspace.manual_sync_stream',
+      action: (onProgress, signal) =>
+        this.telegramWorkspaceFullSyncService.syncWorkspace({
+          workspaceId,
+          actor: { type: 'MANUAL', userId: user.sub },
+          selection: dto.selection,
+          onProgress,
+          signal,
+        }),
     });
   }
 

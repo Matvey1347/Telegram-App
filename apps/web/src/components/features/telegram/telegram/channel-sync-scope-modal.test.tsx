@@ -9,22 +9,29 @@ import {
   syncSelectionFromChannel,
 } from "./channel-sync-scope-modal";
 
-const { pushToast, syncWorkspaceChannels } = vi.hoisted(() => ({
+const { clearProgress, pushToast, setProgress, syncWorkspaceChannels } = vi.hoisted(() => ({
+  clearProgress: vi.fn(),
   pushToast: vi.fn(),
+  setProgress: vi.fn(),
   syncWorkspaceChannels: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
-  telegramChannelsApi: { syncWorkspaceChannels },
+  telegramChannelsApi: {
+    syncWorkspaceChannelsWithProgress: syncWorkspaceChannels,
+  },
 }));
 
 vi.mock("@/providers/toast-provider", () => ({
-  useAppToast: () => ({ pushToast }),
+  useAppToast: () => ({ clearProgress, pushToast, setProgress }),
 }));
 
 describe("ChannelSyncScopeModal", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     pushToast.mockReset();
+    setProgress.mockReset();
+    clearProgress.mockReset();
     syncWorkspaceChannels.mockReset();
   });
 
@@ -124,12 +131,29 @@ describe("ChannelSyncScopeModal", () => {
   it("runs one aggregate workspace request and invalidates channel lists once", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
-    syncWorkspaceChannels.mockResolvedValue({
+    syncWorkspaceChannels.mockImplementation(async (_selection, onProgress) => {
+      onProgress(
+        {
+          phase: "channel_progress",
+          channelId: "channel-2",
+          channelTitle: "Channel Two",
+          message: "Saving invite links…",
+          stageCurrent: 3,
+          stageTotal: 8,
+          successful: 1,
+          failed: 0,
+          skipped: 0,
+        },
+        2,
+        100,
+      );
+      return {
       total: 100,
       successful: 99,
       failed: 1,
       skipped: 0,
       summary: "Synced 99/100 channels, 1 failed.",
+      };
     });
     const queryClient = new QueryClient({
       defaultOptions: { mutations: { retry: false } },
@@ -145,9 +169,25 @@ describe("ChannelSyncScopeModal", () => {
     await user.click(screen.getByRole("button", { name: "Sync all channels" }));
 
     await waitFor(() => expect(syncWorkspaceChannels).toHaveBeenCalledOnce());
+    expect(setProgress).toHaveBeenCalledWith({
+      id: "workspace-channel-sync",
+      title: "Sync all channels",
+      message: "Synchronizing active workspace channels…",
+    });
     expect(syncWorkspaceChannels).toHaveBeenCalledWith(
       DEFAULT_CHANNEL_SYNC_SELECTION,
+      expect.any(Function),
     );
+    expect(setProgress).toHaveBeenCalledWith({
+      id: "workspace-channel-sync",
+      title: "Sync all channels",
+      current: 2,
+      total: 100,
+      message: "Channel Two: Saving invite links… (3/8)",
+      successCount: 1,
+      failedCount: 0,
+      skippedCount: 0,
+    });
     await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
     expect(invalidateQueries).toHaveBeenCalledOnce();
     expect(invalidateQueries).toHaveBeenCalledWith({
@@ -158,6 +198,42 @@ describe("ChannelSyncScopeModal", () => {
       "info",
       8000,
     );
+    expect(setProgress).toHaveBeenLastCalledWith({
+      id: "workspace-channel-sync",
+      title: "Sync all channels",
+      message: "Synced 99/100 channels, 1 failed.",
+      completed: true,
+      successCount: 99,
+      failedCount: 1,
+      skippedCount: 0,
+    });
+  });
+
+  it("restores the previously selected workspace synchronization scope", async () => {
+    const user = userEvent.setup();
+    const queryClient = new QueryClient();
+    const first = render(
+      <QueryClientProvider client={queryClient}>
+        <WorkspaceChannelSyncModal open onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(screen.getByRole("checkbox", { name: /invite links/i }));
+    expect(
+      screen.getByRole("checkbox", { name: /invite links/i }),
+    ).not.toBeChecked();
+    first.unmount();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <WorkspaceChannelSyncModal open onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      screen.getByRole("checkbox", { name: /invite links/i }),
+    ).not.toBeChecked();
+    expect(screen.getByText("Selected: 7/8")).toBeInTheDocument();
   });
 
   it("keeps the workspace modal open and surfaces a failed aggregate request", async () => {
@@ -181,6 +257,7 @@ describe("ChannelSyncScopeModal", () => {
     await waitFor(() =>
       expect(pushToast).toHaveBeenCalledWith("No eligible channels", "error"),
     );
+    expect(clearProgress).toHaveBeenCalledWith("workspace-channel-sync");
     expect(onClose).not.toHaveBeenCalled();
     expect(
       screen.getByRole("dialog", { name: "Sync all channels" }),

@@ -111,7 +111,11 @@ export class TelegramCrmContactReadService {
         access.workspaceId,
         rows
           .filter(
-            (row) => row.totalSalesCount > 0 || isUnassignedCrmContact(row),
+            (row) =>
+              row.totalSalesCount > 0 ||
+              row._count.sales > 0 ||
+              Boolean(row.telegramUsername) ||
+              isUnassignedCrmContact(row),
           )
           .map((row) => ({
             id: row.id,

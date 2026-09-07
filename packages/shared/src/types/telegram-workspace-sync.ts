@@ -13,6 +13,24 @@ export type TelegramWorkspaceManualSyncRequest = {
   selection: TelegramWorkspaceSyncSelection;
 };
 
+export type TelegramWorkspaceSyncProgressItem = {
+  phase:
+    | "channel_started"
+    | "channel_progress"
+    | "channel_completed"
+    | "channel_failed"
+    | "channel_skipped";
+  channelId: string;
+  channelTitle: string;
+  message: string;
+  stepPhase?: import("./operations").TelegramChannelSyncProgressPhase;
+  stageCurrent?: number;
+  stageTotal?: number;
+  successful: number;
+  failed: number;
+  skipped: number;
+};
+
 export type TelegramWorkspaceFullSyncResult = {
   workspaceName: string;
   total: number;

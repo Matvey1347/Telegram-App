@@ -23,6 +23,7 @@ import { adSaleOriginOptions } from "./ad-sale-origin";
 import { SaleStatusActions, type SaleActionKey } from "./sale-status-actions";
 import {
   Button,
+  ConfirmDeleteModal,
   CustomSelect,
   DateInput,
   FormField,
@@ -114,6 +115,7 @@ export function SaleDetailsModal(props: {
     draft: PlacementManagedPostDraft,
   ) => Promise<void>;
   onRecreateSharedPostViaBot?: (sale: TelegramAdSale) => Promise<void>;
+  onDeletePayment?: (sale: TelegramAdSale, paymentId: string) => Promise<void>;
 }) {
   const [placements, setPlacements] = useState<PlacementDraft[]>([]);
   const [payments, setPayments] = useState<PaymentDraft[]>([]);
@@ -129,6 +131,7 @@ export function SaleDetailsModal(props: {
     null,
   );
   const [sharedPostOpen, setSharedPostOpen] = useState(false);
+  const [paymentToDelete, setPaymentToDelete] = useState<string | null>(null);
 
   /* eslint-disable react-hooks/set-state-in-effect -- server entity initializes one cohesive draft */
   useEffect(() => {
@@ -146,6 +149,7 @@ export function SaleDetailsModal(props: {
     setSelectedId(null);
     setSharedPostOpen(false);
     setPaymentOpen(false);
+    setPaymentToDelete(null);
     setSyncPayment(true);
     setError("");
     setPlacements(
@@ -362,12 +366,42 @@ export function SaleDetailsModal(props: {
           onTogglePayment={() => setPaymentOpen((v) => !v)}
           onRegister={() => props.onAction(sale, "register-payment")}
           onPayment={changePayment}
+          onDeletePayment={
+            props.onDeletePayment ? setPaymentToDelete : undefined
+          }
           onAction={(action) => props.onAction(sale, action)}
           onSave={save}
           saving={saving}
           error={error}
         />
       )}
+      <ConfirmDeleteModal
+        open={Boolean(paymentToDelete)}
+        onClose={() => setPaymentToDelete(null)}
+        entityName="finance transaction"
+        label="Delete transaction"
+        description="The linked Finance transaction and this payment record will be removed. You can register the payment again later."
+        onConfirm={async () => {
+          if (!paymentToDelete || !props.onDeletePayment) return;
+          setSaving(true);
+          setError("");
+          try {
+            await props.onDeletePayment(sale, paymentToDelete);
+            setPayments((items) =>
+              items.filter((payment) => payment.id !== paymentToDelete),
+            );
+            setPaymentOpen(false);
+          } catch (cause) {
+            setError(
+              cause instanceof Error
+                ? cause.message
+                : "Could not delete the finance transaction.",
+            );
+          } finally {
+            setSaving(false);
+          }
+        }}
+      />
     </Modal>
   );
 }
@@ -455,6 +489,7 @@ function DealOverview(props: {
   onTogglePayment: () => void;
   onRegister: () => void;
   onPayment: (id: string, patch: Partial<PaymentDraft>) => void;
+  onDeletePayment?: (id: string) => void;
   onAction: (a: SaleActionKey) => Promise<void>;
   onSave: () => Promise<void>;
   saving: boolean;
@@ -662,12 +697,22 @@ function DealOverview(props: {
         {props.paymentOpen && props.payments.length ? (
           <div className="mt-4 space-y-3 border-t border-neutral-800 pt-4">
             {props.payments.map((p) => (
-              <PaymentEditor
-                key={p.id}
-                payment={p}
-                accounts={props.accounts}
-                onChange={(patch) => props.onPayment(p.id, patch)}
-              />
+              <div key={p.id} className="space-y-3">
+                <PaymentEditor
+                  payment={p}
+                  accounts={props.accounts}
+                  onChange={(patch) => props.onPayment(p.id, patch)}
+                />
+                {props.onDeletePayment ? <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="danger"
+                    onClick={() => props.onDeletePayment?.(p.id)}
+                  >
+                    <Trash2 size={15} /> Delete finance transaction
+                  </Button>
+                </div> : null}
+              </div>
             ))}
           </div>
         ) : null}

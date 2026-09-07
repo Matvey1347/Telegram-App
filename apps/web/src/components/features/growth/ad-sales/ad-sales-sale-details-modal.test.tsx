@@ -120,6 +120,38 @@ describe("SaleDetailsModal", () => {
     ).toHaveAttribute("href", "https://t.me/example/42");
   });
 
+  it("confirms removal of a linked finance transaction so it can be registered later", async () => {
+    const user = userEvent.setup();
+    const onDeletePayment = vi.fn().mockResolvedValue(undefined);
+    render(
+      <SaleDetailsModal
+        open
+        onClose={vi.fn()}
+        sale={sale}
+        accounts={[]}
+        channels={[]}
+        productsByChannelId={{}}
+        settings={undefined}
+        rates={undefined}
+        onSave={vi.fn()}
+        onAction={vi.fn()}
+        onDeletePayment={onDeletePayment}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Edit transaction" }));
+    await user.click(
+      screen.getByRole("button", { name: "Delete finance transaction" }),
+    );
+    await user.type(screen.getByPlaceholderText("finance transaction"), "finance transaction");
+    await user.click(screen.getByRole("button", { name: "Delete transaction" }));
+
+    await waitFor(() =>
+      expect(onDeletePayment).toHaveBeenCalledWith(sale, "payment-1"),
+    );
+    expect(screen.getByText("No finance transaction linked")).toBeTruthy();
+  });
+
   it("saves an edited buyer with the rest of the deal", async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(undefined);

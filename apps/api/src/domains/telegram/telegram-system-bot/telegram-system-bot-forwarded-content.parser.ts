@@ -231,12 +231,20 @@ function entitiesToManagedMarkup(text: string, rawEntities: unknown[] = []) {
     .filter((value): value is BotEntity =>
       Boolean(value && typeof value === 'object'),
     )
-    .flatMap((entity) => {
+    .flatMap((entity, order) => {
       const offset = entity.offset ?? -1;
       const length = entity.length ?? 0;
       const tags = entityTags(entity);
       return offset >= 0 && length > 0 && offset + length <= text.length && tags
-        ? [{ offset, end: offset + length, ...tags }]
+        ? [
+            {
+              offset,
+              end: offset + length,
+              order,
+              linkDepth: entity.type === 'text_link' ? 1 : 0,
+              ...tags,
+            },
+          ]
         : [];
     });
   if (!entities.length) return normalizeText(text);
@@ -244,12 +252,22 @@ function entitiesToManagedMarkup(text: string, rawEntities: unknown[] = []) {
   for (let index = 0; index <= text.length; index += 1) {
     html += entities
       .filter((entity) => entity.end === index)
-      .sort((left, right) => right.offset - left.offset)
+      .sort(
+        (left, right) =>
+          right.offset - left.offset ||
+          right.linkDepth - left.linkDepth ||
+          right.order - left.order,
+      )
       .map((entity) => entity.close)
       .join('');
     html += entities
       .filter((entity) => entity.offset === index)
-      .sort((left, right) => right.end - left.end)
+      .sort(
+        (left, right) =>
+          right.end - left.end ||
+          left.linkDepth - right.linkDepth ||
+          left.order - right.order,
+      )
       .map((entity) => entity.open)
       .join('');
     if (index < text.length) html += escapeHtml(text[index]);

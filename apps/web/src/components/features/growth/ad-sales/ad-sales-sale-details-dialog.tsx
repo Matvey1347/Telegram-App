@@ -55,6 +55,18 @@ export function AdSalesSaleDetailsDialog({
         productsByChannelId={productsByChannelId}
         settings={settings}
         rates={rates}
+        onDeletePayment={async (sale, paymentId) => {
+          await telegramAdSalesApi.deletePayment(sale.id, paymentId);
+          await refreshSaleAfterMutation(
+            sale.id,
+            sale.placements.map((item) => item.telegramChannelId),
+          );
+          await invalidateTelegramAdSalesDerivedQueries(queryClient, {
+            finance: true,
+            dashboard: true,
+            analytics: true,
+          });
+        }}
         onSave={async (sale, draft) => {
           let feedbackStarted = false;
           const silentAfterFirstMutation = () => {

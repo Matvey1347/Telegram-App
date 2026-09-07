@@ -14,6 +14,7 @@ export const TELEGRAM_REMOTE_STATUS_KEYS = {
   SCHEDULED: "telegramPosts.status.scheduled",
   MISSING: "telegram.posts.remoteStatus.missing",
   BROKEN: "telegram.posts.remoteStatus.broken",
+  AUTO_DELETED: "telegram.posts.remoteStatus.autoDeleted",
 } as const;
 
 export function telegramManagedPostStatusKey(

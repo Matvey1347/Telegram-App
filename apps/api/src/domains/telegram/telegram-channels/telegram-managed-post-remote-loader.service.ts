@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { TelegramManagedPostStatus } from '@prisma/client';
+import {
+  TelegramAdPlacementStatus,
+  TelegramManagedPostRemoteStatus,
+  TelegramManagedPostStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
 import { parseTelegramPostUrl } from '../../../telegram/shared/telegram-post-url';
@@ -49,6 +53,9 @@ export class TelegramManagedPostRemoteLoaderService {
       where: {
         workspaceId,
         telegramChannelId: channelId,
+        telegramRemoteStatus: {
+          not: TelegramManagedPostRemoteStatus.AUTO_DELETED,
+        },
         OR: [
           {
             status: {
@@ -63,6 +70,18 @@ export class TelegramManagedPostRemoteLoaderService {
           { telegramMessageUrls: { isEmpty: false } },
           { status: TelegramManagedPostStatus.SCHEDULED },
         ],
+      },
+      include: {
+        group: { select: { isSystem: true, systemKey: true } },
+        adSalePlacements: {
+          where: {
+            status: TelegramAdPlacementStatus.COMPLETED,
+            publishedAt: { not: null },
+            deletedAt: { not: null },
+          },
+          select: { publishedAt: true },
+          take: 1,
+        },
       },
     });
     const publishedMessageIds = [

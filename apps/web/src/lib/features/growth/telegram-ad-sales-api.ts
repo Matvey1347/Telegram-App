@@ -588,6 +588,12 @@ export function createTelegramAdSalesApi({
           silent ? silentFeedbackConfig : undefined,
         )
       ).data,
+    deletePayment: async (saleId: string, paymentId: string) =>
+      (
+        await api.delete<
+          import("@telegram-system/shared").TelegramAdSalePaymentDeletionResult
+        >(`/telegram-ad-sales/${saleId}/payments/${paymentId}`)
+      ).data,
     voidPayment: async (
       saleId: string,
       paymentId: string,

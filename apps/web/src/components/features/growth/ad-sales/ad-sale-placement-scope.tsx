@@ -143,9 +143,7 @@ export function AdSalePlacementScope({
             onChange={(event) => onCommonFormatChange(event.target.value)}
             className="h-[42px]"
           >
-            <option value="">
-              {commonFormatName ? commonFormatName : "Mixed / default"}
-            </option>
+            <option value="">Mixed / default</option>
             {commonFormats.map((product) => (
               <option key={product.id} value={product.name}>
                 {product.name}

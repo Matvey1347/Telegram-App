@@ -208,7 +208,7 @@ describe('TelegramCrmContactReadService', () => {
   });
 
   it('returns compact cards with authoritative Deal aggregates independent of Contact stage', async () => {
-    const row = contactRow();
+    const row = { ...contactRow(), totalSalesCount: 0 };
     const prisma = {
       $transaction: jest.fn().mockResolvedValue([[row], 1]),
       telegramAdvertiser: {
@@ -350,6 +350,7 @@ describe('TelegramCrmContactReadService', () => {
   it('skips expensive Deal summaries for a page of contacts without Deals', async () => {
     const row = {
       ...contactRow(),
+      telegramUsername: null,
       totalSalesCount: 0,
       sales: [],
       _count: { sales: 0 },
@@ -383,6 +384,54 @@ describe('TelegramCrmContactReadService', () => {
 
     expect(result.items[0].salesSummary.totalSalesCount).toBe(0);
     expect(findSales).not.toHaveBeenCalled();
+  });
+
+  it('checks legacy username-linked Deals when stored counters are zero', async () => {
+    const row = {
+      ...contactRow(),
+      totalSalesCount: 0,
+      sales: [],
+      _count: { sales: 0 },
+    };
+    const findSales = jest.fn().mockResolvedValue([]);
+    const prisma = {
+      $transaction: jest.fn().mockResolvedValue([[row], 1]),
+      telegramAdvertiser: {
+        findMany: jest.fn().mockReturnValue('rows'),
+        count: jest.fn().mockReturnValue('count'),
+      },
+      telegramCrmConversation: {
+        findMany: jest.fn().mockResolvedValue([]),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+      telegramAdSale: { findMany: findSales },
+    };
+    const service = new TelegramCrmContactReadService(
+      prisma as never,
+      {
+        require: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
+        scope: jest.fn().mockResolvedValue({}),
+      } as never,
+    );
+
+    await service.list('user-1', { page: 1, pageSize: 12, stage: 'CUSTOMER' });
+
+    expect(findSales).toHaveBeenCalledTimes(1);
+    expect(findSales.mock.calls[0][0].where).toMatchObject({
+      workspaceId: 'workspace-1',
+      OR: expect.arrayContaining([
+        expect.objectContaining({
+          advertiserId: null,
+          OR: expect.arrayContaining([
+            expect.objectContaining({
+              advertiserTelegram: expect.objectContaining({
+                in: expect.arrayContaining(['ada', '@ada']),
+              }),
+            }),
+          ]),
+        }),
+      ]),
+    });
   });
 
   it('does not expose Inbox unread to a view-own member', async () => {

@@ -19,6 +19,7 @@ import { TelegramManagedPostIdentityService } from './telegram-managed-post-iden
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 import { TelegramManagedPostRemoteLoaderService } from './telegram-managed-post-remote-loader.service';
+import { missingPublishedPostUpdate } from './completed-advertising-managed-post';
 
 @Injectable()
 export class TelegramManagedPostRemoteSyncService {
@@ -282,8 +283,20 @@ export class TelegramManagedPostRemoteSyncService {
             posts.length,
           );
         } else if (post.status === 'PUBLISHED') {
+          const checkedAt = new Date();
+          const update = missingPublishedPostUpdate(
+            {
+              publishedAt: post.publishedAt,
+              group: post.group,
+              completedAdPlacements: post.adSalePlacements,
+            },
+            checkedAt,
+          );
+          const automaticallyDeleted =
+            update.telegramRemoteStatus ===
+            TelegramManagedPostRemoteStatus.AUTO_DELETED;
           result.updated += 1;
-          result.broken += 1;
+          if (!automaticallyDeleted) result.broken += 1;
           await this.prisma.$transaction(async (tx) => {
             await this.telegramManagedPostRevisionStore.createManagedPostRevision(
               tx,
@@ -292,14 +305,7 @@ export class TelegramManagedPostRemoteSyncService {
             );
             await tx.telegramManagedPost.update({
               where: { id: post.id },
-              data: {
-                status: TelegramManagedPostStatus.PUBLISHED,
-                telegramRemoteStatus: TelegramManagedPostRemoteStatus.BROKEN,
-                lastError: 'Telegram post link is broken.',
-                lastTelegramSyncedAt: new Date(),
-                lastTelegramSyncNote:
-                  'Published Telegram post was not found during sync. Post was kept published and marked as broken.',
-              },
+              data: update,
             });
             if (post.groupId) {
               await this.telegramPostGroupsService.normalizePostGroupNumbering(
@@ -315,9 +321,11 @@ export class TelegramManagedPostRemoteSyncService {
               index: current,
               total: posts.length,
               action: 'FAILED',
-              success: false,
-              status: 'error',
-              message: `${post.title}: Telegram link check failed, post kept published`,
+              success: automaticallyDeleted,
+              status: automaticallyDeleted ? 'success' : 'error',
+              message: automaticallyDeleted
+                ? `${post.title}: advertising post was published and automatically deleted`
+                : `${post.title}: Telegram link check failed, post kept published`,
             } as unknown as BulkActionResultItem,
             current,
             posts.length,

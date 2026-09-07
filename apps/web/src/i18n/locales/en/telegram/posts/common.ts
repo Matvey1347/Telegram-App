@@ -24,6 +24,7 @@ const messages = {
   "telegram.posts.remoteStatus.unknown": "Telegram status unknown",
   "telegram.posts.remoteStatus.missing": "Missing in Telegram",
   "telegram.posts.remoteStatus.broken": "Telegram link broken",
+  "telegram.posts.remoteStatus.autoDeleted": "Published, then automatically deleted",
   "telegram.posts.search": "Search title, text, group or member",
   "telegram.posts.total": "{count} total",
   "telegram.posts.created": "created {date}",
@@ -265,6 +266,9 @@ const messages = {
   "telegram.posts.telegramLink.verifyError":
     "Could not verify the Telegram post ID.",
   "telegram.posts.telegramLink.open": "Open in Telegram",
+  "telegram.posts.telegramLink.autoDeleted": "Published · auto-deleted",
+  "telegram.posts.telegramLink.autoDeletedDescription":
+    "This advertising post was published successfully and then automatically deleted after its placement period ended.",
   "telegram.posts.telegramLink.viewSchedule": "View scheduled Telegram status",
   "telegram.posts.telegramLink.setOrVerify": "Set or verify Telegram link",
   "telegram.posts.telegramLink.deliveryTitle": "Scheduled delivery status",

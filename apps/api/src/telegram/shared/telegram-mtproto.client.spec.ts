@@ -55,6 +55,9 @@ describe('TelegramMtprotoClient import resolution', () => {
           },
         };
       }
+      if (request instanceof Api.messages.GetChatInviteImporters) {
+        return { count: 0, importers: [], users: [] };
+      }
       throw new Error('Unexpected invoke');
     });
 
@@ -72,8 +75,38 @@ describe('TelegramMtprotoClient import resolution', () => {
       username: 'public_channel',
       description: 'About',
       participantsCount: 10,
-      pendingJoinRequestsCount: 302,
+      pendingJoinRequestsCount: 0,
     });
+  });
+
+  it('falls back to ChannelFull pending count when live queue lookup fails', async () => {
+    const entity = new Api.Channel({
+      id: '123456' as any,
+      title: 'Public Channel',
+      accessHash: '1' as any,
+      broadcast: true,
+      megagroup: false,
+      username: 'public_channel',
+    } as unknown as any);
+    fakeClient.getEntity.mockResolvedValue(entity);
+    fakeClient.invoke.mockImplementation((request: unknown) => {
+      if (request instanceof Api.channels.GetFullChannel) {
+        return { fullChat: { participantsCount: 10, requestsPending: 302 } };
+      }
+      if (request instanceof Api.messages.GetChatInviteImporters) {
+        throw new Error('CHAT_ADMIN_REQUIRED');
+      }
+      throw new Error('Unexpected invoke');
+    });
+
+    await expect(
+      client.getPublicChannelInfo({
+        apiId: '1',
+        apiHash: 'hash',
+        session: 'session',
+        channelRef: '@public_channel',
+      }),
+    ).resolves.toMatchObject({ pendingJoinRequestsCount: 302 });
   });
 
   it('handles ChatInviteAlready without importing again', async () => {

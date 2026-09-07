@@ -1085,6 +1085,7 @@ describe('TelegramAdSalesService', () => {
           sourceType: 'BOT',
           sourceId: 'system-bot',
           publishedAt: new Date('2026-08-25T17:00:00.000Z'),
+          group: { isSystem: true, systemKey: 'ADVERTISE' },
         },
         telegramChannel: {
           telegramChatId: '-100123',
@@ -1129,7 +1130,12 @@ describe('TelegramAdSalesService', () => {
     });
     expect(prisma.telegramManagedPost.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ telegramRemoteStatus: 'MISSING' }),
+        data: expect.objectContaining({
+          status: 'PUBLISHED',
+          telegramRemoteStatus: 'AUTO_DELETED',
+          scheduledAt: null,
+          lastError: null,
+        }),
       }),
     );
   });

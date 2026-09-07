@@ -6,6 +6,7 @@ import { Button, Modal } from "@/components/ui/primitives";
 import { telegramChannelsApi } from "@/lib/api";
 import type { TelegramChannel, TelegramChannelSyncSelection } from "@/lib/api";
 import { telegramChannelKeys } from "@/lib/query-keys";
+import { scheduleProgressDismiss } from "@/lib/progress";
 import { useAppToast } from "@/providers/toast-provider";
 
 export const DEFAULT_CHANNEL_SYNC_SELECTION: TelegramChannelSyncSelection = {
@@ -18,6 +19,40 @@ export const DEFAULT_CHANNEL_SYNC_SELECTION: TelegramChannelSyncSelection = {
   syncIncludeManagedPosts: true,
   syncIncludeAudienceSnapshot: true,
 };
+
+const WORKSPACE_SYNC_SELECTION_STORAGE_KEY =
+  "telegram:workspace-channel-sync-selection:v1";
+
+function storedWorkspaceSyncSelection(): TelegramChannelSyncSelection {
+  if (typeof window === "undefined") return DEFAULT_CHANNEL_SYNC_SELECTION;
+  try {
+    const stored = JSON.parse(
+      window.localStorage.getItem(WORKSPACE_SYNC_SELECTION_STORAGE_KEY) || "null",
+    ) as Partial<TelegramChannelSyncSelection> | null;
+    if (!stored) return DEFAULT_CHANNEL_SYNC_SELECTION;
+    return Object.fromEntries(
+      Object.entries(DEFAULT_CHANNEL_SYNC_SELECTION).map(([key, fallback]) => [
+        key,
+        typeof stored[key as keyof TelegramChannelSyncSelection] === "boolean"
+          ? stored[key as keyof TelegramChannelSyncSelection]
+          : fallback,
+      ]),
+    ) as TelegramChannelSyncSelection;
+  } catch {
+    return DEFAULT_CHANNEL_SYNC_SELECTION;
+  }
+}
+
+function storeWorkspaceSyncSelection(selection: TelegramChannelSyncSelection) {
+  try {
+    window.localStorage.setItem(
+      WORKSPACE_SYNC_SELECTION_STORAGE_KEY,
+      JSON.stringify(selection),
+    );
+  } catch {
+    // Browser privacy/storage restrictions must not block synchronization.
+  }
+}
 
 export function syncSelectionFromChannel(
   channel?: TelegramChannel | null,
@@ -208,13 +243,55 @@ export function WorkspaceChannelSyncModal({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const { pushToast } = useAppToast();
+  const { pushToast, setProgress, clearProgress } = useAppToast();
   const [selection, setSelection] = useState<TelegramChannelSyncSelection>(
-    DEFAULT_CHANNEL_SYNC_SELECTION,
+    storedWorkspaceSyncSelection,
   );
+  const updateSelection = (next: TelegramChannelSyncSelection) => {
+    setSelection(next);
+    storeWorkspaceSyncSelection(next);
+  };
   const mutation = useMutation({
-    mutationFn: () => telegramChannelsApi.syncWorkspaceChannels(selection),
+    mutationFn: () =>
+      telegramChannelsApi.syncWorkspaceChannelsWithProgress(
+        selection,
+        (item, current, total) => {
+          const stage =
+            item.stageTotal && item.stageCurrent != null
+              ? ` (${item.stageCurrent}/${item.stageTotal})`
+              : "";
+          setProgress({
+            id: "workspace-channel-sync",
+            title: "Sync all channels",
+            current,
+            total,
+            message: `${item.channelTitle}: ${item.message}${stage}`,
+            successCount: item.successful,
+            failedCount: item.failed,
+            skippedCount: item.skipped,
+          });
+        },
+      ),
+    onMutate: () => {
+      setProgress({
+        id: "workspace-channel-sync",
+        title: "Sync all channels",
+        message: "Synchronizing active workspace channels…",
+      });
+    },
     onSuccess: async (result) => {
+      setProgress({
+        id: "workspace-channel-sync",
+        title: "Sync all channels",
+        message:
+          result.summary ||
+          `Synced ${result.successful}/${result.total} channels.`,
+        completed: true,
+        successCount: result.successful,
+        failedCount: result.failed,
+        skippedCount: result.skipped,
+      });
+      scheduleProgressDismiss(clearProgress, "workspace-channel-sync");
       onClose();
       // The aggregate run can update every channel card. Refetch the list
       // family once instead of issuing a browser request per channel.
@@ -228,11 +305,13 @@ export function WorkspaceChannelSyncModal({
         8000,
       );
     },
-    onError: (error: unknown) =>
+    onError: (error: unknown) => {
+      clearProgress("workspace-channel-sync");
       pushToast(
         requestErrorMessage(error, "Workspace channel sync failed."),
         "error",
-      ),
+      );
+    },
   });
 
   return (
@@ -245,7 +324,7 @@ export function WorkspaceChannelSyncModal({
       isSyncing={mutation.isPending}
       submitLabel="Sync all channels"
       onClose={onClose}
-      onSelectionChange={setSelection}
+      onSelectionChange={updateSelection}
       onSubmit={() => mutation.mutate()}
     />
   );

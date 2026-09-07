@@ -61,6 +61,41 @@ describe('parseTelegramSystemBotForwardedContent', () => {
     });
   });
 
+  it.each([
+    [
+      { type: 'bold', offset: 0, length: 16 },
+      {
+        type: 'text_link',
+        offset: 0,
+        length: 16,
+        url: 'https://t.me/mental_mentality',
+      },
+    ],
+    [
+      {
+        type: 'text_link',
+        offset: 0,
+        length: 16,
+        url: 'https://t.me/mental_mentality',
+      },
+      { type: 'bold', offset: 0, length: 16 },
+    ],
+  ])('keeps bold and link markup nested regardless of entity order', (...entities) => {
+    const result = parseTelegramSystemBotForwardedContent({
+      text: 'Mental mentality',
+      entities,
+      forward_date: 1_700_000_000,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      content: {
+        managedText:
+          '**[Mental mentality](https://t.me/mental_mentality)**',
+      },
+    });
+  });
+
   it('selects the best photo and uses its caption', () => {
     const result = parseTelegramSystemBotForwardedContent({
       caption: ' Photo caption ',

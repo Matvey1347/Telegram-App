@@ -48,21 +48,13 @@ import {
   closeTelegramMtprotoSession,
   createTelegramMtprotoSession,
 } from './telegram-mtproto-session.factory';
+import { livePending } from './telegram-pending-join-requests';
+import type { BroadcastStatsGraphField } from './telegram-broadcast-stats.types';
 
 export type { TelegramAccountProfile } from './telegram-mtproto-account-profile';
 
 type ApiCredentials = { apiId: string; apiHash: string };
 type SessionParams = ApiCredentials & { session?: string };
-type BroadcastStatsGraphField =
-  | 'followers_graph'
-  | 'growth_graph'
-  | 'views_graph'
-  | 'shares_graph'
-  | 'languages_graph'
-  | 'mute_graph'
-  | 'views_by_source_graph'
-  | 'new_followers_by_source_graph'
-  | 'reactions_by_emotion_graph';
 type ImportableTelegramEntity = Api.User | Api.Channel | Api.Chat;
 type TelegramChannelAccessMode =
   | 'PUBLIC'
@@ -1053,8 +1045,16 @@ export class TelegramMtprotoClient {
       this.toFiniteNumber(
         (entity as { participantsCount?: unknown }).participantsCount,
       );
-    const pendingJoinRequestsCount = this.toFiniteNumber(
-      (fullChannel as { requestsPending?: unknown } | null)?.requestsPending,
+    const pendingJoinRequestsCount = await livePending(
+      client,
+      entity,
+      fullChannel,
+      (request) =>
+        this.withTimeout(
+          request,
+          this.telegramMetadataTimeoutMs,
+          'Telegram pending join requests lookup',
+        ),
     );
     const photoUrl =
       (await this.profilePhotoDataUrl(client, entity)) ||

@@ -151,12 +151,14 @@ export function CrmContactCard({
             </div>
           </div>
         )}
-        <ContactActionsMenu
-          contact={contact}
-          canViewSales={canViewSales}
-          canCreateSales={canCreateSales}
-          onAction={onAction}
-        />
+        {!contact.isUnassignedClient ? (
+          <ContactActionsMenu
+            contact={contact}
+            canViewSales={canViewSales}
+            canCreateSales={canCreateSales}
+            onAction={onAction}
+          />
+        ) : null}
       </div>
 
       {contact.description ? (

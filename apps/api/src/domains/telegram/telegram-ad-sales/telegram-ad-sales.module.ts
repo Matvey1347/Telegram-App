@@ -25,6 +25,7 @@ import { TelegramAdvertiserCheckoutResolverService } from './telegram-advertiser
 import { TelegramCrmModule } from '../telegram-crm/telegram-crm.module';
 import { TelegramAdSalesLegacyCrmService } from './telegram-ad-sales-legacy-crm.service';
 import { TelegramAdSalesCrmTasksService } from './telegram-ad-sales-crm-tasks.service';
+import { TelegramAdSalePaymentDeletionService } from './telegram-ad-sale-payment-deletion.service';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { TelegramAdSalesCrmTasksService } from './telegram-ad-sales-crm-tasks.se
   controllers: [TelegramAdSalesReadController, TelegramAdSalesController],
   providers: [
     TelegramAdSalesService,
+    TelegramAdSalePaymentDeletionService,
     TelegramAdSalesQuotePreviewService,
     TelegramAdSalesSaleReadService,
     TelegramAdSalesBulkService,

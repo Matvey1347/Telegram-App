@@ -7,6 +7,7 @@ import {
 
 describe('TelegramChannelsService invite link sync', () => {
   const prisma = {
+    telegramChannel: { updateMany: jest.fn() },
     workspaceMember: { findMany: jest.fn() },
     telegramUserAccountIntegration: { findMany: jest.fn() },
     telegramChannelDailyStats: { findMany: jest.fn() },
@@ -257,6 +258,74 @@ describe('TelegramChannelsService invite link sync', () => {
         }),
       }),
     );
+    expect(prisma.telegramChannel.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'channel-1',
+        workspaceId: 'ws-1',
+        pendingJoinRequestsCount: { not: 3 },
+      },
+      data: { pendingJoinRequestsCount: 3 },
+    });
+  });
+
+  it('clears the channel-card pending count after all join requests are accepted', async () => {
+    prisma.telegramInviteLink.upsert.mockImplementation(
+      async ({ create }: { create: Record<string, unknown> }) => ({
+        id: String(create.url),
+        adCampaignId: null,
+        telegramChannelId: create.telegramChannelId,
+        joinedCount: create.joinedCount,
+        requestedCount: create.requestedCount,
+        isRevoked: create.isRevoked,
+      }),
+    );
+
+    await (service as any).syncChannelInviteLinks({
+      workspaceId: 'ws-1',
+      channelId: 'channel-1',
+      account: {
+        id: 'tg-account-1',
+        label: 'Owner',
+        username: 'owner_admin',
+        firstName: 'Owner',
+      },
+      channelReference: { telegramChatId: '7001' },
+      prefetchedRemote: {
+        scope: 'ALL_ADMINS',
+        expectedTotalLinks: 1,
+        admins: [],
+        links: [
+          {
+            url: 'https://t.me/+accepted',
+            title: 'Accepted applications',
+            telegramCreatorUserId: '100',
+            creatorUsername: 'owner_admin',
+            creatorFirstName: 'Owner',
+            creatorLastName: null,
+            creatorPhotoUrl: null,
+            createdAt: null,
+            startDate: null,
+            expireDate: null,
+            usageLimit: null,
+            usage: 302,
+            requested: 0,
+            requestNeeded: true,
+            permanent: false,
+            revoked: false,
+          },
+        ],
+        warnings: [],
+      },
+    });
+
+    expect(prisma.telegramChannel.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'channel-1',
+        workspaceId: 'ws-1',
+        pendingJoinRequestsCount: { not: 0 },
+      },
+      data: { pendingJoinRequestsCount: 0 },
+    });
   });
 
   it('auto-attaches an imported invite link to the only campaign matching the same Warsaw placement date', async () => {
@@ -687,6 +756,7 @@ describe('TelegramChannelsService invite link sync', () => {
     expect(prisma.telegramInviteLink.create).toHaveBeenCalledTimes(11);
     expect(progress[0]).toBe('0/11');
     expect(progress.at(-1)).toBe('11/11');
+    expect(prisma.telegramChannel.updateMany).not.toHaveBeenCalled();
     expect(sourceAccessService.recordDataSource).toHaveBeenCalledWith(
       expect.objectContaining({
         status: TelegramDataSourceStatus.PARTIAL,

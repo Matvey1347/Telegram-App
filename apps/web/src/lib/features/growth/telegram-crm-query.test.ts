@@ -6,6 +6,7 @@ import type {
 } from "@telegram-system/shared";
 import {
   applyCrmReplyMessage,
+  patchCrmContactCaches,
   telegramCrmKeys,
 } from "./telegram-crm-query";
 
@@ -74,5 +75,46 @@ describe("CRM live reply summary cache", () => {
       outboundMessageCount: 1,
       muted: false,
     });
+  });
+});
+
+describe("CRM contact cache updates", () => {
+  it("moves a changed contact out of its old stage locally without invalidating or refetching lists", () => {
+    const client = new QueryClient();
+    const allKey = telegramCrmKeys.contactList(params);
+    const newKey = telegramCrmKeys.contactList({ ...params, stage: "NEW" });
+    const listedContact = { ...contact, stage: "NEW" as const };
+    const page = (totalItems: number): CrmContactsListResult => ({
+      items: [listedContact],
+      pagination: {
+        page: 1,
+        pageSize: 12,
+        totalItems,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+    });
+    client.setQueryData(allKey, page(86));
+    client.setQueryData(newKey, page(12));
+
+    patchCrmContactCaches(client, {
+      id: listedContact.id,
+      stage: "LEAD",
+    });
+
+    expect(
+      client.getQueryData<CrmContactsListResult>(allKey)?.items[0].stage,
+    ).toBe("LEAD");
+    expect(client.getQueryData<CrmContactsListResult>(newKey)).toMatchObject({
+      items: [],
+      pagination: {
+        totalItems: 11,
+        totalPages: 1,
+        hasNextPage: false,
+      },
+    });
+    expect(client.getQueryState(allKey)?.isInvalidated).toBe(false);
+    expect(client.getQueryState(newKey)?.isInvalidated).toBe(false);
   });
 });
