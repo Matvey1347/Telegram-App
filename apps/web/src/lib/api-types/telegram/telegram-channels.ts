@@ -11,6 +11,7 @@ import type {
   TelegramChannelFinancialSummary,
 } from "./telegram-channel-analytics";
 import type {
+  TelegramChannelAudienceTrend,
   TelegramChannelSystemBotConnection,
   TelegramPublishingCapabilities,
 } from "@telegram-system/shared";
@@ -153,6 +154,7 @@ export type TelegramChannel = EntityAssignment & {
       | "hasSubscriberBasePollution"
       | "postsWindow"
     >;
+    audienceTrend?: TelegramChannelAudienceTrend | null;
     financialSummary: TelegramChannelFinancialSummary;
     bookingSchedule?: {
       futureScheduledTotal: number;

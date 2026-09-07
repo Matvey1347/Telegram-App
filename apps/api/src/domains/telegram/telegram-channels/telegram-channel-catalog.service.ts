@@ -16,6 +16,7 @@ import {
   TelegramChannelSelectQueryDto,
 } from './dto';
 import { TelegramChannelBookingReadService } from './telegram-channel-booking-read.service';
+import { TelegramChannelAudienceTrendReadService } from './telegram-channel-audience-trend-read.service';
 import { TelegramChannelFinancialReadService } from './telegram-channel-financial-read.service';
 import { TelegramSystemBotConfigService } from '../telegram-system-bot/telegram-system-bot-config.service';
 
@@ -38,6 +39,7 @@ export class TelegramChannelCatalogService {
     private readonly telegramChannelSchemaCompatibilityService: TelegramChannelSchemaCompatibilityService,
     private readonly telegramChannelFinancialReadService: TelegramChannelFinancialReadService,
     private readonly telegramChannelBookingReadService: TelegramChannelBookingReadService,
+    private readonly telegramChannelAudienceTrendReadService: TelegramChannelAudienceTrendReadService,
     private readonly telegramSystemBotConfig: TelegramSystemBotConfigService,
   ) {}
 
@@ -233,6 +235,7 @@ export class TelegramChannelCatalogService {
       timePostsByChannel,
       financialSummaryByChannel,
       bookingSummaryByChannel,
+      audienceTrendByChannel,
     ] = await Promise.all([
       this.telegramChannelSchemaCompatibilityService.timePostsByChannelIds(
         channelIds,
@@ -252,6 +255,10 @@ export class TelegramChannelCatalogService {
           ]),
         ),
       ),
+      this.telegramChannelAudienceTrendReadService.summariesForChannels(
+        workspaceId,
+        channelIds,
+      ),
     ]);
 
     const items = channels.map((channel) => {
@@ -262,6 +269,7 @@ export class TelegramChannelCatalogService {
         _count,
         ...channelData
       } = channel;
+      const audienceTrendPreview = audienceTrendByChannel.get(channel.id);
       const snapshot = audienceSnapshots[0];
       const systemBotAccess = sourceAccesses.find(
         (source) =>
@@ -318,6 +326,7 @@ export class TelegramChannelCatalogService {
         timePosts: timePostsByChannel.get(channel.id) ?? [],
         preview: {
           audience,
+          audienceTrend: audienceTrendPreview?.trend ?? null,
           sourcesCount: sourceAccesses.length || channel.adminLinks.length,
           canPostMessages: sourceAccesses.some(
             (source) => source.canPostMessages,

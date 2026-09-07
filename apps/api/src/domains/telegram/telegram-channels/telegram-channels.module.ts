@@ -17,6 +17,8 @@ import { TelegramChannelCatalogService } from './telegram-channel-catalog.servic
 import { TelegramChannelFinancialReadService } from './telegram-channel-financial-read.service';
 import { TelegramChannelBookingReadService } from './telegram-channel-booking-read.service';
 import { TelegramChannelAdPricingReadService } from './telegram-channel-ad-pricing-read.service';
+import { TelegramChannelAudienceTrendReadService } from './telegram-channel-audience-trend-read.service';
+import { TelegramChannelPerformanceHistoryService } from './telegram-channel-performance-history.service';
 import { TelegramChannelHistoricalSyncService } from './telegram-channel-historical-sync.service';
 import { TelegramChannelImportPolicyService } from './telegram-channel-import-policy.service';
 import { TelegramChannelImportService } from './telegram-channel-import.service';
@@ -109,6 +111,8 @@ import { TelegramPostGroupSummaryReadService } from './telegram-post-group-summa
     TelegramChannelFinancialReadService,
     TelegramChannelBookingReadService,
     TelegramChannelAdPricingReadService,
+    TelegramChannelAudienceTrendReadService,
+    TelegramChannelPerformanceHistoryService,
     TelegramChannelCatalogService,
     TelegramChannelLifecycleService,
     TelegramManagedPostGroupPresentationService,

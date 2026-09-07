@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import type { TelegramChannelAudienceTrend } from "@telegram-system/shared";
 import type { TelegramChannel } from "@/lib/api";
 import { ChannelEconomicsEditor } from "./channel-economics-editor";
 import { getChannelBookingIndicator } from "./channel-booking-indicator";
@@ -41,6 +42,32 @@ vi.mock("@/lib/api", () => ({
 vi.mock("@/providers/toast-provider", () => ({
   useAppToast: () => ({ pushToast: vi.fn() }),
 }));
+
+const audienceTrend = {
+  periodDays: 7,
+  currentAt: "2026-09-07T12:00:00.000Z",
+  baselineAt: "2026-08-31T12:00:00.000Z",
+  metrics: {
+    subscribers: {
+      current: 1_100,
+      previous: 1_000,
+      absoluteChange: 100,
+      percentChange: 10,
+    },
+    reach: {
+      current: 450,
+      previous: 500,
+      absoluteChange: -50,
+      percentChange: -10,
+    },
+    reactions: {
+      current: 22,
+      previous: 20,
+      absoluteChange: 2,
+      percentChange: 10,
+    },
+  },
+} satisfies TelegramChannelAudienceTrend;
 
 describe("ChannelEconomicsSummary", () => {
   it.each([
@@ -127,6 +154,66 @@ describe("ChannelEconomicsSummary", () => {
     ]);
   });
 
+  it("shows independent subscriber and view trends and expands channel dynamics", async () => {
+    render(
+      <ChannelEconomicsSummary
+        channel={
+          {
+            id: "channel-1",
+            title: "Mentor",
+            preview: {
+              audience: { subscribersCount: 1_100 },
+              audienceTrend,
+              financialSummary: {},
+            },
+          } as never
+        }
+      />,
+    );
+
+    const trendButton = screen.getByRole("button", {
+      name: "Open 7-day channel dynamics",
+    });
+    expect(trendButton).toHaveTextContent("Subs+10.0%·Views-10.0%");
+    expect(trendButton.parentElement).toHaveClass("mt-2");
+    expect(trendButton.parentElement).not.toContainElement(
+      screen.getByLabelText("Drafts"),
+    );
+
+    await userEvent.click(trendButton);
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Mentor · channel dynamics")).toBeInTheDocument();
+    expect(screen.getByText("Subscribers")).toBeInTheDocument();
+    expect(screen.getByText("Average views")).toBeInTheDocument();
+    expect(screen.getByText("Average reactions")).toBeInTheDocument();
+    expect(screen.getByText("+100 · +10.0%")).toBeInTheDocument();
+    expect(screen.getByText("-50.0 · -10.0%")).toBeInTheDocument();
+    expect(screen.getByText("Current payback")).toBeInTheDocument();
+  });
+
+  it("does not show a trend control until comparable history exists", () => {
+    render(
+      <ChannelEconomicsSummary
+        channel={
+          {
+            id: "channel-new",
+            title: "New channel",
+            preview: {
+              audience: { subscribersCount: 10 },
+              audienceTrend: null,
+              financialSummary: {},
+            },
+          } as never
+        }
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /channel dynamics/ }),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows combined spend with a detailed tooltip and format prices", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-08-23T10:00:00"));
@@ -145,6 +232,7 @@ describe("ChannelEconomicsSummary", () => {
                 activeSubscribersEstimate: 500,
                 viewRate: 7.3,
               },
+              audienceTrend,
               financialSummary: {
                 currency: "UAH",
                 totalAttributedSubscribers: 80,
@@ -244,7 +332,21 @@ describe("ChannelEconomicsSummary", () => {
     expect(screen.queryByText("pending")).not.toBeInTheDocument();
     expect(container.querySelector(".lucide-badge-dollar-sign")).toBeNull();
     expect(screen.getByText("13").tagName).toBe("STRONG");
-    expect(screen.getByText("ads to break even")).toBeInTheDocument();
+    expect(screen.getByText("ads left")).toBeInTheDocument();
+    expect(screen.getByText("ads left").parentElement).toHaveClass(
+      "whitespace-nowrap",
+    );
+    const trendButton = screen.getByRole("button", {
+      name: "Open 7-day channel dynamics",
+    });
+    expect(trendButton.parentElement).toHaveClass("mt-2");
+    expect(trendButton.parentElement).not.toContainElement(
+      screen.getByText("ads left"),
+    );
+    expect(
+      trendButton.compareDocumentPosition(screen.getByText("Payback")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
 
     await userEvent.hover(
       screen.getByRole("button", { name: "Show spend breakdown" }),
@@ -318,7 +420,13 @@ describe("ChannelEconomicsSummary", () => {
 
     render(
       <ChannelEconomicsEditor
-        channel={{ id: "channel-1", title: "Mentor", preview: { financialSummary: {} } } as never}
+        channel={
+          {
+            id: "channel-1",
+            title: "Mentor",
+            preview: { financialSummary: {} },
+          } as never
+        }
         onClose={vi.fn()}
       />,
     );
@@ -332,11 +440,18 @@ describe("ChannelEconomicsSummary", () => {
     expect(screen.getByText("1/24")).toBeInTheDocument();
     expect(screen.getByText("Weekend")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Delete 1/24" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Delete Weekend" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Delete Weekend" }),
+    ).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Enable Weekend" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Enable Weekend" }),
+    );
     expect(editorMocks.mutate).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: "toggle", product: expect.objectContaining({ id: "custom" }) }),
+      expect.objectContaining({
+        kind: "toggle",
+        product: expect.objectContaining({ id: "custom" }),
+      }),
     );
     await userEvent.click(screen.getByRole("button", { name: "Edit Weekend" }));
     expect(screen.getByDisplayValue("Weekend")).toBeInTheDocument();

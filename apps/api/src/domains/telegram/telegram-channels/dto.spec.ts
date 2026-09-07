@@ -7,6 +7,7 @@ import {
   TelegramManagedPostsQueryDto,
   UpdateTelegramManagedPostDto,
 } from './dto';
+import { TelegramChannelPerformanceHistoryQueryDto } from './telegram-channel-bounded-read.dto';
 
 const buttonRows = [
   [
@@ -69,6 +70,22 @@ describe('TelegramManagedPostsQueryDto', () => {
     const oversized = plainToInstance(TelegramManagedPostsQueryDto, {
       pageSize: '101',
     });
+    expect(validateSync(oversized)).not.toEqual([]);
+  });
+});
+
+describe('TelegramChannelPerformanceHistoryQueryDto', () => {
+  it('coerces and bounds the requested history period', () => {
+    const valid = plainToInstance(TelegramChannelPerformanceHistoryQueryDto, {
+      days: '90',
+    });
+    expect(valid.days).toBe(90);
+    expect(validateSync(valid)).toEqual([]);
+
+    const oversized = plainToInstance(
+      TelegramChannelPerformanceHistoryQueryDto,
+      { days: '366' },
+    );
     expect(validateSync(oversized)).not.toEqual([]);
   });
 });

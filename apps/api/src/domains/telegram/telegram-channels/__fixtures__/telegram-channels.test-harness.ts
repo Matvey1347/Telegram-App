@@ -20,6 +20,7 @@ import { TelegramChannelCatalogService } from '../telegram-channel-catalog.servi
 import { TelegramChannelContentReadService } from '../telegram-channel-content-read.service';
 import { TelegramChannelDeepSyncService } from '../telegram-channel-deep-sync.service';
 import { TelegramChannelAdPricingReadService } from '../telegram-channel-ad-pricing-read.service';
+import { TelegramChannelAudienceTrendReadService } from '../telegram-channel-audience-trend-read.service';
 import { TelegramChannelFinancialReadService } from '../telegram-channel-financial-read.service';
 import { TelegramChannelHistoricalSyncService } from '../telegram-channel-historical-sync.service';
 import { TelegramChannelImportPolicyService } from '../telegram-channel-import-policy.service';
@@ -85,6 +86,7 @@ const narrowProviders: ProviderType[] = [
   TelegramInvitePersistenceService,
   TelegramInviteHistoryService,
   TelegramChannelAdPricingReadService,
+  TelegramChannelAudienceTrendReadService,
   TelegramChannelFinancialReadService,
   TelegramChannelBookingReadService,
   TelegramChannelCatalogService,

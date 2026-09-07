@@ -13,6 +13,11 @@ import {
   type ChannelAdPricingWindows,
 } from './telegram-channel-ad-pricing-read.service';
 import type { TelegramChannelFinancialPreviewInput } from './telegram-channel-financial-read.types';
+import {
+  isChannelAdvertisingExpenseTransaction,
+  isChannelAdvertisingRevenueTransaction,
+  isChannelPurchaseTransaction,
+} from './telegram-channel-financial-row-classification';
 
 export type TelegramChannelFinancialSummaryOptions = {
   normalizeToPrimaryCurrency?: boolean;
@@ -230,29 +235,14 @@ async function buildChannelSummary(
   const channelTransactions = transactionsByChannelId.get(channel.id) ?? [];
   const channelAdSaleAllocations =
     adSaleAllocationsByChannelId.get(channel.id) ?? [];
-  const purchaseTransactions = channelTransactions.filter(
-    (transaction) =>
-      transaction.type === 'expense' &&
-      (transaction.id === channel.purchaseTransactionId ||
-        transaction.categoryRef?.key === 'buy_channels' ||
-        transaction.categoryRef?.name?.trim().toLowerCase() ===
-          'buy channels' ||
-        transaction.categoryRef?.name?.trim().toLowerCase() ===
-          'buy channels (legacy)'),
+  const purchaseTransactions = channelTransactions.filter((transaction) =>
+    isChannelPurchaseTransaction(transaction, channel.purchaseTransactionId),
   );
   const revenueTransactions = channelTransactions.filter(
-    (transaction) =>
-      transaction.type === 'income' &&
-      !transaction.telegramAdSalePayment &&
-      (transaction.categoryRef?.key === 'channel_advertising_revenue' ||
-        transaction.categoryRef?.name?.trim().toLowerCase() ===
-          'channel advertising revenue'),
+    isChannelAdvertisingRevenueTransaction,
   );
   const advertisingExpenseTransactions = channelTransactions.filter(
-    (transaction) =>
-      transaction.type === 'expense' &&
-      (transaction.categoryRef?.key === 'advertising' ||
-        transaction.categoryRef?.name?.trim().toLowerCase() === 'advertising'),
+    isChannelAdvertisingExpenseTransaction,
   );
   const kpiCurrency = String(
     channel.kpiCurrency || sources.primaryCurrency,

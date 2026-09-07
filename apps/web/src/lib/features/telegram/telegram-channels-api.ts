@@ -8,6 +8,7 @@ import type {
   ResetChannelScheduledPostsResult,
   ScheduleManagedPostsBatchPayload,
   TelegramChannelSyncProgressItem,
+  TelegramChannelPerformanceHistory,
   TelegramChannelSystemBotConnection,
   TelegramManagedPostCalendarResult,
   TelegramPostPlannerApplyResult,
@@ -257,6 +258,13 @@ export function createTelegramChannelsApi({
         await api.get<TelegramChannelAudienceSnapshot[]>(
           `/telegram-channels/${id}/audience-snapshots`,
           { params: limit ? { limit } : undefined },
+        )
+      ).data,
+    performanceHistory: async (id: string, days = 90) =>
+      (
+        await api.get<TelegramChannelPerformanceHistory>(
+          `/telegram-channels/${id}/performance-history`,
+          { params: { days } },
         )
       ).data,
     financialSummary: async (id: string) =>

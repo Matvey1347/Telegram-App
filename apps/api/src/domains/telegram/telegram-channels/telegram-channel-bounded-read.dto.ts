@@ -6,7 +6,12 @@ import {
   IsArray,
   IsNotEmpty,
   IsString,
+  IsInt,
+  IsOptional,
+  Max,
+  Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class TelegramManagedPostLookupDto {
   @IsArray()
@@ -16,4 +21,13 @@ export class TelegramManagedPostLookupDto {
   @IsString({ each: true })
   @IsNotEmpty({ each: true })
   ids!: string[];
+}
+
+export class TelegramChannelPerformanceHistoryQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(7)
+  @Max(365)
+  days?: number;
 }

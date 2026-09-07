@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import type { CurrencySettings, TelegramChannel } from "@/lib/api";
 import { Tooltip } from "@/components/ui/primitives";
+import { ChannelAudienceTrendButton } from "./channel-audience-trend";
 import { getChannelBookingIndicator } from "./channel-booking-indicator";
 
 function number(value: unknown, digits = 0) {
@@ -136,8 +137,17 @@ export function ChannelEconomicsSummary({
   return (
     <section className="mt-2">
       {!hasEconomics ? (
-        <div className="flex justify-end border-t border-neutral-800/80 pt-2 text-xs">
-          {operationalStatus}
+        <div className="border-t border-neutral-800/80 pt-2 text-xs">
+          <div className="flex justify-end">{operationalStatus}</div>
+          {channel.preview?.audienceTrend ? (
+            <div className="mt-2 flex">
+              <ChannelAudienceTrendButton
+                channelId={channel.id}
+                channelTitle={channel.title}
+                trend={channel.preview.audienceTrend}
+              />
+            </div>
+          ) : null}
         </div>
       ) : economics?.conversionUnavailable ? (
         <>
@@ -148,6 +158,17 @@ export function ChannelEconomicsSummary({
           <div className="mt-2 flex justify-end text-xs">
             {operationalStatus}
           </div>
+          {channel.preview?.audienceTrend ? (
+            <div className="mt-2 flex text-xs">
+              <ChannelAudienceTrendButton
+                channelId={channel.id}
+                channelTitle={channel.title}
+                trend={channel.preview.audienceTrend}
+                paybackPercent={economics?.paybackPercent}
+                estimatedAdsRemaining={economics?.estimatedAdsRemaining}
+              />
+            </div>
+          ) : null}
         </>
       ) : (
         <>
@@ -205,7 +226,18 @@ export function ChannelEconomicsSummary({
               currency={formatPricing?.currency || currency}
             />
           </div>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs">
+          {channel.preview?.audienceTrend ? (
+            <div className="mt-2 flex text-xs">
+              <ChannelAudienceTrendButton
+                channelId={channel.id}
+                channelTitle={channel.title}
+                trend={channel.preview.audienceTrend}
+                paybackPercent={economics?.paybackPercent}
+                estimatedAdsRemaining={economics?.estimatedAdsRemaining}
+              />
+            </div>
+          ) : null}
+          <div className="mt-2 flex items-center justify-between gap-2 whitespace-nowrap text-xs">
             <span className="inline-flex items-center gap-2">
               <Percent size={14} className="text-teal-300" aria-hidden="true" />
               <span className="text-neutral-500">Payback</span>
@@ -228,7 +260,7 @@ export function ChannelEconomicsSummary({
                 <strong className="font-semibold text-white">
                   {economics.estimatedAdsRemaining}
                 </strong>{" "}
-                ads to break even
+                ads left
               </span>
             ) : null}
           </div>
