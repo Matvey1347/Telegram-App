@@ -56,6 +56,7 @@ type TelegramTextEditorProps = {
   enableCustomEmoji?: boolean;
   customEmojiPacks?: TelegramCustomEmojiPackSummary[];
   onManageCustomEmojiPacks?: () => void;
+  singleRowToolbar?: boolean;
 };
 
 export type TelegramTextEditorHandle = {
@@ -92,6 +93,7 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
   enableCustomEmoji = false,
   customEmojiPacks,
   onManageCustomEmojiPacks,
+  singleRowToolbar = false,
 }, ref) {
   const { t, ensureNamespaces } = useI18n();
   useEffect(() => {
@@ -542,7 +544,7 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
 
   return (
     <div className="relative overflow-visible rounded-lg border border-neutral-700 bg-neutral-900 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
-      <TelegramTextEditorToolbar disabled={disabled} hasButtons={Boolean(onButtonRowsChange)} onCommand={executeCommand} onHeading={applyHeading} onPullQuoteWithAuthor={() => { setPullQuoteAuthor(""); setPullQuoteAuthorOpen(true); }} onConfigure={() => setShortcutsOpen(true)} />
+      <TelegramTextEditorToolbar disabled={disabled} hasButtons={Boolean(onButtonRowsChange)} singleRow={singleRowToolbar} onCommand={executeCommand} onHeading={applyHeading} onPullQuoteWithAuthor={() => { setPullQuoteAuthor(""); setPullQuoteAuthorOpen(true); }} onConfigure={() => setShortcutsOpen(true)} />
       {onButtonRowsChange ? <TelegramInlineKeyboardEditor buttonRows={buttonRows} onChange={onButtonRowsChange} disabled={disabled} open={buttonsEditorOpen} onOpenChange={setButtonsEditorOpen} canPublishInlineButtons={canPublishInlineButtons} onCheckPublishingAccess={onCheckInlineButtonPublishingAccess} /> : null}
       <TelegramCustomEmojiPickerModal
         open={customEmojiPickerOpen}

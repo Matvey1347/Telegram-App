@@ -161,6 +161,7 @@ describe("ChannelEconomicsSummary", () => {
           {
             id: "channel-1",
             title: "Mentor",
+            photoUrl: "https://cdn.test/mentor.jpg",
             preview: {
               audience: { subscribersCount: 1_100 },
               audienceTrend,
@@ -174,7 +175,7 @@ describe("ChannelEconomicsSummary", () => {
     const trendButton = screen.getByRole("button", {
       name: "Open 7-day channel dynamics",
     });
-    expect(trendButton).toHaveTextContent("Subs+10.0%·Views-10.0%");
+    expect(trendButton).toHaveTextContent("Subs+10.0%·24h views-10.0%");
     expect(trendButton.parentElement).toHaveClass("mt-2");
     expect(trendButton.parentElement).not.toContainElement(
       screen.getByLabelText("Drafts"),
@@ -184,12 +185,11 @@ describe("ChannelEconomicsSummary", () => {
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText("Mentor · channel dynamics")).toBeInTheDocument();
-    expect(screen.getByText("Subscribers")).toBeInTheDocument();
-    expect(screen.getByText("Average views")).toBeInTheDocument();
-    expect(screen.getByText("Average reactions")).toBeInTheDocument();
-    expect(screen.getByText("+100 · +10.0%")).toBeInTheDocument();
-    expect(screen.getByText("-50.0 · -10.0%")).toBeInTheDocument();
-    expect(screen.getByText("Current payback")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Mentor" })).toHaveAttribute(
+      "src",
+      "https://cdn.test/mentor.jpg",
+    );
+    expect(await screen.findByText("Last 30 days")).toBeInTheDocument();
   });
 
   it("does not show a trend control until comparable history exists", () => {

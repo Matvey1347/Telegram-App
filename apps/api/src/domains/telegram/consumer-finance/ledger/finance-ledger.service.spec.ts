@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
 import { FinanceLedgerService } from './finance-ledger.service';
@@ -225,116 +229,6 @@ describe('FinanceLedgerService tenant and money rules', () => {
     );
   });
 
-  it('keeps legacy rows visible in analytics without treating their old default amount as USD', async () => {
-    const prisma: any = {
-      $queryRaw: jest.fn().mockResolvedValue([
-        {
-          type: 'EXPENSE',
-          categoryId: null,
-          categoryName: null,
-          currency: 'EUR',
-          day: '2026-08-01',
-          nativeAmount: new Prisma.Decimal(50),
-          valuedAmount: new Prisma.Decimal(10),
-          legacyNativeAmount: new Prisma.Decimal(50),
-          legacyTransactionCount: BigInt(1),
-        },
-        {
-          type: 'EXPENSE',
-          categoryId: null,
-          categoryName: null,
-          currency: 'PLN',
-          day: '2026-08-01',
-          nativeAmount: new Prisma.Decimal(20),
-          valuedAmount: new Prisma.Decimal(0),
-          legacyNativeAmount: new Prisma.Decimal(20),
-          legacyTransactionCount: BigInt(1),
-        },
-      ]),
-    };
-    const result = await new FinanceLedgerService(prisma).analytics(
-      { id: 'profile-a', defaultCurrency: 'USD' },
-      {
-        period: 'CUSTOM',
-        from: '2026-08-01T00:00:00.000Z',
-        to: '2026-08-02T00:00:00.000Z',
-      },
-    );
-    expect(result.summary.expenses).toBe('10');
-    expect(result.legacyFallback).toEqual({
-      transactionCount: 2,
-      nativeAmounts: [
-        { currency: 'EUR', amount: '50' },
-        { currency: 'PLN', amount: '20' },
-      ],
-      reason: 'UNKNOWN_HISTORICAL_DEFAULT_CURRENCY',
-    });
-  });
-
-  it('returns zero analytics for an empty non-USD profile without requesting a rate', async () => {
-    const prisma: any = { $queryRaw: jest.fn().mockResolvedValue([]) };
-    const conversion = { getRateMetadata: jest.fn() };
-    const result = await new FinanceLedgerService(
-      prisma,
-      conversion as never,
-    ).analytics(
-      {
-        id: 'profile-a',
-        defaultCurrency: 'UAH',
-        timezone: 'Pacific/Kiritimati',
-        workspaceId: 'workspace-a',
-      },
-      { period: 'CURRENT_MONTH' },
-    );
-    expect(result).toMatchObject({
-      currency: 'UAH',
-      summary: { income: '0', expenses: '0', netCashflow: '0' },
-    });
-    expect(conversion.getRateMetadata).not.toHaveBeenCalled();
-  });
-
-  it('keeps native profile-currency totals exact instead of converting them through USD', async () => {
-    const prisma: any = { $queryRaw: jest.fn().mockResolvedValue([
-      { type: 'INCOME', categoryId: null, categoryName: null, categoryKey: null, currency: 'UAH', day: '2026-08-21', nativeAmount: new Prisma.Decimal(150), valuedAmount: new Prisma.Decimal('3.61'), legacyNativeAmount: new Prisma.Decimal(0), legacyTransactionCount: BigInt(0) },
-      { type: 'EXPENSE', categoryId: 'category-1', categoryName: 'Entertainment', categoryKey: 'entertainment', currency: 'UAH', day: '2026-08-21', nativeAmount: new Prisma.Decimal(100), valuedAmount: new Prisma.Decimal('2.41'), legacyNativeAmount: new Prisma.Decimal(0), legacyTransactionCount: BigInt(0) },
-    ]) };
-    const conversion = { getRateMetadata: jest.fn().mockResolvedValue({ available: true, rate: '36.34' }) };
-    const result = await new FinanceLedgerService(prisma, conversion as never).analytics(
-      { id: 'profile-a', defaultCurrency: 'UAH', timezone: 'Europe/Warsaw', workspaceId: 'workspace-a' },
-      { period: 'CUSTOM', from: '2026-08-21T00:00:00.000Z', to: '2026-08-22T00:00:00.000Z' },
-    );
-    expect(result.summary).toEqual({ income: '150', expenses: '100', netCashflow: '50' });
-    expect(result.expensesByCategory[0].amount).toBe('100');
-    expect(conversion.getRateMetadata).not.toHaveBeenCalled();
-  });
-
-  it('groups analytics by the selected day without creating a second timezone SQL parameter', async () => {
-    const queryRaw = jest.fn().mockResolvedValue([]);
-    await new FinanceLedgerService({ $queryRaw: queryRaw } as never).analytics(
-      {
-        id: 'profile-a',
-        defaultCurrency: 'USD',
-        timezone: 'Europe/Warsaw',
-      },
-      {
-        period: 'CUSTOM',
-        from: '2026-08-01T00:00:00.000Z',
-        to: '2026-08-02T00:00:00.000Z',
-      },
-    );
-
-    const [sql, ...parameters] = queryRaw.mock.calls[0] as [
-      TemplateStringsArray,
-      ...unknown[],
-    ];
-    expect(sql.join('?')).toContain(
-      'GROUP BY t."type", t."categoryId", c."name", c."key", t."currency", 6',
-    );
-    expect(
-      parameters.filter((value) => value === 'Europe/Warsaw'),
-    ).toHaveLength(1);
-  });
-
   it('returns only an explicit valuation snapshot for a non-USD-default transaction', async () => {
     const created = {
       id: 'transaction-a',
@@ -405,16 +299,14 @@ describe('FinanceLedgerService tenant and money rules', () => {
           .fn()
           .mockResolvedValue({ id: 'account-a', currency: 'EUR' }),
       },
-      exchangeRate: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            baseCurrency: 'EUR',
-            targetCurrency: 'USD',
-            rate: 1.1,
-            date: old,
-          },
-        ]),
-      },
+      $queryRaw: jest.fn().mockResolvedValue([
+        {
+          baseCurrency: 'EUR',
+          targetCurrency: 'USD',
+          rate: 1.1,
+          date: old,
+        },
+      ]),
     };
     prisma.$transaction = jest.fn((callback) => callback(prisma));
     await expect(
@@ -431,11 +323,15 @@ describe('FinanceLedgerService tenant and money rules', () => {
         },
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
-    expect(prisma.exchangeRate.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { workspaceId: 'workspace-a' },
-      }),
+    const rateQueries = prisma.$queryRaw.mock.calls.filter(([statement]) =>
+      statement.strings.join(' ').includes('SELECT DISTINCT ON'),
     );
+    expect(rateQueries.length).toBeGreaterThan(0);
+    expect(
+      rateQueries.every(([statement]) =>
+        statement.values.includes('workspace-a'),
+      ),
+    ).toBe(true);
   });
 
   it('uses a dated historical rate for a transaction before today', async () => {
@@ -453,16 +349,14 @@ describe('FinanceLedgerService tenant and money rules', () => {
             Promise.resolve({ id: 'transaction-a', ...data }),
           ),
       },
-      exchangeRate: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            baseCurrency: 'EUR',
-            targetCurrency: 'USD',
-            rate: 1.1,
-            date: occurredAt,
-          },
-        ]),
-      },
+      $queryRaw: jest.fn().mockResolvedValue([
+        {
+          baseCurrency: 'EUR',
+          targetCurrency: 'USD',
+          rate: 1.1,
+          date: occurredAt,
+        },
+      ]),
     };
     prisma.$transaction = jest.fn((callback) => callback(prisma));
     await expect(
@@ -481,11 +375,21 @@ describe('FinanceLedgerService tenant and money rules', () => {
     ).resolves.toMatchObject({
       valuationSnapshot: { currency: 'USD', amount: '11' },
     });
-    expect(prisma.exchangeRate.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { workspaceId: 'workspace-a', date: { lte: occurredAt } },
-      }),
+    const rateQueries = prisma.$queryRaw.mock.calls.filter(([statement]) =>
+      statement.strings.join(' ').includes('SELECT DISTINCT ON'),
     );
+    expect(rateQueries.length).toBeGreaterThan(0);
+    expect(
+      rateQueries.some(
+        ([statement]) =>
+          statement.values.includes('workspace-a') &&
+          statement.values.some(
+            (value) =>
+              value instanceof Date &&
+              value.getTime() === occurredAt.getTime(),
+          ),
+      ),
+    ).toBe(true);
   });
 
   it('edits an existing transaction with unchanged archived references and refreshes its merchant mapping atomically', async () => {
@@ -558,6 +462,119 @@ describe('FinanceLedgerService tenant and money rules', () => {
       }),
     );
     expect(tx.financeMerchantMapping.upsert).toHaveBeenCalled();
+  });
+
+  it('protects debt settlements and recurring occurrences from generic edits and deletes', async () => {
+    const tx = {
+      financeTransaction: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'generated-1',
+          accountId: 'account-a',
+          categoryId: null,
+          merchantDisplay: null,
+          debtSettlement: { id: 'debt-1' },
+          recurringPaymentOccurrence: null,
+        }),
+      },
+    };
+    const prisma: any = {
+      $transaction: jest.fn((callback) => callback(tx)),
+      financeTransaction: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findFirst: jest.fn().mockResolvedValue({
+          debtSettlement: null,
+          recurringPaymentOccurrence: { id: 'occurrence-1' },
+        }),
+      },
+    };
+    const ledger = new FinanceLedgerService(prisma);
+    await expect(
+      ledger.updateTransaction(
+        { id: 'profile-a', defaultCurrency: 'USD' },
+        'generated-1',
+        {
+          accountId: 'account-a',
+          type: 'EXPENSE',
+          amount: '10',
+          occurredAt: new Date().toISOString(),
+        },
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      ledger.removeTransaction('profile-a', 'generated-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.financeTransaction.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          debtSettlement: { is: null },
+          recurringPaymentOccurrence: { is: null },
+        }),
+      }),
+    );
+  });
+
+  it('suppresses merchant learning for a generated recurring transaction', async () => {
+    const occurredAt = new Date('2026-09-01T12:00:00.000Z');
+    const tx: any = {
+      financeAccount: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'account-a',
+          currency: 'USD',
+        }),
+      },
+      financeCategory: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'category-a',
+          name: 'Rent',
+          key: 'rent',
+          type: 'EXPENSE',
+          emoji: null,
+        }),
+      },
+      financeTransaction: {
+        create: jest.fn().mockImplementation(({ data }) =>
+          Promise.resolve({
+            id: 'transaction-a',
+            ...data,
+            account: {
+              id: 'account-a',
+              name: 'Card',
+              currency: 'USD',
+              type: 'CARD',
+              emoji: null,
+            },
+            category: {
+              id: 'category-a',
+              name: 'Rent',
+              key: 'rent',
+              type: 'EXPENSE',
+              emoji: null,
+            },
+            _count: { items: 0 },
+          }),
+        ),
+      },
+      financeMerchantMapping: { upsert: jest.fn() },
+    };
+
+    await new FinanceLedgerService({} as never).createTransactionInTransaction(
+      tx,
+      { id: 'profile-a', defaultCurrency: 'USD', workspaceId: 'workspace-a' },
+      {
+        accountId: 'account-a',
+        categoryId: 'category-a',
+        type: 'EXPENSE',
+        amount: '1000',
+        description: 'Rent',
+        occurredAt: occurredAt.toISOString(),
+      },
+      'MINI_APP',
+      undefined,
+      undefined,
+      { suppressMerchantMapping: true },
+    );
+
+    expect(tx.financeMerchantMapping.upsert).not.toHaveBeenCalled();
   });
 
   it('rejects a reversed history range', async () => {
@@ -711,11 +728,7 @@ describe('FinanceLedgerService tenant and money rules', () => {
       'USD',
       new Date(historical),
     );
-    expect(preparedRateLookup).toHaveBeenCalledWith(
-      'EUR',
-      'UAH',
-      undefined,
-    );
+    expect(preparedRateLookup).toHaveBeenCalledWith('EUR', 'UAH', undefined);
     expect(prisma.financeProfile.findUnique).not.toHaveBeenCalled();
     const first = source.resolve('EUR', 'USD', new Date(historical));
     expect(first).toEqual({ rate: new Prisma.Decimal(1.2), rateAt });
@@ -774,10 +787,7 @@ describe('FinanceLedgerService tenant and money rules', () => {
         getRateMetadata: preparedRateLookup,
       }),
     };
-    const service = new FinanceLedgerService(
-      {} as never,
-      conversion as never,
-    );
+    const service = new FinanceLedgerService({} as never, conversion as never);
     const operations = Array.from({ length: 10 }, (_, index) => ({
       currency: 'EUR',
       occurredAt: `2020-01-${String(index + 1).padStart(2, '0')}T12:00:00.000Z`,

@@ -135,7 +135,7 @@ function FinanceToastCard({
       </p>
       <button
         type="button"
-        aria-label="Close notification"
+        aria-label={closeNotificationLabel()}
         onClick={onClose}
         className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-neutral-400 hover:bg-white/10 hover:text-white"
       >
@@ -143,6 +143,13 @@ function FinanceToastCard({
       </button>
     </div>
   );
+}
+
+function closeNotificationLabel() {
+  const locale = document.documentElement.lang.toLowerCase();
+  if (locale.startsWith("uk")) return "Закрити сповіщення";
+  if (locale.startsWith("ru")) return "Закрыть уведомление";
+  return "Close notification";
 }
 
 export function useFinanceFeedback() {

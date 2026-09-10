@@ -75,17 +75,17 @@ describe('TelegramManagedPostsQueryDto', () => {
 });
 
 describe('TelegramChannelPerformanceHistoryQueryDto', () => {
-  it('coerces and bounds the requested history period', () => {
+  it('accepts only supported history ranges', () => {
     const valid = plainToInstance(TelegramChannelPerformanceHistoryQueryDto, {
-      days: '90',
+      range: '90d',
     });
-    expect(valid.days).toBe(90);
+    expect(valid.range).toBe('90d');
     expect(validateSync(valid)).toEqual([]);
 
-    const oversized = plainToInstance(
+    const unsupported = plainToInstance(
       TelegramChannelPerformanceHistoryQueryDto,
-      { days: '366' },
+      { range: '365d' },
     );
-    expect(validateSync(oversized)).not.toEqual([]);
+    expect(validateSync(unsupported)).not.toEqual([]);
   });
 });

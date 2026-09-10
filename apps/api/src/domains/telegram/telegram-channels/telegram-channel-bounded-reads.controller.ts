@@ -50,6 +50,6 @@ export class TelegramChannelBoundedReadsController {
     @Param('id') channelId: string,
     @Query() query: TelegramChannelPerformanceHistoryQueryDto,
   ) {
-    return this.performanceHistory.history(user.sub, channelId, query.days);
+    return this.performanceHistory.history(user.sub, channelId, query.range);
   }
 }

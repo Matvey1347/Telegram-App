@@ -57,6 +57,7 @@ export class FinanceLimitService {
         FROM "FinanceTransaction" t
         WHERE t."profileId" = ${profileId}
           AND t."type" = 'EXPENSE' AND t."deletedAt" IS NULL
+          AND t."purpose" = 'ORDINARY'
           AND t."occurredAt" >= ${from} AND t."occurredAt" < ${to}
           ${categoryId ? Prisma.sql`AND t."categoryId" = ${categoryId}` : Prisma.empty}
         GROUP BY t."categoryId", t."currency"

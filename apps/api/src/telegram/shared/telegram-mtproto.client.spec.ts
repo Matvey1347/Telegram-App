@@ -64,6 +64,81 @@ describe('TelegramMtprotoClient import resolution', () => {
     });
   });
 
+  it('loads one historical invite link from its selected channel with creator data', async () => {
+    const peer = new Api.InputPeerChannel({
+      channelId: returnBigInt('123456'),
+      accessHash: returnBigInt('7'),
+    });
+    const creator = new Api.User({
+      id: returnBigInt('42'),
+      firstName: '😇',
+      username: 'legacy_owner',
+    });
+    jest
+      .spyOn(client as never, 'resolveStoredChannel' as never)
+      .mockResolvedValue({
+        peer,
+        entity: {},
+        channel: {},
+      } as never);
+    jest
+      .spyOn(client as never, 'profilePhotoDataUrl' as never)
+      .mockResolvedValue('data:image/jpeg;base64,emoji-avatar' as never);
+    fakeClient.invoke.mockImplementation((request: unknown) => {
+      if (request instanceof Api.messages.GetExportedChatInvite) {
+        return {
+          invite: {
+            link: 'https://t.me/+legacy',
+            title: 'Legacy invite',
+            adminId: returnBigInt('42'),
+            date: 1_735_689_600,
+            usage: 3,
+            requested: 1,
+            permanent: true,
+          },
+          users: [creator],
+        };
+      }
+      if (request instanceof Api.messages.GetChatInviteImporters) {
+        return {
+          importers: [
+            { userId: returnBigInt('100'), date: 1_735_776_000 },
+            { userId: returnBigInt('101'), date: 1_735_689_600 },
+            { userId: returnBigInt('102'), date: 1_735_603_200 },
+          ],
+          users: [],
+        };
+      }
+      throw new Error('Unexpected invoke');
+    });
+
+    await expect(
+      client.getChannelInviteLink({
+        apiId: '1',
+        apiHash: 'hash',
+        session: 'session',
+        channel: { telegramChatId: '123456', telegramAccessHash: '7' },
+        inviteLink: 'https://telegram.me/+legacy?source=old',
+        joinedFrom: new Date('2025-01-01T12:00:00.000Z'),
+        joinedUntil: new Date('2025-01-03T00:00:00.000Z'),
+      }),
+    ).resolves.toMatchObject({
+      url: 'https://t.me/+legacy',
+      title: 'Legacy invite',
+      telegramCreatorUserId: '42',
+      creatorUsername: 'legacy_owner',
+      creatorFirstName: '😇',
+      creatorPhotoUrl: 'data:image/jpeg;base64,emoji-avatar',
+      usage: 3,
+      requested: 1,
+      permanent: true,
+      joinedWithinPeriod: 1,
+    });
+    expect(fakeClient.invoke).toHaveBeenCalledWith(
+      expect.objectContaining({ link: 'https://t.me/+legacy' }),
+    );
+  });
+
   it('resolves a public username to a real entity', async () => {
     const entity = new Api.Channel({
       id: '123456' as any,

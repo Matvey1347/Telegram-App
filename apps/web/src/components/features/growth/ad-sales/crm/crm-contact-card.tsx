@@ -63,7 +63,9 @@ export function CrmContactCard({
   const stage = crmContactStagePresentation(contact.stage);
   const hasDeals = contact.salesSummary.totalSalesCount > 0;
   const needsReply =
-    !contact.replySummary.muted && contact.replySummary.status !== "NONE";
+    !contact.replySummary.muted &&
+    contact.replySummary.status !== "NONE" &&
+    contact.replySummary.status !== "WAITING_FOR_CLIENT";
   return (
     <article
       className={`break-inside-avoid rounded-lg border p-3 transition-colors ${
@@ -194,14 +196,17 @@ function ReplySummary({
   const established = summary.status.startsWith("CONVERSATION_");
   const unread = summary.status.endsWith("_UNREAD");
   const first = summary.status.startsWith("FIRST_");
+  const waitingForClient = summary.status === "WAITING_FOR_CLIENT";
   const suffix = summary.countsComplete ? "" : "+";
-  const label = first
-    ? unread
-      ? "First message · unread"
-      : "First message · read"
-    : unread
-      ? "Awaiting reply · unread"
-      : "Awaiting reply · read";
+  const label = waitingForClient
+    ? "Waiting for client"
+    : first
+      ? unread
+        ? "First message · unread"
+        : "First message · read"
+      : unread
+        ? "Awaiting reply · unread"
+        : "Awaiting reply · read";
   return (
     <div
       className={`mt-3 flex items-center gap-2 rounded-lg border px-2.5 py-2 text-xs ${summary.muted ? "border-neutral-800 bg-neutral-900/35 text-neutral-500" : unread ? "border-rose-900/70 bg-rose-950/20 text-rose-200" : "border-neutral-800 bg-neutral-900/45 text-neutral-300"}`}

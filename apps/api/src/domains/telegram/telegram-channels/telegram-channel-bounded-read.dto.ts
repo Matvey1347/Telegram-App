@@ -1,17 +1,17 @@
-import { TELEGRAM_MANAGED_POST_LOOKUP_MAX_IDS } from '@telegram-system/shared';
+import {
+  TELEGRAM_MANAGED_POST_LOOKUP_MAX_IDS,
+  type TelegramChannelPerformanceHistoryRange,
+} from '@telegram-system/shared';
 import {
   ArrayMaxSize,
   ArrayNotEmpty,
   ArrayUnique,
   IsArray,
   IsNotEmpty,
-  IsString,
-  IsInt,
+  IsIn,
   IsOptional,
-  Max,
-  Min,
+  IsString,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 
 export class TelegramManagedPostLookupDto {
   @IsArray()
@@ -25,9 +25,6 @@ export class TelegramManagedPostLookupDto {
 
 export class TelegramChannelPerformanceHistoryQueryDto {
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(7)
-  @Max(365)
-  days?: number;
+  @IsIn(['1d', '7d', '30d', '90d', 'all'])
+  range?: TelegramChannelPerformanceHistoryRange;
 }

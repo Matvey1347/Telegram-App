@@ -9,6 +9,7 @@ import type {
   ScheduleManagedPostsBatchPayload,
   TelegramChannelSyncProgressItem,
   TelegramChannelPerformanceHistory,
+  TelegramChannelPerformanceHistoryRange,
   TelegramChannelSystemBotConnection,
   TelegramManagedPostCalendarResult,
   TelegramPostPlannerApplyResult,
@@ -264,11 +265,14 @@ export function createTelegramChannelsApi({
           { params: limit ? { limit } : undefined },
         )
       ).data,
-    performanceHistory: async (id: string, days = 90) =>
+    performanceHistory: async (
+      id: string,
+      range: TelegramChannelPerformanceHistoryRange = "30d",
+    ) =>
       (
         await api.get<TelegramChannelPerformanceHistory>(
           `/telegram-channels/${id}/performance-history`,
-          { params: { days } },
+          { params: { range } },
         )
       ).data,
     financialSummary: async (id: string) =>

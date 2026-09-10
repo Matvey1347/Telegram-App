@@ -1,0 +1,78 @@
+.scene { position: relative; width: 100%; min-height: 116px; overflow: hidden; border: 1px solid color-mix(in srgb, currentColor 25%, transparent); border-radius: 16px; background: #080b10; isolation: isolate; }
+.scene::after { position: absolute; inset: 0; background: linear-gradient(115deg, transparent 28%, rgb(255 255 255 / 7%) 48%, transparent 66%); content: ""; pointer-events: none; transform: translateX(-120%); }
+.free { color: #67e8f9; }
+.pro { color: #38bdf8; }
+.ultimate { color: #c4b5fd; }
+.canvas { display: block; width: 100%; height: 116px; }
+.grid { stroke: currentColor; stroke-opacity: .055; stroke-dasharray: 2 7; }
+.ambientOne, .ambientTwo { opacity: .08; filter: blur(14px); }
+.wallet { transform-origin: 145px 86px; }
+.bar { transform-box: fill-box; transform-origin: center bottom; }
+.chartLine, .chartLineGlow { stroke-dasharray: 260; stroke-dashoffset: 0; }
+.chartLineGlow { filter: blur(4px); }
+.signal { transform-origin: 256px 33px; }
+.orbitOuter, .orbitInner, .satelliteOne, .satelliteTwo { transform-origin: 160px 78px; }
+.core, .pulseRing { transform-origin: 160px 79px; }
+
+/* The scenes rest in a complete, readable state. Motion runs only for the
+   card the user is exploring instead of turning the whole pricing grid into
+   a permanent dashboard animation. */
+:global([data-finance-plan]:hover) .scene::after,
+:global([data-finance-plan]:focus-within) .scene::after { animation: finance-plan-sheen 1.4s cubic-bezier(.22, 1, .36, 1) 1; }
+:global([data-finance-plan]:hover) .ambientOne,
+:global([data-finance-plan]:focus-within) .ambientOne { animation: finance-plan-ambient 2.8s ease-in-out infinite alternate; }
+:global([data-finance-plan]:hover) .ambientTwo,
+:global([data-finance-plan]:focus-within) .ambientTwo { animation: finance-plan-ambient 3.2s ease-in-out -1s infinite alternate-reverse; }
+:global([data-finance-plan]:hover) .wallet,
+:global([data-finance-plan]:focus-within) .wallet { animation: finance-plan-wallet 2.4s cubic-bezier(.22, 1, .36, 1) 1; }
+:global([data-finance-plan]:hover) .coinOne,
+:global([data-finance-plan]:focus-within) .coinOne { animation: finance-plan-coin-in 2.2s cubic-bezier(.2, .8, .2, 1) infinite; }
+:global([data-finance-plan]:hover) .coinTwo,
+:global([data-finance-plan]:focus-within) .coinTwo { animation: finance-plan-coin-float 2.2s ease-in-out infinite; }
+:global([data-finance-plan]:hover) .transferPath,
+:global([data-finance-plan]:focus-within) .transferPath { animation: finance-plan-dash 1.5s linear infinite; }
+:global([data-finance-plan]:hover) .bar,
+:global([data-finance-plan]:focus-within) .bar { animation: finance-plan-bar 2.4s cubic-bezier(.22, 1, .36, 1) infinite; }
+:global([data-finance-plan]:hover) .chartLine,
+:global([data-finance-plan]:hover) .chartLineGlow,
+:global([data-finance-plan]:focus-within) .chartLine,
+:global([data-finance-plan]:focus-within) .chartLineGlow { animation: finance-plan-draw 3.2s cubic-bezier(.22, 1, .36, 1) infinite; }
+:global([data-finance-plan]:hover) .signal,
+:global([data-finance-plan]:focus-within) .signal { animation: finance-plan-signal 2.1s ease-out infinite; }
+:global([data-finance-plan]:hover) .metricChip,
+:global([data-finance-plan]:focus-within) .metricChip { animation: finance-plan-chip 2.8s ease-in-out infinite; }
+:global([data-finance-plan]:hover) .scan,
+:global([data-finance-plan]:focus-within) .scan { animation: finance-plan-scan 3.2s cubic-bezier(.4, 0, .2, 1) infinite; }
+:global([data-finance-plan]:hover) .orbitOuter,
+:global([data-finance-plan]:focus-within) .orbitOuter { animation: finance-plan-orbit 10s linear infinite; }
+:global([data-finance-plan]:hover) .orbitInner,
+:global([data-finance-plan]:focus-within) .orbitInner { animation: finance-plan-orbit-reverse 7s linear infinite; }
+:global([data-finance-plan]:hover) .core,
+:global([data-finance-plan]:focus-within) .core { animation: finance-plan-core 3.4s ease-in-out infinite; }
+:global([data-finance-plan]:hover) .satelliteOne,
+:global([data-finance-plan]:focus-within) .satelliteOne { animation: finance-plan-orbit 6s linear infinite; }
+:global([data-finance-plan]:hover) .satelliteTwo,
+:global([data-finance-plan]:focus-within) .satelliteTwo { animation: finance-plan-orbit-reverse 4.5s linear infinite; }
+:global([data-finance-plan]:hover) .pulseRing,
+:global([data-finance-plan]:focus-within) .pulseRing { animation: finance-plan-pulse 2.4s ease-out infinite; }
+
+@keyframes finance-plan-sheen { 0%, 70% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
+@keyframes finance-plan-ambient { to { transform: translate(14px, 8px) scale(1.2); opacity: .15; } }
+@keyframes finance-plan-wallet { 0%, 100% { transform: translateY(0) rotate(0); } 45% { transform: translateY(-4px) rotate(-.5deg); } 58% { transform: translateY(-3px) rotate(.5deg); } }
+@keyframes finance-plan-coin-in { 0%, 12% { transform: translate(18px, -15px) scale(.7); opacity: 0; } 38%, 70% { transform: translate(0, 0) scale(1); opacity: 1; } 90%, 100% { transform: translate(-25px, 30px) scale(.55); opacity: 0; } }
+@keyframes finance-plan-coin-float { 50% { transform: translateY(-7px) rotate(12deg); } }
+@keyframes finance-plan-dash { to { stroke-dashoffset: -18; } }
+@keyframes finance-plan-bar { 0%, 15% { transform: scaleY(.25); opacity: .18; } 42%, 78% { transform: scaleY(1); } 100% { transform: scaleY(.55); opacity: .35; } }
+@keyframes finance-plan-draw { 0%, 12% { stroke-dashoffset: 260; } 48%, 83% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -260; } }
+@keyframes finance-plan-signal { 0% { transform: scale(.6); opacity: 0; } 35% { opacity: 1; } 100% { transform: scale(1.65); opacity: 0; } }
+@keyframes finance-plan-chip { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes finance-plan-scan { 0%, 12% { transform: translateX(0); opacity: 0; } 24% { opacity: .75; } 68% { transform: translateX(224px); opacity: .55; } 76%, 100% { transform: translateX(224px); opacity: 0; } }
+@keyframes finance-plan-orbit { to { transform: rotate(360deg); } }
+@keyframes finance-plan-orbit-reverse { to { transform: rotate(-360deg); } }
+@keyframes finance-plan-core { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-4px) scale(1.025); } }
+@keyframes finance-plan-pulse { 0% { transform: scale(.72); opacity: 0; } 28% { opacity: .48; } 100% { transform: scale(1.2); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .scene::after, .ambientOne, .ambientTwo, .wallet, .coinOne, .coinTwo, .transferPath, .bar, .chartLine, .chartLineGlow, .signal, .metricChip, .scan, .orbitOuter, .orbitInner, .core, .satelliteOne, .satelliteTwo, .pulseRing { animation: none; }
+  .chartLine, .chartLineGlow { stroke-dashoffset: 0; }
+}

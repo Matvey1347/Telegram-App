@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { FinanceTransferService } from './finance-transfer.service';
@@ -114,10 +115,13 @@ describe('FinanceTransferService', () => {
           id: 'transfer-1',
           fromAccountId: 'from',
           toAccountId: 'to',
+          _count: { savingsMovements: 0 },
         }),
         update: jest.fn().mockResolvedValue(row),
       },
+      $executeRaw: jest.fn(),
     };
+    prisma.$transaction = jest.fn((callback) => callback(prisma));
     const conversion = {
       getRateMetadata: jest
         .fn()
@@ -136,6 +140,7 @@ describe('FinanceTransferService', () => {
       id: 'transfer-1',
       fromAccountId: 'other',
       toAccountId: 'to',
+      _count: { savingsMovements: 0 },
     });
     await expect(
       service.update('profile-1', 'transfer-1', {
@@ -199,10 +204,15 @@ describe('FinanceTransferService', () => {
     const deleted = { ...row, deletedAt: date };
     const prisma: any = {
       financeTransfer: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'transfer-1' }),
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'transfer-1',
+          _count: { savingsMovements: 0 },
+        }),
         update: jest.fn().mockResolvedValue(deleted),
       },
+      $executeRaw: jest.fn(),
     };
+    prisma.$transaction = jest.fn((callback) => callback(prisma));
     await expect(
       new FinanceTransferService(prisma, {} as never).remove(
         'profile-1',

@@ -4,6 +4,7 @@ import {
   PropsWithChildren,
   forwardRef,
   isValidElement,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -875,6 +876,10 @@ export function CustomSelect({
   searchable = true,
   dropdownClassName = "",
   uiLocale,
+  onSearchChange,
+  canCreateOption,
+  createOptionLabel,
+  onCreateOption,
 }: {
   value?: string;
   onChange: (value: string) => void;
@@ -885,6 +890,10 @@ export function CustomSelect({
   searchable?: boolean;
   dropdownClassName?: string;
   uiLocale?: UiLocale;
+  onSearchChange?: (search: string) => void;
+  canCreateOption?: (search: string) => boolean;
+  createOptionLabel?: (search: string) => React.ReactNode;
+  onCreateOption?: (search: string) => void | Promise<void>;
 }) {
   const i18n = useOptionalI18n(),
     ui = uiCopy(uiLocale ?? i18n?.locale);
@@ -896,7 +905,9 @@ export function CustomSelect({
   const [dropdownStyle, setDropdownStyle] =
     useState<React.CSSProperties | null>(null);
   const selected = options.find((o) => o.value === value);
-  const showSearch = searchable && options.length > 5;
+  const showSearch =
+    searchable &&
+    (options.length > 5 || Boolean(onSearchChange) || Boolean(onCreateOption));
   const filteredOptions = showSearch
     ? options.filter((option) =>
         `${option.label} ${option.meta ?? ""} ${option.value}`
@@ -904,14 +915,32 @@ export function CustomSelect({
           .includes(search.trim().toLocaleLowerCase()),
       )
     : options;
-
+  const normalizedSearch = search.trim();
+  const showCreateOption = Boolean(
+    normalizedSearch &&
+    onCreateOption &&
+    (canCreateOption?.(normalizedSearch) ?? true),
+  );
+  const resetSearch = useCallback(() => {
+    setSearch("");
+    onSearchChange?.("");
+  }, [onSearchChange]);
+  const createTypedOption = () => {
+    if (!showCreateOption || !onCreateOption) return;
+    const typedValue = normalizedSearch;
+    setOpen(false);
+    resetSearch();
+    void Promise.resolve(onCreateOption(typedValue)).catch(() => undefined);
+  };
   const pickFirstFilteredOption = () => {
-    const normalizedSearch = search.trim();
     const candidate = normalizedSearch ? filteredOptions[0] : options[0];
-    if (!candidate) return;
+    if (!candidate) {
+      createTypedOption();
+      return;
+    }
     onChange(candidate.value);
     setOpen(false);
-    setSearch("");
+    resetSearch();
   };
 
   useEffect(() => {
@@ -923,12 +952,12 @@ export function CustomSelect({
         !dropdownRef.current?.contains(target)
       ) {
         setOpen(false);
-        setSearch("");
+        resetSearch();
       }
     };
     document.addEventListener("pointerdown", onDocPointerDown);
     return () => document.removeEventListener("pointerdown", onDocPointerDown);
-  }, []);
+  }, [resetSearch]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -1004,7 +1033,7 @@ export function CustomSelect({
         disabled={disabled}
         onClick={() => {
           setOpen((value) => {
-            if (value) setSearch("");
+            if (value) resetSearch();
             return !value;
           });
         }}
@@ -1049,11 +1078,14 @@ export function CustomSelect({
                   <input
                     autoFocus
                     value={search}
-                    onChange={(event) => setSearch(event.target.value)}
+                    onChange={(event) => {
+                      setSearch(event.target.value);
+                      onSearchChange?.(event.target.value);
+                    }}
                     onKeyDown={(event) => {
                       if (event.key === "Escape") {
                         setOpen(false);
-                        setSearch("");
+                        resetSearch();
                         return;
                       }
                       if (event.key === "Enter") {
@@ -1076,7 +1108,7 @@ export function CustomSelect({
                       onClick={() => {
                         onChange(opt.value);
                         setOpen(false);
-                        setSearch("");
+                        resetSearch();
                       }}
                       className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-neutral-800"
                     >
@@ -1106,7 +1138,25 @@ export function CustomSelect({
                     </button>
                   );
                 })}
-                {!filteredOptions.length ? (
+                {showCreateOption ? (
+                  <button
+                    type="button"
+                    onClick={createTypedOption}
+                    className="flex w-full items-center gap-2 border-t border-neutral-800 px-3 py-2 text-left text-sm font-medium text-blue-300 hover:bg-neutral-800"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-blue-950 text-base leading-none"
+                    >
+                      +
+                    </span>
+                    <span className="truncate">
+                      {createOptionLabel?.(normalizedSearch) ??
+                        `Add ${normalizedSearch}`}
+                    </span>
+                  </button>
+                ) : null}
+                {!filteredOptions.length && !showCreateOption ? (
                   <p className="px-3 py-3 text-center text-sm text-neutral-500">
                     No options found
                   </p>

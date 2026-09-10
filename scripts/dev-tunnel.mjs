@@ -7,6 +7,7 @@ import { connect as connectToUpstream, createServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 import { randomBytes } from "node:crypto";
 import { assertPortAvailable } from "./dev-port-availability.mjs";
+import { terminateDevChildren } from "./dev-process-termination.mjs";
 import { localBotPublicEnvironment } from "./public-origin-environment.mjs";
 
 const withCloudflare = process.argv.includes("--cloudflare");
@@ -49,23 +50,15 @@ async function stop(exitCode = 0) {
       failure("Bot cleanup", error);
     }
   }
-  for (const child of children) terminate(child);
+  await terminateDevChildren(children);
   process.exit(exitCode);
 }
 
-function terminate(child) {
-  if (process.platform !== "win32" && typeof child.pid === "number") {
-    try {
-      process.kill(-child.pid, "SIGTERM");
-      return;
-    } catch {
-      // The process group may already have exited; fall back to the child.
-    }
-  }
-  child.kill("SIGTERM");
-}
-
-for (const signal of ["SIGINT", "SIGTERM"]) {
+for (const signal of [
+  "SIGINT",
+  "SIGTERM",
+  ...(process.platform === "win32" ? [] : ["SIGHUP"]),
+]) {
   process.on(signal, () => void stop());
 }
 

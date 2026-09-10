@@ -1,69 +1,62 @@
 "use client";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type {
-  ConsumerFinanceCategory,
-  ConsumerFinanceDashboard,
-} from "@telegram-system/shared";
+import type { ConsumerFinanceLimit } from "@telegram-system/shared";
 import {
   Button,
   Card,
-  DateInput,
-  EmptyState,
   ErrorState,
   FormField,
   Input,
+  LoadingState,
   Select,
 } from "./ui";
-import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
+import { consumerFinanceInsightsApi } from "@/lib/features/finance/consumer-finance-insights-api";
+import { consumerFinanceLedgerApi } from "@/lib/features/finance/consumer-finance-ledger-api";
+import { consumerFinancePlanningApi } from "@/lib/features/finance/consumer-finance-planning-api";
 import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
 import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import {
-  financeCopy,
-  localizeFinanceCategory,
-  type FinanceLocale,
-} from "./finance-i18n";
+import { type FinanceLocale } from "./i18n/core";
+import { financeBudgetCopy } from "./i18n/budget";
+import { localizeFinanceCategory } from "./finance-category-i18n";
 export function FinanceBudget({
   botId,
-  categories,
-  dashboard,
   locale,
   onUpgrade,
 }: {
   botId: string;
-  categories: ConsumerFinanceCategory[];
-  dashboard: ConsumerFinanceDashboard;
   locale: FinanceLocale;
   onUpgrade: () => void;
 }) {
-  const t = financeCopy(locale);
+  const t = financeBudgetCopy(locale);
   const client = useQueryClient();
   const [categoryId, setCategoryId] = useState("");
   const [amount, setAmount] = useState("");
-  const [goalName, setGoalName] = useState("");
-  const [goalTarget, setGoalTarget] = useState("");
-  const [goalCurrent, setGoalCurrent] = useState("0");
-  const [goalDate, setGoalDate] = useState("");
-  const limits = useQuery({
-    queryKey: consumerFinanceKeys.limits(botId),
-    queryFn: () => consumerFinanceApi.limits(botId),
-    initialData: dashboard.limits,
+  // Dashboard, references and planning reads are independent and start together.
+  const dashboard = useQuery({
+    queryKey: consumerFinanceKeys.dashboard(botId),
+    queryFn: () => consumerFinanceInsightsApi.dashboard(botId),
+    retry: false,
+  });
+  const categories = useQuery({
+    queryKey: consumerFinanceKeys.categories(botId),
+    queryFn: () => consumerFinanceLedgerApi.categories(botId),
   });
   const smartLimits = useQuery({
-    queryKey: [...consumerFinanceKeys.limits(botId), "smart"],
-    queryFn: () => consumerFinanceApi.smartLimits(botId),
+    queryKey: consumerFinanceKeys.smartLimits(botId),
+    queryFn: () => consumerFinancePlanningApi.smartLimits(botId),
   });
   const save = useMutation({
     mutationFn: () =>
-      consumerFinanceApi.saveLimit(botId, {
+      consumerFinancePlanningApi.saveLimit(botId, {
         categoryId,
         amount,
-        currency: dashboard.profile.defaultCurrency,
+        currency: dashboard.data!.profile.defaultCurrency,
       }),
     onSuccess: (limit) => {
       client.setQueryData(
         consumerFinanceKeys.limits(botId),
-        (items: typeof limits.data) =>
+        (items: ConsumerFinanceLimit[] | undefined) =>
           items
             ? [
                 ...items.filter((item) => item.categoryId !== limit.categoryId),
@@ -77,36 +70,23 @@ export function FinanceBudget({
       setAmount("");
     },
   });
-  const saveGoal = useMutation({
-    mutationFn: () =>
-      consumerFinanceApi.saveGoal(botId, {
-        name: goalName.trim(),
-        targetAmount: goalTarget,
-        currentAmount: goalCurrent,
-        currency: dashboard.profile.defaultCurrency,
-        targetDate: goalDate || undefined,
-      }),
-    onSuccess: (goal) => {
-      client.setQueryData(consumerFinanceKeys.goal(botId), goal);
-      void client.invalidateQueries({
-        queryKey: consumerFinanceKeys.dashboard(botId),
-      });
-      setGoalName("");
-      setGoalTarget("");
-      setGoalCurrent("0");
-      setGoalDate("");
-    },
-  });
-  const deleteGoal = useMutation({
-    mutationFn: (id: string) => consumerFinanceApi.deleteGoal(botId, id),
-    onSuccess: () => {
-      client.setQueryData(consumerFinanceKeys.goal(botId), null);
-      void client.invalidateQueries({
-        queryKey: consumerFinanceKeys.dashboard(botId),
-      });
-    },
-  });
-  const goal = dashboard.goal;
+  if (dashboard.isLoading || categories.isLoading)
+    return <LoadingState text={t.loadingFinances} />;
+  if (dashboard.isError || categories.isError || !dashboard.data)
+    return (
+      <div className="space-y-3">
+        <ErrorState text={t.financeUnavailable} />
+        <Button
+          onClick={() =>
+            void Promise.all([dashboard.refetch(), categories.refetch()])
+          }
+        >
+          {t.retry}
+        </Button>
+      </div>
+    );
+  const dashboardData = dashboard.data;
+  const categoryRows = categories.data ?? [];
   return (
     <div className="space-y-4">
       <Card>
@@ -117,7 +97,7 @@ export function FinanceBudget({
             onChange={(e) => setCategoryId(e.target.value)}
           >
             <option value="">{t.selectCategory}</option>
-            {categories
+            {categoryRows
               .filter(
                 (category) =>
                   category.type === "EXPENSE" && !category.archivedAt,
@@ -130,7 +110,7 @@ export function FinanceBudget({
           </Select>
         </FormField>
         <FormField
-          label={`${t.monthlyBudget} (${dashboard.profile.defaultCurrency})`}
+          label={`${t.monthlyBudget} (${dashboardData.profile.defaultCurrency})`}
         >
           <Input
             inputMode="decimal"
@@ -149,103 +129,7 @@ export function FinanceBudget({
           <p className="mt-2 text-sm text-rose-300">{t.financeUnavailable}</p>
         ) : null}
       </Card>
-      <Card>
-        <h2 className="font-medium">{t.financialGoal}</h2>
-        {goal ? (
-          <div className="mt-3 space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="font-medium">{goal.name}</p>
-                <p className="text-sm text-neutral-400">
-                  {formatMoney(goal.currentAmount, goal.currency, "symbol")} /{" "}
-                  {formatMoney(goal.targetAmount, goal.currency, "symbol")}
-                </p>
-              </div>
-              <Button
-                variant="danger"
-                disabled={deleteGoal.isPending}
-                onClick={() => deleteGoal.mutate(goal.id)}
-              >
-                {t.deleteGoal}
-              </Button>
-            </div>
-            <div
-              role="progressbar"
-              aria-label={goal.name}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={Math.min(
-                100,
-                Math.round(
-                  (Number(goal.currentAmount) / Number(goal.targetAmount)) *
-                    100,
-                ),
-              )}
-              className="h-2 rounded bg-neutral-800"
-            >
-              <div
-                className="h-2 rounded bg-emerald-400"
-                style={{
-                  width: `${Math.min(100, (Number(goal.currentAmount) / Number(goal.targetAmount)) * 100)}%`,
-                }}
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="mt-3 space-y-3">
-            <EmptyState text={t.noGoal} />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <FormField label={t.goalName}>
-                <Input
-                  value={goalName}
-                  onChange={(event) => setGoalName(event.target.value)}
-                />
-              </FormField>
-              <FormField
-                label={`${t.goalTarget} (${dashboard.profile.defaultCurrency})`}
-              >
-                <Input
-                  inputMode="decimal"
-                  value={goalTarget}
-                  onChange={(event) => setGoalTarget(event.target.value)}
-                />
-              </FormField>
-              <FormField label={t.goalCurrent}>
-                <Input
-                  inputMode="decimal"
-                  value={goalCurrent}
-                  onChange={(event) => setGoalCurrent(event.target.value)}
-                />
-              </FormField>
-              <FormField label={t.goalTargetDate}>
-                <DateInput
-                  lang={locale}
-                  value={goalDate}
-                  onChange={(event) => setGoalDate(event.target.value)}
-                />
-              </FormField>
-            </div>
-            <Button
-              disabled={
-                !goalName.trim() ||
-                Number(goalTarget) <= 0 ||
-                Number(goalCurrent) < 0 ||
-                saveGoal.isPending
-              }
-              onClick={() => saveGoal.mutate()}
-            >
-              {saveGoal.isPending ? t.saving : t.saveGoal}
-            </Button>
-          </div>
-        )}
-        {saveGoal.isError ? (
-          <p className="mt-2 text-sm text-rose-300">{t.goalSaveError}</p>
-        ) : null}
-        {deleteGoal.isError ? (
-          <p className="mt-2 text-sm text-rose-300">{t.goalDeleteError}</p>
-        ) : null}
-      </Card>
-      {limits.data?.map((limit) => {
+      {dashboardData.limits.map((limit) => {
         const value = Math.min(100, limit.percentage);
         const categoryName = localizeFinanceCategory(
           limit.category.name,

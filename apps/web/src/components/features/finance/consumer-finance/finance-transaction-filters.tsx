@@ -8,11 +8,9 @@ import type {
   ConsumerFinanceHistoryQuery,
 } from "@telegram-system/shared";
 import { Button, Card, DateRangeInput, Input, Modal, Select } from "./ui";
-import {
-  financeCopy,
-  localizeFinanceCategory,
-  type FinanceLocale,
-} from "./finance-i18n";
+import { type FinanceLocale } from "./i18n/core";
+import { financeTransactionsCopy } from "./i18n/transactions";
+import { localizeFinanceCategory } from "./finance-category-i18n";
 import type { ConsumerFinanceSurface } from "./consumer-finance-navigation";
 
 type FinanceTransactionFiltersProps = {
@@ -33,7 +31,7 @@ export function FinanceTransactionFilters({
   surface = "telegram",
 }: FinanceTransactionFiltersProps) {
   const [open, setOpen] = useState(false);
-  const t = financeCopy(locale);
+  const t = financeTransactionsCopy(locale);
   const activeCount = [
     filters.search,
     filters.type,
@@ -97,7 +95,7 @@ function FilterFields({
   onChange,
   compact = false,
 }: Omit<FinanceTransactionFiltersProps, "surface"> & { compact?: boolean }) {
-  const t = financeCopy(locale);
+  const t = financeTransactionsCopy(locale);
   const update = (changes: Partial<ConsumerFinanceHistoryQuery>) =>
     onChange({ ...filters, ...changes, cursor: undefined });
 

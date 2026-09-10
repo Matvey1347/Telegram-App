@@ -13,7 +13,6 @@ import { formatDate } from "@/lib/date-format";
 import {
   TELEGRAM_AD_ANALYTICS_MAX_SELECTED_CHANNELS,
   type TelegramAdAvailabilitySlot,
-  type TelegramAdSale,
 } from "@telegram-system/shared";
 import { AppShell } from "@/components/layout/app-shell";
 import { telegramChannelKeys, telegramSystemBotKeys } from "@/lib/query-keys";
@@ -123,7 +122,6 @@ function LegacyAdSalesPage() {
   const adSaleCheckoutIdempotencyKeyRef = useRef<string | null>(null);
   const [adSaleSeedSlot, setAdSaleSeedSlot] =
     useState<TelegramAdAvailabilitySlot | null>(null);
-  const [paymentSale, setPaymentSale] = useState<TelegramAdSale | null>(null);
   const [postEditorPlacement, setPostEditorPlacement] = useState<{
     saleId: string;
     placementId: string;
@@ -224,7 +222,7 @@ function LegacyAdSalesPage() {
   const { data: accounts = [] } = useQuery({
     queryKey: ["accounts"],
     queryFn: accountsApi.list,
-    enabled: adSaleModalOpen || Boolean(selectedSaleId) || Boolean(paymentSale),
+    enabled: adSaleModalOpen || Boolean(selectedSaleId),
     staleTime: 60 * 1000,
   });
   const systemBotConnectionQuery = useQuery({
@@ -948,9 +946,6 @@ function LegacyAdSalesPage() {
         systemBotConnected={systemBotConnectionQuery.data?.connected}
         systemBotUsername={systemBotConnectionQuery.data?.botUsername}
         submitAdSale={submitAdSale}
-        paymentSale={paymentSale}
-        setPaymentSale={setPaymentSale}
-        refreshSaleAfterMutation={refreshSaleAfterMutation}
         initialAdvertiser={initialAdvertiser}
       />
 
@@ -964,7 +959,6 @@ function LegacyAdSalesPage() {
         settings={settings}
         rates={rates}
         queryClient={queryClient}
-        setPaymentSale={setPaymentSale}
         setPostEditorPlacement={setPostEditorPlacement}
         setPostTitle={setPostTitle}
         setPostText={setPostText}

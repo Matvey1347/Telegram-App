@@ -141,15 +141,18 @@ describe("FinanceTransferEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: /Archived source/ }));
     expect(
       screen.getAllByRole("button", { name: /Archived source/ }),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
     expect(
-      screen.queryByRole("button", { name: /Other archived/ }),
+      screen.getByRole("option", { name: /Archived source/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: /Other archived/ }),
     ).not.toBeInTheDocument();
     expect(
       screen.getAllByRole("button", { name: /Active target/ }),
     ).toHaveLength(1);
     expect(
-      screen.getByRole("button", { name: /Other active/ }),
+      screen.getByRole("option", { name: /Other active/ }),
     ).toBeInTheDocument();
   });
 
@@ -195,7 +198,7 @@ describe("FinanceTransferEditor", () => {
     renderEditor({ initiallyOpen: true, onSaved });
 
     fireEvent.click(screen.getByRole("button", { name: "Select account" }));
-    fireEvent.click(screen.getByRole("button", { name: /Card · USD/ }));
+    fireEvent.click(screen.getByRole("option", { name: /Card · USD/ }));
     const amount = screen.getAllByRole("textbox")[0];
     fireEvent.change(amount, { target: { value: "4" } });
     fireEvent.click(screen.getByRole("button", { name: "Save transfer" }));

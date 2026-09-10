@@ -2,6 +2,10 @@ import type { ResolvedEmoji } from "../resolved-emoji";
 
 export type ConsumerFinanceAccountType = "CASH" | "CARD" | "SAVINGS" | "OTHER";
 export type ConsumerFinanceTransactionType = "INCOME" | "EXPENSE";
+export type ConsumerFinanceTransactionPurpose =
+  | "ORDINARY"
+  | "INVESTMENT_CONTRIBUTION"
+  | "INVESTMENT_RETURN";
 export type ConsumerFinanceTransactionSource =
   | "CHAT"
   | "MINI_APP"
@@ -31,6 +35,11 @@ export type ConsumerFinanceAccount = {
   archivedAt?: string | null;
 };
 
+export type ConsumerFinanceAccountSummary = Pick<
+  ConsumerFinanceAccount,
+  "id" | "name" | "currency" | "iconPresentation"
+>;
+
 export type ConsumerFinanceCategory = {
   id: string;
   parentId?: string | null;
@@ -40,6 +49,11 @@ export type ConsumerFinanceCategory = {
   type: ConsumerFinanceTransactionType;
   archivedAt?: string | null;
 };
+
+export type ConsumerFinanceCategorySummary = Pick<
+  ConsumerFinanceCategory,
+  "id" | "name" | "key" | "type" | "iconPresentation"
+>;
 
 /** Immutable valuation captured at transaction write time. */
 export type ConsumerFinanceValuationSnapshot = {
@@ -54,6 +68,7 @@ export type ConsumerFinanceTransaction = {
   accountId: string;
   categoryId?: string | null;
   type: ConsumerFinanceTransactionType;
+  purpose: ConsumerFinanceTransactionPurpose;
   amount: string;
   currency: string;
   valuationSnapshot?: ConsumerFinanceValuationSnapshot | null;
@@ -64,19 +79,8 @@ export type ConsumerFinanceTransaction = {
   merchantNormalized?: string | null;
   source?: ConsumerFinanceTransactionSource;
   itemCount?: number;
-  account?: {
-    id: string;
-    name: string;
-    currency: string;
-    iconPresentation: ResolvedEmoji;
-  };
-  category?: {
-    id: string;
-    name: string;
-    key?: string | null;
-    type: ConsumerFinanceTransactionType;
-    iconPresentation: ResolvedEmoji;
-  } | null;
+  account?: ConsumerFinanceAccountSummary;
+  category?: ConsumerFinanceCategorySummary | null;
 };
 
 /** Line-item data is deliberately absent from transaction collections. */

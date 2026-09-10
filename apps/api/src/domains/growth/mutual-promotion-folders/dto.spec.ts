@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import {
   CreateMutualPromotionPostDto,
   MutualPromotionScheduledPostDraftDto,
+  UpdateMutualPromotionInviteLinksDto,
 } from './dto';
 
 describe('Mutual promotion DTO runtime metadata', () => {
@@ -12,6 +13,16 @@ describe('Mutual promotion DTO runtime metadata', () => {
         'design:type',
         CreateMutualPromotionPostDto.prototype,
         'posts',
+      ),
+    ).toBe(Array);
+  });
+
+  it('keeps nested invite-link edits available to runtime validation', () => {
+    expect(
+      Reflect.getMetadata(
+        'design:type',
+        UpdateMutualPromotionInviteLinksDto.prototype,
+        'participants',
       ),
     ).toBe(Array);
   });

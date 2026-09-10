@@ -1,5 +1,6 @@
 export const AI_MODEL_POLICY = {
   FINANCE_EXTRACTION: 'gpt-5-mini',
+  FINANCE_ANALYSIS: 'gpt-5-mini',
   VOICE_TRANSCRIPTION: 'gpt-4o-mini-transcribe',
 } as const;
 

@@ -6,11 +6,9 @@ import { Button, ErrorState, LoadingState, Modal } from "./ui";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
 import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
 import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import {
-  financeCopy,
-  localizeFinanceCategory,
-  type FinanceLocale,
-} from "./finance-i18n";
+import { type FinanceLocale } from "./i18n/core";
+import { financeTransactionsCopy } from "./i18n/transactions";
+import { localizeFinanceCategory } from "./finance-category-i18n";
 
 export function FinanceTransactionDetailModal({
   botId,
@@ -23,7 +21,7 @@ export function FinanceTransactionDetailModal({
   locale: FinanceLocale;
   onClose: () => void;
 }) {
-  const t = financeCopy(locale);
+  const t = financeTransactionsCopy(locale);
   const detail = useQuery({
     queryKey: consumerFinanceKeys.transaction(botId, transaction?.id ?? ""),
     queryFn: () => consumerFinanceApi.transaction(botId, transaction!.id),
@@ -52,7 +50,11 @@ export function FinanceTransactionDetailModal({
               <p className="truncate font-medium">
                 {detail.data.merchantDisplay ||
                   detail.data.description ||
-                  t.receipt}
+                  (detail.data.purpose === "INVESTMENT_CONTRIBUTION"
+                    ? t.investmentContribution
+                    : detail.data.purpose === "INVESTMENT_RETURN"
+                      ? t.investmentReturn
+                      : t.receipt)}
               </p>
               <p className="mt-1 text-xs text-neutral-500">
                 {detail.data.account?.name ?? t.accountFallback}

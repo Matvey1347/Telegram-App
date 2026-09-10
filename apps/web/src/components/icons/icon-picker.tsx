@@ -7,7 +7,6 @@ import {
   Dumbbell,
   Flag,
   Grid2x2,
-  ImagePlus,
   Leaf,
   LoaderCircle,
   Package,
@@ -29,6 +28,11 @@ import {
 } from "@/lib/emoji-icons";
 import { Button, Input } from "@/components/ui/primitives";
 import { IconAvatar } from "./icon-avatar";
+import {
+  clipboardImageFile,
+  IconImageUploadPanel,
+  type IconUploadPreview,
+} from "./icon-image-upload-panel";
 import { emojiLocalizedSearchTerms, uiCopy, type UiLocale } from "@/lib/ui-i18n";
 import { useOptionalI18n } from "@/providers/i18n-provider";
 type IconPickerProps = {
@@ -46,10 +50,6 @@ type IconPickerProps = {
   allowImages?: boolean;
   onPendingChange?: (pending: boolean) => void;
   uiLocale?: UiLocale;
-};
-type UploadState = {
-  imageUrl: string;
-  fileName: string;
 };
 type RecentStandardIcon = {
   kind: "standard";
@@ -150,7 +150,7 @@ export function IconPicker({
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("icons");
   const [search, setSearch] = useState("");
-  const [upload, setUpload] = useState<UploadState | null>(null);
+  const [upload, setUpload] = useState<IconUploadPreview | null>(null);
   const [uploadName, setUploadName] = useState("");
   const [saveReusableOpen, setSaveReusableOpen] = useState(false);
   const [recentIcons, setRecentIcons] = useState<RecentIcon[]>(() =>
@@ -427,9 +427,7 @@ export function IconPicker({
     if (!open || tab !== "upload") return;
 
     const onPaste = (event: ClipboardEvent) => {
-      const file = Array.from(event.clipboardData?.files ?? []).find((item) =>
-        item.type.startsWith("image/"),
-      );
+      const file = clipboardImageFile(event.clipboardData);
       if (file) {
         event.preventDefault();
         handleFile(file);
@@ -1025,133 +1023,41 @@ export function IconPicker({
                 ) : null}
 
                 {tab === "upload" ? (
-                  <div
-                    className="min-h-0 flex flex-1 flex-col overflow-hidden rounded-xl border border-dashed border-neutral-700 bg-neutral-950 p-3"
-                    onDragOver={(event) => {
-                      event.preventDefault();
+                  <IconImageUploadPanel
+                    copy={ui}
+                    upload={upload}
+                    uploadName={uploadName}
+                    uploading={isUploading}
+                    disabled={uploadDisabled}
+                    saveReusableOpen={saveReusableOpen}
+                    onChooseFile={() => fileInputRef.current?.click()}
+                    onFile={handleFile}
+                    onUploadName={setUploadName}
+                    onBeginSaveReusable={(name) => {
+                      setUploadName(name);
+                      setSaveReusableOpen(true);
                     }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      handleFile(event.dataTransfer.files?.[0]);
+                    onUseOnce={(item) =>
+                      createTemporaryImageMutation.mutate({
+                        imageUrl: item.imageUrl,
+                        fileName: item.fileName,
+                      })
+                    }
+                    onSaveReusable={(item, name) =>
+                      createCustomMutation.mutate({
+                        name,
+                        imageUrl: item.imageUrl,
+                      })
+                    }
+                    onBack={() => {
+                      if (saveReusableOpen) {
+                        setSaveReusableOpen(false);
+                        setUploadName("");
+                      } else {
+                        setUpload(null);
+                      }
                     }}
-                  >
-                    {isUploading ? (
-                      <div className="flex w-full flex-1 flex-col items-center justify-center gap-3 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-8 text-neutral-300">
-                        <LoaderCircle
-                          size={24}
-                          className="animate-spin text-blue-400"
-                        />
-                        <span>{ui.uploadingImage}</span>
-                        <span className="text-xs text-neutral-500">
-                          {ui.preparingPreview}
-                        </span>
-                      </div>
-                    ) : !upload ? (
-                      <div className="flex w-full flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-8 text-neutral-300">
-                        <ImagePlus size={20} />
-                        <span>{ui.uploadImage}</span>
-                        <span className="text-xs text-neutral-500">
-                          {ui.dropImage}
-                        </span>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-                          <div className="space-y-4 pb-3">
-                            <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-                              <p className="mb-3 text-sm text-neutral-400">
-                                {ui.preview}
-                              </p>
-                              <div className="flex items-center gap-4">
-                                <img
-                                  src={upload.imageUrl}
-                                  alt=""
-                                  className="h-20 w-20 rounded-xl border border-neutral-700 object-cover"
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-sm text-neutral-300">
-                                    {ui.readyOnce}
-                                  </p>
-                                  <p className="truncate text-xs text-neutral-500">
-                                    {upload.fileName}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                            {saveReusableOpen ? (
-                              <div>
-                                <label className="mb-1 block text-sm text-neutral-300">
-                                  {ui.iconName}
-                                </label>
-                                <Input
-                                  value={uploadName}
-                                  onChange={(e) =>
-                                    setUploadName(e.target.value)
-                                  }
-                                  placeholder={ui.iconNameExample}
-                                />
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="sticky bottom-0 mt-auto flex flex-col gap-2 border-t border-neutral-800 bg-neutral-950 pt-3">
-                          <Button
-                            type="button"
-                            className="w-full"
-                            disabled={
-                              uploadDisabled ||
-                              (saveReusableOpen && !uploadName.trim())
-                            }
-                            onClick={() => {
-                              if (!upload) return;
-                              if (saveReusableOpen) {
-                                createCustomMutation.mutate({
-                                  name: uploadName.trim(),
-                                  imageUrl: upload.imageUrl,
-                                });
-                                return;
-                              }
-                              createTemporaryImageMutation.mutate({
-                                imageUrl: upload.imageUrl,
-                                fileName: upload.fileName,
-                              });
-                            }}
-                          >
-                            {saveReusableOpen ? ui.save : ui.useOnce}
-                          </Button>
-                          {!saveReusableOpen ? (
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              className="w-full"
-                              disabled={uploadDisabled}
-                              onClick={() => {
-                                setUploadName(upload.fileName);
-                                setSaveReusableOpen(true);
-                              }}
-                            >
-                              {ui.saveCustomIcon}
-                            </Button>
-                          ) : null}
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            className="w-full"
-                            onClick={() => {
-                              if (saveReusableOpen) {
-                                setSaveReusableOpen(false);
-                                setUploadName("");
-                              } else {
-                                setUpload(null);
-                              }
-                            }}
-                          >
-                            {ui.back}
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                  />
                 ) : null}
               </div>
             </div>,

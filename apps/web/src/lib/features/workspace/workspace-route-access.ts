@@ -40,8 +40,7 @@ const featureRoutePrefixes: readonly [
   ["/categories", ["finance"]],
   ["/scheduled-tasks", ["operations"]],
   ["/trash", ["operations"]],
-  ["/system-logs", ["operations"]],
-  ["/settings", ["workspace"]],
+  ["/settings", ["workspace", "operations", "members"]],
   ["/workspace-members", ["members"]],
   ["/roles", ["members"]],
 ];

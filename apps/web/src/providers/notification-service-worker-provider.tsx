@@ -8,6 +8,10 @@ import {
   useMemo,
   useState,
 } from "react";
+import {
+  registerAppServiceWorker,
+  supportsServiceWorkers,
+} from "@/lib/pwa/service-worker";
 
 type NotificationServiceWorkerContextValue = {
   supported: boolean;
@@ -36,8 +40,7 @@ function safeSameOriginTarget(targetUrl: unknown) {
 export function NotificationServiceWorkerProvider({
   children,
 }: PropsWithChildren) {
-  const supported =
-    typeof window !== "undefined" && "serviceWorker" in navigator;
+  const supported = supportsServiceWorkers();
   const [registration, setRegistration] =
     useState<ServiceWorkerRegistration | null>(null);
   const [registrationError, setRegistrationError] = useState<string | null>(
@@ -47,10 +50,9 @@ export function NotificationServiceWorkerProvider({
   useEffect(() => {
     if (!supported) return;
     let active = true;
-    void navigator.serviceWorker
-      .register("/sw.js")
+    void registerAppServiceWorker()
       .then((nextRegistration) => {
-        if (active) setRegistration(nextRegistration);
+        if (active && nextRegistration) setRegistration(nextRegistration);
       })
       .catch(() => {
         if (active) setRegistrationError("Service worker registration failed.");

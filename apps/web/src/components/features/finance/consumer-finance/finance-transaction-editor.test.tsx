@@ -18,9 +18,9 @@ vi.mock("@/lib/features/finance/consumer-finance-api", () => ({
 beforeEach(() => vi.clearAllMocks());
 
 describe("FinanceTransactionEditor", () => {
-  it("opens first-class expense and income flows with the correct type", () => {
+  it("opens the transaction type requested by the global launcher", () => {
     const client = new QueryClient();
-    const view = render(
+    render(
       <QueryClientProvider client={client}>
         <FinanceTransactionEditor
           botId="bot"
@@ -40,17 +40,16 @@ describe("FinanceTransactionEditor", () => {
           editing={null}
           locale="en"
           timezone="UTC"
+          initiallyOpenType="INCOME"
           onClose={vi.fn()}
           onSaved={vi.fn()}
         />
       </QueryClientProvider>,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Add income" }));
     expect(screen.getByDisplayValue("INCOME")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    fireEvent.click(screen.getByRole("button", { name: "Add expense" }));
-    expect(screen.getByDisplayValue("EXPENSE")).toBeInTheDocument();
-    view.unmount();
+    expect(
+      screen.queryByRole("button", { name: "Add expense" }),
+    ).not.toBeInTheDocument();
   });
 
   it("loads edit values when the parent switches the keyed editor from create to edit", () => {
@@ -71,6 +70,7 @@ describe("FinanceTransactionEditor", () => {
       id: "tx",
       accountId: "a",
       type: "EXPENSE",
+      purpose: "ORDINARY",
       amount: "9",
       currency: "USD",
       occurredAt: "2026-01-01T22:00:00.000Z",
@@ -117,6 +117,7 @@ describe("FinanceTransactionEditor", () => {
       id: "created",
       accountId: "a",
       type: "EXPENSE",
+      purpose: "ORDINARY",
       amount: "12.34",
       currency: "USD",
       occurredAt: "2026-08-21T12:00:00.000Z",
@@ -142,12 +143,12 @@ describe("FinanceTransactionEditor", () => {
           editing={null}
           locale="en"
           timezone="UTC"
+          initiallyOpenType="EXPENSE"
           onClose={vi.fn()}
           onSaved={onSaved}
         />
       </QueryClientProvider>,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Add expense" }));
     fireEvent.change(
       view.container.querySelector('input[inputmode="decimal"]')!,
       { target: { value: "12.34" } },
@@ -191,12 +192,12 @@ describe("FinanceTransactionEditor", () => {
           editing={null}
           locale="en"
           timezone="UTC"
+          initiallyOpenType="EXPENSE"
           onClose={vi.fn()}
           onSaved={vi.fn()}
         />
       </QueryClientProvider>,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Add expense" }));
     fireEvent.change(
       view.container.querySelector('input[inputmode="decimal"]')!,
       { target: { value: "7" } },

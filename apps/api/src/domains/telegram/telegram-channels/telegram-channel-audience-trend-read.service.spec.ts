@@ -13,6 +13,8 @@ describe('TelegramChannelAudienceTrendReadService', () => {
           currentSubscribers: 1_100,
           currentActiveSubscribers: 600,
           currentViewRate: 60,
+          latestViews: 525,
+          latestReactions: 21,
           currentViews: 550,
           currentReactions: 22,
           dataQuality: 'normal',
@@ -37,13 +39,19 @@ describe('TelegramChannelAudienceTrendReadService', () => {
     );
 
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    const rawQuery = prisma.$queryRaw as unknown as {
+      mock: { calls: Array<[{ strings: string[] }]> };
+    };
+    const trendSql = rawQuery.mock.calls[0][0].strings.join(' ');
+    expect(trendSql).toContain('"TelegramPostMetricSnapshot"');
+    expect(trendSql).toContain("INTERVAL '24 hours'");
     expect(result.get('channel-1')).toEqual({
       latest: {
         subscribersCount: 1_100,
         activeSubscribersEstimate: 600,
         viewRate: 60,
-        avgViewsAdjusted: 550,
-        avgReactionsAdjusted: 22,
+        avgViewsAdjusted: 525,
+        avgReactionsAdjusted: 21,
         dataQuality: 'normal',
         dataQualityReason: null,
         hasExternalTrafficAnomaly: false,
@@ -87,6 +95,8 @@ describe('TelegramChannelAudienceTrendReadService', () => {
           currentSubscribers: 50,
           currentActiveSubscribers: null,
           currentViewRate: null,
+          latestViews: null,
+          latestReactions: null,
           currentViews: null,
           currentReactions: null,
           dataQuality: 'normal',

@@ -8,14 +8,26 @@ import { Button, Card, ConfirmDeleteModal, Input, LoadingState, PageHeader } fro
 import { TimezoneSelect } from '@/components/ui/timezone-select';
 import { accountApi, authApi, telegramAdSalesApi, workspacesApi } from '@/lib/api';
 import { WorkspaceMembersSection } from '@/components/features/workspace/workspace-members-section';
+import { WorkspaceTools } from '@/components/features/workspace/workspace-tools';
 
 export default function SettingsPage() {
   const qc = useQueryClient();
   const me = useQuery({ queryKey: ['auth', 'me'], queryFn: authApi.me });
-  const { data: workspaces } = useQuery({ queryKey: ['workspaces'], queryFn: workspacesApi.list });
+  const workspaceAccess = me.data?.workspace.access;
+  const legacyAdmin = me.data?.workspace.role === 'owner' || me.data?.workspace.role === 'admin';
+  const isOwner = workspaceAccess?.isOwner ?? me.data?.workspace.role === 'owner';
+  const hasFeature = (featureId: string) => isOwner || (workspaceAccess ? workspaceAccess.featureIds.includes(featureId) : legacyAdmin);
+  const canManageWorkspace = hasFeature('workspace');
+  const canViewMembers = hasFeature('members');
+  const { data: workspaces } = useQuery({
+    queryKey: ['workspaces'],
+    queryFn: workspacesApi.list,
+    enabled: canManageWorkspace,
+  });
   const adSalesWorkspaceSettings = useQuery({
     queryKey: ['telegram-ad-sales', 'workspace-settings'],
     queryFn: telegramAdSalesApi.getWorkspaceSettings,
+    enabled: canManageWorkspace,
   });
   const [workspaceName, setWorkspaceName] = useState('');
   const [workspaceTimezone, setWorkspaceTimezone] = useState('Europe/Warsaw');
@@ -67,13 +79,12 @@ export default function SettingsPage() {
 
   return (
     <AppShell>
-      <PageHeader title="Settings" />
+      <PageHeader title="Workspace settings" subtitle="People, access, automation and workspace defaults in one place." />
       {me.isLoading ? <LoadingState /> : null}
       <div className="space-y-4">
-        <section>
-          <WorkspaceMembersSection embedded />
-        </section>
-        <Card>
+        <WorkspaceTools role={me.data?.workspace.role} access={me.data?.workspace.access} />
+        {canViewMembers ? <section><WorkspaceMembersSection embedded /></section> : null}
+        {canManageWorkspace ? <Card>
           <h3 className="text-lg font-semibold">Workspace</h3>
           <div className="mt-4 space-y-3">
             <div className="flex items-end gap-3">
@@ -114,8 +125,8 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-        </Card>
-        <Card>
+        </Card> : null}
+        {canManageWorkspace ? <Card>
           <h3 className="text-lg font-semibold">Workspace defaults</h3>
           <p className="mt-1 text-sm text-neutral-400">
             Shared defaults live here so more global settings from different parts of the app can be added in one place.
@@ -152,7 +163,7 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-        </Card>
+        </Card> : null}
       </div>
       <ConfirmDeleteModal
         open={workspaceDeleteOpen}

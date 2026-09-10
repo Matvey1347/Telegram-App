@@ -5,8 +5,6 @@ import {
   CalendarCheck2,
   Eye,
   FilePenLine,
-  Megaphone,
-  Percent,
   UserCheck,
   UserRound,
 } from "lucide-react";
@@ -14,6 +12,7 @@ import type { CurrencySettings, TelegramChannel } from "@/lib/api";
 import { Tooltip } from "@/components/ui/primitives";
 import { ChannelAudienceTrendButton } from "./channel-audience-trend";
 import { getChannelBookingIndicator } from "./channel-booking-indicator";
+import { ChannelPaybackStatus } from "./channel-payback-status";
 
 function number(value: unknown, digits = 0) {
   const parsed = Number(value);
@@ -35,11 +34,6 @@ function moneyOrDash(value: unknown, currency: string, digits = 0) {
   return value == null || !Number.isFinite(parsed) || parsed === 0
     ? "—"
     : money(parsed, currency, digits);
-}
-
-function percent(value: unknown) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? `${number(parsed, 0)}%` : "—";
 }
 
 function channelScale(channel: TelegramChannel) {
@@ -144,6 +138,7 @@ export function ChannelEconomicsSummary({
               <ChannelAudienceTrendButton
                 channelId={channel.id}
                 channelTitle={channel.title}
+                channelPhotoUrl={channel.photoUrl}
                 trend={channel.preview.audienceTrend}
               />
             </div>
@@ -163,6 +158,7 @@ export function ChannelEconomicsSummary({
               <ChannelAudienceTrendButton
                 channelId={channel.id}
                 channelTitle={channel.title}
+                channelPhotoUrl={channel.photoUrl}
                 trend={channel.preview.audienceTrend}
                 paybackPercent={economics?.paybackPercent}
                 estimatedAdsRemaining={economics?.estimatedAdsRemaining}
@@ -231,39 +227,20 @@ export function ChannelEconomicsSummary({
               <ChannelAudienceTrendButton
                 channelId={channel.id}
                 channelTitle={channel.title}
+                channelPhotoUrl={channel.photoUrl}
                 trend={channel.preview.audienceTrend}
                 paybackPercent={economics?.paybackPercent}
                 estimatedAdsRemaining={economics?.estimatedAdsRemaining}
               />
             </div>
           ) : null}
-          <div className="mt-2 flex items-center justify-between gap-2 whitespace-nowrap text-xs">
-            <span className="inline-flex items-center gap-2">
-              <Percent size={14} className="text-teal-300" aria-hidden="true" />
-              <span className="text-neutral-500">Payback</span>
-              <span className="font-semibold text-white">
-                {economics?.paybackPercent == null
-                  ? "—"
-                  : percent(economics.paybackPercent)}
-              </span>
-              {economics?.remainingToBreakEven === 0 ? (
-                <span className="text-emerald-300">Investment recovered</span>
-              ) : null}
-            </span>
-            {economics?.estimatedAdsRemaining != null ? (
-              <span className="inline-flex items-center gap-1.5 text-neutral-400">
-                <Megaphone
-                  size={14}
-                  className="text-amber-300"
-                  aria-hidden="true"
-                />
-                <strong className="font-semibold text-white">
-                  {economics.estimatedAdsRemaining}
-                </strong>{" "}
-                ads left
-              </span>
-            ) : null}
-          </div>
+          <ChannelPaybackStatus
+            className="mt-2"
+            paybackPercent={economics?.paybackPercent}
+            paybackMaximumFractionDigits={0}
+            adsLeft={economics?.estimatedAdsRemaining}
+            investmentRecovered={economics?.remainingToBreakEven === 0}
+          />
         </>
       )}
     </section>

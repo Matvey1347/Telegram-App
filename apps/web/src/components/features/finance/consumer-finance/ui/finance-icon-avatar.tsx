@@ -27,9 +27,12 @@ export function FinanceIconAvatar({
   bordered?: boolean;
 }) {
   const unicode = icon?.type === "unicode";
-  const base = `inline-flex shrink-0 items-center justify-center overflow-hidden rounded-md ${bordered && !unicode ? "border border-neutral-700 bg-neutral-800" : "bg-neutral-800"} text-white ${sizes[size]} ${className}`;
+  const image = icon?.type === "image";
+  const base = `inline-flex shrink-0 items-center justify-center overflow-hidden rounded-md ${bordered && !unicode && !image ? "border border-neutral-700" : ""} ${image ? "bg-transparent" : "bg-neutral-800"} text-white ${sizes[size]} ${className}`;
   if (icon?.type === "image") {
     return (
+      // Entity avatars can use authenticated or temporary URLs unsupported by next/image.
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={icon.url}
         alt={label ?? icon.name ?? ""}

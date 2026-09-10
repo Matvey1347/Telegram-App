@@ -39,6 +39,7 @@ export function CrmConversationsSkeleton() {
           onChange={() => undefined}
           disabled
           rows={3}
+          singleRowToolbar
           placeholder="Write a message…"
           characterCountLabel={(count) => `${count} characters`}
         />

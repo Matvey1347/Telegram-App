@@ -35,7 +35,6 @@ import {
   CreateTelegramAdSaleDto,
   CreateTelegramAdSaleCheckoutDto,
   CreateTelegramAdSalePlacementDto,
-  CreateTelegramAdSalePaymentDto,
   CreateTelegramAdvertiserTaskDto,
   CreatePlacementManagedPostDto,
   RecommendTelegramAdPolicyDto,
@@ -60,7 +59,6 @@ import {
   UpdateTelegramAdChannelPricingDto,
   UpdateTelegramAdSalesMemberPreferencesDto,
   UpdateTelegramAdSalesWorkspaceSettingsDto,
-  UpdateTelegramAdSalePaymentDto,
   UpdateTelegramAdvertiserContactDto,
   UpdateTelegramAdvertiserDto,
   UpdateTelegramAdvertiserTaskDto,
@@ -68,7 +66,6 @@ import {
   UpdateTelegramAdProductDto,
   UpdateTelegramAdSaleDto,
   UpdateTelegramAdSalePlacementDto,
-  VoidTelegramAdSalePaymentDto,
 } from './dto';
 import { TelegramAdSalesBulkService } from './telegram-ad-sales-bulk.service';
 import { TelegramAdSalesCheckoutService } from './telegram-ad-sales-checkout.service';
@@ -76,7 +73,6 @@ import { TelegramAdSalesCrmAdvertisersService } from './telegram-ad-sales-crm-ad
 import { TelegramAdSalesCrmSettingsService } from './telegram-ad-sales-crm-settings.service';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
 import { TelegramAdSalesLegacyCrmService } from './telegram-ad-sales-legacy-crm.service';
-import { TelegramAdSalePaymentDeletionService } from './telegram-ad-sale-payment-deletion.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('telegram-ad-sales')
@@ -88,7 +84,6 @@ export class TelegramAdSalesController {
     private readonly crmAdvertisersService: TelegramAdSalesCrmAdvertisersService,
     private readonly crmSettingsService: TelegramAdSalesCrmSettingsService,
     private readonly legacyCrmService: TelegramAdSalesLegacyCrmService,
-    private readonly paymentDeletion: TelegramAdSalePaymentDeletionService,
     private readonly streamResponse: StreamResponseService,
   ) {}
 
@@ -401,7 +396,12 @@ export class TelegramAdSalesController {
     @Param('contactId') contactId: string,
     @Body() dto: UpdateTelegramAdvertiserContactDto,
   ) {
-    return this.legacyCrmService.updateAdvertiserContact(user.sub, id, contactId, dto);
+    return this.legacyCrmService.updateAdvertiserContact(
+      user.sub,
+      id,
+      contactId,
+      dto,
+    );
   }
 
   @Delete('advertisers/:id/contacts/:contactId')
@@ -410,7 +410,11 @@ export class TelegramAdSalesController {
     @Param('id') id: string,
     @Param('contactId') contactId: string,
   ) {
-    return this.legacyCrmService.deleteAdvertiserContact(user.sub, id, contactId);
+    return this.legacyCrmService.deleteAdvertiserContact(
+      user.sub,
+      id,
+      contactId,
+    );
   }
 
   @Post('advertisers/:id/contacts/:contactId/set-primary')
@@ -419,7 +423,11 @@ export class TelegramAdSalesController {
     @Param('id') id: string,
     @Param('contactId') contactId: string,
   ) {
-    return this.legacyCrmService.setPrimaryAdvertiserContact(user.sub, id, contactId);
+    return this.legacyCrmService.setPrimaryAdvertiserContact(
+      user.sub,
+      id,
+      contactId,
+    );
   }
 
   @Get('advertisers/:id/activities')
@@ -437,7 +445,11 @@ export class TelegramAdSalesController {
     @Param('id') id: string,
     @Body() dto: CreateTelegramAdvertiserActivityDto,
   ) {
-    return this.legacyCrmService.createAdvertiserActivityEntry(user.sub, id, dto);
+    return this.legacyCrmService.createAdvertiserActivityEntry(
+      user.sub,
+      id,
+      dto,
+    );
   }
 
   @Post('advertisers/:id/notes')
@@ -602,53 +614,6 @@ export class TelegramAdSalesController {
     @Body() dto: UpdateTelegramAdSalePlacementDto,
   ) {
     return this.service.updatePlacement(user.sub, saleId, placementId, dto);
-  }
-
-  @Post(':saleId/payments')
-  createPayment(
-    @CurrentUser() user: JwtUser,
-    @Param('saleId') saleId: string,
-    @Body() dto: CreateTelegramAdSalePaymentDto,
-  ) {
-    return this.service.createPayment(user.sub, saleId, dto);
-  }
-
-  @Get(':saleId/payments')
-  listPayments(@CurrentUser() user: JwtUser, @Param('saleId') saleId: string) {
-    return this.service.listPayments(user.sub, saleId);
-  }
-
-  @Patch(':saleId/payments/:paymentId')
-  updatePayment(
-    @CurrentUser() user: JwtUser,
-    @Param('saleId') saleId: string,
-    @Param('paymentId') paymentId: string,
-    @Body() dto: UpdateTelegramAdSalePaymentDto,
-  ) {
-    return this.service.updatePayment(user.sub, saleId, paymentId, dto);
-  }
-
-  @Post(':saleId/payments/:paymentId/void')
-  voidPayment(
-    @CurrentUser() user: JwtUser,
-    @Param('saleId') saleId: string,
-    @Param('paymentId') paymentId: string,
-    @Body() dto: VoidTelegramAdSalePaymentDto,
-  ) {
-    return this.service.voidPayment(user.sub, saleId, paymentId, dto);
-  }
-
-  @Delete(':saleId/payments/:paymentId')
-  deletePayment(
-    @CurrentUser() user: JwtUser,
-    @Param('saleId') saleId: string,
-    @Param('paymentId') paymentId: string,
-  ) {
-    return this.paymentDeletion.deleteActivePayment(
-      user.sub,
-      saleId,
-      paymentId,
-    );
   }
 
   @Post(':id/reserve')

@@ -34,13 +34,15 @@ export function IconAvatar({
   decorative?: boolean;
 }) {
   const hasEmoji = icon?.type === "unicode";
+  const hasImage = icon?.type === "image";
   const base = `inline-flex shrink-0 items-center justify-center overflow-hidden rounded-md ${
-    bordered && !hasEmoji
-      ? "border border-neutral-700 bg-neutral-800"
-      : "bg-neutral-800"
+    bordered && !hasEmoji && !hasImage ? "border border-neutral-700" : ""
+  } ${
+    hasImage ? "bg-transparent" : "bg-neutral-800"
   } text-white ${sizes[size]} ${className}`;
+  const fallbackClassName = `${base} !bg-neutral-800`;
 
-  const fallback = (label?.trim()?.[0] || "·").toUpperCase();
+  const fallback = (Array.from(label?.trim() || "")[0] || "·").toUpperCase();
 
   if (icon?.type === "image") {
     return (
@@ -49,6 +51,7 @@ export function IconAvatar({
         url={icon.url}
         alt={decorative ? "" : (label ?? icon.name ?? "")}
         className={base}
+        fallbackClassName={fallbackClassName}
         fallback={fallback}
       />
     );
@@ -67,16 +70,20 @@ function AvatarImage({
   url,
   alt,
   className,
+  fallbackClassName,
   fallback,
 }: {
   url: string;
   alt: string;
   className: string;
+  fallbackClassName: string;
   fallback: string;
 }) {
   const [failed, setFailed] = useState(false);
-  if (failed) return <span className={className}>{fallback}</span>;
+  if (failed) return <span className={fallbackClassName}>{fallback}</span>;
   return (
+    // Entity avatars can use authenticated or temporary URLs unsupported by next/image.
+    // eslint-disable-next-line @next/next/no-img-element
     <img
       src={url}
       alt={alt}

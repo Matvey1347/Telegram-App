@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   keepPreviousData,
@@ -8,11 +8,14 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { ArrowRight, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { IconAvatar } from "@/components/icons/icon-avatar";
-import { formatDate } from "@/lib/date-format";
-import { accountKeys, currencyKeys, telegramChannelKeys } from "@/lib/query-keys";
+import {
+  accountKeys,
+  currencyKeys,
+  telegramChannelKeys,
+} from "@/lib/query-keys";
 import { financeOverviewQuery } from "@/lib/features/finance/finance-overview-query";
 import {
   accountsApi,
@@ -22,7 +25,6 @@ import {
   transfersApi,
   workspaceMembersApi,
   type Account,
-  type ResolvedEmoji,
   type Transaction,
   type TransactionCategory,
   type TransactionType,
@@ -59,6 +61,14 @@ import {
   TransactionRowsSkeleton,
   TransferRowsSkeleton,
 } from "./finance-overview-skeletons";
+import {
+  FinanceTransactionRow,
+  FinanceTransferRow,
+} from "./finance-overview-list-rows";
+import {
+  resizeFinanceListPage,
+  type FinancePageState,
+} from "./finance-overview-pagination";
 
 type Editor =
   | { kind: "account"; item?: Account }
@@ -67,7 +77,7 @@ type Editor =
   | { kind: "transfer"; item?: Transfer }
   | null;
 type Target = Exclude<Editor, null>;
-type PageState = { page: number; pageSize: number };
+type PageState = FinancePageState;
 export function InternalFinanceOverview() {
   const qc = useQueryClient();
   const { startOperation } = useAppToast();
@@ -91,6 +101,18 @@ export function InternalFinanceOverview() {
     page: 1,
     pageSize: 10,
   });
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 639px)");
+    const applyResponsivePageSize = () => {
+      setTransactionPage((state) =>
+        resizeFinanceListPage(state, media.matches),
+      );
+      setTransferPage((state) => resizeFinanceListPage(state, media.matches));
+    };
+    applyResponsivePageSize();
+    media.addEventListener("change", applyResponsivePageSize);
+    return () => media.removeEventListener("change", applyResponsivePageSize);
+  }, []);
   const dated = useMemo(
     () => financeOverviewQuery(period, transactionPage),
     [period, transactionPage],
@@ -257,7 +279,14 @@ export function InternalFinanceOverview() {
       <PageHeader
         title="Finance"
         subtitle="Manage accounts, transactions, categories and transfers in one place"
-        action={<Link href="/currencies" className="inline-flex min-h-9 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-2 text-sm font-medium text-neutral-100 transition hover:bg-neutral-800">Currencies</Link>}
+        action={
+          <Link
+            href="/currencies"
+            className="inline-flex min-h-9 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-2 text-sm font-medium text-neutral-100 transition hover:bg-neutral-800"
+          >
+            Currencies
+          </Link>
+        }
       />
       <Card className="mb-5">
         <div className="max-w-md">
@@ -346,37 +375,12 @@ export function InternalFinanceOverview() {
         >
           <div className="overflow-hidden rounded-xl border border-neutral-800">
             {transactions.data?.items.map((t) => (
-              <div
+              <FinanceTransactionRow
                 key={t.id}
-                className="grid gap-3 border-b border-neutral-800 bg-neutral-950 px-4 py-3 last:border-0 sm:grid-cols-[minmax(0,1fr)_auto_32px] sm:items-center"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <IconAvatar
-                    icon={transactionAvatar(t)}
-                    label={t.description || t.category}
-                    size="md"
-                  />
-                  <div className="min-w-0">
-                    <div className="truncate font-medium text-white">
-                      {t.description || t.categoryRef?.name || "Transaction"}
-                    </div>
-                    <div className="truncate text-xs text-neutral-500">
-                      {t.categoryRef?.name || t.category} · {t.account?.name} ·{" "}
-                      {formatDate(t.date)}
-                    </div>
-                  </div>
-                </div>
-                <CurrencyAmount
-                  amount={t.type === "expense" ? -Number(t.amount) : t.amount}
-                  currency={t.currency}
-                  className={`font-semibold ${t.type === "income" ? "text-emerald-300" : "text-rose-300"}`}
-                />
-                <FinanceActionMenu
-                  label="transaction"
-                  onEdit={() => setEditor({ kind: "transaction", item: t })}
-                  onDelete={() => setDeleting({ kind: "transaction", item: t })}
-                />
-              </div>
+                transaction={t}
+                onEdit={() => setEditor({ kind: "transaction", item: t })}
+                onDelete={() => setDeleting({ kind: "transaction", item: t })}
+              />
             ))}
           </div>
           {!transactions.data?.items.length && (
@@ -468,42 +472,12 @@ export function InternalFinanceOverview() {
         >
           <div className="grid gap-2">
             {transfers.data?.items.map((t) => (
-              <div
+              <FinanceTransferRow
                 key={t.id}
-                className="grid gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_32px] md:items-center"
-              >
-                <div className="min-w-0">
-                  <AccountPreview account={t.fromAccount} />
-                  <div className="mt-2 pl-9 text-xs text-neutral-500">
-                    Withdrawn{" "}
-                    <CurrencyAmount
-                      amount={-Number(t.fromAmount)}
-                      currency={t.fromCurrency}
-                      className="ml-1 font-semibold text-rose-300"
-                    />
-                  </div>
-                </div>
-                <ArrowRight
-                  size={18}
-                  className="hidden text-neutral-600 md:block"
-                />
-                <div className="min-w-0">
-                  <AccountPreview account={t.toAccount} />
-                  <div className="mt-2 pl-9 text-xs text-neutral-500">
-                    Received{" "}
-                    <CurrencyAmount
-                      amount={t.toAmount}
-                      currency={t.toCurrency}
-                      className="ml-1 font-semibold text-emerald-300"
-                    />
-                  </div>
-                </div>
-                <FinanceActionMenu
-                  label="transfer"
-                  onEdit={() => setEditor({ kind: "transfer", item: t })}
-                  onDelete={() => setDeleting({ kind: "transfer", item: t })}
-                />
-              </div>
+                transfer={t}
+                onEdit={() => setEditor({ kind: "transfer", item: t })}
+                onDelete={() => setDeleting({ kind: "transfer", item: t })}
+              />
             ))}
           </div>
         </Section>
@@ -604,7 +578,11 @@ function Section({
           <h2 className="text-lg font-semibold text-white">{title}</h2>
           <p className="mt-0.5 text-sm leading-5 text-neutral-500">{hint}</p>
         </div>
-        <Button variant="secondary" onClick={create} className="shrink-0 px-3 sm:px-4">
+        <Button
+          variant="secondary"
+          onClick={create}
+          className="shrink-0 px-3 sm:px-4"
+        >
           <Plus size={16} /> <span className="hidden sm:inline">Create</span>
         </Button>
       </div>
@@ -662,24 +640,4 @@ function FinancePagination({
       onPageSizeChange={(pageSize) => setState(() => ({ page: 1, pageSize }))}
     />
   );
-}
-
-function transactionAvatar(
-  transaction: Transaction,
-): ResolvedEmoji | null | undefined {
-  if (transaction.iconPresentation) return transaction.iconPresentation;
-  if (transaction.categoryRef?.iconPresentation)
-    return transaction.categoryRef.iconPresentation;
-  if (transaction.member?.avatarPresentation)
-    return transaction.member.avatarPresentation;
-  const channel =
-    transaction.telegramChannel ?? transaction.purchasedTelegramChannel;
-  if (channel?.photoUrl)
-    return {
-      type: "image",
-      id: channel.id,
-      url: channel.photoUrl,
-      name: channel.title,
-    };
-  return transaction.account?.iconPresentation;
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import type {
   ConsumerFinanceCategory,
   ConsumerFinanceTransactionType,
@@ -10,7 +10,6 @@ import type {
 import {
   Button,
   Card,
-  EmptyState,
   ErrorState,
   FormField,
   Input,
@@ -20,14 +19,15 @@ import {
 } from "./ui";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
 import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import {
-  financeCopy,
-  localizeFinanceCategory,
-  type FinanceLocale,
-} from "./finance-i18n";
+import { type FinanceLocale } from "./i18n/core";
+import { financeCategoriesCopy } from "./i18n/categories";
+import { localizeFinanceCategory } from "./finance-category-i18n";
 import { FinanceConfirmModal } from "./finance-confirm-modal";
-import { IconAvatar } from "./ui/finance-icon-avatar";
 import { IconPicker } from "./ui/finance-icon-picker";
+import {
+  categoryDescendantIds,
+  FinanceCategoryTree,
+} from "./finance-category-tree";
 
 export function FinanceCategories({
   botId,
@@ -36,7 +36,7 @@ export function FinanceCategories({
   botId: string;
   locale: FinanceLocale;
 }) {
-  const t = financeCopy(locale);
+  const t = financeCategoriesCopy(locale);
   const client = useQueryClient();
   const [editing, setEditing] = useState<ConsumerFinanceCategory | null>(null);
   const [archiving, setArchiving] = useState<ConsumerFinanceCategory | null>(
@@ -66,9 +66,6 @@ export function FinanceCategories({
       });
       void client.invalidateQueries({
         queryKey: consumerFinanceKeys.analyticsRoot(botId),
-      });
-      void client.invalidateQueries({
-        queryKey: consumerFinanceKeys.ultimateRoot(botId),
       });
     },
   });
@@ -104,76 +101,18 @@ export function FinanceCategories({
           void client.invalidateQueries({
             queryKey: consumerFinanceKeys.analyticsRoot(botId),
           });
-          void client.invalidateQueries({
-            queryKey: consumerFinanceKeys.ultimateRoot(botId),
-          });
         }}
       />
-      {(["EXPENSE", "INCOME"] as const).map((type) => {
-        const typed = rows.filter(
-          (item) => item.type === type && !item.archivedAt,
-        );
-        return (
-          <Card key={type}>
-            <h2 className="font-medium">
-              {type === "EXPENSE" ? t.expenseCategories : t.incomeCategories}
-            </h2>
-            {typed.length ? (
-              <div className="mt-2 divide-y divide-neutral-800">
-                {typed.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between gap-2 py-2"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <IconAvatar
-                        icon={item.iconPresentation}
-                        label={item.name}
-                        size="sm"
-                        bordered={false}
-                      />
-                      <div className="min-w-0">
-                        <p className="truncate">
-                          {localizeFinanceCategory(item.name, item.key, locale)}
-                        </p>
-                        {item.parentId ? (
-                          <p className="truncate text-xs text-neutral-500">
-                            {t.parentCategory}:{" "}
-                            {localizeFinanceCategory(
-                              rows.find((row) => row.id === item.parentId)
-                                ?.name ?? "—",
-                              rows.find((row) => row.id === item.parentId)?.key,
-                              locale,
-                            )}
-                          </p>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div className="flex shrink-0">
-                      <button
-                        aria-label={`${t.editCategory}: ${item.name}`}
-                        className="flex min-h-11 min-w-11 items-center justify-center rounded text-neutral-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
-                        onClick={() => setEditing(item)}
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <button
-                        aria-label={`${t.archiveCategory}: ${item.name}`}
-                        className="flex min-h-11 min-w-11 items-center justify-center rounded text-rose-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
-                        onClick={() => setArchiving(item)}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState text={t.noCategories} />
-            )}
-          </Card>
-        );
-      })}
+      {(["EXPENSE", "INCOME"] as const).map((type) => (
+        <FinanceCategoryTree
+          key={type}
+          type={type}
+          categories={rows}
+          locale={locale}
+          onEdit={setEditing}
+          onArchive={setArchiving}
+        />
+      ))}
       {rows.some((item) => item.archivedAt) ? (
         <Card>
           <h2 className="font-medium">{t.archivedCategories}</h2>
@@ -187,6 +126,7 @@ export function FinanceCategories({
                 <div
                   className="flex justify-between gap-3 py-2 text-sm text-neutral-400"
                   key={item.id}
+                  data-archived-category-id={item.id}
                 >
                   <span className="truncate">
                     {localizeFinanceCategory(item.name, item.key, locale)}
@@ -227,7 +167,7 @@ function CategoryEditor({
   onClose: () => void;
   onSaved: (item: ConsumerFinanceCategory) => void;
 }) {
-  const t = financeCopy(locale);
+  const t = financeCategoriesCopy(locale);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(editing?.name ?? "");
   const [type, setType] = useState<ConsumerFinanceTransactionType>(
@@ -261,6 +201,9 @@ function CategoryEditor({
       setParentId("");
     },
   });
+  const descendants = editing
+    ? categoryDescendantIds(categories, editing.id)
+    : new Set<string>();
   return (
     <>
       <Button
@@ -321,6 +264,7 @@ function CategoryEditor({
                   (item) =>
                     item.type === type &&
                     item.id !== editing?.id &&
+                    !descendants.has(item.id) &&
                     (!item.archivedAt || item.id === editing?.parentId),
                 )
                 .map((item) => (

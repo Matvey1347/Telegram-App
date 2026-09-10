@@ -1,15 +1,25 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { resolveConsumerFinanceApiBase } from "@/lib/features/finance/consumer-finance-http";
 
 const DEFAULT_FAVICON = "/brand/favicon-finance.png";
+const subscribeToStaticApiTopology = () => () => undefined;
 
 export function useFinanceBotBranding(botId: string) {
-  const root = useMemo(
+  const sameOriginRoot = useMemo(
+    () => `/api/finance-bots/${encodeURIComponent(botId)}/branding`,
+    [botId],
+  );
+  const browserRoot = useMemo(
     () =>
       `${resolveConsumerFinanceApiBase()}/finance-bots/${encodeURIComponent(botId)}/branding`,
     [botId],
+  );
+  const root = useSyncExternalStore(
+    subscribeToStaticApiTopology,
+    () => browserRoot,
+    () => sameOriginRoot,
   );
 
   useEffect(() => {

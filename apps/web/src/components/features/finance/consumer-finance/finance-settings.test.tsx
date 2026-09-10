@@ -1,174 +1,83 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
-import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
 import { FinanceSettings } from "./finance-settings";
 
-vi.mock("@/lib/features/finance/consumer-finance-api", () => ({
-  consumerFinanceApi: {
-    billing: vi.fn(),
-    entitlements: vi.fn(),
-    checkout: vi.fn(),
-    updateSettings: vi.fn(),
-    exportData: vi.fn(),
-    reminders: vi.fn(),
-    createReminder: vi.fn(),
-    deleteData: vi.fn(),
-    logout: vi.fn(),
-  },
+const planning = vi.hoisted(() => ({ updateSettings: vi.fn() }));
+const auth = vi.hoisted(() => ({ logout: vi.fn() }));
+vi.mock("@/lib/features/finance/consumer-finance-profile-api", () => ({
+  consumerFinanceProfileApi: planning,
 }));
+vi.mock("@/lib/features/finance/consumer-finance-auth-api", () => ({
+  consumerFinanceAuthApi: auth,
+}));
+vi.mock("./finance-privacy", () => ({
+  FinancePrivacy: () => <div>Privacy controls</div>,
+}));
+
 const profile: ConsumerFinanceProfile = {
   id: "p",
   defaultCurrency: "USD",
   timezone: "UTC",
   locale: "en",
+  telegramUser: {
+    displayName: "Ada Lovelace",
+    username: "ada_lovelace",
+    avatarUrl: null,
+  },
 };
-const renderSettings = (
-  section: React.ComponentProps<typeof FinanceSettings>["section"] = "all",
-  locale: "en" | "uk" | "ru" = "en",
-) =>
-  render(
-    <QueryClientProvider
-      client={
-        new QueryClient({ defaultOptions: { queries: { retry: false } } })
-      }
-    >
-      <FinanceSettings
-        botId="bot"
-        profile={{ ...profile, locale }}
-        locale={locale}
-        onCategories={vi.fn()}
-        section={section}
-      />
-    </QueryClientProvider>,
-  );
 
-afterEach(() => vi.clearAllMocks());
-
-beforeEach(() => {
-  vi.mocked(consumerFinanceApi.reminders).mockResolvedValue([]);
-  vi.mocked(consumerFinanceApi.billing).mockResolvedValue({
-    plans: [],
-    subscriptions: [],
-    providers: [],
+function renderSettings(locale: "en" | "uk" | "ru" = "en") {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
   });
-  vi.mocked(consumerFinanceApi.entitlements).mockResolvedValue({
-    tier: "FREE",
-    capabilities: ["AI_INPUT", "RECEIPT_SCAN"],
-    usage: [],
-    activeUntil: null,
-    cancelAtPeriodEnd: false,
-  });
-});
+  return {
+    client,
+    ...render(
+      <QueryClientProvider client={client}>
+        <FinanceSettings
+          botId="bot"
+          profile={{ ...profile, locale }}
+          locale={locale}
+        />
+      </QueryClientProvider>,
+    ),
+  };
+}
 
-describe("FinanceSettings billing state", () => {
-  it("uses a timezone selector instead of a free-form input", () => {
-    renderSettings("profile");
+describe("FinanceSettings", () => {
+  it("contains preferences and privacy without a duplicate language control", () => {
+    renderSettings();
 
-    const timezone = screen.getByRole("button", { name: /UTC/u });
-    fireEvent.click(timezone);
-    expect(screen.getByPlaceholderText("Search…")).toBeInTheDocument();
+    expect(screen.getByText("General")).toBeInTheDocument();
+    expect(screen.getByText("Privacy controls")).toBeInTheDocument();
+    expect(screen.queryByText("Current plan")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reminder name")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Language" })).toBeNull();
   });
 
-  it("localizes the shared timezone search for Russian", () => {
-    renderSettings("profile", "ru");
+  it("uses the localized shared timezone selector", () => {
+    renderSettings("ru");
 
     fireEvent.click(screen.getByRole("button", { name: /UTC/u }));
     expect(screen.getByPlaceholderText("Поиск…")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Search…")).not.toBeInTheDocument();
   });
 
-  it("lazy-loads only the data owned by the selected browser section", async () => {
-    const view = renderSettings("profile");
-    expect(screen.getByText("General")).toBeInTheDocument();
-    expect(consumerFinanceApi.entitlements).not.toHaveBeenCalled();
-    expect(consumerFinanceApi.billing).not.toHaveBeenCalled();
-    expect(consumerFinanceApi.reminders).not.toHaveBeenCalled();
+  it("updates financial preferences without changing the shared locale", async () => {
+    planning.updateSettings.mockResolvedValue(profile);
+    const { client } = renderSettings();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
 
-    view.unmount();
-    renderSettings("reminders");
-    await screen.findByText("No reminders yet.");
-    expect(consumerFinanceApi.reminders).toHaveBeenCalledOnce();
-    expect(consumerFinanceApi.entitlements).not.toHaveBeenCalled();
-    expect(consumerFinanceApi.billing).not.toHaveBeenCalled();
-  });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-  it("does not show a tier before entitlements are authoritative", () => {
-    vi.mocked(consumerFinanceApi.entitlements).mockReturnValue(
-      new Promise(() => undefined),
+    await waitFor(() =>
+      expect(planning.updateSettings).toHaveBeenCalledWith("bot", {
+        defaultCurrency: "USD",
+        timezone: "UTC",
+      }),
     );
-    renderSettings();
-    expect(screen.getByText("Loading plan…")).toBeInTheDocument();
-    expect(screen.queryByText("Finance Free")).not.toBeInTheDocument();
-  });
-
-  it("shows retry on entitlement failure", async () => {
-    vi.mocked(consumerFinanceApi.entitlements).mockRejectedValue(
-      new Error("offline"),
-    );
-    renderSettings();
-    expect(
-      await screen.findByText("Could not load plan details."),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
-  });
-
-  it("gives an inactive plan a real checkout action", async () => {
-    vi.mocked(consumerFinanceApi.entitlements).mockResolvedValue({
-      tier: "FREE",
-      capabilities: ["AI_INPUT", "RECEIPT_SCAN"],
-      usage: [
-        {
-          feature: "AI_INPUT",
-          used: 7,
-          limit: 10,
-          remaining: 3,
-          resetAt: null,
-        },
-        {
-          feature: "RECEIPT_SCAN",
-          used: 2,
-          limit: 3,
-          remaining: 1,
-          resetAt: null,
-        },
-      ],
-      activeUntil: null,
-      cancelAtPeriodEnd: false,
-    });
-    vi.mocked(consumerFinanceApi.billing).mockResolvedValue({
-      plans: [
-        {
-          id: "plan",
-          code: "PRO",
-          name: "Pro",
-          prices: [
-            {
-              id: "price",
-              currency: "USD",
-              interval: "MONTH",
-              amountMinor: 500,
-              version: 1,
-            },
-          ],
-        },
-      ],
-      subscriptions: [],
-      providers: [
-        {
-          provider: "STRIPE",
-          mode: "TEST",
-          capabilities: { intervals: ["MONTH"] },
-        },
-      ],
-    });
-    renderSettings();
-    expect(
-      await screen.findByRole("button", { name: "Upgrade to Finance Pro" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Finance Free")).toBeInTheDocument();
-    expect(screen.getByText("7/10")).toBeInTheDocument();
-    expect(screen.getByText("2/3")).toBeInTheDocument();
+    expect(invalidate).not.toHaveBeenCalled();
   });
 });

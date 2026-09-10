@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ConsumerFinanceDashboard } from "@telegram-system/shared";
 import { FinanceDashboard } from "./finance-dashboard";
@@ -9,12 +9,25 @@ const dashboard: ConsumerFinanceDashboard = {
     defaultCurrency: "USD",
     timezone: "UTC",
     locale: "en",
+    telegramUser: { displayName: "Ada", username: null, avatarUrl: null },
   },
   stats: {
     currency: "USD",
     income: "0",
     expense: "0",
+    saved: "0",
+    invested: "0",
+    investmentReturns: "0",
     net: "0",
+    netWorth: {
+      amount: "0",
+      currency: "USD",
+      cashAmount: "0",
+      investmentValue: "0",
+      complete: true,
+      excludedAccountCount: 0,
+      excludedInvestmentCount: 0,
+    },
     totalBalance: {
       amount: "0",
       currency: "USD",
@@ -25,7 +38,26 @@ const dashboard: ConsumerFinanceDashboard = {
     accounts: [],
   },
   limits: [],
-  goal: null,
+  savings: {
+    currency: "USD",
+    allocated: "0",
+    backed: "0",
+    activeGoals: 0,
+    completedGoals: 0,
+    underfundedGoals: 0,
+    excludedGoals: [],
+  },
+  investments: {
+    currency: "USD",
+    totalInvested: "0",
+    totalReturned: "0",
+    currentValue: "0",
+    profitLoss: "0",
+    returnPercentage: null,
+    activeInvestments: 0,
+    closedInvestments: 0,
+    excludedInvestments: [],
+  },
   recent: [],
 };
 
@@ -37,7 +69,6 @@ describe("FinanceDashboard actions", () => {
         locale="en"
         timezone="UTC"
         onNavigate={vi.fn()}
-        onAction={vi.fn()}
         surface="telegram"
       />,
     );
@@ -45,25 +76,38 @@ describe("FinanceDashboard actions", () => {
     expect(container.querySelector(".lucide-circle-minus")).toBeNull();
   });
 
-  it.each([
-    ["Add expense", "expense"],
-    ["Add income", "income"],
-    ["Transfers", "transfer"],
-  ] as const)("launches the real %s workflow", (label, action) => {
-    const onAction = vi.fn();
+  it("uses the hydrated account presentation without an icon request", () => {
     render(
       <FinanceDashboard
-        data={dashboard}
+        data={{
+          ...dashboard,
+          stats: {
+            ...dashboard.stats,
+            totalBalance: {
+              ...dashboard.stats.totalBalance,
+              includedAccountCount: 1,
+            },
+            accounts: [
+              {
+                id: "account",
+                name: "Daily card",
+                iconPresentation: { type: "unicode", value: "💳" },
+                type: "CARD",
+                currency: "USD",
+                openingBalance: "0",
+                balance: "10",
+                defaultCurrency: "USD",
+              },
+            ],
+          },
+        }}
         locale="en"
         timezone="UTC"
         onNavigate={vi.fn()}
-        onAction={onAction}
         surface="telegram"
       />,
     );
-
-    fireEvent.click(screen.getByRole("button", { name: label }));
-
-    expect(onAction).toHaveBeenCalledWith(action);
+    expect(screen.getByText("💳")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add expense" })).toBeNull();
   });
 });

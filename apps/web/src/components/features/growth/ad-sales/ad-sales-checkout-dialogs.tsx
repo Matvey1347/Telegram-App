@@ -4,7 +4,6 @@ import type { ComponentProps, Dispatch, SetStateAction } from "react";
 import type {
   TelegramAdAvailabilitySlot,
   TelegramAdProduct,
-  TelegramAdSale,
 } from "@telegram-system/shared";
 import type {
   Account,
@@ -18,7 +17,6 @@ import {
 } from "@/lib/api";
 import { zonedDateTimeToUtc } from "@/lib/features/growth/telegram-ad-sales";
 import { AdSaleModal } from "./ad-sale-modal";
-import { RegisterPaymentModal } from "./register-payment-modal";
 
 export function AdSalesCheckoutDialogs({
   adSaleModalOpen,
@@ -33,9 +31,6 @@ export function AdSalesCheckoutDialogs({
   systemBotConnected,
   systemBotUsername,
   submitAdSale,
-  paymentSale,
-  setPaymentSale,
-  refreshSaleAfterMutation,
   initialAdvertiser,
 }: {
   adSaleModalOpen: boolean;
@@ -52,12 +47,6 @@ export function AdSalesCheckoutDialogs({
   systemBotConnected?: boolean;
   systemBotUsername?: string | null;
   submitAdSale: ComponentProps<typeof AdSaleModal>["onSubmit"];
-  paymentSale: TelegramAdSale | null;
-  setPaymentSale: Dispatch<SetStateAction<TelegramAdSale | null>>;
-  refreshSaleAfterMutation: (
-    saleId: string,
-    channelIds: string[],
-  ) => Promise<void>;
   initialAdvertiser?: ComponentProps<typeof AdSaleModal>["initialAdvertiser"];
 }) {
   return (
@@ -177,27 +166,6 @@ export function AdSalesCheckoutDialogs({
         }}
         onSubmit={submitAdSale}
       />
-
-      {paymentSale ? (
-        <RegisterPaymentModal
-          key={paymentSale.id}
-          open
-          onClose={() => setPaymentSale(null)}
-          sale={paymentSale}
-          accounts={accounts as Account[]}
-          defaultCurrency={settings?.primaryCurrency || "USD"}
-          onSubmit={async (payload) => {
-            await telegramAdSalesApi.createPayment(paymentSale.id, payload);
-            await refreshSaleAfterMutation(
-              paymentSale.id,
-              paymentSale.placements.map(
-                (placement) => placement.telegramChannelId,
-              ),
-            );
-            setPaymentSale(null);
-          }}
-        />
-      ) : null}
     </>
   );
 }

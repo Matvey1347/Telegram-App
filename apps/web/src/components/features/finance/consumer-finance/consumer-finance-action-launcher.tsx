@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ArrowDown, ArrowLeftRight, ArrowUp, Plus, X } from "lucide-react";
-import type { FinanceCopy } from "./finance-i18n";
+import type { FinanceCoreCopy } from "./i18n/core";
 import type { ConsumerFinanceAction } from "./consumer-finance-navigation";
 
 export function ConsumerFinanceActionLauncher({
@@ -11,7 +11,7 @@ export function ConsumerFinanceActionLauncher({
   showOnDesktop = false,
   onAction,
 }: {
-  copy: FinanceCopy;
+  copy: FinanceCoreCopy;
   compact?: boolean;
   showOnDesktop?: boolean;
   onAction: (action: ConsumerFinanceAction) => void;

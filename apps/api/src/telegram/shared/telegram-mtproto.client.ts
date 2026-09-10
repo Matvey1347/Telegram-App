@@ -17,6 +17,7 @@ import {
   MatchScore,
   canonicalTelegramInviteLink,
   normalizeTelegramUsername,
+  parseTelegramImportInput,
   resolveTelegramTitleCandidates,
   type ResolvedTelegramEntity,
   type TelegramTitleCandidate,
@@ -108,6 +109,7 @@ export type TelegramInviteLinksResult = {
     requestNeeded: boolean;
     permanent: boolean;
     revoked: boolean;
+    joinedWithinPeriod?: number | null;
   }>;
   warnings: string[];
 };
@@ -2032,10 +2034,11 @@ export class TelegramMtprotoClient {
   }
 
   private async getInviteAdminPhotoUrl(client: TelegramClient, user: Api.User) {
-    return (
-      (await this.profilePhotoDataUrl(client, user)) ||
-      this.telegramPublicPhotoUrl(normalizeTelegramUsername(user.username))
-    );
+    // Invite creators can have a Telegram-generated initials/emoji avatar but no
+    // downloadable profile photo. Do not persist a guessed public URL: Telegram
+    // commonly returns a 404 for those profiles and the UI must render the
+    // creator name fallback instead.
+    return this.profilePhotoDataUrl(client, user);
   }
 
   private inviteAdminUserId(row: unknown) {
@@ -2758,6 +2761,205 @@ export class TelegramMtprotoClient {
       );
     } finally {
       await this.closeClient(client);
+    }
+  }
+
+  async getChannelInviteLink(params: {
+    apiId: string;
+    apiHash: string;
+    session: string;
+    channel: StoredTelegramChannelReference;
+    inviteLink: string;
+    joinedFrom?: Date | null;
+    joinedUntil?: Date | null;
+  }): Promise<TelegramInviteLinksResult['links'][number]> {
+    const parsed = parseTelegramImportInput(params.inviteLink);
+    if (parsed.type !== 'invite') {
+      throw new BadRequestException(
+        'Enter a valid private Telegram invite link.',
+      );
+    }
+    const client = await this.createClient(params);
+    try {
+      const resolved = await this.resolveStoredChannel(client, params.channel);
+      let response: unknown;
+      try {
+        response = await this.withTimeout(
+          client.invoke(
+            new Api.messages.GetExportedChatInvite({
+              peer: resolved.peer,
+              link: parsed.inviteLink,
+            }),
+          ),
+          this.telegramResolveTimeoutMs,
+          'Telegram invite-link lookup',
+        );
+      } catch (error) {
+        this.mapInviteError(error);
+      }
+
+      const invite = this.unwrapExportedChatInvite(response);
+      const url = String(invite?.link || '').trim();
+      const creatorTelegramUserId = this.toBigInt(invite?.adminId)?.toString();
+      if (!invite || !url || !creatorTelegramUserId) {
+        throw new BadRequestException(
+          'Telegram did not return this invite link for the selected channel.',
+        );
+      }
+      const users = Array.isArray((response as { users?: unknown[] })?.users)
+        ? (response as { users: unknown[] }).users
+        : [];
+      let creator = users.find(
+        (user): user is Api.User =>
+          user instanceof Api.User && String(user.id) === creatorTelegramUserId,
+      );
+      if (!creator) {
+        const directory = await this.loadChannelInviteAdminsDirectory(
+          client,
+          this.asImportableTelegramEntity(resolved.entity, 'channel'),
+          [],
+        );
+        creator = directory.get(creatorTelegramUserId) ?? creator;
+      }
+      creator = creator
+        ? await this.getInviteCreatorWithDetails(client, creator)
+        : undefined;
+      const joinedWithinPeriod = params.joinedFrom
+        ? await this.countInviteLinkJoinsInPeriod({
+            client,
+            peer: resolved.peer,
+            inviteLink: parsed.inviteLink,
+            from: params.joinedFrom,
+            until: params.joinedUntil ?? new Date(),
+          })
+        : null;
+
+      return {
+        url: canonicalTelegramInviteLink(parsed.inviteHash),
+        title:
+          typeof invite.title === 'string' && invite.title.trim()
+            ? invite.title
+            : null,
+        telegramCreatorUserId: creatorTelegramUserId,
+        creatorUsername: creator
+          ? normalizeTelegramUsername(creator.username)
+          : null,
+        creatorFirstName: creator?.firstName || null,
+        creatorLastName: creator?.lastName || null,
+        creatorPhotoUrl: creator
+          ? await this.getInviteAdminPhotoUrl(client, creator)
+          : null,
+        createdAt: this.toTelegramDate(invite.date),
+        startDate: this.toTelegramDate(invite.startDate),
+        expireDate: this.toTelegramDate(invite.expireDate),
+        usageLimit: this.toFiniteNumber(invite.usageLimit),
+        usage: this.toFiniteNumber(invite.usage) ?? 0,
+        requested: this.toFiniteNumber(invite.requested) ?? 0,
+        requestNeeded: Boolean(invite.requestNeeded),
+        permanent: Boolean(invite.permanent),
+        revoked: Boolean(invite.revoked),
+        joinedWithinPeriod,
+      };
+    } finally {
+      await this.closeClient(client);
+    }
+  }
+
+  private async getInviteCreatorWithDetails(
+    client: TelegramClient,
+    fallback: Api.User,
+  ) {
+    try {
+      const inputUser = await this.resolveInviteAdminInputUser({
+        client,
+        user: fallback,
+        selfUserId: fallback.self ? String(fallback.id) : null,
+      });
+      const response = (await this.withTimeout(
+        client.invoke(new Api.users.GetFullUser({ id: inputUser })),
+        this.telegramResolveTimeoutMs,
+        'Telegram invite creator profile lookup',
+      )) as { users?: unknown[] };
+      return (
+        (response.users ?? []).find(
+          (user): user is Api.User =>
+            user instanceof Api.User && String(user.id) === String(fallback.id),
+        ) ?? fallback
+      );
+    } catch {
+      return fallback;
+    }
+  }
+
+  private async countInviteLinkJoinsInPeriod(params: {
+    client: TelegramClient;
+    peer: Api.TypeInputPeer;
+    inviteLink: string;
+    from: Date;
+    until: Date;
+  }): Promise<number | null> {
+    const limit = 100;
+    let offsetDate = 0;
+    let offsetUser: Api.TypeInputUser = new Api.InputUserEmpty();
+    let count = 0;
+    let previousCursor = '';
+
+    try {
+      for (let page = 0; page < this.maxInviteLinkPages; page += 1) {
+        const response = (await this.withTimeout(
+          params.client.invoke(
+            new Api.messages.GetChatInviteImporters({
+              peer: params.peer,
+              link: params.inviteLink,
+              requested: false,
+              offsetDate,
+              offsetUser,
+              limit,
+            }),
+          ),
+          this.telegramResolveTimeoutMs,
+          'Telegram invite-link importers lookup',
+        )) as {
+          importers?: Array<{ date?: unknown; userId?: unknown }>;
+          users?: unknown[];
+        };
+        const importers = Array.isArray(response.importers)
+          ? response.importers
+          : [];
+        if (!importers.length) return count;
+
+        let reachedBeforePeriod = false;
+        for (const importer of importers) {
+          const joinedAt = this.toTelegramDate(importer.date);
+          if (!joinedAt) continue;
+          if (joinedAt < params.from) {
+            reachedBeforePeriod = true;
+            continue;
+          }
+          if (joinedAt < params.until) count += 1;
+        }
+        if (reachedBeforePeriod || importers.length < limit) return count;
+
+        const last = importers[importers.length - 1]!;
+        const lastUserId = this.toBigInt(last.userId)?.toString();
+        const lastUser = (response.users ?? []).find(
+          (user): user is Api.User =>
+            user instanceof Api.User && String(user.id) === lastUserId,
+        );
+        const nextOffsetDate = this.toFiniteNumber(last.date) ?? 0;
+        const nextCursor = `${nextOffsetDate}:${lastUserId ?? ''}`;
+        if (!lastUser || nextCursor === previousCursor) return null;
+        offsetDate = nextOffsetDate;
+        offsetUser = await this.resolveInviteAdminInputUser({
+          client: params.client,
+          user: lastUser,
+          selfUserId: null,
+        });
+        previousCursor = nextCursor;
+      }
+      return null;
+    } catch {
+      return null;
     }
   }
 

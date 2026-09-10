@@ -31,7 +31,7 @@ const TRANSITION_BASELINE = new Map([
   ],
   ["apps/web/src/app/(internal)/(telegram)/telegram-channels/page.tsx", 2910],
   ["apps/api/src/telegram/shared/telegram-mtproto.client.ts", 3385],
-  ["apps/web/src/components/features/growth/ad-sales/ad-sales-page.tsx", 992],
+  ["apps/web/src/components/features/growth/ad-sales/ad-sales-page.tsx", 986],
   ["apps/web/src/lib/api.ts", 750],
   ["apps/web/src/app/(internal)/(growth)/ad-campaigns/page.tsx", 2464],
   ["apps/api/src/domains/growth/ad-campaigns/ad-campaigns.service.ts", 1782],
@@ -48,7 +48,7 @@ const TRANSITION_BASELINE = new Map([
     "apps/web/src/components/features/telegram/telegram/telegram-account-panels.tsx",
     1083,
   ],
-  ["apps/web/src/components/icons/icon-picker.tsx", 1164],
+  ["apps/web/src/components/icons/icon-picker.tsx", 1070],
   [
     "apps/api/src/domains/telegram/telegram-bots/core/telegram-bot-runtime.service.ts",
     888,
@@ -58,7 +58,6 @@ const TRANSITION_BASELINE = new Map([
     "apps/web/src/components/features/telegram/telegram/telegram-post-preview.tsx",
     1153,
   ],
-  ["apps/web/src/app/(internal)/(operations)/system-logs/page.tsx", 806],
   ["apps/web/src/app/(internal)/page.tsx", 646],
   [
     "apps/web/src/app/(internal)/(telegram)/telegram-channel-networks/[id]/page.tsx",

@@ -162,6 +162,31 @@ describe("CustomSelect", () => {
     expect(option.closest("div")?.className).toContain("z-[120]");
   });
 
+  it("offers a typed value to an async create handler", async () => {
+    const user = userEvent.setup();
+    const onCreateOption = vi.fn().mockResolvedValue(undefined);
+    render(
+      <CustomSelect
+        value="existing"
+        onChange={() => {}}
+        options={[{ value: "existing", label: "Existing" }]}
+        canCreateOption={(search) => search.startsWith("https://t.me/+")}
+        createOptionLabel={() => "Verify and add invite link"}
+        onCreateOption={onCreateOption}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /existing/i }));
+    await user.type(
+      screen.getByPlaceholderText("Search…"),
+      "https://t.me/+legacy",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Verify and add invite link" }),
+    );
+
+    expect(onCreateOption).toHaveBeenCalledWith("https://t.me/+legacy");
+  });
 });
 
 describe("MultiSelect", () => {

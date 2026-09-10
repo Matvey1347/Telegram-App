@@ -2,7 +2,7 @@
 
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpRight,
@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
 import { AppShell } from "@/components/layout/app-shell";
+import { AdsSectionTabs } from "@/components/features/growth/ad-campaigns/ads-section-tabs";
 import { ChannelPreview } from "@/components/features/telegram/telegram/channel-preview";
 import { ExternalChannelAdAnalysis } from "@/components/features/telegram/telegram/external-channel-ad-analysis";
 import { ChannelAutoSyncToggle } from "@/components/features/telegram/telegram/channel-auto-sync-toggle";
@@ -111,12 +112,19 @@ import {
   parseTelegramAccountFilter as parseAccountFilter,
   parseTelegramChannelLifecycle as parseChannelLifecycleTab,
   parseTelegramChannelOwnership as parseChannelFilter,
-  parseTelegramChannelsTab as parseTelegramTab,
   type TelegramAccountFilter as AccountFilter,
   type TelegramChannelLifecycleFilter as ChannelLifecycleTab,
   type TelegramChannelOwnershipFilter as ChannelFilter,
   type TelegramChannelsTab as TelegramTab,
 } from "@/components/features/telegram/telegram/telegram-channels-route-state";
+import { usePersistedRouteTab } from "@/hooks/use-persisted-route-tab";
+import {
+  downloadTelegramChannelExport,
+  safeTelegramChannelExportName,
+} from "@/components/features/telegram/telegram/telegram-channel-export";
+
+const TELEGRAM_TABS: readonly TelegramTab[] = ["channels", "accounts"];
+const TELEGRAM_TAB_STORAGE_KEY = "telegram-channels:last-tab";
 function normalizeUsername(value?: string | null) {
   return String(value || "")
     .replace(/^@/, "")
@@ -193,28 +201,6 @@ function localDateTimeParts(value?: string | Date | null) {
     date: `${year}-${month}-${day}`,
     time: `${hours}:${minutes}`,
   };
-}
-
-function safeExportFileName(value: string) {
-  return (
-    value
-      .trim()
-      .replace(/^@/, "")
-      .replace(/[^a-zA-Z0-9а-яА-ЯёЁ._-]+/g, "_")
-      .replace(/^_+|_+$/g, "")
-      .slice(0, 80) || "telegram-channel"
-  );
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
 }
 
 function isOwnChannel(channel: TelegramChannel) {
@@ -1402,8 +1388,6 @@ function toTelegramDateTime(value: unknown) {
 }
 
 export default function TelegramChannelsPage() {
-  const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { pushToast, setProgress, clearProgress } = useAppToast();
@@ -1411,7 +1395,12 @@ export default function TelegramChannelsPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [mtprotoCreateOpen, setMtprotoCreateOpen] = useState(false);
-  const tab = parseTelegramTab(searchParams.get("tab"));
+  const [tab, setPersistedTab] = usePersistedRouteTab({
+    param: "tab",
+    storageKey: TELEGRAM_TAB_STORAGE_KEY,
+    allowedValues: TELEGRAM_TABS,
+    defaultValue: "channels",
+  });
   const channelFilter = parseChannelFilter(searchParams.get("channelTab"));
   const lifecycleTab = parseChannelLifecycleTab(searchParams.get("lifecycle"));
   const accountFilter = parseAccountFilter(searchParams.get("accountTab"));
@@ -1442,13 +1431,12 @@ export default function TelegramChannelsPage() {
     lifecycle?: ChannelLifecycleTab;
     accountFilter?: AccountFilter;
   }) => {
-    const params = new URLSearchParams(searchParams.toString());
     const nextTab = next.tab || tab;
-    params.set("tab", nextTab);
-    if (next.channelFilter) params.set("channelTab", next.channelFilter);
-    if (next.lifecycle) params.set("lifecycle", next.lifecycle);
-    if (next.accountFilter) params.set("accountTab", next.accountFilter);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    setPersistedTab(nextTab, (params) => {
+      if (next.channelFilter) params.set("channelTab", next.channelFilter);
+      if (next.lifecycle) params.set("lifecycle", next.lifecycle);
+      if (next.accountFilter) params.set("accountTab", next.accountFilter);
+    });
   };
   const {
     data: channelsResponse,
@@ -1858,8 +1846,10 @@ export default function TelegramChannelsPage() {
     try {
       for (const channel of selectedChannels) {
         const blob = await telegramChannelsApi.export(channel.id);
-        const baseName = safeExportFileName(channel.username || channel.title);
-        downloadBlob(
+        const baseName = safeTelegramChannelExportName(
+          channel.username || channel.title,
+        );
+        downloadTelegramChannelExport(
           blob,
           `${baseName}_export_${new Date().toISOString().slice(0, 10)}.xlsx`,
         );
@@ -1921,26 +1911,29 @@ export default function TelegramChannelsPage() {
   return (
     <AppShell>
       <PageHeader
-        title="Telegram"
-        subtitle="Channels and Telegram accounts"
+        title={tab === "networks" ? "Ads" : "Telegram"}
+        subtitle={
+          tab === "networks"
+            ? "Advertising campaigns, channel networks and promos"
+            : "Channels and Telegram accounts"
+        }
         action={headerAction}
       />
-      <div className="mb-5 inline-flex rounded-lg border border-neutral-700 bg-neutral-900 p-1">
-        {(["channels", "networks", "accounts"] as TelegramTab[]).map((item) => (
-          <button
-            key={item}
-            type="button"
-            className={`rounded-md px-4 py-2 text-sm ${tab === item ? "bg-blue-600 text-white" : "text-neutral-300 hover:bg-neutral-800"}`}
-            onClick={() => updateTabs({ tab: item })}
-          >
-            {item === "channels"
-              ? "Channels"
-              : item === "networks"
-                ? "Networks"
-                : "Accounts"}
-          </button>
-        ))}
-      </div>
+      {tab === "networks" ? <AdsSectionTabs value="network" /> : null}
+      {tab !== "networks" ? (
+        <div className="mb-5 inline-flex rounded-lg border border-neutral-700 bg-neutral-900 p-1">
+          {TELEGRAM_TABS.map((item) => (
+            <button
+              key={item}
+              type="button"
+              className={`rounded-md px-4 py-2 text-sm ${tab === item ? "bg-blue-600 text-white" : "text-neutral-300 hover:bg-neutral-800"}`}
+              onClick={() => updateTabs({ tab: item })}
+            >
+              {item === "channels" ? "Channels" : "Accounts"}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {tab === "channels" ? (
         <>
           <div className="mb-5 flex gap-1 border-b border-neutral-800">

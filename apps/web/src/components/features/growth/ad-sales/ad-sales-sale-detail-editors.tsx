@@ -1,10 +1,28 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { TelegramAdProduct, TelegramAdSale } from "@telegram-system/shared";
-import { ExternalLink, FileText, Hourglass, Link2, Timer, Trash2 } from "lucide-react";
+import type {
+  TelegramAdProduct,
+  TelegramAdSale,
+} from "@telegram-system/shared";
+import {
+  ExternalLink,
+  FileText,
+  Hourglass,
+  Link2,
+  Timer,
+  Trash2,
+} from "lucide-react";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
-import { Button, CustomSelect, DateInput, FormField, Input, Select, TimeInput } from "@/components/ui/primitives";
+import {
+  Button,
+  CustomSelect,
+  DateInput,
+  FormField,
+  Input,
+  Select,
+  TimeInput,
+} from "@/components/ui/primitives";
 import type { Account } from "@/lib/api";
 import { accountDisplayName } from "@/lib/features/finance/account-display";
 import { toNumber } from "@/lib/features/growth/telegram-ad-sales";
@@ -412,14 +430,7 @@ export function PaymentEditor(props: {
         .map((a) => ({
           value: a.id,
           label: `${accountDisplayName(a)} (${a.currency})`,
-          iconUrl:
-            a.iconPresentation?.type === "image"
-              ? a.iconPresentation.url
-              : undefined,
-          iconEmoji:
-            a.iconPresentation?.type === "unicode"
-              ? a.iconPresentation.value
-              : undefined,
+          iconPresentation: a.iconPresentation ?? undefined,
           iconFallback: a.name,
         })),
     [props.accounts, props.payment.accountId],
@@ -444,6 +455,7 @@ export function PaymentEditor(props: {
       </FormField>
       <FormField label={`Amount (${props.payment.currency})`}>
         <Input
+          aria-label={`Amount (${props.payment.currency})`}
           value={props.payment.amount}
           inputMode="decimal"
           onChange={(e) => props.onChange({ amount: e.target.value })}
@@ -491,4 +503,3 @@ export function SaveFooter({
     </div>
   );
 }
-

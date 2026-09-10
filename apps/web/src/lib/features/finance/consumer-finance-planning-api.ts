@@ -1,12 +1,10 @@
 import type {
   ConsumerBillingCatalog,
   ConsumerFinanceEntitlements,
-  ConsumerFinanceGoal,
-  ConsumerFinanceGoalInput,
   ConsumerFinanceLimit,
   ConsumerFinanceReminder,
   ConsumerFinanceReminderInput,
-  ConsumerFinanceSettingsInput,
+  ConsumerFinanceRenewalUpdate,
 } from "@telegram-system/shared";
 import {
   consumerFinanceHttp,
@@ -47,26 +45,6 @@ export const consumerFinancePlanningApi = {
         consumerRequest(),
       )
     ).data,
-  goal: async (botId: string) =>
-    (
-      await consumerFinanceHttp.get<ConsumerFinanceGoal | null>(
-        `${consumerFinanceRoot(botId)}/goal`,
-        consumerRequest(),
-      )
-    ).data,
-  saveGoal: async (botId: string, payload: ConsumerFinanceGoalInput) =>
-    (
-      await consumerFinanceHttp.post<ConsumerFinanceGoal>(
-        `${consumerFinanceRoot(botId)}/goal`,
-        payload,
-        consumerRequest(),
-      )
-    ).data,
-  deleteGoal: async (botId: string, id: string) =>
-    consumerFinanceHttp.delete(
-      `${consumerFinanceRoot(botId)}/goal/${id}`,
-      consumerRequest(),
-    ),
   reminders: async (botId: string) =>
     (
       await consumerFinanceHttp.get<ConsumerFinanceReminder[]>(
@@ -81,17 +59,6 @@ export const consumerFinancePlanningApi = {
     (
       await consumerFinanceHttp.post<ConsumerFinanceReminder>(
         `${consumerFinanceRoot(botId)}/reminders`,
-        payload,
-        consumerRequest(),
-      )
-    ).data,
-  updateSettings: async (
-    botId: string,
-    payload: ConsumerFinanceSettingsInput,
-  ) =>
-    (
-      await consumerFinanceHttp.patch(
-        `${consumerFinanceRoot(botId)}/settings`,
         payload,
         consumerRequest(),
       )
@@ -143,7 +110,7 @@ export const consumerFinancePlanningApi = {
     ).data,
   cancelAutoRenew: async (botId: string) =>
     (
-      await consumerFinanceHttp.post(
+      await consumerFinanceHttp.post<ConsumerFinanceRenewalUpdate>(
         `${consumerFinanceRoot(botId)}/billing/cancel-auto-renew`,
         {},
         consumerRequest(),
@@ -151,7 +118,7 @@ export const consumerFinancePlanningApi = {
     ).data,
   resumeAutoRenew: async (botId: string) =>
     (
-      await consumerFinanceHttp.post(
+      await consumerFinanceHttp.post<ConsumerFinanceRenewalUpdate>(
         `${consumerFinanceRoot(botId)}/billing/resume-auto-renew`,
         {},
         consumerRequest(),

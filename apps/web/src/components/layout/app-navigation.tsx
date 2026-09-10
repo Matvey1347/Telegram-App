@@ -3,14 +3,11 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
-  Bug,
   ChevronDown,
   ChevronRight,
   Megaphone,
   MessageCircle,
-  Repeat2,
   Settings,
-  Trash2,
 } from "lucide-react";
 import { workspaceFeatureIcons } from "@/lib/features/workspace/workspace-feature-icons";
 import { useOptionalI18n } from "@/providers/i18n-provider";
@@ -28,7 +25,7 @@ type NavigationItem = {
 };
 
 type NavigationGroup = {
-  key: "telegram" | "growth" | "operations";
+  key: "telegram" | "growth";
   label: TranslationKey;
   icon: LucideIcon;
   children: readonly NavigationItem[];
@@ -46,6 +43,15 @@ const primaryItems: readonly NavigationItem[] = [
     href: "/finance",
     icon: workspaceFeatureIcons.finance,
     featureId: "finance",
+  },
+];
+
+const trailingItems: readonly NavigationItem[] = [
+  {
+    label: "navigation.workspaceSettings",
+    href: "/settings",
+    icon: Settings,
+    featureIds: ["workspace", "operations", "members"],
   },
 ];
 
@@ -87,56 +93,10 @@ const groups: readonly NavigationGroup[] = [
         featureIds: ["adSales.crm", "adSales.sales"],
       },
       {
-        label: "navigation.adCampaigns",
+        label: "navigation.ads",
         href: "/ad-campaigns",
         icon: workspaceFeatureIcons.advertising,
         featureId: "advertising",
-      },
-      {
-        label: "navigation.mutualPromotion",
-        href: "/ad-campaigns/mutual-promotion",
-        icon: Repeat2,
-        featureId: "advertising",
-      },
-    ],
-  },
-  {
-    key: "operations",
-    label: "navigation.operations",
-    icon: Settings,
-    children: [
-      {
-        label: "navigation.scheduledTasks",
-        href: "/scheduled-tasks",
-        icon: workspaceFeatureIcons.operations,
-        featureId: "operations",
-      },
-      {
-        label: "navigation.trash",
-        href: "/trash",
-        icon: Trash2,
-        permissionId: "operations.restoreTrash",
-        featureId: "operations",
-      },
-      {
-        label: "navigation.systemLogs",
-        href: "/system-logs",
-        icon: Bug,
-        permissionId: "operations.viewSystemLogs",
-        featureId: "operations",
-      },
-      {
-        label: "navigation.workspaceSettings",
-        href: "/settings",
-        icon: workspaceFeatureIcons.workspace,
-        featureId: "workspace",
-      },
-      {
-        label: "navigation.roles",
-        href: "/roles",
-        icon: workspaceFeatureIcons.members,
-        permissionId: "members.assignRoles",
-        featureId: "members",
       },
     ],
   },
@@ -144,10 +104,13 @@ const groups: readonly NavigationGroup[] = [
 
 function routeIsActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
-  if (href === "/ad-campaigns") return pathname === href;
   if (href === "/settings") {
     return (
-      pathname === "/settings" || pathname.startsWith("/workspace-members")
+      pathname === "/settings" ||
+      pathname.startsWith("/workspace-members") ||
+      pathname.startsWith("/roles") ||
+      pathname.startsWith("/trash") ||
+      pathname.startsWith("/scheduled-tasks")
     );
   }
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -212,6 +175,7 @@ export function AppNavigation({
       ? effectivePermissionKeys.includes(item.permissionId)
       : canViewAdmin);
   const visiblePrimaryItems = primaryItems.filter(featureAllowed);
+  const visibleTrailingItems = trailingItems.filter(featureAllowed);
   const visibleGroups = groups
     .map((group) => ({
       ...group,
@@ -225,10 +189,13 @@ export function AppNavigation({
     .filter((group) => group.children.length > 0);
   const visibleItemCount =
     visiblePrimaryItems.length +
+    visibleTrailingItems.length +
     visibleGroups.reduce((total, group) => total + group.children.length, 0);
   const onlyVisibleItem =
     visibleItemCount === 1
-      ? (visiblePrimaryItems[0] ?? visibleGroups[0]?.children[0])
+      ? (visiblePrimaryItems[0] ??
+        visibleGroups[0]?.children[0] ??
+        visibleTrailingItems[0])
       : null;
 
   return (
@@ -263,7 +230,7 @@ export function AppNavigation({
                   onClick={() => onToggleGroup(group.key)}
                   aria-expanded={open}
                   aria-controls={panelId}
-                  className={`flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium uppercase tracking-wide transition hover:bg-neutral-900 hover:text-white ${
+                  className={`flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium uppercase tracking-wide transition hover:bg-neutral-900 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
                     active ? "text-neutral-200" : "text-neutral-500"
                   }`}
                 >
@@ -291,6 +258,14 @@ export function AppNavigation({
               </section>
             );
           })}
+        </div>
+      ) : null}
+
+      {!onlyVisibleItem && visibleTrailingItems.length ? (
+        <div className="mt-3 space-y-1 border-t border-neutral-900 pt-3">
+          {visibleTrailingItems.map((item) => (
+            <ItemLink key={item.href} item={item} pathname={pathname} />
+          ))}
         </div>
       ) : null}
     </nav>

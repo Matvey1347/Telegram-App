@@ -43,6 +43,27 @@ describe("IconAvatar", () => {
     );
   });
 
+  it("keeps transparent image avatars free of the emoji fallback background", () => {
+    render(
+      <IconAvatar
+        label="Custom image"
+        icon={{
+          type: "image",
+          id: "custom-image",
+          url: "https://cdn.example.com/custom-image.png",
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "Custom image" })).toHaveClass(
+      "bg-transparent",
+    );
+    expect(screen.getByRole("img", { name: "Custom image" })).not.toHaveClass(
+      "bg-neutral-800",
+      "border-neutral-700",
+    );
+  });
+
   it("renders the standard fallback when an avatar URL cannot be loaded", () => {
     render(
       <IconAvatar

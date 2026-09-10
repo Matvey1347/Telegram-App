@@ -100,7 +100,11 @@ describe('TelegramCrmManualSendService', () => {
     };
     const prisma = {
       telegramCrmConversation: {
-        findFirst: jest.fn().mockResolvedValue(conversation),
+        findFirst: jest.fn().mockResolvedValue({
+          ...conversation,
+          contactId: 'contact-1',
+          contact: { ownerMemberId: 'member-1' },
+        }),
         updateMany: jest.fn(),
       },
       telegramCrmMessage: { findUnique: jest.fn().mockResolvedValue(null) },

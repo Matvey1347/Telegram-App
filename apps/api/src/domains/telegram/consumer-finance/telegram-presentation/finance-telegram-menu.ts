@@ -5,7 +5,7 @@ import { t, type FinanceChatLocale } from '../i18n/finance-chat-i18n';
 export function financeMiniAppUrl(
   botId: string,
   base = publicWebOrigin(),
-  screen?: 'accounts' | 'transactions' | 'more',
+  screen?: 'accounts' | 'transactions' | 'more' | 'debts' | 'regular-payments',
   transfer = false,
 ) {
   const normalized = base?.trim().replace(/\/$/u, '');
@@ -47,18 +47,14 @@ export function financeMainMenu(
   botId: string,
   locale: FinanceChatLocale = 'en',
 ) {
-  const webAppUrl = financeMiniAppUrl(botId);
+  void botId;
   return [
     [{ text: t(locale, 'menuExpense') }, { text: t(locale, 'menuIncome') }],
+    [{ text: t(locale, 'menuRecent') }, { text: t(locale, 'menuAccounts') }],
     [
-      { text: t(locale, 'menuOpen'), ...(webAppUrl ? { webAppUrl } : {}) },
-      { text: t(locale, 'menuRecent') },
-    ],
-    [
-      { text: t(locale, 'menuAccounts') },
       { text: t(locale, 'menuCategories') },
+      { text: t(locale, 'menuTransfer') },
     ],
-    [{ text: t(locale, 'menuTransfer') }, { text: t(locale, 'menuSettings') }],
-    [{ text: t(locale, 'menuHelp') }],
+    [{ text: t(locale, 'menuSettings') }, { text: t(locale, 'menuHelp') }],
   ];
 }

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
 
 @Injectable()
 export class MutualPromotionBoundaryService {
@@ -8,6 +9,10 @@ export class MutualPromotionBoundaryService {
 
   async captureStart(folderId: string, capturedAt: Date) {
     await this.prisma.$transaction(async (tx) => {
+      await acquirePostgresTransactionLock(
+        tx,
+        `mutual-promotion-folder:${folderId}`,
+      );
       await tx.$executeRaw(Prisma.sql`
         UPDATE "MutualPromotionFolderParticipant" participant
         SET "subscribersAtStart" = channel."currentSubscribersCount",
@@ -41,6 +46,10 @@ export class MutualPromotionBoundaryService {
 
   async captureFinal(folderId: string, capturedAt: Date) {
     await this.prisma.$transaction(async (tx) => {
+      await acquirePostgresTransactionLock(
+        tx,
+        `mutual-promotion-folder:${folderId}`,
+      );
       await tx.mutualPromotionFolder.updateMany({
         where: {
           id: folderId,

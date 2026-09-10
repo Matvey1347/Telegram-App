@@ -1,5 +1,6 @@
 import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 import type {
+  ConsumerFinanceAccount,
   ConsumerFinanceHistoryPage,
   ConsumerFinanceHistoryQuery,
   ConsumerFinanceTransaction,
@@ -9,6 +10,22 @@ import type {
 } from "@telegram-system/shared";
 import { financeHistoryDateMatches } from "./consumer-finance-date";
 import { consumerFinanceKeys } from "./consumer-finance-query-keys";
+
+export function patchConsumerFinanceAccountCache(
+  client: QueryClient,
+  botId: string,
+  account: ConsumerFinanceAccount,
+) {
+  client.setQueryData(
+    consumerFinanceKeys.accounts(botId),
+    (rows: ConsumerFinanceAccount[] | undefined) => {
+      if (!rows) return undefined;
+      return rows.some((row) => row.id === account.id)
+        ? rows.map((row) => (row.id === account.id ? account : row))
+        : [...rows, account];
+    },
+  );
+}
 
 export function removeConsumerTransactionFromCaches(
   client: QueryClient,

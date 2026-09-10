@@ -28,6 +28,8 @@ import { GlobalRefreshButton } from "@/components/layout/global-refresh-button";
 import { useSystemBotWorkspaceSync } from "@/components/layout/use-system-bot-workspace-sync";
 import { NotificationCenter } from "@/components/features/operations/notifications/notification-center";
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
+import { AppPwaNavigation } from "@/components/layout/app-pwa-navigation";
+import pwaStyles from "@/components/layout/app-pwa-navigation.module.css";
 import { useI18n } from "@/providers/i18n-provider";
 import { ChevronRight, LogOut, Menu, Plus, X } from "lucide-react";
 
@@ -296,7 +298,7 @@ export function AppShell({ children }: PropsWithChildren) {
     );
   return (
     <div className="min-h-screen overflow-x-hidden bg-neutral-950 text-neutral-100">
-      <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-neutral-800 bg-neutral-950/95 px-3 backdrop-blur lg:hidden">
+      <header className={`${pwaStyles.header} sticky top-0 z-20 flex h-14 items-center justify-between border-b border-neutral-800 bg-neutral-950/95 px-3 backdrop-blur lg:hidden`}>
         <button
           type="button"
           onClick={() => setMobileMenuOpen(true)}
@@ -500,7 +502,7 @@ export function AppShell({ children }: PropsWithChildren) {
           </div>
         </div>
       </aside>
-      <main className="min-h-[calc(100dvh-3.5rem)] min-w-0 px-3 py-4 sm:px-4 sm:py-5 lg:ml-64 lg:min-h-screen lg:w-[calc(100%-16rem)] 2xl:px-5">
+      <main className={`${pwaStyles.content} min-h-[calc(100dvh-3.5rem)] min-w-0 px-3 py-4 sm:px-4 sm:py-5 lg:ml-64 lg:min-h-screen lg:w-[calc(100%-16rem)] 2xl:px-5`}>
         <div
           key={activeWorkspaceId || "no-workspace"}
           className="w-full min-w-0"
@@ -508,6 +510,10 @@ export function AppShell({ children }: PropsWithChildren) {
           {children}
         </div>
       </main>
+      <AppPwaNavigation
+        pathname={pathname}
+        effectiveFeatureIds={activeWorkspace?.access?.featureIds}
+      />
     </div>
   );
 }

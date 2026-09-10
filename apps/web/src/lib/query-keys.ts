@@ -69,8 +69,10 @@ export const telegramChannelKeys = {
     ["telegram-channel-audience", channelId] as const,
   audienceSnapshots: (channelId: string) =>
     ["telegram-channel-audience-snapshots", channelId] as const,
-  performanceHistory: (channelId: string, days: number) =>
-    ["telegram-channel-performance-history", channelId, days] as const,
+  performanceHistory: (
+    channelId: string,
+    range: import("@telegram-system/shared").TelegramChannelPerformanceHistoryRange,
+  ) => ["telegram-channel-performance-history", channelId, range] as const,
   financialSummary: (channelId: string) =>
     ["telegram-channel-financial-summary", channelId] as const,
   inviteLinks: (channelId: string) =>
@@ -180,6 +182,8 @@ export const adCampaignKeys = {
 
 export const mutualPromotionFolderKeys = {
   all: ["mutual-promotion-folders"] as const,
+  inviteOptionsRoot: () =>
+    ["mutual-promotion-folders", "invite-options"] as const,
   list: (params?: { page?: number; pageSize?: number }) =>
     ["mutual-promotion-folders", "list", params ?? {}] as const,
   detail: (folderId: string) =>
@@ -191,8 +195,7 @@ export const mutualPromotionFolderKeys = {
     endsAt: string;
   }) =>
     [
-      "mutual-promotion-folders",
-      "invite-options",
+      ...mutualPromotionFolderKeys.inviteOptionsRoot(),
       input.folderId ?? null,
       input.channelIds,
       input.startsAt ?? null,

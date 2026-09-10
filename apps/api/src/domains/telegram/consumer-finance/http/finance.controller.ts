@@ -18,8 +18,6 @@ import {
 import { IsIn, IsString, Matches } from 'class-validator';
 import { randomBytes, timingSafeEqual } from 'crypto';
 import type { CookieOptions, Request, Response } from 'express';
-import { BotBillingService } from '../../bot-billing/bot-billing.service';
-import { CreateStripeCheckoutDto } from '../../bot-billing/dto';
 import { TelegramBotDeliveryService } from '../../telegram-bots/core/telegram-bot-delivery.service';
 import {
   FinanceConsumerSession,
@@ -33,7 +31,6 @@ import { FinanceTransferService } from '../transfers/finance-transfer.service';
 import {
   CreateFinanceAccountDto,
   CreateFinanceCategoryDto,
-  CreateFinanceGoalDto,
   CreateFinanceReminderDto,
   CreateFinanceTransactionDto,
   CreateFinanceTransferDto,
@@ -46,19 +43,18 @@ import {
   UpdateFinanceTransferDto,
   UpsertFinanceLimitDto,
 } from './finance.dto';
-import { FinanceEntitlementService } from '../billing/finance-entitlement.service';
 import { forecastMonthlyLimit } from '../planning/finance-smart-limits';
+import { FinanceEntitlementService } from '../billing/finance-entitlement.service';
 import { financeAnalyticsDateRange } from '../ledger/finance-history-date-range';
 import { financeChatLocale, t } from '../i18n/finance-chat-i18n';
-import {
-  financeCheckoutReturnUrl,
-  financeMainMenu,
-} from '../telegram-presentation/finance-telegram-menu';
+import { financeMainMenu } from '../telegram-presentation/finance-telegram-menu';
 import {
   isProductionEnvironment,
   publicApiOrigin,
   publicWebOrigin,
 } from '../../../../config/deployment-config';
+import { FinanceConsumerRequestService } from './finance-consumer-request.service';
+import { FinanceAnalyticsService } from '../analytics/finance-analytics.service';
 
 class DeleteFinanceDataDto {
   @IsIn(['DELETE MY FINANCE DATA']) confirmation!: 'DELETE MY FINANCE DATA';
@@ -80,23 +76,13 @@ export class FinanceController {
     private readonly core: FinanceCoreService,
     private readonly ledger: FinanceLedgerService,
     private readonly financeTransfers: FinanceTransferService,
-    private readonly billing: BotBillingService,
     private readonly entitlements: FinanceEntitlementService,
     private readonly delivery: TelegramBotDeliveryService,
+    private readonly requests: FinanceConsumerRequestService,
+    private readonly analyticsService: FinanceAnalyticsService,
   ) {}
-  private assertConsumerMutation(request: Request) {
-    const method = request.method?.toUpperCase();
-    if (
-      method &&
-      !['GET', 'HEAD', 'OPTIONS'].includes(method) &&
-      request.headers['x-finance-consumer-request'] !== '1'
-    ) {
-      throw new ForbiddenException('Finance consumer request is not trusted');
-    }
-  }
   private auth(botId: string, request: Request) {
-    this.assertConsumerMutation(request);
-    return this.sessions.fromRequest(request, botId);
+    return this.requests.authenticate(botId, request);
   }
   private profile(s: FinanceConsumerSession) {
     return {
@@ -215,7 +201,7 @@ export class FinanceController {
     @Req() request: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    this.assertConsumerMutation(request);
+    this.requests.assertMutation(request);
     const c = await this.contexts.fromInitData(b, initData);
     await this.setCookie(
       res,
@@ -258,7 +244,7 @@ export class FinanceController {
     @Req() request: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    this.assertConsumerMutation(request);
+    this.requests.assertMutation(request);
     this.clearCookie(res, b, request);
     return { authenticated: false as const };
   }
@@ -286,7 +272,7 @@ export class FinanceController {
     @Param('botId') botId: string,
     @Req() request: Request,
   ) {
-    this.assertConsumerMutation(request);
+    this.requests.assertMutation(request);
     const config = await this.contexts.browserLoginConfig(botId);
     return this.transfers.createBrowserLogin(botId, config.username);
   }
@@ -296,7 +282,7 @@ export class FinanceController {
     @Req() request: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    this.assertConsumerMutation(request);
+    this.requests.assertMutation(request);
     const result = await this.transfers.consumeBrowserLogin(input.token, botId);
     if (result.status !== 'approved') return result;
     await this.setCookie(res, result.session, botId, request);
@@ -365,25 +351,26 @@ export class FinanceController {
       { period: 'CURRENT_MONTH' },
       profile.timezone,
     );
-    const [stats, limits, goal, recent] = await Promise.all([
+    const [stats, limits, recent] = await Promise.all([
       this.ledger.stats(p.id, from, to),
       this.core.limits(p.id),
-      this.core.goal(p.id),
       this.ledger.history(
         p.id,
         Object.assign(new FinanceHistoryQueryDto(), { limit: 8 }),
       ),
     ]);
     const currency = profile.defaultCurrency;
+    const { savings, investments, ...periodStats } = stats;
     return {
       profile,
       stats: {
-        ...stats,
+        ...periodStats,
         currency,
         categories: stats.categories.map((x) => ({ ...x, currency })),
       },
       limits,
-      goal,
+      savings,
+      investments,
       recent: recent.items,
     };
   }
@@ -584,12 +571,22 @@ export class FinanceController {
       )
     )
       throw new BadRequestException('Invalid analytics period');
-    const profileId = this.auth(b, r).profileId;
-    return this.ledger.analytics(await this.ledger.profileContext(profileId), {
-      period,
-      from,
-      to,
-    });
+    const session = this.auth(b, r);
+    const profile = await this.core.profile(session.profileId);
+    if (!profile) throw new NotFoundException('Finance profile not found');
+    return this.analyticsService.analytics(
+      {
+        id: session.profileId,
+        defaultCurrency: profile.defaultCurrency,
+        timezone: profile.timezone,
+        workspaceId: session.workspaceId,
+      },
+      {
+        period,
+        from,
+        to,
+      },
+    );
   }
   @Get('limits') limits(@Param('botId') b: string, @Req() r: Request) {
     return this.core.limits(this.auth(b, r).profileId);
@@ -672,23 +669,6 @@ export class FinanceController {
     }
     return reminder;
   }
-  @Get('goal') goal(@Param('botId') b: string, @Req() r: Request) {
-    return this.core.goal(this.auth(b, r).profileId);
-  }
-  @Post('goal') createGoal(
-    @Param('botId') b: string,
-    @Req() r: Request,
-    @Body() d: CreateFinanceGoalDto,
-  ) {
-    return this.core.createGoal(this.auth(b, r).profileId, d);
-  }
-  @Delete('goal/:id') deleteGoal(
-    @Param('botId') b: string,
-    @Param('id') id: string,
-    @Req() r: Request,
-  ) {
-    return this.core.deactivateGoal(this.auth(b, r).profileId, id);
-  }
   @Get('export') exportData(@Param('botId') b: string, @Req() r: Request) {
     return this.core.export(this.auth(b, r).profileId);
   }
@@ -700,80 +680,5 @@ export class FinanceController {
     if (d.confirmation !== 'DELETE MY FINANCE DATA')
       throw new BadRequestException('Invalid confirmation');
     return this.core.deleteData(this.auth(b, r).profileId);
-  }
-  @Get('billing') billingCatalog(@Param('botId') b: string, @Req() r: Request) {
-    return this.billing.catalog(b, this.auth(b, r).telegramBotUserId);
-  }
-  @Get('entitlements') entitlementSummary(
-    @Param('botId') b: string,
-    @Req() r: Request,
-  ) {
-    const session = this.auth(b, r);
-    return this.entitlements.resolve({
-      botIntegrationId: b,
-      telegramBotUserId: session.telegramBotUserId,
-      profileId: session.profileId,
-    });
-  }
-  @Post('billing/stripe/checkout') checkout(
-    @Param('botId') b: string,
-    @Req() r: Request,
-    @Body() d: CreateStripeCheckoutDto,
-  ) {
-    const successUrl = financeCheckoutReturnUrl(b, 'success');
-    const cancelUrl = financeCheckoutReturnUrl(b, 'cancelled');
-    if (!successUrl || !cancelUrl) {
-      throw new BadRequestException('Public web origin is not configured');
-    }
-    return this.billing.createStripeCheckout({
-      botIntegrationId: b,
-      telegramBotUserId: this.auth(b, r).telegramBotUserId,
-      priceId: d.priceId,
-      requestedMode: d.mode,
-      couponCode: d.couponCode,
-      successUrl,
-      cancelUrl,
-    });
-  }
-  @Post('billing/stars/checkout') starsCheckout(
-    @Param('botId') b: string,
-    @Req() r: Request,
-    @Body() d: CreateStripeCheckoutDto,
-  ) {
-    return this.billing.createStarsCheckout({
-      botIntegrationId: b,
-      telegramBotUserId: this.auth(b, r).telegramBotUserId,
-      priceId: d.priceId,
-    });
-  }
-  @Post('billing/cancel-auto-renew') cancelAutoRenew(
-    @Param('botId') b: string,
-    @Req() r: Request,
-  ) {
-    return this.billing.setStripeAutoRenewal({
-      botIntegrationId: b,
-      telegramBotUserId: this.auth(b, r).telegramBotUserId,
-      cancelAtPeriodEnd: true,
-    });
-  }
-  @Post('billing/resume-auto-renew') resumeAutoRenew(
-    @Param('botId') b: string,
-    @Req() r: Request,
-  ) {
-    return this.billing.setStripeAutoRenewal({
-      botIntegrationId: b,
-      telegramBotUserId: this.auth(b, r).telegramBotUserId,
-      cancelAtPeriodEnd: false,
-    });
-  }
-  @Post('billing/payment-portal') paymentPortal(
-    @Param('botId') b: string,
-    @Req() r: Request,
-  ) {
-    return this.billing.stripePortal({
-      botIntegrationId: b,
-      telegramBotUserId: this.auth(b, r).telegramBotUserId,
-      returnUrl: this.browserRedirect(b, `/finance/${b}?screen=settings`),
-    });
   }
 }

@@ -103,4 +103,25 @@ describe('CRM reply summary', () => {
       unreadCount: 1,
     });
   });
+
+  it('marks a replied conversation as waiting for the client and keeps its totals', () => {
+    const summary = summarizeReply(
+      { id: 'contact-1', replyAlertMutedAt: null },
+      [
+        {
+          ...base,
+          inboundMessageCount: 4,
+          outboundMessageCount: 3,
+          lastOutboundAt: new Date('2026-09-06T10:01:00.000Z'),
+        },
+      ],
+    );
+
+    expect(summary).toMatchObject({
+      status: 'WAITING_FOR_CLIENT',
+      inboundMessageCount: 4,
+      outboundMessageCount: 3,
+      muted: false,
+    });
+  });
 });

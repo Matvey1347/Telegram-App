@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, useEffect } from "react";
 import { Search } from "lucide-react";
 import { emojiIcons, type EmojiCategory } from "@/lib/emoji-icons";
 import type { ResolvedEmoji } from "@telegram-system/shared";
-import type { FinanceLocale } from "../finance-i18n";
+import type { FinanceLocale } from "../i18n/core";
 import { Button, Input } from "./finance-controls";
 import { financeIconPickerCopy } from "./finance-icon-picker-i18n";
 

@@ -2,16 +2,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConsumerFinanceAccount } from "@telegram-system/shared";
-import { FinanceAccounts } from "./finance-accounts";
+import { FinanceAccounts, FinanceAccountsScreen } from "./finance-accounts";
 
-const apiMocks = vi.hoisted(() => ({
-  createAccount: vi.fn(),
-  updateAccount: vi.fn(),
+const api = vi.hoisted(() => ({
+  accounts: vi.fn(),
   archiveAccount: vi.fn(),
 }));
-
-vi.mock("@/lib/features/finance/consumer-finance-api", () => ({
-  consumerFinanceApi: apiMocks,
+vi.mock("@/lib/features/finance/consumer-finance-ledger-api", () => ({
+  consumerFinanceLedgerApi: api,
 }));
 
 const account: ConsumerFinanceAccount = {
@@ -25,65 +23,56 @@ const account: ConsumerFinanceAccount = {
   defaultCurrency: "USD",
 };
 
-function renderAccounts(accounts: ConsumerFinanceAccount[] = []) {
-  return render(
-    <QueryClientProvider client={new QueryClient()}>
-      <FinanceAccounts
-        botId="bot"
-        accounts={accounts}
-        defaultCurrency="USD"
-        locale="en"
-      />
-    </QueryClientProvider>,
-  );
+function renderAccounts(
+  accounts: ConsumerFinanceAccount[] = [],
+  onEdit = vi.fn(),
+) {
+  return {
+    onEdit,
+    ...render(
+      <QueryClientProvider client={new QueryClient()}>
+        <FinanceAccounts
+          botId="bot"
+          accounts={accounts}
+          locale="en"
+          onEdit={onEdit}
+        />
+      </QueryClientProvider>,
+    ),
+  };
 }
 
 beforeEach(() => vi.clearAllMocks());
 
-describe("FinanceAccounts CRUD", () => {
-  it("lists and creates an account through the API", async () => {
-    apiMocks.createAccount.mockResolvedValue(account);
-    renderAccounts();
+describe("FinanceAccounts list", () => {
+  it("keeps a collection failure retryable in the lazy screen", async () => {
+    api.accounts.mockRejectedValue(new Error("offline"));
+    render(
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
+        <FinanceAccountsScreen botId="bot" locale="en" onEdit={vi.fn()} />
+      </QueryClientProvider>,
+    );
 
-    fireEvent.click(screen.getByRole("button", { name: "Add account" }));
-    fireEvent.change(screen.getAllByRole("textbox")[0], {
-      target: { value: "Daily card" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
-    await waitFor(() => expect(apiMocks.createAccount).toHaveBeenCalledOnce());
-    expect(apiMocks.createAccount).toHaveBeenCalledWith("bot", {
-      name: "Daily card",
-      emoji: "💳",
-      type: "CARD",
-      currency: "USD",
-      openingBalance: "0",
-    });
+    fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(api.accounts).toHaveBeenCalledTimes(2));
   });
 
-  it("updates an existing account", async () => {
-    apiMocks.updateAccount.mockResolvedValue({ ...account, name: "Primary" });
-    renderAccounts([account]);
+  it("routes create and account-row actions to the full-page editor", () => {
+    const { onEdit } = renderAccounts([account]);
 
-    expect(screen.getByText("Daily card")).toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Edit account: Daily card" }),
-    );
-    fireEvent.change(screen.getByDisplayValue("Daily card"), {
-      target: { value: "Primary" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add account" }));
+    expect(onEdit).toHaveBeenCalledWith("create");
 
-    await waitFor(() => expect(apiMocks.updateAccount).toHaveBeenCalledOnce());
-    expect(apiMocks.updateAccount).toHaveBeenCalledWith("bot", "account-1", {
-      name: "Primary",
-      emoji: "💳",
-      type: "CARD",
-    });
+    fireEvent.click(screen.getAllByRole("button", { name: /Daily card/u })[0]);
+    expect(onEdit).toHaveBeenCalledWith("account-1");
   });
 
   it("archives only after typed confirmation", async () => {
-    apiMocks.archiveAccount.mockResolvedValue({
+    api.archiveAccount.mockResolvedValue({
       ...account,
       archivedAt: "2026-08-21T00:00:00.000Z",
     });
@@ -97,7 +86,7 @@ describe("FinanceAccounts CRUD", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Archive" }));
 
-    await waitFor(() => expect(apiMocks.archiveAccount).toHaveBeenCalledOnce());
-    expect(apiMocks.archiveAccount).toHaveBeenCalledWith("bot", "account-1");
+    await waitFor(() => expect(api.archiveAccount).toHaveBeenCalledOnce());
+    expect(api.archiveAccount).toHaveBeenCalledWith("bot", "account-1");
   });
 });

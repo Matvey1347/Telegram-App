@@ -141,7 +141,7 @@ export function applyCrmReplyMessage(
                     (direction === "INBOUND" ? 1 : 0),
                   status:
                     direction === "OUTBOUND"
-                      ? "NONE"
+                      ? "WAITING_FOR_CLIENT"
                       : firstInbound
                         ? "FIRST_INBOUND_UNREAD"
                         : "CONVERSATION_UNANSWERED_UNREAD",

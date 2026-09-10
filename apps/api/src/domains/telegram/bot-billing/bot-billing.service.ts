@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { BotBillingConnectionStatus, BotBillingProvider, BotBillingProviderMode, BotSubscriptionSource, BotSubscriptionStatus, Prisma, TelegramBotRuntimeEnvironment, WorkspaceRole } from '@prisma/client';
+import { BotBillingConnectionStatus, BotBillingInterval, BotBillingProvider, BotBillingProviderMode, BotSubscriptionSource, BotSubscriptionStatus, Prisma, TelegramBotApplicationType, TelegramBotRuntimeEnvironment, WorkspaceRole } from '@prisma/client';
 import type { BotBillingOverviewView, BotBillingProviderConfigView, BotBillingSubscriberPage, BotBillingUserPage } from '@telegram-system/shared';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
 import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
@@ -19,11 +19,12 @@ import {
 type Provider = 'STRIPE' | 'TELEGRAM_STARS';
 type Mode = 'TEST' | 'LIVE';
 
+export type FixedBillingCatalogDefinition = { code: string; name: string; amountMinor: number; currency: string; interval: BotBillingInterval };
+
 function supportLocale(profileLocale?: string | null, telegramLocale?: string | null): 'en' | 'uk' | 'ru' {
   const locale = (profileLocale || telegramLocale || 'en').toLowerCase().split(/[-_]/u)[0];
   return locale === 'uk' || locale === 'ru' ? locale : 'en';
 }
-
 @Injectable()
 export class BotBillingService {
   constructor(
@@ -236,13 +237,11 @@ export class BotBillingService {
     const mode = isProductionEnvironment() ? BotBillingProviderMode.LIVE : (input.requestedMode || BotBillingProviderMode.LIVE) as BotBillingProviderMode;
     const price = await this.prisma.botPlanPrice.findFirst({ where: { id: input.priceId, isActive: true, isPublic: true, plan: { botIntegrationId: input.botIntegrationId, isActive: true } }, include: { plan: true } });
     if (!price) throw new NotFoundException('Public billing price not found');
-    const isFinance = await this.assertFinanceCanonicalPrice(input.botIntegrationId, price.plan.code, price.currency, price.interval, price.amountMinor);
     const subscriber = await this.prisma.telegramBotUser.findFirst({ where: { id: input.telegramBotUserId, botIntegrationId: input.botIntegrationId }, select: { id: true, workspaceId: true } });
     if (!subscriber || subscriber.workspaceId !== price.plan.workspaceId) throw new NotFoundException('Billing subscriber not found');
     const coupon = input.couponCode ? await this.validCoupon({ botIntegrationId: input.botIntegrationId, telegramBotUserId: subscriber.id, planId: price.planId, priceId: price.id, currency: price.currency, code: input.couponCode }) : null;
     const stripeConfigId = await this.stripe.configId(input.botIntegrationId, mode);
     const syncedPriceId = this.providerPriceId(price.providerPriceIdentity, mode, stripeConfigId);
-    if (isFinance && !syncedPriceId) throw new BadRequestException('Finance plans are not synchronized with the selected Stripe mode');
     const providerPriceId = syncedPriceId || await this.stripe.ensurePrice({ botIntegrationId: input.botIntegrationId, mode, plan: price.plan, price });
     const promotionCodeId = coupon ? this.providerPromotionCode(coupon.providerCouponIdentity, mode, stripeConfigId) : null;
     if (coupon && !promotionCodeId) throw new BadRequestException('Coupon is not synchronized with the selected Stripe mode');
@@ -265,21 +264,10 @@ export class BotBillingService {
     return entry && typeof entry === 'object' && !Array.isArray(entry) && (entry as Record<string, unknown>).configId === configId && typeof (entry as Record<string, unknown>).priceId === 'string' ? (entry as Record<string, string>).priceId : null;
   }
 
-  private async assertFinanceCanonicalPrice(botIntegrationId: string, code: string, currency: string, interval: string, amountMinor: number) {
-    const bot = await this.prisma.telegramBotIntegration.findUnique({ where: { id: botIntegrationId }, select: { applicationType: true } });
-    if (bot?.applicationType !== 'FINANCE') return false;
-    const canonical: Record<string, number> = { PRO: 14900, ULTIMATE: 24900 };
-    if (canonical[code] !== amountMinor || currency !== 'UAH' || interval !== 'MONTH') throw new BadRequestException('Finance checkout requires a canonical Pro or Ultimate monthly price');
-    return true;
-  }
-
-  async syncFinanceCatalog(userId: string, botIntegrationId: string) {
+  async syncFixedCatalog(userId: string, botIntegrationId: string, applicationType: TelegramBotApplicationType, definitions: readonly FixedBillingCatalogDefinition[]) {
     const bot = await this.bot(userId, botIntegrationId);
-    const [finance, providerConfigs] = await Promise.all([
-      this.prisma.telegramBotIntegration.findFirst({
-        where: { id: bot.id, applicationType: 'FINANCE' },
-        select: { id: true },
-      }),
+    const [application, providerConfigs] = await Promise.all([
+      this.prisma.telegramBotIntegration.findFirst({ where: { id: bot.id, applicationType }, select: { id: true } }),
       this.prisma.botBillingProviderConfig.findMany({
         where: {
           workspaceId: bot.workspaceId,
@@ -290,22 +278,21 @@ export class BotBillingService {
         select: { botIntegrationId: true, mode: true },
       }),
     ]);
-    if (!finance) throw new BadRequestException('This operation is available only for Finance bots');
+    if (!application) throw new BadRequestException('The fixed catalog does not match this bot application');
     const modes = (['TEST', 'LIVE'] as const).filter((mode) => {
       const matching = providerConfigs.filter((config) => config.mode === mode);
       return matching.some((config) => config.botIntegrationId === botIntegrationId)
         || matching.some((config) => config.botIntegrationId === null);
     });
     if (!modes.length) throw new BadRequestException('Stripe TEST or LIVE is not connected');
-    const definitions = [{ code: 'PRO', name: 'Pro', amountMinor: 14900 }, { code: 'ULTIMATE', name: 'Ultimate', amountMinor: 24900 }];
     const result: Array<{ code: string; planId: string; priceId: string; mode: Mode; providerPriceId: string }> = [];
     for (const definition of definitions) {
       const plan = await this.prisma.botSubscriptionPlan.upsert({ where: { botIntegrationId_code: { botIntegrationId, code: definition.code } }, update: { name: definition.name, isActive: true }, create: { workspaceId: bot.workspaceId, botIntegrationId, code: definition.code, name: definition.name, isActive: true } });
-      let price = await this.prisma.botPlanPrice.findFirst({ where: { planId: plan.id, currency: 'UAH', interval: 'MONTH', amountMinor: definition.amountMinor, isActive: true }, orderBy: { version: 'desc' } });
+      let price = await this.prisma.botPlanPrice.findFirst({ where: { planId: plan.id, currency: definition.currency, interval: definition.interval, amountMinor: definition.amountMinor, isActive: true }, orderBy: { version: 'desc' } });
       if (!price) {
-        const previous = await this.prisma.botPlanPrice.aggregate({ where: { planId: plan.id, currency: 'UAH', interval: 'MONTH' }, _max: { version: true } });
-        await this.prisma.botPlanPrice.updateMany({ where: { planId: plan.id, currency: 'UAH', interval: 'MONTH', isPublic: true }, data: { isPublic: false } });
-        price = await this.prisma.botPlanPrice.create({ data: { planId: plan.id, currency: 'UAH', interval: 'MONTH', amountMinor: definition.amountMinor, version: (previous._max.version || 0) + 1, isPublic: true } });
+        const previous = await this.prisma.botPlanPrice.aggregate({ where: { planId: plan.id, currency: definition.currency, interval: definition.interval }, _max: { version: true } });
+        await this.prisma.botPlanPrice.updateMany({ where: { planId: plan.id, currency: definition.currency, interval: definition.interval, isPublic: true }, data: { isPublic: false } });
+        price = await this.prisma.botPlanPrice.create({ data: { planId: plan.id, currency: definition.currency, interval: definition.interval, amountMinor: definition.amountMinor, version: (previous._max?.version || 0) + 1, isPublic: true } });
       }
       for (const mode of modes) {
         const providerPriceId = await this.stripe.ensurePrice({ botIntegrationId, mode, plan, price });

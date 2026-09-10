@@ -12,24 +12,6 @@ export type ConsumerFinanceLimit = {
   legacyFallback?: ConsumerFinanceLegacyFallback | null;
 };
 
-export type ConsumerFinanceGoal = {
-  id: string;
-  name: string;
-  targetAmount: string;
-  currentAmount: string;
-  currency: string;
-  targetDate?: string | null;
-  active?: boolean;
-};
-
-export type ConsumerFinanceGoalInput = {
-  name: string;
-  targetAmount: string;
-  currentAmount?: string;
-  currency: string;
-  targetDate?: string;
-};
-
 export type ConsumerFinanceReminder = {
   id: string;
   name: string;

@@ -2,7 +2,7 @@
 
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { FinanceLocale } from "../finance-i18n";
+import type { FinanceLocale } from "../i18n/core";
 
 const dateCopy = {
   en: {
@@ -11,6 +11,9 @@ const dateCopy = {
     end: "Select end date",
     clear: "Clear",
     today: "Today",
+    selectDate: "Select date",
+    previousMonth: "Previous month",
+    nextMonth: "Next month",
     weekdays: ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"],
   },
   uk: {
@@ -19,6 +22,9 @@ const dateCopy = {
     end: "Оберіть кінцеву дату",
     clear: "Очистити",
     today: "Сьогодні",
+    selectDate: "Оберіть дату",
+    previousMonth: "Попередній місяць",
+    nextMonth: "Наступний місяць",
     weekdays: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"],
   },
   ru: {
@@ -27,6 +33,9 @@ const dateCopy = {
     end: "Выберите конечную дату",
     clear: "Очистить",
     today: "Сегодня",
+    selectDate: "Выберите дату",
+    previousMonth: "Предыдущий месяц",
+    nextMonth: "Следующий месяц",
     weekdays: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
   },
 } as const;
@@ -128,7 +137,7 @@ function MonthHeader({
         onClick={() =>
           setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))
         }
-        aria-label="Previous month"
+        aria-label={dateCopy[locale].previousMonth}
       >
         <ChevronLeft size={16} />
       </button>
@@ -141,7 +150,7 @@ function MonthHeader({
         onClick={() =>
           setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))
         }
-        aria-label="Next month"
+        aria-label={dateCopy[locale].nextMonth}
       >
         <ChevronRight size={16} />
       </button>
@@ -153,9 +162,11 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   const locale: FinanceLocale =
     props.lang === "ru" ? "ru" : props.lang === "uk" ? "uk" : "en";
   const [open, setOpen] = useState(false);
-  const [value, setValue] = useState(
+  const [internalValue, setInternalValue] = useState(
     String(props.value ?? props.defaultValue ?? ""),
   );
+  const value =
+    props.value === undefined ? internalValue : String(props.value || "");
   const initial = value ? new Date(`${value}T00:00:00`) : new Date();
   const [cursor, setCursor] = useState(
     new Date(initial.getFullYear(), initial.getMonth(), 1),
@@ -163,12 +174,8 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   const rootRef = useOutsideClose(open, () => setOpen(false));
   const openUp = useOpenUp(open, rootRef, 340);
 
-  useEffect(() => {
-    if (props.value !== undefined) setValue(String(props.value || ""));
-  }, [props.value]);
-
   const commit = (next: string) => {
-    setValue(next);
+    setInternalValue(next);
     props.onChange?.({
       target: { name: props.name, value: next },
     } as React.ChangeEvent<HTMLInputElement>);
@@ -183,7 +190,9 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
         className={`flex w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm outline-none ring-blue-500 focus:ring disabled:opacity-50 ${props.className ?? ""}`}
       >
         <span className={value ? "text-white" : "text-neutral-400"}>
-          {value ? displayDate(value) : props.placeholder || "Select date"}
+          {value
+            ? displayDate(value)
+            : props.placeholder || dateCopy[locale].selectDate}
         </span>
         <CalendarDays size={16} className="text-neutral-400" />
       </button>

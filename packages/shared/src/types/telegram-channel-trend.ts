@@ -21,13 +21,23 @@ export type TelegramChannelPerformanceHistoryPoint = {
   subscribers: number | null;
   averageViews: number | null;
   averageReactions: number | null;
+  postsPublished: number | null;
   invested: number;
   revenue: number;
   paybackPercent: number | null;
+  adsLeft: number | null;
 };
 
+export type TelegramChannelPerformanceHistoryRange =
+  | "1d"
+  | "7d"
+  | "30d"
+  | "90d"
+  | "all";
+
 export type TelegramChannelPerformanceHistory = {
-  periodDays: number;
+  range: TelegramChannelPerformanceHistoryRange;
+  periodDays: 1 | 7 | 30 | 90 | null;
   currency: string;
   points: TelegramChannelPerformanceHistoryPoint[];
 };

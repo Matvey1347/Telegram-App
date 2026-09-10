@@ -1,0 +1,318 @@
+.item,
+.iconTile,
+.icon {
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    filter 180ms ease;
+}
+
+.item:active .iconTile {
+  background: rgb(14 165 233 / 0.2);
+  border-color: rgb(56 189 248 / 0.32);
+}
+
+.active .iconTile {
+  background: rgb(14 165 233 / 0.12);
+}
+
+.active .icon {
+  color: rgb(186 230 253);
+  filter: drop-shadow(0 0 5px rgb(125 211 252 / 30%));
+}
+
+/* Every glyph is animated internally. The tile itself never jumps. */
+.item:hover .icon > *,
+.active .icon > *,
+.pageIcon .icon > * {
+  animation: finance-navigation-stroke 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* Lucide paths vary substantially in length. A short repeating dash cut the
+     landmark roof, tag outline and pig body into visible fragments. */
+  stroke-dasharray: 120;
+}
+
+.item:hover .icon > :nth-child(2),
+.active .icon > :nth-child(2),
+.pageIcon .icon > :nth-child(2) {
+  animation-delay: 70ms;
+}
+.item:hover .icon > :nth-child(3),
+.active .icon > :nth-child(3),
+.pageIcon .icon > :nth-child(3) {
+  animation-delay: 140ms;
+}
+.item:hover .icon > :nth-child(4),
+.active .icon > :nth-child(4),
+.pageIcon .icon > :nth-child(4) {
+  animation-delay: 210ms;
+}
+.item:hover .icon > :nth-child(5),
+.active .icon > :nth-child(5),
+.pageIcon .icon > :nth-child(5) {
+  animation-delay: 280ms;
+}
+
+.active .icon > * {
+  animation-duration: 760ms;
+  animation-iteration-count: 1;
+}
+
+/* Overview: the roof settles first, then the columns and base lock in. */
+.item[data-finance-nav-id="home"] .icon > *,
+.pageIcon[data-finance-nav-id="home"] .icon > * {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+.item[data-finance-nav-id="home"]:hover .icon > :nth-child(2),
+.item[data-finance-nav-id="home"].active .icon > :nth-child(2),
+.pageIcon[data-finance-nav-id="home"] .icon > :nth-child(2) {
+  animation-name: finance-navigation-roof;
+}
+.item[data-finance-nav-id="home"]:hover .icon > :not(:nth-child(2)),
+.item[data-finance-nav-id="home"].active .icon > :not(:nth-child(2)),
+.pageIcon[data-finance-nav-id="home"] .icon > :not(:nth-child(2)) {
+  animation-name: finance-navigation-column;
+}
+
+/* Operations: rows assemble one after another. */
+.item[data-finance-nav-id="transactions"] .icon > *,
+.pageIcon[data-finance-nav-id="transactions"] .icon > * {
+  transform-box: fill-box;
+  transform-origin: left center;
+}
+.item[data-finance-nav-id="transactions"]:hover .icon > *,
+.item[data-finance-nav-id="transactions"].active .icon > *,
+.pageIcon[data-finance-nav-id="transactions"] .icon > * {
+  animation-name: finance-navigation-row;
+}
+
+/* Analytics and investments: columns breathe and the trend is redrawn. */
+.item[data-finance-nav-id="analytics"] .icon > *,
+.item[data-finance-nav-id="investments"] .icon > *,
+.pageIcon[data-finance-nav-id="analytics"] .icon > *,
+.pageIcon[data-finance-nav-id="investments"] .icon > * {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+.item[data-finance-nav-id="analytics"]:hover .icon > *,
+.item[data-finance-nav-id="analytics"].active .icon > *,
+.pageIcon[data-finance-nav-id="analytics"] .icon > * {
+  animation-name: finance-navigation-trend;
+}
+.item[data-finance-nav-id="investments"]:hover .icon > *,
+.item[data-finance-nav-id="investments"].active .icon > *,
+.pageIcon[data-finance-nav-id="investments"] .icon > * {
+  animation-name: finance-navigation-trend;
+}
+
+/* Transfers: the two directions cross and settle. */
+.item[data-finance-nav-id="transfers"] .icon > *,
+.pageIcon[data-finance-nav-id="transfers"] .icon > * {
+  transform-box: fill-box;
+}
+.item[data-finance-nav-id="transfers"]:hover .icon > :nth-child(odd),
+.item[data-finance-nav-id="transfers"].active .icon > :nth-child(odd),
+.pageIcon[data-finance-nav-id="transfers"] .icon > :nth-child(odd) {
+  animation-name: finance-navigation-transfer-right;
+}
+.item[data-finance-nav-id="transfers"]:hover .icon > :nth-child(even),
+.item[data-finance-nav-id="transfers"].active .icon > :nth-child(even),
+.pageIcon[data-finance-nav-id="transfers"] .icon > :nth-child(even) {
+  animation-name: finance-navigation-transfer-left;
+}
+
+/* Budget tiles and account cards settle into their grid. */
+.item[data-finance-nav-id="budget"] .icon > *,
+.item[data-finance-nav-id="accounts"] .icon > *,
+.pageIcon[data-finance-nav-id="budget"] .icon > *,
+.pageIcon[data-finance-nav-id="accounts"] .icon > * {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.item[data-finance-nav-id="budget"]:hover .icon > *,
+.item[data-finance-nav-id="budget"].active .icon > *,
+.pageIcon[data-finance-nav-id="budget"] .icon > * {
+  animation-name: finance-navigation-tile-in;
+}
+.item[data-finance-nav-id="accounts"]:hover .icon > *,
+.item[data-finance-nav-id="accounts"].active .icon > *,
+.pageIcon[data-finance-nav-id="accounts"] .icon > * {
+  animation-name: finance-navigation-card-in;
+}
+
+.item[data-finance-nav-id="billing"]:hover .icon > *,
+.item[data-finance-nav-id="billing"].active .icon > *,
+.pageIcon[data-finance-nav-id="billing"] .icon > * {
+  animation-name: finance-navigation-card-in;
+}
+
+@keyframes finance-navigation-stroke {
+  from {
+    opacity: 0.35;
+    stroke-dashoffset: 120;
+  }
+  to {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes finance-navigation-roof {
+  0%,
+  8% {
+    opacity: 0;
+    transform: translateY(-2px) scaleX(0.78);
+    stroke-dashoffset: 120;
+  }
+  48% {
+    opacity: 1;
+    transform: translateY(0.5px) scaleX(1.02);
+    stroke-dashoffset: 0;
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes finance-navigation-column {
+  0%,
+  14% {
+    opacity: 0.25;
+    transform: scaleY(0.45);
+    stroke-dashoffset: 120;
+  }
+  55% {
+    opacity: 1;
+    transform: scaleY(1.04);
+    stroke-dashoffset: 0;
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes finance-navigation-row {
+  0%,
+  10% {
+    opacity: 0;
+    transform: translateX(-5px) scaleX(0.45);
+    stroke-dashoffset: 120;
+  }
+  38%,
+  86% {
+    opacity: 1;
+    transform: translateX(0) scaleX(1);
+    stroke-dashoffset: 0;
+  }
+  100% {
+    opacity: 0.82;
+    transform: none;
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes finance-navigation-trend {
+  0%,
+  10% {
+    opacity: 0.3;
+    transform: translateY(3px);
+    stroke-dashoffset: 120;
+  }
+  44%,
+  84% {
+    opacity: 1;
+    transform: translateY(-1px);
+    stroke-dashoffset: 0;
+  }
+  100% {
+    opacity: 0.86;
+    transform: none;
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes finance-navigation-transfer-right {
+  0%,
+  12% {
+    opacity: 0.35;
+    transform: translateX(-4px);
+    stroke-dashoffset: 120;
+  }
+  40%,
+  88% {
+    opacity: 1;
+    transform: translateX(1px);
+    stroke-dashoffset: 0;
+  }
+  100% {
+    transform: none;
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes finance-navigation-transfer-left {
+  0%,
+  12% {
+    opacity: 0.35;
+    transform: translateX(4px);
+    stroke-dashoffset: 120;
+  }
+  40%,
+  88% {
+    opacity: 1;
+    transform: translateX(-1px);
+    stroke-dashoffset: 0;
+  }
+  100% {
+    transform: none;
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes finance-navigation-tile-in {
+  0%,
+  10% {
+    opacity: 0.2;
+    transform: scale(0.55) rotate(-5deg);
+  }
+  40%,
+  88% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0.86;
+    transform: none;
+  }
+}
+@keyframes finance-navigation-card-in {
+  0%,
+  10% {
+    opacity: 0.3;
+    transform: translateY(3px) scale(0.9);
+    stroke-dashoffset: 120;
+  }
+  42%,
+  88% {
+    opacity: 1;
+    transform: none;
+    stroke-dashoffset: 0;
+  }
+  100% {
+    opacity: 0.86;
+    stroke-dashoffset: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .item,
+  .iconTile,
+  .icon,
+  .icon > *,
+  .active .iconTile,
+  .pageIcon,
+  .pageIcon .icon,
+  .pageIcon .icon > * {
+    animation: none !important;
+    transition: none;
+    transform: none !important;
+    stroke-dashoffset: 0;
+  }
+}

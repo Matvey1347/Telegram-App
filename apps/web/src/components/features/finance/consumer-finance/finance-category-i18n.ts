@@ -1,4 +1,4 @@
-import type { FinanceLocale } from "./finance-i18n";
+import type { FinanceLocale } from "./i18n/core";
 
 const categoryNames: Record<string, Record<FinanceLocale, string>> = {
   food: { en: "Food", uk: "Їжа", ru: "Еда" },

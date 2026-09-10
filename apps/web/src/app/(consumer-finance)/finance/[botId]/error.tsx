@@ -1,9 +1,12 @@
 "use client";
 
-import { financeCopy, normalizeFinanceLocale } from "@/components/features/finance/consumer-finance/finance-i18n";
+import {
+  financeCoreCopy,
+  normalizeFinanceLocale,
+} from "@/components/features/finance/consumer-finance/i18n/core";
 
 export default function FinanceMiniAppError({ reset }: { reset: () => void }) {
-  const t = financeCopy(
+  const t = financeCoreCopy(
     normalizeFinanceLocale(
       typeof navigator === "undefined" ? undefined : navigator.language,
     ),

@@ -1,12 +1,9 @@
 import type {
+  ConsumerFinanceAiInsight,
+  ConsumerFinanceAiInsightInput,
   ConsumerFinanceAnalytics,
   ConsumerFinanceAnalyticsQuery,
   ConsumerFinanceDashboard,
-  ConsumerFinanceUltimateAnalytics,
-  ConsumerFinanceUltimateAnalyticsPeriod,
-  ConsumerFinanceUltimateAnswer,
-  ConsumerFinanceUltimateOverview,
-  ConsumerFinanceUltimateQuestionInput,
 } from "@telegram-system/shared";
 import {
   consumerFinanceHttp,
@@ -29,29 +26,9 @@ export const consumerFinanceInsightsApi = {
         consumerRequest({ params: query }),
       )
     ).data,
-  ultimateOverview: async (botId: string) =>
+  askFinance: async (botId: string, payload: ConsumerFinanceAiInsightInput) =>
     (
-      await consumerFinanceHttp.get<ConsumerFinanceUltimateOverview>(
-        `${consumerFinanceRoot(botId)}/ultimate/overview`,
-        consumerRequest(),
-      )
-    ).data,
-  ultimateAnalytics: async (
-    botId: string,
-    period: ConsumerFinanceUltimateAnalyticsPeriod,
-  ) =>
-    (
-      await consumerFinanceHttp.get<ConsumerFinanceUltimateAnalytics>(
-        `${consumerFinanceRoot(botId)}/ultimate/analytics`,
-        consumerRequest({ params: { period } }),
-      )
-    ).data,
-  askFinance: async (
-    botId: string,
-    payload: ConsumerFinanceUltimateQuestionInput,
-  ) =>
-    (
-      await consumerFinanceHttp.post<ConsumerFinanceUltimateAnswer>(
+      await consumerFinanceHttp.post<ConsumerFinanceAiInsight>(
         `${consumerFinanceRoot(botId)}/ultimate/ask`,
         payload,
         consumerRequest(),

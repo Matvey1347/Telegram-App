@@ -48,6 +48,7 @@ import { TelegramInviteHistoryService } from './telegram-invite-history.service'
 import { TelegramInvitePersistenceService } from './telegram-invite-persistence.service';
 import { TelegramInviteSnapshotStore } from './telegram-invite-snapshot.store';
 import { TelegramInviteSyncService } from './telegram-invite-sync.service';
+import { TelegramInviteLinkRegistrationService } from './telegram-invite-link-registration.service';
 import { TelegramManagedPostBulkService } from './telegram-managed-post-bulk.service';
 import { TelegramManagedPostCommandService } from './telegram-managed-post-command.service';
 import { TelegramManagedPostEditTransportService } from './telegram-managed-post-edit-transport.service';
@@ -106,6 +107,7 @@ import { TelegramManagedPostRemoteDeletionService } from './telegram-managed-pos
     TelegramInvitePersistenceService,
     TelegramInviteHistoryService,
     TelegramInviteSyncService,
+    TelegramInviteLinkRegistrationService,
     TelegramManagedPostPresentationService,
     TelegramManagedPostRevisionStore,
     TelegramManagedPostEditTransportService,
@@ -186,6 +188,7 @@ import { TelegramManagedPostRemoteDeletionService } from './telegram-managed-pos
     TelegramManagedPostMediaStorageService,
     TelegramManagedPostRemoteDeletionService,
     TelegramBroadcastStatsService,
+    TelegramInviteLinkRegistrationService,
   ],
 })
 export class TelegramChannelsModule {}

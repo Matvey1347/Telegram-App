@@ -41,6 +41,8 @@ import {
   financeBotIncomingFile,
   FinanceBotIconInputService,
 } from './finance-bot-icon-input.service';
+import { FinanceRegularPaymentCallbackHandler } from './finance-regular-payment-callback.handler';
+import { parseFinanceFlowCallback } from './finance-bot-flow-callback';
 @Injectable()
 export class FinanceBotService {
   private readonly flowMessages: FinanceBotFlowMessenger;
@@ -59,6 +61,7 @@ export class FinanceBotService {
     private readonly browserLogin: FinanceBotBrowserLogin,
     private readonly iconInput: FinanceBotIconInputService,
     flowPresenter: FinanceChatFlowPresenterService,
+    private readonly regularPaymentCallbacks?: FinanceRegularPaymentCallbackHandler,
   ) {
     this.flowMessages = new FinanceBotFlowMessenger(
       interactive,
@@ -123,6 +126,15 @@ export class FinanceBotService {
     }
     const chatId = user.telegramChatId;
     if (!chatId) return;
+    if (
+      await this.regularPaymentCallbacks?.handle({
+        context,
+        profileId: profile.id,
+        chatId,
+        locale,
+      })
+    )
+      return;
     const sendAccounts = () =>
       this.chat.sendAccounts(
         context,
@@ -152,37 +164,8 @@ export class FinanceBotService {
     }
     const callback = context.update.callback_query;
     if (callback?.data?.startsWith('fin:flow:')) {
-      const [, , action, argument] = callback.data.split(':');
-      const separator = argument?.indexOf('.') ?? -1;
-      const selectionAction = [
-        'account',
-        'category',
-        'parent',
-        'type',
-        'currency',
-        'language',
-        'page',
-        'emoji',
-      ].includes(action);
-      const revision =
-        separator >= 0
-          ? argument.slice(0, separator)
-          : selectionAction
-            ? undefined
-            : argument;
-      const callbackId =
-        separator >= 0
-          ? argument.slice(separator + 1)
-          : selectionAction
-            ? argument
-            : undefined;
-      const entityId = [
-        'edit-account',
-        'edit-category',
-        'archive-category',
-      ].includes(action)
-        ? argument
-        : callbackId;
+      const { action, revision, callbackId, entityId } =
+        parseFinanceFlowCallback(callback.data);
       const flowInput = financeBotFlowInput(
         profile.id,
         context.bot.id,

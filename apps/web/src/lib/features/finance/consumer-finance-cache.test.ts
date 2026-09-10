@@ -11,6 +11,7 @@ describe("consumer Finance transaction cache", () => {
     const client = new QueryClient();
     const expenseKey = consumerFinanceKeys.transactions("bot-1", {
       type: "EXPENSE",
+      purpose: "ORDINARY",
       accountId: "a",
       search: "coffee",
     });
@@ -21,6 +22,7 @@ describe("consumer Finance transaction cache", () => {
       id: "one",
       accountId: "a",
       type: "EXPENSE",
+      purpose: "ORDINARY",
       amount: "5",
       currency: "USD",
       occurredAt: "2026-08-21T12:00:00.000Z",
@@ -59,6 +61,7 @@ describe("consumer Finance transaction cache", () => {
       id: "one",
       accountId: "a",
       type: "EXPENSE",
+      purpose: "ORDINARY",
       amount: "5",
       currency: "USD",
       occurredAt: "2026-08-21T12:00:00.000Z",
@@ -91,6 +94,7 @@ describe("consumer Finance transaction cache", () => {
       id: "old",
       accountId: "a",
       type: "EXPENSE",
+      purpose: "ORDINARY",
       amount: "1",
       currency: "USD",
       occurredAt: "2026-08-01T12:00:00.000Z",
@@ -139,6 +143,7 @@ describe("consumer Finance transaction cache", () => {
         id: "local-day",
         accountId: "a",
         type: "EXPENSE",
+        purpose: "ORDINARY",
         amount: "1",
         currency: "USD",
         occurredAt: "2026-08-20T22:00:00.000Z",

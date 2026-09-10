@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 const MAX_CURRENT_RATE_AGE_MS = 48 * 60 * 60 * 1000;
@@ -8,6 +9,8 @@ type CurrencyRateRow = {
   rate: unknown;
   date: Date;
 };
+
+type DatedCurrencyRateRow = CurrencyRateRow & { asOf: Date };
 
 export type CurrencyRateResult =
   | { available: true; rate: number; rateAt: Date; stale: false }
@@ -117,6 +120,27 @@ function resolveRateMetadata(
   };
 }
 
+function preparedRateSource(
+  rows: CurrencyRateRow[],
+  date?: Date,
+): PreparedCurrencyRateSource {
+  const graph = buildRateGraph(rows);
+  const getRateMetadata = (fromCurrency: string, toCurrency: string) =>
+    Promise.resolve(resolveRateMetadata(graph, fromCurrency, toCurrency, date));
+  const getRate = async (fromCurrency: string, toCurrency: string) => {
+    const result = await getRateMetadata(fromCurrency, toCurrency);
+    return result.available ? result.rate : null;
+  };
+  return {
+    getRateMetadata,
+    getRate,
+    convertCurrency: async (amount, fromCurrency, toCurrency) => {
+      const rate = await getRate(fromCurrency, toCurrency);
+      return rate == null ? null : amount * rate;
+    },
+  };
+}
+
 /** Resolves one bounded, in-memory graph from persisted workspace rates. */
 @Injectable()
 export class CurrencyConversionService {
@@ -127,33 +151,55 @@ export class CurrencyConversionService {
     workspaceId: string,
     date?: Date,
   ): Promise<PreparedCurrencyRateSource> {
-    const rows = await this.prisma.exchangeRate.findMany({
-      where: { workspaceId, ...(date ? { date: { lte: date } } : {}) },
-      select: {
-        baseCurrency: true,
-        targetCurrency: true,
-        rate: true,
-        date: true,
-      },
-      orderBy: { date: 'desc' },
-    });
-    const graph = buildRateGraph(rows);
-    const getRateMetadata = (fromCurrency: string, toCurrency: string) =>
-      Promise.resolve(
-        resolveRateMetadata(graph, fromCurrency, toCurrency, date),
-      );
-    const getRate = async (fromCurrency: string, toCurrency: string) => {
-      const result = await getRateMetadata(fromCurrency, toCurrency);
-      return result.available ? result.rate : null;
-    };
-    return {
-      getRateMetadata,
-      getRate,
-      convertCurrency: async (amount, fromCurrency, toCurrency) => {
-        const rate = await getRate(fromCurrency, toCurrency);
-        return rate == null ? null : amount * rate;
-      },
-    };
+    // One latest row per directed pair bounds memory by the configured
+    // currency graph rather than by the workspace's full rate history.
+    const rows = await this.prisma.$queryRaw<CurrencyRateRow[]>(Prisma.sql`
+      SELECT DISTINCT ON ("baseCurrency", "targetCurrency")
+        "baseCurrency", "targetCurrency", "rate", "date"
+      FROM "ExchangeRate"
+      WHERE "workspaceId" = ${workspaceId}
+        ${date ? Prisma.sql`AND "date" <= ${date}` : Prisma.empty}
+      ORDER BY "baseCurrency", "targetCurrency", "date" DESC
+    `);
+    return preparedRateSource(rows, date);
+  }
+
+  /** Loads all requested historical graphs in one bounded database round-trip. */
+  async prepareHistoricalRateSources(workspaceId: string, dates: Date[]) {
+    const unique = [
+      ...new Map(dates.map((date) => [date.toISOString(), date])).values(),
+    ];
+    if (!unique.length) return new Map<string, PreparedCurrencyRateSource>();
+    const values = Prisma.join(unique.map((date) => Prisma.sql`(${date})`));
+    const rows = await this.prisma.$queryRaw<DatedCurrencyRateRow[]>(Prisma.sql`
+      WITH requested("asOf") AS (VALUES ${values})
+      SELECT
+        requested."asOf",
+        rate."baseCurrency",
+        rate."targetCurrency",
+        rate."rate",
+        rate."date"
+      FROM requested
+      CROSS JOIN LATERAL (
+        SELECT DISTINCT ON ("baseCurrency", "targetCurrency")
+          "baseCurrency", "targetCurrency", "rate", "date"
+        FROM "ExchangeRate"
+        WHERE "workspaceId" = ${workspaceId}
+          AND "date" <= requested."asOf"
+        ORDER BY "baseCurrency", "targetCurrency", "date" DESC
+      ) AS rate
+    `);
+    const grouped = new Map<string, CurrencyRateRow[]>();
+    for (const row of rows) {
+      const key = row.asOf.toISOString();
+      grouped.set(key, [...(grouped.get(key) ?? []), row]);
+    }
+    return new Map(
+      unique.map((date) => [
+        date.toISOString(),
+        preparedRateSource(grouped.get(date.toISOString()) ?? [], date),
+      ]),
+    );
   }
 
   async getRateMetadata(

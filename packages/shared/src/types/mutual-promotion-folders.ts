@@ -46,6 +46,14 @@ export type CreateMutualPromotionFolderPayload = {
 export type UpdateMutualPromotionFolderPayload =
   CreateMutualPromotionFolderPayload;
 
+export type UpdateMutualPromotionInviteLinksPayload = {
+  participants: Array<{
+    participantId: string;
+    inviteLinkId: string;
+    inviteLinkMode: MutualPromotionInviteLinkMode;
+  }>;
+};
+
 export type CreateMutualPromotionPostPayload = {
   importWorkflowId: string;
   posts: Array<{
@@ -90,6 +98,14 @@ export type MutualPromotionInviteLinkOption = {
   } | null;
 };
 
+export type ImportMutualPromotionInviteLinkPayload = {
+  telegramChannelId: string;
+  url: string;
+  folderId?: string;
+  startsAt?: string;
+  endsAt?: string;
+};
+
 export type MutualPromotionFolderListItem = {
   id: string;
   title: string;
@@ -102,6 +118,13 @@ export type MutualPromotionFolderListItem = {
   publisherCount: number;
   paidCount: number;
   postCount: number;
+  channels: Array<{
+    id: string;
+    title: string;
+    username: string | null;
+    photoUrl: string | null;
+    role: MutualPromotionParticipantRole;
+  }>;
   createdAt: string;
   updatedAt: string;
 };
@@ -122,7 +145,11 @@ export type MutualPromotionFolderParticipantStats = {
   audienceDelta: number | null;
   subscriberPrice: number | null;
   currency: string | null;
-  dataQuality: "PENDING" | "CACHED_BOUNDARIES" | "INCOMPLETE";
+  dataQuality:
+    | "PENDING"
+    | "CURRENT_COUNTERS"
+    | "CACHED_BOUNDARIES"
+    | "INCOMPLETE";
 };
 
 export type MutualPromotionFolderParticipant = {
@@ -140,6 +167,15 @@ export type MutualPromotionFolderParticipant = {
     id: string;
     name: string;
     url: string;
+    joinedCount: number;
+    creatorUsername: string | null;
+    creatorFirstName: string | null;
+    creatorPhotoUrl: string | null;
+    creatorMember: {
+      id: string;
+      name: string;
+      avatarPresentation: ResolvedEmoji | null;
+    } | null;
   };
   subscribersAtStart: number | null;
   subscribersAtEnd: number | null;

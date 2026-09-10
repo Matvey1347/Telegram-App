@@ -222,6 +222,17 @@ describe('scheduled task registry executors', () => {
       definitions.find((item) => item.key === 'operational_history.cleanup'),
     ).toMatchObject({ scope: 'SYSTEM_MAINTENANCE' });
     expect(
+      definitions.find((item) => item.key === 'application_logs.cleanup'),
+    ).toMatchObject({
+      scope: 'SYSTEM_MAINTENANCE',
+      defaultSchedule: {
+        frequency: 'DAILY',
+        time: '00:00',
+        timezone: 'Europe/Warsaw',
+      },
+      scheduleEditable: false,
+    });
+    expect(
       definitions.find((item) => item.key === 'mutual_promotion.lifecycle'),
     ).toMatchObject({
       scope: 'SYSTEM_MAINTENANCE',

@@ -234,9 +234,6 @@ export function resolveRouteTabIdentity({
   if (pathname === "/account") {
     return { title: pageTitle("Profile"), emoji: "👤", color: "#0f766e" };
   }
-  if (pathname === "/system-logs") {
-    return { title: pageTitle("Logs"), emoji: "🐞", color: "#7f1d1d" };
-  }
   if (pathname === "/login") {
     return { title: pageTitle("Sign in"), emoji: "🔐", color: "#1d4ed8" };
   }

@@ -43,4 +43,13 @@ describe("workspace route access", () => {
   it("falls back to account settings when no product is accessible", () => {
     expect(workspaceLandingPath({ featureIds: [] })).toBe("/account");
   });
+
+  it("allows the consolidated settings hub for operations and members roles", () => {
+    expect(
+      workspacePathIsAllowed("/settings", { featureIds: ["operations"] }),
+    ).toBe(true);
+    expect(
+      workspacePathIsAllowed("/settings", { featureIds: ["members"] }),
+    ).toBe(true);
+  });
 });

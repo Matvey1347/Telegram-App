@@ -1,5 +1,5 @@
-import { MutualPromotionFoldersPage } from "@/components/features/growth/ad-campaigns/mutual-promotion/mutual-promotion-folders-page";
+import { redirect } from "next/navigation";
 
 export default function MutualPromotionPage() {
-  return <MutualPromotionFoldersPage />;
+  redirect("/ad-campaigns?section=mutual-promotion");
 }

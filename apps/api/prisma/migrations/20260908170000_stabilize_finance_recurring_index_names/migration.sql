@@ -1,0 +1,11 @@
+ALTER INDEX "FinanceRecurringPayment_profileId_status_nextOccurrenceAt_id_id"
+  RENAME TO "FinanceRecurringPayment_profile_status_next_idx";
+
+ALTER INDEX "FinanceRecurringPaymentRevision_recurringPaymentId_effectiveAt_"
+  RENAME TO "FinanceRecurringPaymentRevision_payment_effective_idx";
+
+ALTER INDEX "FinanceRecurringPaymentOccurrence_recurringPaymentId_scheduledF"
+  RENAME TO "FinanceRecurringPaymentOccurrence_payment_scheduled_key";
+
+ALTER INDEX "FinanceRecurringPaymentOccurrence_recurringPaymentId_confirmedA"
+  RENAME TO "FinanceRecurringPaymentOccurrence_payment_confirmed_idx";

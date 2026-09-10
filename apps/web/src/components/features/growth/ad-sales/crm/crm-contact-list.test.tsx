@@ -197,6 +197,7 @@ describe("CrmContactCard", () => {
   });
 
   it.each([
+    ["WAITING_FOR_CLIENT", "Waiting for client"],
     ["FIRST_INBOUND_READ", "First message · read"],
     ["FIRST_INBOUND_UNREAD", "First message · unread"],
     ["CONVERSATION_UNANSWERED_READ", "Awaiting reply · read"],
@@ -229,7 +230,9 @@ describe("CrmContactCard", () => {
       expect(screen.getByText(label)).toBeInTheDocument();
       expect(screen.getByText("In 7+ · Out 3+")).toBeInTheDocument();
       expect(container.querySelector("article")).toHaveClass(
-        "border-rose-800/80",
+        status === "WAITING_FOR_CLIENT"
+          ? "border-neutral-800"
+          : "border-rose-800/80",
       );
       if (status.startsWith("CONVERSATION_")) {
         fireEvent.click(

@@ -21,14 +21,18 @@ import { StreamResponseService } from '../../../common/stream/stream-response.se
 import {
   CreateMutualPromotionFolderDto,
   CreateMutualPromotionPostDto,
+  ImportMutualPromotionInviteLinkDto,
   MutualPromotionExpenseDto,
   MutualPromotionFolderQueryDto,
   MutualPromotionInviteOptionsQueryDto,
   UpdateMutualPromotionFolderDto,
+  UpdateMutualPromotionInviteLinksDto,
   UpdateMutualPromotionPostDto,
 } from './dto';
 import { MutualPromotionCommandService } from './mutual-promotion-command.service';
 import { MutualPromotionExpenseService } from './mutual-promotion-expense.service';
+import { MutualPromotionInviteLinkEditService } from './mutual-promotion-invite-link-edit.service';
+import { MutualPromotionInviteLinkImportService } from './mutual-promotion-invite-link-import.service';
 import { MutualPromotionReadService } from './mutual-promotion-read.service';
 
 @UseGuards(JwtAuthGuard)
@@ -37,6 +41,8 @@ export class MutualPromotionFoldersController {
   constructor(
     private readonly commands: MutualPromotionCommandService,
     private readonly expenses: MutualPromotionExpenseService,
+    private readonly inviteLinkEdits: MutualPromotionInviteLinkEditService,
+    private readonly inviteLinkImports: MutualPromotionInviteLinkImportService,
     private readonly reads: MutualPromotionReadService,
     private readonly streamResponse: StreamResponseService,
   ) {}
@@ -55,6 +61,14 @@ export class MutualPromotionFoldersController {
     @Query() query: MutualPromotionInviteOptionsQueryDto,
   ) {
     return this.reads.inviteLinkOptions(user.sub, query);
+  }
+
+  @Post('invite-link-options/import')
+  importInviteLink(
+    @CurrentUser() user: JwtUser,
+    @Body() dto: ImportMutualPromotionInviteLinkDto,
+  ) {
+    return this.inviteLinkImports.import(user.sub, dto);
   }
 
   @Post()
@@ -77,6 +91,15 @@ export class MutualPromotionFoldersController {
     @Body() dto: UpdateMutualPromotionFolderDto,
   ) {
     return this.commands.update(user.sub, id, dto);
+  }
+
+  @Patch(':id/invite-links')
+  updateInviteLinks(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateMutualPromotionInviteLinksDto,
+  ) {
+    return this.inviteLinkEdits.update(user.sub, id, dto);
   }
 
   @Post(':id/posts')

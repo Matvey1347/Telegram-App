@@ -1,0 +1,374 @@
+.scene,
+.remindersScene {
+  transform-origin: center;
+  animation: finance-scene-enter 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.summaryCard,
+.ledgerRow,
+.categoryChild,
+.balanceCard,
+.budgetTile,
+.featurePill,
+.settingRow,
+.notificationCard {
+  animation: finance-item-enter 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.summaryCard rect:first-child,
+.ledgerRow rect:first-child,
+.accountCard rect:first-child,
+.categoryParent rect:first-child,
+.categoryChild rect:first-child,
+.balanceCard rect:first-child,
+.calendarCard rect:first-child,
+.paymentCard rect:first-child,
+.budgetTile rect:first-child,
+.featurePill rect:first-child,
+.settingRow rect:first-child,
+.notificationCard rect:first-child {
+  fill: #151d26;
+  stroke: rgb(255 255 255 / 0.1);
+}
+
+.summaryCard rect:not(:first-child),
+.ledgerRow rect:not(:first-child),
+.accountCard rect:not(:first-child),
+.categoryParent rect:not(:first-child),
+.categoryChild rect:not(:first-child),
+.balanceCard rect:not(:first-child),
+.paymentCard rect:not(:first-child),
+.budgetTile rect:not(:first-child),
+.featurePill rect:not(:first-child),
+.settingRow rect:not(:first-child),
+.notificationCard rect:not(:first-child) {
+  fill: #526171;
+}
+
+.summaryCard rect:nth-of-type(3),
+.accountCard rect:last-child,
+.balanceCard rect:last-child,
+.paymentCard rect:last-child,
+.featurePill circle,
+.notificationCard rect:last-of-type {
+  fill: currentColor;
+  fill-opacity: 0.42;
+}
+
+.summaryCard path,
+.chartAxis,
+.chartBars {
+  fill: none;
+  stroke: #465362;
+  stroke-linecap: round;
+}
+
+.ledgerRow circle,
+.categoryParent circle,
+.categoryChild circle {
+  fill: currentColor;
+  fill-opacity: 0.28;
+  stroke: currentColor;
+  stroke-opacity: 0.48;
+}
+
+.backCard {
+  fill: #0e151d;
+  stroke: currentColor;
+  stroke-opacity: 0.16;
+  transform-origin: 329px 62px;
+  animation: finance-back-card 680ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.accountCard {
+  fill: #151d26;
+  stroke: rgb(255 255 255 / 0.12);
+  animation: finance-account-card 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.accountCard circle {
+  fill: currentColor;
+  fill-opacity: 0.14;
+  stroke: currentColor;
+  stroke-opacity: 0.45;
+}
+
+.treeConnector,
+.exchangeArrows,
+.recurringArrow,
+.goalFlag {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  stroke-dasharray: 240;
+  animation: finance-line-draw 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.chartArea {
+  fill: currentColor;
+  fill-opacity: 0.07;
+}
+
+.chartLine {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.4;
+  stroke-dasharray: 520;
+  animation: finance-line-draw 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.chartPoint {
+  fill: #0a0f15;
+  stroke: currentColor;
+  stroke-width: 1.7;
+}
+
+.chartEndpoint {
+  fill: currentColor;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: finance-endpoint-enter 520ms cubic-bezier(0.22, 1, 0.36, 1) 820ms
+    both;
+}
+
+.chartBars {
+  stroke-width: 5;
+}
+
+.calendarCard {
+  fill: #151d26;
+  stroke: rgb(255 255 255 / 0.12);
+  stroke-linecap: round;
+  stroke-width: 2;
+  animation: finance-item-enter 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.calendarCard rect:not(:first-child) {
+  fill: currentColor;
+  fill-opacity: 0.15;
+  stroke: currentColor;
+  stroke-opacity: 0.28;
+}
+
+.paymentCard {
+  animation: finance-item-enter 560ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
+}
+
+.goalTrack {
+  fill: #151d26;
+  stroke: rgb(255 255 255 / 0.1);
+}
+
+.goalProgress {
+  fill: currentColor;
+  fill-opacity: 0.18;
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: finance-progress-enter 820ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.savingsCoin {
+  fill: #0e1821;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  animation: finance-coin-enter 760ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.investmentBar {
+  fill: currentColor;
+  fill-opacity: 0.2;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: finance-bar-enter 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.bell {
+  fill: #111a23;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+  transform-origin: 280px 38px;
+  animation: finance-bell-settle 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.notificationCard {
+  transform-origin: left center;
+}
+
+.planShield {
+  fill: currentColor;
+  fill-opacity: 0.08;
+  stroke: currentColor;
+  stroke-opacity: 0.65;
+  stroke-width: 2;
+}
+
+.planCheck {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4;
+  stroke-dasharray: 70;
+  animation: finance-line-draw 680ms cubic-bezier(0.22, 1, 0.36, 1) 160ms both;
+}
+
+.settingRow circle {
+  fill: #d5dee8;
+}
+
+.toggleOn {
+  fill: currentColor !important;
+  fill-opacity: 0.35 !important;
+}
+
+@keyframes finance-scene-enter {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes finance-item-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-7px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes finance-line-draw {
+  from {
+    opacity: 0.3;
+    stroke-dashoffset: 520;
+  }
+  to {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes finance-back-card {
+  from {
+    opacity: 0;
+    transform: translate(-12px, 9px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes finance-account-card {
+  from {
+    opacity: 0;
+    transform: translate(10px, -6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes finance-progress-enter {
+  from {
+    opacity: 0.3;
+    transform: scaleX(0.12);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes finance-coin-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-80px) rotate(-90deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes finance-bar-enter {
+  from {
+    opacity: 0.25;
+    transform: scaleY(0.12);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes finance-endpoint-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes finance-bell-settle {
+  0% {
+    opacity: 0;
+    transform: translateY(-5px) rotate(-5deg);
+  }
+  58% {
+    opacity: 1;
+    transform: rotate(3deg);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene,
+  .remindersScene,
+  .summaryCard,
+  .ledgerRow,
+  .categoryChild,
+  .balanceCard,
+  .budgetTile,
+  .featurePill,
+  .settingRow,
+  .notificationCard,
+  .backCard,
+  .accountCard,
+  .treeConnector,
+  .exchangeArrows,
+  .recurringArrow,
+  .goalFlag,
+  .chartLine,
+  .chartEndpoint,
+  .calendarCard,
+  .paymentCard,
+  .goalProgress,
+  .savingsCoin,
+  .investmentBar,
+  .bell,
+  .planCheck {
+    animation: none;
+  }
+}

@@ -479,6 +479,11 @@ export type TelegramAdSalePayment = {
 export type TelegramAdSalePaymentDeletionResult = {
   paymentId: string;
   transactionId: string | null;
+  dealAmountCleared: boolean;
+};
+
+export type DeleteTelegramAdSalePaymentOptions = {
+  clearDealAmount?: boolean;
 };
 
 export type TelegramAdSaleChannelBreakdown = {

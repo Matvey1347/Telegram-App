@@ -3,9 +3,7 @@ import {
   BadRequestException,
   Injectable,
 } from '@nestjs/common';
-import { FinanceAiConnectionStatus, FinanceAiProvider } from '@prisma/client';
-import { createHash } from 'crypto';
-import { TokenEncryptionService } from '../../../../common/security/token-encryption.service';
+import { FinanceAiProvider } from '@prisma/client';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { TelegramBotApiClient } from '../../../../telegram/shared/telegram-bot-api.client';
 import { FinanceEntitlementService } from '../billing/finance-entitlement.service';
@@ -13,6 +11,11 @@ import {
   AI_MODEL_POLICY,
   priceAiUsage,
 } from '../../telegram-bots/core/ai-usage-cost';
+import {
+  requestFinanceStructuredResponse,
+  type FinanceAiResponseUsage,
+} from './finance-ai-responses.client';
+import { FinanceAiCredentialService } from './finance-ai-credential.service';
 
 export type AiFinanceOperation = {
   type: 'INCOME' | 'EXPENSE';
@@ -84,7 +87,7 @@ const operationSchema = {
 export class FinanceAiProviderService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly encryption: TokenEncryptionService,
+    private readonly credentials: FinanceAiCredentialService,
     private readonly entitlements: FinanceEntitlementService,
     private readonly botApi: TelegramBotApiClient,
   ) {}
@@ -170,7 +173,7 @@ export class FinanceAiProviderService {
     if (input.fileSize && input.fileSize > maxBytes)
       throw new BadRequestException('Voice message exceeds the 8 MB limit');
 
-    const config = await this.providerConfig(
+    const key = await this.credentials.key(
       input.profileId,
       input.botIntegrationId,
     );
@@ -196,7 +199,7 @@ export class FinanceAiProviderService {
     return this.transcribeVoiceBytes({
       bytes: downloaded.bytes,
       mime,
-      config,
+      key,
       profileId: input.profileId,
       botIntegrationId: input.botIntegrationId,
     });
@@ -215,14 +218,14 @@ export class FinanceAiProviderService {
     const mime = input.mime.toLowerCase();
     if (!this.isSupportedVoiceMime(mime))
       throw new BadRequestException('Voice message format is not supported');
-    const config = await this.providerConfig(
+    const key = await this.credentials.key(
       input.profileId,
       input.botIntegrationId,
     );
     return this.transcribeVoiceBytes({
       bytes: input.bytes,
       mime,
-      config,
+      key,
       profileId: input.profileId,
       botIntegrationId: input.botIntegrationId,
     });
@@ -231,21 +234,12 @@ export class FinanceAiProviderService {
   private async transcribeVoiceBytes(input: {
     bytes: Buffer;
     mime: string;
-    config: {
-      apiKeyEncrypted: string | null;
-      apiKeyIv: string | null;
-      apiKeyAuthTag: string | null;
-    };
+    key: string;
     profileId: string;
     botIntegrationId: string;
   }) {
     const startedAt = Date.now();
     const model = AI_MODEL_POLICY.VOICE_TRANSCRIPTION;
-    const key = this.encryption.decrypt({
-      encrypted: input.config.apiKeyEncrypted!,
-      iv: input.config.apiKeyIv!,
-      authTag: input.config.apiKeyAuthTag!,
-    });
     const form = new FormData();
     form.set('model', model);
     form.set('response_format', 'verbose_json');
@@ -265,7 +259,7 @@ export class FinanceAiProviderService {
         'https://api.openai.com/v1/audio/transcriptions',
         {
           method: 'POST',
-          headers: { Authorization: `Bearer ${key}` },
+          headers: { Authorization: `Bearer ${input.key}` },
           body: form,
           signal: AbortSignal.timeout(20_000),
         },
@@ -336,7 +330,7 @@ export class FinanceAiProviderService {
     });
     if (!profileIdentity)
       throw new BadRequestException('Finance profile not found');
-    const config = await this.providerConfig(
+    const key = await this.credentials.key(
       input.profileId,
       input.botIntegrationId,
     );
@@ -350,70 +344,22 @@ export class FinanceAiProviderService {
       input.feature,
       model,
     );
-    const key = this.encryption.decrypt({
-      encrypted: config.apiKeyEncrypted!,
-      iv: config.apiKeyIv!,
-      authTag: config.apiKeyAuthTag!,
-    });
     let status = 'FAILED';
-    let usage:
-      | {
-          input_tokens?: number;
-          input_tokens_details?: { cached_tokens?: number };
-          output_tokens?: number;
-        }
-      | undefined;
+    let usage: FinanceAiResponseUsage | undefined;
     try {
-      const response = await fetch('https://api.openai.com/v1/responses', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${key}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          store: false,
-          max_output_tokens: 1200,
-          safety_identifier: createHash('sha256')
-            .update(input.profileId)
-            .digest('hex')
-            .slice(0, 32),
-          input: [{ role: 'user', content: input.content }],
-          text: {
-            format: {
-              type: 'json_schema',
-              name: 'finance_operations',
-              strict: true,
-              schema: operationSchema,
-            },
-          },
-        }),
-        signal: AbortSignal.timeout(20_000),
+      const response = await requestFinanceStructuredResponse({
+        apiKey: key,
+        model,
+        profileId: input.profileId,
+        content: input.content,
+        schema: operationSchema,
+        schemaName: 'finance_operations',
+        maxOutputTokens: 1200,
+        providerFailureMessage: 'Finance AI provider request failed',
       });
-      const body = (await response.json()) as {
-        output_text?: string;
-        output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
-        usage?: {
-          input_tokens?: number;
-          input_tokens_details?: { cached_tokens?: number };
-          output_tokens?: number;
-        };
-        error?: { message?: string };
-      };
-      if (!response.ok)
-        throw new BadGatewayException(
-          response.status === 401
-            ? 'Finance AI credential is invalid'
-            : 'Finance AI provider request failed',
-        );
-      usage = body.usage;
-      const text =
-        body.output_text ||
-        body.output
-          ?.flatMap((item) => item.content || [])
-          .find((item) => item.type === 'output_text')?.text;
-      const parsed = text
-        ? (JSON.parse(text) as { operations?: AiFinanceOperation[] })
+      usage = response.usage;
+      const parsed = response.text
+        ? (JSON.parse(response.text) as { operations?: AiFinanceOperation[] })
         : null;
       if (
         !parsed?.operations?.length ||
@@ -488,29 +434,6 @@ export class FinanceAiProviderService {
       throw new BadGatewayException(
         'Finance AI proposed a date outside the allowed range',
       );
-  }
-
-  private async providerConfig(profileId: string, botIntegrationId: string) {
-    const profile = await this.prisma.financeProfile.findUnique({
-      where: { id: profileId },
-      select: { botIntegration: { select: { workspaceId: true } } },
-    });
-    const rows = profile
-      ? await this.prisma.aiProviderConfig.findMany({
-          where: {
-            workspaceId: profile.botIntegration.workspaceId,
-            provider: FinanceAiProvider.OPENAI,
-            connectionStatus: FinanceAiConnectionStatus.CONNECTED,
-            OR: [{ botIntegrationId }, { botIntegrationId: null }],
-          },
-        })
-      : [];
-    const config =
-      rows.find((row) => row.botIntegrationId === botIntegrationId) ||
-      rows.find((row) => row.botIntegrationId === null);
-    if (!config?.apiKeyEncrypted || !config.apiKeyIv || !config.apiKeyAuthTag)
-      throw new BadGatewayException('Finance AI provider is not connected');
-    return config;
   }
 
   private async recordUsage(input: {

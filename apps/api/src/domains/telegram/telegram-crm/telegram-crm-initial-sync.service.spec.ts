@@ -539,7 +539,7 @@ describe('TelegramCrmInitialSyncService', () => {
     expect(getHistory).toHaveBeenCalledWith({
       telegramUserId: '1',
       telegramAccessHash: 'stored-hash',
-      beforeTelegramMessageId: null,
+      beforeTelegramMessageId: undefined,
       limit: 51,
     });
     expect(batchStore.importHistoryBatch).toHaveBeenCalledWith(

@@ -1,105 +1,218 @@
-import { BadRequestException } from '@nestjs/common';
+import { ForbiddenException } from '@nestjs/common';
+import type { ConsumerFinanceAnalytics } from '@telegram-system/shared';
 import { FinanceUltimateService } from './finance-ultimate.service';
 
-describe('FinanceUltimateService', () => {
-  const profile = {
-    defaultCurrency: 'UAH',
-    timezone: 'Europe/Warsaw',
-    botIntegration: { workspaceId: 'workspace-1' },
-  };
+const context = {
+  profileId: 'profile-1',
+  botIntegrationId: 'bot-1',
+  workspaceId: 'workspace-1',
+  telegramBotUserId: 'user-1',
+};
+const question = {
+  question: 'What changed?',
+  period: 'CURRENT_MONTH' as const,
+};
 
-  it('returns item totals with explicit receipt coverage and never loads transaction rows', async () => {
-    const prisma = {
-      financeProfile: { findUnique: jest.fn().mockResolvedValue(profile) },
-      $queryRaw: jest.fn()
-        .mockResolvedValueOnce([{ label: 'Bread', amount: 860, transactions: BigInt(3) }])
-        .mockResolvedValueOnce([{ purchases: BigInt(112), covered: BigInt(37) }]),
-    };
-    const result = await new FinanceUltimateService(prisma as never, {} as never).items('profile-1', {});
-    expect(result.rows).toEqual([{ name: 'Bread', amount: '860', quantity: null }]);
-    expect(result).toMatchObject({ currency: 'UAH', totalPurchaseCount: 112, availablePurchaseCount: 37 });
-    expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
-    expect(
-      prisma.$queryRaw.mock.calls[0][0].strings.join(''),
-    ).toContain('i."currency" = ');
-    expect(
-      prisma.$queryRaw.mock.calls[1][0].strings.join(''),
-    ).toContain('i."currency" = ');
-  });
-
-  it('only reports a merchant anomaly after a transparent minimum baseline', async () => {
-    const prisma = {
-      financeProfile: { findUnique: jest.fn().mockResolvedValue(profile) },
-      $queryRaw: jest.fn().mockResolvedValue([{ label: 'Taxi', current: 470, average: 100, occurredAt: new Date('2026-01-01') }]),
-    };
-    const result = await new FinanceUltimateService(prisma as never, {} as never).anomalies('profile-1');
-    expect(result.anomalies).toEqual([expect.objectContaining({ merchant: 'Taxi', amount: '470', usualAmount: '100', multiple: 4.7 })]);
-  });
-
-  it('rejects an unbounded Ultimate reporting period before querying aggregates', async () => {
-    const prisma = { financeProfile: { findUnique: jest.fn().mockResolvedValue(profile) }, $queryRaw: jest.fn() };
-    await expect(new FinanceUltimateService(prisma as never, {} as never).analytics('profile-1', { from: '2024-01-01', to: '2026-01-02' })).rejects.toBeInstanceOf(BadRequestException);
-    expect(prisma.$queryRaw).not.toHaveBeenCalled();
-  });
-
-  it('uses the authoritative converted balance including transfers and reports missing rates', async () => {
-    const prisma = {
-      financeProfile: { findUnique: jest.fn().mockResolvedValue(profile) },
-      financeReminder: { findMany: jest.fn().mockResolvedValue([]) },
-      $queryRaw: jest.fn().mockResolvedValue([]),
-    };
-    const ledger = {
-      accounts: jest.fn().mockResolvedValue([
-        {
-          id: 'uah',
-          name: 'Cash',
-          currency: 'UAH',
-          balance: '100',
-          archivedAt: null,
-        },
-        {
-          id: 'eur',
-          name: 'Card',
-          currency: 'EUR',
-          balance: '10',
-          equivalentBalance: { amount: '450', currency: 'UAH' },
-          archivedAt: null,
-        },
-        {
-          id: 'gbp',
-          name: 'Travel',
-          currency: 'GBP',
-          balance: '20',
-          equivalentBalance: null,
-          archivedAt: null,
-        },
-      ]),
-    };
-
-    const result = await new FinanceUltimateService(
-      prisma as never,
-      ledger as never,
-    ).overview('profile-1');
-
-    expect(result.balance).toBe('550');
-    expect(result.balanceSummary).toEqual({
-      amount: '550',
+function analyticsFixture(): ConsumerFinanceAnalytics {
+  return {
+    currency: 'UAH',
+    period: {
+      period: 'CURRENT_MONTH',
+      from: '2026-09-01T00:00:00.000Z',
+      to: '2026-10-01T00:00:00.000Z',
+    },
+    summary: {
+      income: '1000',
+      expenses: '400',
+      saved: '100',
+      invested: '0',
+      investmentReturns: '0',
+      netCashflow: '600',
+    },
+    comparison: {
+      period: {
+        from: '2026-08-01T00:00:00.000Z',
+        to: '2026-09-01T00:00:00.000Z',
+      },
+      summary: {
+        income: '800',
+        expenses: '500',
+        saved: '80',
+        invested: '0',
+        investmentReturns: '0',
+        netCashflow: '300',
+      },
+    },
+    expensesByCategory: Array.from({ length: 8 }, (_, index) => ({
+      categoryId: `expense-${index}`,
+      categoryKey: null,
+      name: `Expense ${index}`,
+      amount: String(80 - index),
+      percentage: 10,
+    })),
+    incomeByCategory: Array.from({ length: 8 }, (_, index) => ({
+      categoryId: `income-${index}`,
+      categoryKey: null,
+      name: `Income ${index}`,
+      amount: String(100 - index),
+      percentage: 10,
+    })),
+    accounts: Array.from({ length: 8 }, (_, index) => ({
+      accountId: `account-${index}`,
+      name: `Account ${index}`,
+      income: '100',
+      expenses: '40',
+      invested: '0',
+      investmentReturns: '0',
+      netCashflow: '60',
+    })),
+    timeline: Array.from({ length: 14 }, (_, index) => ({
+      date: `${2025 + Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}-01`,
+      income: '100',
+      expenses: '40',
+      saved: '0',
+      invested: '0',
+      investmentReturns: '0',
+      netCashflow: '60',
+    })),
+    trends: [],
+    legacyFallback: null,
+    savings: {
       currency: 'UAH',
-      includedAccountCount: 2,
-      excludedAccounts: [
+      allocated: '0',
+      backed: '0',
+      activeGoals: 0,
+      completedGoals: 0,
+      underfundedGoals: 0,
+      excludedGoals: [],
+    },
+    investments: {
+      currency: 'UAH',
+      totalInvested: '0',
+      totalReturned: '0',
+      currentValue: '0',
+      profitLoss: '0',
+      returnPercentage: null,
+      activeInvestments: 0,
+      closedInvestments: 0,
+      excludedInvestments: [],
+    },
+    netWorth: {
+      amount: '0',
+      currency: 'UAH',
+      cashAmount: '0',
+      investmentValue: '0',
+      complete: true,
+      excludedAccountCount: 0,
+      excludedInvestmentCount: 0,
+    },
+  };
+}
+
+function setup() {
+  const prisma = {
+    financeProfile: {
+      findUnique: jest.fn().mockResolvedValue({
+        defaultCurrency: 'UAH',
+        timezone: 'Europe/Kyiv',
+        locale: 'uk',
+        telegramUser: { languageCode: 'uk' },
+      }),
+    },
+    aiUsageEvent: { update: jest.fn().mockResolvedValue({}) },
+  };
+  const analytics = {
+    analytics: jest.fn().mockResolvedValue(analyticsFixture()),
+  };
+  const ai = {
+    interpret: jest.fn().mockResolvedValue({
+      answer: 'Generated answer',
+      suggestedQuestions: ['Next question?'],
+    }),
+  };
+  const entitlements = {
+    reserveCapability: jest.fn().mockResolvedValue({ id: 'reservation-1' }),
+  };
+  return {
+    prisma,
+    analytics,
+    ai,
+    entitlements,
+    service: new FinanceUltimateService(
+      prisma as never,
+      analytics as never,
+      ai as never,
+      entitlements as never,
+    ),
+  };
+}
+
+describe('FinanceUltimateService', () => {
+  it('denies access before loading a profile or analytics', async () => {
+    const { service, entitlements, prisma, analytics, ai } = setup();
+    entitlements.reserveCapability.mockRejectedValue(
+      new ForbiddenException('Ultimate required'),
+    );
+
+    await expect(service.answer(context, question)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(prisma.financeProfile.findUnique).not.toHaveBeenCalled();
+    expect(analytics.analytics).not.toHaveBeenCalled();
+    expect(ai.interpret).not.toHaveBeenCalled();
+  });
+
+  it('sends only compact aggregate facts and returns deterministic totals separately', async () => {
+    const { service, entitlements, ai } = setup();
+
+    const result = await service.answer(context, question);
+
+    expect(entitlements.reserveCapability).toHaveBeenCalledWith(
+      context,
+      'FINANCE_HISTORY_QA',
+      'AI_INSIGHTS',
+      expect.any(String),
+    );
+    const calls = ai.interpret.mock.calls as unknown as Array<
+      [
         {
-          accountId: 'gbp',
-          name: 'Travel',
-          balance: '20',
-          currency: 'GBP',
-          reason: 'RATE_UNAVAILABLE',
+          facts: {
+            topExpenseCategories: unknown[];
+            topIncomeCategories: unknown[];
+            topAccounts: unknown[];
+            monthlyTimeline: unknown[];
+          };
         },
+      ]
+    >;
+    const request = calls[0]?.[0];
+    const { facts } = request;
+    expect(facts.topExpenseCategories).toHaveLength(5);
+    expect(facts.topIncomeCategories).toHaveLength(5);
+    expect(facts.topAccounts).toHaveLength(5);
+    expect(facts.monthlyTimeline).toHaveLength(12);
+    expect(result).toEqual({
+      answer: 'Generated answer',
+      suggestedQuestions: ['Next question?'],
+      facts: [
+        { label: 'income', amount: '1000', currency: 'UAH' },
+        { label: 'expenses', amount: '400', currency: 'UAH' },
+        { label: 'netCashflow', amount: '600', currency: 'UAH' },
       ],
     });
-    expect(ledger.accounts).toHaveBeenCalledWith(
-      'profile-1',
-      'UAH',
-      'workspace-1',
+  });
+
+  it('releases a reservation when aggregate preparation fails', async () => {
+    const { service, prisma, analytics, ai } = setup();
+    analytics.analytics.mockRejectedValue(new Error('database unavailable'));
+
+    await expect(service.answer(context, question)).rejects.toThrow(
+      'database unavailable',
     );
+    expect(prisma.aiUsageEvent.update).toHaveBeenCalledWith({
+      where: { id: 'reservation-1' },
+      data: { status: 'FAILED' },
+    });
+    expect(ai.interpret).not.toHaveBeenCalled();
   });
 });

@@ -94,7 +94,9 @@ export function summarizeReply(
     inboundMessageCount === 1 &&
     outboundMessageCount === 0;
   const status: CrmReplyStatus = !unanswered
-    ? 'NONE'
+    ? outboundMessageCount > 0
+      ? 'WAITING_FOR_CLIENT'
+      : 'NONE'
     : firstInbound
       ? latestUnread
         ? 'FIRST_INBOUND_UNREAD'
@@ -117,9 +119,7 @@ export function summarizeReply(
   };
 }
 
-function newestUnansweredInbound(
-  conversations: readonly ReplyConversation[],
-) {
+function newestUnansweredInbound(conversations: readonly ReplyConversation[]) {
   return conversations.reduce<ReplyConversation | null>(
     (value, conversation) => {
       if (

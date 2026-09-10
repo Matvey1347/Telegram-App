@@ -88,7 +88,13 @@ export function financeAnalyticsDateRange(
     const range = financeHistoryDateRange(input.from, input.to, timezone);
     if (!range.from || !range.to)
       throw new BadRequestException('Invalid analytics date range');
-    return { from: range.from, to: range.to };
+    const duration = range.to.getTime() - range.from.getTime();
+    return {
+      from: range.from,
+      to: range.to,
+      comparisonFrom: new Date(range.from.getTime() - duration),
+      comparisonTo: range.from,
+    };
   }
 
   let year: number;
@@ -109,10 +115,25 @@ export function financeAnalyticsDateRange(
     return zonedStartOfDay(value.toISOString().slice(0, 10), timezone);
   };
   if (input.period === 'CURRENT_MONTH')
-    return { from: monthDate(0), to: monthDate(1) };
+    return {
+      from: monthDate(0),
+      to: monthDate(1),
+      comparisonFrom: monthDate(-1),
+      comparisonTo: monthDate(0),
+    };
   if (input.period === 'PREVIOUS_MONTH')
-    return { from: monthDate(-1), to: monthDate(0) };
-  return { from: monthDate(-2), to: monthDate(1) };
+    return {
+      from: monthDate(-1),
+      to: monthDate(0),
+      comparisonFrom: monthDate(-2),
+      comparisonTo: monthDate(-1),
+    };
+  return {
+    from: monthDate(-2),
+    to: monthDate(1),
+    comparisonFrom: monthDate(-5),
+    comparisonTo: monthDate(-2),
+  };
 }
 
 export function financeOccurredAtFilter(

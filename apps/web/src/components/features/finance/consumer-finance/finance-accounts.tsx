@@ -1,199 +1,189 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import type {
-  ConsumerFinanceAccount,
-  ConsumerFinanceAccountType,
-} from "@telegram-system/shared";
-import {
-  Button,
-  Card,
-  EmptyState,
-  FormField,
-  Input,
-  Modal,
-  Select,
-} from "./ui";
-import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
+import type { ConsumerFinanceAccount } from "@telegram-system/shared";
+import { Button, Card, EmptyState, ErrorState, LoadingState } from "./ui";
+import { consumerFinanceLedgerApi } from "@/lib/features/finance/consumer-finance-ledger-api";
 import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
+import { patchConsumerFinanceAccountCache } from "@/lib/features/finance/consumer-finance-cache";
 import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { financeCopy, type FinanceLocale } from "./finance-i18n";
+import { type FinanceLocale } from "./i18n/core";
+import { financeAccountsCopy } from "./i18n/accounts";
 import { FinanceConfirmModal } from "./finance-confirm-modal";
 import { IconAvatar } from "./ui/finance-icon-avatar";
-import { IconPicker } from "./ui/finance-icon-picker";
-import { FinanceCurrencySelect } from "./ui/finance-currency-select";
 
-const TYPES: ConsumerFinanceAccountType[] = [
-  "CASH",
-  "CARD",
-  "SAVINGS",
-  "OTHER",
-];
+export function FinanceAccountsScreen({
+  botId,
+  locale,
+  onEdit,
+}: {
+  botId: string;
+  locale: FinanceLocale;
+  onEdit: (accountId: string) => void;
+}) {
+  const t = financeAccountsCopy(locale);
+  const accounts = useQuery({
+    queryKey: consumerFinanceKeys.accounts(botId),
+    queryFn: () => consumerFinanceLedgerApi.accounts(botId),
+  });
+  if (accounts.isLoading) return <LoadingState text={t.loadingReferences} />;
+  if (accounts.isError)
+    return (
+      <div className="space-y-3">
+        <ErrorState text={t.referencesUnavailable} />
+        <Button onClick={() => accounts.refetch()}>{t.retry}</Button>
+      </div>
+    );
+  return (
+    <FinanceAccounts
+      botId={botId}
+      accounts={accounts.data ?? []}
+      locale={locale}
+      onEdit={onEdit}
+    />
+  );
+}
 
 export function FinanceAccounts({
   botId,
   accounts,
-  defaultCurrency,
   locale,
+  onEdit,
 }: {
   botId: string;
   accounts: ConsumerFinanceAccount[];
-  defaultCurrency: string;
   locale: FinanceLocale;
+  onEdit: (accountId: string) => void;
 }) {
   const client = useQueryClient();
-  const t = financeCopy(locale);
-  const [editing, setEditing] = useState<ConsumerFinanceAccount | null>(null);
+  const t = financeAccountsCopy(locale);
   const [archiving, setArchiving] = useState<ConsumerFinanceAccount | null>(
     null,
   );
-  const patchAccount = (account: ConsumerFinanceAccount) =>
-    client.setQueryData(
-      consumerFinanceKeys.accounts(botId),
-      (rows: ConsumerFinanceAccount[] | undefined) => {
-        const current = rows ?? [];
-        return current.some((row) => row.id === account.id)
-          ? current.map((row) => (row.id === account.id ? account : row))
-          : [...current, account];
-      },
-    );
   const archive = useMutation({
-    mutationFn: (id: string) => consumerFinanceApi.archiveAccount(botId, id),
+    mutationFn: (id: string) =>
+      consumerFinanceLedgerApi.archiveAccount(botId, id),
     onSuccess: (account) => {
-      patchAccount(account);
-      void client.invalidateQueries({
-        queryKey: consumerFinanceKeys.dashboard(botId),
-      });
-      void client.invalidateQueries({
-        queryKey: consumerFinanceKeys.analyticsRoot(botId),
-      });
-      void client.invalidateQueries({
-        queryKey: consumerFinanceKeys.ultimateRoot(botId),
-      });
+      patchConsumerFinanceAccountCache(client, botId, account);
+      void Promise.all([
+        client.invalidateQueries({
+          queryKey: consumerFinanceKeys.dashboard(botId),
+        }),
+        client.invalidateQueries({
+          queryKey: consumerFinanceKeys.analyticsRoot(botId),
+        }),
+      ]);
       setArchiving(null);
     },
   });
+  const active = accounts.filter((account) => !account.archivedAt);
+  const archived = accounts.filter((account) => account.archivedAt);
+
   return (
     <div className="space-y-4">
-      <AccountEditor
-        key={editing?.id ?? "create-account"}
-        botId={botId}
-        defaultCurrency={defaultCurrency}
-        locale={locale}
-        editing={editing}
-        onClose={() => setEditing(null)}
-        onSaved={(account) => {
-          patchAccount(account);
-          setEditing(null);
-          void client.invalidateQueries({
-            queryKey: consumerFinanceKeys.dashboard(botId),
-          });
-          // History rows embed account summaries, so a rename must refresh them.
-          void client.invalidateQueries({
-            queryKey: consumerFinanceKeys.transactionLists(botId),
-          });
-          void client.invalidateQueries({
-            queryKey: consumerFinanceKeys.transferLists(botId),
-          });
-          void client.invalidateQueries({
-            queryKey: consumerFinanceKeys.ultimateRoot(botId),
-          });
-        }}
-      />
-      {accounts.filter((account) => !account.archivedAt).length ? (
+      <Button
+        className="min-h-10 self-start px-3"
+        onClick={() => onEdit("create")}
+      >
+        <Plus size={16} aria-hidden="true" />
+        {t.addAccount}
+      </Button>
+      {active.length ? (
         <div className="grid gap-3 lg:grid-cols-2">
-          {accounts
-            .filter((account) => !account.archivedAt)
-            .map((account) => (
-              <Card
-                key={account.id}
-                className="flex items-center justify-between gap-3"
+          {active.map((account) => (
+            <Card
+              key={account.id}
+              className="flex items-center justify-between gap-3"
+            >
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                onClick={() => onEdit(account.id)}
               >
-                <div className="flex min-w-0 items-center gap-3">
-                  <IconAvatar
-                    icon={account.iconPresentation}
-                    label={account.name}
-                    size="sm"
-                    bordered={false}
-                  />
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{account.name}</p>
-                    <p className="text-xs text-neutral-500">
-                      {
-                        t[
-                          account.type.toLowerCase() as
-                            | "cash"
-                            | "card"
-                            | "savings"
-                            | "other"
-                        ]
-                      }{" "}
-                      · {account.currency}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <div className="mr-1 text-right">
-                    <strong>
-                      {formatMoney(account.balance, account.currency, "symbol")}
-                    </strong>
-                    {account.equivalentBalance &&
-                    account.equivalentBalance.currency !== account.currency ? (
-                      <p className="text-xs text-neutral-500">
-                        ≈{" "}
-                        {formatMoney(
-                          account.equivalentBalance.amount,
-                          account.equivalentBalance.currency,
-                          "symbol",
-                        )}
-                      </p>
-                    ) : null}
-                  </div>
-                  <button
-                    aria-label={`${t.editAccount}: ${account.name}`}
-                    className="flex min-h-11 min-w-11 items-center justify-center rounded text-neutral-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
-                    onClick={() => setEditing(account)}
-                  >
-                    <Pencil size={16} />
-                  </button>
-                  <button
-                    aria-label={`${t.archiveAccount}: ${account.name}`}
-                    className="flex min-h-11 min-w-11 items-center justify-center rounded text-rose-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
-                    onClick={() => setArchiving(account)}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </Card>
-            ))}
+                <IconAvatar
+                  icon={account.iconPresentation}
+                  label={account.name}
+                  size="sm"
+                  bordered={false}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">
+                    {account.name}
+                  </span>
+                  <span className="block text-xs text-neutral-500">
+                    {
+                      t[
+                        account.type.toLowerCase() as
+                          | "cash"
+                          | "card"
+                          | "savings"
+                          | "other"
+                      ]
+                    }{" "}
+                    · {account.currency}
+                  </span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <strong className="block">
+                    {formatMoney(account.balance, account.currency, "symbol")}
+                  </strong>
+                  {account.equivalentBalance &&
+                  account.equivalentBalance.currency !== account.currency ? (
+                    <span className="block text-xs text-neutral-500">
+                      ≈{" "}
+                      {formatMoney(
+                        account.equivalentBalance.amount,
+                        account.equivalentBalance.currency,
+                        "symbol",
+                      )}
+                    </span>
+                  ) : null}
+                </span>
+              </button>
+              <div className="flex shrink-0 items-center">
+                <button
+                  aria-label={`${t.editAccount}: ${account.name}`}
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded text-neutral-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
+                  onClick={() => onEdit(account.id)}
+                >
+                  <Pencil size={16} />
+                </button>
+                <button
+                  aria-label={`${t.archiveAccount}: ${account.name}`}
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded text-rose-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
+                  onClick={() => setArchiving(account)}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </Card>
+          ))}
         </div>
       ) : (
         <EmptyState text={t.noAccounts} />
       )}
-      {accounts.some((account) => account.archivedAt) ? (
+      {archived.length ? (
         <Card>
           <h2 className="font-medium">{t.archivedAccounts}</h2>
           <p className="mt-1 text-xs text-neutral-500">
             {t.archivedAccountsHelp}
           </p>
           <div className="mt-3 divide-y divide-neutral-800">
-            {accounts
-              .filter((account) => account.archivedAt)
-              .map((account) => (
-                <div
-                  key={account.id}
-                  className="flex items-center justify-between gap-3 py-2 text-sm text-neutral-400"
-                >
-                  <span className="truncate">
-                    {account.name} · {account.currency}
-                  </span>
-                  <span className="shrink-0 tabular-nums">
-                    {formatMoney(account.balance, account.currency, "symbol")}
-                  </span>
-                </div>
-              ))}
+            {archived.map((account) => (
+              <div
+                key={account.id}
+                className="flex items-center justify-between gap-3 py-2 text-sm text-neutral-400"
+              >
+                <span className="truncate">
+                  {account.name} · {account.currency}
+                </span>
+                <span className="shrink-0 tabular-nums">
+                  {formatMoney(account.balance, account.currency, "symbol")}
+                </span>
+              </div>
+            ))}
           </div>
         </Card>
       ) : null}
@@ -212,165 +202,5 @@ export function FinanceAccounts({
         description={t.archiveAccountDescription}
       />
     </div>
-  );
-}
-
-function AccountEditor({
-  botId,
-  defaultCurrency,
-  locale,
-  editing,
-  onClose,
-  onSaved,
-}: {
-  botId: string;
-  defaultCurrency: string;
-  locale: FinanceLocale;
-  editing: ConsumerFinanceAccount | null;
-  onClose: () => void;
-  onSaved: (account: ConsumerFinanceAccount) => void;
-}) {
-  const t = financeCopy(locale);
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState(editing?.name ?? "");
-  const [currency, setCurrency] = useState(
-    editing?.currency ?? defaultCurrency,
-  );
-  const [openingBalance, setOpeningBalance] = useState(
-    editing?.openingBalance ?? "0",
-  );
-  const [type, setType] = useState<ConsumerFinanceAccountType>(
-    editing?.type ?? "CARD",
-  );
-  const [emoji, setEmoji] = useState(
-    editing?.iconPresentation.type === "unicode"
-      ? editing.iconPresentation.value
-      : "💳",
-  );
-  const mutation = useMutation({
-    mutationFn: () =>
-      editing
-        ? consumerFinanceApi.updateAccount(botId, editing.id, {
-            name: name.trim(),
-            type,
-            emoji,
-          })
-        : consumerFinanceApi.createAccount(botId, {
-            name: name.trim(),
-            emoji,
-            type,
-            currency,
-            openingBalance,
-          }),
-    onSuccess: (account) => {
-      onSaved(account);
-      setOpen(false);
-      setName("");
-      setCurrency(defaultCurrency);
-      setOpeningBalance("0");
-    },
-  });
-  const visible = open || !!editing;
-  return (
-    <>
-      <Button
-        className="min-h-10 self-start px-3"
-        onClick={() => {
-          setName("");
-          setType("CARD");
-          setEmoji("💳");
-          setCurrency(defaultCurrency);
-          setOpeningBalance("0");
-          setOpen(true);
-        }}
-      >
-        <Plus size={16} aria-hidden="true" />
-        {t.addAccount}
-      </Button>
-      <Modal
-        open={visible}
-        closeLabel={t.close}
-        onClose={() => {
-          setOpen(false);
-          onClose();
-        }}
-        title={editing ? t.editAccount : t.addAccount}
-      >
-        <div className="space-y-3">
-          <IconPicker
-            uiLocale={locale}
-            icon={{ type: "unicode", value: emoji }}
-            iconId={null}
-            onChange={() => undefined}
-            onEmojiChange={(value) => value && setEmoji(value)}
-            allowImages={false}
-            buttonLabel={t.accountName}
-          />
-          <FormField label={t.accountName}>
-            <Input
-              autoFocus
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </FormField>
-          <FormField label={t.accountType}>
-            <Select
-              uiLocale={locale}
-              value={type}
-              onChange={(event) =>
-                setType(event.target.value as ConsumerFinanceAccountType)
-              }
-            >
-              {TYPES.map((value) => (
-                <option key={value} value={value}>
-                  {
-                    t[
-                      value.toLowerCase() as
-                        | "cash"
-                        | "card"
-                        | "savings"
-                        | "other"
-                    ]
-                  }
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          {!editing ? (
-            <>
-              <FormField label={t.currency}>
-                <FinanceCurrencySelect
-                  value={currency}
-                  onChange={setCurrency}
-                  locale={locale}
-                />
-              </FormField>
-              <FormField label={t.openingBalance}>
-                <Input
-                  inputMode="decimal"
-                  value={openingBalance}
-                  onChange={(event) => setOpeningBalance(event.target.value)}
-                />
-              </FormField>
-            </>
-          ) : null}
-          <Button
-            className="w-full"
-            disabled={
-              !name.trim() ||
-              !currency.trim() ||
-              !Number.isFinite(Number(openingBalance)) ||
-              mutation.isPending
-            }
-            onClick={() => mutation.mutate()}
-          >
-            {mutation.isPending ? t.saving : t.save}
-          </Button>
-          {mutation.isError ? (
-            <p className="text-sm text-rose-300">{t.accountSaveError}</p>
-          ) : null}
-        </div>
-      </Modal>
-    </>
   );
 }

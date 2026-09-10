@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { MutualPromotionFolderDetailModal } from "./mutual-promotion-folder-detail-modal";
 
@@ -12,6 +12,51 @@ vi.mock("./mutual-promotion-saved-post-card", () => ({
 }));
 
 describe("MutualPromotionFolderDetailModal", () => {
+  it("offers invite-link editing for an active folder", () => {
+    const onEditInviteLinks = vi.fn();
+    render(
+      <MutualPromotionFolderDetailModal
+        open
+        folder={
+          {
+            id: "folder-1",
+            title: "Active folder",
+            status: "ACTIVE",
+            startsAt: "2026-09-08T08:00:00.000Z",
+            endsAt: "2026-09-10T08:00:00.000Z",
+            participantCount: 0,
+            publisherCount: 0,
+            paidCount: 0,
+            postCount: 0,
+            participants: [],
+            posts: [],
+          } as never
+        }
+        timezone="Europe/Warsaw"
+        accounts={[]}
+        botConnected={false}
+        botUsername={null}
+        mutating={false}
+        actionError={null}
+        onClose={vi.fn()}
+        onEdit={vi.fn()}
+        onEditInviteLinks={onEditInviteLinks}
+        onActivate={vi.fn()}
+        onCancel={vi.fn()}
+        onAddPost={vi.fn()}
+        onUpdatePost={vi.fn()}
+        onRemovePost={vi.fn()}
+        onSaveExpense={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit invite links" }));
+    expect(onEditInviteLinks).toHaveBeenCalledOnce();
+    expect(
+      screen.queryByRole("button", { name: "Edit setup" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders channel photos and finance account icons", () => {
     render(
       <MutualPromotionFolderDetailModal
@@ -46,6 +91,11 @@ describe("MutualPromotionFolderDetailModal", () => {
                   id: "link-1",
                   name: "Folders",
                   url: "https://t.me/+folder",
+                  joinedCount: 29,
+                  creatorUsername: "okane_taikin",
+                  creatorFirstName: "😇",
+                  creatorPhotoUrl: null,
+                  creatorMember: null,
                 },
                 subscribersAtStart: null,
                 subscribersAtEnd: null,
@@ -62,10 +112,10 @@ describe("MutualPromotionFolderDetailModal", () => {
                   amountInPrimaryCurrency: 350,
                 },
                 stats: {
-                  joinedCount: null,
-                  unsubscribedCount: null,
+                  joinedCount: 29,
+                  unsubscribedCount: 33,
                   unsubscribedIsEstimate: true,
-                  audienceDelta: null,
+                  audienceDelta: -4,
                   subscriberPrice: null,
                   currency: "UAH",
                   dataQuality: "PENDING",
@@ -100,6 +150,7 @@ describe("MutualPromotionFolderDetailModal", () => {
         actionError={null}
         onClose={vi.fn()}
         onEdit={vi.fn()}
+        onEditInviteLinks={vi.fn()}
         onActivate={vi.fn()}
         onCancel={vi.fn()}
         onAddPost={vi.fn()}
@@ -116,6 +167,19 @@ describe("MutualPromotionFolderDetailModal", () => {
     expect(
       document.querySelector('img[src="https://cdn.test/account.jpg"]'),
     ).toBeInTheDocument();
+    expect(screen.getByText("😇")).toBeVisible();
+    const metricLabels = Array.from(document.querySelectorAll("dt"));
+    expect(metricLabels.map((label) => label.textContent?.trim())).toEqual([
+      "Arrivals",
+      "Unsubscribed ≈",
+      "Audience",
+    ]);
+    expect(metricLabels[0].querySelector("svg")).toHaveClass(
+      "text-emerald-300",
+    );
+    expect(metricLabels[1].querySelector("svg")).toHaveClass("text-rose-300");
+    expect(metricLabels[2].querySelector("svg")).toHaveClass("text-violet-300");
+    expect(screen.queryByText("Audience Δ")).not.toBeInTheDocument();
   });
 
   it("places the activation explanation and action after the publications", () => {
@@ -155,6 +219,7 @@ describe("MutualPromotionFolderDetailModal", () => {
         actionError={null}
         onClose={vi.fn()}
         onEdit={vi.fn()}
+        onEditInviteLinks={vi.fn()}
         onActivate={vi.fn()}
         onCancel={vi.fn()}
         onAddPost={vi.fn()}

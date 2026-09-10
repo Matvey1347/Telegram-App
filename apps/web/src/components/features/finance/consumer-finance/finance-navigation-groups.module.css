@@ -1,0 +1,80 @@
+.menuPanel {
+  animation: finance-navigation-menu-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: bottom center;
+}
+
+.pageIconMotion {
+  animation: finance-page-icon-in 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.groupHeader,
+.groupIcon,
+.groupChevron {
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.groupHeader:hover .groupIcon {
+  color: rgb(125 211 252);
+  transform: translateY(-1px);
+}
+
+.groupChevronCollapsed {
+  transform: rotate(-90deg);
+}
+
+.groupBody {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition:
+    grid-template-rows 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms ease;
+}
+
+.groupBodyCollapsed {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+.groupBodyInner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+@keyframes finance-navigation-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes finance-page-icon-in {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menuPanel,
+  .pageIconMotion,
+  .groupHeader,
+  .groupIcon,
+  .groupChevron,
+  .groupBody {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
+}

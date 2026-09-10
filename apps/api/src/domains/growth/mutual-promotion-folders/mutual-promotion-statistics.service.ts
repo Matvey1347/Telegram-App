@@ -11,6 +11,8 @@ type ParticipantForStatistics = {
   inviteJoinedAtEnd: number | null;
   baselineCapturedAt: Date | null;
   finalCapturedAt: Date | null;
+  currentSubscribersCount?: number | null;
+  currentInviteJoinedCount?: number | null;
   expense: null | {
     id: string;
     accountId: string;
@@ -38,14 +40,21 @@ export class MutualPromotionStatisticsService {
 
   participant(
     row: ParticipantForStatistics,
+    options: { useCurrentCounters?: boolean } = {},
   ): MutualPromotionFolderParticipantStats {
+    const inviteJoinedAtEnd =
+      row.inviteJoinedAtEnd ??
+      (options.useCurrentCounters ? row.currentInviteJoinedCount : null);
+    const subscribersAtEnd =
+      row.subscribersAtEnd ??
+      (options.useCurrentCounters ? row.currentSubscribersCount : null);
     const joinedCount =
-      row.inviteJoinedAtStart !== null && row.inviteJoinedAtEnd !== null
-        ? Math.max(0, row.inviteJoinedAtEnd - row.inviteJoinedAtStart)
+      row.inviteJoinedAtStart !== null && inviteJoinedAtEnd != null
+        ? Math.max(0, inviteJoinedAtEnd - row.inviteJoinedAtStart)
         : null;
     const audienceDelta =
-      row.subscribersAtStart !== null && row.subscribersAtEnd !== null
-        ? row.subscribersAtEnd - row.subscribersAtStart
+      row.subscribersAtStart !== null && subscribersAtEnd != null
+        ? subscribersAtEnd - row.subscribersAtStart
         : null;
     const unsubscribedCount =
       joinedCount !== null && audienceDelta !== null
@@ -70,9 +79,16 @@ export class MutualPromotionStatisticsService {
         row.inviteJoinedAtStart !== null &&
         row.inviteJoinedAtEnd !== null
           ? 'CACHED_BOUNDARIES'
-          : row.baselineCapturedAt || row.finalCapturedAt
-            ? 'INCOMPLETE'
-            : 'PENDING',
+          : options.useCurrentCounters &&
+              row.baselineCapturedAt &&
+              row.subscribersAtStart !== null &&
+              subscribersAtEnd != null &&
+              row.inviteJoinedAtStart !== null &&
+              inviteJoinedAtEnd != null
+            ? 'CURRENT_COUNTERS'
+            : row.baselineCapturedAt || row.finalCapturedAt
+              ? 'INCOMPLETE'
+              : 'PENDING',
     };
   }
 }

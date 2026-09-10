@@ -9,6 +9,7 @@ import { TelegramAdSalesCrmAdvertisersService } from './telegram-ad-sales-crm-ad
 import { TelegramAdSalesCrmSettingsService } from './telegram-ad-sales-crm-settings.service';
 import { TelegramAdSalesController } from './telegram-ad-sales.controller';
 import { TelegramAdSalesReadController } from './telegram-ad-sales-read.controller';
+import { TelegramAdSalesPaymentsController } from './telegram-ad-sales-payments.controller';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
 import { TelegramAdSalesQuotePreviewService } from './telegram-ad-sales-quote-preview.service';
 import { TelegramAdSalesSaleReadService } from './telegram-ad-sales-sale-read.service';
@@ -35,7 +36,11 @@ import { TelegramAdSalePaymentDeletionService } from './telegram-ad-sale-payment
     FinanceCategoriesModule,
     TelegramCrmModule,
   ],
-  controllers: [TelegramAdSalesReadController, TelegramAdSalesController],
+  controllers: [
+    TelegramAdSalesReadController,
+    TelegramAdSalesPaymentsController,
+    TelegramAdSalesController,
+  ],
   providers: [
     TelegramAdSalesService,
     TelegramAdSalePaymentDeletionService,

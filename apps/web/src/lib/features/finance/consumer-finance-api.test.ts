@@ -125,6 +125,33 @@ describe("consumerFinanceApi", () => {
     ]);
   });
 
+  it("updates profile settings through the narrow settings endpoint", async () => {
+    let request: InternalAxiosRequestConfig | undefined;
+    consumerFinanceHttp.defaults.adapter = async (config) => {
+      request = config;
+      return {
+        data: {
+          defaultCurrency: "UAH",
+          timezone: "Europe/Warsaw",
+          locale: "uk",
+        },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await consumerFinanceApi.updateSettings("bot-id", {
+      defaultCurrency: "UAH",
+      timezone: "Europe/Warsaw",
+      locale: "uk",
+    });
+
+    expect(request?.method).toBe("patch");
+    expect(request?.url).toBe("/finance-bots/bot-id/settings");
+  });
+
   it("sends Telegram initData only to the one-time authentication bootstrap", async () => {
     let request: InternalAxiosRequestConfig | undefined;
     consumerFinanceHttp.defaults.adapter = async (config) => {

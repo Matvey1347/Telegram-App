@@ -18,7 +18,12 @@ describe('FinanceCoreService consumer read models', () => {
             timezone: 'UTC',
             locale: null,
             onboardingCompletedAt: null,
-            telegramUser: { languageCode: 'uk-UA' },
+            telegramUser: {
+              languageCode: 'uk-UA',
+              username: 'ada_lovelace',
+              firstName: 'Ada',
+              lastName: 'Lovelace',
+            },
           })
           .mockResolvedValueOnce({
             id: 'p',
@@ -26,7 +31,12 @@ describe('FinanceCoreService consumer read models', () => {
             timezone: 'UTC',
             locale: 'ru',
             onboardingCompletedAt: null,
-            telegramUser: { languageCode: 'uk-UA' },
+            telegramUser: {
+              languageCode: 'uk-UA',
+              username: null,
+              firstName: null,
+              lastName: null,
+            },
           }),
       },
     };
@@ -34,6 +44,11 @@ describe('FinanceCoreService consumer read models', () => {
     await expect(service.profile('p')).resolves.toMatchObject({
       locale: 'uk',
       localeOverride: null,
+      telegramUser: {
+        displayName: 'Ada Lovelace',
+        username: 'ada_lovelace',
+        avatarUrl: 'https://t.me/i/userpic/320/ada_lovelace.jpg',
+      },
     });
     await expect(service.profile('p')).resolves.toMatchObject({
       locale: 'ru',
@@ -48,7 +63,12 @@ describe('FinanceCoreService consumer read models', () => {
       timezone: 'UTC',
       locale: 'en',
       onboardingCompletedAt: null,
-      telegramUser: { languageCode: 'uk' },
+      telegramUser: {
+        languageCode: 'uk',
+        username: null,
+        firstName: 'Ada',
+        lastName: null,
+      },
     };
     const prisma: any = {
       financeProfile: {
@@ -64,6 +84,47 @@ describe('FinanceCoreService consumer read models', () => {
       prisma.financeProfile.update.mock.calls[0][0].data,
     ).not.toHaveProperty('locale');
     expect(result).toMatchObject({ locale: 'en', localeOverride: 'en' });
+  });
+
+  it('stores a Finance-only display name without mutating Telegram identity', async () => {
+    const update = jest.fn();
+    const prisma = {
+      financeProfile: {
+        update,
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'p',
+          displayName: 'Ada Finance',
+          defaultCurrency: 'USD',
+          timezone: 'UTC',
+          locale: null,
+          onboardingCompletedAt: null,
+          telegramUser: {
+            languageCode: 'en',
+            username: 'ada',
+            firstName: 'Ada',
+            lastName: 'Lovelace',
+          },
+        }),
+      },
+    };
+
+    const result = await new FinanceCoreService(
+      prisma as never,
+    ).updateSettings('p', {
+      defaultCurrency: 'USD',
+      timezone: 'UTC',
+      displayName: '  Ada Finance  ',
+    });
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ displayName: 'Ada Finance' }),
+      }),
+    );
+    expect(result).toMatchObject({
+      displayNameOverride: 'Ada Finance',
+      telegramUser: { displayName: 'Ada Finance', username: 'ada' },
+    });
   });
 
   it('rejects cross-profile parents and category cycles', async () => {
@@ -265,5 +326,75 @@ describe('FinanceCoreService consumer read models', () => {
       new FinanceCoreService(prisma).limits('missing-profile'),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.financeSpendingLimit.findMany).not.toHaveBeenCalled();
+  });
+
+  it('deletes obligations and asset records before the profile during privacy deletion', async () => {
+    const calls: string[] = [];
+    const tx = {
+      financeDebt: {
+        deleteMany: jest.fn().mockImplementation(async () => {
+          calls.push('debts');
+        }),
+      },
+      financeRecurringPayment: {
+        deleteMany: jest.fn().mockImplementation(async () => {
+          calls.push('regular-payments');
+        }),
+      },
+      financeSavingsMovement: {
+        deleteMany: jest.fn().mockImplementation(async () => {
+          calls.push('savings-movements');
+        }),
+      },
+      financeSavingsGoal: {
+        deleteMany: jest.fn().mockImplementation(async () => {
+          calls.push('savings-goals');
+        }),
+      },
+      financeInvestmentValuation: {
+        updateMany: jest.fn().mockImplementation(async () => {
+          calls.push('unlink-valuation-corrections');
+        }),
+        deleteMany: jest.fn().mockImplementation(async () => {
+          calls.push('investment-valuations');
+        }),
+      },
+      financeInvestmentCashFlow: {
+        deleteMany: jest.fn().mockImplementation(async () => {
+          calls.push('investment-cash-flows');
+        }),
+      },
+      financeInvestment: {
+        deleteMany: jest.fn().mockImplementation(async () => {
+          calls.push('investments');
+        }),
+      },
+      financeProfile: {
+        delete: jest.fn().mockImplementation(async () => {
+          calls.push('profile');
+        }),
+      },
+    };
+    const prisma: any = {
+      $transaction: jest.fn((callback) => callback(tx)),
+    };
+
+    await expect(
+      new FinanceCoreService(prisma).deleteData('profile-1'),
+    ).resolves.toEqual({ deleted: true });
+    expect(calls).toEqual([
+      'debts',
+      'regular-payments',
+      'savings-movements',
+      'savings-goals',
+      'unlink-valuation-corrections',
+      'investment-valuations',
+      'investment-cash-flows',
+      'investments',
+      'profile',
+    ]);
+    expect(tx.financeDebt.deleteMany).toHaveBeenCalledWith({
+      where: { profileId: 'profile-1' },
+    });
   });
 });

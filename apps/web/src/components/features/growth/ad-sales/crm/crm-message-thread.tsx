@@ -334,6 +334,7 @@ export function CrmMessageThread({
             onChange={setText}
             disabled={send.isPending}
             rows={3}
+            singleRowToolbar
             placeholder="Write a message…"
             characterCountLabel={(count) => `${count} characters`}
             enableCustomEmoji

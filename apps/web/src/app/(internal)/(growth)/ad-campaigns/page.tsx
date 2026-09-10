@@ -1,6 +1,6 @@
 "use client";
 
-import type { MouseEventHandler } from "react";
+import type { MouseEventHandler, ReactNode } from "react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
@@ -36,7 +36,6 @@ import {
   promosApi,
   telegramChannelsApi,
   workspacesApi,
-  type Account,
   type AdCampaign,
   type AdCampaignKpiStatus,
   type AdHypothesis,
@@ -69,12 +68,9 @@ import {
 } from "@/components/ui/primitives";
 import { useAppToast } from "@/providers/toast-provider";
 import { CircleHelp, TrendingUp } from "lucide-react";
-import { accountDisplayName } from "@/lib/features/finance/account-display";
 import { NativeMoney } from "@/components/ui/native-money";
 import {
   formatAdCampaignLocalDate as formatLocalDate,
-  isAdCampaignsViewMode,
-  resolveInitialAdCampaignsView,
   toAdCampaignInputDate as toInputDate,
   type AdCampaignsViewMode,
 } from "@/components/features/growth/ad-campaigns/ad-campaign-route-state";
@@ -84,6 +80,17 @@ import {
 } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
 import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
+import {
+  AdsSectionTabs,
+  type AdsSection,
+} from "@/components/features/growth/ad-campaigns/ads-section-tabs";
+import { MutualPromotionFoldersPage } from "@/components/features/growth/ad-campaigns/mutual-promotion/mutual-promotion-folders-page";
+import { usePersistedRouteTab } from "@/hooks/use-persisted-route-tab";
+import {
+  AD_CAMPAIGN_VIEW_MODES,
+  AD_CAMPAIGN_VIEW_OPTIONS,
+  accountAdCampaignSelectOption,
+} from "@/components/features/growth/ad-campaigns/ad-campaign-view-options";
 
 type CampaignValues = {
   telegramChannelId: string;
@@ -109,29 +116,30 @@ type CampaignSelectOption = {
   searchText?: string;
 };
 
-const AD_CAMPAIGNS_VIEW_MODE_STORAGE_KEY = "ad-campaigns:view-mode";
-const AD_CAMPAIGNS_VIEW_OPTIONS = [
-  { value: "campaigns", label: "Campaigns", iconEmoji: "🎯" },
-  { value: "promos", label: "Promos", iconEmoji: "📣" },
-  { value: "hypotheses", label: "Hypotheses", iconEmoji: "🧪" },
-];
-function accountSelectOption(account: Account) {
-  return {
-    value: account.id,
-    label: `${accountDisplayName(account)} (${account.currency})`,
-    iconUrl:
-      account.iconPresentation?.type === "image"
-        ? account.iconPresentation.url
-        : undefined,
-    iconEmoji:
-      account.iconPresentation?.type === "unicode"
-        ? account.iconPresentation.value
-        : undefined,
-    iconFallback: account.name,
-  };
+export default function AdsPage() {
+  const searchParams = useSearchParams();
+  const requestedSection = searchParams.get("section");
+  const section: AdsSection =
+    requestedSection === "mutual-promotion"
+      ? "mutual-promotion"
+      : requestedSection === "promo"
+        ? "promo"
+        : "campaigns";
+  const sectionTabs = <AdsSectionTabs value={section} />;
+  return section === "mutual-promotion" ? (
+    <MutualPromotionFoldersPage sectionTabs={sectionTabs} />
+  ) : (
+    <AdCampaignsPage sectionTabs={sectionTabs} topSection={section} />
+  );
 }
 
-export default function AdCampaignsPage() {
+function AdCampaignsPage({
+  sectionTabs,
+  topSection,
+}: {
+  sectionTabs: ReactNode;
+  topSection: "campaigns" | "promo";
+}) {
   const qc = useQueryClient();
   const searchParams = useSearchParams();
   const { pushToast, startOperation } = useAppToast();
@@ -139,14 +147,19 @@ export default function AdCampaignsPage() {
   const [editing, setEditing] = useState<any | null>(null);
   const [deleting, setDeleting] = useState<any | null>(null);
   const [channelFilter, setChannelFilter] = useState("");
-  const [viewMode, setViewMode] = useState<AdCampaignsViewMode>(() =>
-    resolveInitialAdCampaignsView(
-      searchParams.get("view"),
-      typeof window === "undefined"
-        ? null
-        : window.localStorage.getItem(AD_CAMPAIGNS_VIEW_MODE_STORAGE_KEY),
-    ),
-  );
+  const [storedViewMode, setViewMode] =
+    usePersistedRouteTab<AdCampaignsViewMode>({
+      param: "view",
+      storageKey: "ad-campaigns:view-mode",
+      allowedValues: AD_CAMPAIGN_VIEW_MODES,
+      defaultValue: "campaigns",
+    });
+  const viewMode: AdCampaignsViewMode =
+    topSection === "promo"
+      ? "promos"
+      : storedViewMode === "promos"
+        ? "campaigns"
+        : storedViewMode;
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("date_desc");
   const [dateFrom, setDateFrom] = useState("");
@@ -294,20 +307,6 @@ export default function AdCampaignsPage() {
     viewMode === "promos",
     promos,
   );
-
-  useEffect(() => {
-    const requestedViewMode = searchParams.get("view");
-    if (isAdCampaignsViewMode(requestedViewMode)) {
-      setViewMode(requestedViewMode);
-      return;
-    }
-    const savedViewMode = window.localStorage.getItem(
-      AD_CAMPAIGNS_VIEW_MODE_STORAGE_KEY,
-    );
-    if (isAdCampaignsViewMode(savedViewMode)) {
-      setViewMode(savedViewMode);
-    }
-  }, [searchParams]);
 
   useEffect(() => {
     if (viewMode !== "promos" || !requestedPromoId) return;
@@ -462,10 +461,6 @@ export default function AdCampaignsPage() {
   const visiblePromos = promos;
   const handleViewModeChange = (nextViewMode: AdCampaignsViewMode) => {
     setViewMode(nextViewMode);
-    window.localStorage.setItem(
-      AD_CAMPAIGNS_VIEW_MODE_STORAGE_KEY,
-      nextViewMode,
-    );
   };
   const openCreateForCurrentView = () => {
     if (viewMode === "hypotheses") {
@@ -498,19 +493,24 @@ export default function AdCampaignsPage() {
           </div>
         }
       />
+      {sectionTabs}
       <Card className="mb-4">
         <div className="grid min-w-0 gap-3 md:grid-cols-2 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,1.4fr)] 2xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.1fr)_minmax(0,1.25fr)_minmax(0,1.1fr)_minmax(0,0.9fr)] 2xl:items-end">
-          <div className="min-w-0">
-            <FormField label="View">
-              <CustomSelect
-                value={viewMode}
-                onChange={(value) =>
-                  handleViewModeChange(value as AdCampaignsViewMode)
-                }
-                options={AD_CAMPAIGNS_VIEW_OPTIONS}
-              />
-            </FormField>
-          </div>
+          {topSection === "campaigns" ? (
+            <div className="min-w-0">
+              <FormField label="View">
+                <CustomSelect
+                  value={viewMode}
+                  onChange={(value) =>
+                    handleViewModeChange(value as AdCampaignsViewMode)
+                  }
+                  options={AD_CAMPAIGN_VIEW_OPTIONS.filter(
+                    (option) => option.value !== "promos",
+                  )}
+                />
+              </FormField>
+            </div>
+          ) : null}
           <div className="min-w-0">
             <FormField label="Channel">
               <CustomSelect
@@ -3530,7 +3530,7 @@ function CampaignModal({
               })
             }
             placeholder="Select account"
-            options={(accounts || []).map(accountSelectOption)}
+            options={(accounts || []).map(accountAdCampaignSelectOption)}
           />
         </FormField>
         <FormField label="Date">

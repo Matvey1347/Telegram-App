@@ -1,79 +1,54 @@
 "use client";
 
-import { useState } from "react";
+import { ExternalLink } from "lucide-react";
+import Image from "next/image";
+import type { ConsumerFinanceProfile } from "@telegram-system/shared";
+import type { FinanceCoreCopy, FinanceLocale } from "./i18n/core";
 import {
-  BarChart3,
-  ArrowLeftRight,
-  ExternalLink,
-  Landmark,
-  LayoutGrid,
-  List,
-  Menu,
-  Settings,
-  Sparkles,
-  Tags,
-  WalletCards,
-  X,
-} from "lucide-react";
-import type { FinanceCopy } from "./finance-i18n";
-import type { FinanceLocale } from "./finance-i18n";
-import type { ConsumerFinanceScreen } from "./consumer-finance-screens";
-import {
-  isMoreScreen,
   financeScreenLabel,
   type ConsumerFinanceAction,
+  type ConsumerFinanceScreen,
 } from "./consumer-finance-navigation";
 import { ConsumerFinanceActionLauncher } from "./consumer-finance-action-launcher";
 import { FinanceLanguageSelect } from "./ui/finance-language-select";
-
-const PRIMARY = [
-  { id: "home", key: "overview", Icon: Landmark },
-  { id: "transactions", key: "transactions", Icon: List },
-  { id: "analytics", key: "analytics", Icon: BarChart3 },
-] as const;
-const SECONDARY = [
-  { id: "transfers", key: "transfers", Icon: ArrowLeftRight },
-  { id: "accounts", key: "accounts", Icon: WalletCards },
-  { id: "budget", key: "budget", Icon: LayoutGrid },
-  { id: "categories", key: "categories", Icon: Tags },
-  { id: "ultimate", key: "financeUltimate", Icon: Sparkles },
-  { id: "settings", key: "settings", Icon: Settings },
-] as const;
+import { FinanceMobileNavigation } from "./finance-mobile-navigation";
+import { FinanceAccountMenu } from "./finance-account-menu";
 
 export function FinanceMiniAppShell({
   logoUrl,
   screen,
   copy,
   locale,
+  profile,
   onLocaleChange,
   localeChanging = false,
   localeDisabled = false,
   children,
   onNavigate,
   onAction,
+  onSignOut,
+  signingOut = false,
   onOpenBrowser,
   openingBrowser = false,
   browserOpenError,
 }: {
   logoUrl?: string;
   screen: ConsumerFinanceScreen;
-  copy: FinanceCopy;
+  copy: FinanceCoreCopy;
   locale: FinanceLocale;
+  profile?: ConsumerFinanceProfile;
   onLocaleChange: (locale: FinanceLocale) => void;
   localeChanging?: boolean;
   localeDisabled?: boolean;
   children: React.ReactNode;
   onNavigate: (screen: ConsumerFinanceScreen) => void;
   onAction: (action: ConsumerFinanceAction) => void;
+  onSignOut: () => void;
+  signingOut?: boolean;
   onOpenBrowser?: () => void;
   openingBrowser?: boolean;
   browserOpenError?: string;
 }) {
-  const [moreOpen, setMoreOpen] = useState(false);
-  const navigate = (next: ConsumerFinanceScreen) => {
-    setMoreOpen(false);
-    onNavigate(next);
-  };
   return (
     <main
       data-finance-surface="telegram"
@@ -84,26 +59,23 @@ export function FinanceMiniAppShell({
         <div className="min-w-0 flex-1">
           <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between border-b border-neutral-800 bg-neutral-950/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur">
             <div className="flex min-w-0 flex-1 items-center gap-3">
-              <img
+              <Image
                 src={logoUrl || "/brand/finance.png"}
                 alt=""
+                width={36}
+                height={36}
+                unoptimized
                 className="h-9 w-9 rounded-lg object-cover"
                 onError={(event) => {
                   event.currentTarget.src = "/brand/finance.png";
                 }}
               />
-              <div className="min-w-0">
-                <p className="text-xs uppercase tracking-[0.18em] text-sky-300">
-                  {copy.personalFinance}
-                </p>
-                <h1 className="truncate text-lg font-semibold">
-                  {financeScreenLabel(copy, screen)}
-                </h1>
-              </div>
+              <h1 className="truncate text-lg font-semibold">
+                {financeScreenLabel(copy, screen)}
+              </h1>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <FinanceLanguageSelect
-                compact
                 copy={copy}
                 value={locale}
                 onChange={onLocaleChange}
@@ -122,6 +94,16 @@ export function FinanceMiniAppShell({
                   </span>
                 </button>
               ) : null}
+              {profile ? (
+                <FinanceAccountMenu
+                  profile={profile}
+                  copy={copy}
+                  screen={screen}
+                  signingOut={signingOut}
+                  onNavigate={onNavigate}
+                  onSignOut={onSignOut}
+                />
+              ) : null}
             </div>
           </header>
           {browserOpenError ? (
@@ -139,71 +121,12 @@ export function FinanceMiniAppShell({
         copy={copy}
         onAction={onAction}
       />
-      <nav
-        aria-label={copy.financeNavigation}
-        className="fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-2xl grid-cols-4 border-t border-neutral-800 bg-neutral-950/95 pb-[max(.5rem,env(safe-area-inset-bottom))] pl-[max(.25rem,env(safe-area-inset-left))] pr-[max(.25rem,env(safe-area-inset-right))] pt-1 backdrop-blur"
-      >
-        {PRIMARY.map(({ id, key, Icon }) => (
-          <MobileItem
-            key={id}
-            active={screen === id}
-            label={copy[key]}
-            Icon={Icon}
-            onClick={() => navigate(id)}
-          />
-        ))}
-        <MobileItem
-          active={isMoreScreen(screen)}
-          label={copy.more}
-          Icon={moreOpen ? X : Menu}
-          expanded={moreOpen}
-          onClick={() => setMoreOpen((value) => !value)}
-        />
-      </nav>
-      {moreOpen ? (
-        <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-[max(.75rem,env(safe-area-inset-left))] right-[max(.75rem,env(safe-area-inset-right))] z-30 mx-auto max-w-xl rounded-xl border border-neutral-800 bg-neutral-900 p-2 shadow-2xl">
-          <div className="grid grid-cols-2 gap-1">
-            {SECONDARY.map(({ id, key, Icon }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => navigate(id)}
-                className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-left text-sm text-neutral-200 outline-none hover:bg-neutral-800 focus-visible:ring-2 focus-visible:ring-sky-300"
-              >
-                <Icon size={17} className="text-sky-300" aria-hidden="true" />
-                {copy[key]}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      <FinanceMobileNavigation
+        screen={screen}
+        copy={copy}
+        onNavigate={onNavigate}
+        alwaysVisible
+      />
     </main>
-  );
-}
-
-function MobileItem({
-  active,
-  label,
-  Icon,
-  expanded,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  Icon: typeof Landmark;
-  expanded?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-current={active ? "page" : undefined}
-      aria-expanded={expanded}
-      onClick={onClick}
-      className={`flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-sky-300 ${active ? "text-sky-200" : "text-neutral-500"}`}
-    >
-      <Icon size={19} aria-hidden="true" />
-      <span className="max-w-full truncate">{label}</span>
-    </button>
   );
 }

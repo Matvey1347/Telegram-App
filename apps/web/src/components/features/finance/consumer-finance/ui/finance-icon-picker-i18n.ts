@@ -1,5 +1,5 @@
 import type { EmojiCategory } from "@/lib/emoji-icons";
-import type { FinanceLocale } from "../finance-i18n";
+import type { FinanceLocale } from "../i18n/core";
 
 type FinanceIconPickerCopy = {
   addIcon: string;

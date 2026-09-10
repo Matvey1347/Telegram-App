@@ -10,7 +10,6 @@ export type SaleActionKey =
   | "reserve"
   | "confirm"
   | "cancel"
-  | "register-payment"
   | "create-post"
   | "attach-post"
   | "schedule"
@@ -23,7 +22,7 @@ export function allowedSaleActions(
   placement?: TelegramAdSalePlacement | null,
 ): SaleActionKey[] {
   if (!placement) {
-    const actions: SaleActionKey[] = ["register-payment"];
+    const actions: SaleActionKey[] = [];
     if (sale.status === "DRAFT") actions.unshift("reserve");
     if (sale.status === "RESERVED") actions.unshift("confirm");
     if (
@@ -57,19 +56,15 @@ export function SaleStatusActions({
   sale,
   placement,
   onAction,
-  hidePayment = false,
   hideSchedule = false,
 }: {
   sale: TelegramAdSale;
   placement?: TelegramAdSalePlacement | null;
   onAction: (action: SaleActionKey) => void;
-  hidePayment?: boolean;
   hideSchedule?: boolean;
 }) {
   const actions = allowedSaleActions(sale, placement).filter(
-    (action) =>
-      (!hidePayment || action !== "register-payment") &&
-      (!hideSchedule || action !== "schedule"),
+    (action) => !hideSchedule || action !== "schedule",
   );
 
   return (

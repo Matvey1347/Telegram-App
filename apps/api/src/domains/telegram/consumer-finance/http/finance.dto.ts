@@ -80,23 +80,20 @@ export class FinanceHistoryQueryDto {
   @IsOptional() @IsString() cursor?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 30;
 }
-/** All Ultimate reads are deliberately bounded so analytical requests remain index-friendly. */
-export class FinanceUltimateQueryDto {
-  @IsOptional()
-  @IsIn(['LAST_3_MONTHS', 'LAST_6_MONTHS', 'LAST_12_MONTHS'])
-  period?: 'LAST_3_MONTHS' | 'LAST_6_MONTHS' | 'LAST_12_MONTHS';
+export class FinanceUltimateQuestionDto {
+  @IsIn(['CURRENT_MONTH', 'PREVIOUS_MONTH', 'LAST_3_MONTHS', 'CUSTOM'])
+  period!: 'CURRENT_MONTH' | 'PREVIOUS_MONTH' | 'LAST_3_MONTHS' | 'CUSTOM';
   @IsOptional() @IsDateString() from?: string;
   @IsOptional() @IsDateString() to?: string;
-  @IsOptional() @IsString() @MaxLength(120) merchant?: string;
-  @IsOptional() @IsString() categoryId?: string;
-}
-export class FinanceUltimateQuestionDto extends FinanceUltimateQueryDto {
   @IsString() @MinLength(3) @MaxLength(500) question!: string;
 }
 export class UpdateFinanceSettingsDto {
   @IsString() @MinLength(3) @MaxLength(3) defaultCurrency!: string;
   @IsString() @MinLength(1) @MaxLength(80) timezone!: string;
   @IsOptional() @IsIn(['uk', 'ru', 'en']) locale?: 'uk' | 'ru' | 'en' | null;
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(120) displayName?:
+    | string
+    | null;
 }
 export class CreateFinanceCategoryDto {
   @IsString() @MinLength(1) @MaxLength(80) name!: string;
@@ -122,13 +119,6 @@ export class UpsertFinanceLimitDto {
   @IsString() categoryId!: string;
   @IsNumberString() amount!: string;
   @IsString() @MinLength(3) @MaxLength(3) currency!: string;
-}
-export class CreateFinanceGoalDto {
-  @IsString() @MinLength(1) @MaxLength(120) name!: string;
-  @IsNumberString() targetAmount!: string;
-  @IsOptional() @IsNumberString() currentAmount?: string;
-  @IsString() @MinLength(3) @MaxLength(3) currency!: string;
-  @IsOptional() @IsDateString() targetDate?: string;
 }
 export class CreateFinanceReminderDto {
   @IsString() @MinLength(1) @MaxLength(120) name!: string;

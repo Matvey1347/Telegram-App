@@ -3,11 +3,11 @@ import { ConsumerFinanceProvider } from "@/providers/consumer-finance-provider";
 
 export const metadata: Metadata = {
   title: "Finance",
-  description: "Personal finance tracking in your browser and Telegram.",
+  description: "Track income, expenses, accounts, and plans in Finance.",
   icons: {
     icon: "/brand/favicon-finance.png",
     shortcut: "/brand/favicon-finance.png",
-    apple: "/brand/finance.png",
+    apple: "/brand/finance-apple-touch.png",
   },
 };
 

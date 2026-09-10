@@ -6,11 +6,12 @@ import {
   forwardRef,
   isValidElement,
   useEffect,
+  useId,
   useRef,
   useState,
 } from "react";
 import { Check, ChevronDown, Eye, EyeOff } from "lucide-react";
-import type { FinanceLocale } from "../finance-i18n";
+import type { FinanceLocale } from "../i18n/core";
 import { financeUiTokens } from "./finance-ui-tokens";
 
 const selectCopy = {
@@ -84,13 +85,17 @@ export function Textarea(
 function OptionIcon({
   emoji,
   fallback,
+  large = false,
 }: {
   emoji?: string;
   fallback?: string;
+  large?: boolean;
 }) {
   if (emoji) {
     return (
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[15px] leading-none">
+      <span
+        className={`flex shrink-0 items-center justify-center leading-none ${large ? "h-7 w-7 text-[22px]" : "h-5 w-5 text-[15px]"}`}
+      >
         {emoji}
       </span>
     );
@@ -106,6 +111,10 @@ function OptionIcon({
 export function Select(
   props: React.SelectHTMLAttributes<HTMLSelectElement> & {
     uiLocale?: FinanceLocale;
+    triggerAriaLabel?: string;
+    iconOnly?: boolean;
+    hideSelectedOption?: boolean;
+    largeOptionIcons?: boolean;
   },
 ) {
   const copy = selectCopy[props.uiLocale ?? "en"];
@@ -148,10 +157,16 @@ export function Select(
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listboxId = useId();
   const controlled = props.value !== undefined;
   const currentValue = String((controlled ? props.value : internalValue) ?? "");
   const selected = options.find((option) => option.value === currentValue);
-  const menuOptions = options.filter((option) => !option.hidden);
+  const menuOptions = options.filter(
+    (option) =>
+      !option.hidden &&
+      (!props.hideSelectedOption || option.value !== currentValue),
+  );
   const showSearch = menuOptions.length > 5;
   const filtered = showSearch
     ? menuOptions.filter((option) =>
@@ -179,31 +194,55 @@ export function Select(
     } as React.ChangeEvent<HTMLSelectElement>);
     setOpen(false);
     setSearch("");
+    window.requestAnimationFrame(() => triggerRef.current?.focus());
+  };
+  const optionButtons = () =>
+    Array.from(
+      rootRef.current?.querySelectorAll<HTMLButtonElement>(
+        "[role='option']:not(:disabled)",
+      ) ?? [],
+    );
+  const focusOption = (edge: "first" | "last") => {
+    window.requestAnimationFrame(() => {
+      const buttons = optionButtons();
+      buttons[edge === "first" ? 0 : buttons.length - 1]?.focus();
+    });
   };
 
   return (
     <div ref={rootRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         disabled={props.disabled}
+        aria-label={props.triggerAriaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-controls={listboxId}
         onClick={() => setOpen((value) => !value)}
         onKeyDown={(event) => {
-          if (["ArrowDown", "Enter", " "].includes(event.key) && !open) {
+          if (event.key === "ArrowDown" && !open) {
             event.preventDefault();
             setOpen(true);
+            focusOption("first");
           } else if (event.key === "Escape") {
             setOpen(false);
             setSearch("");
           }
         }}
-        className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm disabled:opacity-50 ${financeUiTokens.control} ${props.className ?? ""}`}
+        className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm disabled:opacity-50 ${props.iconOnly ? "relative !justify-start" : ""} ${financeUiTokens.control} ${props.className ?? ""}`}
       >
-        <span className="flex min-w-0 flex-1 items-center gap-2">
-          <OptionIcon emoji={selected?.emoji} fallback={selected?.fallback} />
+        <span
+          className={`flex min-w-0 items-center gap-2 ${props.iconOnly ? "flex-none justify-start" : "flex-1"}`}
+        >
+          <OptionIcon
+            emoji={selected?.emoji}
+            fallback={selected?.fallback}
+            large={props.largeOptionIcons}
+          />
           <span
-            className={`truncate ${selected?.className || (selected ? "text-white" : "text-neutral-400")}`}
+            data-select-trigger-label
+            className={`${props.iconOnly ? "sr-only" : "truncate"} ${selected?.className || (selected ? "text-white" : "text-neutral-400")}`}
           >
             {selected?.label || copy.select}
           </span>
@@ -213,7 +252,14 @@ export function Select(
             </bdi>
           ) : null}
         </span>
-        <ChevronDown size={16} className="text-neutral-400" />
+        <ChevronDown
+          size={16}
+          className={
+            props.iconOnly
+              ? "absolute right-1.5 text-neutral-400"
+              : "text-neutral-400"
+          }
+        />
       </button>
       {open ? (
         <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-xl">
@@ -224,7 +270,16 @@ export function Select(
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Escape") setOpen(false);
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    setOpen(false);
+                    setSearch("");
+                    triggerRef.current?.focus();
+                  }
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    focusOption("first");
+                  }
                   if (event.key === "Enter") {
                     event.preventDefault();
                     const first = filtered.find((option) => !option.disabled);
@@ -236,18 +291,56 @@ export function Select(
               />
             </div>
           ) : null}
-          <div className="max-h-60 overflow-auto">
+          <div
+            id={listboxId}
+            role="listbox"
+            aria-label={props.triggerAriaLabel}
+            className="max-h-60 overflow-auto"
+          >
             {filtered.map((option) => (
               <button
                 key={option.key}
                 type="button"
+                role="option"
+                aria-selected={option.value === currentValue}
+                aria-label={props.iconOnly ? option.label : undefined}
                 disabled={option.disabled}
                 onClick={() => commit(option.value)}
-                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+                onKeyDown={(event) => {
+                  const buttons = optionButtons();
+                  const index = buttons.indexOf(event.currentTarget);
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    setOpen(false);
+                    triggerRef.current?.focus();
+                  } else if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    buttons[Math.min(index + 1, buttons.length - 1)]?.focus();
+                  } else if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    buttons[Math.max(index - 1, 0)]?.focus();
+                  } else if (event.key === "Home") {
+                    event.preventDefault();
+                    buttons[0]?.focus();
+                  } else if (event.key === "End") {
+                    event.preventDefault();
+                    buttons.at(-1)?.focus();
+                  }
+                }}
+                className={`flex w-full items-center px-3 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-800 disabled:opacity-50 ${props.iconOnly ? "justify-center" : "justify-between"}`}
               >
-                <span className="flex min-w-0 flex-1 items-center gap-2">
-                  <OptionIcon emoji={option.emoji} fallback={option.fallback} />
-                  <span className={`truncate ${option.className}`}>
+                <span
+                  className={`flex min-w-0 items-center gap-2 ${props.iconOnly ? "flex-none justify-center" : "flex-1"}`}
+                >
+                  <OptionIcon
+                    emoji={option.emoji}
+                    fallback={option.fallback}
+                    large={props.largeOptionIcons}
+                  />
+                  <span
+                    data-select-option-label
+                    className={`${props.iconOnly ? "sr-only" : "truncate"} ${option.className}`}
+                  >
                     {option.label}
                   </span>
                   {option.meta ? (

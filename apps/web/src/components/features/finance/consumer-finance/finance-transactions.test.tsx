@@ -1,9 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FinanceFeedbackProvider } from "./ui/finance-feedback";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
 import { FinanceTransactions } from "./finance-transactions";
+
+const ledger = vi.hoisted(() => ({
+  accounts: vi.fn(),
+  categories: vi.fn(),
+}));
 
 vi.mock("@/lib/features/finance/consumer-finance-api", () => ({
   consumerFinanceApi: {
@@ -14,6 +19,9 @@ vi.mock("@/lib/features/finance/consumer-finance-api", () => ({
     deleteTransaction: vi.fn(),
     undoTransaction: vi.fn(),
   },
+}));
+vi.mock("@/lib/features/finance/consumer-finance-ledger-api", () => ({
+  consumerFinanceLedgerApi: ledger,
 }));
 
 function renderTransactions(
@@ -29,8 +37,6 @@ function renderTransactions(
       <FinanceFeedbackProvider>
         <FinanceTransactions
           botId="bot-1"
-          accounts={[]}
-          categories={[]}
           locale={locale}
           timezone="UTC"
           surface={surface}
@@ -40,9 +46,48 @@ function renderTransactions(
   );
 }
 
+beforeEach(() => {
+  ledger.accounts.mockResolvedValue([]);
+  ledger.categories.mockResolvedValue([]);
+});
 afterEach(() => vi.clearAllMocks());
 
 describe("FinanceTransactions receipt detail", () => {
+  it("starts account, category and history reads before any one resolves", async () => {
+    let resolveAccounts!: (value: []) => void;
+    let resolveCategories!: (value: []) => void;
+    let resolveHistory!: (value: { items: []; nextCursor: null }) => void;
+    ledger.accounts.mockReturnValue(
+      new Promise((resolve) => {
+        resolveAccounts = resolve;
+      }),
+    );
+    ledger.categories.mockReturnValue(
+      new Promise((resolve) => {
+        resolveCategories = resolve;
+      }),
+    );
+    vi.mocked(consumerFinanceApi.transactions).mockReturnValue(
+      new Promise((resolve) => {
+        resolveHistory = resolve;
+      }),
+    );
+
+    renderTransactions();
+
+    await waitFor(() => {
+      expect(ledger.accounts).toHaveBeenCalledOnce();
+      expect(ledger.categories).toHaveBeenCalledOnce();
+      expect(consumerFinanceApi.transactions).toHaveBeenCalledOnce();
+    });
+    resolveAccounts([]);
+    resolveCategories([]);
+    resolveHistory({ items: [], nextCursor: null });
+    expect(
+      await screen.findByText("No matching transactions."),
+    ).toBeInTheDocument();
+  });
+
   it("keeps Mini App creation in the floating launcher and opens filters on demand", async () => {
     vi.mocked(consumerFinanceApi.transactions).mockResolvedValue({
       items: [],
@@ -92,6 +137,7 @@ describe("FinanceTransactions receipt detail", () => {
           id: "long-row",
           accountId: "account-1",
           type: "EXPENSE",
+          purpose: "ORDINARY",
           amount: "123456789012345.67",
           currency: "UAH",
           occurredAt: "2026-08-21T10:00:00.000Z",
@@ -124,6 +170,7 @@ describe("FinanceTransactions receipt detail", () => {
           id: "receipt-1",
           accountId: "account-1",
           type: "EXPENSE",
+          purpose: "ORDINARY",
           amount: "83.42",
           currency: "PLN",
           occurredAt: "2026-08-21T10:00:00.000Z",
@@ -144,6 +191,7 @@ describe("FinanceTransactions receipt detail", () => {
       id: "receipt-1",
       accountId: "account-1",
       type: "EXPENSE",
+      purpose: "ORDINARY",
       amount: "83.42",
       currency: "PLN",
       occurredAt: "2026-08-21T10:00:00.000Z",
@@ -195,6 +243,7 @@ describe("FinanceTransactions receipt detail", () => {
           id: "row-1",
           accountId: "account-1",
           type: "INCOME",
+          purpose: "ORDINARY",
           amount: "1200",
           currency: "USD",
           occurredAt: "2026-08-21T10:00:00.000Z",
@@ -203,7 +252,11 @@ describe("FinanceTransactions receipt detail", () => {
             id: "account-1",
             name: "Bank",
             currency: "USD",
-            iconPresentation: { type: "unicode", value: "🏦" },
+            iconPresentation: {
+              type: "image",
+              id: "bank-icon",
+              url: "https://cdn.example/bank.png",
+            },
           },
           category: {
             id: "category-1",
@@ -221,6 +274,49 @@ describe("FinanceTransactions receipt detail", () => {
     expect(await screen.findByRole("table")).toBeInTheDocument();
     expect(screen.getByText("Client payment")).toBeInTheDocument();
     expect(screen.getByText(/Bank/)).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Bank" })).toHaveAttribute(
+      "src",
+      "https://cdn.example/bank.png",
+    );
     expect(consumerFinanceApi.transaction).not.toHaveBeenCalled();
+  });
+
+  it("keeps investment cash-flow rows inspectable but not directly editable or deletable", async () => {
+    vi.mocked(consumerFinanceApi.transactions).mockResolvedValue({
+      items: [
+        {
+          id: "investment-flow-row",
+          accountId: "account-1",
+          type: "EXPENSE",
+          purpose: "INVESTMENT_CONTRIBUTION",
+          amount: "4000",
+          currency: "USD",
+          occurredAt: "2026-08-21T10:00:00.000Z",
+          description: "House deposit",
+          account: {
+            id: "account-1",
+            name: "Bank",
+            currency: "USD",
+            iconPresentation: { type: "unicode", value: "💳" },
+          },
+        },
+      ],
+      nextCursor: null,
+    });
+
+    renderTransactions("browser");
+
+    expect(
+      await screen.findAllByText("Investment contribution"),
+    ).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: "Purchase details" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Edit transaction" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Delete transaction" }),
+    ).not.toBeInTheDocument();
   });
 });

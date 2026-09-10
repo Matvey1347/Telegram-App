@@ -1,6 +1,114 @@
 # Project Refactor ExecPlan
 
-Updated: 2026-09-06
+Updated: 2026-09-08
+
+## 2026-09-08 Consumer Finance debts and regular payments
+
+This slice adds two FinanceProfile-owned aggregates without crossing into the
+internal Finance product. Debts own direction, account-native amount, due date,
+derived overdue state and one atomic ledger settlement. Regular payments own an
+account-native amount, optional expense category, weekly/monthly/yearly calendar
+anchor, one next useful occurrence and append-only configuration/status
+revisions. Confirmed occurrences are financial audit records; advancing the
+schedule alone is not a configuration revision.
+
+Regular payments deliberately coexist with simple Reminders. Reminder delivery
+may advance after send; regular-payment delivery is a one-shot prompt and may
+advance only after a guarded user confirmation carrying the exact expected
+occurrence. Both features reuse the existing `TelegramBotDelivery` outbox,
+leases, retries, bounded batches and single nearest-due timer. Domain state and
+the next delivery are written in one Prisma transaction through a stable
+transaction-aware platform port. After commit, a new row only notifies the
+existing scheduler of an earlier candidate; replacement first arms its committed
+candidate and then recomputes the shared earliest wake, so it can neither delay
+another product's delivery nor lose a wake if the recompute fails. No cron,
+polling, scan, worker, heartbeat, per-entity timer or Railway service is added.
+
+The cross-stack contract uses bounded profile-scoped read models with compact
+account/category presentation, account-derived currency, narrow query keys and
+two module-scope lazy frontend screens. Settlement and payment confirmation use
+`FinanceLedgerService.createTransactionInTransaction`; stale/double requests
+return the already linked transaction and never pay the following occurrence.
+The confirmation guard carries both the exact occurrence and the presented
+configuration version; confirmation advances the state CAS token, so a stale
+Telegram button or concurrent edit cannot settle a different amount/config.
+Adopting an overridden occurrence amount is a separate version-guarded command
+that creates exactly one real revision. Profile export/deletion includes the
+new aggregates, revisions, occurrences and related delivery payloads. Calendar
+obligations snapshot their schedule timezone, and category revisions snapshot a
+stable localization key. Deep links use an exact profile-scoped, active-row
+lookup rather than a client-side first-page search.
+
+Grace/Knuth/Parnas/Turing review completed with no release-blocking findings.
+All new handwritten production files are within the 100–400 target (largest:
+397 lines), and architecture policy tests pass 16/16. `db:generate`, Prisma
+validate, shared typecheck/build, API typecheck/build, Web typecheck/build,
+targeted lint, 54 targeted API tests, 28 targeted Web tests, i18n and diff checks
+pass. The full API run passes 336 suites and 1843 tests, with three unrelated
+pre-existing suites failing (two CRM assertion drifts and one missing
+`Reflect.getMetadata` setup). The full Web run passes 209 files and 902 tests;
+its sole unrelated failure is the existing Ad Sales publication-preview
+fixture. Full Web lint remains at the inherited 160 errors/231 warnings, while
+the changed obligation files are clean. The architecture command remains red
+only on the same seven unrelated shrinking-baseline violations.
+
+Runtime cost is event-driven. New recurring jobs/processes/timers: zero; after
+the existing scheduler bootstrap, an empty queue performs no periodic DB work.
+Debt create is two persisted rows (debt + delivery), a real edit is at most
+three changed rows (debt, canceled delivery, replacement), settlement is two
+domain rows plus cancellation, and duplicate/no-op requests write nothing.
+Regular-payment create is three rows (payment, first revision, delivery), a
+real edit is at most four, pause/cancel or resume at most three, and confirmation
+is four domain rows (transaction, occurrence, schedule advance, next delivery).
+Applying a changed future amount adds one payment update, one revision, and a
+delivery replacement. At 100 debts plus 100 regular payments there are at most
+200 pending delivery rows but still one timer; if all mature together they drain
+in eight batches of 25 plus the final empty claim. Revisions grow only on real
+configuration/status changes and occurrences only on confirmations; durable
+delivery retention remains 30 days. Neon scale-to-zero and Railway idle
+CPU/RAM/network baselines are unchanged; network and retry cost occur only for
+actual Telegram notifications.
+
+## 2026-09-08 Consumer Finance surface and frontend boundary
+
+Consumer Finance Web App and Telegram Mini App now share one explicit screen
+model while remaining isolated from internal Finance implementation. Settings
+owns profile and privacy only; Reminders and Plans/Billing are independent
+destinations. Accounts use a collection screen plus a browser-history-aware
+full-page create/edit route, and malformed or missing account deep links return
+to a recoverable Accounts state.
+
+The eager shell keeps Dashboard and a small typed `en`/`uk`/`ru` core copy.
+Accounts, account editor, Analytics, Budget, Categories, Onboarding, Plans,
+Reminders, Settings, Transactions, Transfers and Ultimate are module-scope lazy
+screens with feature-local copy. The former monolithic Consumer Finance i18n
+modules were removed. Eager locale updates use a narrow profile API client;
+planning, billing, reminders, ledger, timezone and emoji-picker implementation
+remain outside the initial Home graph and no hidden screen is prefetched.
+
+Transactions now starts account, category and history reads in one render wave;
+Transfers starts accounts and history together; Budget starts Dashboard,
+categories and smart limits together without a duplicate cold limits request;
+Plans starts entitlements and catalog together. Locale-only changes no longer
+refetch Dashboard, account creation cannot populate a partial collection cache,
+and all mutations keep bot-scoped keys and narrow cache updates. Dashboard uses
+hydrated `iconPresentation` without `/icons/:id` joins. No timer, polling,
+per-row request, persistent cache, worker, database write path or Railway
+service was added; idle and 100-channel cost remain unchanged.
+
+Final Grace/Knuth/Parnas/Turing review corrected repeated action reopening,
+account deep-link/cache handling, paid-plan duplicate checkout, Stripe/Stars
+price compatibility, subscription-specific renewal state and localized billing
+status/mode display. All touched handwritten Consumer Finance production files
+remain below 400 lines. Web typecheck, production build, API build, focused API
+and 150 focused Consumer Finance tests, i18n parity/check and `git diff --check`
+pass. Targeted lint for every changed Consumer Finance TypeScript file has zero
+errors (two existing Telegram-avatar `<img>` warnings); full web lint remains
+red on 160 errors and 231 warnings outside this slice. The full web run passes
+872 of 873 tests; its sole stable failure is an untouched Ad Sales lifecycle
+fixture that lacks the linked-post state now required to render `Publication
+pending`. Architecture policy tests pass 16/16; the gate remains red only on
+the same seven unrelated pre-existing size/direct-access baseline violations.
 
 ## 2026-09-06 CRM reply attention and grouped notifications
 
@@ -1496,3 +1604,189 @@ keep-warm request, recurring precomputation, persistent cache, telemetry writer,
 schema migration, retention increase, higher resource floor, or scale-to-zero
 change. Optimized paths perform equal or fewer HTTP/DB calls and writes; all
 100-channel/10,000-quote/1,000-ID behaviors above have explicit bounds.
+
+## 2026-09-08 Consumer Finance Analytics and Billing Consolidation
+
+This slice completes the Consumer Finance UI continuation without reopening the
+internal Finance boundary.
+
+- The single `/analytics` read model now owns FREE totals, expense and income
+  category breakdowns, account breakdowns, timeline, calendar-aware comparison,
+  deterministic trends, and explicit current/previous legacy-currency quality
+  disclosures. The former duplicate Ultimate deterministic screens and reads
+  were removed; old `screen=ultimate` links resolve to Analytics.
+- Ultimate adds one explicit, server-authorized AI action over compact aggregate
+  facts. It uses the existing encrypted provider configuration, structured
+  Responses output, `store: false`, a 20-second timeout, atomic monthly usage
+  reservation, priced usage recording, and no response persistence, timer,
+  polling, background job, or precomputation. Analytics interpretation and
+  credential resolution were extracted into focused services, reducing the
+  touched Finance AI provider from 569 to 492 lines. Reservations persist the
+  workspace, bot, runtime, user and profile dimensions consumed by the existing
+  operator AI usage/cost view.
+- `finance-product-definition.ts` is the production source for the exact Free,
+  Pro and Ultimate capabilities, limits and UAH monthly prices. The consumer
+  billing facade returns this definition plus authoritative subscription and
+  provider state, server-owned purchase eligibility, and owns Finance catalog
+  synchronization. Checkout independently rejects same-tier purchases,
+  downgrades, recoverable past-due subscriptions, and overlapping paid-plan
+  checkout against the current entitlement/provider state; provider-safe
+  replacement/proration remains a separate future flow. The generic billing
+  engine no longer contains Finance prices.
+- Consumer billing endpoints were extracted from the broad Finance controller.
+  Transaction rows render the shared resolved account/category icons, including
+  image-backed icons, and locale-owned date/notification accessibility copy no
+  longer falls back to hard-coded English.
+
+### Runtime-cost assessment
+
+- Base analytics performs five fixed, parallel, bounded aggregates regardless
+  of account count; the 100-account regression asserts the same five statements
+  and capped category/account/legacy result sets. Dashboard keeps its separate
+  one-aggregate read model and does not hydrate comparison or timeline data.
+- Current presentation-rate preparation now reads only the latest persisted row
+  per directed workspace currency pair instead of loading full exchange-rate
+  history. Existing composite uniqueness supports the workspace/pair/date access
+  pattern; a new speculative index was not added without production-like
+  `EXPLAIN (ANALYZE, BUFFERS)` evidence.
+- AI is never called by the FREE analytics read or on page load. The only AI
+  request follows an explicit Ultimate mutation. No unchanged-state write,
+  recurring work, retention change, Neon keep-awake behavior, or Railway
+  CPU/RAM/network baseline was added.
+
+### Verification
+
+- Root typecheck, shared/API/web builds, focused API/web lint, i18n parity,
+  Prisma generation, and all targeted Consumer Finance suites pass.
+- Full API: 339/343 suites and 1,844/1,851 tests pass; the four remaining suites
+  are existing CRM, managed-post metadata, and stale mutual-promotion fixture
+  failures outside this slice.
+- Full web: 209/210 files and 895/896 tests pass; the remaining failure is the
+  existing Ad Sales publication-timing test outside Consumer Finance.
+- Architecture policy tests pass. The normal gate remains red only on seven
+  existing shrinking-baseline overruns in MTProto, Growth campaigns, Telegram
+  Channels/account panels, and shared UI primitives; no Consumer Finance
+  violation or allowance was added. `git diff --check` passes.
+
+## 2026-09-08 Consumer Finance Savings Goals and Universal Investments
+
+This slice replaces the former singular editable goal with product-owned
+Savings Goals and adds generic manual Investments without crossing into the
+internal Finance product.
+
+- Savings Goals use append-only allocation, release, and reallocation events.
+  Account transfers remain real transfers; goal allocation is metadata over
+  cash already held in accounts and therefore contributes zero additional net
+  worth. The read model reports allocated, backed, underfunded, and legacy
+  unlinked amounts explicitly. Completed goals retain release/reallocation and
+  history; archive requires zero linked allocation, while legacy-only metadata
+  remains historical and does not strand the goal.
+- Investments support business, real estate, securities, crypto, digital and
+  physical assets, and other manually valued assets without a ticker or market
+  data engine. Contributions and returns are first-class, account-authoritative
+  movements with a dedicated transaction purpose, immutable reporting/base
+  snapshots, ownership checks, atomic projection updates, and idempotency.
+- Valuations and corrections are append-only. Current value is the latest
+  effective valuation, profit/loss is `current value + returned - invested`,
+  and percentage return is absent when invested capital is zero. Closing can
+  atomically record an optional return, a zero valuation, and closed status.
+- Account allocation, account archive, transfer linking, valuation, cash-flow,
+  close, complete, and archive races use shared advisory/optimistic locks and
+  locked ownership/status rechecks. UI retries preserve the original
+  idempotency key; a duplicate close reconstructs its original return,
+  transaction, account, and valuation result.
+- Active investments without a manual current valuation are disclosed as
+  excluded instead of being reported as known zero-value losses. Corrected
+  valuations remain in history but superseded points are omitted from the
+  effective trend.
+- Analytics and the bounded dashboard distinguish ordinary income, ordinary
+  expenses, saved, invested, investment returns, cash, investments, and net
+  worth. Ordinary category/limit paths exclude investment-purpose movements.
+- Shared contracts, Prisma schema/migration, API DTO/controllers/services,
+  export/privacy deletion, generated-transaction guards, product-owned query
+  keys/cache reconciliation, responsive Web/Mini UI, and Ukrainian/Russian/
+  English copy were updated together. Lists and histories use bounded cursor
+  pagination with explicit load-more and error states.
+
+### Runtime-cost assessment
+
+- Idle cost is zero: no polling, timer, cron, market API, background valuation,
+  persistent cache, or unchanged-state write was introduced. Neon remains able
+  to sleep, and Railway receives no new continuous CPU/RAM/network baseline.
+- At 100 goals or investments, normal reads remain cursor-bounded and dashboard
+  work remains a fixed compact request. Storage grows only from explicit user
+  actions: one savings event, one transaction plus cash-flow row, or one manual
+  valuation row. Full history export remains an explicit user-triggered linear
+  portability operation.
+
+### Verification
+
+- Prisma generate/validate, root typecheck, i18n parity, focused lint, and the
+  shared/API/web production build pass. Prisma validate retains the repository's
+  pre-existing required-field `SetNull` warning.
+- All 47 Consumer Finance API suites pass (240 tests), and the broader 39-file
+  Consumer Finance web slice passes (198 tests). Full API passes 352/356
+  suites and 1,880/1,887 tests; the four remaining suites are existing CRM,
+  Growth mutual-promotion, and Telegram Channels failures outside this slice.
+- Full web passes 214/215 files and 920/921 tests; the remaining failure is the
+  existing Ad Sales publication-lifecycle timing test outside Consumer Finance.
+- Architecture policy tests pass 16/16. The normal file-size gate remains red
+  only on the same seven unrelated shrinking-baseline overruns; no Consumer
+  Finance allowance or cross-product import was added. `git diff --check`
+  passes.
+
+## 2026-09-08 Consumer Finance Fintech Shell and State System
+
+- Consumer Finance navigation now uses one product-owned destination map for
+  Web and Mini App, grouped by summary, money, planning, and service intent.
+  Active destinations retain `aria-current` and use transform-only motion with
+  a reduced-motion fallback.
+- The browser shell keeps branding and Telegram identity outside the scrolling
+  navigation, presents the active section identity in the sticky header, and
+  moves the synchronized locale control to the top-right. Language choices are
+  flag-only visually while retaining localized accessible names.
+- Transfers now treat two non-archived accounts as a real prerequisite. With
+  fewer accounts, only localized guidance and one direct account-creation action
+  are rendered; transfer history is not requested until the prerequisite is
+  satisfied.
+- The shared Consumer Finance feedback layer now uses compact context-aware
+  ledger, flow, planning, and growth visuals. Empty and error states do not loop;
+  continuous motion is limited to active navigation and genuine ongoing states.
+- The existing session profile and settings update contracts already provide
+  Telegram identity and persist locale changes through the bot presentation
+  path, so no parallel API, schema, or cross-product abstraction was added.
+
+### Runtime-cost assessment
+
+- Navigation, avatar, locale placement, and CSS motion add no polling, timers,
+  storage, external calls, or idle Railway/Neon work.
+- The ineligible transfer screen removes its history HTTP request and associated
+  bounded database reads. At 100 such opens this avoids roughly 100 HTTP calls
+  and about 200 database reads while keeping the existing accounts read.
+
+## 2026-09-08 Ads and Workspace Navigation Consolidation
+
+- Growth exposes one Ads destination. Campaigns and mutual-promotion folders
+  are selected through accessible page tabs, while the legacy mutual-promotion
+  URL redirects to the consolidated workspace.
+- Ads and Telegram Channels share one route-tab persistence hook. Explicit URL
+  state wins, valid last-used state is restored, unrelated query parameters are
+  preserved, and invalid stored values fall back safely.
+- The mixed Operations navigation group was removed. Workspace Settings now
+  owns permission-aware links to Roles & access, Scheduled tasks, and Trash;
+  the System Logs UI route was removed while backend operational logging stays
+  available to the platform.
+- Application log retention is 30 days. The existing daily, non-editable
+  system-maintenance task performs the bounded cleanup, so records expire after
+  about one month without introducing another scheduler or polling loop.
+
+### Runtime-cost assessment
+
+- Route-tab persistence is browser-local and adds no HTTP calls, database work,
+  timers, or polling. Hidden Ads sections remain unmounted, so only the active
+  section issues queries.
+- Log cleanup keeps the existing one due-driven daily execution: approximately
+  30 cleanup queries per month deployment-wide, not per workspace or channel.
+  At 100 channels the schedule and query count are unchanged; shorter retention
+  reduces stored rows and index size. No new Railway process, CPU loop, memory
+  baseline, external request, or network egress was added.

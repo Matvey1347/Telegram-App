@@ -4,11 +4,12 @@ import { useState } from "react";
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Pencil, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Pencil, Plus, Trash2 } from "lucide-react";
 import type {
-  ConsumerFinanceAccount,
+  ConsumerFinanceDashboard,
   ConsumerFinanceTransfer,
   ConsumerFinanceTransferQuery,
 } from "@telegram-system/shared";
@@ -23,6 +24,7 @@ import {
   Select,
 } from "./ui";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
+import { consumerFinanceLedgerApi } from "@/lib/features/finance/consumer-finance-ledger-api";
 import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
 import {
   reconcileConsumerTransferCaches,
@@ -32,27 +34,24 @@ import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-que
 import { FinanceConfirmModal } from "./finance-confirm-modal";
 import { FinanceTransferEditor } from "./finance-transfer-editor";
 import { useDebouncedValue } from "./use-debounced-value";
-import {
-  financeCopy,
-  financeIntlLocale,
-  type FinanceLocale,
-} from "./finance-i18n";
+import { financeIntlLocale, type FinanceLocale } from "./i18n/core";
+import { financeTransfersCopy } from "./i18n/transfers";
 
 export function FinanceTransfers({
   botId,
-  accounts,
   locale,
   timezone,
   initiallyOpen = false,
+  onCreateAccount,
 }: {
   botId: string;
-  accounts: ConsumerFinanceAccount[];
   locale: FinanceLocale;
   timezone: string;
   initiallyOpen?: boolean;
+  onCreateAccount: () => void;
 }) {
   const client = useQueryClient();
-  const t = financeCopy(locale);
+  const t = financeTransfersCopy(locale);
   const [filters, setFilters] = useState<ConsumerFinanceTransferQuery>({
     limit: 30,
   });
@@ -62,6 +61,19 @@ export function FinanceTransfers({
   );
   const debouncedSearch = useDebouncedValue(filters.search);
   const queryFilters = { ...filters, search: debouncedSearch };
+  // Accounts and history are independent and intentionally start together.
+  const accounts = useQuery({
+    queryKey: consumerFinanceKeys.accounts(botId),
+    queryFn: () => consumerFinanceLedgerApi.accounts(botId),
+    initialData: () =>
+      client.getQueryData<ConsumerFinanceDashboard>(
+        consumerFinanceKeys.dashboard(botId),
+      )?.stats.accounts,
+    initialDataUpdatedAt: () =>
+      client.getQueryState(consumerFinanceKeys.dashboard(botId))?.dataUpdatedAt,
+  });
+  const accountRows = accounts.data ?? [];
+  const activeAccounts = accountRows.filter((account) => !account.archivedAt);
   const history = useInfiniteQuery({
     queryKey: consumerFinanceKeys.transfers(botId, {
       ...queryFilters,
@@ -74,6 +86,7 @@ export function FinanceTransfers({
         cursor: pageParam,
       }),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
+    enabled: accounts.isSuccess && activeAccounts.length >= 2,
   });
   const items = history.data?.pages.flatMap((page) => page.items) ?? [];
   const invalidateDerived = () => {
@@ -86,9 +99,6 @@ export function FinanceTransfers({
     void client.invalidateQueries({
       queryKey: consumerFinanceKeys.analyticsRoot(botId),
     });
-    void client.invalidateQueries({
-      queryKey: consumerFinanceKeys.ultimateRoot(botId),
-    });
   };
   const remove = useMutation({
     mutationFn: (id: string) => consumerFinanceApi.deleteTransfer(botId, id),
@@ -100,12 +110,44 @@ export function FinanceTransfers({
   });
   const update = (changes: Partial<ConsumerFinanceTransferQuery>) =>
     setFilters((current) => ({ ...current, ...changes, cursor: undefined }));
+  if (accounts.isLoading)
+    return <LoadingState text={t.loadingReferences} context="transfers" />;
+  if (accounts.isError)
+    return (
+      <div className="space-y-3">
+        <ErrorState text={t.referencesUnavailable} context="transfers" />
+        <Button onClick={() => accounts.refetch()}>{t.retry}</Button>
+      </div>
+    );
+  if (activeAccounts.length < 2)
+    return (
+      <Card className="mx-auto flex max-w-2xl flex-col items-center px-5 py-10 text-center sm:px-8 sm:py-12">
+        <span className="relative flex h-16 w-16 items-center justify-center rounded-2xl border border-sky-800/70 bg-sky-500/10 text-sky-200">
+          <ArrowLeftRight size={28} aria-hidden="true" />
+          <span className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full border border-neutral-800 bg-neutral-950 text-xs font-semibold text-neutral-300">
+            {activeAccounts.length}/2
+          </span>
+        </span>
+        <h2 className="mt-5 text-lg font-semibold text-neutral-100">
+          {t.transferUnavailable}
+        </h2>
+        <p className="mt-2 max-w-md text-sm leading-6 text-neutral-400">
+          {activeAccounts.length
+            ? t.secondAccountRequired
+            : t.firstAccountRequired}
+        </p>
+        <Button className="mt-6 min-h-11" onClick={onCreateAccount}>
+          <Plus size={17} aria-hidden="true" />
+          {activeAccounts.length ? t.createSecondAccount : t.createFirstAccount}
+        </Button>
+      </Card>
+    );
   return (
     <div className="space-y-4">
       <FinanceTransferEditor
         key={editing?.id ?? "create-transfer"}
         botId={botId}
-        accounts={accounts}
+        accounts={activeAccounts}
         locale={locale}
         timezone={timezone}
         editing={editing}
@@ -138,7 +180,7 @@ export function FinanceTransfers({
             }
           >
             <option value="">{t.allAccounts}</option>
-            {accounts.map((item) => (
+            {activeAccounts.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
               </option>
@@ -163,10 +205,10 @@ export function FinanceTransfers({
       </Card>
       <Card>
         {history.isLoading ? (
-          <LoadingState text={t.loading} />
+          <LoadingState text={t.loading} context="transfers" />
         ) : history.isError ? (
           <div className="space-y-3">
-            <ErrorState text={t.transferLoadError} />
+            <ErrorState text={t.transferLoadError} context="transfers" />
             <Button onClick={() => history.refetch()}>{t.retry}</Button>
           </div>
         ) : items.length ? (
@@ -181,7 +223,7 @@ export function FinanceTransfers({
             />
           ))
         ) : (
-          <EmptyState text={t.noTransfers} />
+          <EmptyState text={t.noTransfers} context="transfers" />
         )}
       </Card>
       {history.hasNextPage ? (
@@ -225,7 +267,7 @@ function TransferRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const t = financeCopy(locale);
+  const t = financeTransfersCopy(locale);
   return (
     <div className="flex items-center gap-1 border-b border-neutral-800 py-3 last:border-0">
       <div className="min-w-0 flex-1">

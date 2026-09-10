@@ -108,6 +108,7 @@ export class TelegramInviteSyncService {
       creatorPhotoUrl: params.link.creatorPhotoUrl,
       creatorMemberId: attribution.creatorMemberId,
       creatorMatchSource: attribution.creatorMatchSource,
+      telegramCreatedAt: params.link.createdAt,
     };
 
     const upserted =

@@ -9,7 +9,6 @@ import { PrismaService } from '../../../../prisma/prisma.service';
 import type {
   CreateFinanceAccountDto,
   CreateFinanceCategoryDto,
-  CreateFinanceGoalDto,
   CreateFinanceReminderDto,
   UpdateFinanceCategoryDto,
   UpdateFinanceAccountDto,
@@ -24,6 +23,11 @@ import {
   financeCategoryEmoji,
   financeIconPresentation,
 } from './finance-entity-emoji';
+import { exportFinanceData } from './finance-portability';
+import {
+  archiveFinanceAccount,
+  assertFinanceCategoryArchivable,
+} from './finance-obligation-archive-guards';
 
 function categoryView<
   T extends { emoji: string | null; name: string; key: string | null },
@@ -54,7 +58,15 @@ export class FinanceCoreService {
         timezone: true,
         locale: true,
         onboardingCompletedAt: true,
-        telegramUser: { select: { languageCode: true } },
+        displayName: true,
+        telegramUser: {
+          select: {
+            languageCode: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
       },
     });
     if (!profile) return null;
@@ -64,8 +76,17 @@ export class FinanceCoreService {
       profile.locale === 'en'
         ? profile.locale
         : null;
+    const telegramDisplayName =
+      [profile.telegramUser.firstName, profile.telegramUser.lastName]
+        .filter(Boolean)
+        .join(' ') ||
+      (profile.telegramUser.username
+        ? `@${profile.telegramUser.username}`
+        : 'Telegram user');
+    const displayName = profile.displayName?.trim() || telegramDisplayName;
     return {
       id: profile.id,
+      displayNameOverride: profile.displayName,
       defaultCurrency: profile.defaultCurrency,
       timezone: profile.timezone,
       locale: financeChatLocale(
@@ -74,6 +95,13 @@ export class FinanceCoreService {
       ),
       localeOverride,
       onboardingCompletedAt: profile.onboardingCompletedAt,
+      telegramUser: {
+        displayName,
+        username: profile.telegramUser.username,
+        avatarUrl: profile.telegramUser.username
+          ? `https://t.me/i/userpic/320/${encodeURIComponent(profile.telegramUser.username)}.jpg`
+          : null,
+      },
     };
   }
   notificationTarget(profileId: string) {
@@ -121,12 +149,6 @@ export class FinanceCoreService {
       orderBy: { nextOccurrenceAt: 'asc' },
     });
   }
-  goal(profileId: string) {
-    return this.prisma.financeGoal.findFirst({
-      where: { profileId, active: true },
-    });
-  }
-
   async updateSettings(profileId: string, dto: UpdateFinanceSettingsDto) {
     try {
       Intl.DateTimeFormat('en', { timeZone: dto.timezone }).format();
@@ -140,6 +162,9 @@ export class FinanceCoreService {
         timezone: dto.timezone,
         ...(Object.prototype.hasOwnProperty.call(dto, 'locale')
           ? { locale: dto.locale ?? null }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(dto, 'displayName')
+          ? { displayName: dto.displayName?.trim() || null }
           : {}),
         onboardingCompletedAt: new Date(),
       },
@@ -214,16 +239,9 @@ export class FinanceCoreService {
     });
   }
   async archiveAccount(profileId: string, id: string) {
-    const account = await this.prisma.financeAccount.findFirst({
-      where: { id, profileId, archivedAt: null },
-      select: { id: true },
-    });
+    const account = await archiveFinanceAccount(this.prisma, profileId, id);
     if (!account) throw new NotFoundException('Finance account not found');
-    return this.prisma.financeAccount.update({
-      where: { id: account.id },
-      data: { archivedAt: new Date() },
-      select: { id: true },
-    });
+    return account;
   }
 
   async createCategory(
@@ -356,6 +374,7 @@ export class FinanceCoreService {
       select: { id: true },
     });
     if (!category) throw new NotFoundException('Finance category not found');
+    await assertFinanceCategoryArchivable(this.prisma, profileId, category.id);
     return this.prisma.financeCategory
       .update({
         where: { id: category.id },
@@ -409,45 +428,6 @@ export class FinanceCoreService {
     return limit;
   }
 
-  async createGoal(profileId: string, dto: CreateFinanceGoalDto) {
-    const existing = await this.prisma.financeGoal.findFirst({
-      where: { profileId, active: true },
-      select: { id: true },
-    });
-    if (existing)
-      throw new ConflictException({
-        code: 'ACTIVE_GOAL_LIMIT',
-        message: 'Free Finance supports one active goal',
-      });
-    const target = new Prisma.Decimal(dto.targetAmount);
-    const current = new Prisma.Decimal(dto.currentAmount || 0);
-    if (
-      !target.isFinite() ||
-      target.lte(0) ||
-      !current.isFinite() ||
-      current.lt(0)
-    )
-      throw new BadRequestException('Goal amounts are invalid');
-    return this.prisma.financeGoal.create({
-      data: {
-        profileId,
-        name: dto.name.trim(),
-        targetAmount: target,
-        currentAmount: current,
-        currency: dto.currency.toUpperCase(),
-        targetDate: dto.targetDate ? new Date(dto.targetDate) : null,
-      },
-    });
-  }
-  async deactivateGoal(profileId: string, id: string) {
-    const result = await this.prisma.financeGoal.updateMany({
-      where: { id, profileId, active: true },
-      data: { active: false },
-    });
-    if (!result.count) throw new NotFoundException('Active goal not found');
-    return { deleted: true };
-  }
-
   async createReminder(profileId: string, dto: CreateFinanceReminderDto) {
     const profile = await this.prisma.financeProfile.findUnique({
       where: { id: profileId },
@@ -469,43 +449,25 @@ export class FinanceCoreService {
   }
 
   async export(profileId: string) {
-    const [
-      profile,
-      accounts,
-      categories,
-      transactions,
-      transfers,
-      limits,
-      reminders,
-      goals,
-    ] = await Promise.all([
-      this.profile(profileId),
-      this.prisma.financeAccount.findMany({ where: { profileId } }),
-      this.categories(profileId),
-      this.prisma.financeTransaction.findMany({
-        where: { profileId, deletedAt: null },
-      }),
-      this.prisma.financeTransfer.findMany({
-        where: { profileId, deletedAt: null },
-      }),
-      this.limits(profileId),
-      this.reminders(profileId),
-      this.prisma.financeGoal.findMany({ where: { profileId } }),
-    ]);
-    return {
-      exportedAt: new Date().toISOString(),
-      profile,
-      accounts,
-      categories,
-      transactions,
-      transfers,
-      limits,
-      reminders,
-      goals,
-    };
+    return exportFinanceData(this.prisma, profileId);
   }
   async deleteData(profileId: string) {
-    await this.prisma.financeProfile.delete({ where: { id: profileId } });
+    await this.prisma.$transaction(async (tx) => {
+      // Remove obligation rows first so their RESTRICT links to generated
+      // transactions cannot interfere with the profile's remaining cascades.
+      await tx.financeDebt.deleteMany({ where: { profileId } });
+      await tx.financeRecurringPayment.deleteMany({ where: { profileId } });
+      await tx.financeSavingsMovement.deleteMany({ where: { profileId } });
+      await tx.financeSavingsGoal.deleteMany({ where: { profileId } });
+      await tx.financeInvestmentValuation.updateMany({
+        where: { profileId },
+        data: { correctsValuationId: null },
+      });
+      await tx.financeInvestmentValuation.deleteMany({ where: { profileId } });
+      await tx.financeInvestmentCashFlow.deleteMany({ where: { profileId } });
+      await tx.financeInvestment.deleteMany({ where: { profileId } });
+      await tx.financeProfile.delete({ where: { id: profileId } });
+    });
     return { deleted: true };
   }
 

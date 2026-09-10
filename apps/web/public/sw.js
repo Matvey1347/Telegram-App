@@ -22,8 +22,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification("New CRM activity", {
       body: "Open Nexeloq to review the update.",
-      icon: "/brand/telegram-system-192.png",
-      badge: "/brand/telegram-system-192.png",
+      icon: "/brand/nexeloq-pwa-192.png",
+      badge: "/brand/nexeloq-pwa-192.png",
       tag: String(notificationId || "operations-notification"),
       data: { targetUrl: notificationTarget(targetUrl) },
     }),

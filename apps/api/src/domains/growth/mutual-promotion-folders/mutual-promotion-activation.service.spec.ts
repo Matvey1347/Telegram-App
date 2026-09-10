@@ -2,9 +2,9 @@
 import { MutualPromotionActivationService } from './mutual-promotion-activation.service';
 
 describe('MutualPromotionActivationService', () => {
-  const now = new Date('2026-09-07T10:00:00.000Z');
-  const startsAt = new Date('2026-09-08T10:00:00.000Z');
-  const endsAt = new Date('2026-09-09T10:00:00.000Z');
+  const now = new Date();
+  const startsAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const endsAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
 
   function setup(postCount = 5, publisherCount = 2) {
     const posts = Array.from({ length: postCount }, (_, position) => ({
@@ -219,9 +219,14 @@ describe('MutualPromotionActivationService', () => {
       status: 'SCHEDULED',
       activatedAt: now,
     });
+    const retryDelivery = preparedDelivery(
+      'delivery-retry',
+      'managed-retry',
+      'FAILED',
+    );
     prisma.mutualPromotionPostDelivery.findMany.mockResolvedValue([
       preparedDelivery('delivery-ready', 'managed-ready', 'SCHEDULED'),
-      preparedDelivery('delivery-retry', 'managed-retry', 'FAILED'),
+      retryDelivery,
     ]);
 
     const result = await service.activate('user-1', 'folder-1');
@@ -232,7 +237,7 @@ describe('MutualPromotionActivationService', () => {
       'workspace-1',
       'channel-1',
       'managed-retry',
-      startsAt,
+      retryDelivery.folderPost.scheduledAt,
     );
     expect(result).toMatchObject({ successCount: 2, failedCount: 0 });
   });

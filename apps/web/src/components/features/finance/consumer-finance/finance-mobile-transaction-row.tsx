@@ -1,12 +1,10 @@
 import { Pencil, Trash2 } from "lucide-react";
 import type { ConsumerFinanceTransaction } from "@telegram-system/shared";
 import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
-import {
-  financeCopy,
-  financeIntlLocale,
-  localizeFinanceCategory,
-  type FinanceLocale,
-} from "./finance-i18n";
+import { financeIntlLocale, type FinanceLocale } from "./i18n/core";
+import { financeTransactionsCopy } from "./i18n/transactions";
+import { localizeFinanceCategory } from "./finance-category-i18n";
+import { IconAvatar } from "./ui/finance-icon-avatar";
 
 export function FinanceMobileTransactionRow({
   item,
@@ -23,9 +21,17 @@ export function FinanceMobileTransactionRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const t = financeCopy(locale);
-  const income = item.type === "INCOME";
+  const t = financeTransactionsCopy(locale);
+  const income = item.type === "INCOME" || item.purpose === "INVESTMENT_RETURN";
+  const generated = item.purpose !== "ORDINARY";
+  const purposeTitle =
+    item.purpose === "INVESTMENT_CONTRIBUTION"
+      ? t.investmentContribution
+      : item.purpose === "INVESTMENT_RETURN"
+        ? t.investmentReturn
+        : undefined;
   const title =
+    purposeTitle ||
     item.merchantDisplay ||
     item.description ||
     (item.category
@@ -56,8 +62,13 @@ export function FinanceMobileTransactionRow({
         type="button"
         aria-label={t.transactionDetails}
         onClick={onDetail}
-        className="grid min-h-16 min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded px-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+        className="grid min-h-16 min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded px-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
       >
+        <IconAvatar
+          icon={item.account?.iconPresentation}
+          label={item.account?.name ?? t.accountFallback}
+          size="sm"
+        />
         <span className="min-w-0">
           <span className="block truncate text-sm font-medium" title={title}>
             {title}
@@ -80,20 +91,24 @@ export function FinanceMobileTransactionRow({
           {amount}
         </strong>
       </button>
-      <MobileRowAction
-        label={t.editTransactionLabel}
-        tone="text-neutral-300"
-        onClick={onEdit}
-      >
-        <Pencil size={16} />
-      </MobileRowAction>
-      <MobileRowAction
-        label={t.deleteTransactionLabel}
-        tone="text-rose-300"
-        onClick={onDelete}
-      >
-        <Trash2 size={16} />
-      </MobileRowAction>
+      {!generated ? (
+        <MobileRowAction
+          label={t.editTransactionLabel}
+          tone="text-neutral-300"
+          onClick={onEdit}
+        >
+          <Pencil size={16} />
+        </MobileRowAction>
+      ) : null}
+      {!generated ? (
+        <MobileRowAction
+          label={t.deleteTransactionLabel}
+          tone="text-rose-300"
+          onClick={onDelete}
+        >
+          <Trash2 size={16} />
+        </MobileRowAction>
+      ) : null}
     </div>
   );
 }

@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Button, Input, Modal } from "./ui";
-import { financeCopy, type FinanceLocale } from "./finance-i18n";
+import { type FinanceLocale } from "./i18n/core";
+import { financeConfirmCopy } from "./i18n/confirm";
 
 export function FinanceConfirmModal({
   open,
@@ -21,7 +22,7 @@ export function FinanceConfirmModal({
   onClose: () => void;
   onConfirm: () => void | Promise<unknown>;
 }) {
-  const t = financeCopy(locale);
+  const t = financeConfirmCopy(locale);
   const [value, setValue] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);

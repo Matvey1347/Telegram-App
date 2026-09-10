@@ -9,14 +9,24 @@ export type ConsumerFinanceCapability =
   | "RECEIPT_SCAN"
   | "SMART_LIMITS"
   | "FINANCE_HISTORY_QA"
-  | "DEEP_ANALYTICS"
-  | "ITEM_ANALYTICS"
-  | "MERCHANT_PATTERNS"
-  | "AUTOMATIC_INSIGHTS"
-  | "ANOMALY_DETECTION"
-  | "FINANCIAL_FORECAST";
+  | "AI_INSIGHTS"
+  | "AI_FORECAST_INTERPRETATION"
+  | "AI_RECOMMENDATIONS";
 
-export type ConsumerFinanceUsageFeature = "AI_INPUT" | "RECEIPT_SCAN";
+export type ConsumerFinancePlanFeature =
+  | "ACCOUNTS"
+  | "TRANSACTIONS"
+  | "DEBTS"
+  | "REGULAR_PAYMENTS"
+  | "DETAILED_ANALYTICS"
+  | "PERIOD_COMPARISON"
+  | "DETERMINISTIC_TRENDS"
+  | ConsumerFinanceCapability;
+
+export type ConsumerFinanceUsageFeature =
+  | "AI_INPUT"
+  | "RECEIPT_SCAN"
+  | "AI_INSIGHTS";
 
 export type ConsumerFinanceUsage = {
   feature: ConsumerFinanceUsageFeature;
@@ -38,11 +48,15 @@ export type ConsumerFinanceEntitlements = {
 };
 
 export type ConsumerBillingCatalog = {
+  current: ConsumerFinanceEntitlements;
   plans: Array<{
-    id: string;
-    code: string;
-    name: string;
-    description?: string | null;
+    id: string | null;
+    code: ConsumerFinanceTier;
+    capabilities: ConsumerFinanceCapability[];
+    features: ConsumerFinancePlanFeature[];
+    usageLimits: Record<ConsumerFinanceUsageFeature, number | null>;
+    /** Server-authoritative transition eligibility for checkout. */
+    canPurchase: boolean;
     prices: Array<{
       id: string;
       currency: string;
@@ -61,9 +75,24 @@ export type ConsumerBillingCatalog = {
     currentPeriodEnd?: string | null;
     cancelAtPeriodEnd: boolean;
   }>;
+  paymentHistory: Array<{
+    id: string;
+    status: "SUCCEEDED" | "FAILED";
+    provider: "STRIPE" | "TELEGRAM_STARS" | null;
+    amountMinor: number | null;
+    currency: string | null;
+    occurredAt: string;
+    planCode: string | null;
+  }>;
   providers: Array<{
     provider: "STRIPE" | "TELEGRAM_STARS";
     mode: "TEST" | "LIVE";
     capabilities: { intervals: Array<"MONTH" | "YEAR"> };
   }>;
+};
+
+export type ConsumerFinanceRenewalUpdate = {
+  id: string;
+  cancelAtPeriodEnd: boolean;
+  currentPeriodEnd: string | null;
 };

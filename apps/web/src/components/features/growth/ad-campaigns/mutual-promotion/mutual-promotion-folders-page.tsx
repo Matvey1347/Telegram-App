@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, FolderHeart, Plus, Users } from "lucide-react";
+import { FolderHeart, Plus } from "lucide-react";
 import type {
   CreateMutualPromotionFolderPayload,
   CreateMutualPromotionPostPayload,
@@ -16,7 +16,6 @@ import {
   telegramChannelsApi,
   telegramSystemBotApi,
 } from "@/lib/api";
-import { formatDateTime } from "@/lib/date-format";
 import { mutualPromotionFoldersApi } from "@/lib/features/growth/mutual-promotion-folders-api";
 import {
   accountKeys,
@@ -39,17 +38,24 @@ import {
 import { MutualPromotionFolderFormModal } from "./mutual-promotion-folder-form-modal";
 import { MutualPromotionFolderDetailModal } from "./mutual-promotion-folder-detail-modal";
 import { MutualPromotionFolderDetailSkeletonModal } from "./mutual-promotion-folder-detail-skeleton-modal";
+import { MutualPromotionInviteLinksEditor } from "./mutual-promotion-invite-links-editor";
+import { MutualPromotionFolderCard } from "./mutual-promotion-folder-card";
 import { useAppToast } from "@/providers/toast-provider";
 
 const listParams = { page: 1, pageSize: 100 } as const;
 
-export function MutualPromotionFoldersPage() {
+export function MutualPromotionFoldersPage({
+  sectionTabs,
+}: {
+  sectionTabs?: ReactNode;
+}) {
   const queryClient = useQueryClient();
   const { setProgress } = useAppToast();
   const [formOpen, setFormOpen] = useState(false);
   const [editingFolder, setEditingFolder] =
     useState<MutualPromotionFolderDetail | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [inviteLinksEditorOpen, setInviteLinksEditorOpen] = useState(false);
 
   const foldersQuery = useQuery({
     queryKey: mutualPromotionFolderKeys.list(listParams),
@@ -269,6 +275,7 @@ export function MutualPromotionFoldersPage() {
           </Button>
         }
       />
+      {sectionTabs}
 
       <Card className="mb-5 border-blue-900/60 bg-blue-950/15">
         <div className="flex items-start gap-3">
@@ -298,51 +305,11 @@ export function MutualPromotionFoldersPage() {
       {foldersQuery.data?.items.length ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {foldersQuery.data.items.map((item) => (
-            <button
+            <MutualPromotionFolderCard
               key={item.id}
-              type="button"
-              onClick={() => setSelectedFolderId(item.id)}
-              className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 text-left transition hover:border-neutral-600 hover:bg-neutral-800/80"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="min-w-0 truncate text-lg font-semibold text-white">
-                  {item.title}
-                </h3>
-                <span className="rounded-full border border-neutral-700 bg-neutral-800 px-2 py-0.5 text-xs text-neutral-200">
-                  {item.status.toLowerCase()}
-                </span>
-              </div>
-              <p className="mt-3 inline-flex items-center gap-2 text-sm text-neutral-300">
-                <CalendarClock size={15} /> {formatDateTime(item.startsAt)}
-              </p>
-              <p className="mt-1 text-sm text-neutral-500">
-                Ends {formatDateTime(item.endsAt)}
-              </p>
-              <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                <div className="rounded-lg bg-neutral-950/70 p-2">
-                  <p className="text-lg font-semibold text-white">
-                    {item.postCount}
-                  </p>
-                  <p className="text-xs text-neutral-500">Posts</p>
-                </div>
-                <div className="rounded-lg bg-neutral-950/70 p-2">
-                  <p className="text-lg font-semibold text-white">
-                    {item.publisherCount}
-                  </p>
-                  <p className="text-xs text-neutral-500">Publishers</p>
-                </div>
-                <div className="rounded-lg bg-neutral-950/70 p-2">
-                  <p className="text-lg font-semibold text-white">
-                    {item.paidCount}
-                  </p>
-                  <p className="text-xs text-neutral-500">Paid</p>
-                </div>
-              </div>
-              <p className="mt-3 inline-flex items-center gap-1 text-xs text-neutral-500">
-                <Users size={13} /> {item.participantCount} participating
-                channel(s)
-              </p>
-            </button>
+              folder={item}
+              onOpen={() => setSelectedFolderId(item.id)}
+            />
           ))}
         </div>
       ) : null}
@@ -397,7 +364,7 @@ export function MutualPromotionFoldersPage() {
         </div>
       </Modal>
       <MutualPromotionFolderDetailModal
-        open={Boolean(selectedFolderId && folder)}
+        open={Boolean(selectedFolderId && folder && !inviteLinksEditorOpen)}
         folder={folder}
         timezone={workspaceTimezone}
         accounts={accountsQuery.data ?? []}
@@ -405,12 +372,18 @@ export function MutualPromotionFoldersPage() {
         botUsername={systemBotQuery.data?.botUsername ?? null}
         mutating={mutating}
         actionError={actionError}
-        onClose={() => setSelectedFolderId(null)}
+        onClose={() => {
+          setInviteLinksEditorOpen(false);
+          setSelectedFolderId(null);
+        }}
         onEdit={() => {
           if (!folder) return;
           setEditingFolder(folder);
           setSelectedFolderId(null);
           setFormOpen(true);
+        }}
+        onEditInviteLinks={() => {
+          setInviteLinksEditorOpen(true);
         }}
         onActivate={() =>
           activateMutation
@@ -444,6 +417,14 @@ export function MutualPromotionFoldersPage() {
             .then(() => undefined)
         }
       />
+      {inviteLinksEditorOpen ? (
+        <MutualPromotionInviteLinksEditor
+          folder={folder}
+          open
+          onClose={() => setInviteLinksEditorOpen(false)}
+          onSaved={reconcile}
+        />
+      ) : null}
     </AppShell>
   );
 }

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/unbound-method -- Jest assertions inspect mock methods without invoking them. */
 import type { Request, Response } from 'express';
 import { FinanceConsumerSessionService } from '../identity/finance-consumer-session.service';
+import { FinanceConsumerRequestService } from './finance-consumer-request.service';
 import { FinanceController } from './finance.controller';
 
 describe('FinanceController consumer auth', () => {
@@ -92,6 +93,7 @@ describe('FinanceController consumer auth', () => {
     const delivery = {
       enqueueSendMessage: jest.fn().mockResolvedValue(undefined),
     };
+    const requests = new FinanceConsumerRequestService(sessions);
     const controller = new FinanceController(
       contexts as never,
       sessions,
@@ -100,8 +102,9 @@ describe('FinanceController consumer auth', () => {
       ledger as never,
       {} as never,
       {} as never,
-      {} as never,
       delivery as never,
+      requests as never,
+      {} as never,
     );
     const response = {
       cookie: jest.fn(),
@@ -116,6 +119,7 @@ describe('FinanceController consumer auth', () => {
       core,
       ledger,
       delivery,
+      requests,
       response,
     };
   }

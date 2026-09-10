@@ -50,14 +50,12 @@ export function ClientErrorReporter({ children }: PropsWithChildren) {
     };
 
     const onError = (event: ErrorEvent) => {
-      if (pathname.startsWith("/system-logs")) return;
       send(
         event.message || "Unhandled window error",
         event.error instanceof Error ? event.error.stack || null : null,
       );
     };
     const onRejection = (event: PromiseRejectionEvent) => {
-      if (pathname.startsWith("/system-logs")) return;
       const reason =
         event.reason instanceof Error
           ? event.reason

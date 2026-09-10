@@ -28,7 +28,10 @@ describe("AppNavigation permissions", () => {
         canViewAdmin
       />,
     );
-    expect(screen.getByText("Roles & access")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Workspace settings" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(screen.getByText("Finance")).toBeInTheDocument();
   });
 
@@ -76,5 +79,41 @@ describe("AppNavigation permissions", () => {
       />,
     );
     expect(screen.getByRole("link", { name: "CRM" })).toBeInTheDocument();
+  });
+
+  it("consolidates Growth ads and Operations under Ads and Workspace settings", () => {
+    render(
+      <AppNavigation
+        pathname="/ad-campaigns/mutual-promotion"
+        openGroups={{ growth: true }}
+        onToggleGroup={vi.fn()}
+        canViewAdmin
+        effectiveFeatureIds={["advertising", "workspace", "operations", "members"]}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Ads" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getAllByRole("link", { name: "Ads" })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Workspace settings" })).toBeInTheDocument();
+    expect(screen.queryByText("Mutual promotion")).not.toBeInTheDocument();
+    expect(screen.queryByText("System logs")).not.toBeInTheDocument();
+    expect(screen.queryByText("Scheduled tasks")).not.toBeInTheDocument();
+    expect(screen.queryByText("Trash")).not.toBeInTheDocument();
+    expect(screen.queryByText("Roles & access")).not.toBeInTheDocument();
+
+    const growth = screen.getByRole("button", { name: /Growth/i });
+    const workspace = screen.getByRole("link", {
+      name: "Workspace settings",
+    });
+    expect(
+      growth.compareDocumentPosition(workspace) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(growth).toHaveClass(
+      "focus-visible:ring-inset",
+      "focus-visible:outline-none",
+    );
   });
 });

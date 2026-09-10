@@ -1,5 +1,5 @@
 import { timezonePresentations } from "@/lib/timezones";
-import type { FinanceLocale } from "../finance-i18n";
+import type { FinanceLocale } from "../i18n/core";
 import { Select } from "./finance-controls";
 
 export function FinanceTimezoneSelect({

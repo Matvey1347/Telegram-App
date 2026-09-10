@@ -8,8 +8,8 @@ const mocks = vi.hoisted(() => ({
   consume: vi.fn(),
 }));
 
-vi.mock("@/lib/features/finance/consumer-finance-api", () => ({
-  consumerFinanceApi: {
+vi.mock("@/lib/features/finance/consumer-finance-auth-api", () => ({
+  consumerFinanceAuthApi: {
     createBrowserLoginChallenge: mocks.create,
     consumeBrowserLoginChallenge: mocks.consume,
   },

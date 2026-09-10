@@ -1,33 +1,45 @@
+"use client";
 
-'use client';
-
-import { useEffect, useState, type SyntheticEvent } from 'react';
-import { Bot, RadioTower, Smartphone, UserRound } from 'lucide-react';
+import {
+  useEffect,
+  useState,
+  type ReactNode,
+  type SyntheticEvent,
+} from "react";
+import { Bot, RadioTower, Smartphone, UserRound } from "lucide-react";
 
 type TelegramEntityAvatarProps = {
   imageUrl?: string | null;
-  kind?: 'channel' | 'mtproto' | 'person' | 'bot';
+  kind?: "channel" | "mtproto" | "person" | "bot";
   alt?: string;
-  size?: 'xs' | 'sm' | 'md' | 'lg';
+  size?: "xs" | "sm" | "md" | "lg";
+  fallback?: ReactNode;
 };
 
 const sizeConfig = {
-  xs: { box: 'h-5 w-5', icon: 10, label: 'text-[5px]' },
-  sm: { box: 'h-8 w-8', icon: 14, label: 'text-[7px]' },
-  md: { box: 'h-11 w-11', icon: 20, label: 'text-[9px]' },
-  lg: { box: 'h-14 w-14', icon: 22, label: 'text-[9px]' },
+  xs: { box: "h-5 w-5", icon: 10, label: "text-[5px]" },
+  sm: { box: "h-8 w-8", icon: 14, label: "text-[7px]" },
+  md: { box: "h-11 w-11", icon: 20, label: "text-[9px]" },
+  lg: { box: "h-14 w-14", icon: 22, label: "text-[9px]" },
 };
 
 const kindConfig = {
-  channel: { icon: RadioTower, label: 'CH', tone: 'text-sky-300' },
-  mtproto: { icon: Smartphone, label: 'MTP', tone: 'text-violet-300' },
-  person: { icon: UserRound, label: 'USER', tone: 'text-emerald-300' },
-  bot: { icon: Bot, label: 'BOT', tone: 'text-blue-300' },
+  channel: { icon: RadioTower, label: "CH", tone: "text-sky-300" },
+  mtproto: { icon: Smartphone, label: "MTP", tone: "text-violet-300" },
+  person: { icon: UserRound, label: "USER", tone: "text-emerald-300" },
+  bot: { icon: Bot, label: "BOT", tone: "text-blue-300" },
 };
 
-export function TelegramEntityAvatar({ imageUrl, kind = 'person', alt = '', size = 'sm' }: TelegramEntityAvatarProps) {
+export function TelegramEntityAvatar({
+  imageUrl,
+  kind = "person",
+  alt = "",
+  size = "sm",
+  fallback,
+}: TelegramEntityAvatarProps) {
   const [imageFailed, setImageFailed] = useState(false);
-  const normalizedUrl = typeof imageUrl === 'string' && imageUrl.trim() ? imageUrl.trim() : null;
+  const normalizedUrl =
+    typeof imageUrl === "string" && imageUrl.trim() ? imageUrl.trim() : null;
   const dimensions = sizeConfig[size];
   const config = kindConfig[kind];
   const Icon = config.icon;
@@ -44,10 +56,22 @@ export function TelegramEntityAvatar({ imageUrl, kind = 'person', alt = '', size
   };
 
   return (
-    <div className={`relative ${dimensions.box} shrink-0 overflow-hidden rounded-full border border-slate-700 bg-slate-950`}>
-      <div className={`absolute inset-0 flex flex-col items-center justify-center ${config.tone}`}>
-        <Icon size={dimensions.icon} />
-        <span className={`${dimensions.label} font-semibold leading-none tracking-wide`}>{config.label}</span>
+    <div
+      className={`relative ${dimensions.box} shrink-0 overflow-hidden rounded-full border border-slate-700 bg-slate-950`}
+    >
+      <div
+        className={`absolute inset-0 flex flex-col items-center justify-center ${config.tone}`}
+      >
+        {fallback ?? (
+          <>
+            <Icon size={dimensions.icon} />
+            <span
+              className={`${dimensions.label} font-semibold leading-none tracking-wide`}
+            >
+              {config.label}
+            </span>
+          </>
+        )}
       </div>
       {normalizedUrl && !imageFailed ? (
         <img

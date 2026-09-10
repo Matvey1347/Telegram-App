@@ -10,22 +10,47 @@ describe('TelegramChannelPerformanceHistoryService', () => {
         findFirst: jest.fn().mockResolvedValue({
           id: 'channel-1',
           purchaseTransactionId: 'purchase-1',
+          createdAt: new Date('2026-08-01T10:00:00.000Z'),
+          ownViewsPerPost: 0,
+          ownReactionsPerPost: 0,
+          adBaseCpm: 300,
+          adBaseCurrency: 'UAH',
         }),
       },
-      $queryRaw: jest.fn().mockResolvedValue([
-        {
-          collectedAt: new Date('2026-09-01T20:00:00.000Z'),
-          subscribers: 1_000,
-          averageViews: 500,
-          averageReactions: 20,
-        },
-        {
-          collectedAt: new Date('2026-09-07T10:00:00.000Z'),
-          subscribers: 1_100,
-          averageViews: 450,
-          averageReactions: 18,
-        },
-      ]),
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            collectedAt: new Date('2026-09-01T10:00:00.000Z'),
+            subscribers: 1_000,
+          },
+          {
+            collectedAt: new Date('2026-09-01T12:00:00.000Z'),
+            subscribers: 2_070,
+          },
+          {
+            collectedAt: new Date('2026-09-01T20:00:00.000Z'),
+            subscribers: 1_870,
+          },
+          {
+            collectedAt: new Date('2026-09-07T10:00:00.000Z'),
+            subscribers: 1_900,
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            date: new Date('2026-09-01T00:00:00.000Z'),
+            averageViews: 500,
+            averageReactions: 20,
+            postsPublished: 2,
+          },
+          {
+            date: new Date('2026-09-07T00:00:00.000Z'),
+            averageViews: 450,
+            averageReactions: 18,
+            postsPublished: 3,
+          },
+        ]),
       transaction: {
         findMany: jest.fn().mockResolvedValue([
           {
@@ -82,62 +107,126 @@ describe('TelegramChannelPerformanceHistoryService', () => {
       ...overrides,
     };
     const support = { workspace: jest.fn().mockResolvedValue('workspace-1') };
+    const currencyConversion = {
+      convertCurrency: jest.fn().mockResolvedValue(150),
+    };
     return {
       prisma,
+      currencyConversion,
       service: new TelegramChannelPerformanceHistoryService(
         prisma as never,
         support as never,
+        currencyConversion as never,
       ),
     };
   }
 
-  it('builds audience and cumulative payback charts without double-counting payments', async () => {
+  it('preserves same-day subscriber peaks and builds daily views, payback and ads-left charts', async () => {
     const { service, prisma } = createService();
 
-    const result = await service.history('user-1', 'channel-1', 7, now);
+    const result = await service.history('user-1', 'channel-1', '30d', now);
 
-    expect(result).toMatchObject({ periodDays: 7, currency: 'UAH' });
-    expect(result.points).toEqual([
+    expect(result).toMatchObject({
+      range: '30d',
+      periodDays: 30,
+      currency: 'UAH',
+    });
+    expect(
+      result.points
+        .filter((point) => point.subscribers != null)
+        .map((point) => point.subscribers),
+    ).toEqual([1_000, 2_070, 1_870, 1_900]);
+    expect(result.points).toContainEqual(
       expect.objectContaining({
         date: '2026-09-01T00:00:00.000Z',
-        subscribers: 1_000,
         averageViews: 500,
+        averageReactions: 20,
+        postsPublished: 2,
         invested: 1_000,
         revenue: 0,
         paybackPercent: 0,
+        adsLeft: 7,
       }),
-      expect.objectContaining({
-        date: '2026-09-02T00:00:00.000Z',
-        invested: 1_100,
-        revenue: 0,
-        paybackPercent: 0,
-      }),
-      expect.objectContaining({
-        date: '2026-09-03T00:00:00.000Z',
-        invested: 1_100,
-        revenue: 100,
-        paybackPercent: 9.1,
-      }),
+    );
+    expect(result.points).toContainEqual(
       expect.objectContaining({
         date: '2026-09-05T00:00:00.000Z',
         invested: 1_100,
         revenue: 300,
         paybackPercent: 27.3,
+        adsLeft: 6,
       }),
+    );
+    expect(result.points).toContainEqual(
       expect.objectContaining({
         date: '2026-09-07T00:00:00.000Z',
-        subscribers: 1_100,
         averageViews: 450,
-        invested: 1_100,
-        revenue: 300,
-        paybackPercent: 27.3,
+        postsPublished: 3,
+        adsLeft: 6,
       }),
-    ]);
-    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    );
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
+    const rawQuery = prisma.$queryRaw as unknown as {
+      mock: { calls: Array<[{ strings: string[] }]> };
+    };
+    const postHistorySql = rawQuery.mock.calls[1][0].strings.join(' ');
+    expect(postHistorySql).toContain('"TelegramPostMetricSnapshot"');
+    expect(postHistorySql).toContain("INTERVAL '24 hours'");
+    expect(result.points[0].date).toBe('2026-09-01T00:00:00.000Z');
     expect(prisma.transaction.findMany).toHaveBeenCalledTimes(1);
     expect(
       prisma.telegramAdSalePaymentAllocation.findMany,
     ).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets each all-time chart start at its first real metric observation', async () => {
+    const { service } = createService();
+
+    const result = await service.history('user-1', 'channel-1', 'all', now);
+
+    expect(result.range).toBe('all');
+    expect(result.periodDays).toBeNull();
+    expect(result.points.find((point) => point.subscribers != null)?.date).toBe(
+      '2026-09-01T10:00:00.000Z',
+    );
+  });
+
+  it('converts a foreign CPM so the ads-left graph remains available', async () => {
+    const { service, currencyConversion } = createService({
+      telegramChannel: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'channel-1',
+          purchaseTransactionId: 'purchase-1',
+          createdAt: new Date('2026-08-01T10:00:00.000Z'),
+          ownViewsPerPost: 0,
+          ownReactionsPerPost: 0,
+          adBaseCpm: 4,
+          adBaseCurrency: 'USD',
+        }),
+      },
+    });
+
+    const result = await service.history('user-1', 'channel-1', '30d', now);
+
+    expect(currencyConversion.convertCurrency).toHaveBeenCalledWith(
+      4,
+      'USD',
+      'UAH',
+      'workspace-1',
+    );
+    expect(result.points.some((point) => point.adsLeft != null)).toBe(true);
+  });
+
+  it.each([
+    ['1d', 1],
+    ['7d', 7],
+  ] as const)('supports the %s whole-modal range', async (range, days) => {
+    const { service } = createService();
+
+    const result = await service.history('user-1', 'channel-1', range, now);
+
+    expect(result.range).toBe(range);
+    expect(result.periodDays).toBe(days);
   });
 
   it('keeps history workspace-isolated and rejects an unknown channel', async () => {
@@ -146,7 +235,7 @@ describe('TelegramChannelPerformanceHistoryService', () => {
     });
 
     await expect(
-      service.history('user-1', 'missing-channel', 90, now),
+      service.history('user-1', 'missing-channel', '90d', now),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.telegramChannel.findFirst).toHaveBeenCalledWith({
       where: {
@@ -154,7 +243,15 @@ describe('TelegramChannelPerformanceHistoryService', () => {
         workspaceId: 'workspace-1',
         isActive: true,
       },
-      select: { id: true, purchaseTransactionId: true },
+      select: {
+        id: true,
+        purchaseTransactionId: true,
+        createdAt: true,
+        ownViewsPerPost: true,
+        ownReactionsPerPost: true,
+        adBaseCpm: true,
+        adBaseCurrency: true,
+      },
     });
     expect(prisma.$queryRaw).not.toHaveBeenCalled();
   });
@@ -165,7 +262,7 @@ describe('TelegramChannelPerformanceHistoryService', () => {
     });
 
     await expect(
-      service.history('user-1', 'channel-1', 90, now),
+      service.history('user-1', 'channel-1', '90d', now),
     ).rejects.toThrow('database unavailable');
   });
 });

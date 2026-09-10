@@ -11,7 +11,7 @@ function CacheProbe() {
       {JSON.stringify({
         staleTime: queries?.staleTime,
         gcTime: queries?.gcTime,
-        keepsPreviousData: typeof queries?.placeholderData === "function",
+        hasGlobalPlaceholder: queries?.placeholderData !== undefined,
         refetchOnWindowFocus: queries?.refetchOnWindowFocus,
         retry: queries?.retry,
       })}
@@ -36,7 +36,7 @@ describe("ConsumerFinanceProvider", () => {
       JSON.stringify({
         staleTime: 240_000,
         gcTime: 2_700_000,
-        keepsPreviousData: true,
+        hasGlobalPlaceholder: false,
         refetchOnWindowFocus: false,
         retry: 1,
       }),
@@ -49,5 +49,30 @@ describe("ConsumerFinanceProvider", () => {
         .getByTestId("cache-policy")
         .closest("[data-consumer-finance-theme]"),
     ).toHaveAttribute("data-consumer-finance-theme", "neutral-blue");
+  });
+
+  it("does not expose cached data across bot-scoped query keys", () => {
+    function BotIsolationProbe() {
+      const client = useQueryClient();
+      client.setQueryData(["consumer-finance", "bot-a", "accounts"], [
+        { id: "account-a" },
+      ]);
+      return (
+        <output data-testid="bot-b-cache">
+          {JSON.stringify(
+            client.getQueryData(["consumer-finance", "bot-b", "accounts"]) ??
+              null,
+          )}
+        </output>
+      );
+    }
+
+    render(
+      <ConsumerFinanceProvider>
+        <BotIsolationProbe />
+      </ConsumerFinanceProvider>,
+    );
+
+    expect(screen.getByTestId("bot-b-cache")).toHaveTextContent("null");
   });
 });

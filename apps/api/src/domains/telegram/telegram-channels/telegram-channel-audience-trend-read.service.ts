@@ -15,6 +15,8 @@ type AudienceTrendRow = {
   currentSubscribers: number | null;
   currentActiveSubscribers: number | null;
   currentViewRate: number | null;
+  latestViews: number | null;
+  latestReactions: number | null;
   currentViews: number | null;
   currentReactions: number | null;
   dataQuality: string;
@@ -73,8 +75,10 @@ export class TelegramChannelAudienceTrendReadService {
         latest."subscribersCount" AS "currentSubscribers",
         latest."activeSubscribersEstimate" AS "currentActiveSubscribers",
         latest."viewRate" AS "currentViewRate",
-        latest."avgViewsAdjusted" AS "currentViews",
-        latest."avgReactionsAdjusted" AS "currentReactions",
+        latest."avgViewsAdjusted" AS "latestViews",
+        latest."avgReactionsAdjusted" AS "latestReactions",
+        post_trend."currentViews",
+        post_trend."currentReactions",
         latest."dataQuality",
         latest."dataQualityReason",
         latest."hasExternalTrafficAnomaly",
@@ -82,9 +86,12 @@ export class TelegramChannelAudienceTrendReadService {
         latest."postsWindow",
         baseline."collectedAt" AS "baselineAt",
         baseline."subscribersCount" AS "baselineSubscribers",
-        baseline."avgViewsAdjusted" AS "baselineViews",
-        baseline."avgReactionsAdjusted" AS "baselineReactions"
+        post_trend."baselineViews",
+        post_trend."baselineReactions"
       FROM requested
+      JOIN "TelegramChannel" channel
+        ON channel."id" = requested."telegramChannelId"
+        AND channel."workspaceId" = ${workspaceId}
       JOIN LATERAL (
         SELECT
           snapshot."collectedAt",
@@ -118,6 +125,57 @@ export class TelegramChannelAudienceTrendReadService {
         ORDER BY snapshot."collectedAt" DESC
         LIMIT 1
       ) baseline ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          AVG(daily."averageViews") FILTER (
+            WHERE daily."date" > latest."collectedAt" - ${periodDays} * INTERVAL '1 day'
+          ) AS "currentViews",
+          AVG(daily."averageReactions") FILTER (
+            WHERE daily."date" > latest."collectedAt" - ${periodDays} * INTERVAL '1 day'
+          ) AS "currentReactions",
+          AVG(daily."averageViews") FILTER (
+            WHERE daily."date" <= latest."collectedAt" - ${periodDays} * INTERVAL '1 day'
+          ) AS "baselineViews",
+          AVG(daily."averageReactions") FILTER (
+            WHERE daily."date" <= latest."collectedAt" - ${periodDays} * INTERVAL '1 day'
+          ) AS "baselineReactions"
+        FROM (
+          SELECT
+            DATE_TRUNC('day', post."postDate") AS "date",
+            AVG(
+              GREATEST(
+                0,
+                observed."viewsCount" - channel."ownViewsPerPost" - post."manualOwnViews"
+              )::DOUBLE PRECISION
+            ) AS "averageViews",
+            AVG(
+              GREATEST(
+                0,
+                observed."reactionsCount" - channel."ownReactionsPerPost" - post."manualOwnReactions"
+              )::DOUBLE PRECISION
+            ) FILTER (WHERE observed."reactionsCount" IS NOT NULL) AS "averageReactions"
+          FROM "TelegramPost" post
+          JOIN LATERAL (
+            SELECT snapshot."viewsCount", snapshot."reactionsCount"
+            FROM "TelegramPostMetricSnapshot" snapshot
+            WHERE snapshot."telegramPostId" = post."id"
+              AND snapshot."viewsCount" IS NOT NULL
+              AND snapshot."collectedAt" BETWEEN post."postDate" + INTERVAL '16 hours'
+                AND post."postDate" + INTERVAL '32 hours'
+              AND snapshot."collectedAt" <= latest."collectedAt"
+            ORDER BY ABS(EXTRACT(EPOCH FROM (
+              snapshot."collectedAt" - (post."postDate" + INTERVAL '24 hours')
+            ))), snapshot."collectedAt" ASC
+            LIMIT 1
+          ) observed ON TRUE
+          WHERE post."workspaceId" = ${workspaceId}
+            AND post."telegramChannelId" = requested."telegramChannelId"
+            AND post."excludeFromAnalytics" = FALSE
+            AND post."postDate" > latest."collectedAt" - ${periodDays * 2} * INTERVAL '1 day'
+            AND post."postDate" <= latest."collectedAt"
+          GROUP BY DATE_TRUNC('day', post."postDate")
+        ) daily
+      ) post_trend ON TRUE
     `);
 
     return new Map(
@@ -128,8 +186,8 @@ export class TelegramChannelAudienceTrendReadService {
             subscribersCount: row.currentSubscribers,
             activeSubscribersEstimate: row.currentActiveSubscribers,
             viewRate: row.currentViewRate,
-            avgViewsAdjusted: row.currentViews,
-            avgReactionsAdjusted: row.currentReactions,
+            avgViewsAdjusted: row.latestViews,
+            avgReactionsAdjusted: row.latestReactions,
             dataQuality: row.dataQuality,
             dataQualityReason: row.dataQualityReason,
             hasExternalTrafficAnomaly: row.hasExternalTrafficAnomaly,

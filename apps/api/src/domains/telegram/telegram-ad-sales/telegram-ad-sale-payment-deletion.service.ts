@@ -4,7 +4,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { TelegramAdSalePaymentStatus } from '@prisma/client';
-import type { TelegramAdSalePaymentDeletionResult } from '@telegram-system/shared';
+import type {
+  DeleteTelegramAdSalePaymentOptions,
+  TelegramAdSalePaymentDeletionResult,
+} from '@telegram-system/shared';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
@@ -21,6 +24,7 @@ export class TelegramAdSalePaymentDeletionService {
     userId: string,
     saleId: string,
     paymentId: string,
+    options: DeleteTelegramAdSalePaymentOptions = {},
   ): Promise<TelegramAdSalePaymentDeletionResult> {
     const workspaceId =
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
@@ -57,6 +61,12 @@ export class TelegramAdSalePaymentDeletionService {
           data: { deletedAt },
         });
       }
+      if (options.clearDealAmount) {
+        await tx.telegramAdSalePlacement.updateMany({
+          where: { workspaceId, telegramAdSaleId: saleId },
+          data: { agreedPrice: 0 },
+        });
+      }
     });
     if (payment.sale.advertiserId) {
       await this.adSales.recalculateAdvertiserStats(
@@ -64,6 +74,10 @@ export class TelegramAdSalePaymentDeletionService {
         payment.sale.advertiserId,
       );
     }
-    return { paymentId: payment.id, transactionId: payment.transactionId };
+    return {
+      paymentId: payment.id,
+      transactionId: payment.transactionId,
+      dealAmountCleared: Boolean(options.clearDealAmount),
+    };
   }
 }

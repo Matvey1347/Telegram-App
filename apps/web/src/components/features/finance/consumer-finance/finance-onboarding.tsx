@@ -1,16 +1,45 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
 import { Button, Card, FormField } from "./ui";
 import {
-  financeCopy,
   normalizeFinanceLocale,
   type FinanceLocale,
-} from "./finance-i18n";
+} from "./i18n/core";
+import { financeAuthCopy } from "./i18n/auth";
 import { FinanceLanguageSelect } from "./ui/finance-language-select";
 import { FinanceTimezoneSelect } from "./ui/finance-timezone-select";
 import { FinanceCurrencySelect } from "./ui/finance-currency-select";
+import { consumerFinanceProfileApi } from "@/lib/features/finance/consumer-finance-profile-api";
+import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
+
+export function FinanceOnboardingScreen({
+  botId,
+  profile,
+}: {
+  botId: string;
+  profile: ConsumerFinanceProfile;
+}) {
+  const client = useQueryClient();
+  return (
+    <FinanceOnboarding
+      profile={profile}
+      onComplete={async (input) => {
+        const updated = await consumerFinanceProfileApi.updateSettings(
+          botId,
+          input,
+        );
+        client.setQueryData(consumerFinanceKeys.session(botId), {
+          authenticated: true,
+          profile: updated,
+        });
+        return updated;
+      }}
+    />
+  );
+}
 
 export function FinanceOnboarding({
   profile,
@@ -39,7 +68,7 @@ export function FinanceOnboarding({
   );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
-  const t = financeCopy(locale);
+  const t = financeAuthCopy(locale);
   const finish = async () => {
     setPending(true);
     setError(false);

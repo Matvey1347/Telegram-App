@@ -100,6 +100,10 @@ describe("CrmMessageThread header", () => {
     const loading = screen.getByText(/Loading conversation/u);
     expect(loading.parentElement?.parentElement).toHaveClass("flex-1");
     expect(screen.getByPlaceholderText("Write a message…")).toBeInTheDocument();
+    expect(screen.getByRole("toolbar")).toHaveAttribute(
+      "data-layout",
+      "single-row",
+    );
   });
 
   it("does not import Telegram history automatically and imports only after Load older at the DB boundary", async () => {

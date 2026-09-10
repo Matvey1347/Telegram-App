@@ -1,6 +1,7 @@
 import {
   financeChatMenuButton,
   financeCheckoutReturnUrl,
+  financeMainMenu,
   financeMiniAppUrl,
 } from './finance-telegram-menu';
 
@@ -27,6 +28,21 @@ describe('Finance Telegram application URLs', () => {
       type: 'web_app',
       webAppUrl: 'https://public-web.example/finance/finance-bot',
     });
+  });
+
+  it('keeps the reply keyboard compact without duplicating the Mini App button', () => {
+    process.env.FRONTEND_URL = 'https://public-web.example';
+
+    const menu = financeMainMenu('finance-bot', 'uk');
+
+    expect(menu).toHaveLength(4);
+    expect(menu.flat()).toHaveLength(8);
+    expect(menu.flat()).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ text: '📱 Відкрити Finance' }),
+      ]),
+    );
+    expect(menu.flat().some((button) => 'webAppUrl' in button)).toBe(false);
   });
 
   it('adds checkout state through the owned Finance route helper', () => {

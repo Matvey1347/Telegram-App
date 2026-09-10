@@ -58,6 +58,8 @@ import { FinanceLedgerService } from '../consumer-finance/ledger/finance-ledger.
 import { FinanceTransferService } from '../consumer-finance/transfers/finance-transfer.service';
 import { FinanceProposalService } from '../consumer-finance/chat-flows/finance-proposal.service';
 import { FinanceAiProviderService } from '../consumer-finance/ai/finance-ai.provider';
+import { FinanceAiAnalyticsService } from '../consumer-finance/ai/finance-ai-analytics.service';
+import { FinanceAiCredentialService } from '../consumer-finance/ai/finance-ai-credential.service';
 import { FinanceReminderDeliveryService } from '../consumer-finance/planning/finance-reminder-delivery.service';
 import {
   FinanceBotBrandingAdminController,
@@ -72,6 +74,38 @@ import { GreeterBroadcastAudienceService } from './greeter/greeter-broadcast-aud
 import { GreeterBroadcastService } from './greeter/greeter-broadcast.service';
 import { GreeterConfigurationService } from './greeter/greeter-configuration.service';
 import { GreeterTestModeService } from './greeter/greeter-test-mode.service';
+import {
+  TELEGRAM_BOT_DELIVERY_WRITER,
+  TelegramBotDeliveryWriterService,
+} from './core/telegram-bot-delivery-writer';
+import { FinanceConsumerRequestService } from '../consumer-finance/http/finance-consumer-request.service';
+import { FinanceDebtController } from '../consumer-finance/obligations/debts/finance-debt.controller';
+import { FinanceDebtService } from '../consumer-finance/obligations/debts/finance-debt.service';
+import { FinanceRegularPaymentController } from '../consumer-finance/obligations/regular-payments/finance-regular-payment.controller';
+import { FinanceRegularPaymentService } from '../consumer-finance/obligations/regular-payments/finance-regular-payment.service';
+import { FinanceRegularPaymentConfirmationService } from '../consumer-finance/obligations/regular-payments/finance-regular-payment-confirmation.service';
+import { FinanceRegularPaymentDeliveryService } from '../consumer-finance/obligations/regular-payments/finance-regular-payment-delivery.service';
+import { FINANCE_OBLIGATION_PRESENTATION } from '../consumer-finance/obligations/finance-obligation-presentation.port';
+import { FinanceObligationTelegramPresenter } from './finance/finance-obligation-telegram.presenter';
+import { FinanceRegularPaymentCallbackHandler } from './finance/finance-regular-payment-callback.handler';
+import { FinanceAnalyticsService } from '../consumer-finance/analytics/finance-analytics.service';
+import { FinanceBillingService } from '../consumer-finance/billing/finance-billing.service';
+import { FinanceBillingAdminController } from '../consumer-finance/billing/finance-billing-admin.controller';
+import { FinanceConsumerBillingController } from '../consumer-finance/billing/finance-consumer-billing.controller';
+import { FinanceSavingsController } from '../consumer-finance/savings/finance-savings.controller';
+import { FinanceSavingsService } from '../consumer-finance/savings/finance-savings.service';
+import { FinanceSavingsReadService } from '../consumer-finance/savings/finance-savings-read.service';
+import { FinanceInvestmentController } from '../consumer-finance/investments/finance-investment.controller';
+import { FinanceInvestmentService } from '../consumer-finance/investments/finance-investment.service';
+import { FinanceInvestmentReadService } from '../consumer-finance/investments/finance-investment-read.service';
+import { FinanceAssetSummaryService } from '../consumer-finance/assets/finance-asset-summary.service';
+import { FinanceSavingsAllocationService } from '../consumer-finance/savings/finance-savings-allocation.service';
+import { FinanceInvestmentValuationService } from '../consumer-finance/investments/finance-investment-valuation.service';
+import { FinanceInvestmentCashFlowService } from '../consumer-finance/investments/finance-investment-cash-flow.service';
+import { FinanceSavingsGoalService } from '../consumer-finance/savings/finance-savings-goal.service';
+import { FinanceImportController } from '../consumer-finance/portability/finance-import.controller';
+import { FinanceImportService } from '../consumer-finance/portability/finance-import.service';
+import { FinanceConsumerAuthGuard } from '../consumer-finance/portability/finance-consumer-auth.guard';
 
 @Module({
   imports: [BotBillingModule],
@@ -82,9 +116,16 @@ import { GreeterTestModeService } from './greeter/greeter-test-mode.service';
     GreeterController,
     FinanceAiConfigController,
     FinanceController,
+    FinanceDebtController,
+    FinanceRegularPaymentController,
     FinanceUltimateController,
+    FinanceBillingAdminController,
+    FinanceConsumerBillingController,
+    FinanceSavingsController,
+    FinanceInvestmentController,
     FinanceBotBrandingAdminController,
     FinanceBotBrandingAssetController,
+    FinanceImportController,
   ],
   providers: [
     TelegramBotsService,
@@ -129,12 +170,34 @@ import { GreeterTestModeService } from './greeter/greeter-test-mode.service';
     FinanceBotBrowserLogin,
     FinanceCoreService,
     FinanceLedgerService,
+    FinanceAnalyticsService,
+    FinanceSavingsService,
+    FinanceSavingsReadService,
+    FinanceSavingsAllocationService,
+    FinanceSavingsGoalService,
+    FinanceImportService,
+    FinanceConsumerAuthGuard,
+    FinanceInvestmentService,
+    FinanceInvestmentReadService,
+    FinanceInvestmentValuationService,
+    FinanceInvestmentCashFlowService,
+    FinanceAssetSummaryService,
+    FinanceBillingService,
     FinanceTransferService,
     FinanceUltimateService,
     FinanceProposalService,
     FinanceAiProviderService,
+    FinanceAiAnalyticsService,
+    FinanceAiCredentialService,
     FinanceReminderDeliveryService,
     FinanceBotBrandingService,
+    FinanceConsumerRequestService,
+    FinanceDebtService,
+    FinanceRegularPaymentService,
+    FinanceRegularPaymentConfirmationService,
+    FinanceRegularPaymentDeliveryService,
+    FinanceObligationTelegramPresenter,
+    FinanceRegularPaymentCallbackHandler,
     GreeterTelegramPresentationService,
     FinanceTelegramPresentationService,
     { provide: TELEGRAM_BOT_GREETER_HANDLER, useExisting: GreeterService },
@@ -150,6 +213,15 @@ import { GreeterTestModeService } from './greeter/greeter-test-mode.service';
     {
       provide: FINANCE_REMINDER_DELIVERY_PORT,
       useExisting: FinanceReminderDeliveryService,
+    },
+    TelegramBotDeliveryWriterService,
+    {
+      provide: TELEGRAM_BOT_DELIVERY_WRITER,
+      useExisting: TelegramBotDeliveryWriterService,
+    },
+    {
+      provide: FINANCE_OBLIGATION_PRESENTATION,
+      useExisting: FinanceObligationTelegramPresenter,
     },
     TelegramBotApplicationDispatcherService,
     TelegramBotDeliveryService,

@@ -98,9 +98,7 @@ describe('FinanceBotService chat UX', () => {
     };
     const users = {
       actorFromUpdate: jest.fn().mockReturnValue({ id: 'telegram-id' }),
-      upsertFromUpdate: jest
-        .fn()
-        .mockResolvedValue(telegramUser),
+      upsertFromUpdate: jest.fn().mockResolvedValue(telegramUser),
     };
     const contexts = {
       findBotUpdateContext: jest.fn().mockResolvedValue({
@@ -249,7 +247,6 @@ describe('FinanceBotService chat UX', () => {
     ).toEqual([
       '💸 Add expense',
       '💰 Add income',
-      '📱 Open Finance',
       '🧾 Recent',
       '🏦 Accounts',
       '🏷️ Categories',
@@ -769,7 +766,7 @@ describe('FinanceBotService chat UX', () => {
     expect(test.chat.sendTransfer).not.toHaveBeenCalled();
   });
 
-  it('uses one reply keyboard payload for every quick action and the Web App', async () => {
+  it('uses one compact reply keyboard without duplicating the chat Menu button', async () => {
     const delivery = {
       send: jest.fn().mockResolvedValue(undefined),
     };
@@ -792,16 +789,17 @@ describe('FinanceBotService chat UX', () => {
       else process.env.FRONTEND_URL = previous;
     }
     const payload = delivery.send.mock.calls[0][2];
-    expect(payload.replyKeyboard).toEqual(
+    expect(payload.replyKeyboard.flat()).toHaveLength(8);
+    expect(payload.replyKeyboard.flat()).not.toEqual(
       expect.arrayContaining([
-        expect.arrayContaining([
-          expect.objectContaining({
-            text: '📱 Open Finance',
-            webAppUrl: 'https://app.example/finance/finance-bot',
-          }),
-        ]),
+        expect.objectContaining({ text: '📱 Open Finance' }),
       ]),
     );
+    expect(
+      payload.replyKeyboard
+        .flat()
+        .some((item: { webAppUrl?: string }) => Boolean(item.webAppUrl)),
+    ).toBe(false);
     expect(payload).not.toHaveProperty('inlineButtons');
   });
 

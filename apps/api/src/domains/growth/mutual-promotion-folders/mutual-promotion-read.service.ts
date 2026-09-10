@@ -22,9 +22,41 @@ const detailInclude = {
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     include: {
       telegramChannel: {
-        select: { id: true, title: true, username: true, photoUrl: true },
+        select: {
+          id: true,
+          title: true,
+          username: true,
+          photoUrl: true,
+          currentSubscribersCount: true,
+        },
       },
-      inviteLink: { select: { id: true, name: true, url: true } },
+      inviteLink: {
+        select: {
+          id: true,
+          name: true,
+          url: true,
+          joinedCount: true,
+          creatorTelegramUserId: true,
+          creatorUsername: true,
+          creatorFirstName: true,
+          creatorPhotoUrl: true,
+          creatorMember: {
+            select: {
+              id: true,
+              user: { select: { name: true } },
+              avatarIcon: {
+                select: {
+                  id: true,
+                  type: true,
+                  name: true,
+                  emoji: true,
+                  imageUrl: true,
+                },
+              },
+            },
+          },
+        },
+      },
       expense: { include: { account: { select: { name: true } } } },
     },
   },
@@ -63,7 +95,20 @@ export class MutualPromotionReadService {
         take: pageSize,
         include: {
           _count: { select: { participants: true, posts: true } },
-          participants: { select: { role: true } },
+          participants: {
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+            select: {
+              role: true,
+              telegramChannel: {
+                select: {
+                  id: true,
+                  title: true,
+                  username: true,
+                  photoUrl: true,
+                },
+              },
+            },
+          },
         },
       }),
       this.prisma.mutualPromotionFolder.count({ where: { workspaceId } }),
@@ -82,6 +127,10 @@ export class MutualPromotionReadService {
       ).length,
       paidCount: row.participants.filter((item) => item.role === 'PAID').length,
       postCount: row._count.posts,
+      channels: row.participants.map((participant) => ({
+        ...participant.telegramChannel,
+        role: participant.role,
+      })),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     }));
@@ -116,6 +165,14 @@ export class MutualPromotionReadService {
       include: detailInclude,
     });
     if (!row) throw new NotFoundException('Mutual-promotion folder not found');
+    const hydratedInviteLinks = await hydrateTelegramInviteCreatorProfiles(
+      this.prisma,
+      workspaceId,
+      row.participants.map((participant) => participant.inviteLink),
+    );
+    const inviteLinkById = new Map(
+      hydratedInviteLinks.map((inviteLink) => [inviteLink.id, inviteLink]),
+    );
     const publisherCount = row.participants.filter(
       (item) => item.role === 'PUBLISHER',
     ).length;
@@ -132,23 +189,62 @@ export class MutualPromotionReadService {
       publisherCount,
       paidCount: row.participants.length - publisherCount,
       postCount: row.posts.length,
-      participants: row.participants.map((participant) => ({
-        id: participant.id,
-        telegramChannelId: participant.telegramChannelId,
+      channels: row.participants.map((participant) => ({
+        ...participant.telegramChannel,
         role: participant.role,
-        inviteLinkMode: participant.inviteLinkMode,
-        channel: participant.telegramChannel,
-        inviteLink: participant.inviteLink,
-        subscribersAtStart: participant.subscribersAtStart,
-        subscribersAtEnd: participant.subscribersAtEnd,
-        inviteJoinedAtStart: participant.inviteJoinedAtStart,
-        inviteJoinedAtEnd: participant.inviteJoinedAtEnd,
-        baselineCapturedAt:
-          participant.baselineCapturedAt?.toISOString() ?? null,
-        finalCapturedAt: participant.finalCapturedAt?.toISOString() ?? null,
-        expense: this.statistics.expense(participant),
-        stats: this.statistics.participant(participant),
       })),
+      participants: row.participants.map((participant) => {
+        const inviteLink =
+          inviteLinkById.get(participant.inviteLink.id) ??
+          participant.inviteLink;
+        return {
+          id: participant.id,
+          telegramChannelId: participant.telegramChannelId,
+          role: participant.role,
+          inviteLinkMode: participant.inviteLinkMode,
+          channel: {
+            id: participant.telegramChannel.id,
+            title: participant.telegramChannel.title,
+            username: participant.telegramChannel.username,
+            photoUrl: participant.telegramChannel.photoUrl,
+          },
+          inviteLink: {
+            id: inviteLink.id,
+            name: inviteLink.name,
+            url: inviteLink.url,
+            joinedCount: inviteLink.joinedCount,
+            creatorUsername: inviteLink.creatorUsername,
+            creatorFirstName: inviteLink.creatorFirstName,
+            creatorPhotoUrl: inviteLink.creatorPhotoUrl,
+            creatorMember: inviteLink.creatorMember
+              ? {
+                  id: inviteLink.creatorMember.id,
+                  name: inviteLink.creatorMember.user.name,
+                  avatarPresentation: iconToResolvedEmoji(
+                    inviteLink.creatorMember.avatarIcon,
+                  ),
+                }
+              : null,
+          },
+          subscribersAtStart: participant.subscribersAtStart,
+          subscribersAtEnd: participant.subscribersAtEnd,
+          inviteJoinedAtStart: participant.inviteJoinedAtStart,
+          inviteJoinedAtEnd: participant.inviteJoinedAtEnd,
+          baselineCapturedAt:
+            participant.baselineCapturedAt?.toISOString() ?? null,
+          finalCapturedAt: participant.finalCapturedAt?.toISOString() ?? null,
+          expense: this.statistics.expense(participant),
+          stats: this.statistics.participant(
+            {
+              ...participant,
+              currentSubscribersCount:
+                participant.telegramChannel.currentSubscribersCount,
+              currentInviteJoinedCount: inviteLink.joinedCount,
+            },
+            { useCurrentCounters: row.status === 'ACTIVE' },
+          ),
+        };
+      }),
       posts: row.posts.map((post) => ({
         id: post.id,
         title: post.title,

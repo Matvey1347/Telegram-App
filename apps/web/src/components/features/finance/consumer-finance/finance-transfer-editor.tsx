@@ -15,7 +15,8 @@ import {
   financeOccurredAtForDate,
   financeToday,
 } from "@/lib/features/finance/consumer-finance-date";
-import { financeCopy, type FinanceLocale } from "./finance-i18n";
+import { type FinanceLocale } from "./i18n/core";
+import { financeTransfersCopy } from "./i18n/transfers";
 
 export function FinanceTransferEditor({
   botId,
@@ -36,7 +37,7 @@ export function FinanceTransferEditor({
   onClose: () => void;
   onSaved: (item: ConsumerFinanceTransfer) => void;
 }) {
-  const t = financeCopy(locale);
+  const t = financeTransfersCopy(locale);
   const [open, setOpen] = useState(initiallyOpen);
   const [fromAccountId, setFrom] = useState(editing?.fromAccountId ?? "");
   const [toAccountId, setTo] = useState(editing?.toAccountId ?? "");

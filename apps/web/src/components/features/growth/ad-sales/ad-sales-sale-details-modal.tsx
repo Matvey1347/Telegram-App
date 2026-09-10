@@ -1,38 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   TelegramAdProduct,
   TelegramAdSale,
 } from "@telegram-system/shared";
-import {
-  ArrowLeft,
-  CalendarDays,
-  CreditCard,
-  FileText,
-  ExternalLink,
-  Hourglass,
-  Pencil,
-  Link2,
-  Timer,
-  Trash2,
-} from "lucide-react";
+import { ArrowLeft, CalendarDays, ExternalLink, Pencil } from "lucide-react";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import { adSaleOriginOptions } from "./ad-sale-origin";
 import { SaleStatusActions, type SaleActionKey } from "./sale-status-actions";
 import {
   Button,
-  ConfirmDeleteModal,
   CustomSelect,
-  DateInput,
   FormField,
   Input,
   IconButton,
   Modal,
-  Select,
   Skeleton,
-  TimeInput,
 } from "@/components/ui/primitives";
 import type { Account, TelegramChannel } from "@/lib/api";
 import { buildTelegramPostsUrl } from "@/lib/features/telegram/telegram-posts-url";
@@ -43,14 +28,15 @@ import {
   toNumber,
   zonedDateTimeToUtc,
 } from "@/lib/features/growth/telegram-ad-sales";
-import { accountDisplayName } from "@/lib/features/finance/account-display";
 import { formatDateTime } from "@/lib/date-format";
-import { placementRunWindow, placementTimer } from "./ad-placement-lifecycle";
+import { placementRunWindow } from "./ad-placement-lifecycle";
 import { AdSalePostMetrics, PostMetrics } from "./ad-sale-post-metrics";
 import { AdSaleSharedPostEditor } from "./ad-sale-shared-post-editor";
+import type { RegisterPaymentPayload } from "./register-payment-form";
+import { DealFinanceTransaction } from "./deal-finance-transaction";
+import { DealFinanceTransactionDeleteModal } from "./deal-finance-transaction-delete-modal";
 import type { PlacementManagedPostDraft } from "./placement-post/placement-post-composer";
 import {
-  PaymentEditor,
   PlacementDeletionCountdown,
   PlacementEditor,
   SaveFooter,
@@ -115,7 +101,15 @@ export function SaleDetailsModal(props: {
     draft: PlacementManagedPostDraft,
   ) => Promise<void>;
   onRecreateSharedPostViaBot?: (sale: TelegramAdSale) => Promise<void>;
-  onDeletePayment?: (sale: TelegramAdSale, paymentId: string) => Promise<void>;
+  onDeletePayment?: (
+    sale: TelegramAdSale,
+    paymentId: string,
+    options: { clearDealAmount: boolean },
+  ) => Promise<void>;
+  onCreatePayment?: (
+    sale: TelegramAdSale,
+    payload: RegisterPaymentPayload,
+  ) => Promise<void>;
 }) {
   const [placements, setPlacements] = useState<PlacementDraft[]>([]);
   const [payments, setPayments] = useState<PaymentDraft[]>([]);
@@ -364,7 +358,14 @@ export function SaleDetailsModal(props: {
             props.onUpdateSharedPost ? () => setSharedPostOpen(true) : undefined
           }
           onTogglePayment={() => setPaymentOpen((v) => !v)}
-          onRegister={() => props.onAction(sale, "register-payment")}
+          onCreatePayment={
+            props.onCreatePayment
+              ? async (payload) => {
+                  await props.onCreatePayment?.(sale, payload);
+                  setPaymentOpen(false);
+                }
+              : undefined
+          }
           onPayment={changePayment}
           onDeletePayment={
             props.onDeletePayment ? setPaymentToDelete : undefined
@@ -375,33 +376,35 @@ export function SaleDetailsModal(props: {
           error={error}
         />
       )}
-      <ConfirmDeleteModal
-        open={Boolean(paymentToDelete)}
-        onClose={() => setPaymentToDelete(null)}
-        entityName="finance transaction"
-        label="Delete transaction"
-        description="The linked Finance transaction and this payment record will be removed. You can register the payment again later."
-        onConfirm={async () => {
-          if (!paymentToDelete || !props.onDeletePayment) return;
-          setSaving(true);
-          setError("");
-          try {
-            await props.onDeletePayment(sale, paymentToDelete);
-            setPayments((items) =>
-              items.filter((payment) => payment.id !== paymentToDelete),
-            );
-            setPaymentOpen(false);
-          } catch (cause) {
-            setError(
-              cause instanceof Error
-                ? cause.message
-                : "Could not delete the finance transaction.",
-            );
-          } finally {
-            setSaving(false);
-          }
-        }}
-      />
+      {paymentToDelete ? (
+        <DealFinanceTransactionDeleteModal
+          onClose={() => setPaymentToDelete(null)}
+          dealAmount={sale.totalAgreedAmount ?? "0"}
+          currency={sale.settlementCurrency}
+          onConfirm={async (clearDealAmount) => {
+            if (!props.onDeletePayment) return;
+            setSaving(true);
+            setError("");
+            try {
+              await props.onDeletePayment(sale, paymentToDelete, {
+                clearDealAmount,
+              });
+              setPayments((items) =>
+                items.filter((payment) => payment.id !== paymentToDelete),
+              );
+              setPaymentOpen(false);
+            } catch (cause) {
+              setError(
+                cause instanceof Error
+                  ? cause.message
+                  : "Could not delete the finance transaction.",
+              );
+            } finally {
+              setSaving(false);
+            }
+          }}
+        />
+      ) : null}
     </Modal>
   );
 }
@@ -487,7 +490,7 @@ function DealOverview(props: {
   onPlacement: (v: string) => void;
   onSharedPost?: () => void;
   onTogglePayment: () => void;
-  onRegister: () => void;
+  onCreatePayment?: (payload: RegisterPaymentPayload) => Promise<void>;
   onPayment: (id: string, patch: Partial<PaymentDraft>) => void;
   onDeletePayment?: (id: string) => void;
   onAction: (a: SaleActionKey) => Promise<void>;
@@ -530,11 +533,7 @@ function DealOverview(props: {
         <FormField label="Sold by">
           <MemberSelect value={props.memberId} onChange={props.onMember} />
         </FormField>
-        <SaleStatusActions
-          sale={props.sale}
-          onAction={props.onAction}
-          hidePayment
-        />
+        <SaleStatusActions sale={props.sale} onAction={props.onAction} />
       </section>
       <section>
         <div className="mb-3 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
@@ -559,7 +558,10 @@ function DealOverview(props: {
             <span aria-hidden="true" />
           )}
           <div className="text-right">
-            <span className="text-sm text-neutral-400">
+            <span className="block text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+              Deal value
+            </span>
+            <span className="mt-0.5 block text-sm font-medium text-neutral-300">
               {props.sale.totalAgreedAmount} {props.sale.settlementCurrency}
             </span>
             <AdSalePostMetrics className="mt-1 justify-end" sale={props.sale} />
@@ -671,52 +673,16 @@ function DealOverview(props: {
           ))}
         </div>
       </section>
-      <section className="rounded-xl border border-neutral-800 bg-neutral-950/45 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <CreditCard size={20} className="text-neutral-400" />
-            <div>
-              <h4 className="font-medium text-white">Finance transaction</h4>
-              <p className="text-sm text-neutral-500">
-                {props.payments.length
-                  ? `${props.sale.totalPaidAmount} ${props.sale.settlementCurrency} linked`
-                  : "No finance transaction linked"}
-              </p>
-            </div>
-          </div>
-          <IconButton
-            type="button"
-            aria-label={
-              props.payments.length ? "Edit transaction" : "Link transaction"
-            }
-            onClick={
-              props.payments.length ? props.onTogglePayment : props.onRegister
-            }
-          />
-        </div>
-        {props.paymentOpen && props.payments.length ? (
-          <div className="mt-4 space-y-3 border-t border-neutral-800 pt-4">
-            {props.payments.map((p) => (
-              <div key={p.id} className="space-y-3">
-                <PaymentEditor
-                  payment={p}
-                  accounts={props.accounts}
-                  onChange={(patch) => props.onPayment(p.id, patch)}
-                />
-                {props.onDeletePayment ? <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    variant="danger"
-                    onClick={() => props.onDeletePayment?.(p.id)}
-                  >
-                    <Trash2 size={15} /> Delete finance transaction
-                  </Button>
-                </div> : null}
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </section>
+      <DealFinanceTransaction
+        sale={props.sale}
+        payments={props.payments}
+        accounts={props.accounts}
+        open={props.paymentOpen}
+        onToggle={props.onTogglePayment}
+        onPayment={props.onPayment}
+        onCreatePayment={props.onCreatePayment}
+        onDeletePayment={props.onDeletePayment}
+      />
       <SaveFooter
         error={props.error}
         saving={props.saving}

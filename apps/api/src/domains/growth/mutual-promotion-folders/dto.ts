@@ -48,6 +48,21 @@ export class CreateMutualPromotionFolderDto {
 
 export class UpdateMutualPromotionFolderDto extends CreateMutualPromotionFolderDto {}
 
+export class MutualPromotionInviteLinkEditDto {
+  @IsString() participantId!: string;
+  @IsString() inviteLinkId!: string;
+  @IsIn(['FOLDER_ONLY', 'REUSABLE'])
+  inviteLinkMode!: 'FOLDER_ONLY' | 'REUSABLE';
+}
+
+export class UpdateMutualPromotionInviteLinksDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => MutualPromotionInviteLinkEditDto)
+  participants!: MutualPromotionInviteLinkEditDto[];
+}
+
 export class MutualPromotionPostDraftDto {
   @IsString() @MaxLength(160) title!: string;
   @IsString() text!: string;
@@ -85,4 +100,12 @@ export class MutualPromotionInviteOptionsQueryDto {
   @IsArray()
   @IsString({ each: true })
   channelIds?: string[];
+}
+
+export class ImportMutualPromotionInviteLinkDto {
+  @IsString() telegramChannelId!: string;
+  @IsString() @MaxLength(512) url!: string;
+  @IsOptional() @IsString() folderId?: string;
+  @IsOptional() @IsDateString() startsAt?: string;
+  @IsOptional() @IsDateString() endsAt?: string;
 }

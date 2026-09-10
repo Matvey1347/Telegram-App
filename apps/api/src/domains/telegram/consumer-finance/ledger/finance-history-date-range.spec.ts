@@ -25,15 +25,12 @@ describe('financeAnalyticsDateRange', () => {
   });
 
   it('treats custom calendar dates like history and rejects invalid input', () => {
-    expect(
-      financeAnalyticsDateRange(
-        { period: 'CUSTOM', from: '2026-03-29', to: '2026-03-29' },
-        'Europe/Warsaw',
-      ),
-    ).toEqual({
-      from: new Date('2026-03-28T23:00:00.000Z'),
-      to: new Date('2026-03-29T22:00:00.000Z'),
-    });
+    const range = financeAnalyticsDateRange(
+      { period: 'CUSTOM', from: '2026-03-29', to: '2026-03-29' },
+      'Europe/Warsaw',
+    );
+    expect(range.from).toEqual(new Date('2026-03-28T23:00:00.000Z'));
+    expect(range.to).toEqual(new Date('2026-03-29T22:00:00.000Z'));
     expect(() =>
       financeAnalyticsDateRange(
         { period: 'CUSTOM', from: 'not-a-date', to: '2026-04-01' },

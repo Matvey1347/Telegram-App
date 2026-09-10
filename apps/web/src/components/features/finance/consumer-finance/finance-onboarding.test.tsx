@@ -13,6 +13,7 @@ describe("FinanceOnboarding", () => {
           timezone: "UTC",
           locale: "en",
           onboardingCompletedAt: null,
+          telegramUser: { displayName: "Ada", username: null, avatarUrl: null },
         }}
         onComplete={onComplete}
       />,

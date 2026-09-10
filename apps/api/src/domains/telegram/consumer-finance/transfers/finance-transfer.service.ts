@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,6 +12,7 @@ import type {
   FinanceTransferQueryDto,
   UpdateFinanceTransferDto,
 } from '../http/finance.dto';
+import { financeTransferSavingsLinkLockKey } from '../assets/finance-asset-locks';
 import {
   financeHistoryDateRange,
   financeOccurredAtFilter,
@@ -75,24 +77,52 @@ export class FinanceTransferService {
   }
 
   create(profileId: string, dto: CreateFinanceTransferDto, id?: string) {
-    return this.write(profileId, null, dto, id);
+    return this.createTransfer(profileId, dto, id);
   }
 
   async update(profileId: string, id: string, dto: UpdateFinanceTransferDto) {
-    const existing = await this.prisma.financeTransfer.findFirst({
-      where: { id, profileId, deletedAt: null },
-      select: { id: true, fromAccountId: true, toAccountId: true },
+    const prepared = await this.prepare(profileId, dto);
+    const row = await this.prisma.$transaction(async (tx) => {
+      await this.lockSavingsLink(tx, profileId, id);
+      const existing = await tx.financeTransfer.findFirst({
+        where: { id, profileId, deletedAt: null },
+        select: {
+          id: true,
+          fromAccountId: true,
+          toAccountId: true,
+          _count: { select: { savingsMovements: true } },
+        },
+      });
+      if (!existing) throw new NotFoundException('Finance transfer not found');
+      if (existing._count.savingsMovements)
+        throw new ConflictException(
+          'A transfer linked to savings history cannot be changed',
+        );
+      this.assertArchivedReferences(prepared, existing);
+      return tx.financeTransfer.update({
+        where: { id: existing.id },
+        data: prepared.data,
+        select: transferSelect,
+      });
     });
-    if (!existing) throw new NotFoundException('Finance transfer not found');
-    return this.write(profileId, existing, dto);
+    return this.view(row);
   }
 
-  private async write(
+  private async createTransfer(
     profileId: string,
-    existing: { id: string; fromAccountId: string; toAccountId: string } | null,
     dto: CreateFinanceTransferDto,
     id?: string,
   ) {
+    const prepared = await this.prepare(profileId, dto);
+    this.assertArchivedReferences(prepared, null);
+    const row = await this.prisma.financeTransfer.create({
+      data: { ...(id ? { id } : {}), profileId, ...prepared.data },
+      select: transferSelect,
+    });
+    return this.view(row);
+  }
+
+  private async prepare(profileId: string, dto: CreateFinanceTransferDto) {
     if (dto.fromAccountId === dto.toAccountId)
       throw new BadRequestException('Transfer accounts must be different');
     const amount = this.positive(dto.amount);
@@ -110,10 +140,6 @@ export class FinanceTransferService {
     const to = accounts.find((account) => account.id === dto.toAccountId);
     if (!from || !to)
       throw new NotFoundException('Finance transfer account not found');
-    if (from.archivedAt && existing?.fromAccountId !== from.id)
-      throw new NotFoundException('Finance transfer account not found');
-    if (to.archivedAt && existing?.toAccountId !== to.id)
-      throw new NotFoundException('Finance transfer account not found');
     const rateResult = await this.conversion.getRateMetadata(
       from.currency,
       to.currency,
@@ -126,42 +152,72 @@ export class FinanceTransferService {
         message: rateResult.message,
       });
     const exchangeRate = new Prisma.Decimal(rateResult.rate);
-    const data = {
-      fromAccountId: from.id,
-      toAccountId: to.id,
-      fromAmount: amount,
-      fromCurrency: from.currency,
-      toAmount: amount.mul(exchangeRate).toDecimalPlaces(2),
-      toCurrency: to.currency,
-      exchangeRate,
-      occurredAt,
-      description: dto.description?.trim() || null,
+    return {
+      fromArchived: Boolean(from.archivedAt),
+      toArchived: Boolean(to.archivedAt),
+      data: {
+        fromAccountId: from.id,
+        toAccountId: to.id,
+        fromAmount: amount,
+        fromCurrency: from.currency,
+        toAmount: amount.mul(exchangeRate).toDecimalPlaces(2),
+        toCurrency: to.currency,
+        exchangeRate,
+        occurredAt,
+        description: dto.description?.trim() || null,
+      },
     };
-    const row = existing
-      ? await this.prisma.financeTransfer.update({
-          where: { id: existing.id },
-          data,
-          select: transferSelect,
-        })
-      : await this.prisma.financeTransfer.create({
-          data: { ...(id ? { id } : {}), profileId, ...data },
-          select: transferSelect,
-        });
-    return this.view(row);
   }
 
   async remove(profileId: string, id: string) {
-    const existing = await this.prisma.financeTransfer.findFirst({
-      where: { id, profileId, deletedAt: null },
-      select: { id: true },
-    });
-    if (!existing) throw new NotFoundException('Finance transfer not found');
-    const row = await this.prisma.financeTransfer.update({
-      where: { id: existing.id },
-      data: { deletedAt: new Date() },
-      select: transferSelect,
+    const row = await this.prisma.$transaction(async (tx) => {
+      await this.lockSavingsLink(tx, profileId, id);
+      const existing = await tx.financeTransfer.findFirst({
+        where: { id, profileId, deletedAt: null },
+        select: { id: true, _count: { select: { savingsMovements: true } } },
+      });
+      if (!existing) throw new NotFoundException('Finance transfer not found');
+      if (existing._count.savingsMovements)
+        throw new ConflictException(
+          'A transfer linked to savings history cannot be deleted',
+        );
+      return tx.financeTransfer.update({
+        where: { id: existing.id },
+        data: { deletedAt: new Date() },
+        select: transferSelect,
+      });
     });
     return this.view(row);
+  }
+
+  private assertArchivedReferences(
+    prepared: {
+      fromArchived: boolean;
+      toArchived: boolean;
+      data: {
+        fromAccountId: string;
+        toAccountId: string;
+      };
+    },
+    existing: { fromAccountId: string; toAccountId: string } | null,
+  ) {
+    if (
+      (prepared.fromArchived &&
+        existing?.fromAccountId !== prepared.data.fromAccountId) ||
+      (prepared.toArchived &&
+        existing?.toAccountId !== prepared.data.toAccountId)
+    )
+      throw new NotFoundException('Finance transfer account not found');
+  }
+
+  private async lockSavingsLink(
+    tx: Prisma.TransactionClient,
+    profileId: string,
+    transferId: string,
+  ) {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${financeTransferSavingsLinkLockKey(profileId, transferId)}, 0))`,
+    );
   }
 
   private positive(value: string) {

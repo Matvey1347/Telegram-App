@@ -18,4 +18,25 @@ describe("TelegramInviteLinkCreatorAvatar", () => {
     fireEvent.error(screen.getByRole("img", { name: "Admin" }));
     expect(screen.getByText("MTP")).toBeInTheDocument();
   });
+
+  it("renders an emoji creator name as the Telegram avatar fallback", () => {
+    render(<TelegramInviteLinkCreatorAvatar label="😇" />);
+    expect(screen.getByText("😇")).toBeInTheDocument();
+    expect(screen.getByText("😇")).toHaveClass("!bg-violet-400");
+    expect(screen.queryByText("MTP")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the Telegram emoji avatar when a guessed photo is unavailable", () => {
+    render(
+      <TelegramInviteLinkCreatorAvatar
+        label="😇"
+        photoUrl="https://t.me/i/userpic/320/owner.jpg"
+      />,
+    );
+
+    fireEvent.error(screen.getByRole("img", { name: "😇" }));
+
+    expect(screen.getByText("😇")).toBeInTheDocument();
+    expect(screen.queryByText("MTP")).not.toBeInTheDocument();
+  });
 });

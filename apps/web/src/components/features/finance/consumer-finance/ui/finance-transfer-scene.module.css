@@ -1,0 +1,126 @@
+.transferScene {
+  transform-origin: center;
+  animation: finance-transfer-enter 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.transferAccountLeft,
+.transferAccountRight {
+  fill: #151d26;
+  stroke: rgb(255 255 255 / 0.1);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  animation: finance-transfer-item 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.transferAccountRight {
+  animation-delay: 110ms;
+}
+
+.transferAccountLeft circle,
+.transferAccountRight circle {
+  fill: currentColor;
+  fill-opacity: 0.12;
+  stroke: currentColor;
+  stroke-opacity: 0.48;
+}
+
+.transferAccountLeft path,
+.transferAccountRight path {
+  fill: none;
+  stroke: #506071;
+  stroke-width: 3;
+}
+
+.transferAccountLeft rect:last-child,
+.transferAccountRight rect:last-child {
+  fill: currentColor;
+  fill-opacity: 0.42;
+  stroke: none;
+}
+
+.transferOrbit {
+  fill: none;
+  stroke: currentColor;
+  stroke-dasharray: 4 7;
+  stroke-opacity: 0.18;
+}
+
+.transferCore {
+  fill: #0d1822;
+  stroke: currentColor;
+  stroke-opacity: 0.42;
+}
+
+.transferArrows {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.4;
+}
+
+.transferRail {
+  fill: none;
+  stroke: currentColor;
+  stroke-dasharray: 3 8;
+  stroke-linecap: round;
+  stroke-opacity: 0.22;
+}
+
+.transferToken {
+  fill: currentColor;
+  filter: drop-shadow(0 0 5px currentColor);
+  animation: finance-transfer-token 3.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@keyframes finance-transfer-enter {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes finance-transfer-item {
+  from {
+    opacity: 0;
+    transform: translateX(-7px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes finance-transfer-token {
+  0%,
+  12% {
+    opacity: 0;
+    transform: translate(0, 7px);
+  }
+  32% {
+    opacity: 1;
+    transform: translate(30px, -11px);
+  }
+  64% {
+    opacity: 1;
+    transform: translate(76px, -17px);
+  }
+  88%,
+  100% {
+    opacity: 0;
+    transform: translate(115px, 8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .transferScene,
+  .transferAccountLeft,
+  .transferAccountRight,
+  .transferToken {
+    animation: none;
+  }
+}

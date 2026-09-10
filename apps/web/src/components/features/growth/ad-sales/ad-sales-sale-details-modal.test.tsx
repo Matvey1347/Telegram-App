@@ -143,13 +143,98 @@ describe("SaleDetailsModal", () => {
     await user.click(
       screen.getByRole("button", { name: "Delete finance transaction" }),
     );
-    await user.type(screen.getByPlaceholderText("finance transaction"), "finance transaction");
-    await user.click(screen.getByRole("button", { name: "Delete transaction" }));
+    await user.type(
+      screen.getByPlaceholderText("finance transaction"),
+      "finance transaction",
+    );
+    await user.click(screen.getByLabelText("Also clear the deal value"));
+    await user.click(
+      screen.getByRole("button", { name: "Delete transaction" }),
+    );
 
     await waitFor(() =>
-      expect(onDeletePayment).toHaveBeenCalledWith(sale, "payment-1"),
+      expect(onDeletePayment).toHaveBeenCalledWith(sale, "payment-1", {
+        clearDealAmount: true,
+      }),
     );
     expect(screen.getByText("No finance transaction linked")).toBeTruthy();
+  });
+
+  it("creates a transaction inside the deal with an account avatar and automatic allocation", async () => {
+    const user = userEvent.setup();
+    const onCreatePayment = vi.fn().mockResolvedValue(undefined);
+    const sourceSale = sale as unknown as Record<string, unknown>;
+    const unpaidSale = {
+      ...sourceSale,
+      totalPaidAmount: "0",
+      outstandingAmount: "102",
+      payments: [],
+    } as never;
+
+    render(
+      <SaleDetailsModal
+        open
+        onClose={vi.fn()}
+        sale={unpaidSale}
+        accounts={[
+          {
+            id: "account-1",
+            name: "Main account",
+            currency: "UAH",
+            isActive: true,
+            iconPresentation: { type: "unicode", value: "💳" },
+          } as never,
+        ]}
+        channels={[{ id: "channel-1", title: "Psychology" } as never]}
+        productsByChannelId={{}}
+        settings={undefined}
+        rates={undefined}
+        onSave={vi.fn()}
+        onAction={vi.fn()}
+        onCreatePayment={onCreatePayment}
+      />,
+    );
+
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    await user.click(
+      screen.getByRole("button", { name: "Create finance transaction" }),
+    );
+
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(screen.getByText("Main account (UAH)")).toBeTruthy();
+    expect(screen.getByText("💳")).toBeTruthy();
+    expect(
+      screen.getByText(/split automatically across the unpaid channel/),
+    ).toBeTruthy();
+    expect(document.querySelector('input[type="datetime-local"]')).toBeNull();
+    expect(screen.queryByText("Allocations")).toBeNull();
+
+    const amountInput = screen.getByLabelText("Amount (UAH)");
+    await user.clear(amountInput);
+    await user.type(amountInput, "310");
+    expect(
+      screen.getByText(/208 UAH will be recorded as an unallocated/),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Create transaction" }),
+    ).toBeEnabled();
+
+    await user.click(
+      screen.getByRole("button", { name: "Create transaction" }),
+    );
+
+    await waitFor(() =>
+      expect(onCreatePayment).toHaveBeenCalledWith(
+        unpaidSale,
+        expect.objectContaining({
+          accountId: "account-1",
+          amount: 310,
+          currency: "UAH",
+          paidAt: expect.any(String),
+          allocations: [{ placementId: "placement-1", amount: 102 }],
+        }),
+      ),
+    );
   });
 
   it("saves an edited buyer with the rest of the deal", async () => {

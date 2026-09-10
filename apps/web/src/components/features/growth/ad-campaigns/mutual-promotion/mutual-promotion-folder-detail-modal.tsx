@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarClock, Pencil, Play, Users } from "lucide-react";
+import {
+  CalendarClock,
+  Pencil,
+  Play,
+  UserMinus,
+  UserPlus,
+  UserRound,
+  Users,
+} from "lucide-react";
 import type {
   MutualPromotionExpensePayload,
   MutualPromotionFolderDetail,
@@ -22,6 +30,8 @@ import {
 import { MutualPromotionPostImport } from "./mutual-promotion-post-import";
 import { MutualPromotionSavedPostCard } from "./mutual-promotion-saved-post-card";
 import { IconAvatar } from "@/components/icons/icon-avatar";
+import { TelegramInviteLinkCreatorAvatar } from "@/components/features/telegram/telegram/telegram-invite-link-creator-avatar";
+import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
 
 function Count({ value }: { value: number | null }) {
   return <>{value == null ? "—" : new Intl.NumberFormat().format(value)}</>;
@@ -103,6 +113,7 @@ export function MutualPromotionFolderDetailModal({
   actionError,
   onClose,
   onEdit,
+  onEditInviteLinks,
   onActivate,
   onCancel,
   onAddPost,
@@ -120,6 +131,7 @@ export function MutualPromotionFolderDetailModal({
   actionError: string | null;
   onClose: () => void;
   onEdit: () => void;
+  onEditInviteLinks: () => void;
   onActivate: () => Promise<void>;
   onCancel: () => Promise<void>;
   onAddPost: Parameters<typeof MutualPromotionPostImport>[0]["onAddPost"];
@@ -172,6 +184,16 @@ export function MutualPromotionFolderDetailModal({
             {editable ? (
               <Button type="button" variant="secondary" onClick={onEdit}>
                 <Pencil size={16} /> Edit setup
+              </Button>
+            ) : null}
+            {["SCHEDULED", "ACTIVE"].includes(folder.status) ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={onEditInviteLinks}
+                disabled={mutating}
+              >
+                <Pencil size={16} /> Edit invite links
               </Button>
             ) : null}
             {["SCHEDULED", "ACTIVE"].includes(folder.status) ? (
@@ -246,14 +268,26 @@ export function MutualPromotionFolderDetailModal({
                       <p className="truncate font-medium text-white">
                         {participant.channel.title}
                       </p>
-                      <a
-                        href={participant.inviteLink.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-1 block truncate text-xs text-blue-300 hover:text-blue-200"
-                      >
-                        {participant.inviteLink.name}
-                      </a>
+                      <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                        <TelegramInviteLinkCreatorAvatar
+                          photoUrl={participant.inviteLink.creatorPhotoUrl}
+                          memberAvatar={
+                            participant.inviteLink.creatorMember
+                              ?.avatarPresentation
+                          }
+                          label={inviteLinkCreatorFallback(
+                            participant.inviteLink,
+                          )}
+                        />
+                        <a
+                          href={participant.inviteLink.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="min-w-0 truncate text-xs text-blue-300 hover:text-blue-200"
+                        >
+                          {participant.inviteLink.name}
+                        </a>
+                      </div>
                     </div>
                   </div>
                   <span
@@ -266,24 +300,43 @@ export function MutualPromotionFolderDetailModal({
                 </div>
                 <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
                   <div>
-                    <dt className="text-xs text-neutral-500">Arrivals</dt>
+                    <dt className="flex items-center gap-1.5 text-xs text-neutral-500">
+                      <UserPlus
+                        size={14}
+                        className="text-emerald-300"
+                        aria-hidden="true"
+                      />
+                      Arrivals
+                    </dt>
                     <dd className="mt-1 text-white">
                       <Count value={participant.stats.joinedCount} />
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-neutral-500">Audience Δ</dt>
-                    <dd className="mt-1 text-white">
-                      <Count value={participant.stats.audienceDelta} />
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-neutral-500">
+                    <dt className="flex items-center gap-1.5 text-xs text-neutral-500">
+                      <UserMinus
+                        size={14}
+                        className="text-rose-300"
+                        aria-hidden="true"
+                      />
                       Unsubscribed
                       {participant.stats.unsubscribedIsEstimate ? " ≈" : ""}
                     </dt>
                     <dd className="mt-1 text-white">
                       <Count value={participant.stats.unsubscribedCount} />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="flex items-center gap-1.5 text-xs text-neutral-500">
+                      <UserRound
+                        size={14}
+                        className="text-violet-300"
+                        aria-hidden="true"
+                      />
+                      Audience
+                    </dt>
+                    <dd className="mt-1 text-white">
+                      <Count value={participant.stats.audienceDelta} />
                     </dd>
                   </div>
                 </dl>

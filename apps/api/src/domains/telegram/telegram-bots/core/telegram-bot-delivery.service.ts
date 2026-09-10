@@ -177,6 +177,11 @@ export class TelegramBotDeliveryService
     await this.scheduler.reschedule(notBefore);
   }
 
+  /** Arms an earlier candidate without ever delaying an already queued wake-up. */
+  notify(scheduledAt: Date) {
+    this.scheduler.notify(scheduledAt);
+  }
+
   private async findNextDueAt() {
     const runtimeScope = this.runtimeScope();
     if (!runtimeScope) return null;

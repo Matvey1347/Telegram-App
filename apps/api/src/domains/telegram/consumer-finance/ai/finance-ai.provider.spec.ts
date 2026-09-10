@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { FinanceAiProviderService } from './finance-ai.provider';
 
-describe('FinanceAiProviderService voice transcription', () => {
+describe('FinanceAiProviderService', () => {
   const originalFetch = global.fetch;
 
   afterEach(() => {
@@ -17,7 +17,10 @@ describe('FinanceAiProviderService voice transcription', () => {
           telegramUser: { runtimeInstanceId: 'runtime-1' },
         }),
       },
-      aiUsageEvent: { create: jest.fn().mockResolvedValue({}) },
+      aiUsageEvent: {
+        create: jest.fn().mockResolvedValue({}),
+        update: jest.fn().mockResolvedValue({}),
+      },
       aiProviderConfig: {
         findMany: jest.fn().mockResolvedValue([
           {
@@ -29,7 +32,7 @@ describe('FinanceAiProviderService voice transcription', () => {
         ]),
       },
     };
-    const encryption = { decrypt: jest.fn().mockReturnValue('openai-key') };
+    const credentials = { key: jest.fn().mockResolvedValue('openai-key') };
     const botApi = {
       getFile: jest.fn().mockResolvedValue({
         file_id: 'voice-file',
@@ -43,18 +46,21 @@ describe('FinanceAiProviderService voice transcription', () => {
     };
     const service = new FinanceAiProviderService(
       prisma as never,
-      encryption as never,
+      credentials as never,
       {} as never,
       botApi as never,
     );
-    return { service, botApi, encryption };
+    return { service, botApi, credentials, prisma };
   }
 
   it('downloads a bounded Telegram voice note and transcribes it through the configured provider', async () => {
-    const { service, botApi, encryption } = createService();
+    const { service, botApi, credentials } = createService();
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: jest.fn().mockResolvedValue({ text: '  250 грн Bolt с mono  ', usage: { input_tokens: 100, output_tokens: 5 } }),
+      json: jest.fn().mockResolvedValue({
+        text: '  250 грн Bolt с mono  ',
+        usage: { input_tokens: 100, output_tokens: 5 },
+      }),
     }) as never;
 
     await expect(
@@ -73,7 +79,7 @@ describe('FinanceAiProviderService voice transcription', () => {
       'voices/voice.ogg',
       8 * 1024 * 1024,
     );
-    expect(encryption.decrypt).toHaveBeenCalled();
+    expect(credentials.key).toHaveBeenCalledWith('profile-1', 'bot-1');
     expect(global.fetch).toHaveBeenCalledWith(
       'https://api.openai.com/v1/audio/transcriptions',
       expect.objectContaining({

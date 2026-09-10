@@ -6,7 +6,6 @@ import {
   TelegramAdPricingMode,
   TelegramAdPlacementStatus,
   TelegramAdSaleOrigin,
-  TelegramAdSalePaymentStatus,
   TelegramAdSaleStatus,
   TelegramAdSlotStrategy,
   TelegramAdvertiserActivityType,
@@ -18,7 +17,6 @@ import {
   TelegramAdvertiserTaskType,
 } from '@prisma/client';
 import {
-  Allow,
   ArrayMaxSize,
   IsArray,
   IsBoolean,
@@ -600,6 +598,13 @@ export class CreateTelegramAdSalePaymentDto {
   @ValidateNested({ each: true })
   @Type(() => CreateTelegramAdSalePaymentAllocationDto)
   allocations!: CreateTelegramAdSalePaymentAllocationDto[];
+}
+
+export class DeleteTelegramAdSalePaymentQueryDto {
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  clearDealAmount?: boolean;
 }
 
 export class CreateTelegramAdSaleCheckoutPaymentDto {

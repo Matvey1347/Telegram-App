@@ -7,6 +7,8 @@ import { MutualPromotionActivationService } from './mutual-promotion-activation.
 import { MutualPromotionExpenseService } from './mutual-promotion-expense.service';
 import { MutualPromotionFoldersController } from './mutual-promotion-folders.controller';
 import { MutualPromotionLifecycleService } from './mutual-promotion-lifecycle.service';
+import { MutualPromotionInviteLinkEditService } from './mutual-promotion-invite-link-edit.service';
+import { MutualPromotionInviteLinkImportService } from './mutual-promotion-invite-link-import.service';
 import { MutualPromotionReadService } from './mutual-promotion-read.service';
 import { MutualPromotionStatisticsService } from './mutual-promotion-statistics.service';
 import { MutualPromotionValidationService } from './mutual-promotion-validation.service';
@@ -19,6 +21,8 @@ import { MutualPromotionValidationService } from './mutual-promotion-validation.
     MutualPromotionBoundaryService,
     MutualPromotionCommandService,
     MutualPromotionExpenseService,
+    MutualPromotionInviteLinkEditService,
+    MutualPromotionInviteLinkImportService,
     MutualPromotionLifecycleService,
     MutualPromotionReadService,
     MutualPromotionStatisticsService,

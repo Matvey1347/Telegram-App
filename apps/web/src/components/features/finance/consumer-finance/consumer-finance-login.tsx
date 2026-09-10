@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Send } from "lucide-react";
-import { Button, ErrorState, LoadingState } from "./ui";
-import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
+import { Button, ErrorState, LoadingState, WaitingState } from "./ui";
+import { consumerFinanceAuthApi } from "@/lib/features/finance/consumer-finance-auth-api";
 import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { financeCopy, normalizeFinanceLocale } from "./finance-i18n";
+import { normalizeFinanceLocale } from "./i18n/core";
+import { financeAuthCopy } from "./i18n/auth";
 
 /** Browser authentication is delegated to the API so Telegram verifies identity server-side. */
 export function ConsumerFinanceLogin({
@@ -16,7 +17,7 @@ export function ConsumerFinanceLogin({
   botId: string;
   onAuthenticated: () => void;
 }) {
-  const t = financeCopy(
+  const t = financeAuthCopy(
     normalizeFinanceLocale(
       typeof navigator === "undefined" ? undefined : navigator.language,
     ),
@@ -25,7 +26,7 @@ export function ConsumerFinanceLogin({
   const completedToken = useRef<string | null>(null);
   const challenge = useQuery({
     queryKey: consumerFinanceKeys.browserLoginChallenge(botId),
-    queryFn: () => consumerFinanceApi.createBrowserLoginChallenge(botId),
+    queryFn: () => consumerFinanceAuthApi.createBrowserLoginChallenge(botId),
     retry: false,
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: 0,
@@ -36,7 +37,7 @@ export function ConsumerFinanceLogin({
       challenge.data?.token || "pending",
     ),
     queryFn: () =>
-      consumerFinanceApi.consumeBrowserLoginChallenge(
+      consumerFinanceAuthApi.consumeBrowserLoginChallenge(
         botId,
         challenge.data!.token,
       ),
@@ -77,9 +78,6 @@ export function ConsumerFinanceLogin({
         <p className="mt-4 max-w-lg text-neutral-400">{t.signInHelp}</p>
       </div>
       <section className="w-full rounded-lg border border-neutral-800 bg-neutral-900 p-6 md:p-8">
-        <p className="text-xs uppercase tracking-[0.2em] text-sky-300">
-          {t.personalFinance}
-        </p>
         <h1 className="mt-2 text-2xl font-semibold">{t.signInTelegram}</h1>
         <p className="mt-2 text-sm text-neutral-400">{t.signInHelp}</p>
         {challenge.isLoading ? <LoadingState text={t.loadingSignIn} /> : null}
@@ -104,9 +102,11 @@ export function ConsumerFinanceLogin({
               {t.telegramSignIn}
             </a>
             {waiting ? (
-              <p className="text-sm text-neutral-400" role="status">
-                {t.telegramSignInWaiting}
-              </p>
+              <WaitingState
+                text={t.telegramSignInWaiting}
+                context="settings"
+                compact
+              />
             ) : null}
           </div>
         ) : null}
@@ -130,7 +130,7 @@ export function ConsumerFinanceBootstrapError({
   onRetry: () => void;
   locale?: string | null;
 }) {
-  const t = financeCopy(
+  const t = financeAuthCopy(
     normalizeFinanceLocale(
       locale ??
         (typeof navigator === "undefined" ? undefined : navigator.language),

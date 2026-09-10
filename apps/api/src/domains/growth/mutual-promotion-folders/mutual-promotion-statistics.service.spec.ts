@@ -53,4 +53,28 @@ describe('MutualPromotionStatisticsService', () => {
     expect(stats.subscriberPrice).toBeNull();
     expect(stats.dataQuality).toBe('INCOMPLETE');
   });
+
+  it('shows the current invite-link increase while a folder is active', () => {
+    const stats = service.participant(
+      {
+        subscribersAtStart: 884,
+        subscribersAtEnd: null,
+        inviteJoinedAtStart: 20,
+        inviteJoinedAtEnd: null,
+        baselineCapturedAt: new Date('2026-09-09T21:59:27.650Z'),
+        finalCapturedAt: null,
+        currentSubscribersCount: 890,
+        currentInviteJoinedCount: 29,
+        expense: null,
+      },
+      { useCurrentCounters: true },
+    );
+
+    expect(stats).toMatchObject({
+      joinedCount: 9,
+      audienceDelta: 6,
+      unsubscribedCount: 3,
+      dataQuality: 'CURRENT_COUNTERS',
+    });
+  });
 });

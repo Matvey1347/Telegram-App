@@ -63,14 +63,14 @@ describe("CRM live reply summary cache", () => {
     });
   });
 
-  it("clears an unanswered state immediately after an outgoing reply", () => {
+  it("changes an unanswered state to waiting for the client after an outgoing reply", () => {
     const client = setup();
     applyCrmReplyMessage(client, "contact-1", "INBOUND");
 
     applyCrmReplyMessage(client, "contact-1", "OUTBOUND");
 
     expect(current(client)).toMatchObject({
-      status: "NONE",
+      status: "WAITING_FOR_CLIENT",
       inboundMessageCount: 1,
       outboundMessageCount: 1,
       muted: false,

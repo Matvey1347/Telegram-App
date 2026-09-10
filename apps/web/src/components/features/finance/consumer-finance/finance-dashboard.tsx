@@ -1,36 +1,33 @@
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight } from "lucide-react";
 import type {
   ConsumerFinanceDashboard,
   ConsumerFinanceTransaction,
 } from "@telegram-system/shared";
 import { Button, Card, EmptyState } from "./ui";
 import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
-import type { ConsumerFinanceScreen } from "./consumer-finance-screens";
-import type { ConsumerFinanceAction } from "./consumer-finance-navigation";
-import type { ConsumerFinanceSurface } from "./consumer-finance-navigation";
-import {
-  financeCopy,
-  financeIntlLocale,
-  localizeFinanceCategory,
-  type FinanceLocale,
-} from "./finance-i18n";
+import type {
+  ConsumerFinanceScreen,
+  ConsumerFinanceSurface,
+} from "./consumer-finance-navigation";
+import { IconAvatar } from "./ui/finance-icon-avatar";
+import { financeIntlLocale, type FinanceLocale } from "./i18n/core";
+import { financeDashboardCopy } from "./i18n/dashboard";
+import { financeInvestmentsCopy } from "./i18n/investments";
+import { localizeFinanceCategory } from "./finance-category-i18n";
 
 export function FinanceDashboard({
   data,
   onNavigate,
-  onAction,
   locale,
   timezone,
   surface,
 }: {
   data: ConsumerFinanceDashboard;
   onNavigate: (screen: ConsumerFinanceScreen) => void;
-  onAction: (action: ConsumerFinanceAction) => void;
   locale: FinanceLocale;
   timezone: string;
   surface: ConsumerFinanceSurface;
 }) {
-  const t = financeCopy(locale);
+  const t = financeDashboardCopy(locale);
   const { stats } = data;
   const accounts = stats.accounts.filter((account) => !account.archivedAt);
   const categories = stats.categories.slice(0, 6);
@@ -41,29 +38,49 @@ export function FinanceDashboard({
         surface === "browser" ? "grid gap-4 xl:grid-cols-2" : "space-y-4"
       }
     >
-      <Card className="flex flex-wrap items-end justify-between gap-3 xl:col-span-2">
-        <div>
-          <p className="text-xs uppercase text-neutral-500">{t.totalBalance}</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">
-            {formatMoney(
-              stats.totalBalance.amount,
-              stats.totalBalance.currency,
-              "symbol",
-            )}
-          </p>
+      <Card className="xl:col-span-2">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            [t.cash, stats.netWorth.cashAmount, stats.netWorth.currency, ""],
+            [
+              t.savings,
+              data.savings.allocated,
+              data.savings.currency,
+              "text-sky-200",
+            ],
+            [
+              t.investments,
+              stats.netWorth.investmentValue,
+              stats.netWorth.currency,
+              "text-violet-200",
+            ],
+            [
+              t.netWorth,
+              stats.netWorth.amount,
+              stats.netWorth.currency,
+              "text-emerald-200",
+            ],
+          ].map(([label, value, currency, tone]) => (
+            <div key={label}>
+              <p className="text-xs uppercase text-neutral-500">{label}</p>
+              <p className={`mt-1 text-lg font-semibold tabular-nums ${tone}`}>
+                {formatMoney(value, currency, "symbol")}
+              </p>
+            </div>
+          ))}
         </div>
-        <p className="truncate text-xs text-neutral-500">
-          {stats.totalBalance.includedAccountCount} / {accounts.length}{" "}
-          {t.accounts.toLocaleLowerCase()}
-        </p>
-        {stats.totalBalance.excludedAccounts.length ? (
-          <p className="w-full text-xs text-amber-300">{t.incompleteBalance}</p>
+        <p className="mt-3 text-xs text-neutral-500">{t.savingsPartCash}</p>
+        {!stats.netWorth.complete ? (
+          <p className="mt-2 text-xs text-amber-300">{t.incompleteWorth}</p>
         ) : null}
       </Card>
-      <div className="grid grid-cols-3 gap-2 xl:col-span-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:col-span-2">
         {[
           [t.income, stats.income, "text-emerald-300"],
           [t.expense, stats.expense, "text-rose-300"],
+          [t.saved, stats.saved, "text-sky-200"],
+          [t.invested, stats.invested, "text-violet-200"],
+          [t.investmentReturns, stats.investmentReturns, "text-emerald-200"],
           [t.net, stats.net, "text-sky-200"],
         ].map(([label, value, tone]) => (
           <Card key={label} className="p-3">
@@ -80,29 +97,39 @@ export function FinanceDashboard({
           accounts.map((account) => (
             <div
               key={account.id}
-              className="flex justify-between border-t border-neutral-800 py-2 text-sm first:border-0"
+              className="flex items-center justify-between gap-3 border-t border-neutral-800 py-2 text-sm first:border-0"
             >
-              <span>
-                {account.name} · {account.currency}
+              <span className="flex min-w-0 items-center gap-2">
+                <IconAvatar
+                  icon={account.iconPresentation}
+                  label={account.name}
+                  size="sm"
+                  bordered={false}
+                />
+                <span className="truncate">
+                  {account.name} · {account.currency}
+                </span>
               </span>
-              <strong>
-                {formatMoney(account.balance, account.currency, "symbol")}
-              </strong>
-              {account.equivalentBalance &&
-              account.equivalentBalance.currency !== account.currency ? (
-                <p className="mt-1 text-xs text-neutral-500">
-                  ≈{" "}
-                  {formatMoney(
-                    account.equivalentBalance.amount,
-                    account.equivalentBalance.currency,
-                    "symbol",
-                  )}
-                </p>
-              ) : null}
+              <span className="shrink-0 text-right">
+                <strong>
+                  {formatMoney(account.balance, account.currency, "symbol")}
+                </strong>
+                {account.equivalentBalance &&
+                account.equivalentBalance.currency !== account.currency ? (
+                  <span className="mt-1 block text-xs text-neutral-500">
+                    ≈{" "}
+                    {formatMoney(
+                      account.equivalentBalance.amount,
+                      account.equivalentBalance.currency,
+                      "symbol",
+                    )}
+                  </span>
+                ) : null}
+              </span>
             </div>
           ))
         ) : (
-          <EmptyState text={t.addAccountHint} />
+          <EmptyState text={t.addAccountHint} context="accounts" compact />
         )}
       </Card>
       <Card>
@@ -125,7 +152,7 @@ export function FinanceDashboard({
             />
           ))
         ) : (
-          <EmptyState text={t.expensesAppear} />
+          <EmptyState text={t.expensesAppear} context="analytics" compact />
         )}
       </Card>
       {data.limits.length ? (
@@ -161,34 +188,6 @@ export function FinanceDashboard({
           ))}
         </Card>
       ) : null}
-      {data.goal ? (
-        <Card>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase text-neutral-500">
-                {t.financialGoal}
-              </p>
-              <h2 className="mt-1 font-medium">{data.goal.name}</h2>
-              <p className="text-sm text-neutral-400">
-                {formatMoney(
-                  data.goal.currentAmount,
-                  data.goal.currency,
-                  "symbol",
-                )}{" "}
-                /{" "}
-                {formatMoney(
-                  data.goal.targetAmount,
-                  data.goal.currency,
-                  "symbol",
-                )}
-              </p>
-            </div>
-            <Button variant="secondary" onClick={() => onNavigate("budget")}>
-              {t.edit}
-            </Button>
-          </div>
-        </Card>
-      ) : null}
       <Card className="xl:col-span-2">
         <h2 className="mb-2 font-medium">{t.recent}</h2>
         {data.recent.length ? (
@@ -201,22 +200,13 @@ export function FinanceDashboard({
             />
           ))
         ) : (
-          <EmptyState text={t.noTransactionsYet} />
+          <EmptyState
+            text={t.noTransactionsYet}
+            context="transactions"
+            compact
+          />
         )}
       </Card>
-      {surface === "telegram" ? (
-        <div className="grid gap-2 sm:grid-cols-3">
-          <Button onClick={() => onAction("expense")}>
-            <ArrowUpRight size={16} /> {t.addExpense}
-          </Button>
-          <Button variant="secondary" onClick={() => onAction("income")}>
-            <ArrowDownLeft size={16} /> {t.addIncome}
-          </Button>
-          <Button variant="secondary" onClick={() => onAction("transfer")}>
-            <ArrowLeftRight size={16} /> {t.transfers}
-          </Button>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -256,8 +246,17 @@ export function TransactionRow({
   locale: FinanceLocale;
   timezone: string;
 }) {
-  const t = financeCopy(locale);
-  const income = item.type === "INCOME";
+  const t = financeDashboardCopy(locale);
+  const investments = financeInvestmentsCopy(locale);
+  const income = item.type === "INCOME" || item.purpose === "INVESTMENT_RETURN";
+  const fallbackLabel =
+    item.purpose === "INVESTMENT_CONTRIBUTION"
+      ? investments.contribution
+      : item.purpose === "INVESTMENT_RETURN"
+        ? investments.investmentReturn
+        : income
+          ? t.income
+          : t.expense;
   const sourceLabel =
     item.source === "RECEIPT"
       ? t.receipt
@@ -277,7 +276,7 @@ export function TransactionRow({
                   locale,
                 )
               : undefined) ||
-            (income ? t.income : t.expense)}
+            fallbackLabel}
         </p>
         <p className="text-xs text-neutral-500">
           {item.account?.name ?? t.accountFallback} ·{" "}

@@ -6,7 +6,9 @@ import { Button, Card } from "./ui";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
 import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
 import { FinanceConfirmModal } from "./finance-confirm-modal";
-import { financeCopy, type FinanceLocale } from "./finance-i18n";
+import { type FinanceLocale } from "./i18n/core";
+import { financeSettingsCopy } from "./i18n/settings";
+import { FinanceImportModal } from "./finance-import-modal";
 
 export function FinancePrivacy({
   botId,
@@ -15,9 +17,10 @@ export function FinancePrivacy({
   botId: string;
   locale: FinanceLocale;
 }) {
-  const t = financeCopy(locale);
+  const t = financeSettingsCopy(locale);
   const client = useQueryClient();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const exportMutation = useMutation({
     mutationFn: () => consumerFinanceApi.exportData(botId),
     onSuccess: (data) => {
@@ -50,6 +53,9 @@ export function FinancePrivacy({
         >
           {exportMutation.isPending ? t.exportingData : t.exportData}
         </Button>
+        <Button variant="secondary" onClick={() => setImportOpen(true)}>
+          {t.importData}
+        </Button>
         <Button variant="danger" onClick={() => setConfirmDelete(true)}>
           {t.deleteAllData}
         </Button>
@@ -68,6 +74,12 @@ export function FinancePrivacy({
         entityName={t.deleteAllDataConfirmation}
         actionLabel={t.deleteAllData}
         description={t.deleteAllDataDescription}
+      />
+      <FinanceImportModal
+        open={importOpen}
+        botId={botId}
+        locale={locale}
+        onClose={() => setImportOpen(false)}
       />
     </Card>
   );

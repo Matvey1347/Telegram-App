@@ -30,6 +30,8 @@ describe('ApplicationLogsService', () => {
     service = new ApplicationLogsService(repository as any, workspaceService as any);
   });
 
+  afterEach(() => jest.useRealTimers());
+
   it('returns an empty list when ApplicationLog storage is missing', async () => {
     findMany.mockRejectedValue(
       new Prisma.PrismaClientKnownRequestError(
@@ -130,6 +132,24 @@ describe('ApplicationLogsService', () => {
 
     expect(deleteMany).toHaveBeenCalledWith({
       where: { workspaceId: 'ws_1' },
+    });
+  });
+
+  it('deletes logs after the 30-day retention window', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-08T12:00:00.000Z'));
+    deleteMany.mockResolvedValue({ count: 4 });
+
+    await expect(service.cleanupExpiredLogs()).resolves.toEqual({
+      deletedCount: 4,
+      disabled: false,
+    });
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          { expiresAt: { lt: new Date('2026-09-08T12:00:00.000Z') } },
+          { createdAt: { lt: new Date('2026-08-09T12:00:00.000Z') } },
+        ],
+      },
     });
   });
 });

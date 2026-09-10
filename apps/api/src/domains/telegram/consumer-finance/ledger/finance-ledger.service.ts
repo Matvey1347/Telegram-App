@@ -9,15 +9,10 @@ import { CurrencyConversionService } from '../../../../common/currency-conversio
 import { FINANCE_UNDO_TTL_MS } from '../catalog/finance-defaults';
 import { financeAccountView } from '../catalog/finance-account-view';
 import {
-  financeAnalyticsDateRange,
   financeHistoryDateRange,
   financeOccurredAtFilter,
 } from './finance-history-date-range';
-import { financeBalanceSummary } from './finance-balance-summary';
-import {
-  financeAnalyticsView,
-  type FinanceAnalyticsAggregateRow,
-} from '../analytics/finance-analytics-view';
+import { FinanceAnalyticsService } from '../analytics/finance-analytics.service';
 import {
   financeTransactionSearchFilter,
   financeTransactionSelect,
@@ -33,7 +28,6 @@ import {
   financeIconPresentation,
 } from '../catalog/finance-entity-emoji';
 import {
-  currentFinancePresentationRate,
   financeDefaultCurrencySnapshot,
   financeValuationSnapshot,
   prepareFinanceAccountRates,
@@ -43,11 +37,23 @@ import {
   type FinanceTransactionRateSource,
   type FinanceTransactionWriteContext,
 } from './finance-transaction-valuation';
+import {
+  normalizeFinanceMerchant,
+  writeFinanceMerchantMapping,
+} from './finance-merchant-mapping';
+import {
+  assertFinanceTransactionMutable,
+  assertFinanceTransactionRemoved,
+} from './finance-generated-transaction-policy';
+import { FinanceAssetSummaryService } from '../assets/finance-asset-summary.service';
+import { financeLedgerStats } from './finance-ledger-stats';
 @Injectable()
 export class FinanceLedgerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly conversion?: CurrencyConversionService,
+    private readonly analyticsService?: FinanceAnalyticsService,
+    private readonly assets?: FinanceAssetSummaryService,
   ) {}
   async profileContext(profileId: string): Promise<FinanceProfileContext> {
     const profile = await this.prisma.financeProfile.findUnique({
@@ -225,6 +231,10 @@ export class FinanceLedgerService {
     source: FinanceTransactionSource = 'MINI_APP',
     id?: string,
     writeContext?: FinanceTransactionWriteContext,
+    options?: {
+      suppressMerchantMapping?: boolean;
+      purpose?: 'ORDINARY' | 'INVESTMENT_CONTRIBUTION' | 'INVESTMENT_RETURN';
+    },
   ) {
     const amount = this.positive(dto.amount, 'amount');
     const account = writeContext
@@ -288,6 +298,7 @@ export class FinanceLedgerService {
         accountId: account.id,
         categoryId: category?.id || null,
         type: dto.type,
+        purpose: options?.purpose || 'ORDINARY',
         amount,
         currency,
         // These retain their original meaning: a snapshot in the profile's
@@ -311,21 +322,13 @@ export class FinanceLedgerService {
       select: financeTransactionSelect,
     });
     const merchantMappingKey = merchantDisplay || description;
-    if (merchantMappingKey && category)
-      await tx.financeMerchantMapping.upsert({
-        where: {
-          profileId_merchantNormalized: {
-            profileId: profile.id,
-            merchantNormalized: this.normalizeMerchant(merchantMappingKey),
-          },
-        },
-        update: { categoryId: category.id },
-        create: {
-          profileId: profile.id,
-          merchantNormalized: this.normalizeMerchant(merchantMappingKey),
-          categoryId: category.id,
-        },
-      });
+    if (!options?.suppressMerchantMapping)
+      await writeFinanceMerchantMapping(
+        tx,
+        profile.id,
+        merchantMappingKey,
+        category?.id || null,
+      );
     return financeTransactionView(created);
   }
 
@@ -342,10 +345,14 @@ export class FinanceLedgerService {
           accountId: true,
           categoryId: true,
           merchantDisplay: true,
+          debtSettlement: { select: { id: true } },
+          recurringPaymentOccurrence: { select: { id: true } },
+          investmentCashFlow: { select: { id: true } },
         },
       });
       if (!existing)
         throw new NotFoundException('Finance transaction not found');
+      assertFinanceTransactionMutable(existing);
       return this.createReplacement(tx, profile, existing, dto);
     });
   }
@@ -445,31 +452,33 @@ export class FinanceLedgerService {
       select: financeTransactionSelect,
     });
     const merchantMappingKey = merchantDisplay || description;
-    if (merchantMappingKey && category)
-      await tx.financeMerchantMapping.upsert({
-        where: {
-          profileId_merchantNormalized: {
-            profileId: profile.id,
-            merchantNormalized: this.normalizeMerchant(merchantMappingKey),
-          },
-        },
-        update: { categoryId: category.id },
-        create: {
-          profileId: profile.id,
-          merchantNormalized: this.normalizeMerchant(merchantMappingKey),
-          categoryId: category.id,
-        },
-      });
+    await writeFinanceMerchantMapping(
+      tx,
+      profile.id,
+      merchantMappingKey,
+      category?.id || null,
+    );
     return financeTransactionView(updated);
   }
 
   async removeTransaction(profileId: string, id: string) {
     const result = await this.prisma.financeTransaction.updateMany({
-      where: { id, profileId, deletedAt: null },
+      where: {
+        id,
+        profileId,
+        deletedAt: null,
+        debtSettlement: { is: null },
+        recurringPaymentOccurrence: { is: null },
+        investmentCashFlow: { is: null },
+      },
       data: { deletedAt: new Date() },
     });
-    if (!result.count)
-      throw new NotFoundException('Finance transaction not found');
+    await assertFinanceTransactionRemoved(
+      this.prisma,
+      profileId,
+      id,
+      result.count,
+    );
     return { deleted: true };
   }
 
@@ -605,109 +614,15 @@ export class FinanceLedgerService {
   }
 
   async stats(profileId: string, from: Date, to: Date) {
-    if (to <= from || to.getTime() - from.getTime() > 366 * 86400000)
-      throw new BadRequestException('Invalid or unbounded statistics range');
-    const profile = await this.prisma.financeProfile.findUnique({
-      where: { id: profileId },
-      select: {
-        id: true,
-        defaultCurrency: true,
-        timezone: true,
-        botIntegration: { select: { workspaceId: true } },
-      },
-    });
-    if (!profile) throw new NotFoundException('Finance profile not found');
-    const [analytics, accounts] = await Promise.all([
-      this.analytics(
-        {
-          id: profile.id,
-          defaultCurrency: profile.defaultCurrency,
-          timezone: profile.timezone,
-          workspaceId: profile.botIntegration.workspaceId,
-        },
-        { period: 'CUSTOM', from: from.toISOString(), to: to.toISOString() },
-      ),
-      this.accounts(
-        profile.id,
-        profile.defaultCurrency,
-        profile.botIntegration.workspaceId,
-      ),
-    ]);
-    return {
-      income: analytics.summary.income,
-      expense: analytics.summary.expenses,
-      net: analytics.summary.netCashflow,
-      categories: analytics.expensesByCategory.map((row) => ({
-        categoryId: row.categoryId,
-        categoryKey: row.categoryKey,
-        name: row.name,
-        amount: row.amount,
-      })),
-      accounts,
-      totalBalance: financeBalanceSummary(accounts, profile.defaultCurrency),
-    };
-  }
-
-  async analytics(
-    profile: FinanceProfileContext,
-    input: {
-      period: 'CURRENT_MONTH' | 'PREVIOUS_MONTH' | 'LAST_3_MONTHS' | 'CUSTOM';
-      from?: string;
-      to?: string;
-    },
-  ) {
-    const { from, to } = financeAnalyticsDateRange(
-      input,
-      profile.timezone || 'UTC',
-    );
-    // Aggregate in Postgres so a full 366-day window does not load every
-    // ledger row into Node. The result is bounded by day/category/type groups.
-    const rows = await this.prisma.$queryRaw<FinanceAnalyticsAggregateRow[]>`
-      SELECT
-        t."type",
-        t."categoryId",
-        c."name" AS "categoryName",
-        c."key" AS "categoryKey",
-        t."currency",
-        to_char(t."occurredAt" AT TIME ZONE ${profile.timezone || 'UTC'}, 'YYYY-MM-DD') AS "day",
-        SUM(CASE
-          WHEN t."valuationCurrency" = 'USD'
-            AND t."amountInValuationCurrency" IS NOT NULL
-          THEN t."amountInValuationCurrency"
-          ELSE 0
-        END) AS "valuedAmount",
-        SUM(t."amount") AS "nativeAmount",
-        SUM(CASE
-          WHEN t."valuationCurrency" IS DISTINCT FROM 'USD'
-            OR t."amountInValuationCurrency" IS NULL
-          THEN t."amount"
-          ELSE 0
-        END) AS "legacyNativeAmount",
-        COUNT(*) FILTER (WHERE
-          t."valuationCurrency" IS DISTINCT FROM 'USD'
-          OR t."amountInValuationCurrency" IS NULL
-        ) AS "legacyTransactionCount"
-      FROM "FinanceTransaction" t
-      LEFT JOIN "FinanceCategory" c ON c.id = t."categoryId"
-      WHERE t."profileId" = ${profile.id}
-        AND t."deletedAt" IS NULL
-        AND t."occurredAt" >= ${from}
-        AND t."occurredAt" < ${to}
-      GROUP BY t."type", t."categoryId", c."name", c."key", t."currency", 6
-    `;
-    const hasValuedAmount = rows.some(
-      (row) =>
-        row.currency !== profile.defaultCurrency &&
-        !new Prisma.Decimal(row.valuedAmount || 0).isZero(),
-    );
-    const rate = hasValuedAmount
-      ? await currentFinancePresentationRate(profile, this.rateDependencies())
-      : new Prisma.Decimal(1);
-    return financeAnalyticsView({
-      rows,
-      rate,
-      currency: profile.defaultCurrency,
-      period: { ...input, from: from.toISOString(), to: to.toISOString() },
+    return financeLedgerStats({
+      prisma: this.prisma,
+      analytics: this.analyticsService!,
+      assets: this.assets,
+      profileId,
+      from,
+      to,
+      loadAccounts: (id, currency, workspaceId) =>
+        this.accounts(id, currency, workspaceId),
     });
   }
 
@@ -727,12 +642,7 @@ export class FinanceLedgerService {
   }
 
   normalizeMerchant(value: string) {
-    return value
-      .normalize('NFKC')
-      .trim()
-      .toLocaleLowerCase()
-      .replace(/\s+/g, ' ')
-      .slice(0, 120);
+    return normalizeFinanceMerchant(value);
   }
   private positive(value: string | undefined, field: string) {
     try {

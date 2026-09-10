@@ -678,6 +678,45 @@ enum FinanceTransactionType {
   EXPENSE
 }
 
+enum FinanceTransactionPurpose {
+  ORDINARY
+  INVESTMENT_CONTRIBUTION
+  INVESTMENT_RETURN
+}
+
+enum FinanceSavingsGoalStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum FinanceSavingsMovementKind {
+  ALLOCATE
+  RELEASE
+  REALLOCATE
+}
+
+enum FinanceInvestmentType {
+  BUSINESS
+  REAL_ESTATE
+  SECURITIES
+  CRYPTO
+  DIGITAL_ASSET
+  PHYSICAL_ASSET
+  OTHER
+}
+
+enum FinanceInvestmentStatus {
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+enum FinanceInvestmentCashFlowKind {
+  CONTRIBUTION
+  RETURN
+}
+
 enum FinanceTransactionSource {
   CHAT
   MINI_APP
@@ -698,6 +737,37 @@ enum FinanceLimitPeriod {
 
 enum FinanceReminderRecurrence {
   MONTHLY
+}
+
+enum FinanceDebtDirection {
+  I_OWE
+  OWED_TO_ME
+}
+
+enum FinanceDebtStatus {
+  OPEN
+  SETTLED
+}
+
+enum FinanceRecurringPaymentRecurrence {
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum FinanceRecurringPaymentStatus {
+  ACTIVE
+  PAUSED
+  CANCELED
+}
+
+enum FinanceRecurringPaymentRevisionKind {
+  CREATED
+  UPDATED
+  PAUSED
+  RESUMED
+  CANCELED
+  AMOUNT_APPLIED
 }
 
 enum FinanceAiProvider {
@@ -3301,32 +3371,36 @@ model TelegramBotUpdateLog {
 }
 
 model TelegramBotDelivery {
-  id                String                    @id @default(cuid())
-  workspaceId       String
-  botIntegrationId  String
-  runtimeInstanceId String?
-  telegramBotUserId String?
-  financeReminderId String?
-  chatId            String
-  type              TelegramBotDeliveryType
-  payload           Json
-  scheduledAt       DateTime
-  status            TelegramBotDeliveryStatus @default(PENDING)
-  attempts          Int                       @default(0)
-  maxAttempts       Int                       @default(3)
-  lockedAt          DateTime?
-  lockedUntil       DateTime?
-  lastError         String?
-  sentAt            DateTime?
-  idempotencyKey    String
-  createdAt         DateTime                  @default(now())
-  updatedAt         DateTime                  @updatedAt
+  id                        String                    @id @default(cuid())
+  workspaceId               String
+  botIntegrationId          String
+  runtimeInstanceId         String?
+  telegramBotUserId         String?
+  financeReminderId         String?
+  financeDebtId             String?
+  financeRecurringPaymentId String?
+  chatId                    String
+  type                      TelegramBotDeliveryType
+  payload                   Json
+  scheduledAt               DateTime
+  status                    TelegramBotDeliveryStatus @default(PENDING)
+  attempts                  Int                       @default(0)
+  maxAttempts               Int                       @default(3)
+  lockedAt                  DateTime?
+  lockedUntil               DateTime?
+  lastError                 String?
+  sentAt                    DateTime?
+  idempotencyKey            String
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
 
   workspace                 Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   botIntegration            TelegramBotIntegration        @relation(fields: [botIntegrationId, workspaceId], references: [id, workspaceId], onDelete: Cascade, map: "TelegramBotDelivery_botIntegrationId_fkey")
   runtimeInstance           TelegramBotRuntimeInstance?   @relation(fields: [runtimeInstanceId], references: [id], onDelete: SetNull)
   telegramUser              TelegramBotUser?              @relation(fields: [telegramBotUserId], references: [id], onDelete: SetNull)
-  financeReminder           FinanceReminder?              @relation(fields: [financeReminderId], references: [id], onDelete: SetNull)
+  financeReminder           FinanceReminder?              @relation(fields: [financeReminderId], references: [id], onDelete: Cascade)
+  financeDebt               FinanceDebt?                  @relation(fields: [financeDebtId], references: [id], onDelete: Cascade)
+  financeRecurringPayment   FinanceRecurringPayment?      @relation(fields: [financeRecurringPaymentId], references: [id], onDelete: Cascade)
   greeterStepExecution      GreeterSequenceStepExecution?
   greeterBroadcastRecipient GreeterBroadcastRecipient?
   greeterCaptchaJoinRequest GreeterJoinRequest?           @relation("GreeterCaptchaDelivery")
@@ -3338,6 +3412,8 @@ model TelegramBotDelivery {
   @@index([workspaceId, botIntegrationId])
   @@index([runtimeInstanceId])
   @@index([financeReminderId])
+  @@index([financeDebtId])
+  @@index([financeRecurringPaymentId])
 }
 
 model GreeterConfig {
@@ -3699,17 +3775,18 @@ model GreeterUserEnvironmentState {
 }
 
 model FinanceProfile {
-  id                     String                         @id @default(cuid())
+  id                     String                              @id @default(cuid())
+  displayName            String?                             @db.VarChar(120)
   botIntegrationId       String
   telegramBotUserId      String
-  defaultCurrency        String                         @default("UAH") @db.VarChar(3)
-  timezone               String                         @default("Europe/Warsaw")
+  defaultCurrency        String                              @default("UAH") @db.VarChar(3)
+  timezone               String                              @default("Europe/Warsaw")
   locale                 String?
   onboardingCompletedAt  DateTime?
-  createdAt              DateTime                       @default(now())
-  updatedAt              DateTime                       @updatedAt
-  botIntegration         TelegramBotIntegration         @relation(fields: [botIntegrationId], references: [id], onDelete: Cascade)
-  telegramUser           TelegramBotUser                @relation(fields: [telegramBotUserId], references: [id], onDelete: Cascade)
+  createdAt              DateTime                            @default(now())
+  updatedAt              DateTime                            @updatedAt
+  botIntegration         TelegramBotIntegration              @relation(fields: [botIntegrationId], references: [id], onDelete: Cascade)
+  telegramUser           TelegramBotUser                     @relation(fields: [telegramBotUserId], references: [id], onDelete: Cascade)
   accounts               FinanceAccount[]
   categories             FinanceCategory[]
   transactions           FinanceTransaction[]
@@ -3717,7 +3794,15 @@ model FinanceProfile {
   merchantMappings       FinanceMerchantMapping[]
   limits                 FinanceSpendingLimit[]
   reminders              FinanceReminder[]
-  goals                  FinanceGoal[]
+  debts                  FinanceDebt[]
+  recurringPayments      FinanceRecurringPayment[]
+  recurringOccurrences   FinanceRecurringPaymentOccurrence[]
+  savingsGoals           FinanceSavingsGoal[]
+  savingsMovements       FinanceSavingsMovement[]
+  investments            FinanceInvestment[]
+  investmentCashFlows    FinanceInvestmentCashFlow[]
+  investmentValuations   FinanceInvestmentValuation[]
+  dataImportReceipts     FinanceDataImportReceipt[]
   proposals              FinancePendingProposal[]
   assistantProfile       FinanceAssistantProfile?
   aiUsage                AiUsageEvent[]
@@ -3787,78 +3872,88 @@ model AiProviderConfig {
 }
 
 model FinanceAccount {
-  id                String               @id @default(cuid())
-  profileId         String
-  name              String
+  id                  String                      @id @default(cuid())
+  profileId           String
+  name                String
   /// Unicode, canonical Telegram Custom Emoji markup, or an immutable image source.
-  emoji             String?              @db.Text
-  type              FinanceAccountType   @default(OTHER)
-  currency          String               @db.VarChar(3)
-  openingBalance    Decimal              @default(0)
-  archivedAt        DateTime?
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
-  profile           FinanceProfile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  transactions      FinanceTransaction[]
-  outgoingTransfers FinanceTransfer[]    @relation("FinanceOutgoingTransfers")
-  incomingTransfers FinanceTransfer[]    @relation("FinanceIncomingTransfers")
+  emoji               String?                     @db.Text
+  type                FinanceAccountType          @default(OTHER)
+  currency            String                      @db.VarChar(3)
+  openingBalance      Decimal                     @default(0)
+  archivedAt          DateTime?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  profile             FinanceProfile              @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  transactions        FinanceTransaction[]
+  outgoingTransfers   FinanceTransfer[]           @relation("FinanceOutgoingTransfers")
+  incomingTransfers   FinanceTransfer[]           @relation("FinanceIncomingTransfers")
+  debts               FinanceDebt[]
+  recurringPayments   FinanceRecurringPayment[]
+  savingsMovements    FinanceSavingsMovement[]
+  investmentCashFlows FinanceInvestmentCashFlow[]
 
   @@index([profileId, archivedAt])
 }
 
 model FinanceCategory {
-  id               String                   @id @default(cuid())
-  profileId        String
-  parentId         String?
-  name             String
+  id                String                    @id @default(cuid())
+  profileId         String
+  parentId          String?
+  name              String
   /// Unicode, canonical Telegram Custom Emoji markup, or an immutable image source.
-  emoji            String?                  @db.Text
-  type             FinanceTransactionType
-  key              String?
-  archivedAt       DateTime?
-  createdAt        DateTime                 @default(now())
-  updatedAt        DateTime                 @updatedAt
-  profile          FinanceProfile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  parent           FinanceCategory?         @relation("FinanceCategoryChildren", fields: [parentId], references: [id], onDelete: SetNull)
-  children         FinanceCategory[]        @relation("FinanceCategoryChildren")
-  transactions     FinanceTransaction[]
-  transactionItems FinanceTransactionItem[]
-  limits           FinanceSpendingLimit[]
+  emoji             String?                   @db.Text
+  type              FinanceTransactionType
+  key               String?
+  archivedAt        DateTime?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  profile           FinanceProfile            @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  parent            FinanceCategory?          @relation("FinanceCategoryChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children          FinanceCategory[]         @relation("FinanceCategoryChildren")
+  transactions      FinanceTransaction[]
+  transactionItems  FinanceTransactionItem[]
+  limits            FinanceSpendingLimit[]
+  recurringPayments FinanceRecurringPayment[]
 
   @@unique([profileId, type, key])
   @@index([profileId, parentId])
 }
 
 model FinanceTransaction {
-  id                        String                   @id @default(cuid())
-  profileId                 String
-  accountId                 String
-  categoryId                String?
-  type                      FinanceTransactionType
-  amount                    Decimal
-  currency                  String                   @db.VarChar(3)
-  amountInDefaultCurrency   Decimal
-  exchangeRateToDefault     Decimal
+  id                         String                             @id @default(cuid())
+  profileId                  String
+  accountId                  String
+  categoryId                 String?
+  type                       FinanceTransactionType
+  purpose                    FinanceTransactionPurpose          @default(ORDINARY)
+  amount                     Decimal
+  currency                   String                             @db.VarChar(3)
+  amountInDefaultCurrency    Decimal
+  exchangeRateToDefault      Decimal
   // Immutable USD valuation. Legacy rows may be null until they are edited;
   // do not reinterpret amountInDefaultCurrency after a default-currency change.
-  valuationCurrency         String?                  @db.VarChar(3)
-  amountInValuationCurrency Decimal?
-  exchangeRateToValuation   Decimal?
-  valuationRateAt           DateTime?
-  occurredAt                DateTime
-  description               String?
-  merchantDisplay           String?
-  merchantNormalized        String?
-  source                    FinanceTransactionSource @default(CHAT)
-  deletedAt                 DateTime?
-  createdAt                 DateTime                 @default(now())
-  updatedAt                 DateTime                 @updatedAt
-  profile                   FinanceProfile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  account                   FinanceAccount           @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  category                  FinanceCategory?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  items                     FinanceTransactionItem[]
+  valuationCurrency          String?                            @db.VarChar(3)
+  amountInValuationCurrency  Decimal?
+  exchangeRateToValuation    Decimal?
+  valuationRateAt            DateTime?
+  occurredAt                 DateTime
+  description                String?
+  merchantDisplay            String?
+  merchantNormalized         String?
+  source                     FinanceTransactionSource           @default(CHAT)
+  deletedAt                  DateTime?
+  createdAt                  DateTime                           @default(now())
+  updatedAt                  DateTime                           @updatedAt
+  profile                    FinanceProfile                     @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  account                    FinanceAccount                     @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  category                   FinanceCategory?                   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  items                      FinanceTransactionItem[]
+  debtSettlement             FinanceDebt?
+  recurringPaymentOccurrence FinanceRecurringPaymentOccurrence?
+  investmentCashFlow         FinanceInvestmentCashFlow?
 
   @@index([profileId, occurredAt])
+  @@index([profileId, purpose, occurredAt])
   @@index([profileId, accountId, occurredAt])
   @@index([profileId, categoryId, occurredAt])
   @@index([profileId, merchantNormalized, occurredAt])
@@ -3905,23 +4000,24 @@ model FinanceChatFlow {
 }
 
 model FinanceTransfer {
-  id            String         @id @default(cuid())
-  profileId     String
-  fromAccountId String
-  toAccountId   String
-  fromAmount    Decimal
-  fromCurrency  String         @db.VarChar(3)
-  toAmount      Decimal
-  toCurrency    String         @db.VarChar(3)
-  exchangeRate  Decimal?
-  occurredAt    DateTime
-  description   String?
-  deletedAt     DateTime?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  profile       FinanceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  fromAccount   FinanceAccount @relation("FinanceOutgoingTransfers", fields: [fromAccountId], references: [id], onDelete: Restrict)
-  toAccount     FinanceAccount @relation("FinanceIncomingTransfers", fields: [toAccountId], references: [id], onDelete: Restrict)
+  id               String                   @id @default(cuid())
+  profileId        String
+  fromAccountId    String
+  toAccountId      String
+  fromAmount       Decimal
+  fromCurrency     String                   @db.VarChar(3)
+  toAmount         Decimal
+  toCurrency       String                   @db.VarChar(3)
+  exchangeRate     Decimal?
+  occurredAt       DateTime
+  description      String?
+  deletedAt        DateTime?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  profile          FinanceProfile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  fromAccount      FinanceAccount           @relation("FinanceOutgoingTransfers", fields: [fromAccountId], references: [id], onDelete: Restrict)
+  toAccount        FinanceAccount           @relation("FinanceIncomingTransfers", fields: [toAccountId], references: [id], onDelete: Restrict)
+  savingsMovements FinanceSavingsMovement[]
 
   @@index([profileId, occurredAt])
 }
@@ -3972,20 +4068,255 @@ model FinanceReminder {
   @@index([enabled, nextOccurrenceAt])
 }
 
-model FinanceGoal {
-  id            String         @id @default(cuid())
-  profileId     String
-  name          String
-  targetAmount  Decimal
-  currentAmount Decimal        @default(0)
-  currency      String         @db.VarChar(3)
-  targetDate    DateTime?
-  active        Boolean        @default(true)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  profile       FinanceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+model FinanceDebt {
+  id                      String                @id @default(cuid())
+  profileId               String
+  accountId               String
+  direction               FinanceDebtDirection
+  status                  FinanceDebtStatus     @default(OPEN)
+  name                    String
+  amount                  Decimal
+  /// Immutable account-currency snapshot; currency conversion is never entered manually.
+  currency                String                @db.VarChar(3)
+  dueAt                   DateTime
+  /// Timezone in which the user selected the calendar due date.
+  scheduleTimezone        String
+  note                    String?               @db.Text
+  settledAt               DateTime?
+  settlementTransactionId String?               @unique
+  version                 Int                   @default(1)
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  profile                 FinanceProfile        @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  account                 FinanceAccount        @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  settlementTransaction   FinanceTransaction?   @relation(fields: [settlementTransactionId], references: [id], onDelete: Restrict)
+  deliveries              TelegramBotDelivery[]
 
-  @@index([profileId, active])
+  @@index([profileId, status, dueAt, id])
+  @@index([accountId])
+}
+
+model FinanceRecurringPayment {
+  id               String                              @id @default(cuid())
+  profileId        String
+  accountId        String
+  categoryId       String?
+  name             String
+  amount           Decimal
+  /// Immutable for an occurrence and derived from the selected account.
+  currency         String                              @db.VarChar(3)
+  recurrence       FinanceRecurringPaymentRecurrence
+  anchorDay        Int
+  anchorMonth      Int?
+  nextOccurrenceAt DateTime
+  /// Timezone in which recurrence calendar anchors are interpreted.
+  scheduleTimezone String
+  note             String?                             @db.Text
+  status           FinanceRecurringPaymentStatus       @default(ACTIVE)
+  version          Int                                 @default(1)
+  createdAt        DateTime                            @default(now())
+  updatedAt        DateTime                            @updatedAt
+  profile          FinanceProfile                      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  account          FinanceAccount                      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  category         FinanceCategory?                    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  revisions        FinanceRecurringPaymentRevision[]
+  occurrences      FinanceRecurringPaymentOccurrence[]
+  deliveries       TelegramBotDelivery[]
+
+  @@index([profileId, status, nextOccurrenceAt, id], map: "FinanceRecurringPayment_profile_status_next_idx")
+  @@index([accountId])
+  @@index([categoryId])
+}
+
+// Append-only configuration/status history. Account/category labels are
+// snapshots so later edits or archival cannot rewrite historical meaning.
+model FinanceRecurringPaymentRevision {
+  id                 String                              @id @default(cuid())
+  recurringPaymentId String
+  version            Int
+  kind               FinanceRecurringPaymentRevisionKind
+  name               String
+  amount             Decimal
+  currency           String                              @db.VarChar(3)
+  accountId          String
+  accountName        String
+  categoryId         String?
+  categoryName       String?
+  categoryKey        String?
+  recurrence         FinanceRecurringPaymentRecurrence
+  anchorDay          Int
+  anchorMonth        Int?
+  nextOccurrenceAt   DateTime
+  scheduleTimezone   String
+  note               String?                             @db.Text
+  status             FinanceRecurringPaymentStatus
+  effectiveAt        DateTime                            @default(now())
+  recurringPayment   FinanceRecurringPayment             @relation(fields: [recurringPaymentId], references: [id], onDelete: Cascade)
+
+  @@unique([recurringPaymentId, version])
+  @@index([recurringPaymentId, effectiveAt, id], map: "FinanceRecurringPaymentRevision_payment_effective_idx")
+}
+
+// One row per confirmed occurrence. This is payment audit data, not a daily snapshot.
+model FinanceRecurringPaymentOccurrence {
+  id                    String                  @id @default(cuid())
+  profileId             String
+  recurringPaymentId    String
+  transactionId         String                  @unique
+  configVersion         Int
+  scheduledFor          DateTime
+  scheduledAmount       Decimal
+  paidAmount            Decimal
+  currency              String                  @db.VarChar(3)
+  confirmedAt           DateTime                @default(now())
+  futureAmountAppliedAt DateTime?
+  profile               FinanceProfile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  recurringPayment      FinanceRecurringPayment @relation(fields: [recurringPaymentId], references: [id], onDelete: Cascade)
+  transaction           FinanceTransaction      @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@unique([recurringPaymentId, scheduledFor], map: "FinanceRecurringPaymentOccurrence_payment_scheduled_key")
+  @@index([recurringPaymentId, confirmedAt, id], map: "FinanceRecurringPaymentOccurrence_payment_confirmed_idx")
+  @@index([profileId, confirmedAt, id])
+}
+
+model FinanceSavingsGoal {
+  id                   String                   @id @default(cuid())
+  profileId            String
+  name                 String
+  targetAmount         Decimal
+  currency             String                   @db.VarChar(3)
+  targetDate           DateTime?
+  note                 String?                  @db.Text
+  status               FinanceSavingsGoalStatus @default(ACTIVE)
+  currentAllocated     Decimal                  @default(0)
+  linkedAllocated      Decimal                  @default(0)
+  legacyUnlinkedAmount Decimal                  @default(0)
+  completedAt          DateTime?
+  archivedAt           DateTime?
+  version              Int                      @default(1)
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  profile              FinanceProfile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  incomingMovements    FinanceSavingsMovement[] @relation("FinanceSavingsMovementToGoal")
+  outgoingMovements    FinanceSavingsMovement[] @relation("FinanceSavingsMovementFromGoal")
+
+  @@index([profileId, status, updatedAt, id])
+  @@map("FinanceGoal")
+}
+
+// Purpose allocation only. These rows never change an account balance.
+model FinanceSavingsMovement {
+  id                        String                     @id @default(cuid())
+  profileId                 String
+  accountId                 String
+  fromGoalId                String?
+  toGoalId                  String?
+  kind                      FinanceSavingsMovementKind
+  amount                    Decimal
+  currency                  String                     @db.VarChar(3)
+  valuationCurrency         String                     @default("USD") @db.VarChar(3)
+  amountInValuationCurrency Decimal
+  exchangeRateToValuation   Decimal
+  valuationRateAt           DateTime
+  occurredAt                DateTime
+  note                      String?                    @db.Text
+  linkedTransferId          String?                    @unique
+  idempotencyKey            String
+  requestFingerprint        String
+  createdAt                 DateTime                   @default(now())
+  profile                   FinanceProfile             @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  account                   FinanceAccount             @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  fromGoal                  FinanceSavingsGoal?        @relation("FinanceSavingsMovementFromGoal", fields: [fromGoalId], references: [id], onDelete: Restrict)
+  toGoal                    FinanceSavingsGoal?        @relation("FinanceSavingsMovementToGoal", fields: [toGoalId], references: [id], onDelete: Restrict)
+  linkedTransfer            FinanceTransfer?           @relation(fields: [linkedTransferId], references: [id], onDelete: SetNull)
+
+  @@unique([profileId, idempotencyKey])
+  @@index([profileId, occurredAt, id])
+  @@index([accountId])
+  @@index([fromGoalId, occurredAt, id])
+  @@index([toGoalId, occurredAt, id])
+}
+
+model FinanceInvestment {
+  id                               String                       @id @default(cuid())
+  profileId                        String
+  name                             String
+  description                      String?                      @db.Text
+  type                             FinanceInvestmentType        @default(OTHER)
+  currency                         String                       @db.VarChar(3)
+  status                           FinanceInvestmentStatus      @default(ACTIVE)
+  startedAt                        DateTime
+  closedAt                         DateTime?
+  archivedAt                       DateTime?
+  totalInvested                    Decimal                      @default(0)
+  totalReturned                    Decimal                      @default(0)
+  totalInvestedInValuationCurrency Decimal                      @default(0)
+  totalReturnedInValuationCurrency Decimal                      @default(0)
+  currentValue                     Decimal                      @default(0)
+  currentValueInValuationCurrency  Decimal                      @default(0)
+  valuationCurrency                String                       @default("USD") @db.VarChar(3)
+  currentValuationAt               DateTime?
+  version                          Int                          @default(1)
+  createdAt                        DateTime                     @default(now())
+  updatedAt                        DateTime                     @updatedAt
+  profile                          FinanceProfile               @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  cashFlows                        FinanceInvestmentCashFlow[]
+  valuations                       FinanceInvestmentValuation[]
+
+  @@index([profileId, status, updatedAt, id])
+}
+
+model FinanceInvestmentCashFlow {
+  id                         String                        @id @default(cuid())
+  profileId                  String
+  investmentId               String
+  accountId                  String
+  transactionId              String                        @unique
+  kind                       FinanceInvestmentCashFlowKind
+  amountInInvestmentCurrency Decimal
+  exchangeRateToInvestment   Decimal
+  investmentRateAt           DateTime
+  idempotencyKey             String
+  requestFingerprint         String
+  occurredAt                 DateTime
+  note                       String?                       @db.Text
+  createdAt                  DateTime                      @default(now())
+  profile                    FinanceProfile                @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  investment                 FinanceInvestment             @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+  account                    FinanceAccount                @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  transaction                FinanceTransaction            @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@unique([profileId, idempotencyKey])
+  @@index([investmentId, occurredAt, id])
+  @@index([profileId, occurredAt, id])
+  @@index([accountId, occurredAt, id])
+}
+
+// Manual, append-only valuation history. Corrections create another row.
+model FinanceInvestmentValuation {
+  id                        String                      @id @default(cuid())
+  profileId                 String
+  investmentId              String
+  value                     Decimal
+  currency                  String                      @db.VarChar(3)
+  valuationCurrency         String                      @default("USD") @db.VarChar(3)
+  amountInValuationCurrency Decimal
+  exchangeRateToValuation   Decimal
+  valuationRateAt           DateTime
+  valuedAt                  DateTime
+  note                      String?                     @db.Text
+  correctsValuationId       String?                     @unique
+  idempotencyKey            String
+  requestFingerprint        String
+  createdAt                 DateTime                    @default(now())
+  profile                   FinanceProfile              @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  investment                FinanceInvestment           @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+  correctsValuation         FinanceInvestmentValuation? @relation("FinanceInvestmentValuationCorrection", fields: [correctsValuationId], references: [id], onDelete: Restrict)
+  correctedBy               FinanceInvestmentValuation? @relation("FinanceInvestmentValuationCorrection")
+
+  @@unique([profileId, idempotencyKey])
+  @@index([investmentId, valuedAt, id])
+  @@index([profileId, valuedAt, id])
 }
 
 model FinancePendingProposal {
@@ -4004,6 +4335,23 @@ model FinancePendingProposal {
   telegramUser      TelegramBotUser       @relation(fields: [telegramBotUserId], references: [id], onDelete: Cascade)
 
   @@index([botIntegrationId, telegramBotUserId, status, expiresAt], map: "FinancePendingProposal_botIntegrationId_telegramBotUserId_statu")
+}
+
+// One compact idempotency receipt per successful user-triggered import.
+// Source files are never persisted; portable data still belongs to the profile.
+model FinanceDataImportReceipt {
+  id                 String         @id @default(cuid())
+  profileId          String
+  requestFingerprint String
+  formatVersion      Int
+  importedCount      Int
+  counts             Json
+  warnings           Json
+  createdAt          DateTime       @default(now())
+  profile            FinanceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, requestFingerprint], map: "FinanceDataImportReceipt_profile_fingerprint_key")
+  @@index([profileId, createdAt], map: "FinanceDataImportReceipt_profile_created_idx")
 }
 
 model FinanceAssistantProfile {

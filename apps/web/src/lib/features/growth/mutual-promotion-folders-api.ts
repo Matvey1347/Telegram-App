@@ -1,6 +1,7 @@
 import type {
   CreateMutualPromotionFolderPayload,
   CreateMutualPromotionPostPayload,
+  ImportMutualPromotionInviteLinkPayload,
   MutualPromotionActivationResult,
   MutualPromotionActivationProgress,
   MutualPromotionExpensePayload,
@@ -9,6 +10,7 @@ import type {
   MutualPromotionInviteLinkOption,
   PaginatedResponse,
   UpdateMutualPromotionFolderPayload,
+  UpdateMutualPromotionInviteLinksPayload,
   UpdateMutualPromotionPostPayload,
 } from "@telegram-system/shared";
 import { api, streamProgressAction } from "@/lib/api";
@@ -30,6 +32,16 @@ export const mutualPromotionFoldersApi = {
   update: async (id: string, payload: UpdateMutualPromotionFolderPayload) =>
     (await api.patch<MutualPromotionFolderDetail>(`${basePath}/${id}`, payload))
       .data,
+  updateInviteLinks: async (
+    id: string,
+    payload: UpdateMutualPromotionInviteLinksPayload,
+  ) =>
+    (
+      await api.patch<MutualPromotionFolderDetail>(
+        `${basePath}/${id}/invite-links`,
+        payload,
+      )
+    ).data,
   activate: async (
     id: string,
     onProgress: (
@@ -95,6 +107,13 @@ export const mutualPromotionFoldersApi = {
             channelIds: params.channelIds.join(","),
           },
         },
+      )
+    ).data,
+  importInviteLink: async (payload: ImportMutualPromotionInviteLinkPayload) =>
+    (
+      await api.post<MutualPromotionInviteLinkOption>(
+        `${basePath}/invite-link-options/import`,
+        payload,
       )
     ).data,
 };

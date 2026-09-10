@@ -1,11 +1,12 @@
 import { CurrencyConversionService } from './currency-conversion.service';
+import type { PrismaService } from '../prisma/prisma.service';
 
 describe('CurrencyConversionService', () => {
   const now = new Date();
   const service = (rows: Array<Record<string, unknown>>) =>
     new CurrencyConversionService({
-      exchangeRate: { findMany: jest.fn().mockResolvedValue(rows) },
-    } as any);
+      $queryRaw: jest.fn().mockResolvedValue(rows),
+    } as unknown as PrismaService);
 
   it('uses a bounded graph for arbitrary workspace cross-pairs', async () => {
     const result = await service([
@@ -41,13 +42,13 @@ describe('CurrencyConversionService', () => {
   });
 
   it('reuses one prepared graph across repeated request-scoped conversions', async () => {
-    const findMany = jest.fn().mockResolvedValue([
+    const queryRaw = jest.fn().mockResolvedValue([
       { baseCurrency: 'PLN', targetCurrency: 'USD', rate: 0.25, date: now },
       { baseCurrency: 'PLN', targetCurrency: 'UAH', rate: 10, date: now },
     ]);
     const conversion = new CurrencyConversionService({
-      exchangeRate: { findMany },
-    } as any);
+      $queryRaw: queryRaw,
+    } as unknown as PrismaService);
 
     const source = await conversion.prepareRateSource('workspace');
 
@@ -56,9 +57,63 @@ describe('CurrencyConversionService', () => {
       0.05,
     );
     await expect(source.getRate('USD', 'USD')).resolves.toBe(1);
-    expect(findMany).toHaveBeenCalledTimes(1);
-    expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { workspaceId: 'workspace' } }),
-    );
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+    const calls = queryRaw.mock.calls as unknown as Array<
+      [{ values: unknown[]; strings: string[] }]
+    >;
+    const statement = calls[0]?.[0];
+    expect(statement.values).toContain('workspace');
+    expect(statement.strings.join(' ')).toContain('SELECT DISTINCT ON');
+  });
+
+  it('loads many requested historical cutoffs in one database query', async () => {
+    const first = new Date('2026-01-01T12:00:00.000Z');
+    const second = new Date('2026-02-01T12:00:00.000Z');
+    const queryRaw = jest.fn().mockResolvedValue([
+      {
+        asOf: first,
+        baseCurrency: 'USD',
+        targetCurrency: 'UAH',
+        rate: 40,
+        date: first,
+      },
+      {
+        asOf: second,
+        baseCurrency: 'USD',
+        targetCurrency: 'UAH',
+        rate: 41,
+        date: second,
+      },
+    ]);
+    const conversion = new CurrencyConversionService({
+      $queryRaw: queryRaw,
+    } as unknown as PrismaService);
+
+    const sources = await conversion.prepareHistoricalRateSources('workspace', [
+      first,
+      second,
+      first,
+    ]);
+
+    await expect(
+      sources.get(first.toISOString())?.getRate('USD', 'UAH'),
+    ).resolves.toBe(40);
+    await expect(
+      sources.get(second.toISOString())?.getRate('USD', 'UAH'),
+    ).resolves.toBe(41);
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+    const calls = queryRaw.mock.calls as unknown as Array<
+      [
+        {
+          values: unknown[];
+          strings: string[];
+        },
+      ]
+    >;
+    const statement = calls[0]?.[0];
+    expect(
+      statement.values.filter((value) => value instanceof Date),
+    ).toHaveLength(2);
+    expect(statement.strings.join(' ')).toContain('CROSS JOIN LATERAL');
   });
 });

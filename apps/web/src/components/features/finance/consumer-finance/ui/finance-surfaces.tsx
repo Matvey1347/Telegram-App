@@ -1,5 +1,15 @@
+"use client";
+
 import type { PropsWithChildren } from "react";
 import { financeUiTokens } from "./finance-ui-tokens";
+import {
+  FinanceStateIllustration,
+  type FinanceVisualState,
+} from "./finance-state-illustration";
+import {
+  useFinanceVisualContext,
+  type FinanceVisualContext,
+} from "./finance-visual-context";
 
 export function Card({
   children,
@@ -22,53 +32,96 @@ export function Table({ children }: PropsWithChildren) {
   );
 }
 
-export function Skeleton({ className = "" }: { className?: string }) {
+type FinanceFeedbackStateProps = {
+  text?: string;
+  context?: FinanceVisualContext;
+  compact?: boolean;
+  className?: string;
+};
+
+const stateSurface: Record<FinanceVisualState, string> = {
+  loading: "border-sky-950 bg-[#0c1117] text-neutral-300",
+  waiting: "border-amber-950 bg-[#0c1117] text-neutral-300",
+  saving: "border-emerald-950 bg-[#0c1117] text-neutral-200",
+  syncing: "border-blue-950 bg-[#0c1117] text-neutral-200",
+  empty: "border-neutral-800 bg-[#0c1117] text-neutral-300",
+  error: "border-rose-900 bg-[#120e12] text-rose-100",
+};
+
+export function FinanceFeedbackState({
+  state,
+  text,
+  context,
+  compact = false,
+  className = "",
+}: FinanceFeedbackStateProps & { state: FinanceVisualState }) {
+  const inheritedContext = useFinanceVisualContext();
+  const resolvedContext = context ?? inheritedContext;
+  const role = state === "error" ? "alert" : "status";
   return (
     <div
-      className={`animate-pulse rounded-md bg-neutral-800/80 ${className}`}
-      aria-hidden="true"
+      data-finance-feedback={state}
+      className={`relative flex w-full flex-col overflow-hidden rounded-2xl border p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035),0_18px_50px_rgba(0,0,0,0.18)] sm:p-4 ${compact ? "min-h-32" : "min-h-48"} ${stateSurface[state]} ${className}`}
+      role={role}
+      aria-live={state === "error" ? "assertive" : "polite"}
+      aria-busy={
+        state === "loading" ||
+        state === "waiting" ||
+        state === "saving" ||
+        state === "syncing"
+      }
+    >
+      <FinanceStateIllustration
+        state={state}
+        context={resolvedContext}
+        compact={compact}
+      />
+      {text ? (
+        <p className="w-full px-2 pb-1 pt-3 text-center text-sm font-medium leading-6">
+          {text}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+export function LoadingState({
+  text = "Loading...",
+  compact = false,
+  ...props
+}: FinanceFeedbackStateProps) {
+  return (
+    <FinanceFeedbackState
+      state="loading"
+      text={text}
+      compact={compact}
+      {...props}
     />
   );
 }
 
-export function LoadingState({ text = "Loading..." }: { text?: string }) {
-  return (
-    <div
-      className="overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900 p-4 sm:p-5"
-      role="status"
-      aria-label={text}
-    >
-      <span className="sr-only">{text}</span>
-      <div className="space-y-3" aria-hidden="true">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="h-3 w-full" />
-        <Skeleton className="h-3 w-4/5" />
-        <div className="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-4">
-          {Array.from({ length: 4 }, (_, index) => (
-            <Skeleton key={index} className="h-16" />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+export function WaitingState(props: FinanceFeedbackStateProps) {
+  return <FinanceFeedbackState state="waiting" {...props} />;
+}
+
+export function SavingState(props: FinanceFeedbackStateProps) {
+  return <FinanceFeedbackState state="saving" {...props} />;
+}
+
+export function SyncingState(props: FinanceFeedbackStateProps) {
+  return <FinanceFeedbackState state="syncing" {...props} />;
 }
 
 export function ErrorState({
   text = "Something went wrong.",
-}: {
-  text?: string;
-}) {
-  return (
-    <div className="rounded-lg border border-rose-700 bg-rose-950/30 p-4 text-sm text-rose-200">
-      {text}
-    </div>
-  );
+  ...props
+}: FinanceFeedbackStateProps) {
+  return <FinanceFeedbackState state="error" text={text} {...props} />;
 }
 
-export function EmptyState({ text = "No data yet." }: { text?: string }) {
-  return (
-    <div className="rounded-xl border border-dashed border-neutral-700 p-5 text-neutral-400">
-      {text}
-    </div>
-  );
+export function EmptyState({
+  text = "No data yet.",
+  ...props
+}: FinanceFeedbackStateProps) {
+  return <FinanceFeedbackState state="empty" text={text} {...props} />;
 }

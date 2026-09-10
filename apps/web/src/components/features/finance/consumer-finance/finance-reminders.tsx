@@ -15,11 +15,8 @@ import {
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
 import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
 import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import {
-  financeCopy,
-  financeIntlLocale,
-  type FinanceLocale,
-} from "./finance-i18n";
+import { financeIntlLocale, type FinanceLocale } from "./i18n/core";
+import { financeRemindersCopy } from "./i18n/reminders";
 
 export function FinanceReminders({
   botId,
@@ -32,7 +29,7 @@ export function FinanceReminders({
   currency: string;
   timezone: string;
 }) {
-  const t = financeCopy(locale);
+  const t = financeRemindersCopy(locale);
   const client = useQueryClient();
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
@@ -117,10 +114,12 @@ export function FinanceReminders({
         <p className="mt-2 text-sm text-rose-300">{t.reminderSaveError}</p>
       ) : null}
       <div className="mt-4 border-t border-neutral-800 pt-3">
-        {reminders.isLoading ? <LoadingState text={t.loading} /> : null}
+        {reminders.isLoading ? (
+          <LoadingState text={t.loading} context="reminders" />
+        ) : null}
         {reminders.isError ? (
           <div className="space-y-2">
-            <ErrorState text={t.reminderLoadError} />
+            <ErrorState text={t.reminderLoadError} context="reminders" />
             <Button variant="secondary" onClick={() => reminders.refetch()}>
               {t.retry}
             </Button>
@@ -151,7 +150,7 @@ export function FinanceReminders({
             ))}
           </div>
         ) : reminders.isSuccess ? (
-          <EmptyState text={t.noReminders} />
+          <EmptyState text={t.noReminders} context="reminders" />
         ) : null}
       </div>
     </Card>

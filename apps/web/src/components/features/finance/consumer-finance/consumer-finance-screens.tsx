@@ -1,154 +1,166 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type {
-  ConsumerFinanceAccount,
-  ConsumerFinanceCategory,
-  ConsumerFinanceProfile,
-} from "@telegram-system/shared";
+import { lazy, Suspense } from "react";
+import { useQuery } from "@tanstack/react-query";
+import type { ConsumerFinanceProfile } from "@telegram-system/shared";
 import { Button, ErrorState, LoadingState } from "./ui";
-import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
+import { consumerFinanceInsightsApi } from "@/lib/features/finance/consumer-finance-insights-api";
 import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
-import { FinanceAccounts } from "./finance-accounts";
-import { FinanceAnalytics } from "./finance-analytics";
-import { FinanceBudget } from "./finance-budget";
-import { FinanceCategories } from "./finance-categories";
 import { FinanceDashboard } from "./finance-dashboard";
-import { financeCopy, normalizeFinanceLocale } from "./finance-i18n";
-import { FinanceOnboarding } from "./finance-onboarding";
-import { FinanceSettings } from "./finance-settings";
-import { FinanceTransactions } from "./finance-transactions";
-import { FinanceTransfers } from "./finance-transfers";
-import { FinanceUltimate } from "./finance-ultimate";
+import { financeCoreCopy, normalizeFinanceLocale } from "./i18n/core";
 import type {
-  ConsumerFinanceAction,
+  ConsumerFinanceRegularPaymentTarget,
+  ConsumerFinanceScreen,
   ConsumerFinanceSurface,
 } from "./consumer-finance-navigation";
+export type { ConsumerFinanceScreen } from "./consumer-finance-navigation";
 
-export type ConsumerFinanceScreen =
-  | "home"
-  | "transactions"
-  | "transfers"
-  | "analytics"
-  | "ultimate"
-  | "accounts"
-  | "settings"
-  | "categories"
-  | "reminders"
-  | "billing"
-  /** Retained as a direct URL while budget remains a secondary workflow. */
-  | "budget";
-export type ConsumerFinanceContext = {
-  botId: string;
-  accounts: ConsumerFinanceAccount[];
-  categories: ConsumerFinanceCategory[];
-};
-
+const FinanceAccounts = lazy(() =>
+  import("./finance-accounts").then((module) => ({
+    default: module.FinanceAccountsScreen,
+  })),
+);
+const FinanceAccountEditor = lazy(() =>
+  import("./finance-account-editor").then((module) => ({
+    default: module.FinanceAccountEditorScreen,
+  })),
+);
+const FinanceAnalytics = lazy(() =>
+  import("./finance-analytics").then((module) => ({
+    default: module.FinanceAnalytics,
+  })),
+);
+const FinanceBudget = lazy(() =>
+  import("./finance-budget").then((module) => ({
+    default: module.FinanceBudget,
+  })),
+);
+const FinanceCategories = lazy(() =>
+  import("./finance-categories").then((module) => ({
+    default: module.FinanceCategories,
+  })),
+);
+const FinanceOnboarding = lazy(() =>
+  import("./finance-onboarding").then((module) => ({
+    default: module.FinanceOnboardingScreen,
+  })),
+);
+const FinancePlans = lazy(() =>
+  import("./finance-plans").then((module) => ({
+    default: module.FinancePlans,
+  })),
+);
+const FinanceReminders = lazy(() =>
+  import("./finance-reminders").then((module) => ({
+    default: module.FinanceReminders,
+  })),
+);
+const FinanceSettings = lazy(() =>
+  import("./finance-settings").then((module) => ({
+    default: module.FinanceSettings,
+  })),
+);
+const FinanceAccountCenter = lazy(() =>
+  import("./finance-account-center").then((module) => ({
+    default: module.FinanceAccountCenter,
+  })),
+);
+const FinanceTransactions = lazy(() =>
+  import("./finance-transactions").then((module) => ({
+    default: module.FinanceTransactions,
+  })),
+);
+const FinanceTransfers = lazy(() =>
+  import("./finance-transfers").then((module) => ({
+    default: module.FinanceTransfers,
+  })),
+);
+const FinanceDebts = lazy(() =>
+  import("./finance-debts").then((module) => ({
+    default: module.FinanceDebts,
+  })),
+);
+const FinanceRegularPayments = lazy(() =>
+  import("./finance-regular-payments").then((module) => ({
+    default: module.FinanceRegularPayments,
+  })),
+);
+const FinanceSavings = lazy(() =>
+  import("./finance-savings").then((module) => ({
+    default: module.FinanceSavings,
+  })),
+);
+const FinanceInvestments = lazy(() =>
+  import("./finance-investments").then((module) => ({
+    default: module.FinanceInvestments,
+  })),
+);
+const FinanceInvestmentDetail = lazy(() =>
+  import("./finance-investment-detail").then((module) => ({
+    default: module.FinanceInvestmentDetailScreen,
+  })),
+);
 export function ConsumerFinanceScreens({
   botId,
   profile,
   screen,
   onScreenChange,
-  onAction,
   surface,
   openTransfer = false,
   openTransaction = null,
+  actionRequestId = 0,
+  regularPaymentTarget = null,
+  regularPaymentTargetMalformed = false,
+  accountId = null,
+  onAccountEdit = () => undefined,
+  onAccountBack = () => undefined,
+  investmentId = null,
+  onInvestmentOpen = () => undefined,
+  onInvestmentBack = () => undefined,
 }: {
   botId: string;
   profile: ConsumerFinanceProfile;
   screen: ConsumerFinanceScreen;
   onScreenChange: (screen: ConsumerFinanceScreen) => void;
-  onAction: (action: ConsumerFinanceAction) => void;
   surface: ConsumerFinanceSurface;
   openTransfer?: boolean;
   openTransaction?: "EXPENSE" | "INCOME" | null;
+  actionRequestId?: number;
+  regularPaymentTarget?: ConsumerFinanceRegularPaymentTarget | null;
+  regularPaymentTargetMalformed?: boolean;
+  accountId?: string | null;
+  onAccountEdit?: (accountId: string) => void;
+  onAccountBack?: () => void;
+  investmentId?: string | null;
+  onInvestmentOpen?: (investmentId: string) => void;
+  onInvestmentBack?: () => void;
 }) {
-  const queryClient = useQueryClient();
   const dashboard = useQuery({
     queryKey: consumerFinanceKeys.dashboard(botId),
-    queryFn: () => consumerFinanceApi.dashboard(botId),
+    queryFn: () => consumerFinanceInsightsApi.dashboard(botId),
     retry: false,
-    enabled:
-      !!profile.onboardingCompletedAt &&
-      (screen === "home" || screen === "budget"),
-  });
-  const accounts = useQuery({
-    queryKey: consumerFinanceKeys.accounts(botId),
-    queryFn: () => consumerFinanceApi.accounts(botId),
-    enabled:
-      screen === "transactions" ||
-      screen === "transfers" ||
-      screen === "accounts",
-  });
-  const categories = useQuery({
-    queryKey: consumerFinanceKeys.categories(botId),
-    queryFn: () => consumerFinanceApi.categories(botId),
-    enabled:
-      screen === "transactions" ||
-      screen === "categories" ||
-      screen === "budget",
+    enabled: !!profile.onboardingCompletedAt && screen === "home",
   });
   const financeProfile = profile;
   const locale = normalizeFinanceLocale(financeProfile.locale);
-  const t = financeCopy(locale);
-  const needsAccounts =
-    screen === "transactions" ||
-    screen === "transfers" ||
-    screen === "accounts";
-  const needsCategories = screen === "transactions" || screen === "budget";
+  const t = financeCoreCopy(locale);
   if (!financeProfile.onboardingCompletedAt)
     return (
-      <FinanceOnboarding
-        profile={financeProfile}
-        onComplete={(input) =>
-          consumerFinanceApi.updateSettings(botId, input).then((updated) => {
-            queryClient.setQueryData(consumerFinanceKeys.session(botId), {
-              authenticated: true,
-              profile: updated,
-            });
-            return updated;
-          })
-        }
-      />
+      <Suspense fallback={<LoadingState text={t.loadingReferences} />}>
+        <FinanceOnboarding botId={botId} profile={financeProfile} />
+      </Suspense>
     );
-  if ((screen === "home" || screen === "budget") && dashboard.isLoading)
+  if (screen === "home" && dashboard.isLoading)
     return <LoadingState text={t.loadingFinances} />;
-  if ((screen === "home" || screen === "budget") && !dashboard.data)
+  if (screen === "home" && !dashboard.data)
     return (
       <div className="space-y-3">
         <ErrorState text={t.financeUnavailable} />
         <Button onClick={() => dashboard.refetch()}>{t.retry}</Button>
       </div>
     );
-  if (
-    (needsAccounts && accounts.isLoading) ||
-    (needsCategories && categories.isLoading)
-  )
-    return <LoadingState text={t.loadingReferences} />;
-  if (
-    (needsAccounts && accounts.isError) ||
-    (needsCategories && categories.isError)
-  )
-    return (
-      <div className="space-y-3">
-        <ErrorState text={t.referencesUnavailable} />
-        <Button
-          onClick={() => {
-            if (needsAccounts) void accounts.refetch();
-            if (needsCategories) void categories.refetch();
-          }}
-        >
-          {t.retry}
-        </Button>
-      </div>
-    );
-  const context: ConsumerFinanceContext = {
-    botId,
-    accounts: accounts.data ?? [],
-    categories: categories.data ?? [],
-  };
   return (
-    <>
+    <Suspense fallback={<LoadingState text={t.loadingReferences} />}>
       {screen === "home" && (
         <>
           {dashboard.data ? (
@@ -157,28 +169,22 @@ export function ConsumerFinanceScreens({
               locale={locale}
               timezone={financeProfile.timezone}
               onNavigate={onScreenChange}
-              onAction={onAction}
               surface={surface}
             />
           ) : null}
         </>
       )}
       {screen === "analytics" && (
-        <FinanceAnalytics botId={botId} locale={locale} />
-      )}
-      {screen === "ultimate" && (
-        <FinanceUltimate
+        <FinanceAnalytics
           botId={botId}
           locale={locale}
-          onUpgrade={() =>
-            onScreenChange(surface === "browser" ? "billing" : "settings")
-          }
+          onUpgrade={() => onScreenChange("billing")}
         />
       )}
       {screen === "transactions" && (
         <FinanceTransactions
-          key={openTransaction ?? "transaction-history"}
-          {...context}
+          key={`${openTransaction ?? "transaction-history"}:${actionRequestId}`}
+          botId={botId}
           locale={locale}
           timezone={financeProfile.timezone}
           initiallyOpenType={openTransaction}
@@ -187,30 +193,72 @@ export function ConsumerFinanceScreens({
       )}
       {screen === "transfers" && (
         <FinanceTransfers
-          key={openTransfer ? "create-transfer" : "transfer-history"}
+          key={`${openTransfer ? "create-transfer" : "transfer-history"}:${actionRequestId}`}
           botId={botId}
-          accounts={context.accounts}
           locale={locale}
           timezone={financeProfile.timezone}
           initiallyOpen={openTransfer}
+          onCreateAccount={() => onAccountEdit("create")}
         />
       )}
+      {screen === "debts" && (
+        <FinanceDebts
+          botId={botId}
+          locale={locale}
+          timezone={financeProfile.timezone}
+        />
+      )}
+      {screen === "regular-payments" && (
+        <FinanceRegularPayments
+          botId={botId}
+          locale={locale}
+          timezone={financeProfile.timezone}
+          target={regularPaymentTarget}
+          targetMalformed={regularPaymentTargetMalformed}
+        />
+      )}
+      {screen === "savings" && (
+        <FinanceSavings
+          botId={botId}
+          locale={locale}
+          defaultCurrency={financeProfile.defaultCurrency}
+        />
+      )}
+      {screen === "investments" && (
+        <FinanceInvestments
+          botId={botId}
+          locale={locale}
+          defaultCurrency={financeProfile.defaultCurrency}
+          onOpen={onInvestmentOpen}
+        />
+      )}
+      {screen === "investment" && investmentId ? (
+        <FinanceInvestmentDetail
+          botId={botId}
+          locale={locale}
+          defaultCurrency={financeProfile.defaultCurrency}
+          investmentId={investmentId}
+          onBack={onInvestmentBack}
+        />
+      ) : null}
       {screen === "accounts" && (
-        <FinanceAccounts
-          {...context}
+        <FinanceAccounts botId={botId} locale={locale} onEdit={onAccountEdit} />
+      )}
+      {screen === "account" && accountId ? (
+        <FinanceAccountEditor
+          key={accountId}
+          botId={botId}
           defaultCurrency={financeProfile.defaultCurrency}
           locale={locale}
+          accountId={accountId}
+          onBack={onAccountBack}
         />
-      )}
+      ) : null}
       {screen === "budget" && (
         <FinanceBudget
           botId={botId}
-          categories={context.categories}
-          dashboard={dashboard.data!}
           locale={locale}
-          onUpgrade={() =>
-            onScreenChange(surface === "browser" ? "billing" : "settings")
-          }
+          onUpgrade={() => onScreenChange("billing")}
         />
       )}
       {screen === "categories" && (
@@ -221,28 +269,24 @@ export function ConsumerFinanceScreens({
           botId={botId}
           profile={financeProfile}
           locale={locale}
-          onCategories={() => onScreenChange("categories")}
-          section={surface === "browser" ? "profile" : "all"}
+        />
+      )}
+      {screen === "profile" && (
+        <FinanceAccountCenter
+          botId={botId}
+          profile={financeProfile}
+          locale={locale}
         />
       )}
       {screen === "reminders" && (
-        <FinanceSettings
+        <FinanceReminders
           botId={botId}
-          profile={financeProfile}
           locale={locale}
-          onCategories={() => onScreenChange("categories")}
-          section="reminders"
+          currency={financeProfile.defaultCurrency}
+          timezone={financeProfile.timezone}
         />
       )}
-      {screen === "billing" && (
-        <FinanceSettings
-          botId={botId}
-          profile={financeProfile}
-          locale={locale}
-          onCategories={() => onScreenChange("categories")}
-          section="billing"
-        />
-      )}
-    </>
+      {screen === "billing" && <FinancePlans botId={botId} locale={locale} />}
+    </Suspense>
   );
 }
