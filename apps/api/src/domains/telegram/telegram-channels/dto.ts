@@ -3,15 +3,16 @@ import {
   TelegramChannelAdAnalysisStatus,
   TelegramManagedPostStatus,
 } from '@prisma/client';
-import type {
-  ScheduleManagedPostsBatchItem,
-  ScheduleManagedPostsBatchPayload,
-  TelegramPostPlannerPreviewPayload,
+import {
+  type ScheduleManagedPostsBatchItem,
+  type ScheduleManagedPostsBatchPayload,
+  type TelegramPostPlannerPreviewPayload,
 } from '@telegram-system/shared';
 import {
   Allow,
   IsArray,
   ArrayMaxSize,
+  ArrayMinSize,
   IsBoolean,
   IsDateString,
   IsEnum,
@@ -28,6 +29,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/pagination/pagination-query.dto';
+import { MAX_TELEGRAM_CHANNEL_POST_SYNC_LIMIT } from './telegram-channel-sync-limits';
 
 export class CreateTelegramChannelDto {
   @IsOptional() @IsString() assignedMemberId?: string | null;
@@ -50,17 +52,27 @@ export class UpdateTelegramChannelDto {
   @IsOptional() @IsString() username?: string;
   @IsOptional() @IsString() telegramChatId?: string;
   @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsUrl({ require_protocol: true }) tgStatUrl?: string | null;
+  @IsOptional() @IsString() presentationIconId?: string | null;
+  @IsOptional() @IsString() defaultInviteLinkId?: string | null;
   @IsOptional() @Type(() => Number) @IsInt() currentSubscribersCount?: number;
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
   seedSubscribersCount?: number;
+  @IsOptional() @IsBoolean() seedDisabled?: boolean;
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   activeSubscribersWindow?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(MAX_TELEGRAM_CHANNEL_POST_SYNC_LIMIT)
+  postSyncLimit?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) ownViewsPerPost?: number;
   @IsOptional()
   @Type(() => Number)
@@ -137,11 +149,24 @@ export class ImportTelegramChannelDto {
   @IsOptional() @IsString() purchaseTransactionId?: string | null;
 }
 
+export class ImportTelegramChannelsBatchDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  inputs!: string[];
+}
+
 export class HistoricalSyncDto {
   @IsOptional() @IsString() telegramUserAccountId?: string;
   @IsOptional() @IsBoolean() syncInviteLinks?: boolean;
   @IsOptional() @IsBoolean() syncPosts?: boolean;
-  @IsOptional() @Type(() => Number) @IsInt() postLimit?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(MAX_TELEGRAM_CHANNEL_POST_SYNC_LIMIT)
+  postLimit?: number;
 }
 
 export class SyncNowDto {
@@ -155,7 +180,12 @@ export class SyncNowDto {
   @IsOptional() @IsBoolean() syncIncludeChannelStats?: boolean;
   @IsOptional() @IsBoolean() syncIncludeManagedPosts?: boolean;
   @IsOptional() @IsBoolean() syncIncludeAudienceSnapshot?: boolean;
-  @IsOptional() @Type(() => Number) @IsInt() postLimit?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(MAX_TELEGRAM_CHANNEL_POST_SYNC_LIMIT)
+  postLimit?: number;
 }
 
 export class DeepSyncDto {
@@ -169,7 +199,7 @@ export class SyncPostsMetricsDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(MAX_TELEGRAM_CHANNEL_POST_SYNC_LIMIT)
   postLimit?: number;
 }
 
@@ -243,6 +273,7 @@ export class ImportTelegramManagedPostsDto {
 
 export class TelegramChannelSelectQueryDto {
   @IsOptional() @Type(() => Boolean) @IsBoolean() canPostMessagesOnly?: boolean;
+  @IsOptional() @Type(() => Boolean) @IsBoolean() owned?: boolean;
 }
 
 export class UpdateTelegramManagedPostDto {
@@ -336,6 +367,15 @@ export class TelegramChannelPostsQueryDto extends PaginationQueryDto {
 export class TelegramChannelInviteLinksQueryDto extends PaginationQueryDto {
   @IsOptional() @IsString() search?: string;
   @IsOptional() @IsString() availableForCampaignId?: string;
+  @IsOptional() @IsString() selectedId?: string;
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  initial?: boolean;
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  all?: boolean;
 }
 
 export class TelegramManagedPostsQueryDto extends PaginationQueryDto {

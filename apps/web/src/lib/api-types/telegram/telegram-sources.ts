@@ -85,6 +85,7 @@ export type TelegramSyncedDialogChannel = {
   telegramChannelId?: string | null;
   title: string;
   username?: string | null;
+  photoUrl?: string | null;
   role: TelegramChannelSourceRole;
   permissions: TelegramSourcePermissions;
   canBeUsedForAnalytics: boolean;

@@ -79,7 +79,9 @@ function relayErrors(name, stream, recentLines, onLine) {
       const isBenignCloudflareConfigNotice =
         name === "Cloudflare" &&
         /Cannot determine default configuration path/i.test(line);
-      if (
+      if (line.startsWith("[api-watch]")) {
+        console.log(`[${name}] ${line}`);
+      } else if (
         !isBenignCloudflareConfigNotice &&
         /error|exception|failed|cannot|eaddrinuse/i.test(line)
       ) {

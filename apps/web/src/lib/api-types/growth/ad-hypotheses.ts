@@ -1,7 +1,11 @@
 import type { Currency, Icon, ResolvedEmoji, WorkspaceMember } from "../core";
 import type { AdCampaign, AdCampaignKpiStatus } from "./ad-campaigns";
 import type { TelegramChannel } from "../telegram/telegram-channels";
-import type { InviteLinkHistoryPoint, InviteLinkHistorySummary, TelegramInviteLink } from "../telegram/telegram-invite-links";
+import type {
+  InviteLinkHistoryPoint,
+  InviteLinkHistorySummary,
+  TelegramInviteLink,
+} from "../telegram/telegram-invite-links";
 
 export type AdHypothesisStatus =
   | "testing"
@@ -83,6 +87,11 @@ export type AdHypothesis = {
   excludedCampaignsCount?: number;
   campaignsCount: number;
   summary: AdHypothesisSummary;
+  isSystem?: boolean;
+  systemScope?:
+    | { kind: "all_channels" }
+    | { kind: "channel"; channelId: string }
+    | { kind: "network"; networkId: string; channelIds: string[] };
 };
 export type AdHypothesisCampaign = {
   id: string;

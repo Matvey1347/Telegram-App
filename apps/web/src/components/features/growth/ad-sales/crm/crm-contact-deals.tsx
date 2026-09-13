@@ -31,8 +31,8 @@ export function CrmContactDeals({ contact }: { contact: CrmContactDetail }) {
     placeholderData: keepPreviousData,
   });
   const channels = useQuery({
-    queryKey: telegramChannelKeys.list(),
-    queryFn: telegramChannelsApi.list,
+    queryKey: telegramChannelKeys.select(),
+    queryFn: () => telegramChannelsApi.select(),
     staleTime: 60_000,
   });
 

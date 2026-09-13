@@ -1,5 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import type { ConsumerFinanceAnalytics } from '@telegram-system/shared';
+import type {
+  ConsumerFinanceAnalytics,
+  ConsumerFinanceAssistantMessageResult,
+} from '@telegram-system/shared';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { FinanceAiAnalyticsService } from '../ai/finance-ai-analytics.service';
 import { FinanceAnalyticsService } from '../analytics/finance-analytics.service';
@@ -31,15 +34,12 @@ export class FinanceUltimateService {
       telegramBotUserId: string;
     },
     dto: FinanceAssistantMessageDto,
-  ) {
-    const reservation = await this.entitlements.reserveCapability(
+  ): Promise<ConsumerFinanceAssistantMessageResult> {
+    const reservation = await this.entitlements.reserve(
       input,
-      'FINANCE_HISTORY_QA',
-      'AI_INSIGHTS',
+      'AI_INPUT',
       AI_MODEL_POLICY.FINANCE_ANALYSIS,
     );
-    if (!reservation)
-      throw new BadRequestException('Finance AI insight quota is unavailable');
     let providerCalled = false;
     try {
       const profile = await this.prisma.financeProfile.findUnique({
@@ -117,7 +117,11 @@ export class FinanceUltimateService {
             category: transaction.category?.name || null,
           })),
         },
-        reservationId: reservation.id,
+        reservationId: reservation?.id,
+        usageContext: {
+          workspaceId: input.workspaceId,
+          telegramBotUserId: input.telegramBotUserId,
+        },
       });
       if (route.kind !== 'RECORD') {
         return {
@@ -158,7 +162,7 @@ export class FinanceUltimateService {
         proposal,
       };
     } catch (error) {
-      if (!providerCalled)
+      if (!providerCalled && reservation)
         await this.prisma.aiUsageEvent.update({
           where: { id: reservation.id },
           data: { status: 'FAILED' },

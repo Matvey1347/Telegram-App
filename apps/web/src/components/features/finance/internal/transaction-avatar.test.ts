@@ -49,7 +49,10 @@ describe("transactionAvatar", () => {
     expect(
       transactionAvatar({
         iconPresentation: null,
-        assignedMember: { avatarPresentation: avatar },
+        member: { avatarPresentation: avatar },
+        assignedMember: {
+          avatarPresentation: { type: "unicode", value: "👨‍💻" },
+        },
         categoryRef: {
           key: "investment",
           name: "Investment",

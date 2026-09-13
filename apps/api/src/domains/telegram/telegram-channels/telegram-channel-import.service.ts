@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import {
   TelegramChannelDataType,
   TelegramDataSourceStatus,
@@ -8,6 +8,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import {
   canonicalTelegramInviteLink,
   parseTelegramImportInput,
+  type ResolvedTelegramEntity,
 } from '../../../telegram/shared/telegram-import.helpers';
 import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
 import { maskTelegramInviteHash } from '../../../telegram/shared/telegram-invite-log';
@@ -23,6 +24,30 @@ import { TelegramChannelsSupportService } from './telegram-channels-support.serv
 import { BulkProgressCallback } from './telegram-channels.internal';
 import { TelegramPostMetricsService } from './telegram-post-metrics.service';
 import { TelegramPostGroupStore } from './telegram-post-group.store';
+import { REVOKED_TELEGRAM_SESSION_MESSAGE } from '../../../telegram/shared/telegram-session-errors';
+
+type TelegramChannelBatchImportProgress = {
+  input: string;
+  success: boolean;
+  channelId?: string;
+  error?: string;
+};
+
+type TelegramChannelBatchImportProgressCallback = (
+  item: TelegramChannelBatchImportProgress,
+  current: number,
+  total: number,
+) => void | Promise<void>;
+
+function isImportedChannelRecord(
+  value: unknown,
+): value is { id: string; kind?: unknown } & Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { id?: unknown }).id === 'string'
+  );
+}
 
 @Injectable()
 export class TelegramChannelImportService {
@@ -46,16 +71,73 @@ export class TelegramChannelImportService {
 
   private readonly olderPostBackfillMaxPages = 5;
 
+  async importChannels(
+    userId: string,
+    inputs: string[],
+    onProgress?: TelegramChannelBatchImportProgressCallback,
+  ): Promise<{
+    channels: unknown[];
+    failures: Array<{ input: string; error: string }>;
+  }> {
+    const uniqueInputs = [
+      ...new Set(inputs.map((input) => input.trim())),
+    ].filter(Boolean);
+    const channels: unknown[] = [];
+    const failures: Array<{ input: string; error: string }> = [];
+
+    for (const [index, input] of uniqueInputs.entries()) {
+      try {
+        const imported: unknown = await this.importChannel(
+          userId,
+          { input },
+          undefined,
+          { runInitialSync: false },
+        );
+        if (!isImportedChannelRecord(imported)) {
+          throw new BadRequestException(
+            'Telegram did not return a valid channel after import.',
+          );
+        }
+        if (imported.kind === 'person') {
+          throw new BadRequestException(
+            'The Telegram reference resolves to a person, not a channel.',
+          );
+        }
+        channels.push(imported);
+        await onProgress?.(
+          { input, success: true, channelId: imported.id },
+          index + 1,
+          uniqueInputs.length,
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Telegram channel import failed.';
+        failures.push({ input, error: message });
+        await onProgress?.(
+          { input, success: false, error: message },
+          index + 1,
+          uniqueInputs.length,
+        );
+      }
+    }
+
+    return { channels, failures };
+  }
+
   async importChannel(
     userId: string,
     dto: ImportTelegramChannelDto,
     onProgress?: BulkProgressCallback,
+    options: { runInitialSync?: boolean } = {},
   ) {
     const workspaceId =
       await this.telegramChannelsSupportService.workspace(userId);
-    const account =
-      await this.telegramChannelImportPreparationService.firstConnectedAccount(
+    const accounts =
+      await this.telegramChannelImportPreparationService.connectedAccounts(
         workspaceId,
+        userId,
       );
     const rawInput = dto.input ?? dto.username;
     const importInput = parseTelegramImportInput(rawInput || '');
@@ -63,10 +145,6 @@ export class TelegramChannelImportService {
       this.telegramChannelImportPreparationService.importProgressSteps(
         importInput.type,
       );
-    this.logger.log(
-      `Importing Telegram source: inputType=${importInput.type} account=${account.id} invite=${importInput.type === 'invite' ? maskTelegramInviteHash(importInput.inviteHash) : 'n/a'}`,
-    );
-
     await this.telegramChannelImportPreparationService.notifyImportProgress(
       onProgress,
       steps,
@@ -84,14 +162,33 @@ export class TelegramChannelImportService {
       steps,
       importInput.type === 'invite' ? 2 : 1,
     );
-    const info =
-      this.telegramChannelImportPreparationService.ensureImportableChannelEntity(
-        await this.telegramChannelImportPreparationService.resolveImportEntity(
-          account,
-          importInput,
-        ),
-        importInput.type,
-      );
+    let account = accounts[0];
+    let info: ResolvedTelegramEntity | undefined;
+    for (const candidate of accounts) {
+      try {
+        this.logger.log(
+          `Importing Telegram source: inputType=${importInput.type} account=${candidate.id} invite=${importInput.type === 'invite' ? maskTelegramInviteHash(importInput.inviteHash) : 'n/a'}`,
+        );
+        info =
+          this.telegramChannelImportPreparationService.ensureImportableChannelEntity(
+            await this.telegramChannelImportPreparationService.resolveImportEntity(
+              candidate,
+              importInput,
+            ),
+            importInput.type,
+          );
+        account = candidate;
+        break;
+      } catch (error) {
+        const invalidSession =
+          await this.telegramChannelImportPreparationService.markInvalidSession(
+            candidate.id,
+            error,
+          );
+        if (!invalidSession) throw error;
+      }
+    }
+    if (!info) throw new BadRequestException(REVOKED_TELEGRAM_SESSION_MESSAGE);
     const username = this.telegramChannelsSupportService.normalizeUsername(
       info.username,
     );
@@ -220,14 +317,16 @@ export class TelegramChannelImportService {
       channel.id,
     );
     const initialSync =
-      await this.telegramChannelImportPreparationService.runInitialImportBackfill(
-        {
-          userId,
-          workspaceId,
-          channelId: channel.id,
-          accountId: account.id,
-        },
-      );
+      options.runInitialSync === false
+        ? { success: true, skipped: true }
+        : await this.telegramChannelImportPreparationService.runInitialImportBackfill(
+            {
+              userId,
+              workspaceId,
+              channelId: channel.id,
+              accountId: account.id,
+            },
+          );
     this.logger.log(
       `Imported Telegram entity: kind=${info.kind} chatId=${info.telegramChatId} joinedByInvite=${Boolean(info.joinedByInvite)} backfillSuccess=${Boolean(initialSync?.success)}`,
     );

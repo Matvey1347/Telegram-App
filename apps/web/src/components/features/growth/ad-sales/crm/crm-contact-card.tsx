@@ -14,6 +14,7 @@ import {
   ListTodo,
   MessageSquare,
   Plus,
+  Tags,
   UserRound,
   X,
 } from "lucide-react";
@@ -167,6 +168,27 @@ export function CrmContactCard({
         <p className="mt-3 line-clamp-2 text-sm leading-5 text-neutral-300">
           {contact.description}
         </p>
+      ) : null}
+      {contact.tags.length ? (
+        <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Contact tags">
+          {contact.tags.slice(0, 5).map((tag) => (
+            <span
+              key={tag.id}
+              className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-neutral-800 bg-neutral-900 px-2 py-0.5 text-[11px] text-neutral-300"
+            >
+              <span
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: tag.color ?? "#737373" }}
+              />
+              <span className="truncate">{tag.name}</span>
+            </span>
+          ))}
+          {contact.tags.length > 5 ? (
+            <span className="rounded-full border border-neutral-800 px-2 py-0.5 text-[11px] text-neutral-500">
+              +{contact.tags.length - 5}
+            </span>
+          ) : null}
+        </div>
       ) : null}
       {!contact.isUnassignedClient && contact.replySummary.status !== "NONE" ? (
         <ReplySummary
@@ -331,6 +353,7 @@ const contactActions: Array<{
   { id: "deals", label: "Deals", icon: CircleDollarSign, requiresSales: true },
   { id: "tasks", label: "Tasks", icon: ListTodo },
   { id: "notes", label: "Notes / Activities", icon: Activity },
+  { id: "tags", label: "Tags", icon: Tags },
   { id: "info", label: "Contact info", icon: Contact },
 ];
 

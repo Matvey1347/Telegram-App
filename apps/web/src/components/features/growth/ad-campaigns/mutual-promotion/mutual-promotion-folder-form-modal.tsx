@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Forward, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Forward } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type {
   CreateMutualPromotionFolderPayload,
@@ -30,12 +30,8 @@ import {
   type FolderDraft,
 } from "./mutual-promotion-form-types";
 import { MutualPromotionParticipantsEditor } from "./mutual-promotion-participants-editor";
-import {
-  readMutualPromotionDrafts,
-  removeMutualPromotionDraft,
-  writeMutualPromotionDraft,
-  type MutualPromotionModalDraft,
-} from "./mutual-promotion-modal-draft";
+import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
+import { useWorkspaceModalDrafts } from "@/hooks/use-workspace-modal-drafts";
 
 function validateDraft(draft: FolderDraft, timezone: string) {
   if (!draft.title.trim()) return "Enter a folder title.";
@@ -123,81 +119,47 @@ export function MutualPromotionFolderFormModal({
     folder ? folderDetailToDraft(folder, timezone) : emptyFolderDraft(timezone),
   );
   const [error, setError] = useState<string | null>(null);
-  const [pendingDrafts, setPendingDrafts] = useState<
-    MutualPromotionModalDraft[]
-  >(() =>
-    !folder && typeof window !== "undefined"
-      ? readMutualPromotionDrafts(window.localStorage)
-      : [],
-  );
-  const [currentDraftId, setCurrentDraftId] = useState(() =>
-    crypto.randomUUID(),
-  );
-  const draftReadyRef = useRef(folder !== null || pendingDrafts.length === 0);
-  const draftDirtyRef = useRef(false);
-  const persistedDraftJsonRef = useRef("");
-
-  const persistedDraft = useMemo<MutualPromotionModalDraft>(
-    () => ({ version: 1, id: currentDraftId, form: draft }),
-    [currentDraftId, draft],
-  );
-
   useEffect(() => {
-    if (folder || !open || !draftReadyRef.current || pendingDrafts.length)
-      return;
-    const serialized = JSON.stringify(persistedDraft);
-    if (serialized === persistedDraftJsonRef.current) return;
-    persistedDraftJsonRef.current = serialized;
-    if (draftDirtyRef.current) {
-      writeMutualPromotionDraft(window.localStorage, persistedDraft);
-    } else {
-      removeMutualPromotionDraft(window.localStorage, currentDraftId);
-    }
-  }, [
-    currentDraftId,
-    draft,
-    folder,
+    if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDraft(
+      folder
+        ? folderDetailToDraft(folder, timezone)
+        : emptyFolderDraft(timezone),
+    );
+    setError(null);
+  }, [folder, open, timezone]);
+  const createEmptyDraft = useCallback(
+    () => emptyFolderDraft(timezone),
+    [timezone],
+  );
+  const restoreDraft = useCallback((value: FolderDraft) => {
+    setDraft(value);
+    setError(null);
+  }, []);
+  const isMeaningfulDraft = useCallback(
+    (value: FolderDraft) =>
+      Boolean(
+        value.title.trim() ||
+        value.notes.trim() ||
+        value.participants.length > 0 ||
+        JSON.stringify(value) !== JSON.stringify(emptyFolderDraft(timezone)),
+      ),
+    [timezone],
+  );
+  const modalDrafts = useWorkspaceModalDrafts({
+    namespace: "mutual-promotion-folder:draft",
     open,
-    pendingDrafts.length,
-    persistedDraft,
-  ]);
+    enabled: !folder,
+    value: draft,
+    emptyValue: createEmptyDraft,
+    onRestore: restoreDraft,
+    isMeaningful: isMeaningfulDraft,
+  });
 
-  const continueDraft = (saved: MutualPromotionModalDraft) => {
-    draftDirtyRef.current = true;
-    setCurrentDraftId(saved.id || crypto.randomUUID());
-    setDraft(saved.form);
-    persistedDraftJsonRef.current = JSON.stringify(saved);
-    draftReadyRef.current = true;
-    setPendingDrafts([]);
-  };
-
-  const deleteDraft = (saved: MutualPromotionModalDraft) => {
-    removeMutualPromotionDraft(window.localStorage, saved.id);
-    const remaining = pendingDrafts.filter((item) => item.id !== saved.id);
-    setPendingDrafts(remaining);
-    if (!remaining.length) {
-      const clean = emptyFolderDraft(timezone);
-      setDraft(clean);
-      draftDirtyRef.current = false;
-      setCurrentDraftId(crypto.randomUUID());
-      persistedDraftJsonRef.current = JSON.stringify(clean);
-      draftReadyRef.current = true;
-    }
-  };
-
-  const createNewDraft = () => {
-    draftDirtyRef.current = false;
-    setDraft(emptyFolderDraft(timezone));
-    setCurrentDraftId(crypto.randomUUID());
-    persistedDraftJsonRef.current = "";
-    draftReadyRef.current = true;
-    setPendingDrafts([]);
-  };
-
-  const updateDraft = (next: FolderDraft) => {
-    draftDirtyRef.current = true;
+  const updateDraft = useCallback((next: FolderDraft) => {
     setDraft(next);
-  };
+  }, []);
 
   const instants = useMemo(
     () => folderDraftInstants(draft, timezone),
@@ -208,6 +170,30 @@ export function MutualPromotionFolderFormModal({
     () => draft.participants.map((participant) => participant.channelId).sort(),
     [draft.participants],
   );
+  const inviteOptionsRequestKey = JSON.stringify({
+    folderId: folder?.id ?? null,
+    channelIds,
+    ...instants,
+  });
+  const [requestedInviteOptionsKey, setRequestedInviteOptionsKey] =
+    useState("");
+  const initialInviteLinksQuery = useQuery({
+    queryKey: mutualPromotionFolderKeys.inviteOptions({
+      folderId: folder?.id,
+      channelIds,
+      ...instants,
+      initial: true,
+    }),
+    queryFn: () =>
+      mutualPromotionFoldersApi.inviteLinkOptions({
+        folderId: folder?.id,
+        channelIds,
+        ...instants,
+        initial: true,
+      }),
+    enabled: open && channelIds.length > 0 && Boolean(instants.endsAt),
+    staleTime: 30_000,
+  });
   const inviteLinksQuery = useQuery({
     queryKey: mutualPromotionFolderKeys.inviteOptions({
       folderId: folder?.id,
@@ -220,22 +206,44 @@ export function MutualPromotionFolderFormModal({
         channelIds,
         ...instants,
       }),
-    enabled: open && channelIds.length > 0 && Boolean(instants.endsAt),
+    enabled:
+      open &&
+      channelIds.length > 0 &&
+      Boolean(instants.endsAt) &&
+      requestedInviteOptionsKey === inviteOptionsRequestKey,
     staleTime: 30_000,
     refetchOnMount: "always",
   });
 
+  const resolvedParticipants = useMemo(() => {
+    const defaults = initialInviteLinksQuery.data;
+    if (!defaults?.length) return draft.participants;
+    return draft.participants.map((participant) => {
+      if (participant.inviteLinkId) return participant;
+      const defaultLink = defaults.find(
+        (link) =>
+          link.telegramChannelId === participant.channelId && link.available,
+      );
+      if (!defaultLink) return participant;
+      return { ...participant, inviteLinkId: defaultLink.id };
+    });
+  }, [draft.participants, initialInviteLinksQuery.data]);
+  const resolvedDraft = useMemo(
+    () => ({ ...draft, participants: resolvedParticipants }),
+    [draft, resolvedParticipants],
+  );
+
   const submit = async () => {
-    const validationError = validateDraft(draft, timezone);
+    const validationError = validateDraft(resolvedDraft, timezone);
     if (validationError) {
       setError(validationError);
       return;
     }
     setError(null);
     try {
-      await onSubmit(toPayload(draft, timezone));
+      await onSubmit(toPayload(resolvedDraft, timezone));
       if (!folder) {
-        removeMutualPromotionDraft(window.localStorage, currentDraftId);
+        modalDrafts.clearCurrentDraft();
       }
     } catch {
       setError(
@@ -253,42 +261,16 @@ export function MutualPromotionFolderFormModal({
       }
       size="xl"
     >
-      {!folder && pendingDrafts.length ? (
-        <div className="space-y-3">
-          {pendingDrafts.map((saved) => (
-            <section
-              key={saved.id}
-              className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-700/60 bg-amber-950/20 p-3"
-            >
-              <div className="min-w-0 flex-1">
-                <h3 className="truncate text-sm font-semibold text-white">
-                  {saved.form.title.trim() ||
-                    "Unfinished mutual-promotion draft"}
-                </h3>
-                <p className="mt-1 text-xs text-neutral-400">
-                  {saved.form.participants.length} channel(s) · starts{" "}
-                  {saved.form.startsDate} {saved.form.startsTime}
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => deleteDraft(saved)}
-                aria-label={`Delete draft ${saved.form.title || "Untitled"}`}
-              >
-                <Trash2 size={15} /> Delete
-              </Button>
-              <Button type="button" onClick={() => continueDraft(saved)}>
-                Continue draft
-              </Button>
-            </section>
-          ))}
-          <div className="flex justify-end">
-            <Button type="button" onClick={createNewDraft}>
-              Create new
-            </Button>
-          </div>
-        </div>
+      {!folder && modalDrafts.pendingDrafts.length ? (
+        <ModalDraftPicker
+          drafts={modalDrafts.pendingDrafts}
+          titleFor={(form) =>
+            form.title.trim() || "Unfinished mutual-promotion draft"
+          }
+          onContinue={modalDrafts.continueDraft}
+          onDelete={modalDrafts.deleteDraft}
+          onCreateNew={modalDrafts.createNewDraft}
+        />
       ) : (
         <>
           <div className="grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
@@ -391,9 +373,29 @@ export function MutualPromotionFolderFormModal({
               <MutualPromotionParticipantsEditor
                 channels={channels}
                 accounts={accounts}
-                participants={draft.participants}
-                inviteLinks={inviteLinksQuery.data ?? []}
-                inviteLinksLoading={inviteLinksQuery.isFetching}
+                participants={resolvedParticipants}
+                inviteLinks={
+                  inviteLinksQuery.data ??
+                  initialInviteLinksQuery.data ??
+                  folder?.participants.map((participant) => ({
+                    ...participant.inviteLink,
+                    telegramChannelId: participant.telegramChannelId,
+                    requestedCount: 0,
+                    isRevoked: false,
+                    isDefaultForChannel: false,
+                    available: true,
+                    unavailableReason: null,
+                  })) ??
+                  []
+                }
+                inviteLinksLoading={
+                  (requestedInviteOptionsKey === inviteOptionsRequestKey &&
+                    inviteLinksQuery.isFetching) ||
+                  initialInviteLinksQuery.isFetching
+                }
+                onInviteLinksOpen={() =>
+                  setRequestedInviteOptionsKey(inviteOptionsRequestKey)
+                }
                 onChange={(participants) =>
                   updateDraft({ ...draft, participants })
                 }

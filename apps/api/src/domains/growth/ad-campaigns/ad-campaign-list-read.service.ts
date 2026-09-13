@@ -136,12 +136,6 @@ const CAMPAIGN_LIST_SELECT = {
       },
     },
   },
-  hypothesisLinks: {
-    select: {
-      id: true,
-      hypothesis: { select: { id: true, name: true, status: true } },
-    },
-  },
 } satisfies Prisma.AdCampaignSelect;
 
 type CampaignListRow = Prisma.AdCampaignGetPayload<{

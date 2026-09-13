@@ -201,6 +201,7 @@ export class UpdateAdCampaignDto {
 export class AdCampaignQueryDto extends PaginationQueryDto {
   @IsOptional() @IsString() assignedMemberId?: string;
   @IsOptional() @IsString() telegramChannelId?: string;
+  @IsOptional() @IsString() @MaxLength(10_000) telegramChannelIds?: string;
   @IsOptional() @IsString() @MaxLength(120) search?: string;
   @IsOptional() @IsDateString() dateFrom?: string;
   @IsOptional() @IsDateString() dateTo?: string;

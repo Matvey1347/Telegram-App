@@ -51,12 +51,13 @@ import {
 import { TelegramUserAccountCapabilityRefreshService } from './telegram-user-account-capability-refresh.service';
 import { TelegramAccountRuntimeNotifier } from '../../../common/telegram-account-runtime-notifier.service';
 import { decryptTelegramMtprotoCredentials } from '../../../telegram/shared/telegram-mtproto-credentials';
+import {
+  channelImportProgress,
+  type ImportedTelegramUserAccountChannel,
+  type TelegramUserAccountProgressCallback,
+} from './telegram-user-account-import-progress';
 
-type ProgressCallback = (
-  item: { message: string },
-  current: number,
-  total: number,
-) => void | Promise<void>;
+type ProgressCallback = TelegramUserAccountProgressCallback;
 
 @Injectable()
 export class TelegramUserAccountsService {
@@ -97,7 +98,7 @@ export class TelegramUserAccountsService {
     message: string,
   ) {
     if (!onProgress) return;
-    await onProgress({ message }, current, total);
+    await onProgress({ phase: 'sync_step', message }, current, total);
   }
 
   private async updateLoginState(
@@ -673,6 +674,7 @@ export class TelegramUserAccountsService {
         telegramChannelId: channel.id,
         title: channel.title,
         username: channel.username,
+        photoUrl: channel.photoUrl,
         role: access.normalized.role,
         permissions: access.normalized.permissions,
         canBeUsedForAnalytics: this.sourceAccessService.canBeUsedForAnalytics(
@@ -688,6 +690,7 @@ export class TelegramUserAccountsService {
         telegramChannelId: channel.id,
         title: channel.title,
         username: channel.username,
+        photoUrl: channel.photoUrl,
         role: access.normalized.role,
         permissions: access.normalized.permissions,
         canBeUsedForAnalytics: this.sourceAccessService.canBeUsedForAnalytics(
@@ -812,14 +815,11 @@ export class TelegramUserAccountsService {
     if (!selectedChannels.length) {
       return { success: true, channels: [], message: 'No channels selected' };
     }
-    const totalSteps = 1 + selectedChannels.length * 2;
-    let currentStep = 1;
-    await this.notifyProgress(
+    await channelImportProgress({
       onProgress,
-      currentStep,
-      totalSteps,
-      'Preparing selected Telegram channels',
-    );
+      channelIndex: 0,
+      channelCount: selectedChannels.length,
+    }).preparing();
     await this.telegramChannelImportPolicyService.ensureStorageAvailable();
 
     const existingChannels = (await this.prisma.$queryRaw(Prisma.sql`
@@ -854,28 +854,15 @@ export class TelegramUserAccountsService {
               this.normalizeChatId(channel.id)),
       )?.id;
 
-    const imported: Array<{
-      channelId: string;
-      workspaceChannelId: string;
-      title: string;
-      username: string | null;
-      role: ReturnType<
-        TelegramSourceAccessService['normalizeMtprotoPermissions']
-      >['role'];
-      permissions: ReturnType<
-        TelegramSourceAccessService['normalizeMtprotoPermissions']
-      >['permissions'];
-      canBeUsedForAnalytics: boolean;
-    }> = [];
+    const imported: ImportedTelegramUserAccountChannel[] = [];
     const defaultCutoff = new Date();
-    for (const channel of selectedChannels) {
-      currentStep += 1;
-      await this.notifyProgress(
+    for (const [channelIndex, channel] of selectedChannels.entries()) {
+      const progress = channelImportProgress({
         onProgress,
-        currentStep,
-        totalSteps,
-        `Adding ${channel.title} to workspace`,
-      );
+        channelIndex,
+        channelCount: selectedChannels.length,
+      });
+      await progress.adding(channel.title);
       const { rawPermissions, normalized } = this.channelAccessPayload(channel);
       const existingId = findExistingId(channel);
       const existingChannel =
@@ -971,17 +958,14 @@ export class TelegramUserAccountsService {
           normalized.role,
         ),
       });
-      currentStep += 1;
-      await this.notifyProgress(
-        onProgress,
-        currentStep,
-        totalSteps,
-        `Importing data for ${workspaceChannel.title}`,
-      );
+      await progress.syncing(workspaceChannel.title);
       await this.telegramChannelSyncOrchestrator.syncNow(
         userId,
         workspaceChannel.id,
+        {},
+        progress.forward(workspaceChannel.title),
       );
+      await progress.completed(workspaceChannel.title);
     }
 
     return {

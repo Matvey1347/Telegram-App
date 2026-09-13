@@ -4,6 +4,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsDateString,
+  IsBoolean,
   IsIn,
   IsNumber,
   IsOptional,
@@ -91,6 +92,10 @@ export class MutualPromotionInviteOptionsQueryDto {
   @IsOptional() @IsString() folderId?: string;
   @IsOptional() @IsDateString() startsAt?: string;
   @IsOptional() @IsDateString() endsAt?: string;
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  initial?: boolean;
   @IsOptional()
   @Transform(({ value }) =>
     (Array.isArray(value) ? value : String(value || '').split(','))

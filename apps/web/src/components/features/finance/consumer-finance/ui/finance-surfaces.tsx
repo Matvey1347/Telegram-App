@@ -10,6 +10,7 @@ import {
   useFinanceVisualContext,
   type FinanceVisualContext,
 } from "./finance-visual-context";
+import stateStyles from "./finance-state-illustration.module.css";
 
 export function Card({
   children,
@@ -61,7 +62,7 @@ export function FinanceFeedbackState({
   return (
     <div
       data-finance-feedback={state}
-      className={`relative flex w-full flex-col overflow-hidden rounded-2xl border p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035),0_18px_50px_rgba(0,0,0,0.18)] sm:p-4 ${compact ? "min-h-32" : "min-h-48"} ${stateSurface[state]} ${className}`}
+      className={`relative flex w-full flex-col overflow-hidden rounded-2xl border p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035),0_18px_50px_rgba(0,0,0,0.18)] sm:p-4 ${compact ? "min-h-32" : "min-h-48"} ${stateSurface[state]} ${state === "loading" ? stateStyles.deferredLoading : ""} ${className}`}
       role={role}
       aria-live={state === "error" ? "assertive" : "polite"}
       aria-busy={

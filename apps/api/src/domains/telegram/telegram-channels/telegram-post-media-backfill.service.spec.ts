@@ -49,7 +49,7 @@ describe('TelegramPostMediaBackfillService', () => {
     expect(second.base64Migrated).toBe(0);
   });
 
-  it('downloads synchronized photos per channel in one bounded batch and skips unsupported media', async () => {
+  it('downloads synchronized photos and document media in one bounded channel batch', async () => {
     const rows = [
       {
         id: 'photo-post',
@@ -89,10 +89,10 @@ describe('TelegramPostMediaBackfillService', () => {
       },
     };
     const storage = {
-      persistImmutableImages: jest.fn().mockResolvedValue({
-        urls: ['https://cdn.test/photo.jpg'],
+      persistImmutableMedia: jest.fn().mockResolvedValue({
+        urls: ['https://cdn.test/photo.jpg', 'https://cdn.test/video.mp4'],
         uploaded: 0,
-        reused: 1,
+        reused: 2,
       }),
     };
     const mtproto = {
@@ -101,6 +101,11 @@ describe('TelegramPostMediaBackfillService', () => {
           messageId: '11',
           buffer: Buffer.from('photo'),
           mimeType: 'image/jpeg',
+        },
+        {
+          messageId: '12',
+          buffer: Buffer.from('video'),
+          mimeType: 'video/mp4',
         },
       ]),
     };
@@ -117,14 +122,15 @@ describe('TelegramPostMediaBackfillService', () => {
     const result = await service.run({ limit: 10 });
 
     expect(mtproto.downloadChannelMessagesMedia).toHaveBeenCalledWith(
-      expect.objectContaining({ messageIds: ['11'] }),
+      expect.objectContaining({ messageIds: ['11', '12'] }),
     );
-    expect(prisma.telegramPost.update).toHaveBeenCalledTimes(1);
+    expect(storage.persistImmutableMedia).toHaveBeenCalledTimes(1);
+    expect(prisma.telegramPost.update).toHaveBeenCalledTimes(2);
     expect(result).toEqual(
       expect.objectContaining({
-        telegramDownloaded: 1,
-        unsupportedMedia: 1,
-        b2Reused: 1,
+        telegramDownloaded: 2,
+        unsupportedMedia: 0,
+        b2Reused: 2,
       }),
     );
   });

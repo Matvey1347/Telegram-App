@@ -138,6 +138,7 @@ function setup(overrides?: { account?: unknown }) {
   };
   const salesService = {
     getSale: jest.fn().mockResolvedValue(expectedSale),
+    recalculateAdvertiserStats: jest.fn().mockResolvedValue(undefined),
     createManagedPostFromPlacement: jest.fn(),
     scheduleSale: jest.fn(),
   };

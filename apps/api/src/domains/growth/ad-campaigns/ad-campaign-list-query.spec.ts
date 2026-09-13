@@ -41,8 +41,28 @@ describe('ad campaign server list query', () => {
     });
 
     expect(where.workspaceId).toBe('workspace-1');
+    expect(where.telegramChannel).toEqual({ archivedAt: null });
     expect(JSON.stringify(where)).toContain('"placementDate"');
     expect(JSON.stringify(where)).toContain('"hypothesisLinks"');
     expect(where.AND).toHaveLength(2);
+  });
+
+  it('filters both the id page and count predicate by a channel scope', () => {
+    const filter = { telegramChannelIds: 'channel-1,channel-2' };
+    const pageQuery = buildAdCampaignPageIdQuery('workspace-1', filter, 0, 50);
+    const where = buildAdCampaignListWhere('workspace-1', filter);
+
+    expect(pageQuery.strings.join('?')).toContain(
+      'campaign."telegramChannelId" IN',
+    );
+    expect(pageQuery.strings.join('?')).toContain(
+      'active_channel."archivedAt" IS NULL',
+    );
+    expect(pageQuery.values).toEqual(
+      expect.arrayContaining(['channel-1', 'channel-2']),
+    );
+    expect(where.telegramChannelId).toEqual({
+      in: ['channel-1', 'channel-2'],
+    });
   });
 });

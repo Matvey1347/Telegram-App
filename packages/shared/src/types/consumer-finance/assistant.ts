@@ -36,7 +36,8 @@ export type ConsumerFinanceAssistantScreen =
   | "accounts"
   | "categories"
   | "budget"
-  | "reminders";
+  | "reminders"
+  | "billing";
 
 export type ConsumerFinanceAssistantMessage = {
   role: "user" | "assistant";

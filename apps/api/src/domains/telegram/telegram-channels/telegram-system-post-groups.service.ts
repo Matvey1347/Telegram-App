@@ -17,6 +17,27 @@ export class TelegramSystemPostGroupsService {
     private readonly groups: TelegramPostGroupStore,
   ) {}
 
+  async ensureMutualPromotionGroup(userId: string, channelId: string) {
+    const membership =
+      await this.workspaceService.resolveWorkspaceMembershipForUser(userId);
+    const channel = await this.prisma.telegramChannel.findFirst({
+      where: {
+        id: channelId,
+        workspaceId: membership.workspaceId,
+        isActive: true,
+        archivedAt: null,
+      },
+      select: { id: true, assignedMemberId: true },
+    });
+    if (!channel) throw new NotFoundException('Telegram channel not found');
+    return this.groups.ensureMutualPromotionSystemGroup(
+      this.prisma,
+      membership.workspaceId,
+      channel.id,
+      channel.assignedMemberId ?? membership.id,
+    );
+  }
+
   async optionsForSystemBotPost(userId: string, channelId: string) {
     const membership =
       await this.workspaceService.resolveWorkspaceMembershipForUser(userId);

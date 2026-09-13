@@ -107,6 +107,49 @@ const folder = {
 } as never;
 
 describe("MutualPromotionFolderCard", () => {
+  it("opens from the whole card surface but not from channel controls", async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    render(<MutualPromotionFolderCard folder={folder} onOpen={onOpen} />);
+
+    const cardTrigger = screen.getByRole("button", {
+      name: "Open folder September campaign",
+    });
+    expect(cardTrigger).toHaveClass("absolute", "inset-0", "rounded-2xl");
+    expect(cardTrigger).toHaveClass(
+      "focus-visible:!outline-none",
+      "focus-visible:ring-inset",
+    );
+    expect(cardTrigger).not.toHaveClass("rounded-t-2xl");
+
+    await user.click(cardTrigger);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+
+    await user.click(
+      screen.getByRole("button", { name: "View 2 publishers channels" }),
+    );
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("menu", { name: "Publishers channels" }),
+    ).toBeInTheDocument();
+
+    await user.click(document.body);
+    expect(
+      screen.queryByRole("menu", { name: "Publishers channels" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "View 2 publishers channels" }),
+    );
+
+    await user.click(
+      within(screen.getByLabelText("Channel performance")).getByText(
+        "Channel One",
+      ),
+    );
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
   it("shows role avatars in the metrics and opens compact role popovers", async () => {
     const user = userEvent.setup();
     render(<MutualPromotionFolderCard folder={folder} onOpen={vi.fn()} />);
@@ -166,5 +209,32 @@ describe("MutualPromotionFolderCard", () => {
     expect(within(paidMenu).getByText("Channel Two")).toBeTruthy();
     expect(within(paidMenu).getByText("Channel Three")).toBeTruthy();
     expect(within(paidMenu).queryByText("Channel One")).toBeNull();
+  });
+
+  it("uses the Deals countdown presentation and changes phase color", () => {
+    const { rerender } = render(
+      <MutualPromotionFolderCard
+        folder={folder}
+        now={new Date("2026-09-08T16:00:00.000Z").getTime()}
+        onOpen={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Starts in 01:00:00")).toHaveClass(
+      "text-sky-400",
+      "font-mono",
+      "tabular-nums",
+    );
+
+    rerender(
+      <MutualPromotionFolderCard
+        folder={folder}
+        now={new Date("2026-09-09T20:00:00.000Z").getTime()}
+        onOpen={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Ends in 1d 00:00:00")).toHaveClass(
+      "text-amber-300",
+    );
   });
 });

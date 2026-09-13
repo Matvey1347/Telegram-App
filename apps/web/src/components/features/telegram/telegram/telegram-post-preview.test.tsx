@@ -1,11 +1,45 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render as renderDom,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { renderWithI18n as render } from "@/test/render-with-i18n";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { TelegramPostPreview } from "@/components/features/telegram/telegram/telegram-post-preview";
+import { I18nProvider } from "@/providers/i18n-provider";
+import common from "@/i18n/locales/en/common";
+import navigation from "@/i18n/locales/en/navigation";
 
 describe("TelegramPostPreview", () => {
+  it("loads its translations when rendered outside Telegram post routes", async () => {
+    renderDom(
+      <I18nProvider
+        initialLocale="en"
+        preloadedCatalogs={{ common, navigation }}
+      >
+        <TelegramPostPreview
+          channelTitle="Channel"
+          text="Promo text"
+          imageUrls={[]}
+        />
+      </I18nProvider>,
+    );
+
+    expect(await screen.findByText("Leave a Comment")).toBeInTheDocument();
+    expect(screen.getByText("channel")).toBeInTheDocument();
+    expect(
+      screen.queryByText("telegram.posts.editorComponents.preview.channel"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "telegram.posts.editorComponents.preview.leaveComment",
+      ),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders video and GIF animation media instead of an unsupported placeholder", () => {
     const { container } = render(
       <TelegramPostPreview

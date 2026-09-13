@@ -16,7 +16,6 @@ import {
   Check,
   CircleCheck,
   CircleX,
-  Clock3,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -37,6 +36,14 @@ import { IconAvatar } from "@/components/icons/icon-avatar";
 import { useOptionalI18n } from "@/providers/i18n-provider";
 export { Modal } from "./modal";
 export { MasonryGrid } from "./masonry-grid";
+export {
+  TimeInput,
+  canonicalizeTimeInputValue,
+  isValidTimeInputValue,
+  localDateTimeInputToDate,
+  localDateTimeInputToIso,
+  normalizeTimeInputValue,
+} from "./time-input";
 export type ToastItem = {
   id: number | string;
   message: string;
@@ -155,62 +162,6 @@ export const Input = forwardRef<
     </span>
   );
 });
-export function normalizeTimeInputValue(value: string) {
-  const sanitized = value.replace(/[^\d:.\s]/g, "").replace(/\s+/g, "");
-  if (!sanitized) return "";
-  const normalized = sanitized.replace(/\./g, ":");
-  if (!normalized.includes(":")) {
-    if (normalized.length <= 2) return normalized;
-    return `${normalized.slice(0, 2)}:${normalized.slice(2, 4)}`;
-  }
-  const [hours = "", minutes = ""] = normalized.split(":", 2);
-  return `${hours.slice(0, 2)}:${minutes.slice(0, 2)}`;
-}
-export function canonicalizeTimeInputValue(value: string) {
-  const normalized = normalizeTimeInputValue(value);
-  const match = normalized.match(/^(\d{1,2}):(\d{2})$/);
-  if (!match) return null;
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-    return null;
-  }
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
-}
-export function isValidTimeInputValue(value: string) {
-  return canonicalizeTimeInputValue(value) !== null;
-}
-export function TimeInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  const { className, onBlur, onChange, placeholder, ...restProps } = props;
-  return (
-    <div className="relative">
-      <input
-        {...restProps}
-        type="text"
-        inputMode="numeric"
-        maxLength={5}
-        placeholder={placeholder ?? "HH:MM"}
-        onChange={(event) => {
-          event.target.value = normalizeTimeInputValue(event.target.value);
-          onChange?.(event);
-        }}
-        onBlur={(event) => {
-          const canonical = canonicalizeTimeInputValue(event.target.value);
-          if (canonical !== event.target.value) {
-            event.target.value = canonical ?? "12:00";
-            onChange?.(event);
-          }
-          onBlur?.(event);
-        }}
-        className={`min-h-9 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 pr-11 text-sm text-white outline-none ring-blue-500 focus:ring ${className ?? ""}`}
-      />
-      <Clock3
-        size={16}
-        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-300"
-      />
-    </div>
-  );
-}
 function OptionIcon({
   iconNode,
   iconPresentation,
@@ -593,6 +544,10 @@ export function MultiSelect({
   className = "",
   allSelectedLabel,
   compactSelectedAfter = 2,
+  canCreateOption,
+  createOptionLabel,
+  onCreateOption,
+  creatingOption = false,
 }: {
   value: string[];
   onChange: (value: string[]) => void;
@@ -603,6 +558,10 @@ export function MultiSelect({
   className?: string;
   allSelectedLabel?: string;
   compactSelectedAfter?: number;
+  canCreateOption?: (search: string) => boolean;
+  createOptionLabel?: (search: string) => React.ReactNode;
+  onCreateOption?: (search: string) => void | Promise<void>;
+  creatingOption?: boolean;
 }) {
   const i18n = useOptionalI18n();
   const resolvedPlaceholder =
@@ -682,6 +641,14 @@ export function MultiSelect({
       .toLocaleLowerCase()
       .includes(search.trim().toLocaleLowerCase()),
   );
+  const normalizedSearch = search.trim();
+  const showCreateOption = Boolean(
+    onCreateOption &&
+    normalizedSearch &&
+    (canCreateOption?.(normalizedSearch) ?? true),
+  );
+  const resolvedCreateOptionLabel =
+    createOptionLabel?.(normalizedSearch) ?? `Add ${normalizedSearch}`;
 
   const toggleValue = (nextValue: string) => {
     onChange(
@@ -806,7 +773,34 @@ export function MultiSelect({
                     </button>
                   );
                 })}
-                {!filteredOptions.length ? (
+                {showCreateOption ? (
+                  <button
+                    type="button"
+                    disabled={creatingOption}
+                    aria-label={
+                      creatingOption
+                        ? "Adding channel…"
+                        : typeof resolvedCreateOptionLabel === "string"
+                          ? resolvedCreateOptionLabel
+                          : `Add ${normalizedSearch}`
+                    }
+                    onClick={() => {
+                      if (!onCreateOption) return;
+                      void Promise.resolve(onCreateOption(normalizedSearch))
+                        .then(() => setSearch(""))
+                        .catch(() => undefined);
+                    }}
+                    className="flex w-full items-center gap-2 border-t border-neutral-800 px-3 py-2 text-left text-sm text-blue-300 hover:bg-neutral-800 disabled:opacity-50"
+                  >
+                    <span className="flex h-5 w-5 items-center justify-center rounded-md bg-blue-950 text-base">
+                      +
+                    </span>
+                    {creatingOption
+                      ? "Adding channel…"
+                      : resolvedCreateOptionLabel}
+                  </button>
+                ) : null}
+                {!filteredOptions.length && !showCreateOption ? (
                   <p className="px-3 py-3 text-center text-sm text-neutral-500">
                     No options found
                   </p>
@@ -877,6 +871,9 @@ export function CustomSelect({
   dropdownClassName = "",
   uiLocale,
   onSearchChange,
+  onOpen,
+  loading = false,
+  loadingLabel = "Loading options…",
   canCreateOption,
   createOptionLabel,
   onCreateOption,
@@ -891,6 +888,9 @@ export function CustomSelect({
   dropdownClassName?: string;
   uiLocale?: UiLocale;
   onSearchChange?: (search: string) => void;
+  onOpen?: () => void;
+  loading?: boolean;
+  loadingLabel?: string;
   canCreateOption?: (search: string) => boolean;
   createOptionLabel?: (search: string) => React.ReactNode;
   onCreateOption?: (search: string) => void | Promise<void>;
@@ -1032,15 +1032,19 @@ export function CustomSelect({
         type="button"
         disabled={disabled}
         onClick={() => {
-          setOpen((value) => {
-            if (value) resetSearch();
-            return !value;
-          });
+          if (open) resetSearch();
+          else onOpen?.();
+          setOpen(!open);
         }}
         className="flex min-h-9 w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white outline-none ring-blue-500 focus:ring disabled:opacity-50"
       >
         <span className="flex min-w-0 flex-1 items-center gap-2">
-          {selected ? (
+          {loading && !selected ? (
+            <LoaderCircle
+              size={15}
+              className="shrink-0 animate-spin text-neutral-400"
+            />
+          ) : selected ? (
             <OptionIcon
               iconNode={selected.icon}
               iconPresentation={selected.iconPresentation}
@@ -1051,9 +1055,9 @@ export function CustomSelect({
             />
           ) : null}
           <span
-            className={`truncate ${selected ? toneClass(selected.tone) : "text-neutral-400"}`}
+            className={`${selected?.badgeClassName ? "" : "truncate"} ${selected ? toneClass(selected.tone) : "text-neutral-400"} ${selected?.badgeClassName ?? ""}`}
           >
-            {selected?.label || placeholder}
+            {selected?.label || (loading ? loadingLabel : placeholder)}
           </span>
           {selected?.meta ? (
             <bdi className="ml-auto rounded-md bg-neutral-800 px-2 py-0.5 text-xs font-normal text-neutral-400">
@@ -1099,46 +1103,56 @@ export function CustomSelect({
                 </div>
               ) : null}
               <div className="z-[120] min-h-0 flex-1 overflow-auto">
-                {filteredOptions.map((opt) => {
-                  const isSelected = opt.value === value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => {
-                        onChange(opt.value);
-                        setOpen(false);
-                        resetSearch();
-                      }}
-                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-neutral-800"
-                    >
-                      <span className="flex min-w-0 flex-1 items-center gap-2">
-                        <OptionIcon
-                          iconNode={opt.icon}
-                          iconPresentation={opt.iconPresentation}
-                          iconUrl={opt.iconUrl}
-                          iconEmoji={opt.iconEmoji}
-                          premium={opt.iconPremium}
-                          fallback={opt.iconFallback}
-                        />
-                        <span
-                          className={`${opt.badgeClassName ? "" : "truncate"} ${toneClass(opt.tone)} ${opt.badgeClassName ?? ""}`}
-                        >
-                          {opt.label}
+                {loading ? (
+                  <div
+                    role="status"
+                    className="flex items-center justify-center gap-2 px-3 py-4 text-sm text-neutral-400"
+                  >
+                    <LoaderCircle size={15} className="animate-spin" />
+                    {loadingLabel}
+                  </div>
+                ) : null}
+                {!loading &&
+                  filteredOptions.map((opt) => {
+                    const isSelected = opt.value === value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          onChange(opt.value);
+                          setOpen(false);
+                          resetSearch();
+                        }}
+                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-neutral-800"
+                      >
+                        <span className="flex min-w-0 flex-1 items-center gap-2">
+                          <OptionIcon
+                            iconNode={opt.icon}
+                            iconPresentation={opt.iconPresentation}
+                            iconUrl={opt.iconUrl}
+                            iconEmoji={opt.iconEmoji}
+                            premium={opt.iconPremium}
+                            fallback={opt.iconFallback}
+                          />
+                          <span
+                            className={`${opt.badgeClassName ? "" : "truncate"} ${toneClass(opt.tone)} ${opt.badgeClassName ?? ""}`}
+                          >
+                            {opt.label}
+                          </span>
+                          {opt.meta ? (
+                            <bdi className="ml-auto rounded-md bg-neutral-800/80 px-2 py-0.5 text-xs font-normal text-neutral-400">
+                              {opt.meta}
+                            </bdi>
+                          ) : null}
                         </span>
-                        {opt.meta ? (
-                          <bdi className="ml-auto rounded-md bg-neutral-800/80 px-2 py-0.5 text-xs font-normal text-neutral-400">
-                            {opt.meta}
-                          </bdi>
+                        {isSelected ? (
+                          <Check size={14} className="text-blue-300" />
                         ) : null}
-                      </span>
-                      {isSelected ? (
-                        <Check size={14} className="text-blue-300" />
-                      ) : null}
-                    </button>
-                  );
-                })}
-                {showCreateOption ? (
+                      </button>
+                    );
+                  })}
+                {!loading && showCreateOption ? (
                   <button
                     type="button"
                     onClick={createTypedOption}
@@ -1156,7 +1170,7 @@ export function CustomSelect({
                     </span>
                   </button>
                 ) : null}
-                {!filteredOptions.length && !showCreateOption ? (
+                {!loading && !filteredOptions.length && !showCreateOption ? (
                   <p className="px-3 py-3 text-center text-sm text-neutral-500">
                     No options found
                   </p>

@@ -26,65 +26,162 @@ type PaginatedGetter = <T>(
   params?: Record<string, unknown>,
 ) => Promise<PaginatedResponse<T>>;
 
-type AllPaginatedGetter = <T>(
-  path: string,
-  params?: Record<string, unknown>,
-) => Promise<T[]>;
-
 export function createTelegramChannelHelpers({
   api,
   getPaginated,
-  getAllPaginatedItems,
   streamProgressAction,
   silentFeedbackConfig,
 }: {
   api: AxiosInstance;
   getPaginated: PaginatedGetter;
-  getAllPaginatedItems: AllPaginatedGetter;
-  streamProgressAction: <TResult, TItem = BulkActionResultItem>(path: string, payload: unknown, onProgress: StreamProgressHandler<TItem>) => Promise<TResult>;
+  streamProgressAction: <TResult, TItem = BulkActionResultItem>(
+    path: string,
+    payload: unknown,
+    onProgress: StreamProgressHandler<TItem>,
+  ) => Promise<TResult>;
   silentFeedbackConfig: AxiosRequestConfig;
 }) {
   return {
-    syncTelegramChannelNow: async (channelId: string, payload: TelegramChannelSyncNowPayload = {}) =>
-      (await api.post(`/telegram-channels/${channelId}/sync-now`, payload)).data,
+    syncTelegramChannelNow: async (
+      channelId: string,
+      payload: TelegramChannelSyncNowPayload = {},
+    ) =>
+      (await api.post(`/telegram-channels/${channelId}/sync-now`, payload))
+        .data,
     syncTelegramChannelNowWithProgress: (
       channelId: string,
       onProgress: StreamProgressHandler<TelegramChannelSyncProgressItem>,
       payload: TelegramChannelSyncNowPayload = {},
     ) =>
-      streamProgressAction<SyncOperationResult & Record<string, unknown>, TelegramChannelSyncProgressItem>(
-        `/telegram-channels/${channelId}/sync-now-stream`,
-        payload,
-        onProgress,
-      ),
-    syncTelegramChannelHistorical: async (channelId: string, payload: Record<string, unknown>) =>
-      (await api.post(`/telegram-channels/${channelId}/sync/historical`, payload)).data,
-    syncTelegramChannelDeep: async (channelId: string, payload: Record<string, unknown>) =>
-      (await api.post(`/telegram-channels/${channelId}/sync/deep`, payload)).data,
+      streamProgressAction<
+        SyncOperationResult & Record<string, unknown>,
+        TelegramChannelSyncProgressItem
+      >(`/telegram-channels/${channelId}/sync-now-stream`, payload, onProgress),
+    syncTelegramChannelHistorical: async (
+      channelId: string,
+      payload: Record<string, unknown>,
+    ) =>
+      (
+        await api.post(
+          `/telegram-channels/${channelId}/sync/historical`,
+          payload,
+        )
+      ).data,
+    syncTelegramChannelDeep: async (
+      channelId: string,
+      payload: Record<string, unknown>,
+    ) =>
+      (await api.post(`/telegram-channels/${channelId}/sync/deep`, payload))
+        .data,
     syncTelegramChannelPostMetrics: async (
       channelId: string,
       payload: { telegramUserAccountId?: string; postLimit?: number },
       silent = false,
-    ) => (await api.post(`/telegram-channels/${channelId}/sync-posts-metrics`, payload, silent ? silentFeedbackConfig : undefined)).data,
-    getTelegramChannelAnalytics: async (channelId: string, from?: string, to?: string) =>
-      (await api.get<TelegramChannelAnalyticsResponse>(`/telegram-channels/${channelId}/analytics`, { params: { from, to } })).data,
-    getTelegramChannelPosts: async (channelId: string, params?: PaginationParams & { search?: string; from?: string; to?: string }, silent = false) =>
+    ) =>
+      (
+        await api.post(
+          `/telegram-channels/${channelId}/sync-posts-metrics`,
+          payload,
+          silent ? silentFeedbackConfig : undefined,
+        )
+      ).data,
+    getTelegramChannelAnalytics: async (
+      channelId: string,
+      from?: string,
+      to?: string,
+    ) =>
+      (
+        await api.get<TelegramChannelAnalyticsResponse>(
+          `/telegram-channels/${channelId}/analytics`,
+          { params: { from, to } },
+        )
+      ).data,
+    getTelegramChannelPosts: async (
+      channelId: string,
+      params?: PaginationParams & {
+        search?: string;
+        from?: string;
+        to?: string;
+      },
+      silent = false,
+    ) =>
       silent
-        ? (await api.get<PaginatedResponse<TelegramPostAnalyticsItem>>(`/telegram-channels/${channelId}/posts`, { ...silentFeedbackConfig, params })).data
-        : getPaginated<TelegramPostAnalyticsItem>(`/telegram-channels/${channelId}/posts`, params),
+        ? (
+            await api.get<PaginatedResponse<TelegramPostAnalyticsItem>>(
+              `/telegram-channels/${channelId}/posts`,
+              { ...silentFeedbackConfig, params },
+            )
+          ).data
+        : getPaginated<TelegramPostAnalyticsItem>(
+            `/telegram-channels/${channelId}/posts`,
+            params,
+          ),
     getAllTelegramChannelPosts: async (channelId: string) =>
-      (await api.get<Array<Pick<TelegramPostAnalyticsItem, 'id' | 'telegramMessageId' | 'postDate' | 'text'>>>(`/telegram-channels/${channelId}/posts/select`)).data,
-    getTelegramChannelInviteLinks: (channelId: string, params?: PaginationParams & { search?: string }) =>
-      getPaginated<TelegramInviteLink>(`/telegram-channels/${channelId}/invite-links`, params),
+      (
+        await api.get<
+          Array<
+            Pick<
+              TelegramPostAnalyticsItem,
+              "id" | "telegramMessageId" | "postDate" | "text"
+            >
+          >
+        >(`/telegram-channels/${channelId}/posts/select`)
+      ).data,
+    getTelegramChannelInviteLinks: (
+      channelId: string,
+      params?: PaginationParams & { search?: string },
+    ) =>
+      getPaginated<TelegramInviteLink>(
+        `/telegram-channels/${channelId}/invite-links`,
+        params,
+      ),
     getTelegramChannelInviteLinksForSelect: async (
       channelId: string,
-      params?: { search?: string; availableForCampaignId?: string },
+      params?: {
+        search?: string;
+        availableForCampaignId?: string;
+        selectedId?: string;
+        initial?: boolean;
+        all?: boolean;
+      },
     ) =>
-      (await api.get<TelegramInviteLink[]>(`/telegram-channels/${channelId}/invite-links/select`, { params })).data,
-    getAllTelegramChannelInviteLinks: (channelId: string, params?: { search?: string }) =>
-      getAllPaginatedItems<TelegramInviteLink>(`/telegram-channels/${channelId}/invite-links`, params),
-    getTelegramChannelInviteLinkHistory: async (channelId: string, inviteLinkId: string, limit = 120) =>
-      (await api.get<TelegramInviteLinkHistory>(`/telegram-channels/${channelId}/invite-links/${inviteLinkId}/history`, { params: { limit } })).data,
+      (
+        await api.get<TelegramInviteLink[]>(
+          `/telegram-channels/${channelId}/invite-links/select`,
+          { params },
+        )
+      ).data,
+    getTelegramChannelInitialInviteLink: async (
+      channelId: string,
+      selectedId?: string,
+    ) =>
+      (
+        await api.get<TelegramInviteLink[]>(
+          `/telegram-channels/${channelId}/invite-links/select`,
+          { params: { initial: true, ...(selectedId ? { selectedId } : {}) } },
+        )
+      ).data,
+    getAllTelegramChannelInviteLinks: async (
+      channelId: string,
+      params?: { search?: string },
+    ) =>
+      (
+        await api.get<TelegramInviteLink[]>(
+          `/telegram-channels/${channelId}/invite-links/select`,
+          { params: { ...params, all: true } },
+        )
+      ).data,
+    getTelegramChannelInviteLinkHistory: async (
+      channelId: string,
+      inviteLinkId: string,
+      limit = 120,
+    ) =>
+      (
+        await api.get<TelegramInviteLinkHistory>(
+          `/telegram-channels/${channelId}/invite-links/${inviteLinkId}/history`,
+          { params: { limit } },
+        )
+      ).data,
     getTelegramChannelPromos: async (channelId: string) =>
       (await api.get<Promo[]>(`/telegram-channels/${channelId}/promos`)).data,
   };

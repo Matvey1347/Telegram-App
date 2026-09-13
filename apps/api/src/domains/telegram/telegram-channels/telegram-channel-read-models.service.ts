@@ -35,7 +35,10 @@ export class TelegramChannelReadModelsService {
   ) {
     const workspaceId =
       await this.telegramChannelsSupportService.workspace(userId);
-    await this.telegramChannelCatalogService.findOne(userId, channelId);
+    const channel = (await this.telegramChannelCatalogService.findOne(
+      userId,
+      channelId,
+    )) as { defaultInviteLinkId?: string | null };
     const where = this.inviteLinksWhere(workspaceId, channelId, query.search);
     const pagination = normalizePagination(query);
     const [links, totalItems] = await Promise.all([
@@ -50,13 +53,25 @@ export class TelegramChannelReadModelsService {
       ),
       this.prisma.telegramInviteLink.count({ where }),
     ]);
+    const hydratedLinks = await hydrateTelegramInviteCreatorProfiles(
+      this.prisma,
+      workspaceId,
+      links,
+    );
     const items =
       await this.telegramInviteHistoryService.attachInviteLinkHistories(
         workspaceId,
         channelId,
-        links,
+        hydratedLinks,
       );
-    return createPaginatedResponse(items, totalItems, pagination);
+    return createPaginatedResponse(
+      items.map((link) => ({
+        ...link,
+        isDefaultForChannel: link.id === channel.defaultInviteLinkId,
+      })),
+      totalItems,
+      pagination,
+    );
   }
 
   async inviteLinksForSelect(
@@ -64,12 +79,15 @@ export class TelegramChannelReadModelsService {
     channelId: string,
     query: Pick<
       TelegramChannelInviteLinksQueryDto,
-      'search' | 'availableForCampaignId'
+      'search' | 'availableForCampaignId' | 'selectedId' | 'initial' | 'all'
     > = {},
   ) {
     const workspaceId =
       await this.telegramChannelsSupportService.workspace(userId);
-    await this.telegramChannelCatalogService.findOne(userId, channelId);
+    const channel = (await this.telegramChannelCatalogService.findOne(
+      userId,
+      channelId,
+    )) as { defaultInviteLinkId?: string | null };
     const baseWhere = this.inviteLinksWhere(
       workspaceId,
       channelId,
@@ -78,26 +96,34 @@ export class TelegramChannelReadModelsService {
     const availableForCampaignId = String(
       query.availableForCampaignId || '',
     ).trim();
-    const where: Prisma.TelegramInviteLinkWhereInput = availableForCampaignId
-      ? {
-          AND: [
-            baseWhere,
-            { mutualPromotionParticipants: { none: {} } },
-            {
-              OR: [
-                { adCampaignId: null },
-                { adCampaignId: availableForCampaignId },
+    const initialLinkId = String(
+      query.selectedId || channel.defaultInviteLinkId || '',
+    ).trim();
+    if (query.initial && !initialLinkId) return [];
+    const where: Prisma.TelegramInviteLinkWhereInput = query.initial
+      ? { AND: [baseWhere, { id: initialLinkId }] }
+      : query.all
+        ? baseWhere
+        : availableForCampaignId
+          ? {
+              AND: [
+                baseWhere,
+                { mutualPromotionParticipants: { none: {} } },
+                {
+                  OR: [
+                    { adCampaignId: null },
+                    { adCampaignId: availableForCampaignId },
+                  ],
+                },
               ],
-            },
-          ],
-        }
-      : {
-          AND: [
-            baseWhere,
-            { adCampaignId: null },
-            { mutualPromotionParticipants: { none: {} } },
-          ],
-        };
+            }
+          : {
+              AND: [
+                baseWhere,
+                { adCampaignId: null },
+                { mutualPromotionParticipants: { none: {} } },
+              ],
+            };
     const links =
       await this.telegramInvitePersistenceService.findInviteLinksWithRequestedCountFallback(
         {
@@ -111,11 +137,13 @@ export class TelegramChannelReadModelsService {
       workspaceId,
       links,
     );
-    return this.telegramInviteHistoryService.attachInviteLinkHistories(
-      workspaceId,
-      channelId,
-      hydratedLinks,
-    );
+    // Select options intentionally stay compact. Histories are available from
+    // the dedicated history endpoints and made this request both fragile and
+    // unnecessarily expensive for channels with many invite links.
+    return hydratedLinks.map((link) => ({
+      ...link,
+      isDefaultForChannel: link.id === channel.defaultInviteLinkId,
+    }));
   }
 
   public inviteLinksWhere(

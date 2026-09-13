@@ -30,6 +30,7 @@ import { CrmContactDeals } from "./crm-contact-deals";
 import { CrmContactInfoForm } from "./crm-contact-info-form";
 import { CrmContactNotes } from "./crm-contact-notes";
 import { CrmContactTasks } from "./crm-contact-tasks";
+import { CrmContactTagsEditor } from "./crm-contact-tags-editor";
 import { crmPermissions } from "./crm-permissions";
 import {
   crmContactStages,
@@ -41,6 +42,7 @@ export type CrmContactAction =
   | "deals"
   | "tasks"
   | "notes"
+  | "tags"
   | "info";
 
 export const crmContactActionLabels: Record<CrmContactAction, string> = {
@@ -48,6 +50,7 @@ export const crmContactActionLabels: Record<CrmContactAction, string> = {
   deals: "Deals",
   tasks: "Tasks",
   notes: "Notes / Activities",
+  tags: "Tags",
   info: "Contact info",
 };
 
@@ -58,6 +61,7 @@ const crmContactActionSizes: Record<
   deals: "xl",
   tasks: "md",
   notes: "md",
+  tags: "md",
   info: "md",
 };
 
@@ -217,6 +221,8 @@ function ContactActionContent({
     return <CrmContactTasks contact={contact} canEdit={canEdit} />;
   if (action === "notes")
     return <CrmContactNotes contact={contact} canEdit={canEdit} />;
+  if (action === "tags")
+    return <CrmContactTagsEditor contact={contact} canEdit={canEdit} />;
   return (
     <div className="space-y-4">
       {canEdit ? (

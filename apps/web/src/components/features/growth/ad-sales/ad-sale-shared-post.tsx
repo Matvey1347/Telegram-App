@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  type Dispatch,
-  type SetStateAction,
-} from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import type { TelegramChannel } from "@/lib/api";
 import { Button, Tooltip } from "@/components/ui/primitives";
 import { channelLocalDateKey } from "@/lib/features/growth/telegram-ad-sales";
@@ -16,7 +10,7 @@ import {
   type PlacementManagedPostDraft,
 } from "./placement-post/placement-post-composer";
 import { hasPlacementPostContent } from "./placement-post/placement-post-content";
-import { useTransientActionStatus } from "@/hooks/use-transient-action-status";
+import { useTelegramSystemBotPostFlow } from "@/hooks/use-telegram-system-bot-post-flow";
 
 export function AdSaleSharedPost({
   placements,
@@ -45,51 +39,6 @@ export function AdSaleSharedPost({
   setPlacements: Dispatch<SetStateAction<SalePlacementDraft[]>>;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [botOpenError, setBotOpenError] = useState("");
-  const botSend = useTransientActionStatus();
-  const [previewSendStatus, setPreviewSendStatus] = useState<
-    "idle" | "sending" | "sent"
-  >("idle");
-  const waitingForBotRef = useRef(false);
-  const botWorkflowIdRef = useRef("");
-  useEffect(() => {
-    if (previewSendStatus !== "sent") return;
-    const timeout = window.setTimeout(() => setPreviewSendStatus("idle"), 1800);
-    return () => window.clearTimeout(timeout);
-  }, [previewSendStatus]);
-
-  useEffect(() => {
-    const handleFocus = () => {
-      if (!waitingForBotRef.current) return;
-      waitingForBotRef.current = false;
-      const workflowId = botWorkflowIdRef.current;
-      if (!workflowId) return;
-      void onSystemBotReturn?.(workflowId, [
-        ...new Set(placements.map((placement) => placement.channelId)),
-      ])
-        .then((importedDraft) => {
-          if (!importedDraft) {
-            waitingForBotRef.current = true;
-            return;
-          }
-          botWorkflowIdRef.current = "";
-          setExpanded(true);
-          setPlacements((current) =>
-            current.map((placement) => ({
-              ...placement,
-              managedPostDraft: importedDraft,
-              telegramPostId: null,
-            })),
-          );
-        })
-        .catch(() => {
-          waitingForBotRef.current = true;
-          setBotOpenError("Could not load the post from Telegram. Try again.");
-        });
-    };
-    window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
-  }, [onSystemBotReturn, placements, setPlacements]);
   const first = placements[0];
   const channel = channels.find((item) => item.id === first?.channelId);
   const draft = placements.find(
@@ -102,6 +51,38 @@ export function AdSaleSharedPost({
     (placement) =>
       placement.date >= channelLocalDateKey(new Date(), placement.timezone),
   );
+  const botFlow = useTelegramSystemBotPostFlow({
+    botUsername: systemBotUsername,
+    prepareImport: onPrepareSystemBot,
+    readImport: onSystemBotReturn
+      ? async (workflowId) => {
+          const importedDraft = await onSystemBotReturn(workflowId, [
+            ...new Set(placements.map((placement) => placement.channelId)),
+          ]);
+          return importedDraft
+            ? { ready: true as const, value: importedDraft }
+            : { ready: false as const };
+        }
+      : undefined,
+    onImported: (importedDraft) => {
+      setExpanded(true);
+      setPlacements((current) =>
+        current.map((placement) => ({
+          ...placement,
+          managedPostDraft: importedDraft,
+          telegramPostId: null,
+        })),
+      );
+    },
+    sendPreview:
+      draft && onSendSystemBotPost
+        ? () => onSendSystemBotPost(draft)
+        : undefined,
+    importErrorMessage: "Could not load the post from Telegram. Try again.",
+    startImportErrorMessage: "Could not prepare the bot workspace. Try again.",
+    sendErrorMessage: "Could not send the post to the bot. Try again.",
+    openBotOnStart: false,
+  });
   if (!placements.length) return null;
   const isSinglePlacement = placements.length === 1;
   const normalizedSystemBotUsername = systemBotUsername
@@ -153,30 +134,19 @@ export function AdSaleSharedPost({
                 type="button"
                 variant="secondary"
                 className="h-8 px-3 text-xs"
-                disabled={previewSendStatus !== "idle"}
+                disabled={botFlow.sendStatus === "working"}
                 aria-label={
-                  previewSendStatus === "sending"
+                  botFlow.sendStatus === "working"
                     ? "Sending post to bot"
-                    : previewSendStatus === "sent"
+                    : botFlow.sendStatus === "done"
                       ? "Current post sent to bot"
                       : "Send current post to bot"
                 }
-                onClick={() => {
-                  setBotOpenError("");
-                  setPreviewSendStatus("sending");
-                  void onSendSystemBotPost(draft)
-                    .then(() => setPreviewSendStatus("sent"))
-                    .catch(() => {
-                      setPreviewSendStatus("idle");
-                      setBotOpenError(
-                        "Could not send the post to the bot. Try again.",
-                      );
-                    });
-                }}
+                onClick={() => void botFlow.send()}
               >
-                {previewSendStatus === "sending"
+                {botFlow.sendStatus === "working"
                   ? "Sending..."
-                  : previewSendStatus === "sent"
+                  : botFlow.sendStatus === "done"
                     ? "✅ Sent to bot"
                     : "Send current post to bot"}
               </Button>
@@ -187,39 +157,27 @@ export function AdSaleSharedPost({
               type="button"
               variant="secondary"
               className="h-8 px-3 text-xs"
-              disabled={botSend.status !== "idle"}
+              disabled={
+                botFlow.importStatus === "working" ||
+                botFlow.importStatus === "waiting"
+              }
               aria-label={
-                botSend.status === "sending"
+                botFlow.importStatus === "working"
                   ? "Sending to bot"
-                  : botSend.status === "sent"
+                  : botFlow.importStatus === "waiting" ||
+                      botFlow.importStatus === "done"
                     ? "Sent to bot"
                     : "Add new post from bot"
               }
-              onClick={() => {
-                setBotOpenError("");
-                botSend.start();
-                void (onPrepareSystemBot?.() ?? Promise.resolve())
-                  .then((workflowId) => {
-                    if (!workflowId)
-                      throw new Error("Post import was not prepared");
-                    botWorkflowIdRef.current = workflowId;
-                    waitingForBotRef.current = true;
-                    botSend.sent();
-                  })
-                  .catch(() => {
-                    waitingForBotRef.current = false;
-                    botSend.reset();
-                    setBotOpenError(
-                      "Could not prepare the bot workspace. Try again.",
-                    );
-                  });
-              }}
+              onClick={() => void botFlow.startImport()}
             >
-              {botSend.status === "sending" ? (
+              {botFlow.importStatus === "working" ? (
                 <span className="inline-flex min-w-[4.5rem] items-center justify-center gap-1">
-                  Sending{".".repeat(botSend.dots)}
+                  Sending{".".repeat(botFlow.dots)}
                 </span>
-              ) : botSend.status === "sent" ? (
+              ) : botFlow.importStatus === "waiting" ? (
+                <span className="text-blue-100">Waiting for bot…</span>
+              ) : botFlow.importStatus === "done" ? (
                 <span className="inline-flex items-center gap-1 text-emerald-300">
                   ✅ Added from bot
                 </span>
@@ -251,8 +209,8 @@ export function AdSaleSharedPost({
           ) : null}
         </div>
       </div>
-      {botOpenError ? (
-        <p className="mt-2 text-xs text-rose-300">{botOpenError}</p>
+      {botFlow.error ? (
+        <p className="mt-2 text-xs text-rose-300">{botFlow.error}</p>
       ) : null}
       {mode === "shared" && expanded ? (
         <div className="mt-3">

@@ -7,6 +7,7 @@ import type {
   CrmContactMergeResult,
   CrmContactsListResult,
   CrmContactStage,
+  CrmTagSummary,
   CrmConversationListItem,
   CrmConversationReadResult,
   CrmConversationsListResult,
@@ -38,6 +39,7 @@ export type CrmContactsParams = {
   dueFrom?: string;
   dueTo?: string;
   archived?: boolean;
+  tagIds?: string[];
 };
 
 export type CrmInboxParams = {
@@ -93,6 +95,8 @@ export const telegramCrmApi = {
         signal,
       })
     ).data,
+  listTags: async (signal?: AbortSignal) =>
+    (await api.get<CrmTagSummary[]>("/telegram-crm/tags", { signal })).data,
   getContact: async (contactId: string, signal?: AbortSignal) =>
     (
       await api.get<CrmContactDetail>(`/telegram-crm/contacts/${contactId}`, {
@@ -113,6 +117,13 @@ export const telegramCrmApi = {
       await api.patch<CrmContact>(
         `/telegram-crm/contacts/${contactId}`,
         payload,
+      )
+    ).data,
+  setContactTags: async (contactId: string, tagIds: string[]) =>
+    (
+      await api.patch<CrmTagSummary[]>(
+        `/telegram-crm/contacts/${contactId}/tags`,
+        { tagIds },
       )
     ).data,
   setReplyAlertMuted: async (

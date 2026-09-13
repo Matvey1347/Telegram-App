@@ -144,6 +144,13 @@ export type CrmTagSummary = {
   id: string;
   name: string;
   color: string | null;
+  systemKey: string | null;
+  isSystem: boolean;
+  assignmentMode: "AUTOMATIC" | "MANUAL";
+};
+
+export type CrmTagOption = CrmTagSummary & {
+  contactCount: number;
 };
 
 export type CrmContactPaymentSummary = {
@@ -178,6 +185,7 @@ export type CrmContact = {
 };
 
 export type CrmContactListItem = CrmContact & {
+  tags: CrmTagSummary[];
   isUnassignedClient: boolean;
   replySummary: CrmReplySummary;
   ownerMember: CrmMemberSummary | null;
@@ -218,7 +226,9 @@ export type CrmChatContactContext = Pick<
   conversationAccounts: CrmAccountSummary[];
 };
 
-export type CrmContactsListResult = PaginatedResponse<CrmContactListItem>;
+export type CrmContactsListResult = PaginatedResponse<CrmContactListItem> & {
+  availableTags: CrmTagOption[];
+};
 
 export type CrmPeer = {
   id: string;

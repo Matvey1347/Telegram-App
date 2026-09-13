@@ -60,7 +60,11 @@ describe("telegramChannelsApi.syncWorkspaceChannels", () => {
     const client = createTelegramChannelsApi({
       api: {} as AxiosInstance,
       crud: vi.fn(() => ({
-        list: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(),
+        list: vi.fn(),
+        get: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        remove: vi.fn(),
       })),
       getPaginated: vi.fn(),
       getAllPaginatedItems: vi.fn(),
@@ -91,6 +95,43 @@ describe("telegramChannelsApi.syncWorkspaceChannels", () => {
   });
 });
 
+describe("telegramChannelsApi.importBatchWithProgress", () => {
+  it("uses one stream request for every pasted channel reference", async () => {
+    const result = { channels: [{ id: "channel-1" }], failures: [] };
+    const streamProgressAction = vi.fn().mockResolvedValue(result);
+    const client = createTelegramChannelsApi({
+      api: {} as AxiosInstance,
+      crud: vi.fn(() => ({
+        list: vi.fn(),
+        get: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        remove: vi.fn(),
+      })),
+      getPaginated: vi.fn(),
+      getAllPaginatedItems: vi.fn(),
+      streamBulkAction: vi.fn(),
+      streamProgressAction,
+      silentFeedbackConfig: {},
+      quietMutationConfig: {},
+    });
+    const onProgress = vi.fn();
+
+    await expect(
+      client.importBatchWithProgress(
+        ["https://t.me/one", "https://t.me/+two"],
+        onProgress,
+      ),
+    ).resolves.toBe(result);
+    expect(streamProgressAction).toHaveBeenCalledOnce();
+    expect(streamProgressAction).toHaveBeenCalledWith(
+      "/telegram-channels/import-batch-stream",
+      { inputs: ["https://t.me/one", "https://t.me/+two"] },
+      onProgress,
+    );
+  });
+});
+
 describe("telegramChannelsApi workspace custom emoji packs", () => {
   it("uses workspace endpoints without channel targeting", async () => {
     const get = vi.fn().mockResolvedValue({ data: { packs: [] } });
@@ -99,7 +140,11 @@ describe("telegramChannelsApi workspace custom emoji packs", () => {
     const client = createTelegramChannelsApi({
       api: { get, post, delete: remove } as unknown as AxiosInstance,
       crud: vi.fn(() => ({
-        list: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(),
+        list: vi.fn(),
+        get: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        remove: vi.fn(),
       })),
       getPaginated: vi.fn(),
       getAllPaginatedItems: vi.fn(),
@@ -110,7 +155,9 @@ describe("telegramChannelsApi workspace custom emoji packs", () => {
     });
 
     await client.customEmojiPacks();
-    await client.importCustomEmojiPack({ source: "https://t.me/addemoji/team" });
+    await client.importCustomEmojiPack({
+      source: "https://t.me/addemoji/team",
+    });
     await client.detachCustomEmojiPack("pack_1");
 
     expect(get).toHaveBeenCalledWith("/telegram-custom-emoji-packs");

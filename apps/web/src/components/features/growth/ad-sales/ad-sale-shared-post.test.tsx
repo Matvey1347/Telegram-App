@@ -95,7 +95,7 @@ describe("AdSaleSharedPost", () => {
     expect(open).not.toHaveBeenCalled();
     expect(
       await screen.findByRole("button", { name: "Sent to bot" }),
-    ).toHaveTextContent("✅ Added from bot");
+    ).toHaveTextContent("Waiting for bot");
   });
 
   it("keeps bot import and the editor available for one placement without the shared toggle", () => {
@@ -179,6 +179,9 @@ describe("AdSaleSharedPost", () => {
     window.dispatchEvent(new Event("focus"));
 
     await waitFor(() => expect(setPlacements).toHaveBeenCalled());
+    expect(
+      screen.getByRole("button", { name: "Sent to bot" }),
+    ).toHaveTextContent("✅ Added from bot");
     const importedDraftWasStored = setPlacements.mock.calls.some(([update]) =>
       update(placements).every(
         (placement: { managedPostDraft?: { text?: string } }) =>

@@ -191,6 +191,7 @@ export class TelegramChannelAdPricingReadService {
             : 'permanentViews';
     const result = calculateExpectedViews({
       now,
+      minPostsForPrimary: 1,
       maxPostsForPrimary: 3,
       posts: posts.map((post) => ({
         id: post.id,

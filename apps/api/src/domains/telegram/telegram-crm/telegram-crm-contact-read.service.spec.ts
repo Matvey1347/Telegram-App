@@ -37,6 +37,7 @@ const contactRow = () => ({
     },
     user: { name: 'Owner', email: 'owner@example.com' },
   },
+  tags: [],
   crmPeers: [
     {
       id: 'peer-1',
@@ -183,6 +184,51 @@ describe('TelegramCrmContactReadService', () => {
     expect(prisma.telegramAdvertiser.findMany.mock.calls[0][0].where).toEqual({
       workspaceId: 'workspace-1',
     });
+  });
+
+  it('filters contacts by selected tags but builds tag facets from the whole stage', async () => {
+    const tagFindMany = jest.fn().mockResolvedValue([]);
+    const prisma = {
+      $transaction: jest.fn().mockResolvedValue([[], 0]),
+      telegramAdvertiser: {
+        findMany: jest.fn().mockReturnValue('rows'),
+        count: jest.fn().mockReturnValue('count'),
+      },
+      telegramAdvertiserTag: { findMany: tagFindMany },
+    };
+    const service = new TelegramCrmContactReadService(
+      prisma as never,
+      {
+        require: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
+        scope: jest.fn().mockResolvedValue({}),
+      } as never,
+    );
+
+    await service.list('user-1', {
+      page: 1,
+      pageSize: 25,
+      stage: 'NEW',
+      tagIds: ['tag-network'],
+    });
+
+    expect(prisma.telegramAdvertiser.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          stage: 'NEW',
+          tags: { some: { tagId: { in: ['tag-network'] } } },
+        }),
+      }),
+    );
+    expect(tagFindMany.mock.calls[0][0].where).toMatchObject({
+      advertisers: {
+        some: {
+          advertiser: { workspaceId: 'workspace-1', stage: 'NEW' },
+        },
+      },
+    });
+    expect(
+      tagFindMany.mock.calls[0][0].where.advertisers.some.advertiser.tags,
+    ).toBeUndefined();
   });
 
   it('uses the newest unanswered outbound across all account Conversations for READ_NO_REPLY', async () => {

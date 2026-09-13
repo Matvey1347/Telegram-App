@@ -16,9 +16,7 @@ export function transactionAvatar(
     };
   }
 
-  const memberAvatar =
-    transaction.assignedMember?.avatarPresentation ??
-    transaction.member?.avatarPresentation;
+  const investorAvatar = transaction.member?.avatarPresentation;
   const categoryKey = transaction.categoryRef?.key?.trim().toLowerCase();
   const categoryName = (transaction.categoryRef?.name ?? transaction.category)
     ?.trim()
@@ -27,8 +25,8 @@ export function transactionAvatar(
     Boolean(transaction.investment) ||
     categoryKey === "investment" ||
     categoryName === "investment";
-  if (isInvestment && memberAvatar) {
-    return memberAvatar;
+  if (isInvestment && investorAvatar) {
+    return investorAvatar;
   }
 
   return (

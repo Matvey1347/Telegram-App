@@ -110,7 +110,7 @@ const pageHookAllowances = [
   ["(growth)/ad-campaigns/page.tsx", 27],
   ["(telegram)/system-bot/connect/page.tsx", 3],
   ["(telegram)/telegram-channel-networks/[id]/page.tsx", 5],
-  ["(telegram)/telegram-channels/page.tsx", 18],
+  ["(telegram)/telegram-channels/page.tsx", 17],
   ["(telegram)/telegram-posts/page.tsx", 17],
   ["(telegram)/telegram/channels/[id]/page.tsx", 14],
   ["(workspace)/settings/page.tsx", 5],
@@ -128,7 +128,7 @@ for (const [suffix, count] of pageHookAllowances) {
 const pageApiAllowances = [
   ["(finance)/currencies/page.tsx", 2],
   ["(growth)/ad-campaigns/[id]/page.tsx", 1],
-  ["(growth)/ad-campaigns/page.tsx", 3],
+  ["(growth)/ad-campaigns/page.tsx", 2],
   ["(telegram)/system-bot/connect/page.tsx", 1],
   ["(telegram)/telegram-channel-networks/[id]/page.tsx", 1],
   ["(telegram)/telegram-channels/page.tsx", 4],

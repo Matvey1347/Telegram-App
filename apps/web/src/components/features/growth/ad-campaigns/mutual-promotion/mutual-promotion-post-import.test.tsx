@@ -79,6 +79,9 @@ describe("MutualPromotionPostImport", () => {
     vi.mocked(
       telegramSystemBotApi.prepareMutualPromotionPostImport,
     ).mockResolvedValue({ workflowId: "workflow-1" });
+    vi.mocked(
+      telegramSystemBotApi.mutualPromotionPostImportResult,
+    ).mockResolvedValue({ ready: false });
     vi.spyOn(window, "open").mockImplementation(() => null);
     render(
       <MutualPromotionPostImport
@@ -108,13 +111,17 @@ describe("MutualPromotionPostImport", () => {
     await act(async () => Promise.resolve());
     expect(
       screen.getByRole("button", { name: "Sent to bot" }),
-    ).toHaveTextContent("Sent to bot");
+    ).toHaveTextContent("Waiting for bot");
     expect(screen.getByText(/Forward several posts in Telegram/)).toBeVisible();
 
-    act(() => vi.advanceTimersByTime(1800));
+    vi.mocked(
+      telegramSystemBotApi.mutualPromotionPostImportResult,
+    ).mockResolvedValue({ ready: true, drafts: [] });
+    fireEvent.focus(window);
+    await act(async () => Promise.resolve());
     expect(
-      screen.getByRole("button", { name: "Forward posts via bot" }),
-    ).toBeDisabled();
+      screen.getByRole("button", { name: "Sent to bot" }),
+    ).toHaveTextContent("✅ Sent to bot");
   });
 
   it("asks the user to finish an active bot import instead of showing a generic server error", async () => {

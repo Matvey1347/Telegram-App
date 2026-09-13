@@ -64,7 +64,7 @@ export class TelegramChannelSyncOrchestrator {
     if (dto.saveSelection) {
       await this.prisma.telegramChannel.update({
         where: { id: channelId },
-        data: selection,
+        data: { ...selection, postSyncLimit: dto.postLimit },
       });
     }
     const totalSteps =

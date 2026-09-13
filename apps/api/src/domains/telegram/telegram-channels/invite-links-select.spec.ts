@@ -5,6 +5,45 @@ import {
 } from './__fixtures__/telegram-channels.test-harness';
 
 describe('TelegramChannelsService inviteLinksForSelect', () => {
+  it('returns every channel invite link in one unpaginated options request', async () => {
+    const findMany = jest.fn().mockResolvedValue([
+      {
+        id: 'assigned-link',
+        adCampaignId: 'campaign-1',
+        requestedCount: 0,
+      },
+    ]);
+    const service = createTelegramChannelsTestHarness(
+      { telegramInviteLink: { findMany } } as never,
+      {} as never,
+      { clearByPrefix: jest.fn() } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    service['workspace'] = jest.fn().mockResolvedValue('ws-1');
+    service['findOne'] = jest.fn().mockResolvedValue({
+      id: 'channel-1',
+      workspaceId: 'ws-1',
+    });
+    service['attachInviteLinkHistories'] = jest
+      .fn()
+      .mockImplementation(async (_workspaceId, _channelId, links) => links);
+
+    const result = await service.inviteLinksForSelect('user-1', 'channel-1', {
+      all: true,
+    });
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { workspaceId: 'ws-1', telegramChannelId: 'channel-1' },
+      }),
+    );
+    expect(result[0].id).toBe('assigned-link');
+  });
+
   it('returns only unused invite links for campaign creation', async () => {
     const prisma = {
       telegramInviteLink: {

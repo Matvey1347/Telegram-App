@@ -98,6 +98,16 @@ test("local bot development survives Prisma schema and tunnel transport changes"
   assert.match(runner, /localBotActivationTimeoutMs = 5 \* 60_000/u);
   assert.match(runner, /waitForHttpReady/u);
   assert.match(runner, /\["SIGHUP"\]/u);
-  assert.match(apiPackage.scripts.dev, /--config nest-cli\.dev\.json/u);
+  assert.equal(apiPackage.scripts.dev, "node ../../scripts/dev-api-supervisor.mjs");
+  assert.equal(
+    apiPackage.scripts["start:dev"],
+    "node ../../scripts/dev-api-supervisor.mjs",
+  );
+  const apiSupervisor = readFileSync(
+    "scripts/dev-api-supervisor.mjs",
+    "utf8",
+  );
+  assert.match(apiSupervisor, /--config", "nest-cli\.dev\.json/u);
+  assert.match(apiSupervisor, /waitForHealthyBackend/u);
   assert.equal(developmentNestConfig.compilerOptions.deleteOutDir, false);
 });

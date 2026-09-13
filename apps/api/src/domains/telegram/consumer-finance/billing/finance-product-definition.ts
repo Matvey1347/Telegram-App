@@ -52,6 +52,10 @@ type FinanceProductDefinition = {
     RECEIPT_SCAN: number | null;
     AI_INSIGHTS: number | null;
   };
+  usagePeriods: Record<
+    'AI_INPUT' | 'RECEIPT_SCAN' | 'AI_INSIGHTS',
+    'LIFETIME' | 'MONTH' | 'UNLIMITED'
+  >;
 };
 
 export const FINANCE_PRODUCT_DEFINITIONS: Record<
@@ -63,8 +67,13 @@ export const FINANCE_PRODUCT_DEFINITIONS: Record<
     name: 'Free',
     price: null,
     capabilities: [],
-    features: BASE_FEATURES,
+    features: [...BASE_FEATURES, 'AI_INPUT', 'RECEIPT_SCAN'],
     usageLimits: { AI_INPUT: 10, RECEIPT_SCAN: 3, AI_INSIGHTS: 0 },
+    usagePeriods: {
+      AI_INPUT: 'LIFETIME',
+      RECEIPT_SCAN: 'LIFETIME',
+      AI_INSIGHTS: 'LIFETIME',
+    },
   },
   PRO: {
     tier: 'PRO',
@@ -73,6 +82,11 @@ export const FINANCE_PRODUCT_DEFINITIONS: Record<
     capabilities: PRO_CAPABILITIES,
     features: [...BASE_FEATURES, ...PRO_CAPABILITIES],
     usageLimits: { AI_INPUT: null, RECEIPT_SCAN: 30, AI_INSIGHTS: 0 },
+    usagePeriods: {
+      AI_INPUT: 'UNLIMITED',
+      RECEIPT_SCAN: 'MONTH',
+      AI_INSIGHTS: 'MONTH',
+    },
   },
   ULTIMATE: {
     tier: 'ULTIMATE',
@@ -81,5 +95,10 @@ export const FINANCE_PRODUCT_DEFINITIONS: Record<
     capabilities: ULTIMATE_CAPABILITIES,
     features: [...BASE_FEATURES, ...ULTIMATE_CAPABILITIES],
     usageLimits: { AI_INPUT: null, RECEIPT_SCAN: 200, AI_INSIGHTS: 100 },
+    usagePeriods: {
+      AI_INPUT: 'UNLIMITED',
+      RECEIPT_SCAN: 'MONTH',
+      AI_INSIGHTS: 'MONTH',
+    },
   },
 };

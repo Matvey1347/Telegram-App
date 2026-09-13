@@ -17,8 +17,10 @@ type PwaNavigationItem = {
   active: (pathname: string) => boolean;
 };
 
-const hasAny = (enabled: readonly string[] | undefined, ids: readonly string[]) =>
-  !enabled || ids.some((id) => enabled.includes(id));
+const hasAny = (
+  enabled: readonly string[] | undefined,
+  ids: readonly string[],
+) => !enabled || ids.some((id) => enabled.includes(id));
 
 export function buildPwaNavigation(
   featureIds: readonly string[] | undefined,
@@ -67,12 +69,13 @@ export function buildPwaNavigation(
   if (canUseCrm || canUseAds) {
     items.push({
       key: "growth",
-      label: "navigation.growth",
+      label: canUseCrm ? "navigation.crm" : "navigation.ads",
       href: canUseCrm ? "/ad-sales" : "/ad-campaigns",
       Icon: Megaphone,
       active: (pathname) =>
-        pathname.startsWith("/ad-sales") ||
-        pathname.startsWith("/ad-campaigns"),
+        canUseCrm
+          ? pathname.startsWith("/ad-sales")
+          : pathname.startsWith("/ad-campaigns"),
     });
   }
 

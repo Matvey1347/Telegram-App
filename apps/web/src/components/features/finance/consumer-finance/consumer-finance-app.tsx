@@ -87,6 +87,7 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
     "EXPENSE" | "INCOME" | null
   >(null);
   const [actionRequestId, setActionRequestId] = useState(0);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [regularPaymentTarget, setRegularPaymentTarget] =
     useState<ReturnType<typeof readConsumerFinanceRegularPaymentTarget>>(null);
   const [regularPaymentTargetMalformed, setRegularPaymentTargetMalformed] =
@@ -273,6 +274,8 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
           <FinanceAssistantDrawer
             botId={botId}
             locale={locale}
+            open={assistantOpen}
+            onOpenChange={setAssistantOpen}
             onNavigate={navigate}
           />
         ) : null}
@@ -289,6 +292,11 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
         localeChanging={changeLocale.isPending}
         localeDisabled={!profile}
         onNavigate={navigate}
+        onOpenAssistant={
+          profile?.onboardingCompletedAt
+            ? () => setAssistantOpen(true)
+            : undefined
+        }
         onAction={launchAction}
         onSignOut={() => logout.mutate()}
         signingOut={logout.isPending}
@@ -306,6 +314,11 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
         localeChanging={changeLocale.isPending}
         localeDisabled={!profile}
         onNavigate={navigate}
+        onOpenAssistant={
+          profile?.onboardingCompletedAt
+            ? () => setAssistantOpen(true)
+            : undefined
+        }
         onAction={launchAction}
         onSignOut={() => logout.mutate()}
         signingOut={logout.isPending}

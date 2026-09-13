@@ -32,6 +32,22 @@ vi.mock(
   }),
 );
 
+vi.mock("@/components/features/telegram/telegram/telegram-text-editor", () => ({
+  TelegramTextEditor: ({
+    value,
+    onChange,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+  }) => (
+    <textarea
+      aria-label="Post text"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  ),
+}));
+
 vi.mock(
   "@/components/features/telegram/telegram/telegram-inline-keyboard-editor",
   () => ({
@@ -48,7 +64,7 @@ vi.mock(
 );
 
 describe("MutualPromotionPostComposer", () => {
-  it("edits imported text visually and uses Premium Telegram limits", () => {
+  it("shows the standard editor for imported text and keeps the preview compact", () => {
     const onChange = vi.fn();
     render(
       <MutualPromotionPostComposer
@@ -76,8 +92,12 @@ describe("MutualPromotionPostComposer", () => {
       "data-formatted-html",
       '<b>Bold</b> <a href="https://example.test">link</a>',
     );
-    expect(screen.queryByLabelText("Post text")).toBeNull();
-    fireEvent.click(screen.getByTestId("telegram-preview"));
+    const editor = screen.getByLabelText("Post text");
+    expect(editor).toHaveValue("**Bold** [link](https://example.test)");
+    expect(screen.getByTestId("telegram-preview").parentElement).toHaveClass(
+      "max-w-[340px]",
+    );
+    fireEvent.change(editor, { target: { value: "__Edited__" } });
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({
         text: "__Edited__",

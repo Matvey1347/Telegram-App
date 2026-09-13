@@ -590,6 +590,24 @@ enum MutualPromotionFolderStatus {
   CANCELLED
 }
 
+enum CrossPromotionPlanKind {
+  DIRECT_MUTUAL
+  OWN_CHANNELS
+}
+
+enum TelegramMessageTemplateScopeMode {
+  CHANNELS
+  NETWORK
+}
+
+enum CrossPromotionPlanStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
 enum MutualPromotionParticipantRole {
   PUBLISHER
   PAID
@@ -960,6 +978,7 @@ model Workspace {
   adCampaignAdmissionBatches             AdCampaignAdmissionBatch[]
   adCampaignAdmissionBackfillStates      AdCampaignAdmissionBackfillState[]
   telegramChannelNetworks                TelegramChannelNetwork[]
+  telegramChannelMessageTemplates        TelegramChannelMessageTemplate[]
   telegramChannelNetworkMembers          TelegramChannelNetworkMember[]
   telegramChannelStatsPoints             TelegramChannelStatsPoint[]
   telegramChannelAdAnalyses              TelegramChannelAdAnalysis[]
@@ -999,6 +1018,7 @@ model Workspace {
   advertisingSources                     AdvertisingSource[]
   adCampaigns                            AdCampaign[]
   mutualPromotionFolders                 MutualPromotionFolder[]
+  crossPromotionPlans                    CrossPromotionPlan[]
   mutualPromotionParticipants            MutualPromotionFolderParticipant[]
   mutualPromotionPosts                   MutualPromotionFolderPost[]
   mutualPromotionDeliveries              MutualPromotionPostDelivery[]
@@ -1527,12 +1547,16 @@ model TelegramChannel {
   requiresJoinRequest       Boolean                        @default(false)
   lastEntityResolvedAt      DateTime?
   inviteLink                String?
+  tgStatUrl                 String?
+  presentationIconId        String?
+  defaultInviteLinkId       String?
   description               String?
   language                  String?
   niche                     String?
   currentSubscribersCount   Int?
   pendingJoinRequestsCount  Int                            @default(0)
   seedSubscribersCount      Int                            @default(0)
+  seedDisabled              Boolean                        @default(false)
   activeSubscribersWindow   Int                            @default(5)
   knownFakeSubscribersCount Int                            @default(0)
   ownViewsPerPost           Int                            @default(0)
@@ -1574,12 +1598,15 @@ model TelegramChannel {
   syncIncludeChannelStats     Boolean   @default(true)
   syncIncludeManagedPosts     Boolean   @default(true)
   syncIncludeAudienceSnapshot Boolean   @default(true)
+  postSyncLimit               Int       @default(50)
 
-  workspace           Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  assignedMember      WorkspaceMember? @relation("TelegramChannelAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
-  createdByUser       User?            @relation("TelegramChannelCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  purchaseTransaction Transaction?     @relation("TelegramChannelPurchaseTransaction", fields: [purchaseTransactionId], references: [id], onDelete: SetNull)
-  revenueTransactions Transaction[]    @relation("TelegramChannelRevenueTransactions")
+  workspace           Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignedMember      WorkspaceMember?    @relation("TelegramChannelAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdByUser       User?               @relation("TelegramChannelCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  purchaseTransaction Transaction?        @relation("TelegramChannelPurchaseTransaction", fields: [purchaseTransactionId], references: [id], onDelete: SetNull)
+  presentationIcon    Icon?               @relation("TelegramChannelPresentationIcon", fields: [presentationIconId], references: [id], onDelete: SetNull)
+  defaultInviteLink   TelegramInviteLink? @relation("TelegramChannelDefaultInviteLink", fields: [defaultInviteLinkId], references: [id], onDelete: SetNull)
+  revenueTransactions Transaction[]       @relation("TelegramChannelRevenueTransactions")
 
   promos                      Promo[]
   adCampaigns                 AdCampaign[]
@@ -1625,6 +1652,8 @@ model TelegramChannel {
   @@index([workspaceId, username])
   @@index([workspaceId, telegramChatId])
   @@index([workspaceId, assignedMemberId])
+  @@index([presentationIconId])
+  @@index([defaultInviteLinkId])
   @@index([workspaceId, isActive, autoSyncEnabled])
   @@index([workspaceId, archivedAt, createdAt, id])
 }
@@ -1827,12 +1856,13 @@ model TelegramChannelNetwork {
   assignedMemberId String?
   createdByUserId  String?
 
-  workspace        Workspace                      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  icon             Icon?                          @relation(fields: [iconId], references: [id], onDelete: SetNull)
+  workspace        Workspace                        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  icon             Icon?                            @relation(fields: [iconId], references: [id], onDelete: SetNull)
   channels         TelegramChannelNetworkMember[]
-  assignedMember   WorkspaceMember?               @relation("TelegramChannelNetworkAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
-  createdByUser    User?                          @relation("TelegramChannelNetworkCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  assignedMember   WorkspaceMember?                 @relation("TelegramChannelNetworkAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdByUser    User?                            @relation("TelegramChannelNetworkCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   adSalePlacements TelegramAdSalePlacement[]
+  messageTemplates TelegramChannelMessageTemplate[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2190,6 +2220,7 @@ model TelegramAdvertiser {
   automationExecutions TelegramAdvertiserAutomationExecution[]
   crmPeers             TelegramCrmPeer[]
   crmConversations     TelegramCrmConversation[]
+  crossPromotionPlans  CrossPromotionPlan[]
 
   @@unique([id, workspaceId])
   @@index([workspaceId, stage, updatedAt, id])
@@ -2223,6 +2254,7 @@ model TelegramAdvertiserTag {
   workspaceId String
   name        String
   color       String?
+  systemKey   String?
   position    Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -2231,6 +2263,7 @@ model TelegramAdvertiserTag {
   advertisers TelegramAdvertiserTagAssignment[]
 
   @@unique([workspaceId, name])
+  @@unique([workspaceId, systemKey])
   @@index([workspaceId, position])
 }
 
@@ -2606,24 +2639,57 @@ model TelegramAdSalePaymentAllocation {
   @@index([telegramAdSalePlacementId])
 }
 
-model Promo {
-  id                String      @id @default(cuid())
-  workspaceId       String
-  telegramChannelId String
-  iconId            String?
-  title             String
-  text              String
-  angle             String?
-  imageData         String?
-  status            PromoStatus @default(draft)
-  assignedMemberId  String?
-  createdByUserId   String?
+model TelegramChannelMessageTemplate {
+  id                  String                           @id @default(cuid())
+  workspaceId         String
+  title               String?
+  iconId              String?
+  scopeMode           TelegramMessageTemplateScopeMode @default(CHANNELS)
+  networkId           String?
+  channelIds          String[]                         @default([])
+  bodyTemplate        String
+  overrideInviteLinks Boolean                          @default(false)
+  inviteLinkOverrides Json                             @default("{}")
+  createdByUserId     String?
+  createdAt           DateTime                         @default(now())
+  updatedAt           DateTime                         @updatedAt
 
-  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  telegramChannel TelegramChannel  @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
-  icon            Icon?            @relation(fields: [iconId], references: [id], onDelete: SetNull)
-  assignedMember  WorkspaceMember? @relation("PromoAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
-  createdByUser   User?            @relation("PromoCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  workspace Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  icon      Icon?                   @relation(fields: [iconId], references: [id], onDelete: SetNull)
+  network   TelegramChannelNetwork? @relation(fields: [networkId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, updatedAt])
+  @@index([iconId])
+  @@index([networkId])
+}
+
+model Promo {
+  id                  String      @id @default(cuid())
+  workspaceId         String
+  telegramChannelId   String
+  iconId              String?
+  title               String
+  text                String
+  previewText         String?
+  previewImageUrl     String?
+  plainText           String?
+  formattedHtml       String?
+  angle               String?
+  imageData           String?
+  imageUrls           String[]    @default([])
+  mediaItems          Json        @default("[]")
+  buttonRows          Json        @default("[]")
+  defaultInviteLinkId String?
+  status              PromoStatus @default(draft)
+  assignedMemberId    String?
+  createdByUserId     String?
+
+  workspace         Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel   TelegramChannel     @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  defaultInviteLink TelegramInviteLink? @relation("PromoDefaultInviteLink", fields: [defaultInviteLinkId], references: [id], onDelete: SetNull)
+  icon              Icon?               @relation(fields: [iconId], references: [id], onDelete: SetNull)
+  assignedMember    WorkspaceMember?    @relation("PromoAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdByUser     User?               @relation("PromoCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   primaryAdCampaigns AdCampaign[]      @relation("AdCampaignPrimaryPromo")
   campaignLinks      AdCampaignPromo[]
@@ -2632,6 +2698,7 @@ model Promo {
   updatedAt DateTime @updatedAt
 
   @@index([workspaceId, assignedMemberId])
+  @@index([defaultInviteLinkId])
   @@index([iconId])
 }
 
@@ -3096,6 +3163,8 @@ model TelegramInviteLink {
   creatorMember               WorkspaceMember?                   @relation("TelegramInviteLinkCreatorMember", fields: [creatorMemberId, workspaceId], references: [id, workspaceId], onDelete: SetNull)
   snapshots                   TelegramInviteLinkSnapshot[]
   mutualPromotionParticipants MutualPromotionFolderParticipant[]
+  defaultForPromos            Promo[]                            @relation("PromoDefaultInviteLink")
+  defaultForChannels          TelegramChannel[]                  @relation("TelegramChannelDefaultInviteLink")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3160,6 +3229,35 @@ model MutualPromotionFolder {
   @@index([workspaceId, status, startsAt, id], map: "MutualPromotionFolder_workspace_status_idx")
   @@index([status, nextDueAt, id], map: "MutualPromotionFolder_due_idx")
   @@index([workspaceId, assignedMemberId], map: "MutualPromotionFolder_workspace_assignee_idx")
+}
+
+model CrossPromotionPlan {
+  id                           String                   @id @default(cuid())
+  workspaceId                  String
+  advertiserId                 String?
+  kind                         CrossPromotionPlanKind
+  status                       CrossPromotionPlanStatus @default(DRAFT)
+  title                        String
+  publisherChannelIds          String[]                 @default([])
+  partnerChannelIds            String[]                 @default([])
+  targets                      Json
+  publicationPost              Json
+  scheduledAt                  DateTime
+  trackingEndsAt               DateTime?
+  baselineTargetCounters       Json                     @default("[]")
+  baselinePublisherSubscribers Json                     @default("[]")
+  placementPostIds             Json                     @default("[]")
+  lastError                    String?
+  createdByUserId              String
+  createdAt                    DateTime                 @default(now())
+  updatedAt                    DateTime                 @updatedAt
+
+  workspace  Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  advertiser TelegramAdvertiser? @relation(fields: [advertiserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, kind, scheduledAt], map: "CrossPromotionPlan_workspace_kind_date_idx")
+  @@index([workspaceId, status, scheduledAt], map: "CrossPromotionPlan_workspace_status_date_idx")
+  @@index([workspaceId, advertiserId, scheduledAt], map: "CrossPromotionPlan_workspace_advertiser_date_idx")
 }
 
 model MutualPromotionFolderParticipant {
@@ -5151,18 +5249,20 @@ model Icon {
   imageUrl        String?
   createdByUserId String?
 
-  workspace                Workspace?                @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
-  createdByUser            User?                     @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
-  workspaceAvatars         Workspace[]               @relation("WorkspaceAvatarIcon")
-  workspaceMembers         WorkspaceMember[]
-  workspaceRoles           WorkspaceRoleDefinition[] @relation("WorkspaceRoleIcon")
-  accounts                 Account[]
-  transactions             Transaction[]
-  transactionCategories    TransactionCategory[]
-  promos                   Promo[]
-  adHypotheses             AdHypothesis[]
-  telegramChannelTimePosts TelegramChannelTimePost[]
-  telegramChannelNetworks  TelegramChannelNetwork[]
+  workspace                        Workspace?                       @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  createdByUser                    User?                            @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  workspaceAvatars                 Workspace[]                      @relation("WorkspaceAvatarIcon")
+  workspaceMembers                 WorkspaceMember[]
+  workspaceRoles                   WorkspaceRoleDefinition[]        @relation("WorkspaceRoleIcon")
+  accounts                         Account[]
+  transactions                     Transaction[]
+  transactionCategories            TransactionCategory[]
+  promos                           Promo[]
+  adHypotheses                     AdHypothesis[]
+  telegramChannelTimePosts         TelegramChannelTimePost[]
+  telegramChannelNetworks          TelegramChannelNetwork[]
+  telegramChannelPresentationIcons TelegramChannel[]                @relation("TelegramChannelPresentationIcon")
+  telegramChannelMessageTemplates  TelegramChannelMessageTemplate[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

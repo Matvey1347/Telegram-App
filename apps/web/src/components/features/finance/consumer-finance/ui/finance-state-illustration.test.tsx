@@ -64,7 +64,7 @@ describe("Finance state illustration system", () => {
     ).toBeInTheDocument();
   });
 
-  it("keeps the visual context while using the shared branded wallet", () => {
+  it("keeps the visual context while using focused SVG scenes", () => {
     const { rerender } = render(
       <EmptyState text="No transfers" context="transfers" />,
     );
@@ -126,8 +126,8 @@ describe("Finance state illustration system", () => {
       document.querySelector("[data-finance-scene='reminders']"),
     ).toBeInTheDocument();
     expect(
-      document.querySelector("[data-finance-context='reminders'] img"),
-    ).toHaveAttribute("src", expect.stringContaining("wallet-empty"));
+      document.querySelector("[data-finance-state-mark='empty']"),
+    ).toBeInTheDocument();
   });
 
   it.each(contexts)("renders a dedicated %s scene", (context) => {
@@ -138,25 +138,23 @@ describe("Finance state illustration system", () => {
     ).toBeInTheDocument();
   });
 
-  it("uses distinct assets for loading, empty and error states", () => {
+  it("uses distinct lightweight SVG marks for loading, empty and error states", () => {
     const { rerender } = render(
       <LoadingState text="Loading" context="analytics" />,
     );
-    expect(document.querySelector("img")).toHaveAttribute(
-      "src",
-      expect.stringContaining("wallet-loading"),
-    );
+    expect(
+      document.querySelector("[data-finance-state-mark='loading']"),
+    ).toBeInTheDocument();
+    expect(document.querySelector("img")).toBeNull();
 
     rerender(<EmptyState text="Empty" context="analytics" />);
-    expect(document.querySelector("img")).toHaveAttribute(
-      "src",
-      expect.stringContaining("wallet-empty"),
-    );
+    expect(
+      document.querySelector("[data-finance-state-mark='empty']"),
+    ).toBeInTheDocument();
 
     rerender(<ErrorState text="Error" context="analytics" />);
-    expect(document.querySelector("img")).toHaveAttribute(
-      "src",
-      expect.stringContaining("wallet-error"),
-    );
+    expect(
+      document.querySelector("[data-finance-state-mark='error']"),
+    ).toBeInTheDocument();
   });
 });

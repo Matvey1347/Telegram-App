@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CalendarClock, ChevronDown, Trash2 } from "lucide-react";
 import type { TelegramSystemBotMutualPromotionPostDraft } from "@/lib/features/telegram/telegram-system-bot-api";
 import { telegramSystemBotApi } from "@/lib/api";
@@ -10,7 +10,7 @@ import {
   FormField,
   TimeInput,
 } from "@/components/ui/primitives";
-import { useTransientActionStatus } from "@/hooks/use-transient-action-status";
+import { useTelegramSystemBotPostFlow } from "@/hooks/use-telegram-system-bot-post-flow";
 import { MutualPromotionPostComposer } from "./mutual-promotion-post-composer";
 
 export type MutualPromotionImportedPostItem = {
@@ -38,19 +38,15 @@ export function MutualPromotionImportedPostCard({
   onError: (message: string | null) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
-  const previewSend = useTransientActionStatus();
-
-  const sendPreview = async () => {
-    onError(null);
-    previewSend.start();
-    try {
-      await telegramSystemBotApi.sendMutualPromotionPostPreview(item.draft);
-      previewSend.sent();
-    } catch {
-      previewSend.reset();
-      onError("Could not send the current post preview to the system bot.");
-    }
-  };
+  const previewFlow = useTelegramSystemBotPostFlow({
+    sendPreview: () =>
+      telegramSystemBotApi.sendMutualPromotionPostPreview(item.draft),
+    sendErrorMessage:
+      "Could not send the current post preview to the system bot.",
+  });
+  useEffect(() => {
+    onError(previewFlow.error || null);
+  }, [onError, previewFlow.error]);
 
   return (
     <article className="overflow-hidden rounded-xl border border-emerald-900/70 bg-emerald-950/20">
@@ -115,19 +111,19 @@ export function MutualPromotionImportedPostCard({
             <Button
               type="button"
               variant="secondary"
-              disabled={previewSend.status !== "idle"}
+              disabled={previewFlow.sendStatus === "working"}
               aria-label={
-                previewSend.status === "sending"
+                previewFlow.sendStatus === "working"
                   ? `Sending post ${index + 1} to bot`
-                  : previewSend.status === "sent"
+                  : previewFlow.sendStatus === "done"
                     ? `Post ${index + 1} sent to bot`
                     : `Send post ${index + 1} to bot`
               }
-              onClick={() => void sendPreview()}
+              onClick={() => void previewFlow.send()}
             >
-              {previewSend.status === "sending"
-                ? `Sending${".".repeat(previewSend.dots)}`
-                : previewSend.status === "sent"
+              {previewFlow.sendStatus === "working"
+                ? "Sending…"
+                : previewFlow.sendStatus === "done"
                   ? "✅ Sent to bot"
                   : "Send current post to bot"}
             </Button>

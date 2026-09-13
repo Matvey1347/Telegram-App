@@ -1,6 +1,8 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsBoolean,
+  IsArray,
   IsDateString,
   IsIn,
   IsInt,
@@ -35,7 +37,7 @@ export class CrmContactsQueryDto extends PaginationQueryDto {
   @IsOptional() @IsDateString() dueFrom?: string;
   @IsOptional() @IsDateString() dueTo?: string;
   @IsOptional()
-  @Transform(({ value }) =>
+  @Transform(({ value }: { value: unknown }) =>
     value === true || value === 'true'
       ? true
       : value === false || value === 'false'
@@ -44,6 +46,25 @@ export class CrmContactsQueryDto extends PaginationQueryDto {
   )
   @IsBoolean()
   archived?: boolean;
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    Array.isArray(value)
+      ? value
+      : typeof value === 'string'
+        ? value.split(',').filter(Boolean)
+        : value,
+  )
+  @IsArray()
+  @ArrayMaxSize(200)
+  @IsString({ each: true })
+  tagIds?: string[];
+}
+
+export class SetCrmContactTagsDto {
+  @IsArray()
+  @ArrayMaxSize(200)
+  @IsString({ each: true })
+  tagIds!: string[];
 }
 
 export class CreateCrmContactDto {
@@ -148,7 +169,9 @@ export class CreateCrmConversationDto {
 
 export class AttachCrmConversationDto {
   @IsString() accountId!: string;
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
   @MaxLength(128)
   reference!: string;

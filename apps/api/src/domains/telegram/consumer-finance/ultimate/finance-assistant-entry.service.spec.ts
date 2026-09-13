@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { FinanceAssistantEntryService } from './finance-assistant-entry.service';
 
 const identity = {
@@ -56,15 +56,20 @@ function setup() {
     }),
     cancel: jest.fn(),
   };
+  const entitlements = {
+    hasCapability: jest.fn().mockResolvedValue(true),
+  };
   return {
     service: new FinanceAssistantEntryService(
       prisma as never,
       ai as never,
       proposals as never,
+      entitlements as never,
     ),
     prisma,
     ai,
     proposals,
+    entitlements,
   };
 }
 
@@ -98,6 +103,18 @@ describe('FinanceAssistantEntryService', () => {
       BadRequestException,
     );
     expect(ai.extractReceipt).not.toHaveBeenCalled();
+    expect(ai.transcribeVoice).not.toHaveBeenCalled();
+  });
+
+  it('rejects voice uploads when the plan has no voice capability', async () => {
+    const { service, ai, entitlements } = setup();
+    entitlements.hasCapability.mockResolvedValue(false);
+    await expect(
+      service.fromFile(identity, {
+        buffer: Buffer.from('voice'),
+        mimetype: 'audio/webm',
+      } as Express.Multer.File),
+    ).rejects.toBeInstanceOf(ForbiddenException);
     expect(ai.transcribeVoice).not.toHaveBeenCalled();
   });
 

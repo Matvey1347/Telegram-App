@@ -479,7 +479,7 @@ export class TelegramChannelGptContextExporter {
         channel,
         subscriberCountByTelegramPostId.get(post.id) ?? null,
       );
-    const permanentImageUrls = (urls: string[] | undefined) =>
+    const permanentMediaUrls = (urls: string[] | undefined) =>
       (urls ?? []).filter((url) => /^https?:\/\//i.test(url));
     const managedPostBlocks = managedPosts.map((post) => {
       const linkedTelegramPosts = this.linkedTelegramMessageIds(post).flatMap(
@@ -502,22 +502,18 @@ export class TelegramChannelGptContextExporter {
         .map((telegramPost) => telegramPost.postDate)
         .sort((left, right) => left.getTime() - right.getTime())[0];
       const publishedAt = post.publishedAt ?? linkedPublishedAt ?? null;
-      const imageUrls = permanentImageUrls(post.imageUrls);
+      const imageUrls = permanentMediaUrls(post.imageUrls);
       return `POST\nid: ${post.id}\nreference: tg-post:${post.id}\ntitle: ${post.title}\nstatus: ${post.status}\npublished_at: ${publishedAt?.toISOString() ?? 'null'}\nscheduled_at: ${post.scheduledAt?.toISOString() ?? 'null'}\ngroup_id: ${post.groupId ?? 'null'}\ngroup_title: ${post.groupId ? (groupTitleById.get(post.groupId) ?? 'unknown') : 'Ungrouped'}\nimages:\n${imageUrls.length ? imageUrls.map((url) => `- ${url}`).join('\n') : '[]'}\nengagement:\n${metrics.length ? metrics.join('\n---\n') : 'unavailable'}\ntext:\n${post.text || ''}`;
     });
     const importedPostBlocks = typedTelegramPosts
       .filter((post) => !matchedTelegramPostIds.has(post.id))
       .map((post) => {
         const url = telegramPostUrl(channel, post.telegramMessageId);
-        const imageUrls = permanentImageUrls(post.imageUrls);
-        const imageContext = imageUrls.length
-          ? imageUrls.map((imageUrl) => `- ${imageUrl}`).join('\n')
-          : post.hasMedia &&
-              post.mediaKind &&
-              !/photo|image/i.test(post.mediaKind)
-            ? `[]\nmedia: ${post.mediaKind}`
-            : '[]';
-        return `POST\nid: telegram-post:${post.id}\nreference: telegram-source-post:${post.id}\ntitle: ${telegramPostTitle(post)}\nstatus: PUBLISHED\npublished_at: ${post.postDate.toISOString()}\nscheduled_at: null\ngroup_id: null\ngroup_title: Ungrouped\nsource: synchronized_telegram\nimages:\n${imageContext}\nengagement:\n${this.metricContext(engagementFor(post), url)}\ntext:\n${post.text || post.formattedText || ''}`;
+        const mediaUrls = permanentMediaUrls(post.imageUrls);
+        const mediaContext = mediaUrls.length
+          ? mediaUrls.map((mediaUrl) => `- ${mediaUrl}`).join('\n')
+          : '[]';
+        return `POST\nid: telegram-post:${post.id}\nreference: telegram-source-post:${post.id}\ntitle: ${telegramPostTitle(post)}\nstatus: PUBLISHED\npublished_at: ${post.postDate.toISOString()}\nscheduled_at: null\ngroup_id: null\ngroup_title: Ungrouped\nsource: synchronized_telegram\nmedia_kind: ${post.mediaKind ?? 'none'}\nmedia_urls:\n${mediaContext}\nengagement:\n${this.metricContext(engagementFor(post), url)}\ntext:\n${post.text || post.formattedText || ''}`;
       });
 
     const exportedAt = new Date();

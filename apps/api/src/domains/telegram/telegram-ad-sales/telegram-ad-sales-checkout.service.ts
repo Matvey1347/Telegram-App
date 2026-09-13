@@ -490,6 +490,7 @@ export class TelegramAdSalesCheckoutService {
       workspaceId,
       assignedMemberId,
     );
+    let advertiserId: string | null = null;
     const saleId = await this.prisma.$transaction(async (tx) => {
       const resolvedAdvertiser = await this.advertiserResolver.resolve(
         tx,
@@ -501,7 +502,7 @@ export class TelegramAdSalesCheckoutService {
           selected: advertiser,
         },
       );
-      const advertiserId = resolvedAdvertiser?.id ?? null;
+      advertiserId = resolvedAdvertiser?.id ?? null;
       const sale = await tx.telegramAdSale.create({
         data: {
           workspaceId,
@@ -672,6 +673,12 @@ export class TelegramAdSalesCheckoutService {
       return sale.id;
     });
 
+    if (advertiserId) {
+      await this.salesService.recalculateAdvertiserStats(
+        workspaceId,
+        advertiserId,
+      );
+    }
 
     this.responseCache.clearByPrefix(
       `telegram-ad-sales:availability:${workspaceId}:`,

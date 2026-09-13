@@ -1,14 +1,11 @@
 "use client";
-
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpRight,
-  Cable,
   CircleHelp,
-  Download,
   ImagePlus,
   RefreshCw,
   Send,
@@ -18,7 +15,6 @@ import { Controller, useForm } from "react-hook-form";
 import { AppShell } from "@/components/layout/app-shell";
 import { ChannelPreview } from "@/components/features/telegram/telegram/channel-preview";
 import { ExternalChannelAdAnalysis } from "@/components/features/telegram/telegram/external-channel-ad-analysis";
-import { ChannelAutoSyncToggle } from "@/components/features/telegram/telegram/channel-auto-sync-toggle";
 import {
   ChannelEconomicsSummary,
   sortChannelsByScale,
@@ -38,8 +34,9 @@ import {
 import { telegramChannelAccessLabel } from "@/components/features/telegram/telegram/channel-access-badge";
 import { MtprotoAccountsPanel } from "@/components/features/telegram/telegram/telegram-account-panels";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
-import { TelegramSourceAvatar } from "@/components/features/telegram/telegram/telegram-source-avatar";
 import { TelegramTextEditor } from "@/components/features/telegram/telegram/telegram-text-editor";
+import { TelegramChannelMessageTemplatesModal } from "@/components/features/telegram/telegram/telegram-channel-message-templates-modal";
+import { TelegramChannelsHeaderActions } from "@/components/features/telegram/telegram/telegram-channels-header-actions";
 import {
   TelegramNetworkCards,
   TelegramPeopleCards,
@@ -59,7 +56,6 @@ import {
   type CurrencySettings,
   type ExchangeRate,
   type ImportedTelegramSource,
-  type TelegramAnalyticsSources,
   type TelegramChannel,
   type TelegramChannelAdAnalysis,
   type TelegramChannelAdAnalysisPayload,
@@ -211,273 +207,6 @@ function isPersonSource(
   source: ImportedTelegramSource,
 ): source is AdvertisingChannel {
   return "kind" in source && source.kind === "person";
-}
-
-function ChannelSourcesSummary({
-  channelId,
-  sourcesCount,
-  compact = false,
-  menuItem = false,
-}: {
-  channelId: string;
-  sourcesCount: number;
-  compact?: boolean;
-  menuItem?: boolean;
-}) {
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selectedSource, setSelectedSource] =
-    useState<TelegramChannelSourceAccess | null>(null);
-  const {
-    data: analyticsSources,
-    isLoading: analyticsSourcesLoading,
-    error: analyticsSourcesError,
-  } = useQuery({
-    queryKey: ["telegram-channel-analytics-sources", channelId],
-    queryFn: () => telegramChannelsApi.analyticsSources(channelId),
-    enabled: modalOpen,
-  });
-  return (
-    <div className={compact ? "contents" : "mt-2 flex justify-end"}>
-      <button
-        type="button"
-        onClick={() => setModalOpen(true)}
-        className={
-          menuItem
-            ? "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-800 hover:text-white"
-            : compact
-              ? "group relative inline-flex h-9 items-center gap-1.5 rounded-md border border-neutral-700 px-2 text-xs text-neutral-300 hover:border-blue-500 hover:bg-blue-950/30 hover:text-white"
-              : "inline-flex items-center gap-1.5 rounded-md border border-neutral-800 px-2 py-1 text-xs text-neutral-400 transition hover:border-neutral-600 hover:text-blue-300"
-        }
-      >
-        <Cable size={15} aria-hidden="true" />
-        Sources <span className="text-neutral-500">{sourcesCount}</span>
-        {compact ? (
-          <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-neutral-950 px-2 py-1 text-xs text-white shadow group-hover:block">
-            Channel sources
-          </span>
-        ) : null}
-      </button>
-      <ChannelSourcesModal
-        open={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setSelectedSource(null);
-        }}
-        sources={analyticsSources?.sources || []}
-        dataAttribution={analyticsSources?.dataAttribution || []}
-        isLoading={analyticsSourcesLoading}
-        error={analyticsSourcesError}
-        onSelectSource={setSelectedSource}
-      />
-      <SourceAccessModal
-        access={selectedSource}
-        onClose={() => setSelectedSource(null)}
-      />
-    </div>
-  );
-}
-
-function ChannelSourcesModal({
-  open,
-  onClose,
-  sources,
-  dataAttribution,
-  isLoading,
-  error,
-  onSelectSource,
-}: {
-  open: boolean;
-  onClose: () => void;
-  sources: Array<TelegramChannelSourceAccess & { usedFor?: string[] }>;
-  dataAttribution: TelegramAnalyticsSources["dataAttribution"];
-  isLoading: boolean;
-  error: unknown;
-  onSelectSource: (source: TelegramChannelSourceAccess) => void;
-}) {
-  return (
-    <Modal open={open} onClose={onClose} title="Sync sources and scope">
-      <div className="space-y-4">
-        <div>
-          <p className="mb-2 text-sm font-medium text-slate-200">
-            Connected sources
-          </p>
-          {isLoading ? <LoadingState /> : null}
-          {!isLoading && !error && !sources.length ? (
-            <EmptyState text="No synced source access for this channel yet." />
-          ) : null}
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            {sources.map((source) => (
-              <button
-                key={`${source.sourceType}:${source.sourceId}`}
-                type="button"
-                onClick={() => onSelectSource(source)}
-                className="flex min-h-36 flex-col rounded-md border border-slate-800 bg-slate-900/40 p-3 text-left hover:border-slate-600"
-              >
-                <div className="flex items-center gap-3">
-                  <TelegramSourceAvatar
-                    avatarUrl={source.avatarUrl}
-                    sourceType={source.sourceType}
-                    alt={source.displayName}
-                    size="md"
-                  />
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-white">
-                      {source.displayName}
-                    </p>
-                    <p className="flex items-center gap-1 text-xs text-slate-400">
-                      <span>{source.sourceType}</span>
-                      <span>·</span>
-                      <AccessBadge
-                        label={formatRole(source.role)}
-                        tip={roleTooltip(source.role, source.sourceType)}
-                      />
-                    </p>
-                  </div>
-                </div>
-                <div
-                  className={`mt-2 flex min-h-11 flex-wrap items-center gap-1 text-xs ${source.canBeUsedForAnalytics ? "text-emerald-300" : "text-amber-300"}`}
-                >
-                  <span>
-                    {source.canBeUsedForAnalytics
-                      ? "Can be used for analytics"
-                      : "Not enough access for analytics"}
-                  </span>
-                  <PermissionSummaryBadges source={source} />
-                </div>
-                <p className="mt-auto pt-2 text-xs text-slate-400">
-                  Used for:{" "}
-                  {source.usedFor?.length
-                    ? source.usedFor.map(formatDataType).join(", ")
-                    : "-"}
-                </p>
-              </button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <p className="mb-2 text-sm font-medium text-slate-200">
-            Data attribution
-          </p>
-          <div className="rounded-lg border border-slate-800">
-            {dataAttribution.length ? (
-              dataAttribution.map((item) => (
-                <div
-                  key={item.dataType}
-                  className="flex flex-col gap-1 border-t border-slate-800 px-3 py-2 first:border-t-0 md:flex-row md:items-center md:justify-between"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{item.label}</span>
-                    <span
-                      className={`text-xs ${item.status === "SUCCESS" ? "text-emerald-300" : item.status === "FAILED" ? "text-rose-300" : "text-slate-400"}`}
-                    >
-                      {item.status}
-                    </span>
-                  </div>
-                  <p className="text-sm text-slate-400">
-                    {item.sources.length
-                      ? `Loaded from ${item.sources.map((source) => source.displayName || source.sourceType).join(" / ")}`
-                      : `Not available${item.errorMessage ? `: ${item.errorMessage}` : ""}`}
-                  </p>
-                </div>
-              ))
-            ) : (
-              <p className="px-3 py-2 text-sm text-slate-400">
-                {isLoading
-                  ? "Loading attribution..."
-                  : "No attribution data yet."}
-              </p>
-            )}
-          </div>
-        </div>
-        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3 text-sm text-slate-300">
-          <p>Now syncing: idle</p>
-          <p>Last sync payload: Run sync to capture detailed result in UI</p>
-          <p className="mt-1 text-xs text-slate-500">
-            Source choice is recorded per data type; unavailable rows explain
-            which permission is missing.
-          </p>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function SourceAccessModal({
-  access,
-  onClose,
-}: {
-  access: TelegramChannelSourceAccess | null;
-  onClose: () => void;
-}) {
-  if (!access) return null;
-  const permissions = [
-    ["Can create/publish posts", access.permissions.canPostMessages],
-    ["Can edit posts", access.permissions.canEditMessages],
-    ["Can delete posts", access.permissions.canDeleteMessages],
-    ["Can invite users", access.permissions.canInviteUsers],
-    ["Can manage invite links", access.permissions.canManageInviteLinks],
-    ["Can view/export analytics", access.permissions.canViewStats],
-  ] as const;
-  return (
-    <Modal open={!!access} onClose={onClose} title="Source access">
-      <div className="space-y-4 text-sm">
-        <div className="flex items-center gap-3">
-          <TelegramSourceAvatar
-            avatarUrl={access.avatarUrl}
-            sourceType={access.sourceType}
-            alt={access.displayName}
-            size="md"
-          />
-          <div>
-            <p className="font-semibold text-white">{access.displayName}</p>
-            <p className="flex items-center gap-1 text-xs text-slate-400">
-              <span>{access.sourceType}</span>
-              <span>·</span>
-              <AccessBadge
-                label={formatRole(access.role)}
-                tip={roleTooltip(access.role, access.sourceType)}
-              />
-            </p>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-          <div className="rounded-lg border border-slate-800 bg-slate-900/30 p-3">
-            <p className="text-xs text-slate-400">Role in channel</p>
-            <div className="mt-1">
-              <AccessBadge
-                label={formatRole(access.role)}
-                tip={roleTooltip(access.role, access.sourceType)}
-              />
-            </div>
-          </div>
-          <div className="rounded-lg border border-slate-800 bg-slate-900/30 p-3">
-            <p className="text-xs text-slate-400">Analytics</p>
-            <p className="mt-1 font-medium text-slate-100">
-              {access.canBeUsedForAnalytics
-                ? "Can be used for analytics"
-                : "Not enough access for analytics"}
-            </p>
-          </div>
-        </div>
-        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
-          <p className="mb-2 font-medium text-slate-200">Permissions</p>
-          <p className="mb-3 text-xs text-slate-400">
-            {inviteLinksVisibility(access)}
-          </p>
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            {permissions.map(([label, enabled]) => (
-              <p
-                key={label}
-                className={enabled ? "text-emerald-300" : "text-slate-500"}
-              >
-                {enabled ? "Yes" : "No"} · {label}
-              </p>
-            ))}
-          </div>
-        </div>
-      </div>
-    </Modal>
-  );
 }
 
 function ChannelFinanceMiniSummary({
@@ -1393,6 +1122,7 @@ export default function TelegramChannelsPage() {
   const { pushToast, setProgress, clearProgress } = useAppToast();
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [messageTemplatesOpen, setMessageTemplatesOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [mtprotoCreateOpen, setMtprotoCreateOpen] = useState(false);
   const [tab, setPersistedTab] = usePersistedRouteTab({
@@ -1420,6 +1150,7 @@ export default function TelegramChannelsPage() {
     useState<TelegramChannel | null>(null);
   const [syncSelection, setSyncSelection] =
     useState<TelegramChannelSyncSelection>(DEFAULT_CHANNEL_SYNC_SELECTION);
+  const [syncPostLimit, setSyncPostLimit] = useState(50);
   const [workspaceSyncOpen, setWorkspaceSyncOpen] = useState(false);
   const [deletingAnalysis, setDeletingAnalysis] = useState<{
     channel: TelegramChannel;
@@ -1452,7 +1183,11 @@ export default function TelegramChannelsPage() {
         channelFilter === "own" && lifecycleTab === "archive",
         channelFilter === "own",
       ),
-    enabled: tab === "channels" || networkFormOpen || Boolean(editingNetwork),
+    enabled:
+      tab === "channels" ||
+      networkFormOpen ||
+      Boolean(editingNetwork) ||
+      messageTemplatesOpen,
   });
   // Older hot caches can contain the legacy array shape under this key.
   // Keep this page render-safe while React Query replaces it with the read model.
@@ -1469,7 +1204,7 @@ export default function TelegramChannelsPage() {
   } = useQuery({
     queryKey: networkKeys.list(),
     queryFn: telegramChannelNetworksApi.list,
-    enabled: tab === "networks",
+    enabled: tab === "networks" || messageTemplatesOpen,
   });
   const { data: currencySettings } = useQuery({
     queryKey: ["currency-settings"],
@@ -1867,47 +1602,22 @@ export default function TelegramChannelsPage() {
       setExporting(false);
     }
   };
-  const headerAction =
-    tab === "networks" ? (
-      <Button
-        onClick={() => {
-          setEditingNetwork(null);
-          setNetworkFormOpen(true);
-        }}
-      >
-        Create network
-      </Button>
-    ) : tab === "accounts" && accountFilter === "mtproto" ? (
-      <Button onClick={() => setMtprotoCreateOpen(true)}>
-        Connect account
-      </Button>
-    ) : tab === "channels" ? (
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => setWorkspaceSyncOpen(true)}
-          className="inline-flex items-center gap-2"
-        >
-          <RefreshCw size={16} />
-          Sync all channels
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => setExportOpen(true)}
-          disabled={!channels?.length}
-          className="inline-flex items-center gap-2"
-        >
-          <Download size={16} />
-          Export
-        </Button>
-        <Button onClick={() => setImportOpen(true)}>Import</Button>
-      </div>
-    ) : (
-      <Button onClick={() => setImportOpen(true)}>Import</Button>
-    );
-
+  const headerAction = (
+    <TelegramChannelsHeaderActions
+      tab={tab}
+      accountFilter={accountFilter}
+      hasChannels={Boolean(channels?.length)}
+      onCreateNetwork={() => {
+        setEditingNetwork(null);
+        setNetworkFormOpen(true);
+      }}
+      onConnectAccount={() => setMtprotoCreateOpen(true)}
+      onOpenTemplates={() => setMessageTemplatesOpen(true)}
+      onSyncAll={() => setWorkspaceSyncOpen(true)}
+      onExport={() => setExportOpen(true)}
+      onImport={() => setImportOpen(true)}
+    />
+  );
   return (
     <AppShell>
       <PageHeader
@@ -2010,6 +1720,7 @@ export default function TelegramChannelsPage() {
                               setSyncSelection(
                                 syncSelectionFromChannel(channel),
                               );
+                              setSyncPostLimit(channel.postSyncLimit ?? 50);
                             }}
                           />
                         ) : null}
@@ -2036,25 +1747,6 @@ export default function TelegramChannelsPage() {
                             })}
                             icon={<Send size={17} />}
                           />
-                        ) : null}
-                        {hasAdminLink ? (
-                          <ChannelSourcesSummary
-                            channelId={channel.id}
-                            sourcesCount={
-                              channel.preview?.sourcesCount ??
-                              channel.adminLinks?.length ??
-                              0
-                            }
-                            menuItem
-                          />
-                        ) : null}
-                        {!channel.archivedAt ? (
-                          <div className="flex items-center justify-between px-2.5 py-2">
-                            <ChannelAutoSyncToggle
-                              channelId={channel.id}
-                              enabled={channel.autoSyncEnabled ?? true}
-                            />
-                          </div>
                         ) : null}
                       </ChannelActionsMenu>
                     }
@@ -2155,6 +1847,13 @@ export default function TelegramChannelsPage() {
         onClose={() => setExportOpen(false)}
         onSubmit={handleExport}
       />
+      {messageTemplatesOpen ? (
+        <TelegramChannelMessageTemplatesModal
+          channels={channels || []}
+          networks={networks}
+          onClose={() => setMessageTemplatesOpen(false)}
+        />
+      ) : null}
       <ChannelSyncScopeModal
         open={!!syncTargetChannel}
         title={
@@ -2163,15 +1862,20 @@ export default function TelegramChannelsPage() {
         description="Choose what to sync for this channel."
         helperText="Sync selected saves this scope to the channel. Sync all runs the full sync without changing the saved scope."
         selection={syncSelection}
+        postLimit={syncPostLimit}
         isSyncing={syncNowMutation.isPending}
         submitLabel="Sync selected"
         onClose={() => setSyncTargetChannel(null)}
         onSelectionChange={setSyncSelection}
+        onPostLimitChange={setSyncPostLimit}
         onSyncAll={() =>
           syncTargetChannel
             ? syncNowMutation.mutate({
                 channel: syncTargetChannel,
-                payload: { ...DEFAULT_CHANNEL_SYNC_SELECTION },
+                payload: {
+                  ...DEFAULT_CHANNEL_SYNC_SELECTION,
+                  postLimit: syncPostLimit,
+                },
               })
             : undefined
         }
@@ -2179,7 +1883,11 @@ export default function TelegramChannelsPage() {
           syncTargetChannel
             ? syncNowMutation.mutate({
                 channel: syncTargetChannel,
-                payload: { ...syncSelection, saveSelection: true },
+                payload: {
+                  ...syncSelection,
+                  postLimit: syncPostLimit,
+                  saveSelection: true,
+                },
               })
             : undefined
         }

@@ -33,12 +33,16 @@ import {
   IconImageUploadPanel,
   type IconUploadPreview,
 } from "./icon-image-upload-panel";
-import { emojiLocalizedSearchTerms, uiCopy, type UiLocale } from "@/lib/ui-i18n";
+import {
+  emojiLocalizedSearchTerms,
+  uiCopy,
+  type UiLocale,
+} from "@/lib/ui-i18n";
 import { useOptionalI18n } from "@/providers/i18n-provider";
 type IconPickerProps = {
   iconId?: string | null;
   icon?: Icon | ResolvedEmoji | null;
-  onChange: (iconId: string | null) => void;
+  onChange: (iconId: string | null, icon?: ResolvedEmoji | null) => void;
   onEmojiChange?: (emoji: string | null) => void;
   buttonLabel?: string;
   ariaLabel?: string;
@@ -77,11 +81,16 @@ type Tab = (typeof tabOrder)[number];
 type IconSection = "recent" | EmojiCategory | "custom";
 
 const sectionTabs = [
-  { section: "recent", icon: Clock3 }, { section: "people", icon: Smile },
-  { section: "nature", icon: Leaf }, { section: "food", icon: Utensils },
-  { section: "activity", icon: Dumbbell }, { section: "travel", icon: Plane },
-  { section: "objects", icon: Package }, { section: "symbols", icon: Shapes },
-  { section: "flags", icon: Flag }, { section: "custom", icon: Grid2x2 },
+  { section: "recent", icon: Clock3 },
+  { section: "people", icon: Smile },
+  { section: "nature", icon: Leaf },
+  { section: "food", icon: Utensils },
+  { section: "activity", icon: Dumbbell },
+  { section: "travel", icon: Plane },
+  { section: "objects", icon: Package },
+  { section: "symbols", icon: Shapes },
+  { section: "flags", icon: Flag },
+  { section: "custom", icon: Grid2x2 },
 ] as const;
 
 function stripExtension(fileName: string) {
@@ -114,11 +123,25 @@ function matchesSearch(icon: EmojiIcon, search: string, locale?: UiLocale) {
   return haystack.includes(search);
 }
 
-function matchesRecentStandard(item: RecentStandardIcon, search: string, locale?: UiLocale) {
+function matchesRecentStandard(
+  item: RecentStandardIcon,
+  search: string,
+  locale?: UiLocale,
+) {
   if (!search) return true;
   const haystack =
     `${item.emoji} ${item.name} ${item.keywords.join(" ")} ${emojiCategoryLabels[item.category]} ${emojiLocalizedSearchTerms(item.name, item.category, locale)}`.toLowerCase();
   return haystack.includes(search);
+}
+
+function selectableSavedIcon(
+  icon: RecentSavedIcon["icon"],
+  allowImages: boolean,
+) {
+  return (
+    (allowImages && icon.type === "image") ||
+    (icon.type === "emoji" && Boolean(icon.emoji?.includes("tg://emoji?id=")))
+  );
 }
 
 function matchesRecentSaved(item: RecentSavedIcon, search: string) {
@@ -180,20 +203,20 @@ export function IconPicker({
   const { data: selectedIcon } = useQuery({
     queryKey: ["icon", iconId],
     queryFn: () => iconsApi.get(iconId as string),
-    enabled: open && Boolean(iconId) && !icon && !optimisticIcon,
+    enabled: Boolean(iconId) && !icon && !optimisticIcon,
   });
 
   const iconsQuery = useQuery({
     queryKey: ["icons", search],
     queryFn: () => iconsApi.list(search || undefined),
-    enabled: allowImages && open && tab === "icons",
+    enabled: open && tab === "icons",
   });
 
   const customIcons = useMemo(
     () =>
-      allowImages
-        ? (iconsQuery.data ?? []).filter((icon) => icon.type === "image")
-        : [],
+      (iconsQuery.data ?? []).filter((icon) =>
+        selectableSavedIcon(icon, allowImages),
+      ),
     [allowImages, iconsQuery.data],
   );
 
@@ -217,7 +240,7 @@ export function IconPicker({
       };
       qc.setQueryData(["icon", icon.id], icon);
       setOptimisticIcon(icon);
-      onChange(icon.id);
+      onChange(icon.id, iconToResolvedEmoji(icon));
       onPendingChange?.(false);
       setRecentIcons((prev) =>
         [
@@ -255,7 +278,7 @@ export function IconPicker({
       };
       qc.setQueryData(["icon", icon.id], icon);
       setOptimisticIcon(icon);
-      onChange(icon.id);
+      onChange(icon.id, iconToResolvedEmoji(icon));
       onPendingChange?.(false);
       setRecentIcons((prev) =>
         [
@@ -284,7 +307,7 @@ export function IconPicker({
       if (!mountedRef.current) return;
       qc.setQueryData(["icon", icon.id], icon);
       setOptimisticIcon(icon);
-      onChange(icon.id);
+      onChange(icon.id, iconToResolvedEmoji(icon));
       onPendingChange?.(false);
       setOpen(false);
       setUpload(null);
@@ -312,7 +335,9 @@ export function IconPicker({
 
   const filteredStandardIcons = useMemo(() => {
     const value = search.trim().toLowerCase();
-    return emojiIcons.filter((item) => matchesSearch(item, value, effectiveUiLocale));
+    return emojiIcons.filter((item) =>
+      matchesSearch(item, value, effectiveUiLocale),
+    );
   }, [effectiveUiLocale, search]);
 
   const normalizedSearch = search.trim().toLowerCase();
@@ -447,16 +472,17 @@ export function IconPicker({
     () =>
       recentIcons
         .filter(isStandardRecent)
-        .filter((item) => matchesRecentStandard(item, normalizedSearch, effectiveUiLocale)),
+        .filter((item) =>
+          matchesRecentStandard(item, normalizedSearch, effectiveUiLocale),
+        ),
     [effectiveUiLocale, normalizedSearch, recentIcons],
   );
   const savedRecent = useMemo(
     () =>
-      allowImages
-        ? recentIcons
-            .filter((icon): icon is RecentSavedIcon => icon.kind === "saved")
-            .filter((item) => matchesRecentSaved(item, normalizedSearch))
-        : [],
+      recentIcons
+        .filter((icon): icon is RecentSavedIcon => icon.kind === "saved")
+        .filter((item) => selectableSavedIcon(item.icon, allowImages))
+        .filter((item) => matchesRecentSaved(item, normalizedSearch)),
     [allowImages, normalizedSearch, recentIcons],
   );
   const hasRecentItems = standardRecent.length > 0 || savedRecent.length > 0;
@@ -505,7 +531,7 @@ export function IconPicker({
   const selectRecentSaved = (item: RecentSavedIcon) => {
     setOptimisticIcon(item.icon);
     qc.setQueryData(["icon", item.icon.id], item.icon);
-    onChange(item.icon.id);
+    onChange(item.icon.id, iconToResolvedEmoji(item.icon));
     setRecentIcons((prev) =>
       [
         item,
@@ -577,7 +603,9 @@ export function IconPicker({
         type="button"
         ref={triggerRef}
         disabled={disabled}
-        aria-label={ariaLabel ?? (currentIcon ? ui.changeIcon : resolvedButtonLabel)}
+        aria-label={
+          ariaLabel ?? (currentIcon ? ui.changeIcon : resolvedButtonLabel)
+        }
         onClick={() => {
           if (disabled) return;
           if (open) {
@@ -646,7 +674,7 @@ export function IconPicker({
                         if (onEmojiChange) {
                           onEmojiChange(null);
                         } else {
-                          onChange(null);
+                          onChange(null, null);
                         }
                         closePicker();
                       }}
@@ -771,7 +799,10 @@ export function IconPicker({
                                     );
                                     setOptimisticIcon(icon);
                                     qc.setQueryData(["icon", icon.id], icon);
-                                    onChange(icon.id);
+                                    onChange(
+                                      icon.id,
+                                      iconToResolvedEmoji(icon),
+                                    );
                                     setOpen(false);
                                   }}
                                 >
@@ -848,7 +879,8 @@ export function IconPicker({
                                 {ui.standard}
                               </p>
                               <p className="text-xs text-neutral-500">
-                                {filteredStandardIcons.length} {ui.results.toLowerCase()}
+                                {filteredStandardIcons.length}{" "}
+                                {ui.results.toLowerCase()}
                               </p>
                             </div>
                             {!standardIconsReady ? (
@@ -905,7 +937,7 @@ export function IconPicker({
                             )}
                           </div>
 
-                          {allowImages ? (
+                          {allowImages || customIcons.length ? (
                             <div
                               ref={(node) => {
                                 sectionRefs.current.custom = node;
@@ -957,7 +989,10 @@ export function IconPicker({
                                       );
                                       setOptimisticIcon(icon);
                                       qc.setQueryData(["icon", icon.id], icon);
-                                      onChange(icon.id);
+                                      onChange(
+                                        icon.id,
+                                        iconToResolvedEmoji(icon),
+                                      );
                                       setOpen(false);
                                     }}
                                   >
@@ -988,7 +1023,9 @@ export function IconPicker({
                           {sectionTabs
                             .filter(
                               ({ section }) =>
-                                allowImages || section !== "custom",
+                                allowImages ||
+                                customIcons.length > 0 ||
+                                section !== "custom",
                             )
                             .map(({ section, icon: Icon }) => {
                               const label = ui[section];

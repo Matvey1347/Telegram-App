@@ -1,8 +1,15 @@
 "use client";
 
 import { formatDateTime } from "@/lib/date-format";
-import { formatStatsPeriod, formatTelegramPercent, hasRenderableTelegramGraphItem, MtprotoGraphChart, mtprotoGraphConfigs, normalizeStoredTelegramGraph, normalizeTelegramGraph } from "@/components/features/telegram/telegram/telegram-channel-graphs";
-
+import {
+  formatStatsPeriod,
+  formatTelegramPercent,
+  hasRenderableTelegramGraphItem,
+  MtprotoGraphChart,
+  mtprotoGraphConfigs,
+  normalizeStoredTelegramGraph,
+  normalizeTelegramGraph,
+} from "@/components/features/telegram/telegram/telegram-channel-graphs";
 import {
   Fragment,
   type ReactNode,
@@ -31,6 +38,7 @@ import {
   LoaderCircle,
   Pencil,
   RefreshCw,
+  Settings,
   Smile,
   Trash2,
 } from "lucide-react";
@@ -57,6 +65,12 @@ import {
 import { InviteLinksTable } from "@/components/features/telegram/telegram/invite-links-table";
 import { TelegramPostPreviewModal } from "@/components/features/telegram/telegram/post-preview-modal";
 import { TelegramSourceAvatar } from "@/components/features/telegram/telegram/telegram-source-avatar";
+import { ChannelSettingsModal } from "@/components/features/telegram/telegram/channel-settings-modal";
+import {
+  ChannelSyncScopeModal,
+  DEFAULT_CHANNEL_SYNC_SELECTION,
+  syncSelectionFromChannel,
+} from "@/components/features/telegram/telegram/channel-sync-scope-modal";
 import { Pagination } from "@/components/ui/pagination";
 import { NativeMoney } from "@/components/ui/native-money";
 import {
@@ -114,9 +128,6 @@ function formatLocalDate(value?: string | Date | null) {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
-
-
-
 
 function formatLocalDateTime(value?: string | Date | number | null) {
   if (value == null) return "-";
@@ -247,50 +258,8 @@ const closedChannelSections: ChannelSectionState = {
   campaigns: false,
 };
 
-const DEFAULT_SYNC_SELECTION: TelegramChannelSyncSelection = {
-  syncIncludePublicInfo: true,
-  syncIncludeInviteLinks: true,
-  syncIncludeHistoricalPosts: true,
-  syncIncludePostMetrics: true,
-  syncIncludeOlderPosts: true,
-  syncIncludeChannelStats: true,
-  syncIncludeManagedPosts: true,
-  syncIncludeAudienceSnapshot: true,
-};
-
 function countSelectedSyncSections(selection: TelegramChannelSyncSelection) {
   return Object.values(selection).filter(Boolean).length;
-}
-
-function syncSelectionFromChannel(
-  channel?: TelegramChannel | null,
-): TelegramChannelSyncSelection {
-  return {
-    syncIncludePublicInfo:
-      channel?.syncIncludePublicInfo ??
-      DEFAULT_SYNC_SELECTION.syncIncludePublicInfo,
-    syncIncludeInviteLinks:
-      channel?.syncIncludeInviteLinks ??
-      DEFAULT_SYNC_SELECTION.syncIncludeInviteLinks,
-    syncIncludeHistoricalPosts:
-      channel?.syncIncludeHistoricalPosts ??
-      DEFAULT_SYNC_SELECTION.syncIncludeHistoricalPosts,
-    syncIncludePostMetrics:
-      channel?.syncIncludePostMetrics ??
-      DEFAULT_SYNC_SELECTION.syncIncludePostMetrics,
-    syncIncludeOlderPosts:
-      channel?.syncIncludeOlderPosts ??
-      DEFAULT_SYNC_SELECTION.syncIncludeOlderPosts,
-    syncIncludeChannelStats:
-      channel?.syncIncludeChannelStats ??
-      DEFAULT_SYNC_SELECTION.syncIncludeChannelStats,
-    syncIncludeManagedPosts:
-      channel?.syncIncludeManagedPosts ??
-      DEFAULT_SYNC_SELECTION.syncIncludeManagedPosts,
-    syncIncludeAudienceSnapshot:
-      channel?.syncIncludeAudienceSnapshot ??
-      DEFAULT_SYNC_SELECTION.syncIncludeAudienceSnapshot,
-  };
 }
 
 function channelSectionsStorageKey(channelId: string) {
@@ -327,8 +296,10 @@ export default function TelegramChannelAnalyticsPage() {
   );
   const [syncScopeOpen, setSyncScopeOpen] = useState(false);
   const [syncStatusOpen, setSyncStatusOpen] = useState(false);
+  const [channelSettingsOpen, setChannelSettingsOpen] = useState(false);
   const [syncSelection, setSyncSelection] =
-    useState<TelegramChannelSyncSelection>(DEFAULT_SYNC_SELECTION);
+    useState<TelegramChannelSyncSelection>(DEFAULT_CHANNEL_SYNC_SELECTION);
+  const [syncPostLimit, setSyncPostLimit] = useState(50);
   const [rangeMode, setRangeMode] = useState<"30d" | "all" | "custom">("30d");
   const [customFrom, setCustomFrom] = useState(thirtyDaysAgoIso);
   const [customTo, setCustomTo] = useState(todayIso);
@@ -341,7 +312,6 @@ export default function TelegramChannelAnalyticsPage() {
   );
   const [settings, setSettings] = useState<SettingsState>({
     seedSubscribersCount: "0",
-    activeSubscribersWindow: "50",
     knownFakeSubscribersCount: "0",
     ownViewsPerPost: "0",
     ownReactionsPerPost: "0",
@@ -496,9 +466,9 @@ export default function TelegramChannelAnalyticsPage() {
     const source = channel || data?.channel;
     if (!source) return;
     setSyncSelection(syncSelectionFromChannel(source));
+    setSyncPostLimit(source.postSyncLimit ?? 50);
     setSettings({
       seedSubscribersCount: String(source.seedSubscribersCount ?? 0),
-      activeSubscribersWindow: "50",
       knownFakeSubscribersCount: String(source.knownFakeSubscribersCount ?? 0),
       ownViewsPerPost: String(source.ownViewsPerPost ?? 0),
       ownReactionsPerPost: String(source.ownReactionsPerPost ?? 0),
@@ -545,28 +515,28 @@ export default function TelegramChannelAnalyticsPage() {
       const syncSelection: TelegramChannelSyncSelection = {
         syncIncludePublicInfo:
           payload.syncIncludePublicInfo ??
-          DEFAULT_SYNC_SELECTION.syncIncludePublicInfo,
+          DEFAULT_CHANNEL_SYNC_SELECTION.syncIncludePublicInfo,
         syncIncludeInviteLinks:
           payload.syncIncludeInviteLinks ??
-          DEFAULT_SYNC_SELECTION.syncIncludeInviteLinks,
+          DEFAULT_CHANNEL_SYNC_SELECTION.syncIncludeInviteLinks,
         syncIncludeHistoricalPosts:
           payload.syncIncludeHistoricalPosts ??
-          DEFAULT_SYNC_SELECTION.syncIncludeHistoricalPosts,
+          DEFAULT_CHANNEL_SYNC_SELECTION.syncIncludeHistoricalPosts,
         syncIncludePostMetrics:
           payload.syncIncludePostMetrics ??
-          DEFAULT_SYNC_SELECTION.syncIncludePostMetrics,
+          DEFAULT_CHANNEL_SYNC_SELECTION.syncIncludePostMetrics,
         syncIncludeOlderPosts:
           payload.syncIncludeOlderPosts ??
-          DEFAULT_SYNC_SELECTION.syncIncludeOlderPosts,
+          DEFAULT_CHANNEL_SYNC_SELECTION.syncIncludeOlderPosts,
         syncIncludeChannelStats:
           payload.syncIncludeChannelStats ??
-          DEFAULT_SYNC_SELECTION.syncIncludeChannelStats,
+          DEFAULT_CHANNEL_SYNC_SELECTION.syncIncludeChannelStats,
         syncIncludeManagedPosts:
           payload.syncIncludeManagedPosts ??
-          DEFAULT_SYNC_SELECTION.syncIncludeManagedPosts,
+          DEFAULT_CHANNEL_SYNC_SELECTION.syncIncludeManagedPosts,
         syncIncludeAudienceSnapshot:
           payload.syncIncludeAudienceSnapshot ??
-          DEFAULT_SYNC_SELECTION.syncIncludeAudienceSnapshot,
+          DEFAULT_CHANNEL_SYNC_SELECTION.syncIncludeAudienceSnapshot,
       };
       const totalSelectedSteps = Math.max(
         1,
@@ -763,6 +733,7 @@ export default function TelegramChannelAnalyticsPage() {
       (post: any) => !post.excludeFromAnalytics,
     );
     const summaryPostsTotal = toNumber(data?.summary?.postsTotal);
+    const telegramPostsStoredTotal = toNumber(data?.summary?.telegramPostsStoredTotal);
     const summaryViewsTotal = toNumber(data?.summary?.viewsTotal);
     const summaryForwardsTotal = toNumber(data?.summary?.forwardsTotal);
     const summaryReactionsTotal = toNumber(data?.summary?.reactionsTotal);
@@ -872,8 +843,7 @@ export default function TelegramChannelAnalyticsPage() {
 
     return {
       subscribers,
-      postsCount: posts.length || summaryPostsTotal,
-      visiblePostsCount: visiblePosts.length || summaryPostsTotal,
+      postsCount: telegramPostsStoredTotal,
       viewsTotal,
       adjustedViewsTotal,
       forwardsTotal,
@@ -904,6 +874,7 @@ export default function TelegramChannelAnalyticsPage() {
     data?.summary?.inviteLinksCount,
     data?.summary?.joinedHistoricalByLinks,
     data?.summary?.postsTotal,
+    data?.summary?.telegramPostsStoredTotal,
     data?.summary?.reactionsTotal,
     data?.summary?.requestedJoinsTotal,
     data?.summary?.subscribersCurrent,
@@ -914,7 +885,6 @@ export default function TelegramChannelAnalyticsPage() {
     ownReactionsPerPost,
     ownViewsPerPost,
     posts,
-    visiblePosts.length,
   ]);
   const statCards = [
     {
@@ -926,10 +896,10 @@ export default function TelegramChannelAnalyticsPage() {
     },
     {
       key: "posts",
-      show: hasPositiveValue(computed.postsCount),
-      title: "Posts Synced",
+      show: true,
+      title: "Telegram posts",
       value: formatNumber(computed.postsCount),
-      hint: `${computed.visiblePostsCount} with content`,
+      hint: "Stored from Telegram",
     },
     {
       key: "views",
@@ -1068,23 +1038,14 @@ export default function TelegramChannelAnalyticsPage() {
         }
         action={
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <KpiSettingsControl
-              settings={settings}
-              setSettings={setSettings}
-              currencies={
-                currencySettings?.supportedCurrencies || [
-                  currencySettings?.primaryCurrency || "USD",
-                ]
-              }
-              isSaving={settingsMutation.isPending}
-              onSave={(nextSettings) => settingsMutation.mutate(nextSettings)}
-            />
-            <SeedSettingsControl
-              settings={settings}
-              setSettings={setSettings}
-              isSaving={settingsMutation.isPending}
-              onSave={(nextSettings) => settingsMutation.mutate(nextSettings)}
-            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setChannelSettingsOpen(true)}
+              className="inline-flex h-11 items-center justify-center gap-2"
+            >
+              <Settings size={16} /> Settings
+            </Button>
             <InfoTooltip
               tip={
                 latestSnapshot
@@ -1186,37 +1147,37 @@ export default function TelegramChannelAnalyticsPage() {
       </section>
 
       <section className="mt-6">
-          <SectionToggle
-            title="Charts"
-            open={openSections.charts}
-            onToggle={() =>
-              setOpenSections((prev) => ({ ...prev, charts: !prev.charts }))
-            }
-          />
-          {openSections.charts ? (
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(420px,100%),1fr))] gap-4">
-              {!hasAudienceChart &&
-              !mtprotoGraphs.length &&
-              isAudienceSnapshotsLoading ? (
-                <SimplePanel title="Charts">
-                  <div className="h-64 rounded-lg bg-slate-900/40 p-2">
-                    <div className="space-y-3 p-3">
-                      <Skeleton className="h-4 w-28" />
-                      <Skeleton className="h-48 w-full" />
-                    </div>
+        <SectionToggle
+          title="Charts"
+          open={openSections.charts}
+          onToggle={() =>
+            setOpenSections((prev) => ({ ...prev, charts: !prev.charts }))
+          }
+        />
+        {openSections.charts ? (
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(420px,100%),1fr))] gap-4">
+            {!hasAudienceChart &&
+            !mtprotoGraphs.length &&
+            isAudienceSnapshotsLoading ? (
+              <SimplePanel title="Charts">
+                <div className="h-64 rounded-lg bg-slate-900/40 p-2">
+                  <div className="space-y-3 p-3">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-48 w-full" />
                   </div>
-                </SimplePanel>
-              ) : null}
-              {hasAudienceChart ? (
-                <AudienceSnapshotsPanel snapshots={audienceSnapshots} />
-              ) : null}
-              {mtprotoGraphs.map(({ key, title, chart }) => (
-                <SimplePanel key={key} title={title}>
-                  <MtprotoGraphChart chart={chart} />
-                </SimplePanel>
-              ))}
-            </div>
-          ) : null}
+                </div>
+              </SimplePanel>
+            ) : null}
+            {hasAudienceChart ? (
+              <AudienceSnapshotsPanel snapshots={audienceSnapshots} />
+            ) : null}
+            {mtprotoGraphs.map(({ key, title, chart }) => (
+              <SimplePanel key={key} title={title}>
+                <MtprotoGraphChart chart={chart} />
+              </SimplePanel>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       {toNumber(data?.summary?.campaignsCount) > 0 ? (
@@ -1450,23 +1411,53 @@ export default function TelegramChannelAnalyticsPage() {
         latestSnapshot={latestSnapshot}
         mtprotoStats={mtprotoStats}
       />
-      <SyncScopeModal
+      {channelSettingsOpen && activeChannel ? (
+        <ChannelSettingsModal
+          channel={activeChannel}
+          currencySettings={currencySettings}
+          onClose={() => setChannelSettingsOpen(false)}
+        />
+      ) : null}
+      <ChannelSyncScopeModal
         open={syncScopeOpen}
+        title="Sync sources and scope"
+        description="Choose what to sync for this channel."
+        helperText="Sync selected saves this scope and post count to the channel. Sync all runs the full sync without changing the saved settings."
         onClose={() => setSyncScopeOpen(false)}
         isSyncing={syncMutation.isPending}
-        lastSyncResult={lastSyncResult}
         selection={syncSelection}
+        postLimit={syncPostLimit}
+        submitLabel="Sync selected"
         onSelectionChange={setSyncSelection}
+        onPostLimitChange={setSyncPostLimit}
+        statusContent={
+          <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3 text-sm text-slate-300">
+            <p>
+              Now syncing:{" "}
+              {syncMutation.isPending
+                ? "data from available connected sources"
+                : "idle"}
+            </p>
+            <p>
+              Last sync payload:{" "}
+              {lastSyncResult
+                ? summarizeSync(lastSyncResult)
+                : "Run sync to capture detailed result in UI"}
+            </p>
+          </div>
+        }
         onSyncAll={() => {
           setSyncScopeOpen(false);
           syncMutation.mutate({
-            ...DEFAULT_SYNC_SELECTION,
+            ...DEFAULT_CHANNEL_SYNC_SELECTION,
+            postLimit: syncPostLimit,
           });
         }}
-        onSyncSelected={() => {
+        onSubmit={() => {
           setSyncScopeOpen(false);
           syncMutation.mutate({
             ...syncSelection,
+            postLimit: syncPostLimit,
             saveSelection: true,
           });
         }}
@@ -1543,7 +1534,7 @@ function ChannelMetricsDeck({
   }>;
 }) {
   if (!metrics.length) return null;
-  const primaryKeys = new Set(["subscribers", "err", "avgViews", "cpa"]);
+  const primaryKeys = new Set(["subscribers", "posts", "err", "avgViews", "cpa"]);
   const primaryMetrics = metrics.filter((metric) =>
     primaryKeys.has(metric.key),
   );
@@ -1566,7 +1557,7 @@ function ChannelMetricsDeck({
           {metrics.length} metrics
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
         {visiblePrimary.map((metric) => (
           <div
             key={metric.key}
@@ -1985,7 +1976,6 @@ function FinancialOverview({
 
 type SettingsState = {
   seedSubscribersCount: string;
-  activeSubscribersWindow: string;
   knownFakeSubscribersCount: string;
   ownViewsPerPost: string;
   ownReactionsPerPost: string;
@@ -2008,10 +1998,6 @@ type SettingsState = {
 function buildChannelSettingsPayload(settings: SettingsState) {
   return {
     seedSubscribersCount: toNumber(settings.seedSubscribersCount),
-    activeSubscribersWindow: Math.max(
-      1,
-      toNumber(settings.activeSubscribersWindow),
-    ),
     knownFakeSubscribersCount: Math.max(
       0,
       toNumber(settings.knownFakeSubscribersCount),
@@ -2265,16 +2251,6 @@ function SeedSettingsControl({
                 value={settings.ownReactionsPerPost}
                 onChange={(event) =>
                   setValue("ownReactionsPerPost", event.target.value)
-                }
-              />
-            </FormField>
-            <FormField label="Active posts window">
-              <Input
-                type="number"
-                min={1}
-                value={settings.activeSubscribersWindow}
-                onChange={(event) =>
-                  setValue("activeSubscribersWindow", event.target.value)
                 }
               />
             </FormField>
@@ -2767,154 +2743,6 @@ function SyncStatusModal({
       ) : (
         <EmptyState text="No channel snapshot yet." />
       )}
-    </Modal>
-  );
-}
-
-function SyncScopeModal({
-  open,
-  onClose,
-  isSyncing,
-  lastSyncResult,
-  selection,
-  onSelectionChange,
-  onSyncAll,
-  onSyncSelected,
-}: {
-  open: boolean;
-  onClose: () => void;
-  isSyncing: boolean;
-  lastSyncResult: unknown;
-  selection: TelegramChannelSyncSelection;
-  onSelectionChange: (selection: TelegramChannelSyncSelection) => void;
-  onSyncAll: () => void;
-  onSyncSelected: () => void;
-}) {
-  const syncOptions: Array<{
-    key: keyof TelegramChannelSyncSelection;
-    title: string;
-    description: string;
-  }> = [
-    {
-      key: "syncIncludePublicInfo",
-      title: "Public info",
-      description: "Title, username, chat identity and subscriber counter.",
-    },
-    {
-      key: "syncIncludeInviteLinks",
-      title: "Invite links",
-      description: "Joined and pending requests attribution for invite links.",
-    },
-    {
-      key: "syncIncludeHistoricalPosts",
-      title: "Historical daily rows",
-      description: "Daily aggregated historical post rows.",
-    },
-    {
-      key: "syncIncludePostMetrics",
-      title: "Post metrics",
-      description: "Views, reactions and post-level metrics sync.",
-    },
-    {
-      key: "syncIncludeOlderPosts",
-      title: "Older posts backfill",
-      description: "Extra pass for older post metrics pages.",
-    },
-    {
-      key: "syncIncludeChannelStats",
-      title: "Channel stats",
-      description: "Broadcast analytics graphs and stat snapshots.",
-    },
-    {
-      key: "syncIncludeManagedPosts",
-      title: "Managed posts",
-      description: "Remote managed-post status and message links.",
-    },
-    {
-      key: "syncIncludeAudienceSnapshot",
-      title: "Audience snapshot",
-      description: "Save the latest audience estimate after sync.",
-    },
-  ];
-  const selectedCount = syncOptions.filter(
-    (option) => selection[option.key],
-  ).length;
-
-  return (
-    <Modal open={open} onClose={onClose} title="Sync sources and scope">
-      <div className="space-y-4">
-        <div>
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <p className="text-sm font-medium text-slate-200">Sync scope</p>
-            <span className="text-xs text-slate-400">
-              Selected: {selectedCount}/{syncOptions.length}
-            </span>
-          </div>
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            {syncOptions.map((option) => (
-              <label
-                key={option.key}
-                className="flex cursor-pointer items-start gap-3 rounded-md border border-slate-800 bg-slate-900/40 p-3"
-              >
-                <input
-                  type="checkbox"
-                  className="mt-1 h-4 w-4 rounded border-slate-600 bg-slate-950 text-blue-500"
-                  checked={selection[option.key]}
-                  onChange={(event) =>
-                    onSelectionChange({
-                      ...selection,
-                      [option.key]: event.target.checked,
-                    })
-                  }
-                />
-                <div>
-                  <p className="text-sm font-medium text-white">
-                    {option.title}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    {option.description}
-                  </p>
-                </div>
-              </label>
-            ))}
-          </div>
-          <p className="mt-2 text-xs text-slate-500">
-            Sync selected saves this scope to the channel. Sync all runs the
-            full sync without changing the saved selection.
-          </p>
-        </div>
-        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3 text-sm text-slate-300">
-          <p>
-            Now syncing:{" "}
-            {isSyncing ? "data from available connected sources" : "idle"}
-          </p>
-          <p>
-            Last sync payload:{" "}
-            {lastSyncResult
-              ? summarizeSync(lastSyncResult)
-              : "Run sync to capture detailed result in UI"}
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            The selected scope is saved on the channel and reused for the next
-            sync.
-          </p>
-        </div>
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="secondary" onClick={onClose} disabled={isSyncing}>
-            Close
-          </Button>
-          <Button variant="secondary" onClick={onSyncAll} disabled={isSyncing}>
-            Sync all
-          </Button>
-          <Button
-            variant="primary"
-            onClick={onSyncSelected}
-            disabled={isSyncing || selectedCount === 0}
-          >
-            Sync selected
-          </Button>
-        </div>
-      </div>
     </Modal>
   );
 }

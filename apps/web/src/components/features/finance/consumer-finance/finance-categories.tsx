@@ -230,7 +230,7 @@ function CategoryEditor({
             onChange={() => undefined}
             onEmojiChange={(value) => value && setEmoji(value)}
             allowImages={false}
-            buttonLabel={t.categoryName}
+            buttonLabel={name.trim() || t.categoryName}
           />
           <FormField label={t.categoryName}>
             <Input

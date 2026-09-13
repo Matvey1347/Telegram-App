@@ -6,14 +6,12 @@ import {
   useMemo,
   useState,
 } from "react";
-import { TrendingUp } from "lucide-react";
 import { Line, LineChart, ResponsiveContainer } from "recharts";
 import { CampaignAdmissionViewAnalyticsModal } from "@/components/features/growth/ad-campaigns/campaign-admission-view-analytics-modal";
 import { CampaignInviteLinkHistoryModal } from "@/components/features/growth/ad-campaigns/campaign-invite-link-history-modal";
 import { PromoPreviewModal } from "@/components/features/growth/ad-campaigns/promo-preview-modal";
 import { resolveTitleTemplate } from "@telegram-system/shared";
 import { IconAvatar } from "@/components/icons/icon-avatar";
-import { IconButton } from "@/components/ui/primitives";
 import { InviteLinkPreviewModal } from "@/components/features/telegram/telegram/invite-link-preview-modal";
 import {
   MetricPreviewLabel,
@@ -29,6 +27,7 @@ import type {
   TelegramChannel,
   TelegramInviteLink,
 } from "@/lib/api";
+import { AdCampaignRowActions } from "./ad-campaign-row-actions";
 
 function InviteLinkCreatorAvatar({
   inviteLink,
@@ -549,7 +548,7 @@ function PerformanceCell({
           </p>
           <div className="mt-1 space-y-0.5 text-xs leading-snug text-slate-500">
             <p>Joined {formatMetric(resolvedCurrentJoined)}</p>
-            <p>Pending {formatMetric(pending)}</p>
+            {pending > 0 ? <p>Pending {formatMetric(pending)}</p> : null}
           </div>
         </div>
         <div>
@@ -588,25 +587,26 @@ function PerformanceCell({
         <div className="mt-3">
           <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs">
             {showTrendDelta ? (
-              <span className="rounded border border-slate-700/80 bg-black/20 px-2 py-0.5 text-slate-200">
+              <button
+                type="button"
+                onClick={onOpenHistory}
+                className="rounded border border-slate-700/80 bg-black/20 px-2 py-0.5 text-slate-200 transition-colors hover:border-slate-500 hover:text-white"
+                title="Open campaign trend"
+              >
                 Peak {formatMetric(resolvedPeakAttributed)}
-              </span>
+              </button>
             ) : null}
             {historySummary != null || resolvedDropPercent > 0 ? (
-              <span className="rounded border border-amber-700/80 bg-amber-950/20 px-2 py-0.5 text-amber-200">
+              <button
+                type="button"
+                onClick={onOpenHistory}
+                className="rounded border border-amber-700/80 bg-amber-950/20 px-2 py-0.5 text-amber-200 transition-colors hover:border-amber-500 hover:text-amber-100"
+                title="Open campaign trend"
+              >
                 Drop from peak {formatMetric(resolvedDropAbsolute)} ·{" "}
                 {formatPercent(resolvedDropPercent)}
-              </span>
+              </button>
             ) : null}
-            <button
-              type="button"
-              onClick={onOpenHistory}
-              className="inline-flex items-center gap-1 rounded-full border border-slate-700 px-2.5 py-0.5 text-xs text-slate-200 transition-colors hover:border-slate-500 hover:text-white"
-              title="Open invite-link history for this campaign"
-            >
-              <TrendingUp size={12} />
-              Trend
-            </button>
           </div>
         </div>
       ) : null}
@@ -1214,33 +1214,14 @@ export function AdCampaignsTable({
                 ) : null}
                 {showActions ? (
                   <td className="px-4 py-4">
-                    <div className="flex min-w-[108px] items-center justify-end gap-2 whitespace-nowrap">
-                      {onToggleExclude ? (
-                        <label
-                          className="flex items-center gap-1 text-xs text-slate-400"
-                          title="Exclude from performance summary"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={Boolean(row.campaign.excludeFromAnalytics)}
-                            onChange={(event) =>
-                              onToggleExclude(
-                                row.campaign,
-                                event.target.checked,
-                              )
-                            }
-                          />
-                        </label>
-                      ) : null}
-                      {onEdit ? (
-                        <IconButton onClick={() => onEdit(row.campaign)} />
-                      ) : null}
-                      {onDelete ? (
-                        <IconButton
-                          kind="delete"
-                          onClick={() => onDelete(row.campaign)}
-                        />
-                      ) : null}
+                    <div className="flex justify-end">
+                      <AdCampaignRowActions
+                        campaign={row.campaign}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                        onToggleExclude={onToggleExclude}
+                        onOpenHistory={() => setHistoryCampaign(row.campaign)}
+                      />
                     </div>
                   </td>
                 ) : null}

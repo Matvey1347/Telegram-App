@@ -1,5 +1,8 @@
 import type { Prisma } from '@prisma/client';
-import type { TelegramPostEngagementMetrics } from '@telegram-system/shared';
+import {
+  inferTelegramPostMediaKind,
+  type TelegramPostEngagementMetrics,
+} from '@telegram-system/shared';
 import { buildStableTelegramPostUrl } from '../../../telegram/shared/telegram-post-url';
 
 export const telegramPostEngagementSelect = {
@@ -49,6 +52,22 @@ export type TelegramPostEngagementChannel = {
   ownViewsPerPost?: number | null;
   ownReactionsPerPost?: number | null;
 };
+
+export function telegramPostMediaPresentation(post: {
+  imageUrls?: string[] | null;
+}) {
+  const mediaItems = (post.imageUrls ?? []).flatMap((url) => {
+    if (!/^https?:\/\//i.test(url)) return [];
+    const kind = inferTelegramPostMediaKind(url);
+    return kind ? [{ kind, url }] : [];
+  });
+  return {
+    imageUrls: mediaItems
+      .filter((item) => item.kind === 'PHOTO')
+      .map((item) => item.url),
+    mediaItems,
+  };
+}
 
 function rate(numerator: number | null, denominator: number) {
   if (numerator == null || denominator <= 0) return null;

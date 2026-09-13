@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   Prisma,
@@ -13,6 +14,7 @@ import type {
   CrmContactDetail,
   CrmChatContactContext,
   CrmContactsListResult,
+  CrmTagSummary,
   CrmUnreadSummary,
 } from '@telegram-system/shared';
 import {
@@ -40,12 +42,18 @@ import {
   loadCrmContactSalesSummaries,
 } from './telegram-crm-contact-sales-summary';
 import { loadCrmReplySummaries } from './telegram-crm-reply-summary';
+import {
+  crmTagSelect,
+  mapCrmTag,
+  TelegramCrmSystemTagsService,
+} from './telegram-crm-system-tags.service';
 
 @Injectable()
 export class TelegramCrmContactReadService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authorization: WorkspaceAuthorizationService,
+    @Optional() private readonly systemTags?: TelegramCrmSystemTagsService,
   ) {}
 
   async list(
@@ -101,38 +109,64 @@ export class TelegramCrmContactReadService {
         this.prisma.telegramAdvertiser.count({ where: baseWhere }),
       ]);
     }
-    const [dealTotals, salesSummaries, replySummaries] = await Promise.all([
-      this.activeDealTotals(
-        access.workspaceId,
-        rows.flatMap((row) => (row.sales[0] ? [row.sales[0].id] : [])),
+    const facetWhere = this.contactWhere(access.workspaceId, ownership, {
+      ...query,
+      search: undefined,
+      tagIds: undefined,
+    });
+    const [dealTotals, salesSummaries, replySummaries, availableTags] =
+      await Promise.all([
+        this.activeDealTotals(
+          access.workspaceId,
+          rows.flatMap((row) => (row.sales[0] ? [row.sales[0].id] : [])),
+        ),
+        loadCrmContactSalesSummaries(
+          this.prisma,
+          access.workspaceId,
+          rows
+            .filter(
+              (row) =>
+                row.totalSalesCount > 0 ||
+                row._count.sales > 0 ||
+                Boolean(row.telegramUsername) ||
+                isUnassignedCrmContact(row),
+            )
+            .map((row) => ({
+              id: row.id,
+              displayName: row.displayName,
+              companyName: row.companyName,
+              telegramUsername: row.telegramUsername,
+            })),
+        ),
+        loadCrmReplySummaries(this.prisma, access.workspaceId, rows),
+        this.listTagFacets(access.workspaceId, facetWhere),
+      ]);
+    return {
+      ...createPaginatedResponse(
+        rows.map((row) =>
+          mapCrmContactListItem(
+            row,
+            dealTotals,
+            salesSummaries,
+            replySummaries,
+          ),
+        ),
+        totalItems,
+        pagination,
       ),
-      loadCrmContactSalesSummaries(
-        this.prisma,
-        access.workspaceId,
-        rows
-          .filter(
-            (row) =>
-              row.totalSalesCount > 0 ||
-              row._count.sales > 0 ||
-              Boolean(row.telegramUsername) ||
-              isUnassignedCrmContact(row),
-          )
-          .map((row) => ({
-            id: row.id,
-            displayName: row.displayName,
-            companyName: row.companyName,
-            telegramUsername: row.telegramUsername,
-          })),
-      ),
-      loadCrmReplySummaries(this.prisma, access.workspaceId, rows),
-    ]);
-    return createPaginatedResponse(
-      rows.map((row) =>
-        mapCrmContactListItem(row, dealTotals, salesSummaries, replySummaries),
-      ),
-      totalItems,
-      pagination,
-    );
+      availableTags,
+    };
+  }
+
+  async listTags(userId: string): Promise<CrmTagSummary[]> {
+    const access = await this.authorization.require(userId, 'adSales.crm.view');
+    await this.systemTags?.ensureWorkflowTags(access.workspaceId);
+    const rows = await this.prisma.telegramAdvertiserTag.findMany({
+      where: { workspaceId: access.workspaceId },
+      orderBy: [{ position: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+      select: crmTagSelect,
+    });
+    return rows.map(mapCrmTag);
   }
 
   async get(userId: string, contactId: string): Promise<CrmContactDetail> {
@@ -282,7 +316,36 @@ export class TelegramCrmContactReadService {
             ],
           }
         : {}),
+      ...(query.tagIds?.length
+        ? { tags: { some: { tagId: { in: query.tagIds } } } }
+        : {}),
     };
+  }
+
+  private async listTagFacets(
+    workspaceId: string,
+    contactWhere: Prisma.TelegramAdvertiserWhereInput,
+  ) {
+    // Several internal read-only consumers provide a deliberately narrow
+    // Prisma facade. Production Prisma always exposes this delegate.
+    if (!this.prisma.telegramAdvertiserTag) return [];
+    const rows = await this.prisma.telegramAdvertiserTag.findMany({
+      where: {
+        workspaceId,
+        advertisers: { some: { advertiser: contactWhere } },
+      },
+      orderBy: [{ position: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+      select: {
+        ...crmTagSelect,
+        _count: {
+          select: { advertisers: { where: { advertiser: contactWhere } } },
+        },
+      },
+    });
+    return rows.map((row) => ({
+      ...mapCrmTag(row),
+      contactCount: row._count.advertisers,
+    }));
   }
 
   private dueFilter(query: CrmContactsQueryDto): Prisma.DateTimeFilter | null {

@@ -35,8 +35,9 @@ describe('Finance Telegram application URLs', () => {
 
     const menu = financeMainMenu('finance-bot', 'uk');
 
-    expect(menu).toHaveLength(4);
-    expect(menu.flat()).toHaveLength(8);
+    expect(menu).toHaveLength(5);
+    expect(menu.flat()).toHaveLength(9);
+    expect(menu[0]).toEqual([{ text: '🤖 Джаврис' }]);
     expect(menu.flat()).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ text: '📱 Відкрити Finance' }),

@@ -353,9 +353,16 @@ function FormatPrice({
   pricing?: {
     expectedViews: number | null;
     estimatedPrice: number | null;
+    postsSampleCount: number;
   };
   currency: string;
 }) {
+  const requiredPosts = 3;
+  const collectedPosts = Math.min(
+    requiredPosts,
+    Math.max(0, pricing?.postsSampleCount ?? 0),
+  );
+  const dataHint = `${collectedPosts}/${requiredPosts} mature posts with metrics for this placement window`;
   return (
     <div className="rounded-md border border-neutral-800/80 bg-neutral-950/55 px-2.5 py-2">
       <div className="space-y-1">
@@ -364,11 +371,14 @@ function FormatPrice({
           {moneyOrDash(pricing?.estimatedPrice, currency, 1)}
         </p>
       </div>
-      <p className="mt-0.5 flex items-center gap-1 text-xs text-neutral-500">
+      <p
+        className="mt-0.5 flex items-center gap-1 text-xs text-neutral-500"
+        title={pricing?.expectedViews == null ? dataHint : undefined}
+      >
         <Eye size={13} className="text-sky-300" aria-hidden="true" />
         {pricing?.expectedViews != null
           ? `${number(pricing.expectedViews)} views`
-          : "Not enough data"}
+          : `${collectedPosts}/${requiredPosts} mature posts`}
       </p>
     </div>
   );

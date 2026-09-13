@@ -18,7 +18,7 @@ const navigation = {
   "navigation.scheduledTasks": "Запланированные задачи",
   "navigation.trash": "Корзина",
   "navigation.systemLogs": "Системные журналы",
-  "navigation.workspaceSettings": "Настройки пространства",
+  "navigation.workspaceSettings": "Настройки",
   "navigation.roles": "Роли и доступ",
   "navigation.open": "Открыть навигацию",
   "navigation.close": "Закрыть навигацию",

@@ -1,23 +1,9 @@
 "use client";
 
-
 import { X } from "lucide-react";
-import {
-  forwardRef,
-  type KeyboardEvent,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  useState,
-} from "react";
+import { forwardRef, type KeyboardEvent, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  authApi,
-  telegramChannelsApi,
-  type TelegramManagedPost,
-  type TelegramManagedPostLinkTarget,
-} from "@/lib/api";
+import { authApi, telegramChannelsApi, type TelegramManagedPost, type TelegramManagedPostLinkTarget } from "@/lib/api";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { TelegramInlineKeyboardEditor, TelegramInlineKeyboardSummary } from "./telegram-inline-keyboard-editor";
 import { TelegramCustomEmojiPickerModal } from "./telegram-custom-emoji-picker-modal";
@@ -71,30 +57,7 @@ type EditorSnapshot = {
   selectionEnd: number;
 };
 
-export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramTextEditorProps>(function TelegramTextEditor({
-  value,
-  onChange,
-  placeholder,
-  characterCountLabel,
-  disabled,
-  rows = 12,
-  channelId,
-  currentPostId,
-  enableInternalPostLinks = false,
-  internalLinkUsage = "publishNow",
-  internalLinkScheduledAt,
-  highlightInternalLinkTargetId,
-  highlightRequestKey = 0,
-  availableInternalPosts,
-  buttonRows = [],
-  onButtonRowsChange,
-  canPublishInlineButtons = true,
-  onCheckInlineButtonPublishingAccess,
-  enableCustomEmoji = false,
-  customEmojiPacks,
-  onManageCustomEmojiPacks,
-  singleRowToolbar = false,
-}, ref) {
+export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramTextEditorProps>(function TelegramTextEditor({ value, onChange, placeholder, characterCountLabel, disabled, rows = 12, channelId, currentPostId, enableInternalPostLinks = false, internalLinkUsage = "publishNow", internalLinkScheduledAt, highlightInternalLinkTargetId, highlightRequestKey = 0, availableInternalPosts, buttonRows = [], onButtonRowsChange, canPublishInlineButtons = true, onCheckInlineButtonPublishingAccess, enableCustomEmoji = false, customEmojiPacks, onManageCustomEmojiPacks, singleRowToolbar = false }, ref) {
   const { t, ensureNamespaces } = useI18n();
   useEffect(() => {
     void ensureNamespaces(["telegram/posts/editor"]);
@@ -119,9 +82,7 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
   const [pullQuoteAuthor, setPullQuoteAuthor] = useState("");
   const [linkUrl, setLinkUrl] = useState("https://");
   const [linkError, setLinkError] = useState("");
-  const [linkMode, setLinkMode] = useState<"external" | "internal">(
-    enableInternalPostLinks && channelId ? "internal" : "external",
-  );
+  const [linkMode, setLinkMode] = useState<"external" | "internal">(enableInternalPostLinks && channelId ? "internal" : "external");
   const [internalSearch, setInternalSearch] = useState("");
   const internalLinksEnabled = enableInternalPostLinks && Boolean(channelId);
   const customEmojiEnabled = enableCustomEmoji;
@@ -139,11 +100,7 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
     return availableInternalPosts
       .filter((post) => post.telegramChannelId === channelId)
       .filter((post) => post.id !== currentPostId)
-      .filter((post) =>
-        normalizedSearch
-          ? post.title.toLowerCase().includes(normalizedSearch)
-          : true,
-      )
+      .filter((post) => (normalizedSearch ? post.title.toLowerCase().includes(normalizedSearch) : true))
       .sort((left, right) => {
         const updated = right.updatedAt.localeCompare(left.updatedAt);
         return updated || left.title.localeCompare(right.title);
@@ -164,14 +121,7 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
       }));
   }, [availableInternalPosts, channelId, currentPostId, internalSearch]);
   const linkTargets = useQuery({
-    queryKey: [
-      "telegram-managed-post-link-targets",
-      channelId,
-      internalSearch,
-      currentPostId,
-      internalLinkUsage,
-      internalLinkScheduledAt,
-    ],
+    queryKey: ["telegram-managed-post-link-targets", channelId, internalSearch, currentPostId, internalLinkUsage, internalLinkScheduledAt],
     queryFn: () =>
       telegramChannelsApi.managedPostLinkTargets(channelId!, {
         search: internalSearch.trim() || undefined,
@@ -180,15 +130,9 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
         scheduledAt: internalLinkScheduledAt,
         limit: 30,
       }),
-    enabled:
-      !availableInternalPosts &&
-      linkEditorOpen &&
-      linkMode === "internal" &&
-      internalLinksEnabled,
+    enabled: !availableInternalPosts && linkEditorOpen && linkMode === "internal" && internalLinksEnabled,
   });
-  const effectiveLinkTargets = availableInternalPosts
-    ? localLinkTargets()
-    : (linkTargets.data || []);
+  const effectiveLinkTargets = availableInternalPosts ? localLinkTargets() : linkTargets.data || [];
   const scrollTextareaToSelection = useCallback(
     (textarea: HTMLTextAreaElement, start: number, selectionText: string) => {
       const style = window.getComputedStyle(textarea);
@@ -223,36 +167,33 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
       document.body.appendChild(mirror);
       const selectionTop = marker.offsetTop;
       const lineHeight = Number.parseFloat(style.lineHeight) || 24;
-      textarea.scrollTop = Math.max(
-        selectionTop - textarea.clientHeight / 2 + lineHeight * 1.5,
-        0,
-      );
+      textarea.scrollTop = Math.max(selectionTop - textarea.clientHeight / 2 + lineHeight * 1.5, 0);
       document.body.removeChild(mirror);
     },
     [value],
   );
 
-  const focusInternalLinkInText = useCallback((targetId: string, requestKey: number) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const escapedTargetId = targetId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const pattern = new RegExp(
-      String.raw`\[[^\]\n]+\]\(tg-post:${escapedTargetId}\)`,
-      "g",
-    );
-    const match = pattern.exec(value);
-    if (!match || match.index == null) return;
-    const start = match.index;
-    const end = start + match[0].length;
-    highlightedSelectionRef.current = { start, end, requestKey };
-    scrollTextareaToSelection(textarea, start, match[0]);
-    textarea.focus();
-    textarea.setSelectionRange(start, end);
-    requestAnimationFrame(() => {
+  const focusInternalLinkInText = useCallback(
+    (targetId: string, requestKey: number) => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      const escapedTargetId = targetId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const pattern = new RegExp(String.raw`\[[^\]\n]+\]\(tg-post:${escapedTargetId}\)`, "g");
+      const match = pattern.exec(value);
+      if (!match || match.index == null) return;
+      const start = match.index;
+      const end = start + match[0].length;
+      highlightedSelectionRef.current = { start, end, requestKey };
+      scrollTextareaToSelection(textarea, start, match[0]);
       textarea.focus();
       textarea.setSelectionRange(start, end);
-    });
-  }, [scrollTextareaToSelection, value]);
+      requestAnimationFrame(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start, end);
+      });
+    },
+    [scrollTextareaToSelection, value],
+  );
 
   /* eslint-disable react-hooks/refs -- reset editor history when a parent hydrates a different value */
   if (lastKnownValueRef.current !== value) {
@@ -266,10 +207,7 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
     if (!highlightInternalLinkTargetId || !highlightRequestKey) return;
     if (handledHighlightRequestKeyRef.current === highlightRequestKey) return;
     handledHighlightRequestKeyRef.current = highlightRequestKey;
-    focusInternalLinkInText(
-      highlightInternalLinkTargetId,
-      highlightRequestKey,
-    );
+    focusInternalLinkInText(highlightInternalLinkTargetId, highlightRequestKey);
   }, [focusInternalLinkInText, highlightInternalLinkTargetId, highlightRequestKey]);
 
   const currentSnapshot = (): EditorSnapshot => {
@@ -290,11 +228,7 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
     });
   };
 
-  const commitValue = (
-    nextValue: string,
-    nextSelectionStart?: number,
-    nextSelectionEnd = nextSelectionStart,
-  ) => {
+  const commitValue = (nextValue: string, nextSelectionStart?: number, nextSelectionEnd = nextSelectionStart) => {
     if (nextValue === value) return;
     undoStackRef.current.push(currentSnapshot());
     redoStackRef.current = [];
@@ -344,28 +278,20 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
     [commitExternalChange, redo, undo],
   );
 
-  const replaceSelection = (
-    before: string,
-    after: string,
-    placeholder: string,
-  ) => {
+  const replaceSelection = (before: string, after: string, placeholder: string) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const selection = value.slice(start, end);
     const content = selection || placeholder;
-    const selectionIsWrapped =
-      selection.startsWith(before) && selection.endsWith(after) && selection.length >= before.length + after.length;
+    const selectionIsWrapped = selection.startsWith(before) && selection.endsWith(after) && selection.length >= before.length + after.length;
     if (selectionIsWrapped) {
       const unwrapped = selection.slice(before.length, selection.length - after.length);
       commitValue(`${value.slice(0, start)}${unwrapped}${value.slice(end)}`, start, start + unwrapped.length);
       return;
     }
-    const isWrapped =
-      start >= before.length &&
-      value.slice(start - before.length, start) === before &&
-      value.slice(end, end + after.length) === after;
+    const isWrapped = start >= before.length && value.slice(start - before.length, start) === before && value.slice(end, end + after.length) === after;
     if (isWrapped) {
       const nextValue = `${value.slice(0, start - before.length)}${content}${value.slice(end + after.length)}`;
       const selectionStart = start - before.length;
@@ -388,14 +314,8 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
     const selectedLines = value.slice(lineStart, lineEnd) || t("telegram.posts.editorComponents.format.quote");
     const lines = selectedLines.split("\n");
     const allPrefixed = lines.every((line) => line.startsWith(prefix));
-    const replacement = lines
-      .map((line) => (allPrefixed ? line.slice(prefix.length) : `${prefix}${line}`))
-      .join("\n");
-    commitValue(
-      `${value.slice(0, lineStart)}${replacement}${value.slice(lineEnd)}`,
-      lineStart,
-      lineStart + replacement.length,
-    );
+    const replacement = lines.map((line) => (allPrefixed ? line.slice(prefix.length) : `${prefix}${line}`)).join("\n");
+    commitValue(`${value.slice(0, lineStart)}${replacement}${value.slice(lineEnd)}`, lineStart, lineStart + replacement.length);
   };
 
   const insertRichBlock = (before: string, placeholder: string, after = "") => {
@@ -444,11 +364,7 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
     const { start, end } = linkSelectionRef.current;
     const selected = value.slice(start, end) || target.title;
     const markup = telegramPostLinkMarkup(selected, target);
-    commitValue(
-      `${value.slice(0, start)}${markup}${value.slice(end)}`,
-      start,
-      start + markup.length,
-    );
+    commitValue(`${value.slice(0, start)}${markup}${value.slice(end)}`, start, start + markup.length);
     setLinkEditorOpen(false);
     setLinkError("");
   };
@@ -461,10 +377,7 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
     let normalizedHref: string;
     try {
       const url = new URL(linkUrl.trim());
-      if (
-        !["http:", "https:"].includes(url.protocol) ||
-        !url.hostname.includes(".")
-      ) {
+      if (!["http:", "https:"].includes(url.protocol) || !url.hostname.includes(".")) {
         throw new Error("Invalid URL");
       }
       normalizedHref = url.toString();
@@ -473,11 +386,7 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
       return;
     }
     const markup = `[${selected}](${normalizedHref})`;
-    commitValue(
-      `${value.slice(0, start)}${markup}${value.slice(end)}`,
-      start,
-      start + markup.length,
-    );
+    commitValue(`${value.slice(0, start)}${markup}${value.slice(end)}`, start, start + markup.length);
     setLinkEditorOpen(false);
     setLinkError("");
   };
@@ -513,11 +422,7 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
 
   const applyPullQuoteWithAuthor = () => {
     const author = pullQuoteAuthor.trim().replaceAll('"', "'");
-    insertRichBlock(
-      `:::pullquote${author ? ` credit="${author}"` : ""}\n`,
-      t("telegram.posts.editorComponents.format.pullQuote"),
-      "\n:::",
-    );
+    insertRichBlock(`:::pullquote${author ? ` credit="${author}"` : ""}\n`, t("telegram.posts.editorComponents.format.pullQuote"), "\n:::");
     setPullQuoteAuthorOpen(false);
     setPullQuoteAuthor("");
   };
@@ -544,7 +449,18 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
 
   return (
     <div className="relative overflow-visible rounded-lg border border-neutral-700 bg-neutral-900 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
-      <TelegramTextEditorToolbar disabled={disabled} hasButtons={Boolean(onButtonRowsChange)} singleRow={singleRowToolbar} onCommand={executeCommand} onHeading={applyHeading} onPullQuoteWithAuthor={() => { setPullQuoteAuthor(""); setPullQuoteAuthorOpen(true); }} onConfigure={() => setShortcutsOpen(true)} />
+      <TelegramTextEditorToolbar
+        disabled={disabled}
+        hasButtons={Boolean(onButtonRowsChange)}
+        singleRow={singleRowToolbar}
+        onCommand={executeCommand}
+        onHeading={applyHeading}
+        onPullQuoteWithAuthor={() => {
+          setPullQuoteAuthor("");
+          setPullQuoteAuthorOpen(true);
+        }}
+        onConfigure={() => setShortcutsOpen(true)}
+      />
       {onButtonRowsChange ? <TelegramInlineKeyboardEditor buttonRows={buttonRows} onChange={onButtonRowsChange} disabled={disabled} open={buttonsEditorOpen} onOpenChange={setButtonsEditorOpen} canPublishInlineButtons={canPublishInlineButtons} onCheckPublishingAccess={onCheckInlineButtonPublishingAccess} /> : null}
       <TelegramCustomEmojiPickerModal
         open={customEmojiPickerOpen}
@@ -566,42 +482,42 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
         onRetryPremium={() => void customEmojiPacksQuery.refetch()}
       />
       <TelegramTextEditorShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-      {pullQuoteAuthorOpen ? <div className="absolute left-2 right-2 top-12 z-30 rounded-lg border border-neutral-700 bg-neutral-950 p-3 shadow-2xl"><p className="text-sm font-medium text-white">{t("telegram.posts.editorComponents.format.pullQuoteWithAuthor")}</p><p className="mt-1 text-xs text-neutral-400">{t("telegram.posts.editorComponents.pullQuote.authorHelp")}</p><div className="mt-3 flex gap-2"><input autoFocus value={pullQuoteAuthor} onChange={(event) => setPullQuoteAuthor(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") applyPullQuoteWithAuthor(); if (event.key === "Escape") setPullQuoteAuthorOpen(false); }} placeholder={t("telegram.posts.editorComponents.pullQuote.authorPlaceholder")} className="min-w-0 flex-1 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500" /><button type="button" onClick={applyPullQuoteWithAuthor} className="inline-flex shrink-0 items-center whitespace-nowrap rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500">{t("telegram.posts.editorComponents.actions.insert")}</button></div></div> : null}
+      {pullQuoteAuthorOpen ? (
+        <div className="absolute left-2 right-2 top-12 z-30 rounded-lg border border-neutral-700 bg-neutral-950 p-3 shadow-2xl">
+          <p className="text-sm font-medium text-white">{t("telegram.posts.editorComponents.format.pullQuoteWithAuthor")}</p>
+          <p className="mt-1 text-xs text-neutral-400">{t("telegram.posts.editorComponents.pullQuote.authorHelp")}</p>
+          <div className="mt-3 flex gap-2">
+            <input
+              autoFocus
+              value={pullQuoteAuthor}
+              onChange={(event) => setPullQuoteAuthor(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") applyPullQuoteWithAuthor();
+                if (event.key === "Escape") setPullQuoteAuthorOpen(false);
+              }}
+              placeholder={t("telegram.posts.editorComponents.pullQuote.authorPlaceholder")}
+              className="min-w-0 flex-1 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+            />
+            <button type="button" onClick={applyPullQuoteWithAuthor} className="inline-flex shrink-0 items-center whitespace-nowrap rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500">
+              {t("telegram.posts.editorComponents.actions.insert")}
+            </button>
+          </div>
+        </div>
+      ) : null}
       {linkEditorOpen ? (
         <div className="absolute left-2 right-2 top-12 z-30 rounded-lg border border-neutral-700 bg-neutral-950 p-3 shadow-2xl">
           <div className="mb-2 flex items-center justify-between gap-3">
             <p className="text-sm font-medium text-white">{t("telegram.posts.editorComponents.format.insertLink")}</p>
-            <button
-              type="button"
-              onClick={() => setLinkEditorOpen(false)}
-              className="rounded-md p-1 text-neutral-400 hover:bg-neutral-800 hover:text-white"
-              aria-label={t("telegram.posts.editorComponents.link.close")}
-            >
+            <button type="button" onClick={() => setLinkEditorOpen(false)} className="rounded-md p-1 text-neutral-400 hover:bg-neutral-800 hover:text-white" aria-label={t("telegram.posts.editorComponents.link.close")}>
               <X size={15} />
             </button>
           </div>
           {internalLinksEnabled ? (
             <div className="mb-3 flex rounded-md bg-neutral-900 p-1 text-xs">
-              <button
-                type="button"
-                onClick={() => setLinkMode("external")}
-                className={`flex-1 rounded px-3 py-1.5 ${
-                  linkMode === "external"
-                    ? "bg-blue-600 text-white"
-                    : "text-neutral-400 hover:text-white"
-                }`}
-              >
+              <button type="button" onClick={() => setLinkMode("external")} className={`flex-1 rounded px-3 py-1.5 ${linkMode === "external" ? "bg-blue-600 text-white" : "text-neutral-400 hover:text-white"}`}>
                 {t("telegram.posts.editorComponents.link.external")}
               </button>
-              <button
-                type="button"
-                onClick={() => setLinkMode("internal")}
-                className={`flex-1 rounded px-3 py-1.5 ${
-                  linkMode === "internal"
-                    ? "bg-blue-600 text-white"
-                    : "text-neutral-400 hover:text-white"
-                }`}
-              >
+              <button type="button" onClick={() => setLinkMode("internal")} className={`flex-1 rounded px-3 py-1.5 ${linkMode === "internal" ? "bg-blue-600 text-white" : "text-neutral-400 hover:text-white"}`}>
                 {t("telegram.posts.editorComponents.link.internal")}
               </button>
             </div>
@@ -627,17 +543,11 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
                   placeholder="https://example.com"
                   className="min-w-0 flex-1 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
                 />
-                <button
-                  type="button"
-                  onClick={applyLink}
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
-                >
+                <button type="button" onClick={applyLink} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500">
                   {t("telegram.posts.editorComponents.actions.add")}
                 </button>
               </div>
-              {linkError ? (
-                <p className="mt-2 text-xs text-red-400">{linkError}</p>
-              ) : null}
+              {linkError ? <p className="mt-2 text-xs text-red-400">{linkError}</p> : null}
             </>
           ) : (
             <div>
@@ -653,76 +563,24 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
                 className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
               />
               <div className="mt-2 max-h-64 space-y-1 overflow-y-auto">
-                {!availableInternalPosts && linkTargets.isLoading ? (
-                  <p className="px-2 py-3 text-xs text-neutral-400">
-                    {t("telegram.posts.editorComponents.link.loadingPosts")}
-                  </p>
-                ) : null}
-                {!availableInternalPosts && linkTargets.isError ? (
-                  <p className="px-2 py-3 text-xs text-red-400">
-                    {t("telegram.posts.editorComponents.link.loadError")}
-                  </p>
-                ) : null}
+                {!availableInternalPosts && linkTargets.isLoading ? <p className="px-2 py-3 text-xs text-neutral-400">{t("telegram.posts.editorComponents.link.loadingPosts")}</p> : null}
+                {!availableInternalPosts && linkTargets.isError ? <p className="px-2 py-3 text-xs text-red-400">{t("telegram.posts.editorComponents.link.loadError")}</p> : null}
                 {effectiveLinkTargets.map((target) => (
-                  <button
-                    key={target.id}
-                    type="button"
-                    onClick={() => applyInternalLink(target)}
-                    className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left hover:bg-neutral-800"
-                  >
+                  <button key={target.id} type="button" onClick={() => applyInternalLink(target)} className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left hover:bg-neutral-800">
                     {target.iconPresentation ? (
-                      <IconAvatar
-                        icon={target.iconPresentation}
-                        label={target.title}
-                        size="xs"
-                        bordered={false}
-                        className="!bg-transparent"
-                      />
+                      <IconAvatar icon={target.iconPresentation} label={target.title} size="xs" bordered={false} className="!bg-transparent" />
                     ) : (
-                      <span
-                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-xs"
-                        aria-hidden="true"
-                      >
-                        {target.status === "PUBLISHED"
-                          ? "✅"
-                          : target.status === "SCHEDULED"
-                            ? "🕒"
-                            : target.status === "FAILED"
-                              ? "⚠️"
-                              : "📝"}
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-xs" aria-hidden="true">
+                        {target.status === "PUBLISHED" ? "✅" : target.status === "SCHEDULED" ? "🕒" : target.status === "FAILED" ? "⚠️" : "📝"}
                       </span>
                     )}
-                    <span className="min-w-0 flex-1 truncate text-sm text-white">
-                      {target.title}
-                    </span>
-                    <span
-                      className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${
-                        target.status === "PUBLISHED"
-                          ? "bg-emerald-950 text-emerald-300"
-                          : "bg-amber-950 text-amber-300"
-                      }`}
-                      title={
-                        target.status === "PUBLISHED"
-                          ? t("telegram.posts.editorComponents.link.ready")
-                          : t("telegram.posts.editorComponents.link.unpublishedWarning")
-                      }
-                    >
-                      {target.status === "PUBLISHED"
-                        ? t("telegram.posts.editorComponents.status.published")
-                        : target.status === "SCHEDULED"
-                          ? t("telegram.posts.editorComponents.status.scheduled")
-                          : target.status === "FAILED"
-                            ? t("telegram.posts.editorComponents.status.failed")
-                            : t("telegram.posts.editorComponents.status.draft")}
+                    <span className="min-w-0 flex-1 truncate text-sm text-white">{target.title}</span>
+                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${target.status === "PUBLISHED" ? "bg-emerald-950 text-emerald-300" : "bg-amber-950 text-amber-300"}`} title={target.status === "PUBLISHED" ? t("telegram.posts.editorComponents.link.ready") : t("telegram.posts.editorComponents.link.unpublishedWarning")}>
+                      {target.status === "PUBLISHED" ? t("telegram.posts.editorComponents.status.published") : target.status === "SCHEDULED" ? t("telegram.posts.editorComponents.status.scheduled") : target.status === "FAILED" ? t("telegram.posts.editorComponents.status.failed") : t("telegram.posts.editorComponents.status.draft")}
                     </span>
                   </button>
                 ))}
-                {(!availableInternalPosts && !linkTargets.isLoading && !effectiveLinkTargets.length) ||
-                (availableInternalPosts && !effectiveLinkTargets.length) ? (
-                  <p className="px-2 py-3 text-xs text-neutral-500">
-                    {t("telegram.posts.editorComponents.link.noMatches")}
-                  </p>
-                ) : null}
+                {(!availableInternalPosts && !linkTargets.isLoading && !effectiveLinkTargets.length) || (availableInternalPosts && !effectiveLinkTargets.length) ? <p className="px-2 py-3 text-xs text-neutral-500">{t("telegram.posts.editorComponents.link.noMatches")}</p> : null}
               </div>
             </div>
           )}
@@ -743,7 +601,12 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
       />
       {onButtonRowsChange ? <TelegramInlineKeyboardSummary rows={buttonRows} disabled={disabled} onEdit={() => setButtonsEditorOpen(true)} /> : null}
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-neutral-800 px-3 py-1.5 text-[11px] text-neutral-500">
-        <span>{characterCountLabel?.(value.length) ?? t("telegram.posts.editorComponents.text.characterCount", { count: value.length })}</span>
+        <span>
+          {characterCountLabel?.(value.length) ??
+            t("telegram.posts.editorComponents.text.characterCount", {
+              count: value.length,
+            })}
+        </span>
       </div>
     </div>
   );

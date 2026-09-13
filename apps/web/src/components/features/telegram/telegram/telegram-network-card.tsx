@@ -21,7 +21,7 @@ import type {
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { IconPicker } from "@/components/icons/icon-picker";
 import { formatCompactMoney } from "@/lib/features/finance/money";
-import { TelegramEntityAvatar } from "./telegram-entity-avatar";
+import { TelegramChannelAvatarList } from "./telegram-channel-avatar-list";
 import {
   TelegramCardActionsMenu,
   TelegramCardMenuAction,
@@ -89,32 +89,15 @@ function NetworkChannels({
 }: {
   channels: TelegramChannelNetworkMember[];
 }) {
-  const visible = channels.slice(0, 3);
+  if (!channels.length) {
+    return <span className="text-xs text-neutral-500">0 channels</span>;
+  }
   return (
-    <div className="flex min-w-0 items-center gap-2">
-      {visible.length ? (
-        <div className="flex -space-x-2">
-          {visible.map((channel) => (
-            <Link
-              key={channel.id}
-              href={`/telegram/channels/${channel.id}`}
-              title={channel.title}
-              className="rounded-full ring-2 ring-neutral-900 transition hover:z-10 hover:ring-blue-500"
-            >
-              <TelegramEntityAvatar
-                imageUrl={channel.photoUrl}
-                kind="channel"
-                alt={channel.title}
-                size="sm"
-              />
-            </Link>
-          ))}
-        </div>
-      ) : null}
-      <span className="truncate text-xs text-neutral-500">
-        {channels.length} {channels.length === 1 ? "channel" : "channels"}
-      </span>
-    </div>
+    <TelegramChannelAvatarList
+      channels={channels}
+      ariaLabel={`Show ${channels.length} network channels`}
+      getHref={(channel) => `/telegram/channels/${channel.id}`}
+    />
   );
 }
 

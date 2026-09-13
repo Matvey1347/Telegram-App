@@ -39,6 +39,7 @@ describe('parseFinanceChatCommand', () => {
     ['/accounts', 'accounts'],
     ['/categories', 'categories'],
     ['/transfer', 'transfer'],
+    ['/assistant', 'assistant'],
     ['/help', 'help'],
   ])('parses %s before free-form finance input', (input, expected) =>
     expect(parseFinanceChatCommand(input)).toBe(expected),
@@ -175,6 +176,9 @@ describe('FinanceBotService chat UX', () => {
       text: jest.fn().mockReturnValue(null),
       consume: jest.fn().mockResolvedValue({ handled: false }),
     };
+    const assistant = {
+      message: jest.fn(),
+    };
     const instance = new FinanceBotService(
       users as any,
       contexts as any,
@@ -190,6 +194,8 @@ describe('FinanceBotService chat UX', () => {
       browserLogin as any,
       iconInput as any,
       flowPresenter as any,
+      undefined,
+      assistant as any,
     );
     return {
       instance,
@@ -205,6 +211,7 @@ describe('FinanceBotService chat UX', () => {
       flows,
       browserLogin,
       flowPresenter,
+      assistant,
       ...overrides,
     };
   }
@@ -245,6 +252,7 @@ describe('FinanceBotService chat UX', () => {
         .flat()
         .map((item) => item.text),
     ).toEqual([
+      '🤖 Jarvis',
       '💸 Add expense',
       '💰 Add income',
       '🧾 Recent',
@@ -254,6 +262,61 @@ describe('FinanceBotService chat UX', () => {
       '⚙️ Settings',
       '❓ Help',
     ]);
+  });
+
+  it('introduces Jarvis from the persistent bot menu', async () => {
+    const test = service();
+    await test.instance.handle({
+      bot,
+      runtime,
+      token: 'bot-token',
+      updateLogId: 'jarvis-intro',
+      update: {
+        message: { text: '🤖 Jarvis', chat: { id: 'chat-1' } },
+      },
+    } as any);
+
+    expect(test.delivery.send).toHaveBeenCalledWith(
+      'bot-token',
+      'chat-1',
+      expect.objectContaining({ text: expect.stringContaining('Jarvis') }),
+    );
+    expect(test.assistant.message).not.toHaveBeenCalled();
+  });
+
+  it('routes ordinary prose to Jarvis and returns its answer', async () => {
+    const test = service();
+    test.assistant.message.mockResolvedValue({
+      kind: 'ANSWER',
+      message: 'Your optional spending is within the current limit.',
+    });
+    await test.instance.handle({
+      bot,
+      runtime,
+      token: 'bot-token',
+      updateLogId: 'jarvis-answer',
+      update: {
+        message: {
+          text: 'Can I afford a new phone?',
+          chat: { id: 'chat-1' },
+        },
+      },
+    } as any);
+
+    expect(test.assistant.message).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profileId: 'profile-1',
+        workspaceId: 'workspace-1',
+      }),
+      { text: 'Can I afford a new phone?', history: [] },
+    );
+    expect(test.delivery.send).toHaveBeenCalledWith(
+      'bot-token',
+      'chat-1',
+      expect.objectContaining({
+        text: 'Your optional spending is within the current limit.',
+      }),
+    );
   });
 
   it('routes a stale English settings button under a Russian profile instead of parsing it as finance input', async () => {
@@ -789,7 +852,7 @@ describe('FinanceBotService chat UX', () => {
       else process.env.FRONTEND_URL = previous;
     }
     const payload = delivery.send.mock.calls[0][2];
-    expect(payload.replyKeyboard.flat()).toHaveLength(8);
+    expect(payload.replyKeyboard.flat()).toHaveLength(9);
     expect(payload.replyKeyboard.flat()).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ text: '📱 Open Finance' }),
@@ -852,6 +915,29 @@ describe('FinanceBotService chat UX', () => {
         text: expect.stringContaining('Сума: 25 UAH'),
       }),
     );
+  });
+
+  it('gates Telegram voice notes by the Pro voice capability', async () => {
+    const test = service();
+    test.entitlements.has.mockResolvedValue(false);
+    await test.instance.handle({
+      bot,
+      runtime,
+      token: 'bot-token',
+      updateLogId: 'voice-free',
+      update: {
+        message: {
+          voice: { file_id: 'voice-1', file_size: 1200 },
+          chat: { id: 'chat-1' },
+        },
+      },
+    } as any);
+
+    expect(test.entitlements.has).toHaveBeenCalledWith(
+      expect.objectContaining({ profileId: 'profile-1' }),
+      'VOICE_INPUT',
+    );
+    expect(test.ai.transcribeVoice).not.toHaveBeenCalled();
   });
 
   it('localizes Russian receipt proposal titles and previews', async () => {

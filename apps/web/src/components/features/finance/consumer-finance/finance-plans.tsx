@@ -111,7 +111,7 @@ export function FinancePlans({
           className={`${styles.heroGlow} absolute inset-0 bg-[radial-gradient(circle_at_78%_50%,rgba(45,212,191,0.2),transparent_34%),radial-gradient(circle_at_90%_15%,rgba(139,92,246,0.18),transparent_30%)]`}
         />
         <Image
-          src="/finance/states/plans-hero.webp"
+          src="/finance/states/plans-hero-v2.webp"
           alt=""
           fill
           priority

@@ -89,6 +89,7 @@ export type MutualPromotionInviteLinkOption = {
   joinedCount: number;
   requestedCount: number;
   isRevoked: boolean;
+  isDefaultForChannel?: boolean;
   available: boolean;
   unavailableReason: "ADS" | "FOLDER_ONLY" | "OVERLAP" | null;
   creatorUsername: string | null;

@@ -4,9 +4,38 @@ import { TelegramPostPreview } from "@/components/features/telegram/telegram/tel
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { Modal } from "@/components/ui/primitives";
 import type { Promo } from "@/lib/api";
+import { normalizeTelegramPostMediaItems } from "@telegram-system/shared";
+import { renderPromoInviteLink } from "./promo-invite-template";
+
+function promoPreviewPost(promo: Promo) {
+  const imageUrls = promo.imageUrls?.length
+    ? promo.imageUrls
+    : promo.imageData
+      ? [promo.imageData]
+      : [];
+  const post = {
+    text: promo.text || "",
+    plainText: promo.plainText,
+    formattedHtml: promo.formattedHtml,
+    imageUrls,
+    mediaItems: normalizeTelegramPostMediaItems(promo.mediaItems, imageUrls),
+    buttonRows: promo.buttonRows ?? [],
+  };
+  return promo.defaultInviteLink?.url
+    ? renderPromoInviteLink(post, promo.defaultInviteLink.url)
+    : post;
+}
 
 function PromoVisual({ promo }: { promo: Promo }) {
-  return <IconAvatar icon={promo.iconPresentation} label={promo.title} size="sm" bordered={false} className="!bg-transparent" />;
+  return (
+    <IconAvatar
+      icon={promo.iconPresentation}
+      label={promo.title}
+      size="sm"
+      bordered={false}
+      className="!bg-transparent"
+    />
+  );
 }
 
 function PromoAssignedMemberChip({
@@ -15,8 +44,14 @@ function PromoAssignedMemberChip({
   member: NonNullable<Promo["assignedMember"]>;
 }) {
   const label = member.user?.name || "Member";
-  const avatarImageUrl = member.avatarPresentation?.type === "image" ? member.avatarPresentation.url : undefined;
-  const avatarEmoji = member.avatarPresentation?.type === "unicode" ? member.avatarPresentation.value : undefined;
+  const avatarImageUrl =
+    member.avatarPresentation?.type === "image"
+      ? member.avatarPresentation.url
+      : undefined;
+  const avatarEmoji =
+    member.avatarPresentation?.type === "unicode"
+      ? member.avatarPresentation.value
+      : undefined;
   return (
     <a
       href="/workspace-members"
@@ -64,8 +99,7 @@ export function PromoPreviewModal({
           <TelegramPostPreview
             channelTitle={promo.telegramChannel?.title || "Telegram channel"}
             channelPhotoUrl={promo.telegramChannel?.photoUrl}
-            text={promo.text || ""}
-            imageUrls={promo.imageData ? [promo.imageData] : []}
+            {...promoPreviewPost(promo)}
           />
           <div className="space-y-4 rounded-lg border border-slate-800 bg-slate-900/25 p-4">
             <div className="flex items-center gap-3">

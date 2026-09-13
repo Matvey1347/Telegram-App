@@ -50,8 +50,15 @@ const catalog: ConsumerBillingCatalog = {
         "DETAILED_ANALYTICS",
         "PERIOD_COMPARISON",
         "DETERMINISTIC_TRENDS",
+        "AI_INPUT",
+        "RECEIPT_SCAN",
       ],
       usageLimits: { AI_INPUT: 10, RECEIPT_SCAN: 3, AI_INSIGHTS: 0 },
+      usagePeriods: {
+        AI_INPUT: "LIFETIME",
+        RECEIPT_SCAN: "LIFETIME",
+        AI_INSIGHTS: "LIFETIME",
+      },
       canPurchase: false,
       prices: [],
     },
@@ -61,6 +68,11 @@ const catalog: ConsumerBillingCatalog = {
       capabilities: ["AI_INPUT", "RECEIPT_SCAN"],
       features: ["AI_INPUT", "RECEIPT_SCAN", "SMART_LIMITS"],
       usageLimits: { AI_INPUT: null, RECEIPT_SCAN: 30, AI_INSIGHTS: 0 },
+      usagePeriods: {
+        AI_INPUT: "UNLIMITED",
+        RECEIPT_SCAN: "MONTH",
+        AI_INSIGHTS: "MONTH",
+      },
       canPurchase: true,
       prices: [
         {
@@ -85,6 +97,11 @@ const catalog: ConsumerBillingCatalog = {
       capabilities: ["FINANCE_HISTORY_QA", "AI_INSIGHTS"],
       features: ["FINANCE_HISTORY_QA", "AI_INSIGHTS"],
       usageLimits: { AI_INPUT: null, RECEIPT_SCAN: 200, AI_INSIGHTS: 100 },
+      usagePeriods: {
+        AI_INPUT: "UNLIMITED",
+        RECEIPT_SCAN: "MONTH",
+        AI_INSIGHTS: "MONTH",
+      },
       canPurchase: true,
       prices: [
         {
@@ -131,7 +148,7 @@ beforeEach(() => {
 });
 
 describe("FinancePlans", () => {
-  it("uses the branded wallet loading scene instead of skeleton blocks", () => {
+  it("uses the lightweight plan SVG after the fast-load delay", () => {
     api.billing.mockReturnValue(new Promise(() => undefined));
     renderPlans();
 
@@ -139,7 +156,7 @@ describe("FinancePlans", () => {
     expect(loading).toHaveAttribute("data-finance-feedback", "loading");
     expect(loading).toHaveTextContent("Loading plan…");
     expect(
-      loading.querySelector("[data-finance-context='plan'] img"),
+      loading.querySelector("[data-finance-scene='plan']"),
     ).toBeInTheDocument();
     expect(document.querySelector(".animate-pulse")).toBeNull();
   });
@@ -162,7 +179,7 @@ describe("FinancePlans", () => {
       screen.getByText("Your finances, with more room to grow"),
     ).toBeVisible();
     expect(
-      document.querySelector("img[src*='plans-hero']"),
+      document.querySelector("img[src*='plans-hero-v2']"),
     ).toBeInTheDocument();
     expect(screen.getByText("Current plan")).toBeInTheDocument();
     expect(screen.queryByText("Usage")).not.toBeInTheDocument();
@@ -181,7 +198,7 @@ describe("FinancePlans", () => {
       screen.getByText("Period-over-period comparison"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("AI explanations of financial signals: 100"),
+      screen.getByText("AI explanations of financial signals: 100 / month"),
     ).toBeInTheDocument();
     expect(
       screen.getByText(

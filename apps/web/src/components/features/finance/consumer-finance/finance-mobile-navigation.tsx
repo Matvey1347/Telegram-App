@@ -1,6 +1,6 @@
 "use client";
 
-import { Landmark, Menu, X } from "lucide-react";
+import { Bot, Landmark, Menu, X } from "lucide-react";
 import { useEffect, useRef, useState, type Ref } from "react";
 import type { FinanceCoreCopy } from "./i18n/core";
 import {
@@ -20,11 +20,13 @@ export function FinanceMobileNavigation({
   screen,
   copy,
   onNavigate,
+  onOpenAssistant,
   alwaysVisible = false,
 }: {
   screen: ConsumerFinanceScreen;
   copy: FinanceCoreCopy;
   onNavigate: (screen: ConsumerFinanceScreen) => void;
+  onOpenAssistant?: () => void;
   alwaysVisible?: boolean;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -88,9 +90,30 @@ export function FinanceMobileNavigation({
     <>
       <nav
         aria-label={copy.financeNavigation}
-        className={`fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-2xl grid-cols-4 border-t border-neutral-800 bg-neutral-950/95 pb-[max(.5rem,env(safe-area-inset-bottom))] pl-[max(.25rem,env(safe-area-inset-left))] pr-[max(.25rem,env(safe-area-inset-right))] pt-1 backdrop-blur ${alwaysVisible ? "" : "md:hidden"}`}
+        className={`fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-2xl ${onOpenAssistant ? "grid-cols-5" : "grid-cols-4"} border-t border-neutral-800 bg-neutral-950/95 pb-[max(.5rem,env(safe-area-inset-bottom))] pl-[max(.25rem,env(safe-area-inset-left))] pr-[max(.25rem,env(safe-area-inset-right))] pt-1 backdrop-blur ${alwaysVisible ? "" : "md:hidden"}`}
       >
-        {FINANCE_PRIMARY_NAVIGATION.map((item) => (
+        {FINANCE_PRIMARY_NAVIGATION.slice(0, 2).map((item) => (
+          <FinanceNavigationButton
+            key={item.id}
+            item={item}
+            active={isFinanceNavigationActive(screen, item.id)}
+            label={copy[item.key]}
+            mobile
+            onClick={() => navigate(item.id)}
+          />
+        ))}
+        {onOpenAssistant ? (
+          <MobileItem
+            active={false}
+            label={copy.assistant}
+            Icon={Bot}
+            onClick={() => {
+              setMoreOpen(false);
+              onOpenAssistant();
+            }}
+          />
+        ) : null}
+        {FINANCE_PRIMARY_NAVIGATION.slice(2).map((item) => (
           <FinanceNavigationButton
             key={item.id}
             item={item}

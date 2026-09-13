@@ -1,3 +1,6 @@
+export const DEFAULT_TELEGRAM_CHANNEL_POST_SYNC_LIMIT = 50;
+export const MAX_TELEGRAM_CHANNEL_POST_SYNC_LIMIT = 10_000;
+
 export type TelegramWorkspaceSyncSelection = {
   syncIncludePublicInfo: boolean;
   syncIncludeInviteLinks: boolean;

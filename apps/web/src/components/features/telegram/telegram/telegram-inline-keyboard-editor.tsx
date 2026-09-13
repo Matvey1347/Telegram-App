@@ -16,7 +16,7 @@ const styles: Array<{ value: TelegramPostButtonStyle; tone: string }> = [
 const blankButton = () => ({ text: "", url: "", style: "default" as const });
 const compactRows = (rows: TelegramPostButtonRows) => rows.map((row) => row.filter((button) => button.text.trim() && button.url.trim())).filter((row) => row.length > 0);
 
-export function TelegramInlineKeyboardEditor({ buttonRows, onChange, disabled, open, onOpenChange, canPublishInlineButtons = true, onCheckPublishingAccess }: {
+export function TelegramInlineKeyboardEditor({ buttonRows, onChange, disabled, open, onOpenChange, canPublishInlineButtons = true, onCheckPublishingAccess, allowedUrlTokens = ["{{invite_link}}"] }: {
   buttonRows: TelegramPostButtonRows;
   onChange: (rows: TelegramPostButtonRows) => void;
   disabled?: boolean;
@@ -24,6 +24,7 @@ export function TelegramInlineKeyboardEditor({ buttonRows, onChange, disabled, o
   onOpenChange: (open: boolean) => void;
   canPublishInlineButtons?: boolean;
   onCheckPublishingAccess?: () => Promise<boolean>;
+  allowedUrlTokens?: string[];
 }) {
   const { t } = useI18n();
   const [draggedRow, setDraggedRow] = useState<number | null>(null);
@@ -32,13 +33,15 @@ export function TelegramInlineKeyboardEditor({ buttonRows, onChange, disabled, o
   const errors = useMemo(() => buttonRows.map((row) => row.map((button) => {
     if (!button.text.trim() && !button.url.trim()) return { text: "", link: "" };
     const textError = button.text.trim() ? "" : t("telegram.posts.editorComponents.inlineButtons.errors.textRequired");
+    if (allowedUrlTokens.some((token) => button.url.includes(token)))
+      return { text: textError, link: "" };
     try {
       const url = new URL(button.url);
       return { text: textError, link: ["http:", "https:", "tg:"].includes(url.protocol) ? "" : t("telegram.posts.editorComponents.inlineButtons.errors.protocol") };
     } catch {
       return { text: textError, link: t("telegram.posts.editorComponents.inlineButtons.errors.invalidLink") };
     }
-  })), [buttonRows, t]);
+  })), [allowedUrlTokens, buttonRows, t]);
   const updateButton = (rowIndex: number, buttonIndex: number, patch: Partial<TelegramPostButtonRows[number][number]>) =>
     onChange(buttonRows.map((row, ri) => ri === rowIndex ? row.map((button, bi) => bi === buttonIndex ? { ...button, ...patch } : button) : row));
   const moveButton = (from: { row: number; button: number }, to: { row: number; button: number }) => {

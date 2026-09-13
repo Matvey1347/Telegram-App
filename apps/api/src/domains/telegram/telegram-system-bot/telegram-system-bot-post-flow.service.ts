@@ -11,12 +11,6 @@ import {
 } from '@prisma/client';
 import { sanitizeOperationalError } from '../../../common/security/operational-error';
 import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
-import {
-  normalizeTelegramPostButtonRows,
-  toTelegramBotInlineKeyboard,
-} from '../../../telegram/shared/telegram-inline-keyboard';
-import { telegramMarkupToHtml } from '../../../telegram/shared/telegram-markup';
-import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 import { TelegramManagedPostCommandService } from '../telegram-channels/telegram-managed-post-command.service';
 import { TelegramManagedPostPublicationService } from '../telegram-channels/telegram-managed-post-publication.service';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
@@ -32,6 +26,8 @@ import { renderTelegramSystemBotPostCard } from './telegram-system-bot-post-flow
 import {
   telegramSystemBotPostJson,
   telegramSystemBotPostPayload,
+  isTelegramSystemBotModalImport,
+  type TelegramSystemBotModalDestination,
   type TelegramSystemBotPostFlowScope,
   type TelegramSystemBotPostPayload,
   type TelegramSystemBotPostPreviewDraft,
@@ -40,6 +36,7 @@ import {
 import { TelegramSystemBotWorkflowStore } from './telegram-system-bot-workflow.store';
 import { TelegramSystemBotPostContentService } from './telegram-system-bot-post-content.service';
 import { TelegramSystemBotPostFlowOptions } from './telegram-system-bot-post-flow.options';
+import { sendTelegramSystemBotPostPreview } from './telegram-system-bot-post-preview.sender';
 
 export type { TelegramSystemBotCapturedPostContent } from './telegram-system-bot-post-flow.types';
 
@@ -74,7 +71,10 @@ export class TelegramSystemBotPostFlowService {
     return this.render(workflow, scope);
   }
 
-  async prepareAdSaleImport(scope: TelegramSystemBotPostFlowScope) {
+  async prepareAdSaleImport(
+    scope: TelegramSystemBotPostFlowScope,
+    destination: TelegramSystemBotModalDestination = 'AD_SALE_MODAL',
+  ) {
     const conflictingAdSale = await this.workflows.active(
       scope,
       TelegramSystemBotWorkflowKind.AD_SALE,
@@ -90,7 +90,7 @@ export class TelegramSystemBotPostFlowService {
       ...scope,
       kind: TelegramSystemBotWorkflowKind.POST_IMPORT,
       step: 'AWAIT_CONTENT',
-      payload: telegramSystemBotPostJson({ destination: 'AD_SALE_MODAL' }),
+      payload: telegramSystemBotPostJson({ destination }),
       expiresAt: telegramSystemBotPostWorkflowExpiry(),
     });
     await this.render(workflow, scope);
@@ -101,94 +101,12 @@ export class TelegramSystemBotPostFlowService {
     scope: TelegramSystemBotPostFlowScope,
     draft: TelegramSystemBotPostPreviewDraft,
   ) {
-    const text = String(draft.text ?? '');
-    const formattedText = telegramMarkupToHtml(text);
-    const mediaItems = normalizeTelegramPostMediaItems(
-      draft.mediaItems,
-      draft.imageUrls,
-    ).slice(0, 10);
-    if (
-      mediaItems.some((item) => item.kind === 'ANIMATION') &&
-      mediaItems.length !== 1
-    ) {
-      throw new ConflictException(
-        'An animation must be the only media item in a post',
-      );
-    }
-    if (!text.trim() && !mediaItems.length)
-      throw new ConflictException('Telegram post is empty');
-    const replyMarkup = toTelegramBotInlineKeyboard(
-      normalizeTelegramPostButtonRows(
-        (draft.buttonRows ?? []).map((row) =>
-          row.map((button) => ({
-            text: String(button.text ?? '').trim(),
-            url: String(button.url ?? '').trim(),
-            style: button.style ?? 'default',
-          })),
-        ),
-      ),
-    ) ?? { inline_keyboard: [] };
-    const token = this.config.token!;
-    const messageIds: number[] = [];
-    if (mediaItems.length === 1 && text.length <= 1024) {
-      const media = mediaItems[0];
-      const method =
-        media.kind === 'VIDEO'
-          ? 'sendVideo'
-          : media.kind === 'ANIMATION'
-            ? 'sendAnimation'
-            : 'sendPhoto';
-      const field =
-        media.kind === 'VIDEO'
-          ? 'video'
-          : media.kind === 'ANIMATION'
-            ? 'animation'
-            : 'photo';
-      const commonBody = {
-        chat_id: scope.chatId,
-        caption: formattedText || undefined,
-        parse_mode: 'HTML',
-        reply_markup: replyMarkup,
-      };
-      if (media.kind === 'PHOTO') {
-        const sent = await this.api.sendPhoto(token, {
-          ...commonBody,
-          photo: media.url,
-        });
-        messageIds.push(sent.message_id);
-      } else {
-        const sent = await this.api.call<{ message_id: number }>(
-          token,
-          method,
-          {
-            ...commonBody,
-            [field]: media.url,
-          },
-        );
-        messageIds.push(sent.message_id);
-      }
-    } else {
-      if (mediaItems.length) {
-        const sent = await this.api.sendMediaGroup(token, {
-          chat_id: scope.chatId,
-          media: mediaItems.map((media) => ({
-            type: media.kind === 'VIDEO' ? 'video' : 'photo',
-            media: media.url,
-          })),
-        });
-        messageIds.push(...sent.map((message) => message.message_id));
-      }
-      if (text || replyMarkup.inline_keyboard.length) {
-        const sent = await this.api.sendMessage(token, {
-          chat_id: scope.chatId,
-          text: formattedText || 'Advertising post',
-          parse_mode: 'HTML',
-          reply_markup: replyMarkup,
-        });
-        messageIds.push(sent.message_id);
-      }
-    }
-    return { status: 'SENT' as const, messageIds };
+    return sendTelegramSystemBotPostPreview({
+      api: this.api,
+      token: this.config.token!,
+      scope,
+      draft,
+    });
   }
 
   async resumeAdSaleImport(
@@ -205,11 +123,12 @@ export class TelegramSystemBotPostFlowService {
   async adSaleImportResult(
     scope: TelegramSystemBotPostFlowScope,
     workflowId: string,
+    destination: TelegramSystemBotModalDestination = 'AD_SALE_MODAL',
   ) {
     const workflow = await this.workflows.get(scope, workflowId);
     const payload = telegramSystemBotPostPayload(workflow.payload);
     if (
-      payload.destination !== 'AD_SALE_MODAL' ||
+      payload.destination !== destination ||
       workflow.status !== TelegramSystemBotWorkflowStatus.COMPLETED ||
       !payload.content
     )
@@ -219,6 +138,8 @@ export class TelegramSystemBotPostFlowService {
       draft: {
         title: telegramSystemBotPostTitle(payload.content),
         text: payload.content.text,
+        plainText: payload.content.plainText,
+        formattedHtml: payload.content.formattedHtml,
         imageUrls: payload.content.imageUrls,
         mediaItems: payload.content.mediaItems,
         buttonRows: payload.content.buttonRows,
@@ -354,7 +275,7 @@ export class TelegramSystemBotPostFlowService {
     const payload = telegramSystemBotPostPayload(workflow.payload);
     if (action === 'back') return this.back(scope, workflow);
     if (action === 'confirm') {
-      if (payload.destination === 'AD_SALE_MODAL')
+      if (isTelegramSystemBotModalImport(payload.destination))
         return this.completeAdSaleImport(scope, workflow);
       return this.commit(scope, workflow);
     }
@@ -627,7 +548,7 @@ export class TelegramSystemBotPostFlowService {
     const token = this.config.token!;
     const payload = telegramSystemBotPostPayload(workflow.payload);
     if (
-      payload.destination === 'AD_SALE_MODAL' &&
+      isTelegramSystemBotModalImport(payload.destination) &&
       workflow.status === TelegramSystemBotWorkflowStatus.COMPLETED
     ) {
       if (workflow.controlMessageId) {
@@ -641,13 +562,12 @@ export class TelegramSystemBotPostFlowService {
       }
       return this.api.sendMessage(token, {
         chat_id: scope.chatId,
-        text: '✅ Post added to the Ad Sale form. Return to the website.',
+        text: `✅ Post added to the ${payload.destination === 'PROMO_MODAL' ? 'Promo' : 'Ad Sale'} form. Return to the website.`,
       });
     }
-    const previewImageUrl =
-      payload.destination === 'AD_SALE_MODAL'
-        ? payload.content?.imageUrls[0]
-        : undefined;
+    const previewImageUrl = isTelegramSystemBotModalImport(payload.destination)
+      ? payload.content?.imageUrls[0]
+      : undefined;
     if (previewImageUrl) {
       const nativeCard = {
         chat_id: scope.chatId,

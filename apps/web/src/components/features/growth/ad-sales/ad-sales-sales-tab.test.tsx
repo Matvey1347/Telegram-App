@@ -126,14 +126,14 @@ describe("SalesTab", () => {
     );
 
     expect(screen.getByText("buyer")).toBeTruthy();
-    expect(screen.getByText("Mentor Self-development")).toBeTruthy();
-    expect(screen.getByText("Business Patterns")).toBeTruthy();
     expect(screen.getByText(/Published .*28\/08\/2026/)).toBeTruthy();
     expect(screen.queryByText(/28\/08\/2026.*→.*29\/08\/2026/)).toBeNull();
     const channelPreview = screen.getByLabelText("Show 2 placement channels");
     expect(channelPreview).toBeTruthy();
     fireEvent.click(channelPreview);
     expect(onOpenSale).not.toHaveBeenCalled();
+    expect(screen.getByText("Mentor Self-development")).toBeTruthy();
+    expect(screen.getByText("Business Patterns")).toBeTruthy();
     expect(screen.getByText("Repeat sales")).toBeTruthy();
     expect(screen.getByText("Matthew Kayden")).toBeTruthy();
     expect(screen.getByText("Money received")).toBeTruthy();
@@ -213,6 +213,7 @@ describe("SalesTab", () => {
       />,
     );
 
+    fireEvent.click(screen.getByLabelText("Show 1 placement channels"));
     expect(screen.getAllByText("Mentor Self-development")).toHaveLength(1);
     expect(screen.getByText("5 placements")).toBeTruthy();
     expect(

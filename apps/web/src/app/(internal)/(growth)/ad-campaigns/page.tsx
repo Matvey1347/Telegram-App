@@ -1,8 +1,14 @@
 "use client";
 
 import type { MouseEventHandler, ReactNode } from "react";
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSearchParams } from "next/navigation";
 import {
   keepPreviousData,
@@ -11,9 +17,15 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
-import { resolveTitleTemplate } from "@telegram-system/shared";
+import {
+  resolveTitleTemplate,
+  type ResolvedEmoji,
+} from "@telegram-system/shared";
 import { AdCampaignsTable } from "@/components/features/growth/ad-campaigns/campaigns-table";
+import { AdHypothesisAvatar } from "@/components/features/growth/ad-campaigns/ad-hypothesis-avatar";
+import { AdHypothesisRowActions } from "@/components/features/growth/ad-campaigns/ad-hypothesis-row-actions";
 import { PromoPreviewModal } from "@/components/features/growth/ad-campaigns/promo-preview-modal";
+import { PromoFormModal } from "@/components/features/growth/ad-campaigns/promo-form-modal";
 import { usePromoDeepLink } from "@/components/features/growth/ad-campaigns/use-promo-deep-link";
 import {
   AdCampaignSortMenu,
@@ -25,32 +37,30 @@ import { AppShell } from "@/components/layout/app-shell";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 import { InviteLinkHistoryPanel } from "@/components/features/telegram/telegram/invite-link-history-panel";
 import { InviteLinkPreviewModal } from "@/components/features/telegram/telegram/invite-link-preview-modal";
-import { TelegramImageUpload } from "@/components/features/telegram/telegram/telegram-image-upload";
-import { TelegramPostPreview } from "@/components/features/telegram/telegram/telegram-post-preview";
-import { TelegramTextEditor } from "@/components/features/telegram/telegram/telegram-text-editor";
-import { TelegramInviteLinkCreatorAvatar } from "@/components/features/telegram/telegram/telegram-invite-link-creator-avatar";
 import {
   accountsApi,
   adCampaignsApi,
   adHypothesesApi,
   advertisingChannelsApi,
-  getTelegramChannelInviteLinksForSelect,
   getTelegramChannelPromos,
-  iconsApi,
   promosApi,
+  telegramChannelNetworksApi,
   telegramChannelsApi,
   workspacesApi,
   type AdCampaign,
   type AdCampaignKpiStatus,
   type AdHypothesis,
-  type AdHypothesisDetail,
-  type AdHypothesisInviteLinkHistory,
   type Promo,
   type TelegramChannel,
   type TelegramInviteLink,
 } from "@/lib/api";
 import { currenciesApi } from "@/lib/api";
-import { accountKeys, adCampaignKeys, dashboardKeys } from "@/lib/query-keys";
+import {
+  accountKeys,
+  adCampaignKeys,
+  dashboardKeys,
+  telegramChannelKeys,
+} from "@/lib/query-keys";
 import { MoneyStack } from "@/components/ui/money-stack";
 import {
   Button,
@@ -61,16 +71,16 @@ import {
   DateRangeInput,
   EmptyState,
   FormField,
-  IconButton,
   Input,
   LoadingState,
+  MasonryGrid,
   Modal,
   PageHeader,
+  Skeleton,
   Textarea,
-  TooltipBubble,
 } from "@/components/ui/primitives";
 import { useAppToast } from "@/providers/toast-provider";
-import { CircleHelp, TrendingUp } from "lucide-react";
+import { CircleHelp, EyeOff, Pencil, Trash2 } from "lucide-react";
 import { NativeMoney } from "@/components/ui/native-money";
 import {
   formatAdCampaignLocalDate as formatLocalDate,
@@ -82,14 +92,34 @@ import {
   THREE_COLUMN_GRID_PAGE_SIZES,
 } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
-import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
+import {
+  CampaignMultiValueSelect as MultiValueSelect,
+  type CampaignSelectOption,
+} from "@/components/features/growth/ad-campaigns/campaign-multi-value-select";
+import { CampaignInviteLinksSelect } from "@/components/features/growth/ad-campaigns/campaign-invite-links-select";
 import {
   AdsSectionTabs,
   resolveAdsSection,
   type AdsSection,
 } from "@/components/features/growth/ad-campaigns/ads-section-tabs";
 import { MutualPromotionFoldersPage } from "@/components/features/growth/ad-campaigns/mutual-promotion/mutual-promotion-folders-page";
+import {
+  CrossPromotionPlansPage,
+  MutualPromotionModeTabs,
+} from "@/components/features/growth/ad-campaigns/cross-promotion-plans-page";
 import { accountAdCampaignSelectOption } from "@/components/features/growth/ad-campaigns/ad-campaign-view-options";
+import { adsSectionHeader } from "@/components/features/growth/ad-campaigns/ads-section-header";
+import { PromoCard } from "@/components/features/growth/ad-campaigns/promo-card";
+import { AdsChannelScopeFilter } from "@/components/features/growth/ad-campaigns/ads-channel-scope-filter";
+import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
+import {
+  useWorkspaceModalDrafts,
+  type WorkspaceFormDraft,
+} from "@/hooks/use-workspace-modal-drafts";
+import {
+  CardActionsMenu,
+  CardMenuAction,
+} from "@/components/ui/card-actions-menu";
 
 type CampaignValues = {
   telegramChannelId: string;
@@ -104,16 +134,53 @@ type CampaignValues = {
   notes?: string;
 };
 
-type CampaignSelectOption = {
-  value: string;
-  label: string;
-  iconUrl?: string;
-  iconEmoji?: string;
-  iconFallback?: string;
-  icon?: React.ReactNode;
-  description?: string;
-  searchText?: string;
+type HypothesisDraftValues = {
+  iconId: string | null;
+  telegramChannelId: string;
+  assignedMemberId: string | null;
+  name: string;
+  description: string;
+  selectedIds: string[];
 };
+
+function mapCampaignInitialValues(row?: any): CampaignValues {
+  return row
+    ? {
+        telegramChannelId: row.telegramChannelId ?? "",
+        assignedMemberId:
+          row.assignedMemberId ?? row.assignedMember?.id ?? null,
+        promoIds: Array.isArray(row.promoIds)
+          ? row.promoIds
+          : row.promoId
+            ? [row.promoId]
+            : [],
+        inviteLinkIds: Array.isArray(row.inviteLinkIds)
+          ? row.inviteLinkIds
+          : row.telegramInviteLinkId
+            ? [row.telegramInviteLinkId]
+            : [],
+        advertisingChannelIds: campaignAdvertisingSources(row)
+          .map(advertisingSelectionId)
+          .filter(Boolean),
+        price: Number(row.price ?? row.costAmount ?? 0),
+        accountId: row.accountId ?? "",
+        date: toInputDate(row.placementDate || row.startedAt),
+        customTitle: row.customTitleTemplate ?? "",
+        notes: row.notes ?? "",
+      }
+    : {
+        telegramChannelId: "",
+        assignedMemberId: null,
+        promoIds: [],
+        inviteLinkIds: [],
+        advertisingChannelIds: [],
+        price: 0,
+        accountId: "",
+        date: formatLocalDate(new Date()),
+        customTitle: "",
+        notes: "",
+      };
+}
 
 export default function AdsPage() {
   const searchParams = useSearchParams();
@@ -121,8 +188,25 @@ export default function AdsPage() {
   const legacyView = searchParams.get("view");
   const section: AdsSection = resolveAdsSection(requestedSection, legacyView);
   const sectionTabs = <AdsSectionTabs value={section} />;
-  return section === "mutual-promotion" ? (
-    <MutualPromotionFoldersPage sectionTabs={sectionTabs} />
+  const mutualMode =
+    searchParams.get("mode") === "folders" ? "folders" : "direct";
+  return section === "mutual-promotion" && mutualMode === "folders" ? (
+    <MutualPromotionFoldersPage
+      sectionTabs={
+        <>
+          {sectionTabs}
+          <MutualPromotionModeTabs mode="folders" />
+        </>
+      }
+    />
+  ) : section === "mutual-promotion" ? (
+    <CrossPromotionPlansPage
+      kind="DIRECT_MUTUAL"
+      sectionTabs={sectionTabs}
+      mutualModeTabs={<MutualPromotionModeTabs mode="direct" />}
+    />
+  ) : section === "own-promotion" ? (
+    <CrossPromotionPlansPage kind="OWN_CHANNELS" sectionTabs={sectionTabs} />
   ) : (
     <AdCampaignsPage sectionTabs={sectionTabs} topSection={section} />
   );
@@ -140,8 +224,10 @@ function AdCampaignsPage({
   const { pushToast, startOperation } = useAppToast();
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
+  const [editingCampaignLoading, setEditingCampaignLoading] = useState(false);
+  const editingCampaignRequest = useRef(0);
   const [deleting, setDeleting] = useState<any | null>(null);
-  const [channelFilter, setChannelFilter] = useState("");
+  const [channelScopeFilter, setChannelScopeFilter] = useState("");
   const viewMode: AdCampaignsViewMode =
     topSection === "promo"
       ? "promos"
@@ -155,6 +241,9 @@ function AdCampaignsPage({
   const [hypothesisFormOpen, setHypothesisFormOpen] = useState(false);
   const [editingHypothesis, setEditingHypothesis] =
     useState<AdHypothesis | null>(null);
+  const [editingHypothesisLoading, setEditingHypothesisLoading] =
+    useState(false);
+  const editingHypothesisRequest = useRef(0);
   const [deletingHypothesis, setDeletingHypothesis] =
     useState<AdHypothesis | null>(null);
   const [previewHypothesis, setPreviewHypothesis] =
@@ -196,9 +285,13 @@ function AdCampaignsPage({
     currencyDisplayMode: workspace?.currencyDisplayMode || "code",
   };
   const { data: channels } = useQuery({
-    queryKey: ["telegram-channels"],
-    queryFn: telegramChannelsApi.list,
-    enabled: viewMode !== "hypotheses" || hypothesisFormOpen,
+    queryKey: telegramChannelKeys.select(),
+    queryFn: () => telegramChannelsApi.select(),
+  });
+  const { data: channelNetworks } = useQuery({
+    queryKey: ["telegram-channel-networks"],
+    queryFn: telegramChannelNetworksApi.list,
+    staleTime: 60_000,
   });
   const { data, isLoading, error } = useQuery({
     queryKey: [
@@ -209,7 +302,7 @@ function AdCampaignsPage({
         page: campaignsPagination.page,
         pageSize: campaignsPagination.pageSize,
         search: deferredSearch,
-        channelFilter,
+        channelScopeFilter,
         dateFrom,
         dateTo,
         sort,
@@ -220,7 +313,7 @@ function AdCampaignsPage({
         page: campaignsPagination.page,
         pageSize: campaignsPagination.pageSize,
         search: deferredSearch || undefined,
-        telegramChannelId: channelFilter || undefined,
+        telegramChannelIds: channelScopeFilter || undefined,
         dateFrom: dateFrom || undefined,
         dateTo: dateTo || undefined,
         sort: sort as "date_desc" | "date_asc" | "cost_desc" | "joined_desc",
@@ -229,10 +322,12 @@ function AdCampaignsPage({
     placeholderData: keepPreviousData,
   });
   const { data: performance } = useQuery({
-    queryKey: ["ad-campaigns-performance", channelFilter],
+    queryKey: ["ad-campaigns-performance", channelScopeFilter],
     queryFn: () =>
       adCampaignsApi.performanceSummary(
-        channelFilter ? { channelId: channelFilter } : undefined,
+        channelScopeFilter
+          ? { telegramChannelIds: channelScopeFilter }
+          : undefined,
       ),
     enabled: viewMode === "campaigns",
   });
@@ -249,6 +344,7 @@ function AdCampaignsPage({
         page: hypothesesPagination.page,
         pageSize: hypothesesPagination.pageSize,
         search: deferredSearch,
+        channelScopeFilter,
       },
     ],
     queryFn: () =>
@@ -256,6 +352,7 @@ function AdCampaignsPage({
         page: hypothesesPagination.page,
         pageSize: hypothesesPagination.pageSize,
         search: deferredSearch || undefined,
+        telegramChannelIds: channelScopeFilter || undefined,
       }),
     enabled: viewMode === "hypotheses",
     placeholderData: keepPreviousData,
@@ -273,7 +370,7 @@ function AdCampaignsPage({
         page: promosPagination.page,
         pageSize: promosPagination.pageSize,
         search: deferredSearch,
-        channelFilter,
+        channelScopeFilter,
       },
     ],
     queryFn: () =>
@@ -281,7 +378,7 @@ function AdCampaignsPage({
         page: promosPagination.page,
         pageSize: promosPagination.pageSize,
         search: deferredSearch || undefined,
-        telegramChannelId: channelFilter || undefined,
+        telegramChannelIds: channelScopeFilter || undefined,
       }),
     enabled: viewMode === "promos",
     placeholderData: keepPreviousData,
@@ -293,19 +390,17 @@ function AdCampaignsPage({
   const promoDeepLink = usePromoDeepLink(
     requestedPromoId,
     viewMode === "promos",
-    promos,
   );
 
   useEffect(() => {
     if (viewMode !== "promos" || !requestedPromoId) return;
-    const requestedPromo =
-      promos.find((promo) => promo.id === requestedPromoId) ??
-      promoDeepLink.data;
+    const requestedPromo = promoDeepLink.data;
     if (!requestedPromo) return;
-    setPreviewPromo((current) =>
+    setEditingPromo((current) =>
       current?.id === requestedPromo.id ? current : requestedPromo,
     );
-  }, [promoDeepLink.data, promos, requestedPromoId, viewMode]);
+    setPromoFormOpen(true);
+  }, [promoDeepLink.data, requestedPromoId, viewMode]);
 
   const createMutation = useMutation({
     mutationFn: adCampaignsApi.create,
@@ -447,6 +542,7 @@ function AdCampaignsPage({
   const visibleCampaigns = campaigns;
   const visibleHypotheses = hypotheses;
   const visiblePromos = promos;
+  const sectionHeader = adsSectionHeader(topSection);
   const openCreateForCurrentView = () => {
     if (viewMode === "hypotheses") {
       setEditingHypothesis(null);
@@ -464,16 +560,12 @@ function AdCampaignsPage({
   return (
     <AppShell>
       <PageHeader
-        title="Ads"
-        subtitle="Promos, campaigns, hypotheses and performance"
+        title={sectionHeader.title}
+        subtitle={sectionHeader.subtitle}
         action={
           <div className="flex items-center gap-2">
             <Button onClick={openCreateForCurrentView}>
-              {viewMode === "hypotheses"
-                ? "Create hypothesis"
-                : viewMode === "promos"
-                  ? "Create promo"
-                  : "Create campaign"}
+              {sectionHeader.actionLabel}
             </Button>
           </div>
         }
@@ -481,56 +573,40 @@ function AdCampaignsPage({
       {sectionTabs}
       <Card className="mb-4">
         <div
-          className={`grid min-w-0 gap-3 md:grid-cols-2 ${viewMode === "campaigns" ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)_auto] lg:items-end" : "lg:max-w-4xl"}`}
+          className={`grid min-w-0 gap-3 md:grid-cols-2 ${viewMode === "campaigns" ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)_auto] lg:items-start" : "lg:max-w-4xl"}`}
         >
-          {viewMode !== "hypotheses" ? (
-            <div className="min-w-0">
-              <FormField label="Channel">
-                <CustomSelect
-                  value={channelFilter}
-                  onChange={(value) => {
-                    setChannelFilter(value);
-                    campaignsPagination.resetPage();
-                    promosPagination.resetPage();
-                  }}
-                  placeholder="All channels"
-                  options={[
-                    {
-                      value: "",
-                      label: "All channels",
-                      iconFallback: "All channels",
-                    },
-                    ...ownTelegramChannels.map((channel: any) => ({
-                      value: channel.id,
-                      label: channel.title,
-                      iconUrl: channel.photoUrl,
-                      iconFallback: channel.title,
-                    })),
-                  ]}
-                />
-              </FormField>
-            </div>
-          ) : null}
-          <div className="min-w-0">
-            <FormField label="Search">
-              <Input
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  campaignsPagination.resetPage();
-                  hypothesesPagination.resetPage();
-                  promosPagination.resetPage();
-                }}
-                placeholder={
-                  viewMode === "campaigns"
-                    ? "Campaign, source, channel"
-                    : viewMode === "promos"
-                      ? "Promo, text, channel"
-                      : "Hypothesis"
-                }
-              />
-            </FormField>
-          </div>
+          <AdsChannelScopeFilter
+            networks={channelNetworks ?? []}
+            channels={ownTelegramChannels}
+            onChange={(channelIds) => {
+              setChannelScopeFilter(channelIds.join(","));
+              campaignsPagination.resetPage();
+              hypothesesPagination.resetPage();
+              promosPagination.resetPage();
+            }}
+          />
+          <label className="min-w-0 space-y-1">
+            <span className="flex min-h-7 items-center text-sm text-neutral-300">
+              Search
+            </span>
+            <Input
+              className="h-[42px]"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                campaignsPagination.resetPage();
+                hypothesesPagination.resetPage();
+                promosPagination.resetPage();
+              }}
+              placeholder={
+                viewMode === "campaigns"
+                  ? "Campaign, source, channel"
+                  : viewMode === "promos"
+                    ? "Promo, text, channel"
+                    : "Hypothesis"
+              }
+            />
+          </label>
           {viewMode === "campaigns" ? (
             <div className="min-w-0">
               <FormField label="Period">
@@ -547,7 +623,13 @@ function AdCampaignsPage({
             </div>
           ) : null}
           {viewMode === "campaigns" ? (
-            <div className="justify-self-start md:justify-self-end">
+            <div className="space-y-1 justify-self-start md:justify-self-end">
+              <span
+                className="flex min-h-7 items-center text-sm opacity-0"
+                aria-hidden="true"
+              >
+                Sort
+              </span>
               <AdCampaignSortMenu
                 value={sort}
                 onChange={(value) => {
@@ -571,16 +653,30 @@ function AdCampaignsPage({
       visibleCampaigns.length ? (
         <AdCampaignsTable
           campaigns={visibleCampaigns}
+          showHypotheses={false}
           moneySettings={moneySettings}
           rates={rates}
           onEdit={async (campaign) => {
+            const requestId = ++editingCampaignRequest.current;
+            setEditing(campaign);
+            setEditingCampaignLoading(true);
             try {
-              setEditing(await adCampaignsApi.get(campaign.id));
+              const detail = await adCampaignsApi.get(campaign.id);
+              if (editingCampaignRequest.current === requestId) {
+                setEditing(detail);
+              }
             } catch (error) {
+              if (editingCampaignRequest.current === requestId) {
+                setEditing(null);
+              }
               pushToast(
                 getErrorMessage(error, "Failed to load campaign."),
                 "error",
               );
+            } finally {
+              if (editingCampaignRequest.current === requestId) {
+                setEditingCampaignLoading(false);
+              }
             }
           }}
           onDelete={setDeleting}
@@ -623,14 +719,28 @@ function AdCampaignsPage({
           moneySettings={moneySettings}
           rates={rates}
           onEdit={async (hypothesis) => {
+            const requestId = ++editingHypothesisRequest.current;
+            setEditingHypothesis(hypothesis);
+            setHypothesisFormOpen(true);
+            setEditingHypothesisLoading(true);
             try {
-              setEditingHypothesis(await adHypothesesApi.get(hypothesis.id));
-              setHypothesisFormOpen(true);
+              const detail = await adHypothesesApi.get(hypothesis.id);
+              if (editingHypothesisRequest.current === requestId) {
+                setEditingHypothesis(detail);
+              }
             } catch (error) {
+              if (editingHypothesisRequest.current === requestId) {
+                setHypothesisFormOpen(false);
+                setEditingHypothesis(null);
+              }
               pushToast(
                 getErrorMessage(error, "Failed to load hypothesis."),
                 "error",
               );
+            } finally {
+              if (editingHypothesisRequest.current === requestId) {
+                setEditingHypothesisLoading(false);
+              }
             }
           }}
           onDelete={setDeletingHypothesis}
@@ -644,16 +754,7 @@ function AdCampaignsPage({
               );
             }
           }}
-          onOpenHistory={async (hypothesis) => {
-            try {
-              setHistoryHypothesis(await adHypothesesApi.get(hypothesis.id));
-            } catch (error) {
-              pushToast(
-                getErrorMessage(error, "Failed to load hypothesis."),
-                "error",
-              );
-            }
-          }}
+          onOpenHistory={setHistoryHypothesis}
           onToggleExclude={(hypothesis, excludeFromAnalytics) =>
             excludeHypothesisMutation.mutate({
               id: hypothesis.id,
@@ -705,7 +806,6 @@ function AdCampaignsPage({
         channels={channels ?? []}
         onClose={() => setCreateOpen(false)}
         onSubmit={async (v: any) => {
-          setCreateOpen(false);
           const operation = startOperation({
             id: `campaign-create:${Date.now()}`,
             title: "Processing",
@@ -717,20 +817,27 @@ function AdCampaignsPage({
               title: "Success",
               message: "Campaign created.",
             });
+            setCreateOpen(false);
           } catch (error) {
             operation.fail({
               title: "Error",
               message: getErrorMessage(error, "Failed to create campaign."),
             });
+            throw error;
           }
         }}
       />
       <CampaignModal
         open={!!editing}
         title="Edit Campaign"
+        loading={editingCampaignLoading}
         channels={channels ?? []}
         initial={editing ?? undefined}
-        onClose={() => setEditing(null)}
+        onClose={() => {
+          editingCampaignRequest.current += 1;
+          setEditingCampaignLoading(false);
+          setEditing(null);
+        }}
         onSubmit={async (v: any) => {
           if (!editing) return;
           const campaignId = editing.id;
@@ -754,7 +861,7 @@ function AdCampaignsPage({
           }
         }}
       />
-      <PromoModal
+      <PromoFormModal
         open={promoFormOpen}
         title={editingPromo ? "Edit Promo" : "Create Promo"}
         initial={editingPromo ?? undefined}
@@ -764,8 +871,6 @@ function AdCampaignsPage({
         }}
         onSubmit={async (payload) => {
           const currentPromo = editingPromo;
-          setPromoFormOpen(false);
-          setEditingPromo(null);
           const operation = startOperation({
             id: `promo-${currentPromo ? `update:${currentPromo.id}` : "create"}:${Date.now()}`,
             title: "Processing",
@@ -788,6 +893,8 @@ function AdCampaignsPage({
                 message: "Promo created.",
               });
             }
+            setPromoFormOpen(false);
+            setEditingPromo(null);
           } catch (error) {
             operation.fail({
               title: "Error",
@@ -798,6 +905,7 @@ function AdCampaignsPage({
                   : "Failed to create promo.",
               ),
             });
+            throw error;
           }
         }}
         channels={ownTelegramChannels}
@@ -809,6 +917,7 @@ function AdCampaignsPage({
       <HypothesisFormModal
         open={hypothesisFormOpen}
         hypothesis={editingHypothesis}
+        loading={editingHypothesisLoading}
         channels={ownTelegramChannels}
         moneySettings={moneySettings}
         rates={rates}
@@ -817,13 +926,13 @@ function AdCampaignsPage({
           updateHypothesisMutation.isPending
         }
         onClose={() => {
+          editingHypothesisRequest.current += 1;
+          setEditingHypothesisLoading(false);
           setHypothesisFormOpen(false);
           setEditingHypothesis(null);
         }}
         onSubmit={async (payload) => {
           const currentHypothesis = editingHypothesis;
-          setHypothesisFormOpen(false);
-          setEditingHypothesis(null);
           const operation = startOperation({
             id: `hypothesis-${currentHypothesis ? `update:${currentHypothesis.id}` : "create"}:${Date.now()}`,
             title: "Processing",
@@ -848,6 +957,8 @@ function AdCampaignsPage({
                 message: "Hypothesis created.",
               });
             }
+            setHypothesisFormOpen(false);
+            setEditingHypothesis(null);
           } catch (error) {
             operation.fail({
               title: "Error",
@@ -858,6 +969,7 @@ function AdCampaignsPage({
                   : "Failed to create hypothesis.",
               ),
             });
+            throw error;
           }
         }}
       />
@@ -1157,12 +1269,11 @@ function CampaignsTable({
   return (
     <>
       <div className="table-scroll mb-5 w-full rounded-lg border border-neutral-800">
-        <table className="w-full min-w-[1120px] table-fixed text-left text-sm">
+        <table className="w-full min-w-[960px] table-fixed text-left text-sm">
           <colgroup>
             <col className="w-[420px]" />
             <col className="w-[360px]" />
-            <col className="w-[180px]" />
-            <col className="w-[140px]" />
+            <col className="w-[80px]" />
           </colgroup>
           <thead className="bg-slate-950 text-xs uppercase text-neutral-400">
             <tr>
@@ -1176,7 +1287,6 @@ function CampaignsTable({
                   <CircleHelp size={13} className="text-slate-500" />
                 </span>
               </th>
-              <th className="px-4 py-3 font-medium">Hypotheses</th>
               <th className="px-4 py-3 text-right font-medium">Actions</th>
             </tr>
           </thead>
@@ -1270,27 +1380,34 @@ function CampaignsTable({
                     />
                   </td>
                   <td className="px-4 py-4">
-                    <HypothesisLinks links={campaign.hypothesisLinks || []} />
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex min-w-[108px] items-center justify-end gap-2 whitespace-nowrap">
-                      <label
-                        className="flex items-center gap-1 text-xs text-slate-400"
-                        title="Exclude from performance summary"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={Boolean(campaign.excludeFromAnalytics)}
-                          onChange={(event) =>
-                            onToggleExclude(campaign, event.target.checked)
+                    <div className="flex justify-end">
+                      <CardActionsMenu label={`Actions for ${campaign.title}`}>
+                        <CardMenuAction
+                          label="Edit campaign"
+                          icon={<Pencil size={16} />}
+                          onClick={() => onEdit(campaign)}
+                        />
+                        <CardMenuAction
+                          label={
+                            campaign.excludeFromAnalytics
+                              ? "Include in analytics"
+                              : "Exclude from analytics"
+                          }
+                          icon={<EyeOff size={16} />}
+                          onClick={() =>
+                            onToggleExclude(
+                              campaign,
+                              !campaign.excludeFromAnalytics,
+                            )
                           }
                         />
-                      </label>
-                      <IconButton onClick={() => onEdit(campaign)} />
-                      <IconButton
-                        kind="delete"
-                        onClick={() => onDelete(campaign)}
-                      />
+                        <CardMenuAction
+                          label="Delete campaign"
+                          icon={<Trash2 size={16} />}
+                          danger
+                          onClick={() => onDelete(campaign)}
+                        />
+                      </CardActionsMenu>
                     </div>
                   </td>
                 </tr>
@@ -1636,35 +1753,6 @@ function SourceList({ sources }: { sources: any[] }) {
   );
 }
 
-function HypothesisLinks({ links }: { links: any[] }) {
-  const [expanded, setExpanded] = useState(false);
-  if (!links.length) return <span className="text-slate-500">-</span>;
-  const visible = expanded ? links : links.slice(0, 2);
-  const hiddenCount = Math.max(0, links.length - visible.length);
-  return (
-    <div className="flex min-w-0 max-w-full flex-wrap gap-1.5">
-      {visible.map((link) => (
-        <span
-          key={link.hypothesis.id}
-          className={`inline-flex min-w-0 max-w-full rounded-full border px-2 py-0.5 text-xs ${hypothesisStatusClass(link.hypothesis.status)}`}
-        >
-          <span className="truncate">{link.hypothesis.name}</span>
-        </span>
-      ))}
-      {hiddenCount ? (
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          className="rounded-full border border-slate-700 px-2 py-0.5 text-xs text-slate-300 transition-colors hover:border-slate-500 hover:text-white"
-          title={`Show ${hiddenCount} more hypotheses`}
-        >
-          +{hiddenCount}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
 function MemberChip({
   member,
 }: {
@@ -1859,14 +1947,6 @@ function formatKpiRange(
   return "-";
 }
 
-function hypothesisStatusClass(status?: string) {
-  if (status === "winner") return "border-emerald-700 text-emerald-200";
-  if (status === "loser") return "border-rose-700 text-rose-200";
-  if (status === "paused") return "border-yellow-700 text-yellow-200";
-  if (status === "archived") return "border-slate-700 text-slate-400";
-  return "border-blue-700 text-blue-200";
-}
-
 function MiniPerformance({
   label,
   value,
@@ -1913,38 +1993,33 @@ function PromosSection({
         <EmptyState text="No promos yet." />
       ) : null}
       {promos.length ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <MasonryGrid>
           {promos.map((promo) => (
-            <Card key={promo.id}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <PromoIcon
-                      iconId={promo.iconId}
-                      icon={promo.iconPresentation}
-                      title={promo.title}
-                    />
-                    <h3 className="truncate text-lg font-semibold text-white">
-                      {promo.title}
-                    </h3>
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    {promo.telegramChannel ? (
-                      <SourceChip source={promo.telegramChannel} compact />
-                    ) : null}
-                    {promo.assignedMember ? (
-                      <PromoAssignedMemberChip member={promo.assignedMember} />
-                    ) : null}
-                  </div>
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <IconButton onClick={() => onEdit(promo)} />
-                  <IconButton kind="delete" onClick={() => onDelete(promo)} />
-                </div>
-              </div>
-            </Card>
+            <PromoCard
+              key={promo.id}
+              promo={promo}
+              icon={
+                <PromoIcon
+                  iconId={promo.iconId}
+                  icon={promo.iconPresentation}
+                  title={promo.title}
+                />
+              }
+              channel={
+                promo.telegramChannel ? (
+                  <SourceChip source={promo.telegramChannel} compact />
+                ) : null
+              }
+              member={
+                promo.assignedMember ? (
+                  <PromoAssignedMemberChip member={promo.assignedMember} />
+                ) : null
+              }
+              onEdit={() => onEdit(promo)}
+              onDelete={() => onDelete(promo)}
+            />
           ))}
-        </div>
+        </MasonryGrid>
       ) : null}
     </>
   );
@@ -2053,12 +2128,11 @@ function HypothesesSection({
       ) : null}
       {hypotheses.length ? (
         <div className="table-scroll mb-5 w-full rounded-lg border border-neutral-800">
-          <table className="w-full min-w-[1180px] table-fixed text-left text-sm">
+          <table className="w-full min-w-[880px] table-fixed text-left text-sm">
             <thead className="bg-slate-950 text-xs uppercase text-neutral-400">
               <tr>
-                <th className="w-[38%] px-4 py-3 font-medium">Hypothesis</th>
-                <th className="w-[28%] px-4 py-3 font-medium">Performance</th>
-                <th className="w-[24%] px-4 py-3 font-medium">Decision</th>
+                <th className="w-[52%] px-4 py-3 font-medium">Hypothesis</th>
+                <th className="w-[38%] px-4 py-3 font-medium">Performance</th>
                 <th className="w-[10%] px-4 py-3 text-right font-medium">
                   Actions
                 </th>
@@ -2073,20 +2147,17 @@ function HypothesesSection({
                   <td className="px-4 py-4">
                     <div className="space-y-3">
                       <div className="flex items-start gap-3">
-                        {hypothesis.iconPresentation ? (
-                          <IconAvatar
-                            icon={hypothesis.iconPresentation}
-                            label={hypothesis.name}
-                            size="xs"
-                            bordered={false}
-                            className="!bg-transparent"
-                          />
-                        ) : null}
+                        <AdHypothesisAvatar hypothesis={hypothesis} />
                         <div className="min-w-0">
                           <p className="font-semibold text-white">
                             {hypothesis.name}
                           </p>
                           <div className="mt-1 flex flex-wrap items-center gap-2">
+                            {hypothesis.isSystem ? (
+                              <span className="rounded-full border border-cyan-700/80 bg-cyan-950/40 px-2 py-0.5 text-xs font-medium text-cyan-200">
+                                System
+                              </span>
+                            ) : null}
                             {hypothesis.assignedMember ? (
                               <MemberChip member={hypothesis.assignedMember} />
                             ) : null}
@@ -2096,17 +2167,27 @@ function HypothesesSection({
                                 compact
                               />
                             ) : null}
-                            <button
-                              type="button"
-                              onClick={() => onOpenCampaigns(hypothesis)}
-                              className="inline-flex items-center rounded-full border border-blue-700 px-2 py-0.5 text-xs text-blue-200 transition-colors hover:border-blue-500 hover:text-white"
-                            >
-                              Campaigns{" "}
-                              {formatMetric(
-                                hypothesis.summary?.campaignsCount ??
-                                  hypothesis.campaignsCount,
-                              )}
-                            </button>
+                            {hypothesis.isSystem ? (
+                              <span className="inline-flex items-center rounded-full border border-slate-700 px-2 py-0.5 text-xs text-slate-300">
+                                Campaigns{" "}
+                                {formatMetric(
+                                  hypothesis.summary?.campaignsCount ??
+                                    hypothesis.campaignsCount,
+                                )}
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => onOpenCampaigns(hypothesis)}
+                                className="inline-flex items-center rounded-full border border-blue-700 px-2 py-0.5 text-xs text-blue-200 transition-colors hover:border-blue-500 hover:text-white"
+                              >
+                                Campaigns{" "}
+                                {formatMetric(
+                                  hypothesis.summary?.campaignsCount ??
+                                    hypothesis.campaignsCount,
+                                )}
+                              </button>
+                            )}
                           </div>
                           {hypothesis.description ? (
                             <p className="mt-2 line-clamp-2 text-xs text-slate-500">
@@ -2162,12 +2243,16 @@ function HypothesesSection({
                                 hypothesis.summary?.totalJoinedSubscribers,
                               )}
                             </p>
-                            <p>
-                              Pending{" "}
-                              {formatMetric(
-                                hypothesis.summary?.totalPendingSubscribers,
-                              )}
-                            </p>
+                            {Number(
+                              hypothesis.summary?.totalPendingSubscribers ?? 0,
+                            ) > 0 ? (
+                              <p>
+                                Pending{" "}
+                                {formatMetric(
+                                  hypothesis.summary?.totalPendingSubscribers,
+                                )}
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                         <div>
@@ -2188,51 +2273,16 @@ function HypothesesSection({
                           />
                         </div>
                       </div>
-                      <div className="mt-3">
-                        <button
-                          type="button"
-                          onClick={() => onOpenHistory(hypothesis)}
-                          className="inline-flex items-center gap-1.5 rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-100 transition-colors hover:border-slate-500 hover:text-white"
-                        >
-                          <TrendingUp size={14} />
-                          Trend
-                        </button>
-                      </div>
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="space-y-2">
-                      <KpiStatusBadge status={hypothesis.summary?.kpiStatus} />
-                      <p className="text-slate-400">
-                        {hypothesis.summary?.decision || "-"}
-                      </p>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex items-center justify-end gap-2">
-                      <span className="group relative inline-flex">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(
-                            hypothesis.allCampaignsExcludedFromAnalytics,
-                          )}
-                          onChange={(event) =>
-                            onToggleExclude(hypothesis, event.target.checked)
-                          }
-                          className="h-4 w-4 shrink-0"
-                        />
-                        <TooltipBubble
-                          side="top"
-                          align="right"
-                          className="hidden whitespace-nowrap group-hover:block"
-                        >
-                          Exclude from channel performance calculations
-                        </TooltipBubble>
-                      </span>
-                      <IconButton onClick={() => onEdit(hypothesis)} />
-                      <IconButton
-                        kind="delete"
-                        onClick={() => onDelete(hypothesis)}
+                    <div className="flex justify-end">
+                      <AdHypothesisRowActions
+                        hypothesis={hypothesis}
+                        onOpenHistory={onOpenHistory}
+                        onEdit={onEdit}
+                        onToggleExclude={onToggleExclude}
+                        onDelete={onDelete}
                       />
                     </div>
                   </td>
@@ -2246,167 +2296,10 @@ function HypothesesSection({
   );
 }
 
-function PromoModal({
-  open,
-  onClose,
-  onSubmit,
-  title,
-  initial,
-  channels,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onSubmit: (payload: {
-    telegramChannelId: string;
-    assignedMemberId?: string | null;
-    iconId?: string | null;
-    title: string;
-    imageData?: string;
-    text?: string;
-  }) => void;
-  title: string;
-  initial?: Promo;
-  channels: TelegramChannel[];
-}) {
-  const channelOptions = useMemo(
-    () =>
-      channels.map((channel) => ({
-        value: channel.id,
-        label: channel.title,
-        iconUrl: channel.photoUrl,
-        iconFallback: channel.title,
-      })),
-    [channels],
-  );
-  const [iconId, setIconId] = useState<string | null>(initial?.iconId || null);
-  const [assignedMemberId, setAssignedMemberId] = useState<string | null>(
-    initial?.assignedMemberId ?? initial?.assignedMember?.id ?? null,
-  );
-  const [selectedChannelId, setSelectedChannelId] = useState(
-    initial?.telegramChannelId ?? "",
-  );
-  const [titleValue, setTitleValue] = useState(initial?.title ?? "");
-  const [textValue, setTextValue] = useState(initial?.text ?? "");
-  const [imageUrls, setImageUrls] = useState<string[]>(
-    initial?.imageData ? [initial.imageData] : [],
-  );
-  const [uploadingImages, setUploadingImages] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    setIconId(initial?.iconId || null);
-    setAssignedMemberId(
-      initial?.assignedMemberId ?? initial?.assignedMember?.id ?? null,
-    );
-    setSelectedChannelId(initial?.telegramChannelId ?? "");
-    setTitleValue(initial?.title ?? "");
-    setTextValue(initial?.text ?? "");
-    setImageUrls(initial?.imageData ? [initial.imageData] : []);
-    setUploadingImages(false);
-  }, [initial, open]);
-
-  useEffect(() => {
-    if (!open || selectedChannelId || channels.length !== 1) return;
-    setSelectedChannelId(channels[0].id);
-  }, [channels, open, selectedChannelId]);
-
-  const selectedChannel = channels.find(
-    (channel) => channel.id === selectedChannelId,
-  );
-  const submit = () => {
-    const trimmedTitle = titleValue.trim();
-    const trimmedText = textValue.trim();
-    onSubmit({
-      telegramChannelId: selectedChannelId,
-      assignedMemberId,
-      iconId,
-      title: trimmedTitle,
-      imageData: imageUrls[0] || undefined,
-      text: trimmedText || undefined,
-    });
-  };
-  const canSubmit = Boolean(
-    selectedChannelId && titleValue.trim() && !uploadingImages,
-  );
-
-  return (
-    <Modal open={open} onClose={onClose} title={title} size="xl">
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(270px,0.72fr)_minmax(0,1.28fr)]">
-        <TelegramPostPreview
-          channelTitle={selectedChannel?.title || "Telegram channel"}
-          channelPhotoUrl={selectedChannel?.photoUrl}
-          text={textValue}
-          imageUrls={imageUrls}
-        />
-        <Card className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-[auto_minmax(0,1.15fr)_minmax(220px,0.85fr)]">
-            <FormField label="Emoji">
-              <IconPicker
-                compact
-                iconId={iconId}
-                onChange={setIconId}
-                buttonLabel="Add emoji"
-              />
-            </FormField>
-            <FormField label="Internal title" required>
-              <Input
-                value={titleValue}
-                onChange={(event) => setTitleValue(event.target.value)}
-                placeholder="Promo title"
-              />
-            </FormField>
-            <FormField label="Channel" required>
-              <CustomSelect
-                value={selectedChannelId}
-                onChange={setSelectedChannelId}
-                placeholder="Select channel"
-                options={channelOptions}
-              />
-            </FormField>
-          </div>
-          <FormField label="Member">
-            <MemberSelect
-              value={assignedMemberId}
-              onChange={(value) => setAssignedMemberId(value || null)}
-              defaultToCurrent={!initial}
-            />
-          </FormField>
-          <FormField label="Telegram text">
-            <TelegramTextEditor
-              value={textValue}
-              onChange={setTextValue}
-              rows={8}
-              channelId={selectedChannelId || undefined}
-            />
-          </FormField>
-          <TelegramImageUpload
-            value={imageUrls}
-            onChange={(urls) => setImageUrls(urls.slice(0, 1))}
-            onUploadingChange={setUploadingImages}
-          />
-          {imageUrls.length > 1 ? (
-            <p className="text-xs text-amber-300">
-              Promo keeps only one image. The first uploaded image will be
-              saved.
-            </p>
-          ) : null}
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" type="button" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="button" disabled={!canSubmit} onClick={submit}>
-              {initial ? "Save promo" : "Create promo"}
-            </Button>
-          </div>
-        </Card>
-      </div>
-    </Modal>
-  );
-}
-
 function HypothesisFormModal({
   open,
   hypothesis,
+  loading = false,
   channels,
   moneySettings,
   rates,
@@ -2416,6 +2309,7 @@ function HypothesisFormModal({
 }: {
   open: boolean;
   hypothesis: AdHypothesis | null;
+  loading?: boolean;
   channels: TelegramChannel[];
   moneySettings: any;
   rates: any[] | undefined;
@@ -2428,9 +2322,11 @@ function HypothesisFormModal({
     assignedMemberId?: string | null;
     description?: string | null;
     adCampaignIds: string[];
-  }) => void;
+  }) => void | Promise<void>;
 }) {
   const [iconId, setIconId] = useState<string | null>(null);
+  const [draftIconPresentation, setDraftIconPresentation] =
+    useState<ResolvedEmoji | null>(null);
   const [telegramChannelId, setTelegramChannelId] = useState("");
   const [assignedMemberId, setAssignedMemberId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -2444,28 +2340,95 @@ function HypothesisFormModal({
   useEffect(() => {
     if (!open) return;
     setIconId(hypothesis?.iconId || null);
+    setDraftIconPresentation(hypothesis?.iconPresentation ?? null);
     setTelegramChannelId(hypothesis?.telegramChannelId || "");
     setAssignedMemberId(
       hypothesis?.assignedMemberId ?? hypothesis?.assignedMember?.id ?? null,
     );
     setName(hypothesis?.name || "");
     setDescription(hypothesis?.description || "");
-    setSelectedIds([]);
+    setSelectedIds(
+      Array.isArray((hypothesis as any)?.campaigns)
+        ? (hypothesis as any).campaigns.map(
+            (campaign: AdCampaign) => campaign.id,
+          )
+        : [],
+    );
     setCampaignSearch("");
     campaignPagination.resetPage();
     setError("");
   }, [hypothesis, open]);
 
-  useEffect(() => {
-    if (!open || !hypothesis) return;
-    adHypothesesApi
-      .get(hypothesis.id)
-      .then((detail) => {
-        setTelegramChannelId(detail.telegramChannelId || "");
-        setSelectedIds(detail.campaigns.map((campaign) => campaign.id));
-      })
-      .catch(() => setError("Failed to load linked campaigns."));
-  }, [hypothesis, open]);
+  const hypothesisDraft = useMemo<HypothesisDraftValues>(
+    () => ({
+      iconId,
+      telegramChannelId,
+      assignedMemberId,
+      name,
+      description,
+      selectedIds,
+    }),
+    [
+      assignedMemberId,
+      description,
+      iconId,
+      name,
+      selectedIds,
+      telegramChannelId,
+    ],
+  );
+  const hypothesisDraftPreview = useMemo(
+    () => ({ icon: draftIconPresentation }),
+    [draftIconPresentation],
+  );
+  const restoreHypothesisDraft = useCallback(
+    (
+      draft: HypothesisDraftValues,
+      storedDraft?: WorkspaceFormDraft<HypothesisDraftValues>,
+    ) => {
+      setIconId(draft.iconId ?? null);
+      setDraftIconPresentation(storedDraft?.preview?.icon ?? null);
+      setTelegramChannelId(draft.telegramChannelId);
+      setAssignedMemberId(draft.assignedMemberId);
+      setName(draft.name);
+      setDescription(draft.description);
+      setSelectedIds(draft.selectedIds);
+      setCampaignSearch("");
+      setError("");
+    },
+    [],
+  );
+  const emptyHypothesisDraft = useCallback(
+    (): HypothesisDraftValues => ({
+      iconId: null,
+      telegramChannelId: "",
+      assignedMemberId: null,
+      name: "",
+      description: "",
+      selectedIds: [],
+    }),
+    [],
+  );
+  const hypothesisDrafts = useWorkspaceModalDrafts({
+    namespace: "ads:hypothesis:draft",
+    open,
+    enabled: !hypothesis,
+    value: hypothesisDraft,
+    preview: hypothesisDraftPreview,
+    emptyValue: emptyHypothesisDraft,
+    onRestore: restoreHypothesisDraft,
+    isMeaningful: useCallback(
+      (draft: HypothesisDraftValues) =>
+        Boolean(
+          draft.name.trim() ||
+          draft.iconId ||
+          draft.description.trim() ||
+          draft.telegramChannelId ||
+          draft.selectedIds.length,
+        ),
+      [],
+    ),
+  });
 
   const campaignsQuery = useQuery({
     queryKey: [
@@ -2482,7 +2445,7 @@ function HypothesisFormModal({
         pageSize: campaignPagination.pageSize,
         search: deferredCampaignSearch || undefined,
       }),
-    enabled: open && Boolean(telegramChannelId),
+    enabled: open && !loading && Boolean(telegramChannelId),
     placeholderData: keepPreviousData,
   });
 
@@ -2494,7 +2457,7 @@ function HypothesisFormModal({
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
   };
-  const submit = () => {
+  const submit = async () => {
     const trimmedName = name.trim();
     if (!trimmedName) {
       setError("Name is required.");
@@ -2508,14 +2471,19 @@ function HypothesisFormModal({
       setError("Hypothesis must contain at least 1 campaign.");
       return;
     }
-    onSubmit({
-      name: trimmedName,
-      iconId,
-      telegramChannelId,
-      assignedMemberId,
-      description: description.trim() || null,
-      adCampaignIds: selectedIds,
-    });
+    try {
+      await onSubmit({
+        name: trimmedName,
+        iconId,
+        telegramChannelId,
+        assignedMemberId,
+        description: description.trim() || null,
+        adCampaignIds: selectedIds,
+      });
+      hypothesisDrafts.clearCurrentDraft();
+    } catch {
+      setError("Could not save the hypothesis. Your draft is still available.");
+    }
   };
 
   return (
@@ -2524,118 +2492,136 @@ function HypothesisFormModal({
       onClose={onClose}
       title={hypothesis ? "Edit hypothesis" : "Create hypothesis"}
     >
-      <div className="space-y-4">
-        <div className="grid gap-3 md:grid-cols-[auto_minmax(0,1fr)]">
-          <FormField label="Emoji">
-            <IconPicker
-              compact
-              iconId={iconId}
-              onChange={setIconId}
-              buttonLabel="Add emoji"
-            />
-          </FormField>
-          <FormField label="Member">
-            <MemberSelect
-              value={assignedMemberId}
-              onChange={(value) => setAssignedMemberId(value || null)}
-              defaultToCurrent={!hypothesis}
-            />
-          </FormField>
-        </div>
-        <FormField label="Own Telegram Channel" required>
-          <CustomSelect
-            value={telegramChannelId}
-            onChange={(value) => {
-              if (value !== telegramChannelId) setSelectedIds([]);
-              setTelegramChannelId(value);
-              setCampaignSearch("");
-              campaignPagination.resetPage();
-              setError("");
-            }}
-            placeholder="Select channel"
-            options={channels.map((channel: TelegramChannel) => ({
-              value: channel.id,
-              label: channel.title,
-              iconUrl: channel.photoUrl,
-              iconFallback: channel.title,
-            }))}
-          />
-        </FormField>
-        <FormField label="Name" required>
-          <Input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </FormField>
-        <FormField label="Description">
-          <Textarea
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-          />
-        </FormField>
-        <div>
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <p className="text-sm font-medium text-slate-200">Campaigns</p>
-            <span className="text-xs text-slate-400">
-              {selectedIds.length} selected
-            </span>
-          </div>
-          <Input
-            value={campaignSearch}
-            onChange={(event) => {
-              setCampaignSearch(event.target.value);
-              campaignPagination.resetPage();
-            }}
-            placeholder="Search campaigns"
-            disabled={!telegramChannelId}
-            className="mb-2"
-          />
-          <div className="max-h-72 space-y-2 overflow-auto rounded-lg border border-slate-800 p-2">
-            {campaignsQuery.isLoading && telegramChannelId ? (
-              <p className="p-2 text-sm text-slate-400">Loading campaigns…</p>
-            ) : null}
-            {!telegramChannelId ? (
-              <p className="p-2 text-sm text-slate-400">
-                Select a channel to load campaigns.
-              </p>
-            ) : null}
-            {visibleCampaigns.map((campaign: AdCampaign) => (
-              <CampaignSelectRow
-                key={campaign.id}
-                campaign={campaign}
-                checked={selectedSet.has(campaign.id)}
-                moneySettings={moneySettings}
-                rates={rates}
-                onToggle={() => toggleCampaign(campaign.id)}
+      {loading ? <EditFormSkeleton /> : null}
+      {!loading && !hypothesis && hypothesisDrafts.pendingDrafts.length ? (
+        <ModalDraftPicker
+          drafts={hypothesisDrafts.pendingDrafts}
+          titleFor={(draft) => draft.name.trim() || "Unfinished hypothesis"}
+          onContinue={hypothesisDrafts.continueDraft}
+          onDelete={hypothesisDrafts.deleteDraft}
+          onCreateNew={hypothesisDrafts.createNewDraft}
+        />
+      ) : null}
+      {!loading && (hypothesis || !hypothesisDrafts.pendingDrafts.length) ? (
+        <div className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-[auto_minmax(0,1fr)]">
+            <FormField label="Emoji">
+              <IconPicker
+                compact
+                iconId={iconId}
+                icon={draftIconPresentation}
+                onChange={(value, presentation) => {
+                  setIconId(value);
+                  setDraftIconPresentation(presentation ?? null);
+                }}
+                buttonLabel="Add emoji"
               />
-            ))}
-            {telegramChannelId &&
-            !campaignsQuery.isLoading &&
-            !visibleCampaigns.length ? (
-              <p className="p-2 text-sm text-slate-400">
-                No campaigns available for this channel.
-              </p>
+            </FormField>
+            <FormField label="Member">
+              <MemberSelect
+                value={assignedMemberId}
+                onChange={(value) => setAssignedMemberId(value || null)}
+                defaultToCurrent={!hypothesis}
+              />
+            </FormField>
+          </div>
+          <FormField label="Own Telegram Channel" required>
+            <CustomSelect
+              value={telegramChannelId}
+              onChange={(value) => {
+                if (value !== telegramChannelId) setSelectedIds([]);
+                setTelegramChannelId(value);
+                setCampaignSearch("");
+                campaignPagination.resetPage();
+                setError("");
+              }}
+              placeholder="Select channel"
+              options={channels.map((channel: TelegramChannel) => ({
+                value: channel.id,
+                label: channel.title,
+                iconUrl: channel.photoUrl,
+                iconFallback: channel.title,
+              }))}
+            />
+          </FormField>
+          <FormField label="Name" required>
+            <Input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </FormField>
+          <FormField label="Description">
+            <Textarea
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+            />
+          </FormField>
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-slate-200">Campaigns</p>
+              <span className="text-xs text-slate-400">
+                {selectedIds.length} selected
+              </span>
+            </div>
+            <Input
+              value={campaignSearch}
+              onChange={(event) => {
+                setCampaignSearch(event.target.value);
+                campaignPagination.resetPage();
+              }}
+              placeholder="Search campaigns"
+              disabled={!telegramChannelId}
+              className="mb-2"
+            />
+            <div className="max-h-72 space-y-2 overflow-auto rounded-lg border border-slate-800 p-2">
+              {campaignsQuery.isLoading && telegramChannelId ? (
+                <p className="p-2 text-sm text-slate-400">Loading campaigns…</p>
+              ) : null}
+              {!telegramChannelId ? (
+                <p className="p-2 text-sm text-slate-400">
+                  Select a channel to load campaigns.
+                </p>
+              ) : null}
+              {visibleCampaigns.map((campaign: AdCampaign) => (
+                <CampaignSelectRow
+                  key={campaign.id}
+                  campaign={campaign}
+                  checked={selectedSet.has(campaign.id)}
+                  moneySettings={moneySettings}
+                  rates={rates}
+                  onToggle={() => toggleCampaign(campaign.id)}
+                />
+              ))}
+              {telegramChannelId &&
+              !campaignsQuery.isLoading &&
+              !visibleCampaigns.length ? (
+                <p className="p-2 text-sm text-slate-400">
+                  No campaigns available for this channel.
+                </p>
+              ) : null}
+            </div>
+            {campaignsQuery.data ? (
+              <Pagination
+                {...campaignsQuery.data.pagination}
+                onPageChange={campaignPagination.setPage}
+                onPageSizeChange={campaignPagination.setPageSize}
+                loading={campaignsQuery.isLoading}
+              />
+            ) : null}
+            {error ? (
+              <p className="mt-2 text-sm text-rose-300">{error}</p>
             ) : null}
           </div>
-          {campaignsQuery.data ? (
-            <Pagination
-              {...campaignsQuery.data.pagination}
-              onPageChange={campaignPagination.setPage}
-              onPageSizeChange={campaignPagination.setPageSize}
-              loading={campaignsQuery.isLoading}
-            />
-          ) : null}
-          {error ? <p className="mt-2 text-sm text-rose-300">{error}</p> : null}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="button" disabled={isSubmitting} onClick={submit}>
+              {isSubmitting ? "Saving..." : "Save"}
+            </Button>
+          </div>
         </div>
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="button" disabled={isSubmitting} onClick={submit}>
-            {isSubmitting ? "Saving..." : "Save"}
-          </Button>
-        </div>
-      </div>
+      ) : null}
     </Modal>
   );
 }
@@ -2830,7 +2816,7 @@ function CampaignSelectRow({
         <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-400">
           <span>Attributed {formatMetric(attributed)}</span>
           <span>Joined {formatMetric(joined)}</span>
-          <span>Pending {formatMetric(pending)}</span>
+          {pending > 0 ? <span>Pending {formatMetric(pending)}</span> : null}
         </div>
       </div>
     </label>
@@ -2854,202 +2840,6 @@ function normalizeAdvertisingSelectionValue(value: unknown): string {
   }
   if (raw.startsWith("channel:")) return raw;
   return `channel:${raw}`;
-}
-
-function MultiValueSelect({
-  value,
-  onChange,
-  options,
-  placeholder,
-}: {
-  value: string[];
-  onChange: (v: string[]) => void;
-  options: CampaignSelectOption[];
-  placeholder: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const [menuStyle, setMenuStyle] = useState<{
-    top: number;
-    left: number;
-    width: number;
-  } | null>(null);
-  const selectedIds = new Set(value || []);
-  const selected = options.filter((option) => selectedIds.has(option.value));
-  const filteredOptions = options.filter((option) =>
-    `${option.label} ${option.description || ""} ${option.searchText || ""}`
-      .toLocaleLowerCase()
-      .includes(search.trim().toLocaleLowerCase()),
-  );
-
-  useEffect(() => {
-    if (!open) return;
-
-    const updatePosition = () => {
-      const rect = triggerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const viewportPadding = 16;
-      const width = Math.min(
-        Math.max(rect.width, 280),
-        window.innerWidth - viewportPadding * 2,
-      );
-      const left = Math.min(
-        Math.max(viewportPadding, rect.left),
-        window.innerWidth - width - viewportPadding,
-      );
-      const estimatedHeight = 360;
-      const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
-      const showAbove =
-        spaceBelow < 220 && rect.top > estimatedHeight + viewportPadding;
-      setMenuStyle({
-        left,
-        width,
-        top: showAbove
-          ? Math.max(viewportPadding, rect.top - estimatedHeight - 8)
-          : Math.min(
-              window.innerHeight - estimatedHeight - viewportPadding,
-              rect.bottom + 8,
-            ),
-      });
-    };
-
-    updatePosition();
-    window.addEventListener("resize", updatePosition);
-    window.addEventListener("scroll", updatePosition, true);
-    return () => {
-      window.removeEventListener("resize", updatePosition);
-      window.removeEventListener("scroll", updatePosition, true);
-    };
-  }, [open]);
-
-  const toggle = (optionValue: string) => {
-    if (selectedIds.has(optionValue))
-      onChange(value.filter((item) => item !== optionValue));
-    else onChange([...value, optionValue]);
-  };
-
-  return (
-    <div ref={rootRef} className="relative">
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => {
-          setOpen((current) => {
-            if (current) setSearch("");
-            return !current;
-          });
-        }}
-        className="flex min-h-11 w-full flex-wrap items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white"
-      >
-        {selected.length ? (
-          selected.map((option) => (
-            <span
-              key={option.value}
-              className="inline-flex max-w-[220px] items-center gap-1.5 rounded-full border border-neutral-600 px-2 py-0.5 text-xs"
-            >
-              <SelectOptionVisual option={option} />
-              <span className="truncate">{option.label}</span>
-            </span>
-          ))
-        ) : (
-          <span className="text-neutral-400">{placeholder}</span>
-        )}
-      </button>
-      {open && menuStyle
-        ? createPortal(
-            <div className="fixed inset-0 z-[180]">
-              <button
-                type="button"
-                aria-label="Close select"
-                className="absolute inset-0 cursor-default bg-transparent"
-                onClick={() => {
-                  setOpen(false);
-                  setSearch("");
-                }}
-              />
-              <div
-                className="absolute overflow-hidden rounded-xl border border-neutral-700 bg-neutral-900 shadow-2xl"
-                style={{
-                  top: menuStyle.top,
-                  left: menuStyle.left,
-                  width: menuStyle.width,
-                  maxHeight: 360,
-                }}
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="border-b border-neutral-800 p-2">
-                  <Input
-                    autoFocus
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Escape") {
-                        event.preventDefault();
-                        setOpen(false);
-                        setSearch("");
-                      }
-                    }}
-                    placeholder="Search..."
-                    className="bg-neutral-950"
-                  />
-                </div>
-                <div className="max-h-[300px] overflow-auto p-1">
-                  {filteredOptions.map((option) => (
-                    <button
-                      type="button"
-                      key={option.value}
-                      onClick={() => toggle(option.value)}
-                      className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-800"
-                    >
-                      <SelectOptionVisual option={option} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate">{option.label}</span>
-                        {option.description ? (
-                          <span className="block truncate text-xs text-neutral-500">
-                            {option.description}
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="text-blue-300">
-                        {selectedIds.has(option.value) ? "✓" : ""}
-                      </span>
-                    </button>
-                  ))}
-                  {!filteredOptions.length ? (
-                    <p className="px-3 py-3 text-center text-sm text-neutral-500">
-                      No options found
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
-    </div>
-  );
-}
-
-function SelectOptionVisual({ option }: { option: CampaignSelectOption }) {
-  if (option.iconUrl) {
-    return (
-      <img
-        src={option.iconUrl}
-        className="h-5 w-5 shrink-0 rounded-full object-cover"
-        alt=""
-      />
-    );
-  }
-  if (option.iconEmoji) {
-    return (
-      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-[15px] leading-none">
-        {option.iconEmoji}
-      </span>
-    );
-  }
-  return null;
 }
 
 function isOwnTelegramChannel(channel: any) {
@@ -3105,45 +2895,8 @@ function CampaignModal({
   title,
   initial,
   channels,
+  loading = false,
 }: any) {
-  const mapInitialValues = (row?: any): CampaignValues =>
-    row
-      ? {
-          telegramChannelId: row.telegramChannelId ?? "",
-          assignedMemberId:
-            row.assignedMemberId ?? row.assignedMember?.id ?? null,
-          promoIds: Array.isArray(row.promoIds)
-            ? row.promoIds
-            : row.promoId
-              ? [row.promoId]
-              : [],
-          inviteLinkIds: Array.isArray(row.inviteLinkIds)
-            ? row.inviteLinkIds
-            : row.telegramInviteLinkId
-              ? [row.telegramInviteLinkId]
-              : [],
-          advertisingChannelIds: campaignAdvertisingSources(row)
-            .map(advertisingSelectionId)
-            .filter(Boolean),
-          price: Number(row.price ?? row.costAmount ?? 0),
-          accountId: row.accountId ?? "",
-          date: toInputDate(row.placementDate || row.startedAt),
-          customTitle: row.customTitleTemplate ?? "",
-          notes: row.notes ?? "",
-        }
-      : {
-          telegramChannelId: "",
-          assignedMemberId: null,
-          promoIds: [],
-          inviteLinkIds: [],
-          advertisingChannelIds: [],
-          price: 0,
-          accountId: "",
-          date: formatLocalDate(new Date()),
-          customTitle: "",
-          notes: "",
-        };
-
   const {
     register,
     handleSubmit,
@@ -3151,13 +2904,44 @@ function CampaignModal({
     setValue,
     reset,
     formState: { errors },
-  } = useForm<CampaignValues>({ defaultValues: mapInitialValues(initial) });
+  } = useForm<CampaignValues>({
+    defaultValues: mapCampaignInitialValues(initial),
+  });
   const selectedChannelId = watch("telegramChannelId");
   const selectedPromoIds = watch("promoIds") || [];
   const selectedInviteLinkIds = watch("inviteLinkIds") || [];
   const selectedAdChannels = watch("advertisingChannelIds") || [];
   const selectedDate = watch("date");
   const customTitleValue = watch("customTitle");
+  const campaignDraftValue = watch();
+  const restoreCampaignDraft = useCallback(
+    (draft: CampaignValues) => reset(draft),
+    [reset],
+  );
+  const emptyCampaignDraft = useCallback(() => mapCampaignInitialValues(), []);
+  const campaignDrafts = useWorkspaceModalDrafts({
+    namespace: "ads:campaign:draft",
+    open,
+    enabled: !initial,
+    value: campaignDraftValue,
+    emptyValue: emptyCampaignDraft,
+    onRestore: restoreCampaignDraft,
+    isMeaningful: useCallback(
+      (draft: CampaignValues) =>
+        Boolean(
+          draft.telegramChannelId ||
+          draft.promoIds?.length ||
+          draft.inviteLinkIds?.length ||
+          draft.advertisingChannelIds?.length ||
+          Number(draft.price) ||
+          draft.accountId ||
+          draft.customTitle?.trim() ||
+          draft.notes?.trim() ||
+          (draft.date && draft.date !== formatLocalDate(new Date())),
+        ),
+      [],
+    ),
+  });
 
   useEffect(() => {
     register("advertisingChannelIds");
@@ -3167,7 +2951,7 @@ function CampaignModal({
 
   useEffect(() => {
     if (!open) return;
-    reset(mapInitialValues(initial));
+    reset(mapCampaignInitialValues(initial));
   }, [open, initial, reset]);
 
   useEffect(() => {
@@ -3187,29 +2971,17 @@ function CampaignModal({
   const { data: promos } = useQuery({
     queryKey: ["channel-promos", selectedChannelId],
     queryFn: () => getTelegramChannelPromos(selectedChannelId),
-    enabled: open && !!selectedChannelId,
-  });
-  const { data: inviteLinks } = useQuery({
-    queryKey: [
-      "channel-invite-links-select",
-      selectedChannelId,
-      initial?.id ?? null,
-    ],
-    queryFn: () =>
-      getTelegramChannelInviteLinksForSelect(selectedChannelId, {
-        availableForCampaignId: initial?.id || undefined,
-      }),
-    enabled: open && !!selectedChannelId,
+    enabled: open && !loading && !!selectedChannelId,
   });
   const { data: accounts } = useQuery({
     queryKey: ["accounts"],
     queryFn: accountsApi.list,
-    enabled: open,
+    enabled: open && !loading,
   });
   const { data: people } = useQuery({
     queryKey: ["advertising-people"],
     queryFn: advertisingChannelsApi.list,
-    enabled: open,
+    enabled: open && !loading,
   });
 
   const availablePromos = useMemo(() => promos ?? [], [promos]);
@@ -3252,66 +3024,6 @@ function CampaignModal({
     }));
     return mergeCampaignSelectOptions(liveOptions, initialOptions);
   }, [availablePromos, initial]);
-  const inviteLinkOptions = useMemo(() => {
-    const liveOptions = (inviteLinks || []).map(
-      (inviteLink: TelegramInviteLink) => ({
-        value: inviteLink.id,
-        label: inviteLink.name,
-        iconUrl:
-          (inviteLink.creatorMember?.avatarPresentation?.type === "image"
-            ? inviteLink.creatorMember.avatarPresentation.url
-            : null) ??
-          inviteLink.creatorPhotoUrl ??
-          undefined,
-        iconEmoji:
-          inviteLink.creatorMember?.avatarPresentation?.type === "unicode"
-            ? inviteLink.creatorMember.avatarPresentation.value
-            : undefined,
-        iconFallback: inviteLinkCreatorFallback(inviteLink),
-        icon: (
-          <TelegramInviteLinkCreatorAvatar
-            photoUrl={inviteLink.creatorPhotoUrl}
-            memberAvatar={inviteLink.creatorMember?.avatarPresentation}
-            label={inviteLinkCreatorFallback(inviteLink)}
-          />
-        ),
-        description:
-          inviteLink.creatorMember?.user?.name || inviteLink.creatorUsername
-            ? `${inviteLink.creatorMember?.user?.name || inviteLink.creatorUsername} · ${inviteLink.url}`
-            : inviteLink.url,
-      }),
-    );
-    const initialOptions = (
-      initial?.inviteLinks ||
-      (initial?.telegramInviteLink ? [initial.telegramInviteLink] : [])
-    ).map((inviteLink: TelegramInviteLink) => ({
-      value: inviteLink.id,
-      label: inviteLink.name,
-      iconUrl:
-        (inviteLink.creatorMember?.avatarPresentation?.type === "image"
-          ? inviteLink.creatorMember.avatarPresentation.url
-          : null) ??
-        inviteLink.creatorPhotoUrl ??
-        undefined,
-      iconEmoji:
-        inviteLink.creatorMember?.avatarPresentation?.type === "unicode"
-          ? inviteLink.creatorMember.avatarPresentation.value
-          : undefined,
-      iconFallback: inviteLinkCreatorFallback(inviteLink),
-      icon: (
-        <TelegramInviteLinkCreatorAvatar
-          photoUrl={inviteLink.creatorPhotoUrl}
-          memberAvatar={inviteLink.creatorMember?.avatarPresentation}
-          label={inviteLinkCreatorFallback(inviteLink)}
-        />
-      ),
-      description:
-        inviteLink.creatorMember?.user?.name || inviteLink.creatorUsername
-          ? `${inviteLink.creatorMember?.user?.name || inviteLink.creatorUsername} · ${inviteLink.url}`
-          : inviteLink.url,
-    }));
-    return mergeCampaignSelectOptions(liveOptions, initialOptions);
-  }, [initial, inviteLinks]);
   const advertisingSources = useMemo(() => {
     const liveOptions = [
       ...(people || []).map((person: any) => ({
@@ -3356,173 +3068,218 @@ function CampaignModal({
 
   return (
     <Modal open={open} onClose={onClose} title={title}>
-      <form
-        className="space-y-3"
-        onSubmit={handleSubmit((v: any) => {
-          onSubmit({
-            ...v,
-            assignedMemberId: v.assignedMemberId || null,
-            promoIds: v.promoIds || [],
-            inviteLinkIds: v.inviteLinkIds || [],
-            price: Number(v.price),
-            advertisingChannelIds: v.advertisingChannelIds || [],
-            customTitle: v.customTitle?.trim() || null,
-          });
-        })}
-      >
-        <FormField label="Custom title">
-          <Input
-            placeholder="[date] // custom campaign name"
-            {...register("customTitle")}
-          />
-          <p className="text-sm text-slate-500">
-            Optional. Use [date] to insert the campaign date automatically.
-          </p>
-          {customTitleValue?.trim() ? (
-            <p className="text-sm text-slate-400">
-              Preview:{" "}
-              {resolveTitleTemplate(customTitleValue, {
-                date: selectedDate || formatLocalDate(new Date()),
-              })}
-            </p>
-          ) : null}
-        </FormField>
-        <FormField
-          label="Own Telegram Channel"
-          required
-          error={errors.telegramChannelId ? "Required field" : undefined}
-        >
-          <CustomSelect
-            value={watch("telegramChannelId")}
-            onChange={(v) => {
-              setValue("telegramChannelId", v, {
-                shouldValidate: true,
-                shouldDirty: true,
-              });
-              setValue("promoIds", [], {
-                shouldDirty: true,
-                shouldValidate: true,
-              });
-              setValue("inviteLinkIds", [], {
-                shouldDirty: true,
-                shouldValidate: true,
-              });
-            }}
-            placeholder="Select"
-            options={ownTelegramChannels.map((x: any) => ({
-              value: x.id,
-              label: x.title,
-              iconUrl: x.photoUrl,
-              iconFallback: x.title,
-            }))}
-          />
-        </FormField>
-        <FormField label="Member">
-          <MemberSelect
-            value={watch("assignedMemberId") ?? null}
-            onChange={(assignedMemberId) =>
-              setValue("assignedMemberId", assignedMemberId || null, {
-                shouldDirty: true,
-              })
-            }
-            defaultToCurrent={!initial}
-          />
-        </FormField>
-        <FormField label="Promos">
-          <MultiValueSelect
-            value={selectedPromoIds}
-            onChange={(next) =>
-              setValue("promoIds", next, {
-                shouldValidate: true,
-                shouldDirty: true,
-              })
-            }
-            options={promoOptions}
-            placeholder="Select promos"
-          />
-        </FormField>
-        <FormField label="Invite Links">
-          <MultiValueSelect
-            value={selectedInviteLinkIds}
-            onChange={(next) =>
-              setValue("inviteLinkIds", next, {
-                shouldValidate: true,
-                shouldDirty: true,
-              })
-            }
-            options={inviteLinkOptions}
-            placeholder="Select invite links"
-          />
-        </FormField>
-        <FormField label="Advertising Sources">
-          <MultiValueSelect
-            value={selectedAdChannels.filter(
-              (id) =>
-                id !== `channel:${selectedChannelId}` &&
-                id !== selectedChannelId,
-            )}
-            onChange={(next) =>
-              setValue("advertisingChannelIds", next, {
-                shouldValidate: true,
-                shouldDirty: true,
-              })
-            }
-            options={advertisingSources}
-            placeholder="Select sources"
-          />
-        </FormField>
-        <FormField
-          label="Cost amount"
-          required
-          error={errors.price ? "Required field" : undefined}
-        >
-          <Input
-            type="number"
-            step="0.01"
-            {...register("price", { valueAsNumber: true, required: true })}
-          />
-        </FormField>
-        <FormField
-          label="Account"
-          required
-          error={errors.accountId ? "Required field" : undefined}
-        >
-          <CustomSelect
-            value={watch("accountId")}
-            onChange={(v) =>
-              setValue("accountId", v, {
-                shouldValidate: true,
-                shouldDirty: true,
-              })
-            }
-            placeholder="Select account"
-            options={(accounts || []).map(accountAdCampaignSelectOption)}
-          />
-        </FormField>
-        <FormField label="Date">
-          <DateInput
-            name="date"
-            value={watch("date") || ""}
-            onChange={(e) =>
-              setValue("date", e.target.value, { shouldDirty: true })
-            }
-          />
-        </FormField>
-        <FormField label="Notes">
-          <Textarea {...register("notes")} />
-        </FormField>
-        <input
-          type="hidden"
-          {...register("telegramChannelId", { required: true })}
+      {loading ? <EditFormSkeleton /> : null}
+      {!loading && !initial && campaignDrafts.pendingDrafts.length ? (
+        <ModalDraftPicker
+          drafts={campaignDrafts.pendingDrafts}
+          titleFor={(draft) =>
+            draft.customTitle?.trim() || "Unfinished ad campaign"
+          }
+          onContinue={campaignDrafts.continueDraft}
+          onDelete={campaignDrafts.deleteDraft}
+          onCreateNew={campaignDrafts.createNewDraft}
         />
-        <input type="hidden" {...register("accountId", { required: true })} />
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" type="button" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit">Save</Button>
-        </div>
-      </form>
+      ) : null}
+      {!loading && (initial || !campaignDrafts.pendingDrafts.length) ? (
+        <form
+          className="space-y-3"
+          onSubmit={handleSubmit(async (v: any) => {
+            try {
+              await onSubmit({
+                ...v,
+                assignedMemberId: v.assignedMemberId || null,
+                promoIds: v.promoIds || [],
+                inviteLinkIds: v.inviteLinkIds || [],
+                price: Number(v.price),
+                advertisingChannelIds: v.advertisingChannelIds || [],
+                customTitle: v.customTitle?.trim() || null,
+              });
+              campaignDrafts.clearCurrentDraft();
+            } catch {
+              // The operation alert reports the API error; keep the draft.
+            }
+          })}
+        >
+          <FormField label="Custom title">
+            <Input
+              placeholder="[date] // custom campaign name"
+              {...register("customTitle")}
+            />
+            <p className="text-sm text-slate-500">
+              Optional. Use [date] to insert the campaign date automatically.
+            </p>
+            {customTitleValue?.trim() ? (
+              <p className="text-sm text-slate-400">
+                Preview:{" "}
+                {resolveTitleTemplate(customTitleValue, {
+                  date: selectedDate || formatLocalDate(new Date()),
+                })}
+              </p>
+            ) : null}
+          </FormField>
+          <FormField
+            label="Own Telegram Channel"
+            required
+            error={errors.telegramChannelId ? "Required field" : undefined}
+          >
+            <CustomSelect
+              value={watch("telegramChannelId")}
+              onChange={(v) => {
+                setValue("telegramChannelId", v, {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                });
+                setValue("promoIds", [], {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                });
+                setValue("inviteLinkIds", [], {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                });
+              }}
+              placeholder="Select"
+              options={ownTelegramChannels.map((x: any) => ({
+                value: x.id,
+                label: x.title,
+                iconUrl: x.photoUrl,
+                iconFallback: x.title,
+              }))}
+            />
+          </FormField>
+          <FormField label="Member">
+            <MemberSelect
+              value={watch("assignedMemberId") ?? null}
+              onChange={(assignedMemberId) =>
+                setValue("assignedMemberId", assignedMemberId || null, {
+                  shouldDirty: true,
+                })
+              }
+              defaultToCurrent={!initial}
+            />
+          </FormField>
+          <FormField label="Promos">
+            <MultiValueSelect
+              value={selectedPromoIds}
+              onChange={(next) =>
+                setValue("promoIds", next, {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                })
+              }
+              options={promoOptions}
+              placeholder="Select promos"
+            />
+          </FormField>
+          <FormField label="Invite Links">
+            <CampaignInviteLinksSelect
+              channelId={selectedChannelId}
+              campaignId={initial?.id}
+              value={selectedInviteLinkIds}
+              initialLinks={
+                initial?.inviteLinks ||
+                (initial?.telegramInviteLink
+                  ? [initial.telegramInviteLink]
+                  : [])
+              }
+              enabled={open && !loading}
+              onChange={(next) =>
+                setValue("inviteLinkIds", next, {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                })
+              }
+            />
+          </FormField>
+          <FormField label="Advertising Sources">
+            <MultiValueSelect
+              value={selectedAdChannels.filter(
+                (id) =>
+                  id !== `channel:${selectedChannelId}` &&
+                  id !== selectedChannelId,
+              )}
+              onChange={(next) =>
+                setValue("advertisingChannelIds", next, {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                })
+              }
+              options={advertisingSources}
+              placeholder="Select sources"
+            />
+          </FormField>
+          <FormField
+            label="Cost amount"
+            required
+            error={errors.price ? "Required field" : undefined}
+          >
+            <Input
+              type="number"
+              step="0.01"
+              {...register("price", { valueAsNumber: true, required: true })}
+            />
+          </FormField>
+          <FormField
+            label="Account"
+            required
+            error={errors.accountId ? "Required field" : undefined}
+          >
+            <CustomSelect
+              value={watch("accountId")}
+              onChange={(v) =>
+                setValue("accountId", v, {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                })
+              }
+              placeholder="Select account"
+              options={(accounts || []).map(accountAdCampaignSelectOption)}
+            />
+          </FormField>
+          <FormField label="Date">
+            <DateInput
+              name="date"
+              value={watch("date") || ""}
+              onChange={(e) =>
+                setValue("date", e.target.value, { shouldDirty: true })
+              }
+            />
+          </FormField>
+          <FormField label="Notes">
+            <Textarea {...register("notes")} />
+          </FormField>
+          <input
+            type="hidden"
+            {...register("telegramChannelId", { required: true })}
+          />
+          <input type="hidden" {...register("accountId", { required: true })} />
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" type="button" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit">Save</Button>
+          </div>
+        </form>
+      ) : null}
     </Modal>
+  );
+}
+
+function EditFormSkeleton() {
+  return (
+    <div className="space-y-4" role="status" aria-label="Loading form">
+      <span className="sr-only">Loading form…</span>
+      <div className="grid gap-3 md:grid-cols-2">
+        <Skeleton className="h-[68px]" />
+        <Skeleton className="h-[68px]" />
+      </div>
+      <Skeleton className="h-[68px]" />
+      <Skeleton className="h-[68px]" />
+      <Skeleton className="h-28" />
+      <div className="flex justify-end gap-2">
+        <Skeleton className="h-10 w-24" />
+        <Skeleton className="h-10 w-24" />
+      </div>
+    </div>
   );
 }

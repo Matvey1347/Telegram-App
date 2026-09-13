@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { TelegramCrmContactCommandService } from './telegram-crm-contact-command.service';
 
 describe('TelegramCrmContactCommandService', () => {
@@ -25,6 +25,123 @@ describe('TelegramCrmContactCommandService', () => {
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     _count: { sales: 0 },
   };
+
+  it('replaces manual tags while preserving automatically managed purchase tags', async () => {
+    const tx = {
+      telegramAdvertiserTagAssignment: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const prisma = {
+      telegramAdvertiser: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'contact-1',
+          workspaceId: 'workspace-1',
+          ownerMemberId: 'member-1',
+          archivedAt: null,
+        }),
+      },
+      telegramAdvertiserTag: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([{ id: 'workflow-tag' }])
+          .mockResolvedValueOnce([
+            {
+              id: 'automatic-tag',
+              name: 'Network · Business',
+              color: '#60a5fa',
+              systemKey: 'NETWORK:network-1',
+            },
+            {
+              id: 'workflow-tag',
+              name: 'Mutual promotion',
+              color: '#a78bfa',
+              systemKey: 'WORKFLOW:MUTUAL_PROMOTION',
+            },
+          ]),
+      },
+      $transaction: jest.fn(async (work: (value: unknown) => unknown) =>
+        work(tx),
+      ),
+    };
+    const systemTags = { ensureWorkflowTags: jest.fn() };
+    const service = new TelegramCrmContactCommandService(
+      prisma as never,
+      {
+        require: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
+        context: jest.fn().mockResolvedValue({
+          workspaceId: 'workspace-1',
+          memberId: 'member-1',
+        }),
+        can: jest.fn().mockResolvedValue(true),
+        requireOwnOrAny: jest.fn(),
+      } as never,
+      {} as never,
+      undefined,
+      systemTags as never,
+    );
+
+    const result = await service.setTags('user-1', 'contact-1', {
+      tagIds: ['workflow-tag'],
+    });
+
+    expect(tx.telegramAdvertiserTagAssignment.deleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          advertiserId: 'contact-1',
+          tag: expect.any(Object),
+        }),
+      }),
+    );
+    expect(result).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'automatic-tag',
+          assignmentMode: 'AUTOMATIC',
+        }),
+        expect.objectContaining({
+          id: 'workflow-tag',
+          assignmentMode: 'MANUAL',
+        }),
+      ]),
+    );
+  });
+
+  it('rejects a tag from another workspace or an automatic tag', async () => {
+    const prisma = {
+      telegramAdvertiser: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'contact-1',
+          workspaceId: 'workspace-1',
+          ownerMemberId: 'member-1',
+          archivedAt: null,
+        }),
+      },
+      telegramAdvertiserTag: { findMany: jest.fn().mockResolvedValue([]) },
+      $transaction: jest.fn(),
+    };
+    const service = new TelegramCrmContactCommandService(
+      prisma as never,
+      {
+        require: jest.fn().mockResolvedValue({ workspaceId: 'workspace-1' }),
+        context: jest.fn().mockResolvedValue({
+          workspaceId: 'workspace-1',
+          memberId: 'member-1',
+        }),
+        can: jest.fn().mockResolvedValue(true),
+        requireOwnOrAny: jest.fn(),
+      } as never,
+      {} as never,
+    );
+
+    await expect(
+      service.setTags('user-1', 'contact-1', {
+        tagIds: ['automatic-or-foreign-tag'],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
 
   it('authorizes writes against Contact ownership inside the selected workspace', async () => {
     const prisma = {

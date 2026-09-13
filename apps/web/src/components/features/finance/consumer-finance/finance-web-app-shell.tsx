@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Bot } from "lucide-react";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
 import Image from "next/image";
 import type { FinanceCoreCopy } from "./i18n/core";
@@ -34,6 +35,7 @@ export function FinanceWebAppShell({
   localeDisabled = false,
   children,
   onNavigate,
+  onOpenAssistant,
   onAction,
   onSignOut,
   signingOut = false,
@@ -48,6 +50,7 @@ export function FinanceWebAppShell({
   localeDisabled?: boolean;
   children: React.ReactNode;
   onNavigate: (screen: ConsumerFinanceScreen) => void;
+  onOpenAssistant?: () => void;
   onAction: (action: ConsumerFinanceAction) => void;
   onSignOut: () => void;
   signingOut?: boolean;
@@ -89,6 +92,18 @@ export function FinanceWebAppShell({
             aria-label={copy.financeNavigation}
             className="min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1 [scrollbar-color:#3a3a3a_transparent] [scrollbar-width:thin]"
           >
+            {onOpenAssistant ? (
+              <button
+                type="button"
+                onClick={onOpenAssistant}
+                className="mb-3 flex min-h-11 w-full items-center gap-2 rounded-xl border border-cyan-800/60 bg-cyan-500/10 px-2.5 text-sm text-cyan-100 outline-none transition hover:border-cyan-700 hover:bg-cyan-500/15 focus-visible:ring-2 focus-visible:ring-cyan-300"
+              >
+                <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-800/60 bg-cyan-950/70">
+                  <Bot size={17} aria-hidden="true" />
+                </span>
+                <span className="truncate">{copy.assistant}</span>
+              </button>
+            ) : null}
             {FINANCE_NAVIGATION_GROUPS.map((group) => {
               const collapsed = collapsedGroups.has(group.id);
               const controls = `finance-sidebar-group-${group.id}`;
@@ -167,6 +182,7 @@ export function FinanceWebAppShell({
         screen={screen}
         copy={copy}
         onNavigate={onNavigate}
+        onOpenAssistant={onOpenAssistant}
       />
     </main>
   );

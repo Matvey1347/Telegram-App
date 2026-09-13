@@ -26,9 +26,10 @@ describe('TelegramChannelsService characterization seams', () => {
   describe('syncNow sequencing', () => {
     const setupSync = () => {
       const clearByPrefix = jest.fn();
+      const updateChannel = jest.fn();
       const service = createTelegramChannelsTestHarness(
         {
-          telegramChannel: { update: jest.fn() },
+          telegramChannel: { update: updateChannel },
         } as never,
         {} as never,
         { clearByPrefix } as never,
@@ -56,7 +57,7 @@ describe('TelegramChannelsService characterization seams', () => {
         .fn()
         .mockResolvedValue({ id: 'account' });
       service['postSyncLimitForChannel'] = jest.fn().mockResolvedValue(50);
-      return { service, clearByPrefix };
+      return { service, clearByPrefix, updateChannel };
     };
 
     it('continues optional failures in order and reports a partial sync', async () => {
@@ -181,6 +182,38 @@ describe('TelegramChannelsService characterization seams', () => {
 
       expect(service['createAudienceSnapshotSafely']).toHaveBeenCalledTimes(1);
       expect(result.status).not.toBe('success');
+    });
+
+    it('saves the selected post count with the per-channel sync scope', async () => {
+      const { service, updateChannel } = setupSync();
+      service['syncHistorical'] = jest.fn().mockResolvedValue({
+        imported: 0,
+        updated: 0,
+        postsUpdated: 3,
+      });
+      service['syncBroadcastStats'] = jest.fn().mockResolvedValue({
+        success: false,
+      });
+      service['syncManagedPosts'] = jest.fn().mockResolvedValue({
+        status: 'skipped',
+      });
+
+      await service.syncNow('user', 'channel', {
+        saveSelection: true,
+        postLimit: 75,
+      });
+
+      expect(updateChannel).toHaveBeenCalledWith({
+        where: { id: 'channel' },
+        data: expect.objectContaining({ postSyncLimit: 75 }),
+      });
+      expect(service['syncHistorical']).toHaveBeenCalledWith(
+        'user',
+        'channel',
+        expect.objectContaining({ postLimit: 75 }),
+        undefined,
+        expect.any(Object),
+      );
     });
   });
 

@@ -88,6 +88,39 @@ describe("telegramSystemBotApi subscriptions", () => {
     );
   });
 
+  it("starts promo import with the dedicated Promo destination", async () => {
+    const post = vi.fn().mockResolvedValue({ data: { workflowId: "promo-1" } });
+    const client = createTelegramSystemBotApi({
+      post,
+    } as unknown as AxiosInstance);
+
+    await expect(client.preparePromoPostImport()).resolves.toEqual({
+      workflowId: "promo-1",
+    });
+    expect(post).toHaveBeenCalledWith(
+      "/telegram/system-bot/promo-post-import",
+      undefined,
+      { feedback: { mode: "silent" } },
+    );
+  });
+
+  it("bypasses browser caches while checking a bot import result", async () => {
+    const get = vi.fn().mockResolvedValue({ data: { ready: false } });
+    const client = createTelegramSystemBotApi({
+      get,
+    } as unknown as AxiosInstance);
+
+    await client.promoPostImportResult("workflow-1");
+
+    expect(get).toHaveBeenCalledWith(
+      "/telegram/system-bot/promo-post-import",
+      expect.objectContaining({
+        headers: { "Cache-Control": "no-cache" },
+        params: expect.objectContaining({ workflowId: "workflow-1" }),
+      }),
+    );
+  });
+
   it("updates all subscriptions in a task group with one request", async () => {
     const payload = {
       workspaceId: "workspace-a",

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { extractAutoPrefilledPostTitle } from "@/lib/features/telegram/telegram-post-title";
+import {
+  extractAutoPrefilledPostTitle,
+  extractFirstEmoji,
+} from "@/lib/features/telegram/telegram-post-title";
 
 describe("telegram-post-title", () => {
   it("extracts a leading emoji and first-line title from telegram text", () => {
@@ -73,5 +76,14 @@ describe("telegram-post-title", () => {
       emoji: null,
       title: "C* algorithm",
     });
+  });
+
+  it("finds the first emoji anywhere in post text for an icon picker", () => {
+    expect(extractFirstEmoji("Plain heading\nText 🧠 then 🔥")).toBe("🧠");
+  });
+
+  it("keeps a multi-codepoint emoji as one picker value", () => {
+    expect(extractFirstEmoji("Hello 👩🏽‍💻 world")).toBe("👩🏽‍💻");
+    expect(extractFirstEmoji("Country 🇺🇦 channel")).toBe("🇺🇦");
   });
 });

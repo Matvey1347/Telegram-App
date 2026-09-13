@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { AdCampaignQueryDto } from './dto';
+import { adsChannelWhere, parseAdsChannelIds } from '../ads-channel-scope';
 
 export type AdCampaignPageId = { id: string };
 
@@ -81,7 +82,11 @@ export function buildAdCampaignListWhere(
   ].filter((filter) => Object.keys(filter).length > 0);
   return {
     workspaceId,
-    telegramChannelId: query.telegramChannelId || undefined,
+    telegramChannel: { archivedAt: null },
+    telegramChannelId: adsChannelWhere(
+      query.telegramChannelId,
+      query.telegramChannelIds,
+    ),
     assignedMemberId: query.assignedMemberId || undefined,
     ...(filters.length ? { AND: filters } : {}),
   };
@@ -173,8 +178,19 @@ export function buildAdCampaignPageIdQuery(
   const bounds = dateBounds(query);
   const conditions: Prisma.Sql[] = [
     Prisma.sql`campaign."workspaceId" = ${workspaceId}`,
+    Prisma.sql`EXISTS (
+      SELECT 1 FROM "TelegramChannel" active_channel
+      WHERE active_channel."id" = campaign."telegramChannelId"
+        AND active_channel."workspaceId" = ${workspaceId}
+        AND active_channel."archivedAt" IS NULL
+    )`,
   ];
-  if (query.telegramChannelId) {
+  const channelIds = parseAdsChannelIds(query.telegramChannelIds);
+  if (channelIds.length) {
+    conditions.push(
+      Prisma.sql`campaign."telegramChannelId" IN (${Prisma.join(channelIds)})`,
+    );
+  } else if (query.telegramChannelId) {
     conditions.push(
       Prisma.sql`campaign."telegramChannelId" = ${query.telegramChannelId}`,
     );

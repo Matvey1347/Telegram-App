@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -9,12 +9,13 @@ import {
   syncSelectionFromChannel,
 } from "./channel-sync-scope-modal";
 
-const { clearProgress, pushToast, setProgress, syncWorkspaceChannels } = vi.hoisted(() => ({
-  clearProgress: vi.fn(),
-  pushToast: vi.fn(),
-  setProgress: vi.fn(),
-  syncWorkspaceChannels: vi.fn(),
-}));
+const { clearProgress, pushToast, setProgress, syncWorkspaceChannels } =
+  vi.hoisted(() => ({
+    clearProgress: vi.fn(),
+    pushToast: vi.fn(),
+    setProgress: vi.fn(),
+    syncWorkspaceChannels: vi.fn(),
+  }));
 
 vi.mock("@/lib/api", () => ({
   telegramChannelsApi: {
@@ -116,6 +117,33 @@ describe("ChannelSyncScopeModal", () => {
     expect(onSyncAll).toHaveBeenCalledOnce();
   });
 
+  it("edits the per-channel post count inside the Posts scope", () => {
+    const onPostLimitChange = vi.fn();
+
+    render(
+      <ChannelSyncScopeModal
+        open
+        title="Sync Test"
+        description="Choose what to sync."
+        helperText="Saved per channel."
+        selection={DEFAULT_CHANNEL_SYNC_SELECTION}
+        postLimit={50}
+        isSyncing={false}
+        submitLabel="Sync selected"
+        onClose={vi.fn()}
+        onSelectionChange={vi.fn()}
+        onPostLimitChange={onPostLimitChange}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    const input = screen.getByRole("spinbutton", { name: "Posts to sync" });
+    fireEvent.change(input, { target: { value: "750" } });
+
+    expect(onPostLimitChange).toHaveBeenLastCalledWith(750);
+    expect(input).toHaveAttribute("max", "10000");
+  });
+
   it("hydrates missing channel preferences with enabled defaults", () => {
     expect(
       syncSelectionFromChannel({
@@ -148,11 +176,11 @@ describe("ChannelSyncScopeModal", () => {
         100,
       );
       return {
-      total: 100,
-      successful: 99,
-      failed: 1,
-      skipped: 0,
-      summary: "Synced 99/100 channels, 1 failed.",
+        total: 100,
+        successful: 99,
+        failed: 1,
+        skipped: 0,
+        summary: "Synced 99/100 channels, 1 failed.",
       };
     });
     const queryClient = new QueryClient({

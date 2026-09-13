@@ -5,14 +5,7 @@ import type {
   TelegramAdProduct,
   TelegramAdSale,
 } from "@telegram-system/shared";
-import {
-  ExternalLink,
-  FileText,
-  Hourglass,
-  Link2,
-  Timer,
-  Trash2,
-} from "lucide-react";
+import { ExternalLink, FileText, Link2 } from "lucide-react";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import {
   Button,
@@ -24,6 +17,7 @@ import {
   TimeInput,
 } from "@/components/ui/primitives";
 import type { Account } from "@/lib/api";
+import { LifecycleCountdown } from "@/components/ui/lifecycle-countdown";
 import { accountDisplayName } from "@/lib/features/finance/account-display";
 import { toNumber } from "@/lib/features/growth/telegram-ad-sales";
 import { buildTelegramPostsUrl } from "@/lib/features/telegram/telegram-posts-url";
@@ -85,22 +79,7 @@ export function PlacementDeletionCountdown({
   const now = sharedNow ?? localNow;
   const timer = placementTimer(placement, now);
   if (!timer) return null;
-  return (
-    <div className="mt-2 text-xs">
-      <p
-        className={`inline-flex items-center gap-1.5 font-mono font-medium tabular-nums ${timer.phase === "complete" ? "text-neutral-500" : timer.phase === "deletion" ? "text-amber-300" : "text-sky-400"}`}
-      >
-        {timer.phase === "complete" ? (
-          <Trash2 size={13} aria-hidden="true" />
-        ) : timer.phase === "deletion" ? (
-          <Timer size={13} aria-hidden="true" />
-        ) : (
-          <Hourglass size={13} aria-hidden="true" />
-        )}
-        {timer.label}
-      </p>
-    </div>
-  );
+  return <LifecycleCountdown value={timer} className="mt-2" />;
 }
 
 export function PlacementEditor(props: {

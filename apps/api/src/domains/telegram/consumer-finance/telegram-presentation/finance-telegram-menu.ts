@@ -1,11 +1,12 @@
 import type { TelegramChatMenuButton } from '../../../../telegram/shared/telegram-bot-api.client';
 import { publicWebOrigin } from '../../../../config/deployment-config';
 import { t, type FinanceChatLocale } from '../i18n/finance-chat-i18n';
+import type { ConsumerFinanceAssistantScreen } from '@telegram-system/shared';
 
 export function financeMiniAppUrl(
   botId: string,
   base = publicWebOrigin(),
-  screen?: 'accounts' | 'transactions' | 'more' | 'debts' | 'regular-payments',
+  screen?: ConsumerFinanceAssistantScreen | 'more',
   transfer = false,
 ) {
   const normalized = base?.trim().replace(/\/$/u, '');
@@ -49,6 +50,7 @@ export function financeMainMenu(
 ) {
   void botId;
   return [
+    [{ text: t(locale, 'menuAssistant') }],
     [{ text: t(locale, 'menuExpense') }, { text: t(locale, 'menuIncome') }],
     [{ text: t(locale, 'menuRecent') }, { text: t(locale, 'menuAccounts') }],
     [

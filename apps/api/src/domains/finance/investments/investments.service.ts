@@ -11,6 +11,7 @@ import {
 import { WorkspaceService } from '../../../common/workspace.service';
 import { CreateInvestmentDto, UpdateInvestmentDto } from './dto';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
+import { FinanceCategoriesService } from '../finance-categories/finance-categories.service';
 
 @Injectable()
 export class InvestmentsService {
@@ -18,7 +19,24 @@ export class InvestmentsService {
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
     private readonly authorization: WorkspaceAuthorizationService,
+    private readonly financeCategoriesService: FinanceCategoriesService,
   ) {}
+
+  private async investmentCategoryId(workspaceId: string) {
+    await this.financeCategoriesService.ensureSystemCategories(workspaceId);
+    const category = await this.prisma.transactionCategory.findUnique({
+      where: {
+        workspaceId_type_key: {
+          workspaceId,
+          type: 'income',
+          key: 'investment',
+        },
+      },
+      select: { id: true },
+    });
+    if (!category) throw new NotFoundException('Investment category not found');
+    return category.id;
+  }
 
   private async workspace(userId: string) {
     return this.workspaceService.resolveWorkspaceIdForUser(userId);
@@ -107,16 +125,18 @@ export class InvestmentsService {
         userId,
         dto.assignedMemberId,
       );
-    const [workspace, workspaceMember, account] = await Promise.all([
-      this.prisma.workspace.findFirst({ where: { id: workspaceId } }),
-      this.prisma.workspaceMember.findFirst({
-        where: { id: dto.workspaceMemberId, workspaceId },
-        include: { user: true },
-      }),
-      this.prisma.account.findFirst({
-        where: { id: dto.accountId, workspaceId },
-      }),
-    ]);
+    const [workspace, workspaceMember, account, investmentCategoryId] =
+      await Promise.all([
+        this.prisma.workspace.findFirst({ where: { id: workspaceId } }),
+        this.prisma.workspaceMember.findFirst({
+          where: { id: dto.workspaceMemberId, workspaceId },
+          include: { user: true },
+        }),
+        this.prisma.account.findFirst({
+          where: { id: dto.accountId, workspaceId },
+        }),
+        this.investmentCategoryId(workspaceId),
+      ]);
     if (!workspace) throw new NotFoundException('Workspace not found');
     if (!workspaceMember)
       throw new NotFoundException('Workspace member not found');
@@ -136,6 +156,8 @@ export class InvestmentsService {
           accountId: account.id,
           type: 'income',
           category: 'investment',
+          categoryId: investmentCategoryId,
+          memberId: workspaceMember.id,
           amount: dto.amount,
           currency: account.currency,
           amountInPrimaryCurrency,
@@ -215,14 +237,18 @@ export class InvestmentsService {
       dto.workspaceMemberId ?? existing.workspaceMemberId;
     const accountId = dto.accountId ?? existing.accountId;
 
-    const [workspace, workspaceMember, account] = await Promise.all([
-      this.prisma.workspace.findFirst({ where: { id: workspaceId } }),
-      this.prisma.workspaceMember.findFirst({
-        where: { id: workspaceMemberId, workspaceId },
-        include: { user: true },
-      }),
-      this.prisma.account.findFirst({ where: { id: accountId, workspaceId } }),
-    ]);
+    const [workspace, workspaceMember, account, investmentCategoryId] =
+      await Promise.all([
+        this.prisma.workspace.findFirst({ where: { id: workspaceId } }),
+        this.prisma.workspaceMember.findFirst({
+          where: { id: workspaceMemberId, workspaceId },
+          include: { user: true },
+        }),
+        this.prisma.account.findFirst({
+          where: { id: accountId, workspaceId },
+        }),
+        this.investmentCategoryId(workspaceId),
+      ]);
     if (!workspace) throw new NotFoundException('Workspace not found');
     if (!workspaceMember)
       throw new NotFoundException('Workspace member not found');
@@ -248,6 +274,9 @@ export class InvestmentsService {
           amountInPrimaryCurrency,
           exchangeRateToPrimary,
           description: notes || `Investment from ${workspaceMember.user.name}`,
+          category: 'investment',
+          categoryId: investmentCategoryId,
+          memberId: workspaceMember.id,
           date,
           assignedMemberId,
         },

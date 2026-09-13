@@ -149,6 +149,28 @@ function OperationHarness() {
       </button>
       <button
         type="button"
+        onClick={() => {
+          window.dispatchEvent(
+            new CustomEvent(API_MUTATION_EVENT, {
+              detail: { id: "network-update", phase: "start" },
+            }),
+          );
+          window.dispatchEvent(
+            new CustomEvent(API_MUTATION_EVENT, {
+              detail: {
+                id: "network-update",
+                phase: "success",
+                message: "Saved successfully.",
+              },
+            }),
+          );
+          pushToast("Network updated.", "success");
+        }}
+      >
+        API and local success
+      </button>
+      <button
+        type="button"
         onClick={() =>
           operation.start({
             id: "cancelable-import",
@@ -358,5 +380,17 @@ describe("ToastProvider", () => {
         "Unable to connect to the server. Please try again later.",
       ),
     ).toHaveLength(1);
+  });
+
+  it("uses a local success message to update the completed API toast", async () => {
+    renderWithProviders(<OperationHarness />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "API and local success" }),
+    );
+
+    expect(await screen.findByText("Network updated.")).toBeInTheDocument();
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(screen.queryByText("Saved successfully.")).not.toBeInTheDocument();
   });
 });

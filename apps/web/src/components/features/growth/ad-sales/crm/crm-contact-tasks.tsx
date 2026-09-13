@@ -11,6 +11,7 @@ import {
   Modal,
   TimeInput,
   isValidTimeInputValue,
+  localDateTimeInputToIso,
 } from "@/components/ui/primitives";
 import { telegramAdSalesApi } from "@/lib/api";
 import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
@@ -57,7 +58,7 @@ export function CrmContactTasks({
         assignedMemberId: contact.ownerMemberId,
         priority: "NORMAL",
         title: title.trim(),
-        dueAt: new Date(`${dueDate}T${dueTime}`).toISOString(),
+        dueAt: localDateTimeInputToIso(dueDate, dueTime)!,
       }),
     onSuccess: async () => {
       setTitle("");

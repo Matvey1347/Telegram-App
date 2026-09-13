@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import axios from "axios";
 import { ExternalLink, Forward, Plus } from "lucide-react";
 import {
@@ -15,7 +15,7 @@ import {
   zonedDateTimeToUtc,
 } from "@/lib/features/growth/telegram-ad-sales";
 import { Button, FormError } from "@/components/ui/primitives";
-import { useTransientActionStatus } from "@/hooks/use-transient-action-status";
+import { useTelegramSystemBotPostFlow } from "@/hooks/use-telegram-system-bot-post-flow";
 import {
   MutualPromotionImportedPostCard,
   type MutualPromotionImportedPostItem,
@@ -66,71 +66,49 @@ export function MutualPromotionPostImport({
   saving: boolean;
   onAddPost: (payload: CreateMutualPromotionPostPayload) => Promise<void>;
 }) {
-  const [workflowId, setWorkflowId] = useState<string | null>(null);
+  const [importedWorkflowId, setImportedWorkflowId] = useState<string | null>(
+    null,
+  );
   const [items, setItems] = useState<MutualPromotionImportedPostItem[]>([]);
-  const [resultLoaded, setResultLoaded] = useState(false);
-  const [checking, setChecking] = useState(false);
   const [hasAddedPosts, setHasAddedPosts] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const botSend = useTransientActionStatus();
-
-  const checkResult = useCallback(async () => {
-    if (!workflowId || checking) return;
-    setChecking(true);
-    try {
-      const result =
-        await telegramSystemBotApi.mutualPromotionPostImportResult(workflowId);
-      if (result.ready) {
-        setResultLoaded(true);
-        setItems(
-          importedItems(workflowId, result.drafts, startsAt, endsAt, timezone),
-        );
-      }
-    } catch {
-      setError("Could not read the forwarded posts from the system bot.");
-    } finally {
-      setChecking(false);
-    }
-  }, [checking, endsAt, startsAt, timezone, workflowId]);
-
-  useEffect(() => {
-    if (!workflowId || resultLoaded) return;
-    const onFocus = () => void checkResult();
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [checkResult, resultLoaded, workflowId]);
-
-  const prepare = async () => {
-    setError(null);
-    botSend.start();
-    try {
+  const botFlow = useTelegramSystemBotPostFlow<{
+    workflowId: string;
+    drafts: TelegramSystemBotMutualPromotionPostDraft[];
+  }>({
+    botUsername,
+    prepareImport: async () => {
+      setError(null);
       const result =
         await telegramSystemBotApi.prepareMutualPromotionPostImport(folderId);
-      setWorkflowId(result.workflowId);
-      setResultLoaded(false);
-      setItems([]);
-      botSend.sent();
-      if (botUsername) {
-        window.open(
-          `https://t.me/${botUsername}`,
-          "_blank",
-          "noopener,noreferrer",
-        );
-      }
-    } catch (error) {
-      botSend.reset();
-      setError(
-        axios.isAxiosError(error) &&
-          error.response?.data?.code ===
-            TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE_ERROR_CODE
-          ? "Finish the current post import in the bot before starting a new one."
-          : "Could not start the post import.",
-      );
-    }
-  };
+      return result.workflowId;
+    },
+    readImport: async (workflowId) => {
+      const result =
+        await telegramSystemBotApi.mutualPromotionPostImportResult(workflowId);
+      return result.ready
+        ? {
+            ready: true as const,
+            value: { workflowId, drafts: result.drafts },
+          }
+        : { ready: false as const };
+    },
+    onImported: ({ workflowId, drafts }) => {
+      setImportedWorkflowId(workflowId);
+      setItems(importedItems(workflowId, drafts, startsAt, endsAt, timezone));
+    },
+    importErrorMessage:
+      "Could not read the forwarded posts from the system bot.",
+    resolveImportError: (caught) =>
+      axios.isAxiosError(caught) &&
+      caught.response?.data?.code ===
+        TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE_ERROR_CODE
+        ? "Finish the current post import in the bot before starting a new one."
+        : "Could not start the post import.",
+  });
 
   const addPosts = async () => {
-    if (!workflowId || !items.length) return;
+    if (!importedWorkflowId || !items.length) return;
     const posts = items.map((item) => {
       const draft = item.draft;
       return {
@@ -162,12 +140,11 @@ export function MutualPromotionPostImport({
     }
     setError(null);
     try {
-      await onAddPost({ importWorkflowId: workflowId, posts });
+      await onAddPost({ importWorkflowId: importedWorkflowId, posts });
       setItems([]);
-      setResultLoaded(false);
-      setWorkflowId(null);
+      setImportedWorkflowId(null);
       setHasAddedPosts(true);
-      botSend.reset();
+      botFlow.reset();
     } catch {
       setError("Could not add the imported posts to this folder.");
     }
@@ -188,28 +165,31 @@ export function MutualPromotionPostImport({
         </div>
         <Button
           type="button"
-          onClick={() => void prepare()}
+          onClick={() => void botFlow.startImport()}
           disabled={
             !botConnected ||
-            botSend.status !== "idle" ||
-            workflowId !== null ||
+            botFlow.importStatus === "working" ||
+            botFlow.importStatus === "waiting" ||
             items.length > 0
           }
           aria-label={
-            botSend.status === "sending"
+            botFlow.importStatus === "working"
               ? "Sending to bot"
-              : botSend.status === "sent"
+              : botFlow.importStatus === "waiting" ||
+                  botFlow.importStatus === "done"
                 ? "Sent to bot"
                 : hasAddedPosts
                   ? "Add another post"
                   : "Forward posts via bot"
           }
         >
-          {botSend.status === "sending" ? (
+          {botFlow.importStatus === "working" ? (
             <span className="inline-flex min-w-[7rem] items-center justify-center">
-              Sending{".".repeat(botSend.dots)}
+              Sending{".".repeat(botFlow.dots)}
             </span>
-          ) : botSend.status === "sent" ? (
+          ) : botFlow.importStatus === "waiting" ? (
+            <span className="text-blue-100">Waiting for bot…</span>
+          ) : botFlow.importStatus === "done" ? (
             <span className="text-emerald-100">✅ Sent to bot</span>
           ) : hasAddedPosts ? (
             <>
@@ -228,7 +208,7 @@ export function MutualPromotionPostImport({
           Connect the workspace system bot before importing publications.
         </p>
       ) : null}
-      {workflowId && !resultLoaded ? (
+      {botFlow.workflowId ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-900/60 bg-blue-950/20 p-3 text-sm text-blue-100">
           <span>
             Forward several posts in Telegram, press “Finish import”, then
@@ -239,10 +219,12 @@ export function MutualPromotionPostImport({
               type="button"
               variant="secondary"
               className="h-8 px-2.5 text-xs"
-              onClick={() => void checkResult()}
-              disabled={checking}
+              onClick={() => void botFlow.checkImport()}
+              disabled={botFlow.importStatus === "working"}
             >
-              {checking ? "Checking…" : "Check forwarded posts"}
+              {botFlow.importStatus === "working"
+                ? "Checking…"
+                : "Check forwarded posts"}
             </Button>
             {botUsername ? (
               <a
@@ -258,7 +240,7 @@ export function MutualPromotionPostImport({
         </div>
       ) : null}
 
-      {resultLoaded && !items.length ? (
+      {botFlow.importStatus === "done" && !items.length ? (
         <p className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-3 text-sm text-neutral-400">
           No imported posts are selected. Start a new import to forward another
           batch.
@@ -311,7 +293,7 @@ export function MutualPromotionPostImport({
           ))}
         </div>
       ) : null}
-      <FormError message={error ?? undefined} />
+      <FormError message={error ?? botFlow.error ?? undefined} />
     </section>
   );
 }

@@ -107,6 +107,7 @@ const SUCCESS_DISMISS_MS = 3200;
 const ERROR_DISMISS_MS = 8000;
 const INFO_DISMISS_MS = 4000;
 const TOAST_DEDUPE_WINDOW_MS = 5000;
+const API_RESULT_OVERRIDE_WINDOW_MS = 1000;
 
 type ApiMutationEventDetail = {
   id: string;
@@ -168,6 +169,11 @@ export function ToastProvider({ children }: PropsWithChildren) {
   const recentToastRef = useRef<Map<string, number>>(new Map());
   const sequenceRef = useRef(0);
   const cancelHandlersRef = useRef<Map<string, () => void>>(new Map());
+  const recentApiResultRef = useRef<{
+    id: string;
+    phase: "success" | "error";
+    createdAt: number;
+  } | null>(null);
 
   const clearDismissTimer = useCallback((id: string) => {
     const timer = dismissTimersRef.current.get(id);
@@ -299,6 +305,29 @@ export function ToastProvider({ children }: PropsWithChildren) {
 
   const pushToast = useCallback<PushToast>(
     (message, tone = "info", durationMs = INFO_DISMISS_MS, icon) => {
+      const recentApiResult = recentApiResultRef.current;
+      const matchingApiPhase =
+        (tone === "success" && recentApiResult?.phase === "success") ||
+        (tone === "error" && recentApiResult?.phase === "error");
+      if (
+        recentApiResult &&
+        matchingApiPhase &&
+        Date.now() - recentApiResult.createdAt <= API_RESULT_OVERRIDE_WINDOW_MS
+      ) {
+        recentApiResultRef.current = null;
+        transitionOperation(recentApiResult.id, tone, {
+          title:
+            tone === "success"
+              ? t("common.success")
+              : t("common.error.short"),
+          message,
+          icon,
+          clearProgress: true,
+          cancelable: false,
+        });
+        scheduleDismiss(recentApiResult.id, durationMs);
+        return;
+      }
       const key = `${tone}:${message.trim()}`;
       const now = Date.now();
       const previous = recentToastRef.current.get(key);
@@ -327,7 +356,7 @@ export function ToastProvider({ children }: PropsWithChildren) {
         scheduleDismiss(id, durationMs);
       }
     },
-    [scheduleDismiss, upsertEntry],
+    [scheduleDismiss, t, transitionOperation, upsertEntry],
   );
 
   const setProgress = useCallback(
@@ -411,6 +440,7 @@ export function ToastProvider({ children }: PropsWithChildren) {
         return;
       }
       if (detail.phase === "start") {
+        recentApiResultRef.current = null;
         startOperation({
           id: `mutation:${detail.id}`,
           title: detail.title || "Processing",
@@ -425,6 +455,11 @@ export function ToastProvider({ children }: PropsWithChildren) {
         message: detail.message || "Waiting for the server…",
         icon: detail.icon,
       });
+      recentApiResultRef.current = {
+        id: `mutation:${detail.id}`,
+        phase: detail.phase,
+        createdAt: Date.now(),
+      };
       if (detail.phase === "success") {
         handle.succeed({
           title: detail.title,

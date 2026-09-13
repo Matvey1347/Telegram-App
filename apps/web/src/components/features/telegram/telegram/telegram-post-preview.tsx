@@ -446,7 +446,10 @@ export function TelegramPostPreview({
   buttonRows = [],
   customEmojiPacks,
 }: TelegramPostPreviewProps) {
-  const { locale, t } = useI18n();
+  const { ensureNamespaces, locale, t } = useI18n();
+  useEffect(() => {
+    void ensureNamespaces(["telegram/posts/editor"]);
+  }, [ensureNamespaces]);
   const resolvedCustomEmojiPacks =
     useRetainedCustomEmojiPacks(customEmojiPacks);
   const resolvedMediaItems = normalizeTelegramPostMediaItems(

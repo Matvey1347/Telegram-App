@@ -498,6 +498,71 @@ describe("ChannelEconomicsSummary", () => {
     expect(screen.queryByText("Not enough data")).not.toBeInTheDocument();
   });
 
+  it("explains how many mature post samples are missing for a new channel", () => {
+    render(
+      <ChannelEconomicsSummary
+        channel={
+          {
+            id: "new-channel",
+            title: "New channel",
+            adBaseCpm: 300,
+            adBaseCurrency: "UAH",
+            preview: {
+              financialSummary: {
+                assetEconomics: {
+                  currency: "UAH",
+                  invested: 0,
+                  purchasePrice: 0,
+                  adSpend: 0,
+                  revenue: 0,
+                  remainingToBreakEven: 0,
+                  paybackPercent: 0,
+                  adsSold: 0,
+                  estimatedAdPrice: null,
+                  estimatedAdsRemaining: null,
+                  conversionUnavailable: false,
+                  formatPricing: {
+                    currency: "UAH",
+                    cpm: 300,
+                    h24: {
+                      expectedViews: null,
+                      estimatedPrice: null,
+                      postsSampleCount: 1,
+                      dataQuality: "NOT_ENOUGH_DATA",
+                    },
+                    h48: {
+                      expectedViews: null,
+                      estimatedPrice: null,
+                      postsSampleCount: 0,
+                      dataQuality: "NOT_ENOUGH_DATA",
+                    },
+                    h72: {
+                      expectedViews: null,
+                      estimatedPrice: null,
+                      postsSampleCount: 0,
+                      dataQuality: "NOT_ENOUGH_DATA",
+                    },
+                    permanent: {
+                      expectedViews: null,
+                      estimatedPrice: null,
+                      postsSampleCount: 0,
+                      dataQuality: "NOT_ENOUGH_DATA",
+                    },
+                  },
+                },
+              },
+            },
+          } as never
+        }
+      />,
+    );
+
+    expect(screen.getByText("1/3 mature posts")).toHaveAttribute(
+      "title",
+      "1/3 mature posts with metrics for this placement window",
+    );
+  });
+
   it("omits zero-value lines from the spend breakdown", async () => {
     render(
       <ChannelEconomicsSummary

@@ -20,6 +20,10 @@ import {
 } from "@/components/ui/primitives";
 import { mutualPromotionFoldersApi } from "@/lib/features/growth/mutual-promotion-folders-api";
 import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
+import {
+  telegramInviteLinkDefaultBadgeClassName,
+  telegramInviteLinkOptionLabel,
+} from "@/lib/features/telegram/telegram-invite-link-options";
 import { mutualPromotionFolderKeys } from "@/lib/query-keys";
 
 type LinkDraft =
@@ -180,7 +184,8 @@ export function MutualPromotionInviteLinksModal({
           );
           const selectOptions = options.map((link) => ({
             value: link.id,
-            label: link.name,
+            label: telegramInviteLinkOptionLabel(link),
+            badgeClassName: telegramInviteLinkDefaultBadgeClassName(link),
             meta: link.url,
             iconFallback: inviteLinkCreatorFallback(link),
             icon: (

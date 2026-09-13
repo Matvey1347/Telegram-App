@@ -15,7 +15,7 @@ import {
   type TelegramAdAvailabilitySlot,
 } from "@telegram-system/shared";
 import { AppShell } from "@/components/layout/app-shell";
-import { telegramChannelKeys, telegramSystemBotKeys } from "@/lib/query-keys";
+import { telegramSystemBotKeys } from "@/lib/query-keys";
 import { PageTabHead } from "@/components/layout/page-tab-head";
 import { Button, PageHeader } from "@/components/ui/primitives";
 import { AdSaleModal } from "@/components/features/growth/ad-sales/ad-sale-modal";
@@ -47,7 +47,6 @@ import {
   getTelegramChannelPosts,
   telegramAdSalesApi,
   telegramSystemBotApi,
-  telegramChannelsApi,
   telegramChannelNetworksApi,
   type Account,
   type TelegramChannelNetwork,
@@ -72,6 +71,7 @@ import { CrmWorkspace } from "./crm/crm-workspace";
 import { CrmNavigation } from "./crm/crm-navigation";
 import { resolveAdSalesSurface } from "./crm/crm-routes";
 import { useCrmDealDeepLink } from "./use-crm-deal-deep-link";
+import { useAdSalesChannels } from "./use-ad-sales-channels";
 const adSalesDataCacheOptions = {
   staleTime: 2 * 60 * 1000,
   gcTime: 15 * 60 * 1000,
@@ -107,18 +107,23 @@ function LegacyAdSalesPage() {
   const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
   const [inventorySelectionMode, setInventorySelectionMode] =
     useState<AdSaleScopeMode>("channels");
-  const [inventoryOpen, setInventoryOpen] = useState(() =>
-    searchParams.get("open") === "inventory",
+  const [inventoryOpen, setInventoryOpen] = useState(
+    () => searchParams.get("open") === "inventory",
   );
   const [salesPage, setSalesPage] = useState(1);
   const [salesPageSize, setSalesPageSize] = useState(25);
   const [saleSearch, setSaleSearch] = useState("");
   const deferredSaleSearch = useDeferredValue(saleSearch.trim());
-  const [selectedSaleId, setSelectedSaleId] = useState<string | null>(requestedSaleId);
-  const [adSaleModalOpen, setAdSaleModalOpen] = useState(() =>
-    searchParams.get("open") === "sell",
+  const [selectedSaleId, setSelectedSaleId] = useState<string | null>(
+    requestedSaleId,
   );
-  const initialAdvertiser = useCrmDealDeepLink(searchParams, setAdSaleModalOpen);
+  const [adSaleModalOpen, setAdSaleModalOpen] = useState(
+    () => searchParams.get("open") === "sell",
+  );
+  const initialAdvertiser = useCrmDealDeepLink(
+    searchParams,
+    setAdSaleModalOpen,
+  );
   const adSaleCheckoutIdempotencyKeyRef = useRef<string | null>(null);
   const [adSaleSeedSlot, setAdSaleSeedSlot] =
     useState<TelegramAdAvailabilitySlot | null>(null);
@@ -195,15 +200,12 @@ function LegacyAdSalesPage() {
     queryFn: currenciesApi.listLatestRates,
     staleTime: 5 * 60 * 1000,
   });
-  const channelsQuery = useQuery({
-    queryKey: telegramChannelKeys.list(),
-    queryFn: telegramChannelsApi.list,
-    enabled: tab !== "clients" || inventoryOpen || adSaleModalOpen,
-    staleTime: 60 * 1000,
-  });
-  const channels = useMemo(
-    () => channelsQuery.data ?? [],
-    [channelsQuery.data],
+  const {
+    query: channelsQuery,
+    channels,
+    saleableChannels,
+  } = useAdSalesChannels(
+    tab !== "clients" || inventoryOpen || adSaleModalOpen,
   );
   const networksQuery = useQuery({
     queryKey: ["telegram-channel-networks"],
@@ -228,7 +230,8 @@ function LegacyAdSalesPage() {
   const systemBotConnectionQuery = useQuery({
     queryKey: telegramSystemBotKeys.connection(),
     queryFn: telegramSystemBotApi.connection,
-    enabled: adSaleModalOpen, staleTime: 60 * 1000,
+    enabled: adSaleModalOpen,
+    staleTime: 60 * 1000,
     refetchOnWindowFocus: "always",
   });
   const workspaceTimezone = me?.workspace.timezone || "Europe/Warsaw";
@@ -285,10 +288,6 @@ function LegacyAdSalesPage() {
     if (selectedSaleQuery.isError) setSelectedSaleId(null);
   }, [selectedSaleQuery.isError]);
 
-  const saleableChannels = useMemo(
-    () => channels.filter((channel) => channel.preview?.canPostMessages),
-    [channels],
-  );
   const saleableChannelIdsList = useMemo(
     () => saleableChannels.map((channel) => channel.id),
     [saleableChannels],
@@ -792,9 +791,10 @@ function LegacyAdSalesPage() {
     });
   }
 
-  const selectedSale = selectedSaleQuery.data?.id === selectedSaleId
-    ? selectedSaleQuery.data
-    : null;
+  const selectedSale =
+    selectedSaleQuery.data?.id === selectedSaleId
+      ? selectedSaleQuery.data
+      : null;
   return (
     <AppShell>
       <PageTabHead title="Ad Sales" emoji="💼" color="#0f766e" />

@@ -4,6 +4,11 @@ import { PaginationQueryDto } from '../../../../common/pagination/pagination-que
 export class AdHypothesisQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
+  @MaxLength(10_000)
+  telegramChannelIds?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(120)
   search?: string;
 }

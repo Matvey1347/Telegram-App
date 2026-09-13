@@ -357,12 +357,28 @@ export class MutualPromotionReadService {
     }
     const channelIds = [...new Set(query.channelIds ?? [])];
     if (!channelIds.length) return [];
+    const defaultInviteLinkIds = query.initial
+      ? (
+          await this.prisma.telegramChannel.findMany({
+            where: { workspaceId, id: { in: channelIds } },
+            select: { defaultInviteLinkId: true },
+          })
+        ).flatMap((channel) =>
+          channel.defaultInviteLinkId ? [channel.defaultInviteLinkId] : [],
+        )
+      : [];
+    if (query.initial && !defaultInviteLinkIds.length) return [];
     const links = await this.prisma.telegramInviteLink.findMany({
-      where: { workspaceId, telegramChannelId: { in: channelIds } },
+      where: {
+        workspaceId,
+        telegramChannelId: { in: channelIds },
+        ...(query.initial ? { id: { in: defaultInviteLinkIds } } : {}),
+      },
       orderBy: [{ telegramChannelId: 'asc' }, { name: 'asc' }, { id: 'asc' }],
       select: {
         id: true,
         telegramChannelId: true,
+        telegramChannel: { select: { defaultInviteLinkId: true } },
         name: true,
         url: true,
         joinedCount: true,
@@ -437,6 +453,8 @@ export class MutualPromotionReadService {
         joinedCount: link.joinedCount,
         requestedCount: link.requestedCount,
         isRevoked: link.isRevoked,
+        isDefaultForChannel:
+          link.telegramChannel.defaultInviteLinkId === link.id,
         available: !link.isRevoked && unavailableReason === null,
         unavailableReason,
         creatorUsername: link.creatorUsername,

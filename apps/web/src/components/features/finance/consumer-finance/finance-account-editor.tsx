@@ -181,7 +181,7 @@ export function FinanceAccountEditor({
             onChange={() => undefined}
             onEmojiChange={(value) => value && setEmoji(value)}
             allowImages={false}
-            buttonLabel={t.accountName}
+            buttonLabel={name.trim() || t.accountName}
           />
           <FormField label={t.accountName}>
             <Input

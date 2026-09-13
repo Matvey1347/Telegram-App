@@ -18,7 +18,7 @@ const navigation = {
   "navigation.scheduledTasks": "Scheduled tasks",
   "navigation.trash": "Trash",
   "navigation.systemLogs": "System logs",
-  "navigation.workspaceSettings": "Workspace settings",
+  "navigation.workspaceSettings": "Settings",
   "navigation.roles": "Roles & access",
   "navigation.open": "Open navigation",
   "navigation.close": "Close navigation",

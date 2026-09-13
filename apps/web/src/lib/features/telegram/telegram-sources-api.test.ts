@@ -38,4 +38,34 @@ describe("telegramUserAccountsApi.loginWithQr", () => {
       { signal: controller.signal },
     );
   });
+
+  it("uses the NDJSON stream for channel import progress", async () => {
+    const streamProgressAction = vi.fn().mockResolvedValue({ success: true });
+    const api = createTelegramSourcesApi({
+      api: {} as AxiosInstance,
+      crud: vi.fn(() => ({
+        list: vi.fn(),
+        get: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        remove: vi.fn(),
+      })),
+      getPaginated: vi.fn(),
+      getAllPaginatedItems: vi.fn(),
+      streamProgressAction,
+    });
+    const onProgress = vi.fn();
+
+    await api.telegramUserAccountsApi.importChannelsWithProgress(
+      "account-1",
+      [{ telegramChannelId: "-1001" }],
+      onProgress,
+    );
+
+    expect(streamProgressAction).toHaveBeenCalledWith(
+      "/telegram-user-accounts/account-1/channels/import-stream",
+      { channels: [{ telegramChannelId: "-1001" }] },
+      onProgress,
+    );
+  });
 });

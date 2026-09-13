@@ -2,17 +2,14 @@
 
 import type { ReactNode } from "react";
 import type { TelegramChannel, TelegramChannelNetwork } from "@/lib/api";
-import { getChannelOptionLabel } from "@/lib/features/growth/telegram-ad-sales";
+import { DateRangeInput, Select, TimeInput } from "@/components/ui/primitives";
 import {
-  CustomSelect,
-  DateRangeInput,
-  MultiSelect,
-  Select,
-  TimeInput,
-} from "@/components/ui/primitives";
-import { SegmentedControl } from "@/components/ui/segmented-control";
+  TelegramChannelScopeModeToggle,
+  TelegramChannelScopeSelector,
+  type TelegramChannelScopeMode,
+} from "@/components/features/telegram/telegram/telegram-channel-scope-selector";
 
-export type AdSaleScopeMode = "network" | "channels";
+export type AdSaleScopeMode = TelegramChannelScopeMode;
 
 export function AdSaleScopeModeToggle({
   mode,
@@ -22,14 +19,10 @@ export function AdSaleScopeModeToggle({
   onChange: (mode: AdSaleScopeMode) => void;
 }) {
   return (
-    <SegmentedControl
-      value={mode}
+    <TelegramChannelScopeModeToggle
+      mode={mode}
       onChange={onChange}
       ariaLabel="Placement source"
-      options={[
-        { value: "network", label: "Network" },
-        { value: "channels", label: "Channels" },
-      ]}
     />
   );
 }
@@ -72,47 +65,17 @@ export function AdSalePlacementScope({
   return (
     <section className="space-y-3">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.4fr)_minmax(220px,1fr)_160px_minmax(190px,0.8fr)] xl:items-start">
-        <div className="min-w-0 space-y-1 text-sm">
-          <div className="flex h-7 items-center gap-2">
-            <span className="text-sm text-neutral-300">Placement source</span>
-            <AdSaleScopeModeToggle mode={mode} onChange={onModeChange} />
-          </div>
-          <div className="[&>div>button]:h-[42px] [&>div>button]:min-h-0">
-            {mode === "network" ? (
-              <CustomSelect
-                value={selectedNetworkId}
-                onChange={onNetworkChange}
-                placeholder="Choose network"
-                options={networks.map((network) => ({
-                  value: network.id,
-                  label: network.name,
-                  iconUrl:
-                    network.iconPresentation?.type === "image"
-                      ? network.iconPresentation.url
-                      : undefined,
-                  iconEmoji:
-                    network.iconPresentation?.type === "unicode"
-                      ? network.iconPresentation.value
-                      : undefined,
-                  iconFallback: network.name,
-                }))}
-              />
-            ) : (
-              <MultiSelect
-                value={selectedChannelIds}
-                onChange={onChannelsChange}
-                placeholder="Choose channels"
-                options={channels.map((channel) => ({
-                  value: channel.id,
-                  label: getChannelOptionLabel(channel),
-                  selectedLabel: channel.title,
-                  iconUrl: channel.photoUrl,
-                  iconFallback: channel.title,
-                }))}
-              />
-            )}
-          </div>
-        </div>
+        <TelegramChannelScopeSelector
+          mode={mode}
+          selectedNetworkId={selectedNetworkId}
+          selectedChannelIds={selectedChannelIds}
+          networks={networks}
+          channels={channels}
+          onModeChange={onModeChange}
+          onNetworkChange={onNetworkChange}
+          onChannelsChange={onChannelsChange}
+          label="Placement source"
+        />
         <div className="space-y-1">
           <div className="flex h-7 items-center text-sm text-neutral-300">
             Placement dates

@@ -107,4 +107,72 @@ describe('MutualPromotionReadService', () => {
       }),
     );
   });
+
+  it('loads only one default invite-link option per selected channel initially', async () => {
+    const prisma = {
+      telegramChannel: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([
+            { defaultInviteLinkId: 'default-1' },
+            { defaultInviteLinkId: 'default-2' },
+          ]),
+      },
+      telegramInviteLink: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'default-1',
+            telegramChannelId: 'channel-1',
+            telegramChannel: { defaultInviteLinkId: 'default-1' },
+            name: 'Main link',
+            url: 'https://t.me/+main',
+            joinedCount: 0,
+            requestedCount: 0,
+            isRevoked: false,
+            creatorTelegramUserId: null,
+            creatorUsername: null,
+            creatorFirstName: null,
+            creatorPhotoUrl: null,
+            creatorMember: null,
+            adCampaignId: null,
+            snapshots: [],
+            mutualPromotionParticipants: [],
+          },
+        ]),
+      },
+      telegramUserAccountIntegration: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    };
+    const service = new MutualPromotionReadService(
+      prisma as never,
+      {
+        resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
+      } as never,
+      new MutualPromotionStatisticsService(),
+      {} as never,
+    );
+
+    const result = await service.inviteLinkOptions('user-1', {
+      channelIds: ['channel-1', 'channel-2'],
+      initial: true,
+    });
+
+    expect(prisma.telegramInviteLink.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          workspaceId: 'workspace-1',
+          telegramChannelId: { in: ['channel-1', 'channel-2'] },
+          id: { in: ['default-1', 'default-2'] },
+        },
+      }),
+    );
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: 'default-1',
+        isDefaultForChannel: true,
+        available: true,
+      }),
+    ]);
+  });
 });

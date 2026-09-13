@@ -1,10 +1,11 @@
 "use client";
 
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import type { TelegramChannelSelectOption as TelegramChannel } from "@/lib/api";
 import { useI18n } from "@/providers/i18n-provider";
+import { useDismissiblePopover } from "@/hooks/use-dismissible-popover";
 
 export function ChannelMultiSelect({
   channels,
@@ -20,16 +21,11 @@ export function ChannelMultiSelect({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const selected = new Set(selectedIds);
 
-  useEffect(() => {
-    const onDocClick = (event: MouseEvent) => {
-      if (!rootRef.current) return;
-      if (!rootRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
+  useDismissiblePopover({
+    open,
+    onDismiss: () => setOpen(false),
+    triggerRef: rootRef,
+  });
 
   const toggle = (channelId: string) => {
     onChange(

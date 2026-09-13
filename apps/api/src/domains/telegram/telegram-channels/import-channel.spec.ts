@@ -49,8 +49,8 @@ describe('TelegramChannelsService importChannel', () => {
     workspaceService.resolveWorkspaceIdForUser.mockResolvedValue('ws-1');
     encryptionService.decrypt.mockReturnValue('decrypted');
     jest
-      .spyOn(service as never, 'firstConnectedAccount' as never)
-      .mockResolvedValue(
+      .spyOn(service as never, 'connectedAccounts' as never)
+      .mockResolvedValue([
         buildTelegramUserAccount({
           id: 'tg-account-1',
           apiId: '1',
@@ -60,7 +60,7 @@ describe('TelegramChannelsService importChannel', () => {
           sessionIv: 'sessiv',
           sessionAuthTag: 'sesstag',
         }) as never,
-      );
+      ] as never);
     jest
       .spyOn(service as never, 'findMatchingChannels' as never)
       .mockResolvedValue([] as never);
@@ -242,5 +242,82 @@ describe('TelegramChannelsService importChannel', () => {
       }),
     ).rejects.toThrow(BadRequestException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('falls back to another connected account when the preferred session is invalid', async () => {
+    const primary = buildTelegramUserAccount({
+      id: 'tg-account-invalid',
+      sessionEncrypted: 'invalid-session',
+      sessionIv: 'invalid-iv',
+      sessionAuthTag: 'invalid-tag',
+    });
+    const fallback = buildTelegramUserAccount({
+      id: 'tg-account-fallback',
+      sessionEncrypted: 'fallback-session',
+      sessionIv: 'fallback-iv',
+      sessionAuthTag: 'fallback-tag',
+    });
+    jest
+      .spyOn(service as never, 'connectedAccounts' as never)
+      .mockResolvedValue([primary, fallback] as never);
+    const markInvalidSession = jest
+      .spyOn(service as never, 'markInvalidSession' as never)
+      .mockResolvedValue(true as never);
+    mtprotoClient.getPublicChannelInfo
+      .mockRejectedValueOnce(new Error('406: AUTH_KEY_DUPLICATED'))
+      .mockResolvedValueOnce(
+        buildResolvedTelegramEntity({
+          telegramChatId: '1885418686',
+          title: 'Етикет_ка',
+          username: 'etiket_k',
+        }),
+      );
+    const tx = {
+      telegramChannel: {
+        create: jest.fn().mockResolvedValue({ id: 'channel-1' }),
+      },
+    };
+    prisma.$transaction.mockImplementation(
+      async (callback: (tx: unknown) => Promise<unknown>) => callback(tx),
+    );
+
+    await service.importChannel('user-1', {
+      input: 'http://t.me/etiket_k',
+    });
+
+    expect(markInvalidSession).toHaveBeenCalledWith(
+      'tg-account-invalid',
+      expect.any(Error),
+    );
+    expect(mtprotoClient.getPublicChannelInfo).toHaveBeenCalledTimes(2);
+    expect(sourceAccessService.recordDataSource).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceId: 'tg-account-fallback' }),
+    );
+  });
+
+  it('imports unique channel links in one batch and preserves partial successes', async () => {
+    jest
+      .spyOn(service, 'importChannel')
+      .mockResolvedValueOnce({ id: 'channel-1', title: 'First' })
+      .mockRejectedValueOnce(new BadRequestException('Invalid invite'));
+    const onProgress = jest.fn();
+
+    const result = await service.importChannels(
+      'user-1',
+      [' https://t.me/first ', 'https://t.me/first', 'https://t.me/+bad'],
+      onProgress,
+    );
+
+    expect(service.importChannel).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({
+      channels: [{ id: 'channel-1', title: 'First' }],
+      failures: [{ input: 'https://t.me/+bad', error: 'Invalid invite' }],
+    });
+    expect(onProgress).toHaveBeenCalledTimes(2);
+    expect(onProgress).toHaveBeenLastCalledWith(
+      expect.objectContaining({ input: 'https://t.me/+bad', success: false }),
+      2,
+      2,
+    );
   });
 });

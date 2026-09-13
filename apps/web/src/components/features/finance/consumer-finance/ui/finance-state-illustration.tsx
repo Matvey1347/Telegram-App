@@ -15,9 +15,9 @@ import {
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
-import Image from "next/image";
 import type { FinanceVisualContext } from "./finance-visual-context";
 import type { FinanceStateGraphicKind } from "./finance-state-context-graphic";
+import { FinanceStateContextGraphic } from "./finance-state-context-graphic";
 import styles from "./finance-state-illustration.module.css";
 
 export type FinanceVisualState =
@@ -71,15 +71,6 @@ const stateTone: Record<FinanceVisualState, string> = {
   error: "text-rose-300",
 };
 
-const stateAsset: Record<FinanceVisualState, string> = {
-  loading: "/finance/states/wallet-loading.webp",
-  waiting: "/finance/states/wallet-loading.webp",
-  saving: "/finance/states/wallet-loading.webp",
-  syncing: "/finance/states/wallet-loading.webp",
-  empty: "/finance/states/wallet-empty.webp",
-  error: "/finance/states/wallet-error.webp",
-};
-
 export function FinanceStateIllustration({
   state,
   context,
@@ -100,16 +91,13 @@ export function FinanceStateIllustration({
       aria-hidden="true"
     >
       <div className={styles.ambient} />
-      <div className={styles.walletStage} data-finance-scene={context}>
-        <Image
-          src={stateAsset[state]}
-          alt=""
-          width={720}
-          height={720}
-          sizes="(max-width: 640px) 150px, 190px"
-          className={styles.walletImage}
-        />
-      </div>
+      <svg
+        viewBox="0 0 600 136"
+        preserveAspectRatio="xMidYMid meet"
+        className={styles.contextCanvas}
+      >
+        <FinanceStateContextGraphic context={context} />
+      </svg>
       <span className={styles.iconTile}>
         <Icon size={compact ? 17 : 21} strokeWidth={1.8} />
       </span>
@@ -145,6 +133,27 @@ function StateMark({ state }: { state: FinanceVisualState }) {
         <path
           data-finance-state-mark="waiting"
           d="M16 7V16L22 20"
+          className={styles.stateMark}
+        />
+      </svg>
+    );
+  if (state === "loading" || state === "syncing")
+    return (
+      <svg viewBox="0 0 32 32" className={styles.stateBadge} fill="none">
+        <circle cx="16" cy="16" r="8" className={styles.loadingTrack} />
+        <path
+          data-finance-state-mark={state}
+          d="M16 8a8 8 0 0 1 8 8"
+          className={styles.loadingMark}
+        />
+      </svg>
+    );
+  if (state === "empty")
+    return (
+      <svg viewBox="0 0 32 32" className={styles.stateBadge} fill="none">
+        <path
+          data-finance-state-mark="empty"
+          d="M9 16h14"
           className={styles.stateMark}
         />
       </svg>

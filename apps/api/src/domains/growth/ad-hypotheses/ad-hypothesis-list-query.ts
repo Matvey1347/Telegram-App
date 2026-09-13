@@ -1,5 +1,11 @@
 import { Prisma } from '@prisma/client';
 import { AdHypothesisQueryDto } from './dto/ad-hypothesis-query.dto';
+import { adsChannelWhere } from '../ads-channel-scope';
+
+export const OWNED_AD_HYPOTHESIS_CHANNEL_WHERE = {
+  archivedAt: null,
+  adminLinks: { some: {} },
+} satisfies Prisma.TelegramChannelWhereInput;
 
 export function buildAdHypothesisListWhere(
   workspaceId: string,
@@ -8,6 +14,8 @@ export function buildAdHypothesisListWhere(
   const search = query.search?.trim();
   return {
     workspaceId,
+    telegramChannel: { is: OWNED_AD_HYPOTHESIS_CHANNEL_WHERE },
+    telegramChannelId: adsChannelWhere(undefined, query.telegramChannelIds),
     ...(search
       ? {
           OR: [

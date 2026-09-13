@@ -81,6 +81,16 @@ describe('TelegramChannelsService syncPostsMetricsForWorkspace', () => {
     ).toBeUndefined();
   });
 
+  it('keeps an explicitly requested post window above 100', async () => {
+    await service.syncPostsMetricsForWorkspace('workspace-1', 'channel-1', {
+      postLimit: 750,
+    });
+
+    expect(mtprotoClient.getChannelPostsMetrics).toHaveBeenCalledWith(
+      expect.objectContaining({ postLimit: 750 }),
+    );
+  });
+
   it('keeps manual metrics sync available for a channel with auto sync disabled', async () => {
     prisma.telegramChannel.findFirst.mockResolvedValueOnce({
       id: 'channel-1',
@@ -187,7 +197,7 @@ describe('TelegramChannelsService syncPostsMetricsForWorkspace', () => {
       },
     ]);
     service['objectStorage'] = {
-      persistImmutableImages: jest.fn().mockResolvedValue({
+      persistImmutableMedia: jest.fn().mockResolvedValue({
         urls: ['https://cdn.test/photo.jpg'],
         uploaded: 1,
         reused: 0,
@@ -244,7 +254,7 @@ describe('TelegramChannelsService syncPostsMetricsForWorkspace', () => {
       },
     ]);
     service['objectStorage'] = {
-      persistImmutableImages: jest.fn().mockResolvedValue({
+      persistImmutableMedia: jest.fn().mockResolvedValue({
         urls: ['https://cdn.test/photo.jpg'],
         uploaded: 1,
         reused: 0,
@@ -298,7 +308,7 @@ describe('TelegramChannelsService syncPostsMetricsForWorkspace', () => {
         imageUrls: ['https://cdn.test/already.jpg'],
       },
     ]);
-    const storage = { persistImmutableImages: jest.fn() };
+    const storage = { persistImmutableMedia: jest.fn() };
     service['objectStorage'] = storage;
     service['recalculateDailyStatsFromPosts'] = jest.fn();
     prisma.telegramPost.update.mockResolvedValueOnce({ id: 'post-104' });
@@ -316,7 +326,7 @@ describe('TelegramChannelsService syncPostsMetricsForWorkspace', () => {
     );
 
     expect(mtprotoClient.downloadChannelMessagesMedia).not.toHaveBeenCalled();
-    expect(storage.persistImmutableImages).not.toHaveBeenCalled();
+    expect(storage.persistImmutableMedia).not.toHaveBeenCalled();
     expect(prisma.telegramPost.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -326,7 +336,7 @@ describe('TelegramChannelsService syncPostsMetricsForWorkspace', () => {
     );
   });
 
-  it('persists metrics but skips unsupported non-image media', async () => {
+  it('downloads document media such as Telegram videos and GIFs', async () => {
     const metric = {
       telegramMessageId: '105',
       postDate: new Date('2026-08-12T10:00:00.000Z'),
@@ -343,6 +353,20 @@ describe('TelegramChannelsService syncPostsMetricsForWorkspace', () => {
     };
     prisma.telegramPost.findMany.mockResolvedValueOnce([]);
     prisma.telegramPost.create.mockResolvedValueOnce({ id: 'post-105' });
+    mtprotoClient.downloadChannelMessagesMedia.mockResolvedValueOnce([
+      {
+        messageId: '105',
+        buffer: Buffer.from('video'),
+        mimeType: 'video/mp4',
+      },
+    ]);
+    service['objectStorage'] = {
+      persistImmutableMedia: jest.fn().mockResolvedValue({
+        urls: ['https://cdn.test/video.mp4'],
+        uploaded: 1,
+        reused: 0,
+      }),
+    };
     service['recalculateDailyStatsFromPosts'] = jest.fn();
 
     await service.persistPostMetrics(
@@ -357,11 +381,72 @@ describe('TelegramChannelsService syncPostsMetricsForWorkspace', () => {
       },
     );
 
-    expect(mtprotoClient.downloadChannelMessagesMedia).not.toHaveBeenCalled();
+    expect(mtprotoClient.downloadChannelMessagesMedia).toHaveBeenCalledWith(
+      expect.objectContaining({ messageIds: ['105'] }),
+    );
     expect(prisma.telegramPost.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ imageUrls: [] }),
+        data: expect.objectContaining({
+          imageUrls: ['https://cdn.test/video.mp4'],
+        }),
       }),
     );
+  });
+
+  it('downloads more than 100 media posts in bounded Telegram batches', async () => {
+    const metrics = Array.from({ length: 101 }, (_, index) => ({
+      telegramMessageId: String(index + 1),
+      postDate: new Date('2026-08-12T10:00:00.000Z'),
+      text: `post ${index + 1}`,
+      formattedText: `post ${index + 1}`,
+      hasMedia: true,
+      mediaKind: 'MessageMediaPhoto',
+      viewsCount: 1,
+      forwardsCount: 0,
+      reactionsCount: 0,
+      commentsCount: 0,
+      reactions: [],
+      rawMessage: { id: index + 1 },
+    }));
+    prisma.telegramPost.findMany.mockResolvedValueOnce([]);
+    prisma.telegramPost.create.mockImplementation(async ({ data }) => ({
+      id: `post-${data.telegramMessageId}`,
+    }));
+    mtprotoClient.downloadChannelMessagesMedia.mockImplementation(
+      async ({ messageIds }) =>
+        messageIds.map((messageId: string) => ({
+          messageId,
+          buffer: Buffer.from(messageId),
+          mimeType: 'image/jpeg',
+        })),
+    );
+    service['objectStorage'] = {
+      persistImmutableMedia: jest.fn().mockImplementation(async (items) => ({
+        urls: items.map(
+          (_item: unknown, index: number) => `https://cdn.test/${index}.jpg`,
+        ),
+        uploaded: items.length,
+        reused: 0,
+      })),
+    };
+    service['recalculateDailyStatsFromPosts'] = jest.fn();
+
+    await service.persistPostMetrics(
+      'workspace-1',
+      'channel-1',
+      metrics,
+      undefined,
+      undefined,
+      {
+        credentials: { apiId: '1', apiHash: 'hash', session: 'session' },
+        channel: { username: 'channel', telegramChatId: null },
+      },
+    );
+
+    expect(
+      mtprotoClient.downloadChannelMessagesMedia.mock.calls.map(
+        ([request]) => request.messageIds.length,
+      ),
+    ).toEqual([50, 50, 1]);
   });
 });

@@ -1,14 +1,18 @@
 "use client";
 
 import { X } from "lucide-react";
+import { createPortal } from "react-dom";
 import {
   type PropsWithChildren,
   type ReactNode,
   useEffect,
   useId,
   useRef,
+  useSyncExternalStore,
 } from "react";
 import { useOptionalI18n } from "@/providers/i18n-provider";
+
+const subscribeToClientRuntime = () => () => undefined;
 
 export function Modal({
   open,
@@ -36,6 +40,12 @@ export function Modal({
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   const titleId = useId();
+  const isClient = useSyncExternalStore(
+    subscribeToClientRuntime,
+    () => true,
+    () => false,
+  );
+  const portalTarget = isClient ? document.body : null;
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -90,8 +100,8 @@ export function Modal({
     };
   }, [open]);
 
-  if (!open) return null;
-  return (
+  if (!open || !portalTarget) return null;
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-[max(1rem,env(safe-area-inset-top))]"
       onMouseDown={(event) => {
@@ -130,6 +140,7 @@ export function Modal({
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    portalTarget,
   );
 }

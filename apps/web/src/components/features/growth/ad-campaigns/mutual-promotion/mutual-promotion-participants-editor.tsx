@@ -2,6 +2,10 @@
 
 import type { MutualPromotionInviteLinkOption } from "@telegram-system/shared";
 import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
+import {
+  telegramInviteLinkDefaultBadgeClassName,
+  telegramInviteLinkOptionLabel,
+} from "@/lib/features/telegram/telegram-invite-link-options";
 import { TelegramInviteLinkCreatorAvatar } from "@/components/features/telegram/telegram/telegram-invite-link-creator-avatar";
 import type { Account, TelegramChannel } from "@/lib/api";
 import {
@@ -19,6 +23,7 @@ export function MutualPromotionParticipantsEditor({
   participants,
   inviteLinks,
   inviteLinksLoading,
+  onInviteLinksOpen,
   onChange,
 }: {
   channels: TelegramChannel[];
@@ -26,6 +31,7 @@ export function MutualPromotionParticipantsEditor({
   participants: ParticipantDraft[];
   inviteLinks: MutualPromotionInviteLinkOption[];
   inviteLinksLoading: boolean;
+  onInviteLinksOpen?: () => void;
   onChange: (participants: ParticipantDraft[]) => void;
 }) {
   const byChannel = new Map(
@@ -159,12 +165,15 @@ export function MutualPromotionParticipantsEditor({
                         update(channel.id, { inviteLinkId })
                       }
                       disabled={inviteLinksLoading}
-                      placeholder={
-                        inviteLinksLoading ? "Loading links…" : "Select link"
-                      }
+                      onOpen={onInviteLinksOpen}
+                      loading={inviteLinksLoading}
+                      loadingLabel="Loading invite links…"
+                      placeholder="Select link"
                       options={channelLinks.map((link) => ({
                         value: link.id,
-                        label: link.name,
+                        label: telegramInviteLinkOptionLabel(link),
+                        badgeClassName:
+                          telegramInviteLinkDefaultBadgeClassName(link),
                         meta: link.url,
                         iconFallback: inviteLinkCreatorFallback(link),
                         icon: (

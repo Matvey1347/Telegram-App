@@ -112,22 +112,27 @@ describe("FinanceTransactions receipt detail", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
-  it("localizes shared filter controls and keeps the calendar inside the modal", async () => {
+  it("localizes filters and portals the calendar above the modal", async () => {
     vi.mocked(consumerFinanceApi.transactions).mockResolvedValue({
       items: [],
       nextCursor: null,
     });
-    renderTransactions("telegram", "ru");
+    const { container } = renderTransactions("telegram", "ru");
 
     fireEvent.click(await screen.findByRole("button", { name: "Фильтры" }));
     const period = screen.getByRole("button", { name: "Выберите период" });
     fireEvent.click(period);
 
+    const calendar = screen.getByRole("dialog", {
+      name: "Выберите период",
+    });
+    expect(calendar).toHaveStyle({ position: "fixed" });
+    expect(calendar).toHaveClass("z-[220]");
+    expect(container).not.toContainElement(calendar);
     expect(screen.getByText("Выберите начальную дату")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Очистить" }),
     ).toBeInTheDocument();
-    expect(period.nextElementSibling).toHaveClass("right-0");
   });
 
   it("keeps long mobile transaction labels and amounts on one line", async () => {
@@ -306,9 +311,9 @@ describe("FinanceTransactions receipt detail", () => {
 
     renderTransactions("browser");
 
-    expect(
-      await screen.findAllByText("Investment contribution"),
-    ).toHaveLength(2);
+    expect(await screen.findAllByText("Investment contribution")).toHaveLength(
+      2,
+    );
     expect(
       screen.getByRole("button", { name: "Purchase details" }),
     ).toBeInTheDocument();

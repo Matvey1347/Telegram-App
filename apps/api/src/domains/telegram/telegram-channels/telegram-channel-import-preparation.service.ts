@@ -13,6 +13,10 @@ import { TelegramChannelHistoricalSyncService } from './telegram-channel-histori
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 import { BulkProgressCallback } from './telegram-channels.internal';
 import { TelegramPostMetricsService } from './telegram-post-metrics.service';
+import {
+  isRevokedTelegramSessionError,
+  REVOKED_TELEGRAM_SESSION_MESSAGE,
+} from '../../../telegram/shared/telegram-session-errors';
 
 @Injectable()
 export class TelegramChannelImportPreparationService {
@@ -181,21 +185,41 @@ export class TelegramChannelImportPreparationService {
     }
   }
 
-  public async firstConnectedAccount(workspaceId: string) {
-    const account = await this.prisma.telegramUserAccountIntegration.findFirst({
+  public async connectedAccounts(workspaceId: string, userId: string) {
+    const accounts = await this.prisma.telegramUserAccountIntegration.findMany({
       where: {
         workspaceId,
         isActive: true,
         status: TelegramUserAccountStatus.connected,
       },
+      include: {
+        assignedMember: { select: { userId: true } },
+      },
       orderBy: { createdAt: 'asc' },
     });
-    if (!account) {
+    if (!accounts.length) {
       throw new BadRequestException(
         'Connect an active Telegram user account before importing public channels',
       );
     }
-    return account;
+    return accounts.sort((left, right) => {
+      const leftPriority = left.assignedMember?.userId === userId ? 0 : 1;
+      const rightPriority = right.assignedMember?.userId === userId ? 0 : 1;
+      return leftPriority - rightPriority;
+    });
+  }
+
+  public async markInvalidSession(accountId: string, error: unknown) {
+    if (!isRevokedTelegramSessionError(error)) return false;
+    await this.prisma.telegramUserAccountIntegration.update({
+      where: { id: accountId },
+      data: {
+        status: TelegramUserAccountStatus.error,
+        lastCheckedAt: new Date(),
+        lastErrorMessage: REVOKED_TELEGRAM_SESSION_MESSAGE,
+      },
+    });
+    return true;
   }
 
   public async findMatchingChannels(

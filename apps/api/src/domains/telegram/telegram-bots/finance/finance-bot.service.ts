@@ -43,6 +43,8 @@ import {
 } from './finance-bot-icon-input.service';
 import { FinanceRegularPaymentCallbackHandler } from './finance-regular-payment-callback.handler';
 import { parseFinanceFlowCallback } from './finance-bot-flow-callback';
+import { FinanceUltimateService } from '../../consumer-finance/ultimate/finance-ultimate.service';
+import { sendFinanceAssistantReply } from './finance-bot-assistant-reply';
 @Injectable()
 export class FinanceBotService {
   private readonly flowMessages: FinanceBotFlowMessenger;
@@ -62,6 +64,7 @@ export class FinanceBotService {
     private readonly iconInput: FinanceBotIconInputService,
     flowPresenter: FinanceChatFlowPresenterService,
     private readonly regularPaymentCallbacks?: FinanceRegularPaymentCallbackHandler,
+    private readonly assistant?: FinanceUltimateService,
   ) {
     this.flowMessages = new FinanceBotFlowMessenger(
       interactive,
@@ -331,7 +334,7 @@ export class FinanceBotService {
           telegramBotUserId: user.id,
           profileId: profile.id,
         },
-        'AI_INPUT',
+        'VOICE_INPUT',
       );
       if (!entitled) {
         await this.interactive.send(context.token, chatId, {
@@ -506,6 +509,7 @@ export class FinanceBotService {
         'Accounts',
         'Categories',
         'Transfer',
+        'Jarvis',
         'Help',
       ].includes(text || '');
     if (text && !menuAction) {
@@ -543,6 +547,12 @@ export class FinanceBotService {
     }
     if (command === 'start') {
       await this.chat.sendMainMenu(context, user.id, chatId, locale);
+      return;
+    }
+    if (command === 'assistant' || persistedMenuCommand === 'assistant') {
+      await this.interactive.send(context.token, chatId, {
+        text: t(locale, 'assistantIntro'),
+      });
       return;
     }
     if (
@@ -700,50 +710,18 @@ export class FinanceBotService {
     if (!text) return;
     const parsed = parseFinanceQuickInput(text);
     if (!parsed) {
-      const entitled = await this.entitlements.has(
-        {
-          botIntegrationId: context.bot.id,
-          telegramBotUserId: user.id,
-          profileId: profile.id,
-        },
-        'AI_INPUT',
-      );
-      if (!entitled) {
-        await this.interactive.send(context.token, chatId, {
-          text: t(locale, 'aiGate'),
-          inlineButtons: financeBotProButtons(context.bot.id, locale),
-        });
-        return;
-      }
-      await sendFinanceTyping(this.botApi, context.token, chatId);
-      try {
-        const operations = await this.ai.extractText({
-          profileId: profile.id,
-          botIntegrationId: context.bot.id,
-          text,
-          timezone: profile.timezone,
-          defaultCurrency: profile.defaultCurrency,
-        });
-        const proposal = await this.proposals.createBatch({
-          profile,
-          botIntegrationId: context.bot.id,
-          telegramBotUserId: user.id,
-          operations,
-          source: 'AI',
-        });
-        await this.interactive.send(context.token, chatId, {
-          text: `${t(locale, 'suggested', { count: proposal.operations.length })}\n\n${this.chat.batchPreview(proposal.preview, locale)}\n\n${t(locale, 'review')}`,
-          inlineButtons: this.chat.proposalButtons(proposal.token),
-        });
-      } catch {
-        await this.chat.sendSafe(
-          context,
-          user.id,
-          chatId,
-          t(locale, 'aiError'),
-          `finance-ai-error:${context.updateLogId}`,
-        );
-      }
+      await sendFinanceAssistantReply({
+        context,
+        profile,
+        telegramBotUserId: user.id,
+        chatId,
+        locale,
+        text,
+        assistant: this.assistant,
+        interactive: this.interactive,
+        botApi: this.botApi,
+        chat: this.chat,
+      });
       return;
     }
     const proposal = await this.proposals.createQuick({

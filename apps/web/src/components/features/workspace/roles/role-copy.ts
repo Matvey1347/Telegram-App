@@ -40,7 +40,7 @@ const FEATURE_COPY: Record<string, { label: string; description: string }> = {
   },
   workspace: {
     label: "Workspace",
-    description: "Workspace settings and deletion",
+    description: "Settings and workspace deletion",
   },
   operations: {
     label: "Operations",

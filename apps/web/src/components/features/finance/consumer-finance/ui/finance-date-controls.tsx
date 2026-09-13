@@ -1,7 +1,8 @@
 "use client";
 
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { FinanceLocale } from "../i18n/core";
 
 const dateCopy = {
@@ -65,47 +66,63 @@ function monthCells(cursor: Date) {
   });
 }
 
-function useOutsideClose(open: boolean, onClose: () => void) {
+function useOutsideClose(
+  open: boolean,
+  onClose: () => void,
+  popoverRef?: React.RefObject<HTMLElement | null>,
+) {
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
     const close = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) onClose();
+      const target = event.target as Node;
+      if (
+        !rootRef.current?.contains(target) &&
+        !popoverRef?.current?.contains(target)
+      ) {
+        onClose();
+      }
     };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
-  }, [onClose, open]);
+  }, [onClose, open, popoverRef]);
   return rootRef;
 }
 
-function useOpenUp(
+function useFixedPopoverPosition(
   open: boolean,
   rootRef: React.RefObject<HTMLDivElement | null>,
+  widthLimit: number,
   estimatedHeight: number,
 ) {
-  const [openUp, setOpenUp] = useState(false);
-  useEffect(() => {
+  const [style, setStyle] = useState<React.CSSProperties | null>(null);
+  useLayoutEffect(() => {
     if (!open) return;
     const recalculate = () => {
       const root = rootRef.current;
       if (!root) return;
       const rect = root.getBoundingClientRect();
-      let boundaryTop = 0;
-      let boundaryBottom = window.innerHeight;
-      let ancestor = root.parentElement;
-      while (ancestor) {
-        const overflowY = window.getComputedStyle(ancestor).overflowY;
-        if (["auto", "scroll", "hidden"].includes(overflowY)) {
-          const boundary = ancestor.getBoundingClientRect();
-          boundaryTop = Math.max(0, boundary.top);
-          boundaryBottom = Math.min(window.innerHeight, boundary.bottom);
-          break;
-        }
-        ancestor = ancestor.parentElement;
-      }
-      const below = boundaryBottom - rect.bottom;
-      const above = rect.top - boundaryTop;
-      setOpenUp(below < estimatedHeight && above > below);
+      const padding = 8;
+      const gap = 4;
+      const width = Math.min(widthLimit, window.innerWidth - padding * 2);
+      const below = window.innerHeight - rect.bottom - gap - padding;
+      const above = rect.top - gap - padding;
+      const openUp = below < estimatedHeight && above > below;
+      setStyle({
+        position: "fixed",
+        left: Math.min(
+          Math.max(rect.right - width, padding),
+          window.innerWidth - width - padding,
+        ),
+        ...(openUp
+          ? { bottom: window.innerHeight - rect.top + gap }
+          : { top: rect.bottom + gap }),
+        width,
+        maxHeight: Math.max(
+          180,
+          Math.min(estimatedHeight, openUp ? above : below),
+        ),
+      });
     };
     recalculate();
     window.addEventListener("resize", recalculate);
@@ -114,8 +131,8 @@ function useOpenUp(
       window.removeEventListener("resize", recalculate);
       window.removeEventListener("scroll", recalculate, true);
     };
-  }, [estimatedHeight, open, rootRef]);
-  return openUp;
+  }, [estimatedHeight, open, rootRef, widthLimit]);
+  return style;
 }
 
 function MonthHeader({
@@ -171,8 +188,9 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   const [cursor, setCursor] = useState(
     new Date(initial.getFullYear(), initial.getMonth(), 1),
   );
-  const rootRef = useOutsideClose(open, () => setOpen(false));
-  const openUp = useOpenUp(open, rootRef, 340);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const rootRef = useOutsideClose(open, () => setOpen(false), popoverRef);
+  const popoverStyle = useFixedPopoverPosition(open, rootRef, 300, 340);
 
   const commit = (next: string) => {
     setInternalValue(next);
@@ -196,31 +214,42 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
         </span>
         <CalendarDays size={16} className="text-neutral-400" />
       </button>
-      {open ? (
-        <div
-          className={`absolute z-50 w-[min(300px,calc(100vw-2rem))] rounded-lg border border-neutral-700 bg-neutral-900 p-3 shadow-xl ${openUp ? "bottom-full mb-1" : "mt-1"}`}
-        >
-          <MonthHeader cursor={cursor} setCursor={setCursor} locale={locale} />
-          <CalendarGrid
-            cursor={cursor}
-            locale={locale}
-            start={value}
-            end={value}
-            onPick={(iso) => {
-              commit(iso);
-              setOpen(false);
-            }}
-          />
-          <CalendarActions
-            locale={locale}
-            onClear={() => commit("")}
-            onToday={() => {
-              commit(localDate(new Date()));
-              setOpen(false);
-            }}
-          />
-        </div>
-      ) : null}
+      {open && popoverStyle
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              role="dialog"
+              aria-label={dateCopy[locale].selectDate}
+              style={popoverStyle}
+              className="z-[220] overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 p-3 shadow-xl"
+            >
+              <MonthHeader
+                cursor={cursor}
+                setCursor={setCursor}
+                locale={locale}
+              />
+              <CalendarGrid
+                cursor={cursor}
+                locale={locale}
+                start={value}
+                end={value}
+                onPick={(iso) => {
+                  commit(iso);
+                  setOpen(false);
+                }}
+              />
+              <CalendarActions
+                locale={locale}
+                onClear={() => commit("")}
+                onToday={() => {
+                  commit(localDate(new Date()));
+                  setOpen(false);
+                }}
+              />
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -250,8 +279,9 @@ export function DateRangeInput({
   const [cursor, setCursor] = useState(
     new Date(initial.getFullYear(), initial.getMonth(), 1),
   );
-  const rootRef = useOutsideClose(open, () => setOpen(false));
-  const openUp = useOpenUp(open, rootRef, 360);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const rootRef = useOutsideClose(open, () => setOpen(false), popoverRef);
+  const popoverStyle = useFixedPopoverPosition(open, rootRef, 320, 360);
   const start = from && to && from > to ? to : from;
   const end = from && to && from > to ? from : to;
   const display =
@@ -283,40 +313,47 @@ export function DateRangeInput({
         </span>
         <CalendarDays size={16} className="text-neutral-400" />
       </button>
-      {open ? (
-        <div
-          className={`absolute right-0 z-50 w-[min(320px,calc(100vw-2rem))] rounded-lg border border-neutral-700 bg-neutral-900 p-3 shadow-xl ${openUp ? "bottom-full mb-1" : "mt-1"}`}
-        >
-          <MonthHeader
-            cursor={cursor}
-            setCursor={setCursor}
-            locale={uiLocale}
-          />
-          <div className="mb-2 text-xs text-neutral-400">
-            {selectingEnd ? copy.end : copy.start}
-          </div>
-          <CalendarGrid
-            cursor={cursor}
-            locale={uiLocale}
-            start={start}
-            end={end}
-            onPick={pick}
-          />
-          <CalendarActions
-            locale={uiLocale}
-            onClear={() => {
-              onChange({ from: "", to: "" });
-              setSelectingEnd(false);
-            }}
-            onToday={() => {
-              const today = localDate(new Date());
-              onChange({ from: today, to: today });
-              setSelectingEnd(false);
-              setOpen(false);
-            }}
-          />
-        </div>
-      ) : null}
+      {open && popoverStyle
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              role="dialog"
+              aria-label={copy.selectPeriod}
+              style={popoverStyle}
+              className="z-[220] overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 p-3 shadow-xl"
+            >
+              <MonthHeader
+                cursor={cursor}
+                setCursor={setCursor}
+                locale={uiLocale}
+              />
+              <div className="mb-2 text-xs text-neutral-400">
+                {selectingEnd ? copy.end : copy.start}
+              </div>
+              <CalendarGrid
+                cursor={cursor}
+                locale={uiLocale}
+                start={start}
+                end={end}
+                onPick={pick}
+              />
+              <CalendarActions
+                locale={uiLocale}
+                onClear={() => {
+                  onChange({ from: "", to: "" });
+                  setSelectingEnd(false);
+                }}
+                onToday={() => {
+                  const today = localDate(new Date());
+                  onChange({ from: today, to: today });
+                  setSelectingEnd(false);
+                  setOpen(false);
+                }}
+              />
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

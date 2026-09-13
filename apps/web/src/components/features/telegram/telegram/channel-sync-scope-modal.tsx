@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button, Modal } from "@/components/ui/primitives";
 import { telegramChannelsApi } from "@/lib/api";
@@ -8,6 +8,7 @@ import type { TelegramChannel, TelegramChannelSyncSelection } from "@/lib/api";
 import { telegramChannelKeys } from "@/lib/query-keys";
 import { scheduleProgressDismiss } from "@/lib/progress";
 import { useAppToast } from "@/providers/toast-provider";
+import { ChannelPostSyncLimitField } from "./channel-post-sync-limit-field";
 
 export const DEFAULT_CHANNEL_SYNC_SELECTION: TelegramChannelSyncSelection = {
   syncIncludePublicInfo: true,
@@ -27,7 +28,8 @@ function storedWorkspaceSyncSelection(): TelegramChannelSyncSelection {
   if (typeof window === "undefined") return DEFAULT_CHANNEL_SYNC_SELECTION;
   try {
     const stored = JSON.parse(
-      window.localStorage.getItem(WORKSPACE_SYNC_SELECTION_STORAGE_KEY) || "null",
+      window.localStorage.getItem(WORKSPACE_SYNC_SELECTION_STORAGE_KEY) ||
+        "null",
     ) as Partial<TelegramChannelSyncSelection> | null;
     if (!stored) return DEFAULT_CHANNEL_SYNC_SELECTION;
     return Object.fromEntries(
@@ -102,8 +104,8 @@ const SYNC_OPTIONS: Array<{
   },
   {
     key: "syncIncludeHistoricalPosts",
-    title: "Historical daily rows",
-    description: "Daily aggregated historical post rows.",
+    title: "Posts",
+    description: "Telegram posts and their historical rows.",
   },
   {
     key: "syncIncludePostMetrics",
@@ -142,6 +144,9 @@ export function ChannelSyncScopeModal({
   submitLabel,
   onClose,
   onSelectionChange,
+  postLimit,
+  onPostLimitChange,
+  statusContent,
   onSubmit,
   onSyncAll,
 }: {
@@ -154,6 +159,9 @@ export function ChannelSyncScopeModal({
   submitLabel: string;
   onClose: () => void;
   onSelectionChange: (selection: TelegramChannelSyncSelection) => void;
+  postLimit?: number;
+  onPostLimitChange?: (value: number) => void;
+  statusContent?: ReactNode;
   onSubmit: () => void;
   onSyncAll?: () => void;
 }) {
@@ -170,32 +178,44 @@ export function ChannelSyncScopeModal({
         </div>
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
           {SYNC_OPTIONS.map((option) => (
-            <label
+            <div
               key={option.key}
-              className="flex cursor-pointer items-start gap-3 rounded-lg border border-neutral-800 bg-neutral-950/55 p-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500"
+              className="rounded-lg border border-neutral-800 bg-neutral-950/55 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500"
             >
-              <input
-                type="checkbox"
-                className="mt-1 h-4 w-4 rounded border-neutral-600 bg-neutral-950 text-blue-500"
-                checked={selection[option.key]}
-                onChange={(event) =>
-                  onSelectionChange({
-                    ...selection,
-                    [option.key]: event.target.checked,
-                  })
-                }
-              />
-              <span>
-                <span className="block text-sm font-medium text-white">
-                  {option.title}
+              <label className="flex cursor-pointer items-start gap-3 p-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 rounded border-neutral-600 bg-neutral-950 text-blue-500"
+                  checked={selection[option.key]}
+                  onChange={(event) =>
+                    onSelectionChange({
+                      ...selection,
+                      [option.key]: event.target.checked,
+                    })
+                  }
+                />
+                <span>
+                  <span className="block text-sm font-medium text-white">
+                    {option.title}
+                  </span>
+                  <span className="mt-1 block text-xs text-neutral-400">
+                    {option.description}
+                  </span>
                 </span>
-                <span className="mt-1 block text-xs text-neutral-400">
-                  {option.description}
-                </span>
-              </span>
-            </label>
+              </label>
+              {option.key === "syncIncludeHistoricalPosts" &&
+              postLimit !== undefined &&
+              onPostLimitChange ? (
+                <ChannelPostSyncLimitField
+                  className="border-t border-neutral-800 px-3 py-2"
+                  value={postLimit}
+                  onChange={onPostLimitChange}
+                />
+              ) : null}
+            </div>
           ))}
         </div>
+        {statusContent}
         <div className="flex items-center justify-between gap-3 text-xs text-neutral-400">
           <span>
             Selected: {selectedCount}/{SYNC_OPTIONS.length}

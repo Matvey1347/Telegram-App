@@ -132,7 +132,7 @@ describe("internal transaction modal category fields", () => {
     expect(transactionCategoryPurpose(categories[3])).toBe("standard");
   });
 
-  it("pairs Category with Member and Account with Amount for Investment", async () => {
+  it("keeps Account and Amount stable and shows Investor below them", async () => {
     vi.spyOn(telegramChannelsApi, "select").mockResolvedValue([]);
     const user = userEvent.setup();
     renderModal();
@@ -142,13 +142,13 @@ describe("internal transaction modal category fields", () => {
     await user.click(screen.getByRole("button", { name: "Select category" }));
     await user.click(await screen.findByRole("button", { name: /Investment/ }));
 
-    expect(screen.getByText("Member")).toBeInTheDocument();
+    expect(screen.getByText("Investor")).toBeInTheDocument();
     expect(primaryFieldLabels()).toEqual([
       "Type",
       "Category",
-      "Member",
       "Account",
       "Amount",
+      "Investor",
     ]);
     expect(screen.getByTestId("transaction-primary-fields")).toHaveClass(
       "md:grid-cols-2",
@@ -156,7 +156,7 @@ describe("internal transaction modal category fields", () => {
     expect(
       screen
         .getByTestId("transaction-primary-fields")
-        .querySelector('[data-transaction-field="type"]'),
+        .querySelector('[data-transaction-field="member"]'),
     ).toHaveClass("md:col-span-2");
   });
 
@@ -180,9 +180,9 @@ describe("internal transaction modal category fields", () => {
     expect(primaryFieldLabels()).toEqual([
       "Type",
       "Category",
-      "Channel",
       "Account",
       "Amount",
+      "Channel",
     ]);
     expect(
       within(screen.getByTestId("transaction-primary-fields")).getByText(
@@ -200,11 +200,6 @@ describe("internal transaction modal category fields", () => {
         "Amount",
       ]),
     );
-    expect(
-      screen
-        .getByTestId("transaction-primary-fields")
-        .querySelector('[data-transaction-field="type"]'),
-    ).not.toHaveClass("md:col-span-2");
   });
 
   it("shows an optional channel selector for Advertising expenses", async () => {
@@ -221,7 +216,9 @@ describe("internal transaction modal category fields", () => {
     renderModal();
 
     await user.click(screen.getByRole("button", { name: "Select category" }));
-    await user.click(await screen.findByRole("button", { name: /Advertising/ }));
+    await user.click(
+      await screen.findByRole("button", { name: /Advertising/ }),
+    );
 
     expect(transactionCategoryPurpose(categories[4])).toBe(
       "advertising-expense",
@@ -229,9 +226,9 @@ describe("internal transaction modal category fields", () => {
     expect(primaryFieldLabels()).toEqual([
       "Type",
       "Category",
-      "Channel",
       "Account",
       "Amount",
+      "Channel",
     ]);
     expect(
       screen.getByRole("button", { name: "No channel" }),
@@ -276,5 +273,31 @@ describe("internal transaction modal category fields", () => {
     expect(
       await screen.findByRole("button", { name: /Operations/ }),
     ).toBeInTheDocument();
+  });
+
+  it("restores an investment with a stale category id and its investor", async () => {
+    vi.spyOn(telegramChannelsApi, "select").mockResolvedValue([]);
+    renderModal({
+      id: "legacy-investment",
+      accountId: "account",
+      type: "income",
+      amount: 500,
+      currency: "USD",
+      exchangeRateToPrimary: 1,
+      amountInPrimaryCurrency: 500,
+      category: "investment",
+      categoryId: "removed-investment-category",
+      investment: {
+        id: "investment-1",
+        workspaceMemberId: "member",
+      },
+      date: "2026-09-12T00:00:00.000Z",
+    } as Transaction);
+
+    expect(
+      await screen.findByRole("button", { name: /Investment/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Investor")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Member/ })).toBeInTheDocument();
   });
 });

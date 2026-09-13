@@ -62,7 +62,14 @@ export function consumerFinanceFeatureLabel(
         : feature === "AI_INSIGHTS"
           ? copy.featureAiInsights
           : copy.receiptScans;
-    return `${label}: ${limit === null ? copy.unlimited : limit}`;
+    const period = plan.usagePeriods[feature];
+    const value =
+      limit === null
+        ? copy.unlimited
+        : period === "LIFETIME"
+          ? `${limit} · ${copy.lifetime}`
+          : `${limit} / ${copy.perMonth}`;
+    return `${label}: ${value}`;
   }
   const labels: Record<
     Exclude<

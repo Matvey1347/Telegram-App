@@ -172,7 +172,7 @@ import {
   TimeInput,
   ToggleRow,
   TooltipBubble,
-  isValidTimeInputValue,
+  canonicalizeTimeInputValue, isValidTimeInputValue, localDateTimeInputToDate, localDateTimeInputToIso,
 } from "@/components/ui/primitives";
 import { useAppToast } from "@/providers/toast-provider";
 import { useI18n, type TranslationFunction } from "@/providers/i18n-provider";
@@ -997,11 +997,10 @@ function TelegramPostWorkspace({
   const dependencyPublishBlocked =
     effectivePublishingMode === "publish" && hasBlockingManagedPostInternalLinks(outgoingInternalLinks, channelTelegramChatId);
   const hasValidScheduleTime = isValidTimeInputValue(scheduleTime);
-  const selectedTimePostId = channelTimePosts.find((timePost) => timePost.time === scheduleTime)?.id || null;
-  const internalLinkScheduledAt =
-    effectivePublishingMode === "schedule" && scheduleDate && hasValidScheduleTime
-      ? new Date(`${scheduleDate}T${scheduleTime}`).toISOString()
-      : undefined;
+  const canonicalScheduleTime = canonicalizeTimeInputValue(scheduleTime),
+    selectedTimePostId = channelTimePosts.find((timePost) => timePost.time === canonicalScheduleTime)?.id || null;
+  const internalLinkScheduledAt = effectivePublishingMode === "schedule" && scheduleDate && hasValidScheduleTime
+    ? (localDateTimeInputToIso(scheduleDate, scheduleTime) ?? undefined) : undefined;
   const editingIsSaving = Boolean(editing && savingPostIds.includes(editing.id));
   const editorIsSaving = editingIsSaving || Boolean(creatingPostId);
   const effectiveCaptionLengthMax = channelPublishingCapabilities?.captionLengthMax ?? 1024;
@@ -1296,8 +1295,8 @@ function TelegramPostWorkspace({
           invalidPostIds.push(postId);
           continue;
         }
-        const candidate = new Date(`${selectedCalendarDate}T${customTime}:00`);
-        if (Number.isNaN(candidate.getTime()) || candidate.getTime() <= Date.now()) {
+        const candidate = localDateTimeInputToDate(selectedCalendarDate, customTime);
+        if (!candidate || candidate.getTime() <= Date.now()) {
           invalidPostIds.push(postId);
           continue;
         }
@@ -1306,7 +1305,7 @@ function TelegramPostWorkspace({
           invalidPostIds.push(postId);
           continue;
         }
-        resolvedTime = customTime;
+        resolvedTime = canonicalizeTimeInputValue(customTime) ?? customTime;
       } else {
         invalidPostIds.push(postId);
         continue;
@@ -1318,7 +1317,7 @@ function TelegramPostWorkspace({
       usedTimes.set(resolvedTime, postId);
       assignments.push({
         postId,
-        scheduledAt: new Date(`${selectedCalendarDate}T${resolvedTime}:00`).toISOString(),
+        scheduledAt: localDateTimeInputToIso(selectedCalendarDate, resolvedTime)!,
       });
     }
 
@@ -2587,8 +2586,7 @@ function TelegramPostWorkspace({
       setError(t("telegram.posts.editor.invalidPublishTime"));
       return;
     }
-    const saveScheduledAt =
-      saveMode === "schedule" && isValidTimeInputValue(scheduleTime) ? new Date(`${scheduleDate}T${scheduleTime}`).toISOString() : null;
+    const saveScheduledAt = saveMode === "schedule" ? localDateTimeInputToIso(scheduleDate, scheduleTime) : null;
     const payload: {
       title: string;
       text: string;
@@ -5837,7 +5835,8 @@ function CalendarPostTimePicker({
         timeChoiceByPostId[otherPostId] === "custom" &&
         value === customTime,
     );
-  const invalidPast = isValidTimeInputValue(customTime) && new Date(`${selectedCalendarDate}T${customTime}:00`).getTime() <= Date.now();
+  const customDateTime = localDateTimeInputToDate(selectedCalendarDate, customTime);
+  const invalidPast = Boolean(customDateTime && customDateTime.getTime() <= Date.now());
   const invalidOccupied = customTime && (slotState === "occupied" || slotState === "past");
   const errorMessage =
     selectedChoice === "custom"
@@ -6214,7 +6213,7 @@ function ScheduleGroupModal({
           return false;
         })
         .map((post, index) => {
-          const date = new Date(`${startDate}T${time}:00`);
+          const date = localDateTimeInputToDate(startDate, time) ?? new Date(NaN);
           date.setDate(date.getDate() + index * intervalDays);
           return { post, date };
         }),

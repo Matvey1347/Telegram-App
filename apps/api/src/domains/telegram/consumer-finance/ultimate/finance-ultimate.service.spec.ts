@@ -160,6 +160,7 @@ function setup() {
   };
   const entitlements = {
     reserveCapability: jest.fn().mockResolvedValue({ id: 'reservation-1' }),
+    reserve: jest.fn().mockResolvedValue({ id: 'reservation-1' }),
   };
   const ledger = {
     accounts: jest.fn().mockResolvedValue([

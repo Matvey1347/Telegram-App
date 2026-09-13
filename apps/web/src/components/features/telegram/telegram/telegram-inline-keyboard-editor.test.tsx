@@ -22,6 +22,11 @@ describe("TelegramInlineKeyboardEditor", () => {
     expect(screen.getByText("Enter a valid link")).toBeInTheDocument();
   });
 
+  it("accepts the reusable invite-link token in the standard editor", () => {
+    render(<TelegramInlineKeyboardEditor open onOpenChange={vi.fn()} buttonRows={[[{ text: "Join", url: "{{invite_link}}", style: "default" }]]} onChange={vi.fn()} />);
+    expect(screen.queryByText("Enter a valid link")).not.toBeInTheDocument();
+  });
+
   it("shows only the system-bot setup instructions until access is confirmed", () => {
     render(<TelegramInlineKeyboardEditor open onOpenChange={vi.fn()} buttonRows={[[{ text: "", url: "", style: "default" }]]} onChange={vi.fn()} canPublishInlineButtons={false} onCheckPublishingAccess={vi.fn().mockResolvedValue(false)} />);
     expect(screen.getByText(/add our system bot as a channel administrator/i)).toBeInTheDocument();

@@ -1,16 +1,20 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 import {
   canonicalizeTimeInputValue,
   CustomSelect,
   CurrencySelect,
+  DateInput,
   DateRangeInput,
   isValidTimeInputValue,
+  localDateTimeInputToIso,
   Input,
   MasonryGrid,
   Modal,
   MultiSelect,
+  TimeInput,
   Tooltip,
 } from "@/components/ui/primitives";
 
@@ -72,6 +76,21 @@ describe("MasonryGrid", () => {
 });
 
 describe("Modal", () => {
+  it("portals the dialog outside page stacking contexts", () => {
+    const { container } = render(
+      <div className="relative z-50">
+        Page panel
+        <Modal open onClose={vi.fn()} title="Channel import">
+          Import form
+        </Modal>
+      </div>,
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Channel import" });
+    expect(container).not.toContainElement(dialog);
+    expect(document.body).toContainElement(dialog);
+  });
+
   it("renders an action beside the dialog title", () => {
     render(
       <Modal
@@ -187,6 +206,56 @@ describe("CustomSelect", () => {
 
     expect(onCreateOption).toHaveBeenCalledWith("https://t.me/+legacy");
   });
+
+  it("shows async option loading in both the trigger and open dropdown", async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    render(
+      <CustomSelect
+        value=""
+        onChange={() => {}}
+        options={[]}
+        loading
+        loadingLabel="Loading invite links…"
+        onOpen={onOpen}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Loading invite links…" }),
+    );
+    expect(onOpen).toHaveBeenCalledOnce();
+    expect(screen.getAllByText("Loading invite links…")).toHaveLength(2);
+  });
+
+  it("allows onOpen to update its parent without updating during CustomSelect render", async () => {
+    const user = userEvent.setup();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    function Harness() {
+      const [opened, setOpened] = useState(false);
+      return (
+        <>
+          <span>{opened ? "requested" : "idle"}</span>
+          <CustomSelect
+            value=""
+            onChange={() => {}}
+            options={[]}
+            onOpen={() => setOpened(true)}
+          />
+        </>
+      );
+    }
+    render(<Harness />);
+
+    await user.click(screen.getByRole("button", { name: "Select" }));
+
+    expect(screen.getByText("requested")).toBeTruthy();
+    expect(
+      consoleError.mock.calls.some((call) =>
+        String(call[0]).includes("Cannot update a component"),
+      ),
+    ).toBe(false);
+  });
 });
 
 describe("MultiSelect", () => {
@@ -239,6 +308,33 @@ describe("MultiSelect", () => {
     expect(screen.queryByText("First")).not.toBeInTheDocument();
     expect(screen.queryByText("Second")).not.toBeInTheDocument();
     expect(screen.queryByText("Third")).not.toBeInTheDocument();
+  });
+
+  it("can import a typed option directly from its dropdown", async () => {
+    const user = userEvent.setup();
+    const onCreateOption = vi.fn().mockResolvedValue(undefined);
+    render(
+      <MultiSelect
+        value={[]}
+        onChange={() => {}}
+        options={[]}
+        placeholder="Partner channels"
+        searchPlaceholder="Search or paste a Telegram channel link"
+        createOptionLabel={() => "Import and select this channel"}
+        onCreateOption={onCreateOption}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Partner channels" }));
+    await user.type(
+      screen.getByPlaceholderText("Search or paste a Telegram channel link"),
+      "https://t.me/partner",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Import and select this channel" }),
+    );
+
+    expect(onCreateOption).toHaveBeenCalledWith("https://t.me/partner");
   });
 });
 
@@ -303,6 +399,24 @@ describe("DateRangeInput", () => {
   });
 });
 
+describe("DateInput", () => {
+  it("renders its calendar through a fixed portal above modal clipping", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <div className="overflow-hidden">
+        <DateInput value="2026-09-13" onChange={() => {}} />
+      </div>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "13.09.2026" }));
+
+    const calendar = screen.getByRole("dialog", { name: "Select start date" });
+    expect(container).not.toContainElement(calendar);
+    expect(calendar).toHaveStyle({ position: "fixed" });
+    expect(calendar).toHaveClass("z-[220]");
+  });
+});
+
 describe("Input", () => {
   it("lets users reveal and hide every password field", async () => {
     const user = userEvent.setup();
@@ -320,6 +434,21 @@ describe("Input", () => {
 });
 
 describe("time input helpers", () => {
+  it("keeps a partially edited time stable when a middle digit is removed", async () => {
+    const user = userEvent.setup();
+    render(<TimeInput aria-label="Publication time" defaultValue="12:34" />);
+
+    const input = screen.getByRole("textbox", {
+      name: "Publication time",
+    }) as HTMLInputElement;
+    await user.click(input);
+    input.setSelectionRange(1, 2);
+    await user.keyboard("{Backspace}");
+
+    expect(input).toHaveValue("1:34");
+    expect(localDateTimeInputToIso("2026-09-13", input.value)).not.toBeNull();
+  });
+
   it("accepts single-digit hours and canonicalizes them for saving", () => {
     expect(canonicalizeTimeInputValue("8:15")).toBe("08:15");
     expect(isValidTimeInputValue("8:15")).toBe(true);
@@ -329,5 +458,12 @@ describe("time input helpers", () => {
     expect(canonicalizeTimeInputValue("8:1")).toBeNull();
     expect(canonicalizeTimeInputValue("24:00")).toBeNull();
     expect(isValidTimeInputValue("24:00")).toBe(false);
+  });
+
+  it("never serializes a partial time and canonicalizes single-digit hours", () => {
+    expect(localDateTimeInputToIso("2026-09-13", "8:15")).toBe(
+      new Date("2026-09-13T08:15:00").toISOString(),
+    );
+    expect(localDateTimeInputToIso("2026-09-13", "8:1")).toBeNull();
   });
 });

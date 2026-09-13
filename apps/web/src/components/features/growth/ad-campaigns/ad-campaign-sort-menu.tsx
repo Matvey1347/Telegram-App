@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpDown, Check, ChevronDown } from "lucide-react";
+import { ArrowUpDown, Check } from "lucide-react";
 import { ActionMenu, ActionMenuItem } from "@/components/ui/action-menu";
 
 export type AdCampaignSort =
@@ -23,24 +23,11 @@ export function AdCampaignSortMenu({
   value: AdCampaignSort;
   onChange: (value: AdCampaignSort) => void;
 }) {
-  const selected =
-    OPTIONS.find((option) => option.value === value) ?? OPTIONS[0];
-
   return (
     <ActionMenu
       label="Sort campaigns"
-      trigger={
-        <>
-          <ArrowUpDown size={16} aria-hidden="true" />
-          <span>{selected.label}</span>
-          <ChevronDown
-            size={14}
-            className="text-neutral-500"
-            aria-hidden="true"
-          />
-        </>
-      }
-      triggerClassName="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-sm text-neutral-200 transition hover:border-neutral-600 hover:bg-neutral-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      trigger={<ArrowUpDown size={18} aria-hidden="true" />}
+      triggerClassName="inline-flex h-[42px] w-[42px] items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-200 transition hover:border-neutral-600 hover:bg-neutral-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
       menuClassName="absolute right-0 top-10 z-50 w-52 rounded-lg border border-neutral-700 bg-neutral-950 p-1.5 shadow-2xl"
     >
       {OPTIONS.map((option) => (

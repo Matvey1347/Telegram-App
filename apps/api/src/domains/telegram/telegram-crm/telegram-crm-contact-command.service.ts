@@ -12,11 +12,17 @@ import {
   CreateCrmContactDto,
   SetCrmReplyAlertMuteDto,
   UpdateCrmContactDto,
+  SetCrmContactTagsDto,
 } from './telegram-crm.dto';
 import { crmContactSelect, mapCrmContact } from './telegram-crm-contact.mapper';
 import { TelegramCrmInternalNotificationProjector } from './telegram-crm-internal-notification-projector.service';
 import { loadCrmReplySummaries } from './telegram-crm-reply-summary';
 import { ResponseCacheService } from '../../../common/response-cache.service';
+import {
+  crmTagSelect,
+  mapCrmTag,
+  TelegramCrmSystemTagsService,
+} from './telegram-crm-system-tags.service';
 
 @Injectable()
 export class TelegramCrmContactCommandService {
@@ -25,7 +31,70 @@ export class TelegramCrmContactCommandService {
     private readonly authorization: WorkspaceAuthorizationService,
     private readonly notifications: TelegramCrmInternalNotificationProjector,
     @Optional() private readonly responseCache?: ResponseCacheService,
+    @Optional() private readonly systemTags?: TelegramCrmSystemTagsService,
   ) {}
+
+  async setTags(userId: string, contactId: string, dto: SetCrmContactTagsDto) {
+    const contact = await this.requireWritableContact(userId, contactId);
+    await this.systemTags?.ensureWorkflowTags(contact.workspaceId);
+    const tagIds = [...new Set(dto.tagIds)];
+    const tags = tagIds.length
+      ? await this.prisma.telegramAdvertiserTag.findMany({
+          where: {
+            id: { in: tagIds },
+            workspaceId: contact.workspaceId,
+            OR: [
+              { systemKey: null },
+              { systemKey: { startsWith: 'WORKFLOW:' } },
+            ],
+          },
+          select: { id: true },
+        })
+      : [];
+    if (tags.length !== tagIds.length) {
+      throw new BadRequestException(
+        'One or more tags are invalid or managed automatically',
+      );
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.telegramAdvertiserTagAssignment.deleteMany({
+        where: {
+          workspaceId: contact.workspaceId,
+          advertiserId: contact.id,
+          tag: {
+            OR: [
+              { systemKey: null },
+              { systemKey: { startsWith: 'WORKFLOW:' } },
+            ],
+          },
+        },
+      });
+      if (tagIds.length) {
+        await tx.telegramAdvertiserTagAssignment.createMany({
+          data: tagIds.map((tagId) => ({
+            workspaceId: contact.workspaceId,
+            advertiserId: contact.id,
+            tagId,
+            assignedByUserId: userId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    });
+    const assigned = await this.prisma.telegramAdvertiserTag.findMany({
+      where: {
+        workspaceId: contact.workspaceId,
+        advertisers: { some: { advertiserId: contact.id } },
+      },
+      orderBy: [{ position: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+      select: crmTagSelect,
+    });
+    this.responseCache?.clearWorkspacePath(
+      contact.workspaceId,
+      '/telegram-crm/contacts',
+    );
+    return assigned.map(mapCrmTag);
+  }
 
   async create(userId: string, dto: CreateCrmContactDto) {
     const access = await this.writeContext(userId);

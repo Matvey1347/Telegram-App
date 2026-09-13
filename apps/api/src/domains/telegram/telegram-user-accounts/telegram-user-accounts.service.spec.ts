@@ -434,4 +434,147 @@ describe('TelegramUserAccountsService account checks', () => {
     );
     expect(updateInput.data.lastCheckedAt).toBeInstanceOf(Date);
   });
+
+  it('forwards real channel sync stages through the import progress stream', async () => {
+    const progress: Array<{
+      phase: string;
+      message: string;
+      current: number;
+      total: number;
+      stageCurrent?: number;
+      stageTotal?: number;
+    }> = [];
+    const syncNow = jest.fn(
+      async (
+        _userId: string,
+        _channelId: string,
+        _dto: unknown,
+        onProgress: (
+          item: {
+            phase: string;
+            message: string;
+            stageCurrent?: number;
+            stageTotal?: number;
+          },
+          current: number,
+          total: number,
+        ) => Promise<void>,
+      ) => {
+        await onProgress(
+          { phase: 'sync_step', message: 'Importing historical posts' },
+          1,
+          4,
+        );
+        await onProgress(
+          {
+            phase: 'loading_invite_links',
+            message: 'Loading invite links 2/5',
+            stageCurrent: 2,
+            stageTotal: 5,
+          },
+          2,
+          4,
+        );
+      },
+    );
+    const prisma = {
+      telegramUserAccountIntegration: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'account-1',
+          workspaceId: 'workspace-1',
+          label: '@owner',
+          apiId: '123',
+          apiHashEncrypted: 'hash',
+          apiHashIv: 'hash-iv',
+          apiHashAuthTag: 'hash-tag',
+          sessionEncrypted: 'session',
+          sessionIv: 'session-iv',
+          sessionAuthTag: 'session-tag',
+          isActive: true,
+        }),
+      },
+      telegramChannel: {
+        create: jest.fn().mockResolvedValue({
+          id: 'workspace-channel-1',
+          title: 'Imported channel',
+          username: 'imported_channel',
+        }),
+      },
+      telegramChannelAdminLink: {
+        upsert: jest.fn().mockResolvedValue({}),
+      },
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      $executeRaw: jest.fn().mockResolvedValue(1),
+    };
+    const sourceAccess = {
+      normalizeMtprotoPermissions: jest.fn().mockReturnValue({
+        role: 'OWNER',
+        permissions: {},
+      }),
+      canBeUsedForAnalytics: jest.fn().mockReturnValue(true),
+      upsertAccess: jest.fn().mockResolvedValue({}),
+      recordDataSource: jest.fn().mockResolvedValue({}),
+    };
+    const service = new TelegramUserAccountsService(
+      prisma as never,
+      {
+        resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
+      } as never,
+      { decrypt: jest.fn().mockReturnValue('decrypted') } as never,
+      {
+        getAdminChannels: jest.fn().mockResolvedValue([
+          {
+            id: '-1001',
+            title: 'Imported channel',
+            username: 'imported_channel',
+            isCreator: true,
+            adminRights: null,
+          },
+        ]),
+      } as never,
+      sourceAccess as never,
+      { get: jest.fn() } as never,
+      {
+        ensureStorageAvailable: jest.fn().mockResolvedValue(undefined),
+        resolveChannelImportPolicy: jest.fn().mockResolvedValue({
+          acquisitionType: 'CREATED',
+          postsSyncFrom: null,
+          inviteLinksSyncFrom: null,
+          purchaseTransactionId: null,
+        }),
+      } as never,
+      { syncNow } as never,
+      {} as never,
+      {} as never,
+      { writeStructured: jest.fn() } as never,
+    );
+
+    await service.importChannels(
+      'user-1',
+      'account-1',
+      { channels: [{ telegramChannelId: '-1001' }] },
+      (item, current, total) => {
+        progress.push({ ...item, current, total });
+      },
+    );
+
+    expect(progress).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          phase: 'sync_step',
+          message: 'Imported channel: Importing historical posts',
+          current: 33,
+          total: 100,
+        }),
+        expect.objectContaining({
+          phase: 'loading_invite_links',
+          message: 'Imported channel: Loading invite links 2/5',
+          stageCurrent: 2,
+          stageTotal: 5,
+          current: 55,
+          total: 100,
+        }),
+      ]),
+    );
+  });
 });

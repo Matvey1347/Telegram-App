@@ -713,7 +713,6 @@ export const {
 const telegramChannelHelpers = createTelegramChannelHelpers({
   api,
   getPaginated,
-  getAllPaginatedItems,
   streamProgressAction,
   silentFeedbackConfig,
 });
@@ -729,6 +728,7 @@ export const {
   getAllTelegramChannelPosts,
   getTelegramChannelInviteLinks,
   getTelegramChannelInviteLinksForSelect,
+  getTelegramChannelInitialInviteLink,
   getAllTelegramChannelInviteLinks,
   getTelegramChannelInviteLinkHistory,
   getTelegramChannelPromos,

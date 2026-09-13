@@ -168,7 +168,7 @@ import {
 } from './telegram-ad-sales-lifecycle-records';
 import { hydrateManagedTelegramPosts } from './telegram-ad-sales-managed-post-metrics';
 import { TelegramCrmInternalNotificationProjector } from '../telegram-crm/telegram-crm-internal-notification-projector.service';
-
+import { syncPurchasedCrmTags } from '../telegram-crm/telegram-crm-system-tags.service';
 @Injectable()
 export class TelegramAdSalesService {
   private readonly pricingReader: TelegramAdSalesPricingReader;
@@ -176,7 +176,6 @@ export class TelegramAdSalesService {
   private readonly inventoryReader: TelegramAdSalesInventoryReader;
   private readonly analyticsDatasetReader: TelegramAdSalesAnalyticsDatasetReader;
   private readonly saleReadService: TelegramAdSalesSaleReadService;
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
@@ -936,6 +935,7 @@ export class TelegramAdSalesService {
         repeatCustomerAt,
       },
     });
+    await syncPurchasedCrmTags(tx, workspaceId, advertiserId);
   }
 
   private async resolveAdvertiserForSale(

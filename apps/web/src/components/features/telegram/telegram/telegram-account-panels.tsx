@@ -2,8 +2,9 @@
 
 import { formatDateTime } from "@/lib/date-format";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { TelegramChannelSyncProgressItem } from "@telegram-system/shared";
 import { useForm } from "react-hook-form";
 import { ChannelPreview } from "@/components/features/telegram/telegram/channel-preview";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
@@ -12,11 +13,13 @@ import {
   telegramUserAccountsApi,
   type TelegramBot,
   type TelegramSourceChannelAccess,
-  type TelegramSyncedDialogChannel,
   type TelegramUserAccount,
   type TelegramUserAccountSyncDialogsResponse,
 } from "@/lib/api";
-import { scheduleProgressDismiss } from "@/lib/progress";
+import {
+  scheduleProgressDismiss,
+  syncProgressToToast,
+} from "@/lib/progress";
 import {
   Button,
   ConfirmDeleteModal,
@@ -41,6 +44,7 @@ import { TelegramAccountCodeModal } from "./telegram-account-code-modal";
 import { TelegramAccountPasswordModal } from "./telegram-account-password-modal";
 import { useTelegramAccountQrRecovery } from "./use-telegram-account-qr-recovery";
 import { TelegramMtprotoAccountCard } from "./telegram-mtproto-account-card";
+import { TelegramSyncChannelsReviewModal } from "./telegram-sync-channels-review-modal";
 
 function errorMessage(error: unknown, fallback: string) {
   const responseError = error as { response?: { data?: { message?: string } } };
@@ -220,11 +224,12 @@ export function MtprotoAccountsPanel({
       channelIds: string[];
     }) => {
       const progressId = `telegram-user-import:${account.id}:${Date.now()}`;
+      const totalProgress = Math.max(1, channelIds.length * 100);
       setProgress({
         id: progressId,
         title: `Import from ${accountDisplayName(account)}`,
         current: 0,
-        total: Math.max(1, 1 + channelIds.length * 2),
+        total: totalProgress,
         message: "Starting import…",
         iconUrl: account.photoUrl || undefined,
       });
@@ -233,22 +238,28 @@ export function MtprotoAccountsPanel({
           await telegramUserAccountsApi.importChannelsWithProgress(
             account.id,
             channelIds.map((telegramChannelId) => ({ telegramChannelId })),
-            (item: { message?: string }, current, total) => {
-              setProgress({
-                id: progressId,
-                title: `Import from ${accountDisplayName(account)}`,
-                current,
-                total,
-                message: item.message || "Importing Telegram channels…",
-                iconUrl: account.photoUrl || undefined,
-              });
+            (
+              item: TelegramChannelSyncProgressItem,
+              current,
+              total,
+            ) => {
+              setProgress(
+                syncProgressToToast({
+                  id: progressId,
+                  title: `Import from ${accountDisplayName(account)}`,
+                  item,
+                  current,
+                  total,
+                  iconUrl: account.photoUrl || undefined,
+                }),
+              );
             },
           );
         setProgress({
           id: progressId,
           title: `Import from ${accountDisplayName(account)}`,
-          current: Math.max(1, 1 + channelIds.length * 2),
-          total: Math.max(1, 1 + channelIds.length * 2),
+          current: totalProgress,
+          total: totalProgress,
           message: "Channel import completed",
           completed: true,
           successCount: 1,
@@ -369,18 +380,34 @@ export function MtprotoAccountsPanel({
         }
         label="Delete"
       />
-      <SyncChannelsReviewModal
-        review={syncReview}
-        isSaving={importChannelsMutation.isPending}
-        onClose={() => setSyncReview(null)}
-        onSubmit={(channelIds) =>
-          syncReview &&
-          importChannelsMutation.mutate({
-            account: syncReview.account,
-            channelIds,
-          })
-        }
-      />
+      {syncReview ? (
+        <TelegramSyncChannelsReviewModal
+          account={syncReview.account}
+          accountName={accountDisplayName(syncReview.account)}
+          response={syncReview.response}
+          isSaving={importChannelsMutation.isPending}
+          onClose={() => setSyncReview(null)}
+          onSubmit={(channelIds) =>
+            importChannelsMutation.mutate({
+              account: syncReview.account,
+              channelIds,
+            })
+          }
+          renderRoleBadge={(channel) => (
+            <AccessBadge
+              label={formatRole(channel.role)}
+              tip={roleTooltip(channel.role, "MTPROTO")}
+            />
+          )}
+          renderNewCountBadge={(count) => (
+            <AccessBadge
+              label={`${count} new`}
+              tip="Channels found in this Telegram account that are not in this workspace yet."
+              tone="info"
+            />
+          )}
+        />
+      ) : null}
     </>
   );
 }
@@ -506,171 +533,6 @@ export function BotAccountsPanel({
         label="Delete"
       />
     </>
-  );
-}
-
-function SyncChannelsReviewModal({
-  review,
-  isSaving,
-  onClose,
-  onSubmit,
-}: {
-  review: {
-    account: TelegramUserAccount;
-    response: TelegramUserAccountSyncDialogsResponse;
-  } | null;
-  isSaving: boolean;
-  onClose: () => void;
-  onSubmit: (channelIds: string[]) => void;
-}) {
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  useEffect(() => {
-    setSelectedIds([]);
-  }, [review?.account.id, review?.response]);
-  if (!review) return null;
-
-  const syncedChannels = review.response.syncedChannels || [];
-  const availableChannels = review.response.availableChannels || [];
-  const accountName = accountDisplayName(review.account);
-  const allSelected =
-    availableChannels.length > 0 &&
-    selectedIds.length === availableChannels.length;
-  const toggleChannel = (channelId: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(channelId)
-        ? prev.filter((item) => item !== channelId)
-        : [...prev, channelId],
-    );
-  };
-  const toggleAll = () => {
-    setSelectedIds(
-      allSelected ? [] : availableChannels.map((c) => c.channelId),
-    );
-  };
-
-  return (
-    <Modal
-      open={!!review}
-      onClose={onClose}
-      title={`Sync channels: ${accountName}`}
-    >
-      <div className="space-y-4 text-sm">
-        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="font-medium text-slate-100">
-                {syncedChannels.length} synchronized
-              </p>
-              <p className="mt-1 text-xs text-slate-400">
-                Existing workspace channels linked to {accountName}.
-              </p>
-            </div>
-            <AccessBadge
-              label={`${availableChannels.length} new`}
-              tip="Channels found in this Telegram account that are not in this workspace yet."
-              tone="info"
-            />
-          </div>
-          {syncedChannels.length ? (
-            <div className="mt-3 space-y-2">
-              {syncedChannels.map((channel) => (
-                <SyncedDialogChannelRow
-                  key={channel.channelId}
-                  channel={channel}
-                />
-              ))}
-            </div>
-          ) : (
-            <p className="mt-3 text-xs text-slate-500">
-              No existing workspace channels matched this Telegram account.
-            </p>
-          )}
-        </div>
-
-        <div className="rounded-md border border-slate-800 bg-slate-900/40 p-3">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <p className="font-medium text-slate-100">Add new channels</p>
-              <p className="mt-1 text-xs text-slate-400">
-                Selected channels will be created and linked to {accountName}.
-              </p>
-            </div>
-            {availableChannels.length ? (
-              <Button variant="secondary" type="button" onClick={toggleAll}>
-                {allSelected ? "Clear" : "Select all"}
-              </Button>
-            ) : null}
-          </div>
-          {availableChannels.length ? (
-            <div className="max-h-[280px] space-y-2 overflow-y-auto pr-1">
-              {availableChannels.map((channel) => {
-                const checked = selectedIds.includes(channel.channelId);
-                return (
-                  <label
-                    key={channel.channelId}
-                    className={`flex cursor-pointer items-center gap-3 rounded-md border p-2 ${
-                      checked
-                        ? "border-blue-500 bg-blue-950/30"
-                        : "border-slate-800 bg-slate-950/30 hover:border-slate-600"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleChannel(channel.channelId)}
-                      className="h-4 w-4 accent-blue-500"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <SyncedDialogChannelRow channel={channel} />
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-xs text-slate-500">
-              No new admin channels found for this account.
-            </p>
-          )}
-        </div>
-
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" type="button" onClick={onClose}>
-            Close
-          </Button>
-          <Button
-            type="button"
-            disabled={!selectedIds.length || isSaving}
-            onClick={() => onSubmit(selectedIds)}
-          >
-            {isSaving ? "Adding..." : `Add ${selectedIds.length || ""}`.trim()}
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function SyncedDialogChannelRow({
-  channel,
-}: {
-  channel: TelegramSyncedDialogChannel;
-}) {
-  return (
-    <div className="flex min-w-0 items-center justify-between gap-3">
-      <div className="min-w-0">
-        <p className="truncate font-medium text-slate-100">{channel.title}</p>
-        <p className="truncate text-xs text-slate-400">
-          {channel.username
-            ? `@${channel.username}`
-            : channel.telegramChannelId}
-        </p>
-      </div>
-      <AccessBadge
-        label={formatRole(channel.role)}
-        tip={roleTooltip(channel.role, "MTPROTO")}
-      />
-    </div>
   );
 }
 

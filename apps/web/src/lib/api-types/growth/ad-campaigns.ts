@@ -1,7 +1,12 @@
 import type { Currency, Icon, ResolvedEmoji, WorkspaceMember } from "../core";
 import type { TelegramChannel } from "../telegram/telegram-channels";
-import type { TelegramInviteLink, AdCampaignInviteLinkHistory } from "../telegram/telegram-invite-links";
+import type {
+  TelegramInviteLink,
+  AdCampaignInviteLinkHistory,
+} from "../telegram/telegram-invite-links";
 import type { AdHypothesisStatus } from "./ad-hypotheses";
+import type { TelegramPostButtonRows } from "@telegram-system/shared";
+import type { TelegramPostMediaItem } from "@telegram-system/shared";
 
 export type Promo = {
   id: string;
@@ -12,8 +17,17 @@ export type Promo = {
   assignedMemberId?: string | null;
   assignedMember?: WorkspaceMember | null;
   title: string;
+  previewText?: string | null;
+  previewImageUrl?: string | null;
   text?: string;
+  plainText?: string | null;
+  formattedHtml?: string | null;
   imageData?: string;
+  imageUrls?: string[];
+  mediaItems?: TelegramPostMediaItem[];
+  buttonRows?: TelegramPostButtonRows;
+  defaultInviteLinkId?: string | null;
+  defaultInviteLink?: TelegramInviteLink | null;
   status: "draft" | "active" | "archived";
   telegramChannel?: TelegramChannel;
 };
@@ -198,7 +212,7 @@ export type AdCampaign = AdCampaignAnalyticsFields & {
   assignedMember?: WorkspaceMember | null;
   hypothesisLinks?: AdCampaignHypothesisLink[];
   inviteLinkHistory?: AdCampaignInviteLinkHistory | null;
-  inviteLinkHistorySummary?: AdCampaignInviteLinkHistory['summary'] | null;
+  inviteLinkHistorySummary?: AdCampaignInviteLinkHistory["summary"] | null;
   admissionViewAnalytics?: AdCampaignAdmissionViewAnalytics | null;
   analytics?: {
     joinedCount: number;

@@ -55,6 +55,10 @@ export type ConsumerBillingCatalog = {
     capabilities: ConsumerFinanceCapability[];
     features: ConsumerFinancePlanFeature[];
     usageLimits: Record<ConsumerFinanceUsageFeature, number | null>;
+    usagePeriods: Record<
+      ConsumerFinanceUsageFeature,
+      "LIFETIME" | "MONTH" | "UNLIMITED"
+    >;
     /** Server-authoritative transition eligibility for checkout. */
     canPurchase: boolean;
     prices: Array<{

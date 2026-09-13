@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Headers,
   Post,
   Query,
@@ -107,6 +108,7 @@ export class TelegramSystemBotController {
 
   @UseGuards(JwtAuthGuard)
   @Get('ad-sale-post-import')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
   async adSalePostImportResult(
     @CurrentUser() user: JwtUser,
     @Query('workflowId') workflowId: string,
@@ -121,6 +123,44 @@ export class TelegramSystemBotController {
     return this.postFlow.adSaleImportResult(
       { ...connection, timezone: 'UTC' },
       workflowId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('promo-post-import')
+  async preparePromoPostImport(@CurrentUser() user: JwtUser) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
+      user.sub,
+    );
+    await this.connections.switchWorkspaceForUser(user.sub, workspaceId);
+    const connection = await this.connections.workflowScopeForUser(
+      user.sub,
+      workspaceId,
+    );
+    return this.postFlow.prepareAdSaleImport(
+      { ...connection, timezone: 'UTC' },
+      'PROMO_MODAL',
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('promo-post-import')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
+  async promoPostImportResult(
+    @CurrentUser() user: JwtUser,
+    @Query('workflowId') workflowId: string,
+  ) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
+      user.sub,
+    );
+    const connection = await this.connections.workflowScopeForUser(
+      user.sub,
+      workspaceId,
+    );
+    return this.postFlow.adSaleImportResult(
+      { ...connection, timezone: 'UTC' },
+      workflowId,
+      'PROMO_MODAL',
     );
   }
 
@@ -146,6 +186,7 @@ export class TelegramSystemBotController {
 
   @UseGuards(JwtAuthGuard)
   @Get('mutual-promotion-post-import')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
   async mutualPromotionPostImportResult(
     @CurrentUser() user: JwtUser,
     @Query('workflowId') workflowId: string,
@@ -169,6 +210,25 @@ export class TelegramSystemBotController {
     @CurrentUser() user: JwtUser,
     @Body()
     draft: TelegramSystemBotPostPreviewDraft,
+  ) {
+    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
+      user.sub,
+    );
+    const connection = await this.connections.workflowScopeForUser(
+      user.sub,
+      workspaceId,
+    );
+    return this.postFlow.sendPostPreview(
+      { ...connection, timezone: 'UTC' },
+      draft,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('promo-post-preview')
+  async sendPromoPostPreview(
+    @CurrentUser() user: JwtUser,
+    @Body() draft: TelegramSystemBotPostPreviewDraft,
   ) {
     const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
       user.sub,

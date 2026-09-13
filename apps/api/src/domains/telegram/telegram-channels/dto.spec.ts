@@ -3,8 +3,11 @@ import { plainToInstance, type ClassConstructor } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import {
   CreateTelegramManagedPostDto,
+  ImportTelegramChannelsBatchDto,
+  SyncNowDto,
   TelegramChannelListQueryDto,
   TelegramManagedPostsQueryDto,
+  UpdateTelegramChannelDto,
   UpdateTelegramManagedPostDto,
 } from './dto';
 import { TelegramChannelPerformanceHistoryQueryDto } from './telegram-channel-bounded-read.dto';
@@ -50,6 +53,61 @@ describe('TelegramChannelListQueryDto', () => {
 
     expect(dto.archived).toBe(false);
     expect(dto.owned).toBe(true);
+    expect(validateSync(dto)).toEqual([]);
+  });
+});
+
+describe('SyncNowDto', () => {
+  it('accepts post counts above 100 and rejects values above the Telegram sync cap', () => {
+    const valid = plainToInstance(SyncNowDto, { postLimit: '750' });
+    expect(valid.postLimit).toBe(750);
+    expect(validateSync(valid)).toEqual([]);
+
+    const oversized = plainToInstance(SyncNowDto, { postLimit: '10001' });
+    expect(validateSync(oversized)).not.toEqual([]);
+  });
+});
+
+describe('ImportTelegramChannelsBatchDto', () => {
+  it('accepts up to 20 channel references and rejects empty or oversized batches', () => {
+    expect(
+      validateSync(
+        plainToInstance(ImportTelegramChannelsBatchDto, {
+          inputs: ['https://t.me/one', 'https://t.me/+two'],
+        }),
+      ),
+    ).toEqual([]);
+    expect(
+      validateSync(
+        plainToInstance(ImportTelegramChannelsBatchDto, { inputs: [] }),
+      ),
+    ).not.toEqual([]);
+    expect(
+      validateSync(
+        plainToInstance(ImportTelegramChannelsBatchDto, {
+          inputs: Array.from({ length: 21 }, (_, index) => `channel-${index}`),
+        }),
+      ),
+    ).not.toEqual([]);
+  });
+});
+
+describe('UpdateTelegramChannelDto', () => {
+  it('accepts an explicit no-seed setting', () => {
+    const dto = plainToInstance(UpdateTelegramChannelDto, {
+      seedDisabled: true,
+    });
+
+    expect(dto.seedDisabled).toBe(true);
+    expect(validateSync(dto)).toEqual([]);
+  });
+
+  it('accepts a saved post sync limit above 100', () => {
+    const dto = plainToInstance(UpdateTelegramChannelDto, {
+      postSyncLimit: '750',
+    });
+
+    expect(dto.postSyncLimit).toBe(750);
     expect(validateSync(dto)).toEqual([]);
   });
 });

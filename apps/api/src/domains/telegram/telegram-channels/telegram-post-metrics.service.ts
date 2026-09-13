@@ -13,12 +13,16 @@ import {
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   B2ObjectStorageService,
-  isSupportedImmutableImageMimeType,
+  isSupportedImmutableMediaMimeType,
 } from '../../../common/object-storage/b2-object-storage.service';
 import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
 import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
+import {
+  DEFAULT_TELEGRAM_CHANNEL_POST_SYNC_LIMIT,
+  MAX_TELEGRAM_CHANNEL_POST_SYNC_LIMIT,
+} from './telegram-channel-sync-limits';
 import { TelegramChannelCatalogService } from './telegram-channel-catalog.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 import { BulkProgressCallback } from './telegram-channels.internal';
@@ -37,7 +41,8 @@ export class TelegramPostMetricsService {
   ) {}
   private readonly logger = new Logger('TelegramChannelsService');
 
-  private readonly defaultPostSyncLimit = 50;
+  private readonly defaultPostSyncLimit =
+    DEFAULT_TELEGRAM_CHANNEL_POST_SYNC_LIMIT;
 
   async syncPostsMetrics(
     userId: string,
@@ -97,7 +102,7 @@ export class TelegramPostMetricsService {
         ...this.telegramChannelAccessService.accountCredentials(account),
         channel: channelReference,
         postLimit: Math.min(
-          100,
+          MAX_TELEGRAM_CHANNEL_POST_SYNC_LIMIT,
           Math.max(1, dto.postLimit || this.defaultPostSyncLimit),
         ),
       });
@@ -233,42 +238,62 @@ export class TelegramPostMetricsService {
           const existing = existingByMessageId.get(
             String(post.telegramMessageId),
           );
-          return (
-            post.hasMedia &&
-            this.isTelegramImageKind(post.mediaKind) &&
-            !this.hasPermanentImage(existing?.imageUrls)
-          );
+          return post.hasMedia && !this.hasPermanentImage(existing?.imageUrls);
         })
       : [];
     let imageUrlsFailed = 0;
     if (mediaContext && mediaCandidates.length) {
-      try {
-        const downloaded =
-          await this.mtprotoClient.downloadChannelMessagesMedia({
-            ...mediaContext.credentials,
-            channel: mediaContext.channel,
-            messageIds: mediaCandidates.map((post) =>
-              String(post.telegramMessageId),
-            ),
-          });
-        const images = downloaded.filter((item) =>
-          isSupportedImmutableImageMimeType(item.mimeType),
-        );
-        const stored = await this.objectStorage.persistImmutableImages(
-          images.map((item) => ({
-            bytes: item.buffer,
-            mimeType: item.mimeType,
-          })),
-        );
-        images.forEach((item, index) => {
-          imageUrlsByMessageId.set(item.messageId, [stored.urls[index]]);
-        });
-        imageUrlsFailed = mediaCandidates.length - images.length;
-      } catch (error) {
-        imageUrlsFailed = mediaCandidates.length;
-        this.logger.warn(
-          `Telegram post image persistence failed for channel=${channelId}: ${error instanceof Error ? error.message : 'unknown error'}`,
-        );
+      for (let offset = 0; offset < mediaCandidates.length; offset += 50) {
+        const batch = mediaCandidates.slice(offset, offset + 50);
+        try {
+          const downloaded =
+            await this.mtprotoClient.downloadChannelMessagesMedia({
+              ...mediaContext.credentials,
+              channel: mediaContext.channel,
+              messageIds: batch.map((post) => String(post.telegramMessageId)),
+            });
+          const supportedMedia = downloaded.filter((item) =>
+            isSupportedImmutableMediaMimeType(item.mimeType),
+          );
+          let persisted = 0;
+          try {
+            const stored = await this.objectStorage.persistImmutableMedia(
+              supportedMedia.map((item) => ({
+                bytes: item.buffer,
+                mimeType: item.mimeType,
+              })),
+            );
+            supportedMedia.forEach((item, index) => {
+              imageUrlsByMessageId.set(item.messageId, [stored.urls[index]]);
+              persisted += 1;
+            });
+          } catch (error) {
+            this.logger.warn(
+              `Telegram post media batch persistence is retrying individually for channel=${channelId}: ${error instanceof Error ? error.message : 'unknown error'}`,
+            );
+            for (const item of supportedMedia) {
+              try {
+                const stored = await this.objectStorage.persistImmutableMedia([
+                  { bytes: item.buffer, mimeType: item.mimeType },
+                ]);
+                if (stored.urls[0]) {
+                  imageUrlsByMessageId.set(item.messageId, [stored.urls[0]]);
+                  persisted += 1;
+                }
+              } catch (itemError) {
+                this.logger.warn(
+                  `Telegram post media persistence failed for channel=${channelId} message=${item.messageId}: ${itemError instanceof Error ? itemError.message : 'unknown error'}`,
+                );
+              }
+            }
+          }
+          imageUrlsFailed += batch.length - persisted;
+        } catch (error) {
+          imageUrlsFailed += batch.length;
+          this.logger.warn(
+            `Telegram post media persistence failed for channel=${channelId}: ${error instanceof Error ? error.message : 'unknown error'}`,
+          );
+        }
       }
     }
     let changedPosts = 0;

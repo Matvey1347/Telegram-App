@@ -10,6 +10,11 @@ describe("consumerFinanceOffersForPlan", () => {
       capabilities: [],
       features: [],
       usageLimits: { AI_INPUT: null, RECEIPT_SCAN: 30, AI_INSIGHTS: 0 },
+      usagePeriods: {
+        AI_INPUT: "UNLIMITED",
+        RECEIPT_SCAN: "MONTH",
+        AI_INSIGHTS: "MONTH",
+      },
       canPurchase: true,
       prices: [
         {

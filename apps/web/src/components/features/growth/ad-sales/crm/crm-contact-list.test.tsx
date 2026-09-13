@@ -37,6 +37,16 @@ const contact: CrmContactListItem = {
   createdAt: "2026-07-01T10:00:00.000Z",
   updatedAt: "2026-08-31T12:00:00.000Z",
   isUnassignedClient: false,
+  tags: [
+    {
+      id: "tag-network",
+      name: "Network · Business",
+      color: "#60a5fa",
+      systemKey: "NETWORK:business",
+      isSystem: true,
+      assignmentMode: "AUTOMATIC",
+    },
+  ],
   replySummary: {
     status: "NONE",
     inboundMessageCount: 0,
@@ -269,6 +279,7 @@ describe("CrmContactCard", () => {
     expect(screen.getByText("735 UAH")).toBeTruthy();
     expect(screen.getByText("Orders")).toBeTruthy();
     expect(screen.getByText("Paid")).toBeTruthy();
+    expect(screen.getByText("Network · Business")).toBeTruthy();
     expect(screen.queryByText("Can we book the next placement?")).toBeNull();
     expect(screen.queryByText(/via @sales/u)).toBeNull();
     expect(screen.getByRole("img", { name: "Ada Client" })).toHaveAttribute(
@@ -293,7 +304,7 @@ describe("CrmContactCard", () => {
       screen.getByRole("button", { name: "Actions for Ada Client" }),
     );
     expect(screen.queryByRole("menuitem", { name: "Payments" })).toBeNull();
-    expect(screen.queryByRole("menuitem", { name: "Tags" })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: "Tags" })).toBeTruthy();
     expect(screen.queryByRole("menuitem", { name: "Automation" })).toBeNull();
     expect(screen.queryByText(/Automated messages/i)).toBeNull();
     fireEvent.click(screen.getByRole("menuitem", { name: "Deals" }));

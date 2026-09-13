@@ -168,13 +168,24 @@ describe("telegram overview cards", () => {
 
   it("renders a network as a metric card and selects emoji through the shared picker", async () => {
     updateNetwork.mockResolvedValue({ ...network, iconId: "icon-2" });
+    const networkWithFourChannels = {
+      ...network,
+      channels: [
+        ...network.channels,
+        { id: "channel-3", title: "Third", photoUrl: null },
+        { id: "channel-4", title: "Fourth", photoUrl: null },
+      ].map((channel) => ({
+        ...channel,
+        photoUrl: `https://cdn.test/${channel.id}.jpg`,
+      })),
+    };
     const client = new QueryClient({
       defaultOptions: { mutations: { retry: false } },
     });
     render(
       <QueryClientProvider client={client}>
         <TelegramNetworkCards
-          networks={[network]}
+          networks={[networkWithFourChannels]}
           onEdit={vi.fn()}
           onDelete={vi.fn()}
         />
@@ -206,6 +217,15 @@ describe("telegram overview cards", () => {
     expect(screen.getByText("No delete")).toBeInTheDocument();
     expect(screen.getByText("700 UAH")).toBeInTheDocument();
     expect(screen.queryByText("700.00 UAH")).not.toBeInTheDocument();
+    const channelSummary = screen.getByLabelText("Show 4 network channels");
+    expect(channelSummary.querySelectorAll("img")).toHaveLength(3);
+    fireEvent.click(channelSummary);
+    expect(channelSummary).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Main")).toBeInTheDocument();
+    expect(screen.getByText("Fourth")).toBeInTheDocument();
+    fireEvent.pointerDown(document.body);
+    expect(channelSummary).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Fourth")).not.toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: "Choose emoji for Creators" }),
     );

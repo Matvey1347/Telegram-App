@@ -23,6 +23,11 @@ const editablePostPayload = (draft: TelegramSystemBotPostDraft) => ({
   buttonRows: draft.buttonRows,
 });
 
+const workflowResultConfig = (workflowId: string): AxiosRequestConfig => ({
+  params: { workflowId, _: Date.now() },
+  headers: { "Cache-Control": "no-cache" },
+});
+
 export function createTelegramSystemBotApi(api: AxiosInstance) {
   const silentFeedback = {
     feedback: { mode: "silent" },
@@ -75,9 +80,27 @@ export function createTelegramSystemBotApi(api: AxiosInstance) {
         await api.get<
           | { ready: false }
           | { ready: true; draft: TelegramSystemBotAdSalePostDraft }
-        >("/telegram/system-bot/ad-sale-post-import", {
-          params: { workflowId },
-        })
+        >(
+          "/telegram/system-bot/ad-sale-post-import",
+          workflowResultConfig(workflowId),
+        )
+      ).data,
+    preparePromoPostImport: async () =>
+      (
+        await api.post<{ workflowId: string }>(
+          "/telegram/system-bot/promo-post-import",
+          undefined,
+          silentFeedback,
+        )
+      ).data,
+    promoPostImportResult: async (workflowId: string) =>
+      (
+        await api.get<
+          { ready: false } | { ready: true; draft: TelegramSystemBotPostDraft }
+        >(
+          "/telegram/system-bot/promo-post-import",
+          workflowResultConfig(workflowId),
+        )
       ).data,
     prepareMutualPromotionPostImport: async (folderId: string) =>
       (
@@ -95,14 +118,31 @@ export function createTelegramSystemBotApi(api: AxiosInstance) {
               ready: true;
               drafts: TelegramSystemBotMutualPromotionPostDraft[];
             }
-        >("/telegram/system-bot/mutual-promotion-post-import", {
-          params: { workflowId },
-        })
+        >(
+          "/telegram/system-bot/mutual-promotion-post-import",
+          workflowResultConfig(workflowId),
+        )
       ).data,
     sendAdSalePostPreview: async (draft: TelegramSystemBotAdSalePostDraft) =>
       (
         await api.post<{ status: "SENT" }>(
           "/telegram/system-bot/ad-sale-post-preview",
+          editablePostPayload(draft),
+          silentFeedback,
+        )
+      ).data,
+    sendPromoPostPreview: async (draft: TelegramSystemBotPostDraft) =>
+      (
+        await api.post<{ status: "SENT" }>(
+          "/telegram/system-bot/promo-post-preview",
+          editablePostPayload(draft),
+          silentFeedback,
+        )
+      ).data,
+    sendPostPreview: async (draft: TelegramSystemBotPostDraft) =>
+      (
+        await api.post<{ status: "SENT" }>(
+          "/telegram/system-bot/promo-post-preview",
           editablePostPayload(draft),
           silentFeedback,
         )

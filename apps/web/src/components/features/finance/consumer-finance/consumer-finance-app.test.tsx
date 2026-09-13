@@ -394,7 +394,7 @@ describe("ConsumerFinanceApp bootstrap", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the Telegram shell with four primary mobile destinations", async () => {
+  it("renders the Telegram shell with Jarvis in the five-item mobile bar", async () => {
     mocks.bootstrap = { status: "ready", initData: "signed-init-data" };
     mocks.auth.mockResolvedValue({ authenticated: true, profile });
 
@@ -410,11 +410,17 @@ describe("ConsumerFinanceApp bootstrap", () => {
     expect(
       screen.getByRole("button", { name: "Open in browser" }),
     ).toBeInTheDocument();
-    const mobileNav = document.querySelector("nav.grid-cols-4");
+    const mobileNav = document.querySelector("nav.grid-cols-5");
     expect(mobileNav).toBeInTheDocument();
     expect(
       within(mobileNav as HTMLElement).getAllByRole("button"),
-    ).toHaveLength(4);
+    ).toHaveLength(5);
+    fireEvent.click(
+      within(mobileNav as HTMLElement).getByRole("button", { name: "Jarvis" }),
+    );
+    expect(
+      screen.getByRole("complementary", { name: "Jarvis" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps Debts and Regular payments reachable from the Mini App menu", async () => {

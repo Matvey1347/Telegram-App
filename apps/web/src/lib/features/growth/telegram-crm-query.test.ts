@@ -29,6 +29,7 @@ function setup() {
     telegramCrmKeys.contactList(params),
     {
       items: [contact],
+      availableTags: [],
       pagination: {
         page: 1,
         pageSize: 12,
@@ -86,6 +87,7 @@ describe("CRM contact cache updates", () => {
     const listedContact = { ...contact, stage: "NEW" as const };
     const page = (totalItems: number): CrmContactsListResult => ({
       items: [listedContact],
+      availableTags: [],
       pagination: {
         page: 1,
         pageSize: 12,

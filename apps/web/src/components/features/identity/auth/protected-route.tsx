@@ -139,7 +139,7 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
 function FullScreenLoader({ label }: { label: string }) {
   return (
     <div
-      className="min-h-screen bg-neutral-950 text-neutral-100"
+      className="min-h-dvh bg-neutral-950 text-neutral-100"
       role="status"
       aria-label={label}
     >
@@ -158,11 +158,11 @@ function FullScreenLoader({ label }: { label: string }) {
           <Skeleton className="h-10 w-full" />
         </div>
       </aside>
-      <header className="flex h-14 items-center gap-3 border-b border-neutral-800 px-3 lg:hidden">
+      <header className="fixed inset-x-0 top-0 z-20 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center gap-3 border-b border-neutral-800 bg-neutral-950 px-[max(.75rem,env(safe-area-inset-left))] pt-[env(safe-area-inset-top)] pr-[max(.75rem,env(safe-area-inset-right))] lg:hidden">
         <Skeleton className="h-10 w-10" />
         <Skeleton className="h-4 w-32" />
       </header>
-      <main className="p-4 sm:p-5 lg:ml-64 lg:p-5">
+      <main className="px-4 pb-4 pt-[calc(4.5rem+env(safe-area-inset-top))] sm:px-5 sm:pb-5 lg:ml-64 lg:p-5">
         <Skeleton className="h-8 w-40" />
         <Skeleton className="mt-3 h-4 w-72 max-w-full" />
         <div className="mt-6 rounded-lg border border-neutral-800 bg-neutral-900 p-4 sm:p-5">

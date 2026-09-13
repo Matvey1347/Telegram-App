@@ -78,10 +78,8 @@ export function AppShell({ children }: PropsWithChildren) {
         : null;
       const created = await workspacesApi.create({ name: payload.name });
       if (!selectedIcon) return created;
-
       localStorage.setItem("selected-workspace-id", created.id);
       setSelectedWorkspaceId(created.id);
-
       const clonedIcon =
         selectedIcon.type === "emoji"
           ? await iconsApi
@@ -96,11 +94,9 @@ export function AppShell({ children }: PropsWithChildren) {
                   name: selectedIcon.name,
                   imageUrl: selectedIcon.imageUrl,
                 })
-                .catch(() => null)
+                  .catch(() => null)
             : null;
-
       if (!clonedIcon) return created;
-
       try {
         return await workspacesApi.update(created.id, {
           avatarIconId: clonedIcon.id,
@@ -297,8 +293,8 @@ export function AppShell({ children }: PropsWithChildren) {
       ),
     );
   return (
-    <div className="min-h-screen overflow-x-hidden bg-neutral-950 text-neutral-100">
-      <header className={`${pwaStyles.header} sticky top-0 z-20 flex h-14 items-center justify-between border-b border-neutral-800 bg-neutral-950/95 px-3 backdrop-blur lg:hidden`}>
+    <div className="min-h-dvh overflow-x-hidden bg-neutral-950 text-neutral-100">
+      <header className={pwaStyles.header}>
         <button
           type="button"
           onClick={() => setMobileMenuOpen(true)}
@@ -326,7 +322,7 @@ export function AppShell({ children }: PropsWithChildren) {
       <aside
         id="app-sidebar"
         aria-label={t("navigation.sidebar")}
-        className={`fixed left-0 top-0 z-40 flex h-[100dvh] w-[min(19rem,calc(100vw-1.25rem))] -translate-x-full flex-col border-r border-neutral-800 bg-neutral-950 p-4 shadow-2xl transition-transform duration-200 lg:z-30 lg:h-screen lg:w-64 lg:translate-x-0 lg:p-5 lg:shadow-none ${mobileMenuOpen ? "translate-x-0" : ""}`}
+        className={`${pwaStyles.sidebar} fixed left-0 top-0 z-40 flex h-[100dvh] w-[min(19rem,calc(100vw-1.25rem))] -translate-x-full flex-col border-r border-neutral-800 bg-neutral-950 p-4 shadow-2xl transition-transform duration-200 lg:z-30 lg:h-screen lg:w-64 lg:translate-x-0 lg:p-5 lg:shadow-none ${mobileMenuOpen ? "translate-x-0" : ""}`}
         onClickCapture={(event) => {
           if ((event.target as HTMLElement).closest("a"))
             setMobileMenuOpen(false);
@@ -335,7 +331,7 @@ export function AppShell({ children }: PropsWithChildren) {
         <button
           type="button"
           onClick={() => setMobileMenuOpen(false)}
-          className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-800 text-neutral-300 hover:bg-neutral-900 lg:hidden"
+          className={`${pwaStyles.sidebarClose} absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-800 text-neutral-300 hover:bg-neutral-900 lg:hidden`}
           aria-label={t("navigation.close")}
         >
           <X size={18} />
@@ -502,7 +498,7 @@ export function AppShell({ children }: PropsWithChildren) {
           </div>
         </div>
       </aside>
-      <main className={`${pwaStyles.content} min-h-[calc(100dvh-3.5rem)] min-w-0 px-3 py-4 sm:px-4 sm:py-5 lg:ml-64 lg:min-h-screen lg:w-[calc(100%-16rem)] 2xl:px-5`}>
+      <main className={pwaStyles.content}>
         <div
           key={activeWorkspaceId || "no-workspace"}
           className="w-full min-w-0"

@@ -21,7 +21,6 @@ import {
   CreateTelegramManagedPostDto,
   CreateTelegramChannelDto,
   HistoricalSyncDto,
-  ImportTelegramChannelDto,
   ImportTelegramManagedPostsDto,
   ImportPostGroupsDto,
   ManagedPostLinkTargetsQueryDto,
@@ -105,23 +104,6 @@ export class TelegramChannelsController {
     @Body() dto: CreateTelegramChannelDto,
   ) {
     return this.service.create(user.sub, dto);
-  }
-  @Post('import')
-  import(@CurrentUser() user: JwtUser, @Body() dto: ImportTelegramChannelDto) {
-    return this.service.importChannel(user.sub, dto);
-  }
-  @Post('import-stream')
-  importStream(
-    @CurrentUser() user: JwtUser,
-    @Body() dto: ImportTelegramChannelDto,
-    @Res() res: Response,
-  ) {
-    return this.streamBulkAction(
-      res,
-      (onProgress) =>
-        this.service.importChannel(user.sub, dto, onProgress as never),
-      'telegram_channel.import_stream',
-    );
   }
   @Get('post-groups')
   postGroups(@CurrentUser() user: JwtUser, @Query() query: PostGroupsQueryDto) {
@@ -733,7 +715,7 @@ export class TelegramChannelsController {
   @Get(':id/invite-links/select') inviteLinksForSelect(
     @CurrentUser() user: JwtUser,
     @Param('id') id: string,
-    @Query() query: Pick<TelegramChannelInviteLinksQueryDto, 'search'>,
+    @Query() query: TelegramChannelInviteLinksQueryDto,
   ) {
     return this.service.inviteLinksForSelect(user.sub, id, query);
   }

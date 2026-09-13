@@ -138,14 +138,34 @@ function channelOptionProps(channel: TelegramChannel) {
   };
 }
 
-function transactionDefaults(initial?: Transaction): InternalTransactionValues {
+function transactionDefaults(
+  initial?: Transaction,
+  categories?: TransactionCategory[],
+): InternalTransactionValues {
+  const legacyCategoryId = initial
+    ? categories?.find((category) => {
+        const legacyName = initial.category.trim().toLowerCase();
+        return (
+          category.type === initial.type &&
+          (category.name.trim().toLowerCase() === legacyName ||
+            category.key?.trim().toLowerCase() === legacyName)
+        );
+      })?.id
+    : undefined;
+  const storedCategoryId = initial?.categoryId ?? initial?.categoryRef?.id;
+  const categoryId =
+    categories === undefined ||
+    categories.some((category) => category.id === storedCategoryId)
+      ? (storedCategoryId ?? legacyCategoryId ?? "")
+      : (legacyCategoryId ?? "");
   return initial
     ? {
         accountId: initial.accountId,
         type: initial.type,
         amount: Number(initial.amount),
-        categoryId: initial.categoryId ?? initial.categoryRef?.id ?? "",
-        memberId: initial.memberId ?? "",
+        categoryId,
+        memberId:
+          initial.memberId ?? initial.investment?.workspaceMemberId ?? "",
         telegramChannelId:
           initial.telegramChannel?.id ??
           initial.purchasedTelegramChannel?.id ??
@@ -195,7 +215,7 @@ export function InternalTransactionModal({
     getValues,
     formState: { errors },
   } = useForm<InternalTransactionValues>({
-    defaultValues: transactionDefaults(initial),
+    defaultValues: transactionDefaults(initial, categories),
   });
   const lastAutoMemberIdRef = useRef("");
   const type = watch("type");
@@ -225,7 +245,6 @@ export function InternalTransactionModal({
     categoryPurpose === "channel-advertising-revenue";
   const showsTelegramChannel =
     isBuyChannels || isAdvertisingExpense || isChannelAdvertisingRevenue;
-  const hasCategoryExtraField = requiresMember || showsTelegramChannel;
   const ownChannels = useMemo(
     () =>
       (telegramChannels ?? []).filter((channel) => channel.isActive !== false),
@@ -239,8 +258,8 @@ export function InternalTransactionModal({
   useEffect(() => {
     if (!open) return;
     lastAutoMemberIdRef.current = "";
-    reset(transactionDefaults(initial));
-  }, [open, initial, reset]);
+    reset(transactionDefaults(initial, categories));
+  }, [open, initial, categories, reset]);
 
   useEffect(() => {
     if (!requiresMember) {
@@ -301,10 +320,7 @@ export function InternalTransactionModal({
           className="grid gap-3 md:grid-cols-2"
           data-testid="transaction-primary-fields"
         >
-          <div
-            className={hasCategoryExtraField ? "md:col-span-2" : undefined}
-            data-transaction-field="type"
-          >
+          <div data-transaction-field="type">
             <FormField label="Type">
               <Select
                 {...register("type")}
@@ -356,78 +372,6 @@ export function InternalTransactionModal({
               </Select>
             </FormField>
           </div>
-          {requiresMember ? (
-            <div data-transaction-field="member">
-              <FormField
-                label="Member"
-                required
-                error={errors.memberId ? "Required field" : undefined}
-              >
-                <Select
-                  {...register("memberId", { required: true })}
-                  value={memberId}
-                  onChange={(event) =>
-                    setValue("memberId", event.target.value, {
-                      shouldDirty: true,
-                      shouldValidate: true,
-                    })
-                  }
-                >
-                  <option value="" disabled hidden>
-                    Select member
-                  </option>
-                  {members.map((member) => (
-                    <option
-                      key={member.id}
-                      value={member.id}
-                      {...memberOptionProps(member)}
-                    >
-                      {member.user.name}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
-            </div>
-          ) : null}
-          {showsTelegramChannel ? (
-            <div data-transaction-field="channel">
-              <FormField
-                label={
-                  isChannelAdvertisingRevenue ? "Revenue channel" : "Channel"
-                }
-                required={isChannelAdvertisingRevenue}
-                error={errors.telegramChannelId ? "Required field" : undefined}
-              >
-                <Select
-                  {...register("telegramChannelId", {
-                    validate: (value) =>
-                      !isChannelAdvertisingRevenue ||
-                      Boolean(value) ||
-                      "required",
-                  })}
-                  value={telegramChannelId}
-                  onChange={(event) =>
-                    setValue("telegramChannelId", event.target.value, {
-                      shouldDirty: true,
-                      shouldValidate: true,
-                    })
-                  }
-                >
-                  <option value="">No channel</option>
-                  {ownChannels.map((channel) => (
-                    <option
-                      key={channel.id}
-                      value={channel.id}
-                      {...channelOptionProps(channel)}
-                    >
-                      {channel.title}
-                      {channel.username ? ` (@${channel.username})` : ""}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
-            </div>
-          ) : null}
           <div data-transaction-field="account">
             <FormField
               label="Account"
@@ -468,6 +412,78 @@ export function InternalTransactionModal({
               />
             </FormField>
           </div>
+          {requiresMember ? (
+            <div className="md:col-span-2" data-transaction-field="member">
+              <FormField
+                label={isInvestment ? "Investor" : "Member"}
+                required
+                error={errors.memberId ? "Required field" : undefined}
+              >
+                <Select
+                  {...register("memberId", { required: true })}
+                  value={memberId}
+                  onChange={(event) =>
+                    setValue("memberId", event.target.value, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
+                >
+                  <option value="" disabled hidden>
+                    {isInvestment ? "Select investor" : "Select member"}
+                  </option>
+                  {members.map((member) => (
+                    <option
+                      key={member.id}
+                      value={member.id}
+                      {...memberOptionProps(member)}
+                    >
+                      {member.user.name}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+            </div>
+          ) : null}
+          {showsTelegramChannel ? (
+            <div className="md:col-span-2" data-transaction-field="channel">
+              <FormField
+                label={
+                  isChannelAdvertisingRevenue ? "Revenue channel" : "Channel"
+                }
+                required={isChannelAdvertisingRevenue}
+                error={errors.telegramChannelId ? "Required field" : undefined}
+              >
+                <Select
+                  {...register("telegramChannelId", {
+                    validate: (value) =>
+                      !isChannelAdvertisingRevenue ||
+                      Boolean(value) ||
+                      "required",
+                  })}
+                  value={telegramChannelId}
+                  onChange={(event) =>
+                    setValue("telegramChannelId", event.target.value, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
+                >
+                  <option value="">No channel</option>
+                  {ownChannels.map((channel) => (
+                    <option
+                      key={channel.id}
+                      value={channel.id}
+                      {...channelOptionProps(channel)}
+                    >
+                      {channel.title}
+                      {channel.username ? ` (@${channel.username})` : ""}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+            </div>
+          ) : null}
         </div>
         <FormField label="Description">
           <Input {...register("description")} />

@@ -18,7 +18,13 @@ function splitGraphemes(value: string) {
 }
 
 function isEmojiGrapheme(value: string) {
-  return /\p{Extended_Pictographic}/u.test(value);
+  return /\p{Extended_Pictographic}|\p{Regional_Indicator}|[#*0-9]\uFE0F?\u20E3/u.test(
+    value,
+  );
+}
+
+export function extractFirstEmoji(value: string) {
+  return splitGraphemes(value).find(isEmojiGrapheme) ?? null;
 }
 
 function stripLineFormatting(value: string) {
@@ -42,9 +48,7 @@ function stripLineFormatting(value: string) {
       .trim();
   }
 
-  return normalized
-    .replace(/(\*\*|__|~~|`)/gu, "")
-    .trim();
+  return normalized.replace(/(\*\*|__|~~|`)/gu, "").trim();
 }
 
 export function extractAutoPrefilledPostTitle(

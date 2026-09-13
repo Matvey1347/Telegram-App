@@ -30,6 +30,7 @@ import {
   resolveTransactionChannelLink,
   TransactionPurchaseChannelLinks,
 } from './transaction-channel-link';
+import { TransactionInvestmentSyncService } from './transaction-investment-sync.service';
 @Injectable()
 export class TransactionsService {
   private readonly purchaseChannels: TransactionPurchaseChannelLinks;
@@ -45,6 +46,7 @@ export class TransactionsService {
     private transactionCategoryMemberPolicy: TransactionCategoryMemberPolicyService = new TransactionCategoryMemberPolicyService(
       prisma,
     ),
+    private transactionInvestmentSync: TransactionInvestmentSyncService = new TransactionInvestmentSyncService(),
   ) {
     this.purchaseChannels = new TransactionPurchaseChannelLinks(prisma);
   }
@@ -374,6 +376,9 @@ export class TransactionsService {
           purchaseChannel.id,
         );
       }
+      if (category.key === 'investment') {
+        await this.transactionInvestmentSync.syncContribution(tx, transaction);
+      }
       return transaction;
     });
     const [enriched] = await this.purchaseChannels.attach(workspaceId, [
@@ -391,6 +396,8 @@ export class TransactionsService {
       where: { id, workspaceId, deletedAt: null },
       include: {
         memberCompensationSettlement: { select: { id: true } },
+        categoryRef: { select: { key: true } },
+        investment: { select: { id: true, origin: true } },
       },
     });
     if (!existing) throw new NotFoundException('Transaction not found');
@@ -550,6 +557,19 @@ export class TransactionsService {
         transaction.id,
         purchaseChannel?.id ?? null,
       );
+      const wasInvestment =
+        existing.categoryRef?.key === 'investment' ||
+        String(existing.category ?? '')
+          .trim()
+          .toLowerCase() === 'investment';
+      if (category.key === 'investment') {
+        await this.transactionInvestmentSync.syncContribution(tx, transaction);
+      } else if (wasInvestment && existing.investment?.origin === 'EXTERNAL') {
+        await this.transactionInvestmentSync.removeContribution(
+          tx,
+          transaction.id,
+        );
+      }
       return transaction;
     });
     const [enriched] = await this.purchaseChannels.attach(workspaceId, [
@@ -565,6 +585,7 @@ export class TransactionsService {
       where: { id, workspaceId, deletedAt: null },
       include: {
         memberCompensationSettlement: { select: { id: true } },
+        investment: { select: { id: true, origin: true } },
       },
     });
     if (!existing) throw new NotFoundException('Transaction not found');
@@ -579,9 +600,14 @@ export class TransactionsService {
       'finance.deleteOwn',
       'finance.deleteAny',
     );
-    return this.prisma.transaction.update({
-      where: { id },
-      data: { deletedAt: new Date() },
+    return this.prisma.$transaction(async (tx) => {
+      if (existing.investment?.origin === 'EXTERNAL') {
+        await this.transactionInvestmentSync.removeContribution(tx, id);
+      }
+      return tx.transaction.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
     });
   }
 }

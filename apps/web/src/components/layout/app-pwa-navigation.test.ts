@@ -16,10 +16,15 @@ describe("installed Nexeloq navigation", () => {
       ["growth", "/ad-campaigns"],
       ["workspace", "/settings"],
     ]);
-    expect(items.find(({ key }) => key === "telegram")?.active("/telegram-bots"))
-      .toBe(true);
-    expect(items.find(({ key }) => key === "growth")?.active("/ad-sales/crm"))
-      .toBe(true);
+    expect(
+      items.find(({ key }) => key === "telegram")?.active("/telegram-bots"),
+    ).toBe(true);
+    expect(
+      items.find(({ key }) => key === "growth")?.active("/ad-sales/crm"),
+    ).toBe(false);
+    expect(items.find(({ key }) => key === "growth")?.label).toBe(
+      "navigation.ads",
+    );
   });
 
   it("uses the CRM destination when CRM access is available", () => {
@@ -27,5 +32,7 @@ describe("installed Nexeloq navigation", () => {
       ({ key }) => key === "growth",
     );
     expect(growth?.href).toBe("/ad-sales");
+    expect(growth?.label).toBe("navigation.crm");
+    expect(growth?.active("/ad-campaigns")).toBe(false);
   });
 });

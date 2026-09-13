@@ -883,6 +883,28 @@ describe('TelegramChannelsService invite link sync', () => {
     expect((result as Record<string, unknown>).inviteLinks).toBeUndefined();
   });
 
+  it('returns the all-time stored Telegram post count separately from the selected range', async () => {
+    prisma.telegramPost.count
+      .mockResolvedValueOnce(10)
+      .mockResolvedValueOnce(200);
+
+    const result = await service.analytics(
+      'user-1',
+      'channel-1',
+      '2026-07-01',
+      '2026-07-18',
+    );
+
+    expect(result.summary.postsTotal).toBe(10);
+    expect(result.summary.telegramPostsStoredTotal).toBe(200);
+    expect(prisma.telegramPost.count).toHaveBeenLastCalledWith({
+      where: {
+        workspaceId: 'ws-1',
+        telegramChannelId: 'channel-1',
+      },
+    });
+  });
+
   it('persists invite-link history snapshots during syncHistorical remote invite-link syncs', async () => {
     jest
       .spyOn(service as never, 'connectedAccount' as never)

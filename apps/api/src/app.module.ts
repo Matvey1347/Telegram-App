@@ -6,6 +6,7 @@ import { AccountsModule } from './domains/finance/accounts/accounts.module';
 import { AdCampaignsModule } from './domains/growth/ad-campaigns/ad-campaigns.module';
 import { AdHypothesesModule } from './domains/growth/ad-hypotheses/ad-hypotheses.module';
 import { MutualPromotionFoldersModule } from './domains/growth/mutual-promotion-folders/mutual-promotion-folders.module';
+import { CrossPromotionPlansModule } from './domains/growth/cross-promotion-plans/cross-promotion-plans.module';
 import { AdvertisingSourcesModule } from './domains/growth/advertising-sources/advertising-sources.module';
 import { AppController } from './app.controller';
 import { AuthModule } from './domains/identity/auth/auth.module';
@@ -43,6 +44,7 @@ import { TrashModule } from './domains/operations/trash/trash.module';
 import { TelegramCrmModule } from './domains/telegram/telegram-crm/telegram-crm.module';
 import { OperationsNotificationsModule } from './domains/operations/notifications/operations-notifications.module';
 import { MemberFinanceModule } from './domains/finance/member-finance/member-finance.module';
+import { TelegramChannelMessageTemplatesModule } from './domains/telegram/telegram-channel-message-templates/telegram-channel-message-templates.module';
 
 @Module({
   imports: [
@@ -63,12 +65,14 @@ import { MemberFinanceModule } from './domains/finance/member-finance/member-fin
     TransactionsModule,
     TransfersModule,
     TelegramChannelsModule,
+    TelegramChannelMessageTemplatesModule,
     TelegramChannelNetworksModule,
     PromosModule,
     AdvertisingSourcesModule,
     AdCampaignsModule,
     AdHypothesesModule,
     MutualPromotionFoldersModule,
+    CrossPromotionPlansModule,
     DashboardModule,
     GlobalSearchModule,
     FinanceCategoriesModule,

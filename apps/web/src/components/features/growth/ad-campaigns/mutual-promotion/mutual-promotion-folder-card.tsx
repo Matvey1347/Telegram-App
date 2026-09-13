@@ -6,6 +6,11 @@ import { createPortal } from "react-dom";
 import type { MutualPromotionFolderListItem } from "@telegram-system/shared";
 import { ArrowUpRight, CalendarClock } from "lucide-react";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
+import {
+  LifecycleCountdown,
+  type LifecycleCountdownValue,
+} from "@/components/ui/lifecycle-countdown";
+import { useDismissiblePopover } from "@/hooks/use-dismissible-popover";
 import { formatDateTime } from "@/lib/date-format";
 import { MutualPromotionFolderStatusBadge } from "./mutual-promotion-folder-status-badge";
 import { MutualPromotionPaidSubscriberPrice } from "./mutual-promotion-paid-subscriber-price";
@@ -14,9 +19,11 @@ import { MutualPromotionParticipantRoleBadge } from "./mutual-promotion-particip
 export function MutualPromotionFolderCard({
   folder,
   onOpen,
+  now,
 }: {
   folder: MutualPromotionFolderListItem;
   onOpen: () => void;
+  now?: number;
 }) {
   const publisherChannels = folder.channels.filter(
     (channel) => channel.role === "PUBLISHER",
@@ -24,15 +31,18 @@ export function MutualPromotionFolderCard({
   const paidChannels = folder.channels.filter(
     (channel) => channel.role === "PAID",
   );
+  const timer = folderTimer(folder, now ?? new Date(folder.endsAt).getTime());
 
   return (
     <article className="group relative rounded-2xl border border-neutral-800 bg-neutral-950/80 transition duration-200 hover:border-neutral-700">
       <button
         type="button"
-        className="block w-full rounded-t-2xl p-4 pb-0 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-neutral-600"
+        className="absolute inset-0 z-0 rounded-2xl focus-visible:!outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-neutral-600"
         onClick={onOpen}
         aria-label={`Open folder ${folder.title}`}
-      >
+      />
+
+      <div className="pointer-events-none relative z-10 p-4 pb-0">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h3 className="truncate text-base font-semibold text-white">
@@ -44,12 +54,13 @@ export function MutualPromotionFolderCard({
               <span className="text-neutral-600">→</span>
               <span>{formatDateTime(folder.endsAt)}</span>
             </p>
+            <LifecycleCountdown value={timer} className="mt-2" />
           </div>
           <MutualPromotionFolderStatusBadge status={folder.status} />
         </div>
-      </button>
+      </div>
 
-      <div className="mx-4 mt-3 grid grid-cols-3 divide-x divide-white/10 rounded-lg border border-white/5 bg-black/25 py-2 text-center">
+      <div className="pointer-events-none relative z-10 mx-4 mt-3 grid grid-cols-3 divide-x divide-white/10 rounded-lg border border-white/5 bg-black/25 py-2 text-center">
         <Metric value={folder.postCount} label="Posts" />
         <ChannelMetric channels={publisherChannels} label="Publishers" />
         <ChannelMetric channels={paidChannels} label="Paid" />
@@ -57,17 +68,43 @@ export function MutualPromotionFolderCard({
 
       <ChannelPerformance channels={folder.channels} />
 
-      <div className="mt-3 flex justify-end border-t border-white/10 px-4 py-2">
-        <button
-          type="button"
-          onClick={onOpen}
-          className="inline-flex items-center gap-1 text-xs font-medium text-sky-300 transition group-hover:text-sky-200"
-        >
+      <div className="pointer-events-none relative z-10 mt-3 flex justify-end border-t border-white/10 px-4 py-2">
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-sky-300 transition group-hover:text-sky-200">
           Details <ArrowUpRight size={14} />
-        </button>
+        </span>
       </div>
     </article>
   );
+}
+
+function folderTimer(
+  folder: Pick<MutualPromotionFolderListItem, "startsAt" | "endsAt">,
+  now: number,
+): LifecycleCountdownValue {
+  const startsAt = new Date(folder.startsAt).getTime();
+  const endsAt = new Date(folder.endsAt).getTime();
+  if (now < startsAt) {
+    return {
+      phase: "publication",
+      label: `Starts in ${durationLabel(startsAt - now)}`,
+    };
+  }
+  if (now < endsAt) {
+    return {
+      phase: "deletion",
+      label: `Ends in ${durationLabel(endsAt - now)}`,
+    };
+  }
+  return { phase: "complete", label: "Completed" };
+}
+
+function durationLabel(remaining: number) {
+  const seconds = Math.max(0, Math.floor(remaining / 1_000));
+  const days = Math.floor(seconds / 86_400);
+  const hours = Math.floor((seconds % 86_400) / 3_600);
+  const minutes = Math.floor((seconds % 3_600) / 60);
+  const rest = seconds % 60;
+  return `${days ? `${days}d ` : ""}${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
 }
 
 function ChannelPerformance({
@@ -79,7 +116,7 @@ function ChannelPerformance({
 
   return (
     <div
-      className="mx-4 mt-3 divide-y divide-neutral-800 overflow-hidden rounded-lg border border-neutral-800 bg-black/20"
+      className="pointer-events-auto relative z-20 mx-4 mt-3 divide-y divide-neutral-800 overflow-hidden rounded-lg border border-neutral-800 bg-black/20"
       aria-label="Channel performance"
     >
       {channels.map((channel) => (
@@ -165,6 +202,12 @@ function ChannelMetric({
   const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({});
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  useDismissiblePopover({
+    open,
+    onDismiss: () => setOpen(false),
+    triggerRef,
+    contentRef: popoverRef,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -180,29 +223,12 @@ function ChannelMetric({
       );
       setPopoverStyle({ left, top: rect.bottom + 8, width });
     };
-    const closeOnOutsidePress = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (
-        !triggerRef.current?.contains(target) &&
-        !popoverRef.current?.contains(target)
-      ) {
-        setOpen(false);
-      }
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-
     positionPopover();
     window.addEventListener("resize", positionPopover);
     window.addEventListener("scroll", positionPopover, true);
-    document.addEventListener("pointerdown", closeOnOutsidePress);
-    document.addEventListener("keydown", closeOnEscape);
     return () => {
       window.removeEventListener("resize", positionPopover);
       window.removeEventListener("scroll", positionPopover, true);
-      document.removeEventListener("pointerdown", closeOnOutsidePress);
-      document.removeEventListener("keydown", closeOnEscape);
     };
   }, [open]);
 
@@ -215,7 +241,7 @@ function ChannelMetric({
       <button
         ref={triggerRef}
         type="button"
-        className="flex min-h-7 items-center justify-center rounded-lg px-2 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        className="pointer-events-auto flex min-h-11 flex-col items-center justify-center rounded-lg px-2 transition hover:bg-white/5 focus-visible:!outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-neutral-600"
         aria-label={`View ${channels.length} ${label.toLowerCase()} channels`}
         aria-expanded={open}
         aria-haspopup="menu"
@@ -241,8 +267,8 @@ function ChannelMetric({
             +{channels.length - 3}
           </span>
         ) : null}
+        <span className="mt-0.5 text-[11px] text-neutral-500">{label}</span>
       </button>
-      <p className="mt-0.5 text-[11px] text-neutral-500">{label}</p>
 
       {open
         ? createPortal(

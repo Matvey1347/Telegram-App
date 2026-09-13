@@ -59,11 +59,12 @@ export const telegramChannelKeys = {
   list: (archived?: boolean, owned?: boolean) =>
     ["telegram-channels", "list", archived ?? "all", owned ?? "all"] as const,
   details: () => ["telegram-channels", "detail"] as const,
-  select: (params?: { canPostMessagesOnly?: boolean }) =>
+  select: (params?: { canPostMessagesOnly?: boolean; owned?: boolean }) =>
     [
       "telegram-channels",
       "select",
       params?.canPostMessagesOnly ?? null,
+      params?.owned ?? null,
     ] as const,
   selects: () => ["telegram-channels", "select"] as const,
   detail: (channelId: string) =>
@@ -86,6 +87,24 @@ export const telegramChannelKeys = {
     ["telegram-channel-financial-summary", channelId] as const,
   inviteLinks: (channelId: string) =>
     ["telegram-channel-invite-links", channelId] as const,
+  inviteLinkInitial: (channelId: string, selectedId?: string | null) =>
+    [
+      "telegram-channel-invite-links",
+      channelId,
+      "initial",
+      selectedId ?? null,
+    ] as const,
+  inviteLinkOptions: (
+    channelId: string,
+    params?: { availableForCampaignId?: string; all?: boolean },
+  ) =>
+    [
+      "telegram-channel-invite-links",
+      channelId,
+      "options",
+      params?.availableForCampaignId ?? null,
+      params?.all ?? false,
+    ] as const,
   inviteLinksPage: (
     channelId: string,
     page: number,
@@ -202,6 +221,7 @@ export const mutualPromotionFolderKeys = {
     channelIds: string[];
     startsAt?: string;
     endsAt: string;
+    initial?: boolean;
   }) =>
     [
       ...mutualPromotionFolderKeys.inviteOptionsRoot(),
@@ -209,6 +229,7 @@ export const mutualPromotionFolderKeys = {
       input.channelIds,
       input.startsAt ?? null,
       input.endsAt,
+      input.initial ?? false,
     ] as const,
 };
 

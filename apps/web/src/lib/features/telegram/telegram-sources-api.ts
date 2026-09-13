@@ -6,6 +6,7 @@ import type {
   TelegramBotRuntimeEnvironment,
   UpdateTelegramBotRuntimePayload,
   TelegramLoginStartResponse,
+  TelegramChannelSyncProgressItem,
   TelegramQrLoginProgress,
   TelegramQrLoginResult,
 } from "@telegram-system/shared";
@@ -167,11 +168,11 @@ export function createTelegramSourcesApi({
     importChannelsWithProgress: async (
       id: string,
       channels: TelegramAccountChannelImportItem[],
-      onProgress: StreamProgressHandler<{ message?: string }>,
+      onProgress: StreamProgressHandler<TelegramChannelSyncProgressItem>,
     ) =>
       streamProgressAction<
         TelegramUserAccountSyncDialogsResponse,
-        { message?: string }
+        TelegramChannelSyncProgressItem
       >(
         `/telegram-user-accounts/${id}/channels/import-stream`,
         { channels },

@@ -62,12 +62,17 @@ describe("localized auth forms", () => {
   });
 
   it("switches the whole login screen and existing validation errors to Russian", async () => {
-    render(
+    const { container } = render(
       <I18nProvider initialLocale="en" preloadedCatalogs={{ auth: authEn }}>
         <LoginForm />
       </I18nProvider>,
     );
 
+    expect(container.querySelector("main")).toHaveClass(
+      "h-dvh",
+      "overflow-hidden",
+    );
+    expect(screen.getAllByRole("group", { name: "Language" })).toHaveLength(1);
     expect(
       screen.getByRole("heading", { name: "Welcome back" }),
     ).toBeInTheDocument();

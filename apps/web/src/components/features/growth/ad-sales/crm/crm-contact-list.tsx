@@ -13,6 +13,7 @@ import {
   EmptyState,
   Input,
   MasonryGrid,
+  MultiSelect,
 } from "@/components/ui/primitives";
 import {
   Pagination,
@@ -81,6 +82,7 @@ export function CrmContactList({
   const deferredSearch = useDeferredValue(search.trim());
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
+  const [tagIds, setTagIds] = useState<string[]>([]);
   const [localSelectedAction, setLocalSelectedAction] = useState<{
     contactId: string;
     action: CrmContactAction;
@@ -186,8 +188,9 @@ export function CrmContactList({
       search: deferredSearch || undefined,
       stage: !stageFilter || stageFilter === "ALL" ? undefined : stageFilter,
       archived: !stageFilter || stageFilter === "ALL" ? false : undefined,
+      tagIds: tagIds.length ? tagIds : undefined,
     }),
-    [deferredSearch, page, pageSize, stageFilter],
+    [deferredSearch, page, pageSize, stageFilter, tagIds],
   );
   const query = useQuery({
     queryKey: telegramCrmKeys.contactList(params),
@@ -270,6 +273,7 @@ export function CrmContactList({
             value={stageFilter ?? "ALL"}
             onChange={(stage) => {
               setPage(1);
+              setTagIds([]);
               writeCrmContactStagePreference(window.localStorage, stage);
               const next = crmContactStageSearchParams(searchParams, stage);
               router.replace(
@@ -279,16 +283,39 @@ export function CrmContactList({
             }}
           />
         </div>
-        <Input
-          value={search}
-          onChange={(event) => {
-            setSearch(event.target.value);
-            setPage(1);
-          }}
-          placeholder="Search contacts"
-          aria-label="Search contacts"
-          className="w-full shrink-0 lg:max-w-sm"
-        />
+        <div className="flex w-full shrink-0 flex-col gap-2 sm:flex-row lg:max-w-2xl">
+          <MultiSelect
+            value={tagIds}
+            onChange={(value) => {
+              setTagIds(value);
+              setPage(1);
+            }}
+            options={(query.data?.availableTags ?? []).map((tag) => ({
+              value: tag.id,
+              label: `${tag.name} (${tag.contactCount})`,
+              selectedLabel: tag.name,
+              icon: (
+                <span
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: tag.color ?? "#737373" }}
+                />
+              ),
+            }))}
+            placeholder="Filter by tags"
+            searchPlaceholder="Search tags"
+            className="min-w-0 flex-1"
+          />
+          <Input
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
+            placeholder="Search contacts"
+            aria-label="Search contacts"
+            className="min-w-0 flex-1"
+          />
+        </div>
       </div>
       {showContactsSkeleton ? <CrmContactsSkeleton count={pageSize} /> : null}
       {query.error ? (

@@ -25,6 +25,7 @@ export const telegramCrmKeys = {
   contactDetails: () => ["telegram-crm", "contacts", "detail"] as const,
   contactDetail: (contactId: string) =>
     ["telegram-crm", "contacts", "detail", contactId] as const,
+  tags: () => ["telegram-crm", "tags"] as const,
   chatContexts: () => ["telegram-crm", "contacts", "chat-context"] as const,
   chatContext: (contactId: string) =>
     ["telegram-crm", "contacts", "chat-context", contactId] as const,

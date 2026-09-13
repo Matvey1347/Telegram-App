@@ -7,6 +7,7 @@ import {
 } from '../../../common/pagination/pagination.utils';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import {
   TELEGRAM_PRODUCTION_SYSTEM_BOT_SOURCE_ID,
   TelegramSourceAccessService,
@@ -18,6 +19,7 @@ import {
 import { TelegramChannelBookingReadService } from './telegram-channel-booking-read.service';
 import { TelegramChannelAudienceTrendReadService } from './telegram-channel-audience-trend-read.service';
 import { TelegramChannelFinancialReadService } from './telegram-channel-financial-read.service';
+import { DEFAULT_TELEGRAM_CHANNEL_POST_SYNC_LIMIT } from './telegram-channel-sync-limits';
 import { TelegramSystemBotConfigService } from '../telegram-system-bot/telegram-system-bot-config.service';
 
 type TelegramChannelImportPolicyRow = {
@@ -43,24 +45,17 @@ export class TelegramChannelCatalogService {
     private readonly telegramSystemBotConfig: TelegramSystemBotConfigService,
   ) {}
 
-  private readonly defaultPostSyncLimit = 50;
-
-  private readonly initialPostBackfillLimit = 50;
+  private readonly defaultPostSyncLimit =
+    DEFAULT_TELEGRAM_CHANNEL_POST_SYNC_LIMIT;
 
   private telegramChannelSyncScopeColumnsAvailable: boolean | null = null;
 
   public async postSyncLimitForChannel(channelId: string) {
-    const [existingPosts] = await Promise.all([
-      this.prisma.telegramPost.count({
-        where: { telegramChannelId: channelId },
-      }),
-      this.getTelegramChannelImportPolicyRow({
-        channelId,
-      }),
-    ]);
-    return existingPosts > 0
-      ? this.defaultPostSyncLimit
-      : this.initialPostBackfillLimit;
+    const channel = await this.prisma.telegramChannel.findUnique({
+      where: { id: channelId },
+      select: { postSyncLimit: true },
+    });
+    return channel?.postSyncLimit ?? this.defaultPostSyncLimit;
   }
 
   public syncCutoffMetadata(channel: {
@@ -149,6 +144,7 @@ export class TelegramChannelCatalogService {
         this.prisma.telegramChannel.findMany({
           where,
           include: {
+            presentationIcon: true,
             assignedMember: WorkspaceService.assignedMemberInclude,
             createdByUser: WorkspaceService.createdByUserInclude,
             adAnalyses: {
@@ -267,6 +263,7 @@ export class TelegramChannelCatalogService {
         audienceSnapshots,
         adAnalyses,
         _count,
+        presentationIcon,
         ...channelData
       } = channel;
       const audienceTrendPreview = audienceTrendByChannel.get(channel.id);
@@ -323,6 +320,7 @@ export class TelegramChannelCatalogService {
 
       return {
         ...channelData,
+        presentationIconPresentation: iconToResolvedEmoji(presentationIcon),
         timePosts: timePostsByChannel.get(channel.id) ?? [],
         preview: {
           audience,
@@ -385,14 +383,24 @@ export class TelegramChannelCatalogService {
     const workspaceId =
       await this.telegramChannelsSupportService.workspace(userId);
     const channels = await this.prisma.telegramChannel.findMany({
-      where: { workspaceId, isActive: true, archivedAt: null },
+      where: {
+        workspaceId,
+        isActive: true,
+        archivedAt: null,
+        adminLinks: query.owned === true ? { some: {} } : undefined,
+      },
       select: {
         id: true,
         title: true,
         username: true,
         telegramChatId: true,
         photoUrl: true,
+        currentSubscribersCount: true,
+        ownViewsPerPost: true,
         isActive: true,
+        adminLinks: {
+          select: { id: true, telegramUserAccountIntegrationId: true },
+        },
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
@@ -428,6 +436,10 @@ export class TelegramChannelCatalogService {
 
         return {
           ...channel,
+          username: channel.username ?? undefined,
+          telegramChatId: channel.telegramChatId ?? undefined,
+          photoUrl: channel.photoUrl ?? undefined,
+          currentSubscribersCount: channel.currentSubscribersCount ?? undefined,
           timePosts: timePostsByChannel.get(channel.id) ?? [],
           canPostMessages: Boolean(publishingCapabilities.source),
           publishingCapabilities,
@@ -445,6 +457,8 @@ export class TelegramChannelCatalogService {
       (this.prisma.telegramChannel as any).findFirst({
         where: { id, workspaceId },
         include: {
+          presentationIcon: true,
+          defaultInviteLink: true,
           adminLinks: { include: { telegramUserAccountIntegration: true } },
           assignedMember: WorkspaceService.assignedMemberInclude,
           createdByUser: WorkspaceService.createdByUserInclude,
@@ -514,6 +528,9 @@ export class TelegramChannelCatalogService {
     }
     return {
       ...channel,
+      presentationIconPresentation: iconToResolvedEmoji(
+        channel.presentationIcon,
+      ),
       acquisitionType: importPolicy?.acquisitionType ?? 'CREATED',
       postsSyncFrom: importPolicy?.postsSyncFrom ?? null,
       inviteLinksSyncFrom: importPolicy?.inviteLinksSyncFrom ?? null,

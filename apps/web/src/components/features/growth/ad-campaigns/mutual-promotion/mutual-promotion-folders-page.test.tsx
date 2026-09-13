@@ -135,6 +135,10 @@ describe("MutualPromotionFoldersPage", () => {
       </QueryClientProvider>,
     );
 
+    expect(
+      screen.queryByText("One schedule, many publishing channels"),
+    ).not.toBeInTheDocument();
+
     await user.click(
       await screen.findByRole("button", {
         name: "Open folder Completed folder",

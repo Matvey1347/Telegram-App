@@ -8,11 +8,8 @@ import {
   effectiveCampaignJoinedSubscribers,
   effectiveCampaignPendingSubscribers,
 } from '../../../common/analytics/channel-financial-summary';
-import {
-  createPaginatedResponse,
-  normalizePagination,
-} from '../../../common/pagination/pagination.utils';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
+import { withWorkspaceMemberAvatar } from '../../../common/workspace-member-presentation';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateAdHypothesisDto } from './dto/create-ad-hypothesis.dto';
@@ -20,12 +17,9 @@ import {
   AD_HYPOTHESIS_STATUSES,
   UpdateAdHypothesisDto,
 } from './dto/update-ad-hypothesis.dto';
-import {
-  AD_HYPOTHESIS_DETAIL_INCLUDE,
-  AD_HYPOTHESIS_LIST_SELECT,
-} from './ad-hypothesis-read-selects';
-import { buildAdHypothesisListWhere } from './ad-hypothesis-list-query';
+import { AD_HYPOTHESIS_DETAIL_INCLUDE } from './ad-hypothesis-read-selects';
 import { AdHypothesisQueryDto } from './dto/ad-hypothesis-query.dto';
+import { AdSystemHypothesesService } from './ad-system-hypotheses.service';
 
 type KpiStatus = 'good' | 'acceptable' | 'bad' | 'unknown';
 type HypothesisStatus = (typeof AD_HYPOTHESIS_STATUSES)[number];
@@ -35,6 +29,7 @@ export class AdHypothesesService {
   constructor(
     private prisma: PrismaService,
     private workspaceService: WorkspaceService,
+    private systemHypothesesService: AdSystemHypothesesService,
   ) {}
   private workspace(userId: string) {
     return this.workspaceService.resolveWorkspaceIdForUser(userId);
@@ -660,7 +655,7 @@ export class AdHypothesesService {
       createdAt: hypothesis.createdAt,
       updatedAt: hypothesis.updatedAt,
       assignedMemberId: hypothesis.assignedMemberId,
-      assignedMember: hypothesis.assignedMember,
+      assignedMember: withWorkspaceMemberAvatar(hypothesis.assignedMember),
       createdByUserId: hypothesis.createdByUserId,
       createdByUser: hypothesis.createdByUser,
       allCampaignsExcludedFromAnalytics:
@@ -684,22 +679,13 @@ export class AdHypothesesService {
 
   async list(userId: string, query: AdHypothesisQueryDto = {}) {
     const workspaceId = await this.workspace(userId);
-    const pagination = normalizePagination(query);
-    const where = buildAdHypothesisListWhere(workspaceId, query);
-    const [hypotheses, totalItems] = await Promise.all([
-      (this.prisma.adHypothesis as any).findMany({
-        where,
-        select: AD_HYPOTHESIS_LIST_SELECT,
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        skip: pagination.skip,
-        take: pagination.take,
-      }),
-      this.prisma.adHypothesis.count({ where }),
-    ]);
-    const items = hypotheses.map((hypothesis: any) =>
-      this.enrichHypothesis(hypothesis, false),
+    return this.systemHypothesesService.listPage(
+      workspaceId,
+      query,
+      (campaign) => this.campaignSummary(campaign),
+      (summaries, channel) => this.aggregateSummary(summaries, channel),
+      (hypothesis) => this.enrichHypothesis(hypothesis, false),
     );
-    return createPaginatedResponse(items, totalItems, pagination);
   }
 
   async getById(userId: string, hypothesisId: string) {
@@ -863,14 +849,19 @@ export class AdHypothesesService {
   }
 
   async inviteLinkHistory(userId: string, hypothesisId: string) {
-    const hypothesis = (await this.getById(userId, hypothesisId)) as any;
+    const workspaceId = await this.workspace(userId);
+    const hypothesis =
+      (await this.systemHypothesesService.resolveInviteLinkHistoryScope(
+        workspaceId,
+        hypothesisId,
+      )) ?? ((await this.getById(userId, hypothesisId)) as any);
     const campaignIds = (hypothesis.campaigns || []).map(
       (campaign: any) => campaign.id,
     );
     const rowsAsc = campaignIds.length
       ? await this.prisma.telegramInviteLinkSnapshot.findMany({
           where: {
-            workspaceId: await this.workspace(userId),
+            workspaceId,
             adCampaignId: { in: campaignIds },
           },
           orderBy: [{ syncedAt: 'asc' }, { inviteLinkId: 'asc' }],

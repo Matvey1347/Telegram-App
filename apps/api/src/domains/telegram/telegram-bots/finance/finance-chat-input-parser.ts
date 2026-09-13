@@ -17,6 +17,7 @@ export type FinanceChatCommand =
   | 'accounts'
   | 'categories'
   | 'transfer'
+  | 'assistant'
   | 'settings'
   | 'help';
 
@@ -35,7 +36,7 @@ export function parseFinanceChatCommand(
   const match = input
     .trim()
     .match(
-      /^\/(start|income|expense|recent|accounts|categories|transfer|settings|help)(?:@[^\s]+)?(?:\s+.*)?$/iu,
+      /^\/(start|income|expense|recent|accounts|categories|transfer|assistant|settings|help)(?:@[^\s]+)?(?:\s+.*)?$/iu,
     );
   return match ? (match[1].toLowerCase() as FinanceChatCommand) : null;
 }
@@ -47,6 +48,7 @@ const menuCommands: Array<[FinanceChatCommand, Parameters<typeof t>[1]]> = [
   ['accounts', 'menuAccounts'],
   ['categories', 'menuCategories'],
   ['transfer', 'menuTransfer'],
+  ['assistant', 'menuAssistant'],
   ['settings', 'menuSettings'],
   ['help', 'menuHelp'],
 ];

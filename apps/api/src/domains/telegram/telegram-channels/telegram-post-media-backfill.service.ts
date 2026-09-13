@@ -3,7 +3,7 @@ import { Prisma, TelegramUserAccountStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   B2ObjectStorageService,
-  isSupportedImmutableImageMimeType,
+  isSupportedImmutableMediaMimeType,
 } from '../../../common/object-storage/b2-object-storage.service';
 import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
 import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
@@ -55,11 +55,7 @@ export class TelegramPostMediaBackfillService {
     await this.migrateManagedPostDataUrls(filters, remaining, summary);
     const synchronizedLimit = Math.max(0, remaining - summary.considered);
     if (synchronizedLimit > 0) {
-      await this.backfillSynchronizedPosts(
-        filters,
-        synchronizedLimit,
-        summary,
-      );
+      await this.backfillSynchronizedPosts(filters, synchronizedLimit, summary);
     }
     return summary;
   }
@@ -169,12 +165,8 @@ export class TelegramPostMediaBackfillService {
       cursor = rows.at(-1)?.id;
       processed += rows.length;
       summary.considered += rows.length;
-      const images = rows.filter((row) =>
-        /photo|image/i.test(row.mediaKind || ''),
-      );
-      summary.unsupportedMedia += rows.length - images.length;
-      const byChannel = new Map<string, typeof images>();
-      for (const row of images) {
+      const byChannel = new Map<string, typeof rows>();
+      for (const row of rows) {
         const key = `${row.workspaceId}:${row.telegramChannelId}`;
         byChannel.set(key, [...(byChannel.get(key) ?? []), row]);
       }
@@ -191,21 +183,42 @@ export class TelegramPostMediaBackfillService {
             channel: first.telegramChannel,
             messageIds: channelRows.map((row) => row.telegramMessageId),
           });
-          const imageMedia = downloaded.filter((item) =>
-            isSupportedImmutableImageMimeType(item.mimeType),
+          const supportedMedia = downloaded.filter((item) =>
+            isSupportedImmutableMediaMimeType(item.mimeType),
           );
-          const stored = await this.storage.persistImmutableImages(
-            imageMedia.map((item) => ({
-              bytes: item.buffer,
-              mimeType: item.mimeType,
-            })),
-          );
-          const urlByMessageId = new Map(
-            imageMedia.map((item, index) => [
-              item.messageId,
-              stored.urls[index],
-            ]),
-          );
+          summary.unsupportedMedia += downloaded.length - supportedMedia.length;
+          const urlByMessageId = new Map<string, string>();
+          let uploaded = 0;
+          let reused = 0;
+          try {
+            const stored = await this.storage.persistImmutableMedia(
+              supportedMedia.map((item) => ({
+                bytes: item.buffer,
+                mimeType: item.mimeType,
+              })),
+            );
+            supportedMedia.forEach((item, index) => {
+              urlByMessageId.set(item.messageId, stored.urls[index]);
+            });
+            uploaded += stored.uploaded;
+            reused += stored.reused;
+          } catch (error) {
+            this.warn(first.telegramChannelId, error);
+            for (const item of supportedMedia) {
+              try {
+                const stored = await this.storage.persistImmutableMedia([
+                  { bytes: item.buffer, mimeType: item.mimeType },
+                ]);
+                if (stored.urls[0]) {
+                  urlByMessageId.set(item.messageId, stored.urls[0]);
+                }
+                uploaded += stored.uploaded;
+                reused += stored.reused;
+              } catch (itemError) {
+                this.warn(item.messageId, itemError);
+              }
+            }
+          }
           for (const row of channelRows) {
             const url = urlByMessageId.get(row.telegramMessageId);
             if (!url) {
@@ -218,8 +231,8 @@ export class TelegramPostMediaBackfillService {
             });
             summary.telegramDownloaded += 1;
           }
-          summary.b2Uploaded += stored.uploaded;
-          summary.b2Reused += stored.reused;
+          summary.b2Uploaded += uploaded;
+          summary.b2Reused += reused;
         } catch (error) {
           summary.failed += channelRows.length;
           this.warn(first.telegramChannelId, error);
@@ -239,24 +252,23 @@ export class TelegramPostMediaBackfillService {
       select: { telegramUserAccountIntegrationId: true },
     });
     if (!linkedAdmin) throw new Error('No connected Telegram account.');
-    const account =
-      await this.prisma.telegramUserAccountIntegration.findFirst({
-        where: {
-          id: linkedAdmin.telegramUserAccountIntegrationId,
-          workspaceId,
-          isActive: true,
-          status: TelegramUserAccountStatus.connected,
-        },
-        select: {
-          apiId: true,
-          apiHashEncrypted: true,
-          apiHashIv: true,
-          apiHashAuthTag: true,
-          sessionEncrypted: true,
-          sessionIv: true,
-          sessionAuthTag: true,
-        },
-      });
+    const account = await this.prisma.telegramUserAccountIntegration.findFirst({
+      where: {
+        id: linkedAdmin.telegramUserAccountIntegrationId,
+        workspaceId,
+        isActive: true,
+        status: TelegramUserAccountStatus.connected,
+      },
+      select: {
+        apiId: true,
+        apiHashEncrypted: true,
+        apiHashIv: true,
+        apiHashAuthTag: true,
+        sessionEncrypted: true,
+        sessionIv: true,
+        sessionAuthTag: true,
+      },
+    });
     if (
       !account?.sessionEncrypted ||
       !account.sessionIv ||

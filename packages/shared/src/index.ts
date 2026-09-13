@@ -32,6 +32,8 @@ export * from "./types/resolved-emoji";
 export * from "./types/telegram-custom-emoji";
 export * from "./types/editor-shortcuts";
 export * from "./types/mutual-promotion-folders";
+export * from "./types/cross-promotion-plans";
+export * from "./types/telegram-channel-message-templates";
 export * from "./title-template";
 export * from "./telegram-spoilers";
 export * from "./telegram-managed-markup";

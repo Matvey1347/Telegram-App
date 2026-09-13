@@ -3,6 +3,8 @@ import {
   BadRequestException,
   Injectable,
 } from '@nestjs/common';
+import { FinanceAiProvider } from '@prisma/client';
+import type { ConsumerFinanceAssistantScreen } from '@telegram-system/shared';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import {
   AI_MODEL_POLICY,
@@ -57,6 +59,7 @@ const assistantRouteSchema = {
         'categories',
         'budget',
         'reminders',
+        'billing',
         null,
       ],
     },
@@ -68,7 +71,7 @@ const assistantRouteSchema = {
   },
 };
 
-const ASSISTANT_SCREENS = new Set([
+const ASSISTANT_SCREENS = new Set<ConsumerFinanceAssistantScreen>([
   'transactions',
   'transfers',
   'debts',
@@ -80,6 +83,7 @@ const ASSISTANT_SCREENS = new Set([
   'categories',
   'budget',
   'reminders',
+  'billing',
 ]);
 
 /** On-demand generated interpretation. Deterministic facts stay in Analytics. */
@@ -180,7 +184,11 @@ export class FinanceAiAnalyticsService {
     text: string;
     history: Array<{ role: 'user' | 'assistant'; text: string }>;
     facts: Record<string, unknown>;
-    reservationId: string;
+    reservationId?: string;
+    usageContext: {
+      workspaceId: string;
+      telegramBotUserId: string;
+    };
   }) {
     const startedAt = Date.now();
     const model = AI_MODEL_POLICY.FINANCE_ANALYSIS;
@@ -205,7 +213,7 @@ export class FinanceAiAnalyticsService {
         schemaName: 'finance_assistant_route',
         maxOutputTokens: 900,
         instructions:
-          `You are the primary interface to a personal-finance system. Respond in ${input.locale}. ` +
+          `You are Jarvis, the calm and precise primary interface to a personal-finance system. Introduce yourself as Jarvis only when the user asks who you are. Respond in ${input.locale}. ` +
           'Choose RECORD when the user describes one or more concrete money movements with enough amount, currency, ownership and account context to prepare ledger entries, and return those entries in operations. Use accountHint only for an exact available account name from the supplied context. Resolve dates using the supplied context and never invent an account. ' +
           'Choose CLARIFICATION and ask one focused question when a safe record is missing amount, currency, account, ownership, personal share, participants, or whether money is income, reimbursement, pass-through, debt, transfer, subscription, saving, or investment. ' +
           'Choose GUIDANCE when the user needs a dedicated feature and set recommendedScreen: transfers for movement between own accounts; debts for amounts owed; regular-payments for subscriptions; investments; savings; accounts; categories; budget; reminders; otherwise transactions. Explain why that function fits. ' +
@@ -231,7 +239,9 @@ export class FinanceAiAnalyticsService {
         (parsed.kind !== 'RECORD' && parsed.operations.length) ||
         (parsed.recommendedScreen !== null &&
           parsed.recommendedScreen !== undefined &&
-          !ASSISTANT_SCREENS.has(parsed.recommendedScreen)) ||
+          !ASSISTANT_SCREENS.has(
+            parsed.recommendedScreen as ConsumerFinanceAssistantScreen,
+          )) ||
         (parsed.kind === 'GUIDANCE' && !parsed.recommendedScreen)
       )
         throw new BadGatewayException(
@@ -243,7 +253,8 @@ export class FinanceAiAnalyticsService {
       return {
         kind: parsed.kind,
         message: parsed.message.trim(),
-        recommendedScreen: parsed.recommendedScreen || null,
+        recommendedScreen:
+          (parsed.recommendedScreen as ConsumerFinanceAssistantScreen) || null,
         operations: parsed.operations,
       };
     } catch (error) {
@@ -256,18 +267,31 @@ export class FinanceAiAnalyticsService {
         'Finance assistant timed out or returned invalid output',
       );
     } finally {
-      await this.prisma.aiUsageEvent.update({
-        where: { id: input.reservationId },
-        data: {
-          ...priceAiUsage(model, {
-            inputTokens: usage?.input_tokens,
-            cachedInputTokens: usage?.input_tokens_details?.cached_tokens,
-            outputTokens: usage?.output_tokens,
-          }),
-          latencyMs: Date.now() - startedAt,
-          status,
-        },
+      const priced = priceAiUsage(model, {
+        inputTokens: usage?.input_tokens,
+        cachedInputTokens: usage?.input_tokens_details?.cached_tokens,
+        outputTokens: usage?.output_tokens,
       });
+      if (input.reservationId)
+        await this.prisma.aiUsageEvent.update({
+          where: { id: input.reservationId },
+          data: { ...priced, latencyMs: Date.now() - startedAt, status },
+        });
+      else
+        await this.prisma.aiUsageEvent.create({
+          data: {
+            workspaceId: input.usageContext.workspaceId,
+            botIntegrationId: input.botIntegrationId,
+            telegramBotUserId: input.usageContext.telegramBotUserId,
+            profileId: input.profileId,
+            feature: 'AI_INPUT',
+            provider: FinanceAiProvider.OPENAI,
+            model,
+            ...priced,
+            latencyMs: Date.now() - startedAt,
+            status,
+          },
+        });
     }
   }
 }

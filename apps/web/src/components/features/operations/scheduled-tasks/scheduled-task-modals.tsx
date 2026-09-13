@@ -10,6 +10,7 @@ import {
   LoadingState,
   Modal,
   Select,
+  TimeInput,
 } from "@/components/ui/primitives";
 import type {
   ScheduledTaskRunSummary,
@@ -130,8 +131,7 @@ function EditTaskForm({
       </FormField>
       {schedule.frequency === "DAILY" ? (
         <FormField label="Time">
-          <Input
-            type="time"
+          <TimeInput
             value={schedule.time}
             onChange={(event) =>
               setSchedule({ ...schedule, time: event.target.value })

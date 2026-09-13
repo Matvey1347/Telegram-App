@@ -123,6 +123,7 @@ export type TelegramChannelAnalyticsSummary = {
   inviteLinksCount: number;
   campaignsCount: number;
   postsTotal: number;
+  telegramPostsStoredTotal: number;
   viewsTotal: number;
   forwardsTotal: number;
   reactionsTotal: number;

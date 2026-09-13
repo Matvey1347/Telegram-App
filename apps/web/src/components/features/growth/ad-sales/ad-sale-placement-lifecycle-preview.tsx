@@ -5,7 +5,7 @@ import type { TelegramAdSaleListItem } from "@telegram-system/shared";
 import { Hourglass, Timer, Trash2 } from "lucide-react";
 import type { TelegramChannel } from "@/lib/api";
 import { formatDateTime } from "@/lib/date-format";
-import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
+import { TelegramChannelAvatarList } from "@/components/features/telegram/telegram/telegram-channel-avatar-list";
 import {
   hasLinkedPlacementPost,
   placementFormatLabel,
@@ -74,64 +74,11 @@ function ChannelPreview({
       photoUrl: channel?.photoUrl ?? null,
     };
   });
-  if (channels.length === 1)
-    return (
-      <div className="flex min-w-0 items-center gap-2">
-        <TelegramEntityAvatar
-          imageUrl={channels[0].photoUrl}
-          kind="channel"
-          alt={channels[0].title}
-          size="xs"
-        />
-        <span className="truncate text-xs font-medium text-neutral-300">
-          {channels[0].title}
-        </span>
-      </div>
-    );
   return (
-    <details
-      className="group relative w-fit"
-      onClick={(event) => event.stopPropagation()}
-    >
-      <summary
-        aria-label={`Show ${channels.length} placement channels`}
-        className="flex cursor-pointer list-none items-center gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-blue-500 [&::-webkit-details-marker]:hidden"
-      >
-        <span className="flex -space-x-2">
-          {channels.slice(0, 3).map((channel) => (
-            <span
-              key={channel.id}
-              className="rounded-full ring-2 ring-[#111111]"
-            >
-              <TelegramEntityAvatar
-                imageUrl={channel.photoUrl}
-                kind="channel"
-                alt={channel.title}
-                size="xs"
-              />
-            </span>
-          ))}
-        </span>
-        <span className="text-xs font-medium text-neutral-300">
-          {channels.length} channels
-        </span>
-      </summary>
-      <div className="absolute left-0 top-full z-30 mt-2 min-w-56 space-y-1 rounded-lg border border-neutral-700 bg-neutral-950 p-2 shadow-xl">
-        {channels.map((channel) => (
-          <div key={channel.id} className="flex items-center gap-2 px-1 py-1">
-            <TelegramEntityAvatar
-              imageUrl={channel.photoUrl}
-              kind="channel"
-              alt={channel.title}
-              size="xs"
-            />
-            <span className="whitespace-nowrap text-xs text-neutral-200">
-              {channel.title}
-            </span>
-          </div>
-        ))}
-      </div>
-    </details>
+    <TelegramChannelAvatarList
+      channels={channels}
+      ariaLabel={`Show ${channels.length} placement channels`}
+    />
   );
 }
 

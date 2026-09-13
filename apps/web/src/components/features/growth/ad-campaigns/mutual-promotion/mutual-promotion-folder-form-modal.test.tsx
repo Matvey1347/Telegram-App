@@ -39,7 +39,11 @@ describe("MutualPromotionFolderFormModal drafts", () => {
 
     renderModal();
     expect(await screen.findByText("September exchange")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Continue draft" }));
+    const continueButton = screen.getByRole("button", {
+      name: "Continue draft September exchange",
+    });
+    expect(continueButton).toHaveTextContent("");
+    fireEvent.click(continueButton);
     expect(
       screen.getByPlaceholderText("September // [date-range]"),
     ).toHaveValue("September exchange");
@@ -69,9 +73,11 @@ describe("MutualPromotionFolderFormModal drafts", () => {
     );
     renderModal();
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Delete draft Delete me" }),
-    );
+    const deleteButton = await screen.findByRole("button", {
+      name: "Delete draft Delete me",
+    });
+    expect(deleteButton).toHaveClass("border-red-700", "text-red-300");
+    fireEvent.click(deleteButton);
     expect(
       window.localStorage.getItem("mutual-promotion-folder:draft:default"),
     ).toBeNull();

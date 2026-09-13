@@ -25,6 +25,7 @@ import {
 } from './invite-link-history';
 import { AdCampaignListReadService } from './ad-campaign-list-read.service';
 import { GrowthInviteLinkReservationService } from '../invite-link-reservation.service';
+import { adsChannelWhere } from '../ads-channel-scope';
 @Injectable()
 export class AdCampaignsService {
   private campaignPromoStorageState: 'unknown' | 'available' | 'missing' =
@@ -1673,7 +1674,10 @@ export class AdCampaignsService {
     const where: any = {
       workspaceId,
       excludeFromAnalytics: false,
-      telegramChannelId: query.channelId || undefined,
+      telegramChannelId: adsChannelWhere(
+        query.channelId,
+        query.telegramChannelIds,
+      ),
       placementDate: {
         gte: query.dateFrom ? new Date(query.dateFrom) : undefined,
         lte: query.dateTo ? new Date(query.dateTo) : undefined,

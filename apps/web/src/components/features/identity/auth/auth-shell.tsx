@@ -18,7 +18,7 @@ export function AuthShell({
 }) {
   const { t } = useI18n();
   return (
-    <main className="grid min-h-screen bg-neutral-950 text-neutral-100 lg:grid-cols-[minmax(340px,0.85fr)_minmax(480px,1.15fr)]">
+    <main className="grid h-dvh overflow-hidden bg-neutral-950 text-neutral-100 lg:grid-cols-[minmax(340px,0.85fr)_minmax(480px,1.15fr)]">
       <section className="relative hidden overflow-hidden border-r border-neutral-800 bg-neutral-900/55 p-10 lg:flex lg:flex-col lg:justify-between">
         <div
           aria-hidden="true"
@@ -40,14 +40,14 @@ export function AuthShell({
         </div>
         <p className="relative z-10 text-xs text-neutral-600">© Nexeloq</p>
       </section>
-      <section className="relative flex min-h-screen items-center justify-center px-4 py-8 sm:px-8">
-        <div className="absolute right-4 top-4 sm:right-8 sm:top-6">
-          <AuthLanguageSwitcher />
-        </div>
-        <div className="w-full max-w-md">
-          <Link href="/" className="mb-8 inline-flex lg:hidden">
-            <SystemBrandLogo />
-          </Link>
+      <section className="relative flex h-dvh items-center justify-center overflow-y-auto overscroll-contain px-[max(1rem,env(safe-area-inset-left))] pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] sm:px-8 sm:py-6">
+        <div className="w-full max-w-md py-1 sm:py-4">
+          <div className="mb-5 flex items-center justify-between gap-4 lg:absolute lg:right-[max(1rem,env(safe-area-inset-right))] lg:top-[max(1rem,env(safe-area-inset-top))] lg:mb-0">
+            <Link href="/" className="inline-flex min-w-0 lg:hidden">
+              <SystemBrandLogo />
+            </Link>
+            <AuthLanguageSwitcher />
+          </div>
           <div className="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-5 shadow-2xl shadow-black/20 sm:p-7">
             <h1 className="text-2xl font-semibold text-white">{title}</h1>
             <p className="mt-2 text-sm leading-6 text-neutral-400">

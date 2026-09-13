@@ -1,4 +1,5 @@
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { AdCampaignsTable } from "@/components/features/growth/ad-campaigns/campaigns-table";
 import type { AdCampaign } from "@/lib/api";
@@ -21,13 +22,13 @@ function campaign(overrides: Partial<AdCampaign> = {}): AdCampaign {
   };
 }
 
-function renderTable(campaigns: AdCampaign[]) {
+function renderTable(campaigns: AdCampaign[], showActions = false) {
   return renderWithProviders(
     <AdCampaignsTable
       campaigns={campaigns}
       moneySettings={{ currencyDisplayMode: "code" }}
       rates={[]}
-      showActions={false}
+      showActions={showActions}
       showHypotheses={false}
     />,
   );
@@ -89,6 +90,61 @@ describe("AdCampaignsTable admission view analytics", () => {
     ]);
 
     expect(screen.getByText(/Drop from peak 20 · 18\.2%/)).toBeInTheDocument();
+    expect(screen.queryByText("Pending 0")).not.toBeInTheDocument();
+  });
+
+  it("opens trend from a metric chip and from the row actions menu", async () => {
+    const user = userEvent.setup();
+    const row = campaign({
+      inviteLinks: [
+        {
+          id: "link-1",
+          joinedCount: 80,
+          requestedCount: 0,
+        } as NonNullable<AdCampaign["inviteLinks"]>[number],
+      ],
+      inviteLinkHistory: {
+        campaign: { id: "campaign-1", title: "Campaign" },
+        inviteLinks: [],
+        points: [],
+        summary: {
+          currentJoinedCount: 80,
+          currentRequestedCount: 0,
+          currentTotalAttributed: 80,
+          peakJoinedCount: 100,
+          peakRequestedCount: 0,
+          peakTotalAttributed: 100,
+          drawdownFromPeak: 20,
+          drawdownPercent: 20,
+          hasHighDropoff: true,
+          inviteLinksCount: 1,
+        },
+      },
+      inviteLinkHistorySummary: {
+        currentJoinedCount: 80,
+        currentRequestedCount: 0,
+        currentTotalAttributed: 80,
+        peakJoinedCount: 100,
+        peakRequestedCount: 0,
+        peakTotalAttributed: 100,
+        drawdownFromPeak: 20,
+        drawdownPercent: 20,
+        hasHighDropoff: true,
+        inviteLinksCount: 1,
+      },
+    });
+    const firstRender = renderTable([row], true);
+
+    await user.click(screen.getByRole("button", { name: "Peak 100" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    firstRender.unmount();
+
+    renderTable([row], true);
+    await user.click(
+      screen.getByRole("button", { name: "Actions for Campaign" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Open trend" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
   it("renders exact batch uplift, estimated active and activation", () => {
@@ -179,7 +235,9 @@ describe("AdCampaignsTable admission view analytics", () => {
     ]);
 
     expect(screen.getByText("Reconstructed")).toBeInTheDocument();
-    expect(screen.getByText(/Joined before first tracked sync/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Joined before first tracked sync/),
+    ).toBeInTheDocument();
     expect(screen.getByText(/Observed view growth/)).toBeInTheDocument();
     expect(screen.getByText(/Activation estimate 29.0%/)).toBeInTheDocument();
   });
@@ -219,7 +277,9 @@ describe("AdCampaignsTable admission view analytics", () => {
     expect(
       screen.getByText(/View growth: not enough historical post data/),
     ).toBeInTheDocument();
-    expect(screen.getByText("Not enough historical post measurements.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Not enough historical post measurements."),
+    ).toBeInTheDocument();
   });
 
   it("does not render the block when no batch exists", () => {

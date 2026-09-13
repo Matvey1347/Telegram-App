@@ -21,6 +21,30 @@ describe('installDevelopmentConnectionDrain', () => {
     expect(socket.destroy).toHaveBeenCalledTimes(1);
   });
 
+  it('bounds a development shutdown when an async lifecycle hook hangs', () => {
+    jest.useFakeTimers();
+    const signals = new EventEmitter();
+    const server = new EventEmitter() as EventEmitter & {
+      closeAllConnections: jest.Mock;
+    };
+    server.closeAllConnections = jest.fn();
+    const forceExit = jest.fn();
+    installDevelopmentConnectionDrain(
+      server as never,
+      'development',
+      signals,
+      forceExit,
+    );
+
+    signals.emit('SIGTERM');
+    jest.advanceTimersByTime(1_499);
+    expect(forceExit).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(1);
+
+    expect(forceExit).toHaveBeenCalledWith(0);
+    jest.useRealTimers();
+  });
+
   it('keeps production shutdown graceful', () => {
     const signals = new EventEmitter();
     const server = {

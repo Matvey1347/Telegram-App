@@ -63,6 +63,24 @@ function setup(
 }
 
 describe('TelegramChannelGptContextExporter', () => {
+  it('exports synchronized Telegram media links with their Telegram media kind', async () => {
+    const { exporter, prisma } = setup();
+    prisma.telegramPost.findMany.mockResolvedValueOnce([
+      {
+        ...syncedPost,
+        hasMedia: true,
+        mediaKind: 'MessageMediaDocument',
+        imageUrls: ['https://cdn.test/animation.mp4'],
+      },
+    ]);
+
+    const result = await exporter.export('user-1', 'channel-1');
+    const text = result.buffer.toString('utf8');
+
+    expect(text).toContain('media_kind: MessageMediaDocument');
+    expect(text).toContain('media_urls:\n- https://cdn.test/animation.mp4');
+  });
+
   it('builds a compact channel acronym and download-time filename', () => {
     const downloadedAt = new Date(2026, 7, 22, 9, 5);
 

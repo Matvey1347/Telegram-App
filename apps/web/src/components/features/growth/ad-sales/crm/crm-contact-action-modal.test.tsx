@@ -39,7 +39,7 @@ vi.mock("@/lib/api", () => ({
     listSalesPage: mocks.listSalesPage,
     deleteSale: vi.fn(),
   },
-  telegramChannelsApi: { list: mocks.listChannels },
+  telegramChannelsApi: { select: mocks.listChannels },
 }));
 
 vi.mock("./crm-conversations", () => ({

@@ -6,6 +6,7 @@ type Translation = Record<string, Message>;
 
 const en = {
   menuOpen: '📱 Open Finance',
+  menuAssistant: '🤖 Jarvis',
   menuExpense: '💸 Add expense',
   menuIncome: '💰 Add income',
   menuRecent: '🧾 Recent',
@@ -15,7 +16,14 @@ const en = {
   menuSettings: '⚙️ Settings',
   menuHelp: '❓ Help',
   welcome:
-    '👋 Welcome to Finance\n\nRecord a transaction here in seconds, or open the Mini App for accounts, categories, budget, and insights.',
+    '👋 Hi, I’m Jarvis, your Finance assistant.\n\nSend me a normal message, voice note, or receipt. I can answer finance questions and prepare operations, but I never save money changes without your confirmation.',
+  assistantIntro:
+    '🤖 I’m Jarvis. Ask me about your finances, describe a payment in plain language, send a voice note or receipt, or ask where to find a feature. Every money change stays a reviewable proposal until you confirm it.',
+  assistantError:
+    'Jarvis could not process that message. Try again or use a quick entry such as “250 coffee”.',
+  assistantLimit:
+    'Your current Jarvis message limit is used up. Quick amount input still works, or you can choose a plan with more access.',
+  openRecommended: 'Open recommended section',
   reminderNotification: ({ name, amount, currency }) =>
     `Reminder: ${name}\n${amount} ${currency}`,
   incomeHelp: '💰 Add income\n\nSend it as: +125.50 client payment',
@@ -206,6 +214,7 @@ const en = {
 
 const uk = {
   menuOpen: '📱 Відкрити Finance',
+  menuAssistant: '🤖 Джаврис',
   menuExpense: '💸 Додати витрату',
   menuIncome: '💰 Додати дохід',
   menuRecent: '🧾 Останні',
@@ -215,7 +224,14 @@ const uk = {
   menuSettings: '⚙️ Налаштування',
   menuHelp: '❓ Допомога',
   welcome:
-    '👋 Вітаємо у Finance\n\nДодавайте операції за секунди або відкрийте Mini App для рахунків, категорій, бюджету й аналітики.',
+    '👋 Вітаємо! Я Джаврис, ваш асистент у Finance.\n\nНадішліть звичайне повідомлення, голосове або чек. Я відповідаю на фінансові запитання й готую операції, але не зберігаю зміни без вашого підтвердження.',
+  assistantIntro:
+    '🤖 Я Джаврис. Запитайте мене про свої фінанси, опишіть платіж звичайними словами, надішліть голосове чи чек або запитайте, де знайти потрібну функцію. Кожна фінансова зміна лишається пропозицією, доки ви її не підтвердите.',
+  assistantError:
+    'Джаврис не зміг обробити повідомлення. Спробуйте ще раз або скористайтеся швидким записом, наприклад «250 кава».',
+  assistantLimit:
+    'Ліміт повідомлень Джаврису у вашому тарифі вичерпано. Швидкий запис суми працює й далі, або можна обрати тариф із більшим доступом.',
+  openRecommended: 'Відкрити рекомендований розділ',
   reminderNotification: ({ name, amount, currency }) =>
     `Нагадування: ${name}\n${amount} ${currency}`,
   incomeHelp: '💰 Додати дохід\n\nНадішліть: +125.50 оплата клієнта',
@@ -404,6 +420,7 @@ const uk = {
 
 const ru = {
   menuOpen: '📱 Открыть Finance',
+  menuAssistant: '🤖 Джаврис',
   menuExpense: '💸 Добавить расход',
   menuIncome: '💰 Добавить доход',
   menuRecent: '🧾 Последние',
@@ -413,7 +430,14 @@ const ru = {
   menuSettings: '⚙️ Настройки',
   menuHelp: '❓ Помощь',
   welcome:
-    '👋 Добро пожаловать в Finance\n\nДобавляйте операции за секунды или откройте Mini App для счетов, категорий, бюджета и аналитики.',
+    '👋 Добро пожаловать! Я Джаврис, ваш ассистент в Finance.\n\nПришлите обычное сообщение, голосовое или чек. Я отвечаю на финансовые вопросы и готовлю операции, но не сохраняю изменения без вашего подтверждения.',
+  assistantIntro:
+    '🤖 Я Джаврис. Спросите меня о своих финансах, опишите платёж обычными словами, пришлите голосовое или чек либо спросите, где найти нужную функцию. Каждое финансовое изменение остаётся предложением, пока вы его не подтвердите.',
+  assistantError:
+    'Джаврис не смог обработать сообщение. Попробуйте снова или используйте быстрый ввод, например «250 кофе».',
+  assistantLimit:
+    'Лимит сообщений Джаврису на вашем тарифе исчерпан. Быстрый ввод суммы продолжает работать, либо можно выбрать тариф с большим доступом.',
+  openRecommended: 'Открыть рекомендованный раздел',
   reminderNotification: ({ name, amount, currency }) =>
     `Напоминание: ${name}\n${amount} ${currency}`,
   incomeHelp: '💰 Добавить доход\n\nОтправьте: +125.50 оплата клиента',

@@ -48,8 +48,12 @@ describe("ChannelActionsMenu", () => {
       screen.getByRole("button", { name: "Actions for Freudzone" }),
     );
     expect(screen.getByText("Sync channel")).toBeInTheDocument();
-    expect(screen.getByText("Edit economics")).toBeInTheDocument();
-    expect(screen.getByText("Bot connection")).toBeInTheDocument();
+    const settingsAction = screen.getByText("Settings").closest("button");
+    expect(settingsAction).toBeInTheDocument();
+    expect(settingsAction?.querySelector(".lucide-settings")).not.toBeNull();
+    expect(screen.queryByText("Edit economics")).not.toBeInTheDocument();
+    expect(screen.queryByText("Channel appearance")).not.toBeInTheDocument();
+    expect(screen.queryByText("Bot connection")).not.toBeInTheDocument();
     expect(screen.getByText("Archive channel")).toBeInTheDocument();
     expect(screen.getByText("Delete channel")).toBeInTheDocument();
     const menu = screen.getByRole("menu");
@@ -59,10 +63,8 @@ describe("ChannelActionsMenu", () => {
     const labels = Array.from(menu.querySelectorAll("a,button")).map((item) =>
       item.textContent?.trim(),
     );
-    expect(labels.indexOf("Edit economics")).toBe(labels.indexOf("Posts") + 1);
-    expect(labels.indexOf("Edit economics")).toBeLessThan(
-      labels.indexOf("Sources"),
-    );
+    expect(labels.indexOf("Settings")).toBe(labels.indexOf("Posts") + 1);
+    expect(labels.indexOf("Settings")).toBeLessThan(labels.indexOf("Sources"));
 
     await userEvent.click(screen.getByText("Sync channel"));
     expect(sync).toHaveBeenCalledOnce();

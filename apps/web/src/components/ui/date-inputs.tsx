@@ -7,6 +7,52 @@ import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { uiCopy, type UiLocale } from "@/lib/ui-i18n";
 import { useOptionalI18n } from "@/providers/i18n-provider";
 
+function useFixedPopoverPosition(
+  open: boolean,
+  rootRef: React.RefObject<HTMLElement | null>,
+  widthLimit: number,
+  estimatedHeight: number,
+) {
+  const [style, setStyle] = useState<React.CSSProperties | null>(null);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const recalculate = () => {
+      const root = rootRef.current;
+      if (!root) return;
+      const rect = root.getBoundingClientRect();
+      const padding = 8;
+      const gap = 4;
+      const width = Math.min(widthLimit, window.innerWidth - padding * 2);
+      const below = window.innerHeight - rect.bottom - gap - padding;
+      const above = rect.top - gap - padding;
+      const openUp = below < estimatedHeight && above > below;
+      setStyle({
+        position: "fixed",
+        left: Math.min(
+          Math.max(rect.right - width, padding),
+          window.innerWidth - width - padding,
+        ),
+        ...(openUp
+          ? { bottom: window.innerHeight - rect.top + gap }
+          : { top: rect.bottom + gap }),
+        width,
+        maxHeight: Math.max(
+          180,
+          Math.min(estimatedHeight, openUp ? above : below),
+        ),
+      });
+    };
+    recalculate();
+    window.addEventListener("resize", recalculate);
+    window.addEventListener("scroll", recalculate, true);
+    return () => {
+      window.removeEventListener("resize", recalculate);
+      window.removeEventListener("scroll", recalculate, true);
+    };
+  }, [estimatedHeight, open, rootRef, widthLimit]);
+  return style;
+}
+
 export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   const i18n = useOptionalI18n();
   const locale =
@@ -19,11 +65,12 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
     return `${y}-${m}-${d}`;
   };
   const [open, setOpen] = useState(false);
-  const [openUp, setOpenUp] = useState(false);
   const [value, setValue] = useState(
     String(props.value ?? props.defaultValue ?? ""),
   );
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const popoverStyle = useFixedPopoverPosition(open, rootRef, 300, 340);
 
   useEffect(() => {
     if (props.value !== undefined) setValue(String(props.value || ""));
@@ -37,47 +84,17 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   useEffect(() => {
     const onDocClick = (event: MouseEvent) => {
       if (!rootRef.current) return;
-      if (!rootRef.current.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (
+        !rootRef.current.contains(target) &&
+        !popoverRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    const recalc = () => {
-      if (!rootRef.current) return;
-      const rect = rootRef.current.getBoundingClientRect();
-      let boundaryTop = 0;
-      let boundaryBottom = window.innerHeight;
-      let ancestor = rootRef.current.parentElement;
-      while (ancestor) {
-        const overflowY = window.getComputedStyle(ancestor).overflowY;
-        if (
-          overflowY === "auto" ||
-          overflowY === "scroll" ||
-          overflowY === "hidden"
-        ) {
-          const boundary = ancestor.getBoundingClientRect();
-          boundaryTop = Math.max(0, boundary.top);
-          boundaryBottom = Math.min(window.innerHeight, boundary.bottom);
-          break;
-        }
-        ancestor = ancestor.parentElement;
-      }
-      const estimatedHeight = 340;
-      const spaceBelow = boundaryBottom - rect.bottom;
-      const spaceAbove = rect.top - boundaryTop;
-      setOpenUp(spaceBelow < estimatedHeight && spaceAbove > spaceBelow);
-    };
-    recalc();
-    window.addEventListener("resize", recalc);
-    window.addEventListener("scroll", recalc, true);
-    return () => {
-      window.removeEventListener("resize", recalc);
-      window.removeEventListener("scroll", recalc, true);
-    };
-  }, [open]);
 
   const commit = (next: string) => {
     setValue(next);
@@ -126,7 +143,7 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
 
   return (
     <div ref={rootRef} className="relative">
-      <input type="hidden" {...(props as any)} value={value} />
+      <input {...(props as any)} type="hidden" value={value} />
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -137,89 +154,96 @@ export function DateInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
         </span>
         <CalendarDays size={16} className="text-neutral-400" />
       </button>
-      {open ? (
-        <div
-          className={`absolute z-50 w-[min(300px,calc(100vw-2rem))] rounded-lg border border-neutral-700 bg-neutral-900 p-3 shadow-xl ${openUp ? "bottom-full mb-1" : "mt-1"}`}
-        >
-          <div className="mb-2 flex items-center justify-between">
-            <button
-              type="button"
-              className="rounded p-1 hover:bg-neutral-800"
-              onClick={() =>
-                setCursor(
-                  new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1),
-                )
-              }
+      {open && popoverStyle
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              role="dialog"
+              aria-label={ui.selectStartDate}
+              style={popoverStyle}
+              className="z-[220] overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 p-3 shadow-xl"
             >
-              <ChevronLeft size={16} />
-            </button>
-            <p className="text-sm font-medium">
-              {cursor.toLocaleString(locale, {
-                month: "long",
-                year: "numeric",
-              })}
-            </p>
-            <button
-              type="button"
-              className="rounded p-1 hover:bg-neutral-800"
-              onClick={() =>
-                setCursor(
-                  new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1),
-                )
-              }
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-          <div className="mb-1 grid grid-cols-7 gap-1 text-center text-xs text-neutral-400">
-            {(locale === "ru-RU"
-              ? ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
-              : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
-            ).map((d) => (
-              <span key={d}>{d}</span>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-1">
-            {cells.map((cell) => {
-              const selected = cell.iso === selectedIso;
-              return (
+              <div className="mb-2 flex items-center justify-between">
                 <button
-                  key={`${cell.iso}-${cell.day}`}
                   type="button"
+                  className="rounded p-1 hover:bg-neutral-800"
+                  onClick={() =>
+                    setCursor(
+                      new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1),
+                    )
+                  }
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <p className="text-sm font-medium">
+                  {cursor.toLocaleString(locale, {
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </p>
+                <button
+                  type="button"
+                  className="rounded p-1 hover:bg-neutral-800"
+                  onClick={() =>
+                    setCursor(
+                      new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1),
+                    )
+                  }
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+              <div className="mb-1 grid grid-cols-7 gap-1 text-center text-xs text-neutral-400">
+                {(locale === "ru-RU"
+                  ? ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+                  : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+                ).map((d) => (
+                  <span key={d}>{d}</span>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {cells.map((cell) => {
+                  const selected = cell.iso === selectedIso;
+                  return (
+                    <button
+                      key={`${cell.iso}-${cell.day}`}
+                      type="button"
+                      onClick={() => {
+                        commit(cell.iso);
+                        setOpen(false);
+                      }}
+                      className={`rounded px-1 py-1.5 text-sm ${selected ? "bg-blue-600 text-white" : cell.muted ? "text-neutral-500 hover:bg-neutral-800" : "text-white hover:bg-neutral-800"}`}
+                    >
+                      {cell.day}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-2 flex justify-between text-xs">
+                <button
+                  type="button"
+                  className="text-neutral-400 hover:text-white"
+                  onClick={() => commit("")}
+                >
+                  {ui.clear}
+                </button>
+                <button
+                  type="button"
+                  className="text-blue-300 hover:text-blue-200"
                   onClick={() => {
-                    commit(cell.iso);
+                    const now = new Date();
+                    const iso = formatLocalDate(now);
+                    commit(iso);
                     setOpen(false);
                   }}
-                  className={`rounded px-1 py-1.5 text-sm ${selected ? "bg-blue-600 text-white" : cell.muted ? "text-neutral-500 hover:bg-neutral-800" : "text-white hover:bg-neutral-800"}`}
                 >
-                  {cell.day}
+                  {ui.today}
                 </button>
-              );
-            })}
-          </div>
-          <div className="mt-2 flex justify-between text-xs">
-            <button
-              type="button"
-              className="text-neutral-400 hover:text-white"
-              onClick={() => commit("")}
-            >
-              {ui.clear}
-            </button>
-            <button
-              type="button"
-              className="text-blue-300 hover:text-blue-200"
-              onClick={() => {
-                const now = new Date();
-                const iso = formatLocalDate(now);
-                commit(iso);
-                setOpen(false);
-              }}
-            >
-              {ui.today}
-            </button>
-          </div>
-        </div>
-      ) : null}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -293,9 +317,7 @@ export function DateRangeInput({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
-  const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties | null>(
-    null,
-  );
+  const popoverStyle = useFixedPopoverPosition(open, rootRef, 320, 360);
   const [cursor, setCursor] = useState(() => {
     const base = from || to;
     const date = base ? new Date(`${base}T00:00:00`) : new Date();
@@ -317,48 +339,6 @@ export function DateRangeInput({
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
-
-  useLayoutEffect(() => {
-    if (!open) return;
-    const recalc = () => {
-      if (!rootRef.current) return;
-      const rect = rootRef.current.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-      const viewportPadding = 8;
-      const gap = 4;
-      const width = Math.min(320, viewportWidth - viewportPadding * 2);
-      const estimatedHeight = 360;
-      const spaceBelow = viewportHeight - rect.bottom - gap - viewportPadding;
-      const spaceAbove = rect.top - gap - viewportPadding;
-      const openUp = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
-      const left = Math.min(
-        Math.max(rect.right - width, viewportPadding),
-        viewportWidth - width - viewportPadding,
-      );
-      const maxHeight = Math.max(
-        180,
-        Math.min(estimatedHeight, openUp ? spaceAbove : spaceBelow),
-      );
-
-      setPopoverStyle({
-        position: "fixed",
-        left,
-        ...(openUp
-          ? { bottom: viewportHeight - rect.top + gap }
-          : { top: rect.bottom + gap }),
-        width,
-        maxHeight,
-      });
-    };
-    recalc();
-    window.addEventListener("resize", recalc);
-    window.addEventListener("scroll", recalc, true);
-    return () => {
-      window.removeEventListener("resize", recalc);
-      window.removeEventListener("scroll", recalc, true);
-    };
-  }, [open]);
 
   const start = from && to && from > to ? to : from;
   const end = from && to && from > to ? from : to;
@@ -402,7 +382,7 @@ export function DateRangeInput({
               role="dialog"
               aria-label={ui.selectPeriod}
               style={popoverStyle}
-              className="z-[120] overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 p-3 shadow-xl"
+              className="z-[220] overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 p-3 shadow-xl"
             >
               <div className="mb-2 flex items-center justify-between">
                 <button

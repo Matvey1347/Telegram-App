@@ -1,8 +1,8 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderHeart, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import type {
   CreateMutualPromotionFolderPayload,
   CreateMutualPromotionPostPayload,
@@ -28,7 +28,6 @@ import { AppShell } from "@/components/layout/app-shell";
 import { PageTabHead } from "@/components/layout/page-tab-head";
 import {
   Button,
-  Card,
   EmptyState,
   ErrorState,
   LoadingState,
@@ -41,6 +40,7 @@ import { MutualPromotionFolderDetailSkeletonModal } from "./mutual-promotion-fol
 import { MutualPromotionInviteLinksEditor } from "./mutual-promotion-invite-links-editor";
 import { MutualPromotionFolderCard } from "./mutual-promotion-folder-card";
 import { useAppToast } from "@/providers/toast-provider";
+import { adsSectionHeader } from "../ads-section-header";
 
 const listParams = { page: 1, pageSize: 100 } as const;
 
@@ -56,6 +56,12 @@ export function MutualPromotionFoldersPage({
     useState<MutualPromotionFolderDetail | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [inviteLinksEditorOpen, setInviteLinksEditorOpen] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const foldersQuery = useQuery({
     queryKey: mutualPromotionFolderKeys.list(listParams),
@@ -74,8 +80,8 @@ export function MutualPromotionFoldersPage({
   });
   const workspaceTimezone = meQuery.data?.workspace.timezone || "Europe/Warsaw";
   const channelsQuery = useQuery({
-    queryKey: telegramChannelKeys.list(false, true),
-    queryFn: () => telegramChannelsApi.listWithCounts(false, true),
+    queryKey: telegramChannelKeys.select({ owned: true }),
+    queryFn: () => telegramChannelsApi.select({ owned: true }),
     enabled: resourcesEnabled,
     staleTime: 60_000,
   });
@@ -256,13 +262,14 @@ export function MutualPromotionFoldersPage({
     expenseMutation.isError
       ? "The folder action could not be completed. Check its current status and try again."
       : null;
+  const header = adsSectionHeader("mutual-folders");
 
   return (
     <AppShell>
       <PageTabHead title="Mutual promotion" emoji="🤝" color="#2563eb" />
       <PageHeader
-        title="Mutual-promotion folders"
-        subtitle="Coordinate shared publication schedules, invite-link attribution, and paid participation across your channels."
+        title={header.title}
+        subtitle={header.subtitle}
         action={
           <Button
             type="button"
@@ -272,27 +279,11 @@ export function MutualPromotionFoldersPage({
               setFormOpen(true);
             }}
           >
-            <Plus size={18} /> Create folder
+            <Plus size={18} /> {header.actionLabel}
           </Button>
         }
       />
       {sectionTabs}
-
-      <Card className="mb-5 border-blue-900/60 bg-blue-950/15">
-        <div className="flex items-start gap-3">
-          <FolderHeart className="mt-0.5 shrink-0 text-blue-300" size={20} />
-          <div>
-            <p className="font-medium text-white">
-              One schedule, many publishing channels
-            </p>
-            <p className="mt-1 text-sm text-neutral-300">
-              At the end time, published Telegram messages are removed
-              automatically while folder content, delivery history, statistics,
-              and transactions remain in the system.
-            </p>
-          </div>
-        </div>
-      </Card>
 
       {foldersQuery.isLoading ? (
         <LoadingState text="Loading mutual-promotion folders…" />
@@ -309,6 +300,7 @@ export function MutualPromotionFoldersPage({
             <MutualPromotionFolderCard
               key={item.id}
               folder={item}
+              now={now}
               onOpen={() => setSelectedFolderId(item.id)}
             />
           ))}
@@ -321,7 +313,7 @@ export function MutualPromotionFoldersPage({
           open
           folder={editingFolder}
           timezone={workspaceTimezone}
-          channels={channelsQuery.data?.items ?? []}
+          channels={channelsQuery.data ?? []}
           accounts={accountsQuery.data ?? []}
           resourcesLoading={
             meQuery.isLoading ||

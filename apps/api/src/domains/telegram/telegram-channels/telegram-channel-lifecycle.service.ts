@@ -103,8 +103,45 @@ export class TelegramChannelLifecycleService {
               dto.assignedMemberId,
             )
           ).assignedMemberId;
+    const [presentationIcon, defaultInviteLink] = await Promise.all([
+      dto.presentationIconId
+        ? this.prisma.icon.findFirst({
+            where: {
+              id: dto.presentationIconId,
+              type: 'emoji',
+              OR: [{ workspaceId }, { workspaceId: null }],
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+      dto.defaultInviteLinkId
+        ? this.prisma.telegramInviteLink.findFirst({
+            where: {
+              id: dto.defaultInviteLinkId,
+              workspaceId,
+              telegramChannelId: id,
+              isRevoked: false,
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+    ]);
+    if (dto.presentationIconId && !presentationIcon) {
+      throw new BadRequestException('Channel emoji is unavailable');
+    }
+    if (dto.defaultInviteLinkId && !defaultInviteLink) {
+      throw new BadRequestException(
+        'Default invite link must belong to this channel',
+      );
+    }
     const { timePosts: _timePosts, ...channelUpdateData } = dto;
     void _timePosts;
+    if (dto.seedDisabled) {
+      channelUpdateData.seedSubscribersCount = 0;
+      channelUpdateData.knownFakeSubscribersCount = 0;
+      channelUpdateData.ownViewsPerPost = 0;
+      channelUpdateData.ownReactionsPerPost = 0;
+    }
     const normalizedTimePosts = dto.timePosts?.map((item, index) => ({
       id: randomUUID(),
       title: String(item.title || '').trim(),

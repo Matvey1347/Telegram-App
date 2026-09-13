@@ -1,6 +1,11 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { FinanceAiProviderService } from '../ai/finance-ai.provider';
+import { FinanceEntitlementService } from '../billing/finance-entitlement.service';
 import { FinanceProposalService } from '../chat-flows/finance-proposal.service';
 
 type AssistantIdentity = {
@@ -17,6 +22,7 @@ export class FinanceAssistantEntryService {
     private readonly prisma: PrismaService,
     private readonly ai: FinanceAiProviderService,
     private readonly proposals: FinanceProposalService,
+    private readonly entitlements: FinanceEntitlementService,
   ) {}
 
   async fromText(identity: AssistantIdentity, text: string) {
@@ -36,6 +42,11 @@ export class FinanceAssistantEntryService {
       throw new BadRequestException('File is required');
     const profile = await this.profile(identity.profileId);
     const mime = file.mimetype.toLowerCase();
+    if (
+      !mime.startsWith('image/') &&
+      !(await this.entitlements.hasCapability(identity, 'VOICE_INPUT'))
+    )
+      throw new ForbiddenException('Voice input requires Pro or Ultimate');
     const operations = mime.startsWith('image/')
       ? await this.ai.extractReceipt({
           profileId: identity.profileId,

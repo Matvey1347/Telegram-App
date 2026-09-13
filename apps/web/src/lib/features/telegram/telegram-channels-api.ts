@@ -39,6 +39,7 @@ import type {
   TelegramChannelAudienceSnapshot,
   TelegramChannelFinancialSummary,
   TelegramChannelImportPayload,
+  TelegramChannelBatchImportResult,
   TelegramChannelSelectOption,
   TelegramChannelSourceAccess,
   TelegramInviteLink,
@@ -116,7 +117,10 @@ export function createTelegramChannelsApi({
 }) {
   const telegramChannelsApi = {
     ...crud<TelegramChannel>("/telegram-channels"),
-    select: async (params?: { canPostMessagesOnly?: boolean }) =>
+    select: async (params?: {
+      canPostMessagesOnly?: boolean;
+      owned?: boolean;
+    }) =>
       (
         await api.get<TelegramChannelSelectOption[]>(
           "/telegram-channels/select",
@@ -198,6 +202,14 @@ export function createTelegramChannelsApi({
           silentFeedbackConfig,
         )
       ).data,
+    registerInviteLink: async (id: string, url: string) =>
+      (
+        await api.post<{ id: string }>(
+          `/telegram-channels/${id}/invite-links/register`,
+          { url },
+          quietMutationConfig,
+        )
+      ).data,
     import: async (payload: TelegramChannelImportPayload) =>
       (
         await api.post<ImportedTelegramSource>(
@@ -215,6 +227,24 @@ export function createTelegramChannelsApi({
         payload,
         onProgress,
       ),
+    importBatchWithProgress: async (
+      inputs: string[],
+      onProgress: StreamProgressHandler<{
+        input: string;
+        success: boolean;
+        channelId?: string;
+        error?: string;
+      }>,
+    ) =>
+      streamProgressAction<
+        TelegramChannelBatchImportResult,
+        {
+          input: string;
+          success: boolean;
+          channelId?: string;
+          error?: string;
+        }
+      >("/telegram-channels/import-batch-stream", { inputs }, onProgress),
     export: async (id: string) =>
       (
         await api.get<Blob>(`/telegram-channels/${id}/export`, {

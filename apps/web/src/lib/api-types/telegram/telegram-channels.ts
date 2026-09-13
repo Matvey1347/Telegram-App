@@ -86,11 +86,17 @@ export type TelegramChannel = EntityAssignment & {
   lastEntityResolvedAt?: string | null;
   inviteLink?: string;
   description?: string;
+  tgStatUrl?: string | null;
+  presentationIconId?: string | null;
+  presentationIconPresentation?: ResolvedEmoji | null;
+  defaultInviteLinkId?: string | null;
   language?: string;
   niche?: string;
   currentSubscribersCount?: number;
   seedSubscribersCount?: number;
+  seedDisabled?: boolean;
   activeSubscribersWindow?: number;
+  postSyncLimit?: number;
   knownFakeSubscribersCount?: number;
   ownViewsPerPost?: number;
   ownReactionsPerPost?: number;
@@ -184,10 +190,16 @@ export type TelegramChannel = EntityAssignment & {
 export type TelegramChannelSelectOption = {
   id: string;
   title: string;
-  username?: string | null;
-  telegramChatId?: string | null;
-  photoUrl?: string | null;
+  username?: string;
+  telegramChatId?: string;
+  photoUrl?: string;
+  currentSubscribersCount?: number;
+  ownViewsPerPost?: number;
   isActive: boolean;
+  adminLinks?: Array<{
+    id: string;
+    telegramUserAccountIntegrationId: string;
+  }>;
   timePosts?: TelegramChannelTimePost[];
   canPostMessages: boolean;
   publishingCapabilities: TelegramPublishingCapabilities;
@@ -242,6 +254,11 @@ export type TelegramChannelImportPayload = {
   postsSyncFrom?: string | null;
   inviteLinksSyncFrom?: string | null;
   purchaseTransactionId?: string | null;
+};
+
+export type TelegramChannelBatchImportResult = {
+  channels: TelegramChannel[];
+  failures: Array<{ input: string; error: string }>;
 };
 
 export type TelegramAccountChannelImportItem = {

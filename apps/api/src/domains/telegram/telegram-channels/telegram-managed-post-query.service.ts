@@ -13,6 +13,7 @@ import { TelegramManagedPostGroupPresentationService } from './telegram-managed-
 import { TelegramManagedPostSyntheticReadService } from './telegram-managed-post-synthetic-read.service';
 import {
   telegramPostEngagementMetrics,
+  telegramPostMediaPresentation,
   telegramPostEngagementSelect,
   telegramPostTitle,
   telegramPostUrl,
@@ -206,9 +207,7 @@ export class TelegramManagedPostQueryService {
       formattedText: post.formattedText,
       hasMedia: post.hasMedia,
       mediaKind: post.mediaKind,
-      imageUrls: (post.imageUrls ?? []).filter((url) =>
-        /^https?:\/\//i.test(url),
-      ),
+      ...telegramPostMediaPresentation(post),
       buttonRows: [],
       status: TelegramManagedPostStatus.PUBLISHED,
       scheduledAt: null,

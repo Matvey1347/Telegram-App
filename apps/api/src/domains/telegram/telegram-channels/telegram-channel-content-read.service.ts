@@ -9,6 +9,7 @@ import { TelegramChannelAccessService } from './telegram-channel-access.service'
 import { TelegramChannelAnalyticsService } from './telegram-channel-analytics.service';
 import { TelegramChannelCatalogService } from './telegram-channel-catalog.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
+import { telegramPostMediaPresentation } from './telegram-post-engagement';
 
 @Injectable()
 export class TelegramChannelContentReadService {
@@ -99,15 +100,17 @@ export class TelegramChannelContentReadService {
       this.prisma.telegramPost.count({ where }),
     ]);
     return createPaginatedResponse(
-      items.map((post) => ({
-        ...post,
-        imageUrls: post.imageUrls.filter((url) => /^https?:\/\//i.test(url)),
-        primaryTelegramMessageUrl:
-          this.telegramChannelAccessService.telegramMessageUrl(
-            channel,
-            post.telegramMessageId,
-          ),
-      })),
+      items.map((post) => {
+        return {
+          ...post,
+          ...telegramPostMediaPresentation(post),
+          primaryTelegramMessageUrl:
+            this.telegramChannelAccessService.telegramMessageUrl(
+              channel,
+              post.telegramMessageId,
+            ),
+        };
+      }),
       totalItems,
       pagination,
     );
@@ -180,6 +183,7 @@ export class TelegramChannelContentReadService {
       dailyStats,
       postsAggregate,
       postsTotal,
+      telegramPostsStoredTotal,
       inviteLinksAggregate,
       inviteLinksCount,
       financialSummary,
@@ -211,6 +215,12 @@ export class TelegramChannelContentReadService {
           workspaceId,
           telegramChannelId: channelId,
           postDate: { gte: effectiveFromDate, lte: safeToDate },
+        },
+      }),
+      this.prisma.telegramPost.count({
+        where: {
+          workspaceId,
+          telegramChannelId: channelId,
         },
       }),
       this.prisma.telegramInviteLink.aggregate({
@@ -256,6 +266,7 @@ export class TelegramChannelContentReadService {
         inviteLinksCount,
         campaignsCount: financialSummary.campaignsCount,
         postsTotal,
+        telegramPostsStoredTotal,
         viewsTotal: Number(postsAggregate._sum.viewsCount || 0),
         forwardsTotal: Number(postsAggregate._sum.forwardsCount || 0),
         reactionsTotal: Number(postsAggregate._sum.reactionsCount || 0),

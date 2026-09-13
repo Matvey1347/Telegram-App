@@ -17,6 +17,7 @@ describe("Finance mobile navigation", () => {
         screen="home"
         copy={financeCoreCopy("en")}
         onNavigate={onNavigate}
+        onOpenAssistant={vi.fn()}
       />,
     );
 
@@ -25,6 +26,7 @@ describe("Finance mobile navigation", () => {
       "page",
     );
     expect(screen.getByRole("button", { name: "Transactions" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Jarvis" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Accounts" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "More" }));
@@ -48,6 +50,23 @@ describe("Finance mobile navigation", () => {
     expect(onNavigate).toHaveBeenCalledWith("accounts");
     expect(screen.queryByRole("button", { name: "Accounts" })).toBeNull();
     expect(document.body.style.overflow).toBe("");
+  });
+
+  it("opens Jarvis from the bottom bar without changing screens", () => {
+    const onNavigate = vi.fn();
+    const onOpenAssistant = vi.fn();
+    render(
+      <FinanceMobileNavigation
+        screen="home"
+        copy={financeCoreCopy("en")}
+        onNavigate={onNavigate}
+        onOpenAssistant={onOpenAssistant}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Jarvis" }));
+    expect(onOpenAssistant).toHaveBeenCalledTimes(1);
+    expect(onNavigate).not.toHaveBeenCalled();
   });
 
   it("traps sheet focus, closes on Escape and restores the More trigger", async () => {

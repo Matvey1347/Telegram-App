@@ -1,7 +1,8 @@
 "use client";
 
 import { MoreVertical } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
+import { useDismissiblePopover } from "@/hooks/use-dismissible-popover";
 
 export function ActionMenu({
   label,
@@ -18,22 +19,11 @@ export function ActionMenu({
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const close = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("pointerdown", close);
-    document.addEventListener("keydown", escape);
-    return () => {
-      document.removeEventListener("pointerdown", close);
-      document.removeEventListener("keydown", escape);
-    };
-  }, [open]);
+  useDismissiblePopover({
+    open,
+    onDismiss: () => setOpen(false),
+    triggerRef: root,
+  });
 
   return (
     <div ref={root} className="relative shrink-0">

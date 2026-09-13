@@ -95,6 +95,7 @@ export class TelegramChannelsService {
   financialSummary: TelegramChannelInsightsService['financialSummary'];
   updatePostManualMetrics: TelegramChannelInsightsService['updatePostManualMetrics'];
   importChannel: TelegramChannelImportService['importChannel'];
+  importChannels: TelegramChannelImportService['importChannels'];
   syncNow: TelegramChannelSyncOrchestrator['syncNow'];
   deepSync: TelegramChannelDeepSyncService['deepSync'];
   syncHistorical: TelegramChannelHistoricalSyncService['syncHistorical'];
@@ -231,6 +232,7 @@ export class TelegramChannelsService {
     this.updatePostManualMetrics =
       insights.updatePostManualMetrics.bind(insights);
     this.importChannel = channelImport.importChannel.bind(channelImport);
+    this.importChannels = channelImport.importChannels.bind(channelImport);
     this.syncNow = sync.syncNow.bind(sync);
     this.deepSync = deepSync.deepSync.bind(deepSync);
     this.syncHistorical = historical.syncHistorical.bind(historical);

@@ -3,6 +3,7 @@ import { zonedDateTimeToUtc } from '../telegram-ad-sales/domain/timezone';
 import {
   telegramSystemBotPostJson,
   telegramSystemBotPostPayload,
+  isTelegramSystemBotModalImport,
   type TelegramSystemBotCapturedPostContent,
   type TelegramSystemBotPostFlowScope,
   type TelegramSystemBotPostWorkflow,
@@ -110,7 +111,7 @@ export async function transitionTelegramSystemBotCapturedContent(input: {
       expectedVersion: active.version,
       step: sameAlbum
         ? active.step
-        : payload.destination === 'AD_SALE_MODAL'
+        : isTelegramSystemBotModalImport(payload.destination)
           ? 'CHOOSE_ACTION'
           : 'CHOOSE_CHANNEL',
       payload: telegramSystemBotPostJson({ ...payload, content }),

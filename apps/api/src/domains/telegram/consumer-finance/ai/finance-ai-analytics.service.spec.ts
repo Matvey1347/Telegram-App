@@ -10,7 +10,10 @@ describe('FinanceAiAnalyticsService', () => {
 
   function setup() {
     const prisma = {
-      aiUsageEvent: { update: jest.fn().mockResolvedValue({}) },
+      aiUsageEvent: {
+        update: jest.fn().mockResolvedValue({}),
+        create: jest.fn().mockResolvedValue({}),
+      },
     };
     const credentials = {
       key: jest.fn().mockResolvedValue('openai-key'),
@@ -119,6 +122,10 @@ describe('FinanceAiAnalyticsService', () => {
         history: [],
         facts: { accountBalances: [], recentTransactions: [] },
         reservationId: 'reservation-1',
+        usageContext: {
+          workspaceId: 'workspace-1',
+          telegramBotUserId: 'user-1',
+        },
       }),
     ).resolves.toEqual({
       kind: 'GUIDANCE',

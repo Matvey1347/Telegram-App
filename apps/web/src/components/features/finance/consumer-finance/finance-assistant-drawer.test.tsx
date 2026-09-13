@@ -15,9 +15,50 @@ vi.mock("@/lib/features/finance/consumer-finance-assistant-api", () => ({
   },
 }));
 
-beforeEach(() => vi.clearAllMocks());
+vi.mock("@/lib/features/finance/consumer-finance-planning-api", () => ({
+  consumerFinancePlanningApi: {
+    entitlements: vi.fn().mockResolvedValue({
+      tier: "FREE",
+      capabilities: [],
+      usage: [
+        {
+          feature: "AI_INPUT",
+          used: 0,
+          limit: 10,
+          remaining: 10,
+          resetAt: null,
+        },
+      ],
+      activeUntil: null,
+      cancelAtPeriodEnd: false,
+    }),
+  },
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  window.localStorage.clear();
+});
 
 describe("FinanceAssistantDrawer", () => {
+  it("keeps the localized message field on one line", () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <FinanceAssistantDrawer
+          botId="bot"
+          locale="uk"
+          open
+          onOpenChange={vi.fn()}
+          onNavigate={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    const composer = screen.getByLabelText("Повідомлення Джаврису…");
+    expect(composer).toHaveAttribute("wrap", "off");
+    expect(composer).toHaveClass("min-w-0", "whitespace-nowrap");
+  });
+
   it("answers questions without writing an operation", async () => {
     vi.mocked(consumerFinanceAssistantApi.message).mockResolvedValue({
       kind: "ANSWER",
@@ -25,11 +66,16 @@ describe("FinanceAssistantDrawer", () => {
     });
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <FinanceAssistantDrawer botId="bot" locale="en" onNavigate={vi.fn()} />
+        <FinanceAssistantDrawer
+          botId="bot"
+          locale="en"
+          open
+          onOpenChange={vi.fn()}
+          onNavigate={vi.fn()}
+        />
       </QueryClientProvider>,
     );
-    fireEvent.click(screen.getByLabelText("Open finance assistant"));
-    fireEvent.change(screen.getByLabelText(/For example/), {
+    fireEvent.change(screen.getByLabelText("Message Jarvis…"), {
       target: { value: "Can I afford a new phone?" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
@@ -70,11 +116,16 @@ describe("FinanceAssistantDrawer", () => {
     });
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <FinanceAssistantDrawer botId="bot" locale="en" onNavigate={vi.fn()} />
+        <FinanceAssistantDrawer
+          botId="bot"
+          locale="en"
+          open
+          onOpenChange={vi.fn()}
+          onNavigate={vi.fn()}
+        />
       </QueryClientProvider>,
     );
-    fireEvent.click(screen.getByLabelText("Open finance assistant"));
-    fireEvent.change(screen.getByLabelText(/For example/), {
+    fireEvent.change(screen.getByLabelText("Message Jarvis…"), {
       target: { value: "Paid 12 PLN for coffee" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
@@ -109,12 +160,13 @@ describe("FinanceAssistantDrawer", () => {
         <FinanceAssistantDrawer
           botId="bot"
           locale="en"
+          open
+          onOpenChange={vi.fn()}
           onNavigate={onNavigate}
         />
       </QueryClientProvider>,
     );
-    fireEvent.click(screen.getByLabelText("Open finance assistant"));
-    fireEvent.change(screen.getByLabelText(/For example/), {
+    fireEvent.change(screen.getByLabelText("Message Jarvis…"), {
       target: { value: "A friend still owes me 25 PLN" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
@@ -127,5 +179,56 @@ describe("FinanceAssistantDrawer", () => {
       screen.getByRole("button", { name: "Open recommended section" }),
     );
     expect(onNavigate).toHaveBeenCalledWith("debts");
+  });
+
+  it("queues a device attachment and sends it for review", async () => {
+    vi.mocked(consumerFinanceAssistantApi.proposeFile).mockResolvedValue({
+      token: "media-token",
+      operations: [],
+    });
+    const { container } = render(
+      <QueryClientProvider client={new QueryClient()}>
+        <FinanceAssistantDrawer
+          botId="bot"
+          locale="en"
+          open
+          onOpenChange={vi.fn()}
+          onNavigate={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    const file = new File(["receipt"], "receipt.png", { type: "image/png" });
+    fireEvent.change(container.querySelector('input[type="file"]')!, {
+      target: { files: [file] },
+    });
+    expect(screen.getByText("receipt.png")).toBeInTheDocument();
+    expect(consumerFinanceAssistantApi.proposeFile).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() =>
+      expect(consumerFinanceAssistantApi.proposeFile).toHaveBeenCalledWith(
+        "bot",
+        file,
+      ),
+    );
+  });
+
+  it("sends Free users to plans when they choose voice", async () => {
+    const onNavigate = vi.fn();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <FinanceAssistantDrawer
+          botId="bot"
+          locale="en"
+          open
+          onOpenChange={vi.fn()}
+          onNavigate={onNavigate}
+        />
+      </QueryClientProvider>,
+    );
+    const voiceButton = await screen.findByRole("button", {
+      name: "Voice messages require Pro or Ultra",
+    });
+    fireEvent.click(voiceButton);
+    expect(onNavigate).toHaveBeenCalledWith("billing");
   });
 });

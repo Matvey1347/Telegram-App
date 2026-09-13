@@ -25,6 +25,7 @@ export function FinanceMiniAppShell({
   localeDisabled = false,
   children,
   onNavigate,
+  onOpenAssistant,
   onAction,
   onSignOut,
   signingOut = false,
@@ -42,6 +43,7 @@ export function FinanceMiniAppShell({
   localeDisabled?: boolean;
   children: React.ReactNode;
   onNavigate: (screen: ConsumerFinanceScreen) => void;
+  onOpenAssistant?: () => void;
   onAction: (action: ConsumerFinanceAction) => void;
   onSignOut: () => void;
   signingOut?: boolean;
@@ -125,6 +127,7 @@ export function FinanceMiniAppShell({
         screen={screen}
         copy={copy}
         onNavigate={onNavigate}
+        onOpenAssistant={onOpenAssistant}
         alwaysVisible
       />
     </main>

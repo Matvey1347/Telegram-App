@@ -11,8 +11,98 @@ import {
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
+import { withWorkspaceMemberAvatar } from '../../../common/workspace-member-presentation';
 import { CreatePromoDto, PromoQueryDto, UpdatePromoDto } from './dto';
 import { Prisma, PromoStatus } from '@prisma/client';
+import { adsChannelWhere } from '../ads-channel-scope';
+
+const PROMO_PREVIEW_TEXT_MAX_LENGTH = 360;
+
+const promoDetailSelect = {
+  id: true,
+  workspaceId: true,
+  telegramChannelId: true,
+  iconId: true,
+  title: true,
+  text: true,
+  previewText: true,
+  previewImageUrl: true,
+  plainText: true,
+  formattedHtml: true,
+  angle: true,
+  imageData: true,
+  imageUrls: true,
+  mediaItems: true,
+  buttonRows: true,
+  defaultInviteLinkId: true,
+  status: true,
+  assignedMemberId: true,
+  createdByUserId: true,
+  createdAt: true,
+  updatedAt: true,
+  telegramChannel: {
+    select: { id: true, title: true, username: true, photoUrl: true },
+  },
+  defaultInviteLink: {
+    select: {
+      id: true,
+      telegramChannelId: true,
+      adCampaignId: true,
+      name: true,
+      url: true,
+      joinedCount: true,
+      requestedCount: true,
+      isRevoked: true,
+      expireDate: true,
+      memberLimit: true,
+      createsJoinRequest: true,
+      creatorTelegramUserId: true,
+      creatorUsername: true,
+      creatorFirstName: true,
+      creatorLastName: true,
+      creatorPhotoUrl: true,
+      creatorMatchSource: true,
+      creatorMember: WorkspaceService.assignedMemberInclude,
+    },
+  },
+  icon: true,
+  assignedMember: WorkspaceService.assignedMemberInclude,
+  createdByUser: WorkspaceService.createdByUserInclude,
+} satisfies Prisma.PromoSelect;
+
+function promoPreviewText(input: {
+  plainText?: string | null;
+  text?: string | null;
+}) {
+  const value = input.plainText?.trim() || input.text?.trim();
+  return value ? value.slice(0, PROMO_PREVIEW_TEXT_MAX_LENGTH) : null;
+}
+
+function promoPreviewImageUrl(input: {
+  imageData?: string | null;
+  imageUrls?: string[] | null;
+  mediaItems?: unknown;
+}) {
+  const mediaPhoto = Array.isArray(input.mediaItems)
+    ? input.mediaItems.find((item): item is { kind: 'PHOTO'; url: string } =>
+        Boolean(
+          item &&
+          typeof item === 'object' &&
+          (item as { kind?: unknown }).kind === 'PHOTO' &&
+          typeof (item as { url?: unknown }).url === 'string',
+        ),
+      )?.url
+    : undefined;
+  const value = [mediaPhoto, ...(input.imageUrls ?? []), input.imageData]
+    .find(
+      (candidate) =>
+        typeof candidate === 'string' &&
+        Boolean(candidate.trim()) &&
+        !candidate.trim().startsWith('data:'),
+    )
+    ?.trim();
+  return value || null;
+}
 
 @Injectable()
 export class PromosService {
@@ -24,6 +114,33 @@ export class PromosService {
   private async workspace(userId: string) {
     return this.workspaceService.resolveWorkspaceIdForUser(userId);
   }
+  private async validateChannelAndInviteLink(
+    workspaceId: string,
+    telegramChannelId: string,
+    defaultInviteLinkId?: string | null,
+  ) {
+    const [channel, inviteLink] = await Promise.all([
+      this.prisma.telegramChannel.findFirst({
+        where: { id: telegramChannelId, workspaceId, archivedAt: null },
+        select: { id: true },
+      }),
+      defaultInviteLinkId
+        ? this.prisma.telegramInviteLink.findFirst({
+            where: {
+              id: defaultInviteLinkId,
+              telegramChannelId,
+              workspaceId,
+              isRevoked: false,
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+    ]);
+    if (!channel) throw new NotFoundException('Telegram channel not found');
+    if (defaultInviteLinkId && !inviteLink) {
+      throw new NotFoundException('Channel invite link not found');
+    }
+  }
   async findAll(userId: string, query: PromoQueryDto = {}) {
     const workspaceId = await this.workspace(userId);
     const search = query.search?.trim();
@@ -34,7 +151,11 @@ export class PromosService {
       : [];
     const where: Prisma.PromoWhereInput = {
       workspaceId,
-      telegramChannelId: query.telegramChannelId || undefined,
+      telegramChannel: { workspaceId, archivedAt: null },
+      telegramChannelId: adsChannelWhere(
+        query.telegramChannelId,
+        query.telegramChannelIds,
+      ),
       assignedMemberId: query.assignedMemberId || undefined,
       ...(search
         ? {
@@ -67,6 +188,8 @@ export class PromosService {
           telegramChannelId: true,
           iconId: true,
           title: true,
+          previewText: true,
+          previewImageUrl: true,
           status: true,
           assignedMemberId: true,
           createdAt: true,
@@ -87,6 +210,7 @@ export class PromosService {
       items.map((item) => ({
         ...item,
         iconPresentation: iconToResolvedEmoji(item.icon),
+        assignedMember: withWorkspaceMemberAvatar(item.assignedMember),
       })),
       totalItems,
       pagination,
@@ -95,16 +219,19 @@ export class PromosService {
   async findOne(userId: string, id: string) {
     const workspaceId = await this.workspace(userId);
     const row = await this.prisma.promo.findFirst({
-      where: { id, workspaceId },
-      include: {
-        telegramChannel: true,
-        icon: true,
-        assignedMember: WorkspaceService.assignedMemberInclude,
-        createdByUser: WorkspaceService.createdByUserInclude,
+      where: {
+        id,
+        workspaceId,
+        telegramChannel: { workspaceId, archivedAt: null },
       },
+      select: promoDetailSelect,
     });
     if (!row) throw new NotFoundException('Promo not found');
-    return { ...row, iconPresentation: iconToResolvedEmoji(row.icon) };
+    return {
+      ...row,
+      iconPresentation: iconToResolvedEmoji(row.icon),
+      assignedMember: withWorkspaceMemberAvatar(row.assignedMember),
+    };
   }
   async create(userId: string, dto: CreatePromoDto) {
     const { workspaceId, assignedMemberId } =
@@ -113,23 +240,31 @@ export class PromosService {
         dto.assignedMemberId,
       );
     const iconId = await this.resolveIconId(workspaceId, dto.iconId);
+    await this.validateChannelAndInviteLink(
+      workspaceId,
+      dto.telegramChannelId,
+      dto.defaultInviteLinkId,
+    );
     const promo = await this.prisma.promo.create({
       data: {
         workspaceId,
         ...dto,
+        mediaItems: dto.mediaItems,
+        buttonRows: dto.buttonRows,
         iconId,
         assignedMemberId,
         createdByUserId: userId,
         text: dto.text ?? '',
+        previewText: promoPreviewText(dto),
+        previewImageUrl: promoPreviewImageUrl(dto),
       },
-      include: {
-        telegramChannel: true,
-        icon: true,
-        assignedMember: WorkspaceService.assignedMemberInclude,
-        createdByUser: WorkspaceService.createdByUserInclude,
-      },
+      select: promoDetailSelect,
     });
-    return { ...promo, iconPresentation: iconToResolvedEmoji(promo.icon) };
+    return {
+      ...promo,
+      iconPresentation: iconToResolvedEmoji(promo.icon),
+      assignedMember: withWorkspaceMemberAvatar(promo.assignedMember),
+    };
   }
   async update(userId: string, id: string, dto: UpdatePromoDto) {
     const existing = await this.findOne(userId, id);
@@ -146,17 +281,68 @@ export class PromosService {
       dto.iconId === undefined
         ? undefined
         : await this.resolveIconId(existing.workspaceId, dto.iconId);
+    const telegramChannelId =
+      dto.telegramChannelId ?? existing.telegramChannelId;
+    const defaultInviteLinkId =
+      dto.defaultInviteLinkId === undefined
+        ? existing.defaultInviteLinkId
+        : dto.defaultInviteLinkId;
+    const contentChanged =
+      dto.text !== undefined || dto.plainText !== undefined;
+    const mediaChanged =
+      dto.mediaItems !== undefined ||
+      dto.imageUrls !== undefined ||
+      dto.imageData !== undefined;
+    await this.validateChannelAndInviteLink(
+      existing.workspaceId,
+      telegramChannelId,
+      defaultInviteLinkId,
+    );
     const promo = await this.prisma.promo.update({
       where: { id },
-      data: { ...dto, iconId, assignedMemberId },
-      include: {
-        telegramChannel: true,
-        icon: true,
-        assignedMember: WorkspaceService.assignedMemberInclude,
-        createdByUser: WorkspaceService.createdByUserInclude,
+      data: {
+        ...dto,
+        mediaItems: dto.mediaItems,
+        buttonRows: dto.buttonRows,
+        imageData:
+          dto.imageData !== undefined
+            ? dto.imageData
+            : dto.mediaItems !== undefined || dto.imageUrls !== undefined
+              ? null
+              : undefined,
+        iconId,
+        assignedMemberId,
+        previewText: contentChanged
+          ? promoPreviewText({
+              text: dto.text ?? existing.text,
+              plainText:
+                dto.plainText !== undefined
+                  ? dto.plainText
+                  : dto.text !== undefined
+                    ? null
+                    : existing.plainText,
+            })
+          : undefined,
+        previewImageUrl: mediaChanged
+          ? promoPreviewImageUrl({
+              mediaItems: dto.mediaItems ?? existing.mediaItems,
+              imageUrls: dto.imageUrls ?? existing.imageUrls,
+              imageData:
+                dto.imageData !== undefined
+                  ? dto.imageData
+                  : dto.mediaItems !== undefined || dto.imageUrls !== undefined
+                    ? null
+                    : existing.imageData,
+            })
+          : undefined,
       },
+      select: promoDetailSelect,
     });
-    return { ...promo, iconPresentation: iconToResolvedEmoji(promo.icon) };
+    return {
+      ...promo,
+      iconPresentation: iconToResolvedEmoji(promo.icon),
+      assignedMember: withWorkspaceMemberAvatar(promo.assignedMember),
+    };
   }
   async remove(userId: string, id: string) {
     await this.findOne(userId, id);

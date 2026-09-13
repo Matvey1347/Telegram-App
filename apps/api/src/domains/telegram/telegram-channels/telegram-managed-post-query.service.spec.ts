@@ -22,7 +22,7 @@ const telegramPost = {
 
 function setup(
   managedPosts: Record<string, unknown>[],
-  telegramPosts = [telegramPost],
+  telegramPosts: Record<string, unknown>[] = [telegramPost],
 ) {
   const prisma = {
     $executeRaw: jest.fn(),
@@ -130,7 +130,17 @@ describe('TelegramManagedPostQueryService unified read model', () => {
   });
 
   it('appends unmatched synchronized posts as safely distinguishable read-only records', async () => {
-    const { service } = setup([]);
+    const { service } = setup(
+      [],
+      [
+        {
+          ...telegramPost,
+          hasMedia: true,
+          mediaKind: 'MessageMediaDocument',
+          imageUrls: ['https://cdn.test/video.mp4'],
+        },
+      ],
+    );
     const result = await service.managedPosts('user-1', 'channel-1');
 
     expect(result.items[0]).toEqual(
@@ -143,6 +153,8 @@ describe('TelegramManagedPostQueryService unified read model', () => {
         formattedText: '<b>Synced text</b>',
         primaryTelegramMessageUrl: 'https://t.me/example_channel/42',
         telegramMessageIds: ['42'],
+        imageUrls: [],
+        mediaItems: [{ kind: 'VIDEO', url: 'https://cdn.test/video.mp4' }],
         engagementMetrics: [
           expect.objectContaining({ viewsCount: 1_000, reactionRate: 10 }),
         ],

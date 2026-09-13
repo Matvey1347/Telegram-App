@@ -27,6 +27,7 @@ import {
   mapCrmMemberSummary,
   mapCrmPeerSummary,
 } from './telegram-crm-read-model.mapper';
+import { crmTagSelect, mapCrmTag } from './telegram-crm-system-tags.service';
 
 export const CRM_OPEN_TASK_STATUSES = [
   TelegramAdvertiserTaskStatus.OPEN,
@@ -40,6 +41,14 @@ export const crmContactListSelect = {
   ...crmContactSelect,
   totalSalesCount: true,
   ownerMember: { select: crmMemberSummarySelect },
+  tags: {
+    orderBy: [
+      { tag: { position: 'asc' as const } },
+      { createdAt: 'asc' as const },
+    ],
+    take: CONTACT_DETAIL_RELATION_LIMIT,
+    select: { tag: { select: crmTagSelect } },
+  },
   crmPeers: {
     orderBy: [{ updatedAt: 'desc' as const }, { id: 'desc' as const }],
     take: 1,
@@ -104,7 +113,7 @@ export const crmContactDetailSelect = {
   tags: {
     orderBy: { createdAt: 'desc' as const },
     take: CONTACT_DETAIL_RELATION_LIMIT,
-    select: { tag: { select: { id: true, name: true, color: true } } },
+    select: { tag: { select: crmTagSelect } },
   },
   _count: {
     select: {
@@ -180,6 +189,7 @@ export function mapCrmContactListItem(
   };
   return {
     ...mapCrmContact(row),
+    tags: row.tags.map(({ tag }) => mapCrmTag(tag)),
     isUnassignedClient: isUnassignedCrmContact(row),
     replySummary: replySummaries.get(row.id) ?? {
       status: 'NONE',
@@ -230,7 +240,7 @@ export function mapCrmContactDetail(
       0,
       CONTACT_ACCOUNT_LIMIT,
     ),
-    tags: row.tags.map(({ tag }) => tag),
+    tags: row.tags.map(({ tag }) => mapCrmTag(tag)),
     paymentSummary: paymentSummary.map((item) => ({
       currency: item.currency,
       agreedAmount: String(item.agreedAmount),

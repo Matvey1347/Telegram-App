@@ -97,6 +97,7 @@ export const mutualPromotionFoldersApi = {
     startsAt?: string;
     endsAt: string;
     folderId?: string;
+    initial?: boolean;
   }) =>
     (
       await api.get<MutualPromotionInviteLinkOption[]>(

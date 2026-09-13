@@ -99,6 +99,9 @@ export class TelegramChannelSchemaCompatibilityService {
       ) ||
       /column [`'"]syncInclude[A-Za-z]+ of relation TelegramChannel[`'"] does not exist/i.test(
         message,
+      ) ||
+      /column [`'"](?:TelegramChannel\.)?postSyncLimit\b.*does not exist(?: in the current database)?/i.test(
+        message,
       )
     );
   }
@@ -119,6 +122,7 @@ export class TelegramChannelSchemaCompatibilityService {
           ADD COLUMN IF NOT EXISTS "syncIncludeChannelStats" BOOLEAN NOT NULL DEFAULT true,
           ADD COLUMN IF NOT EXISTS "syncIncludeManagedPosts" BOOLEAN NOT NULL DEFAULT true,
           ADD COLUMN IF NOT EXISTS "syncIncludeAudienceSnapshot" BOOLEAN NOT NULL DEFAULT true,
+          ADD COLUMN IF NOT EXISTS "postSyncLimit" INTEGER NOT NULL DEFAULT 50,
           ADD COLUMN IF NOT EXISTS "autoSyncEnabled" BOOLEAN NOT NULL DEFAULT true
         `);
       this.telegramChannelSyncScopeColumnsAvailable = true;
@@ -220,19 +224,63 @@ export class TelegramChannelSchemaCompatibilityService {
       return this.ensurePostGroupSystemColumnsPromise;
     }
     this.ensurePostGroupSystemColumnsPromise = (async () => {
-      await this.prisma.$executeRawUnsafe(`
-          ALTER TABLE "PostGroup"
-          ADD COLUMN IF NOT EXISTS "isSystem" BOOLEAN NOT NULL DEFAULT false,
-          ADD COLUMN IF NOT EXISTS "systemKey" TEXT
-        `);
-      await this.prisma.$executeRawUnsafe(`
-          CREATE UNIQUE INDEX IF NOT EXISTS "PostGroup_telegramChannelId_systemKey_key"
-          ON "PostGroup"("telegramChannelId", "systemKey")
-        `);
+      const [schemaState] = await this.prisma.$queryRaw<
+        Array<{
+          hasIsSystem: boolean;
+          hasSystemKey: boolean;
+          hasSystemKeyIndex: boolean;
+        }>
+      >(Prisma.sql`
+        SELECT
+          EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'PostGroup'
+              AND column_name = 'isSystem'
+          ) AS "hasIsSystem",
+          EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'PostGroup'
+              AND column_name = 'systemKey'
+          ) AS "hasSystemKey",
+          EXISTS (
+            SELECT 1 FROM pg_indexes
+            WHERE schemaname = current_schema()
+              AND tablename = 'PostGroup'
+              AND indexname = 'PostGroup_telegramChannelId_systemKey_key'
+          ) AS "hasSystemKeyIndex"
+      `);
+      if (
+        !schemaState?.hasIsSystem ||
+        !schemaState.hasSystemKey ||
+        !schemaState.hasSystemKeyIndex
+      ) {
+        await this.prisma.$transaction(async (tx) => {
+          // Compatibility DDL must fail visibly instead of waiting forever
+          // behind an unrelated long-running development transaction.
+          await tx.$executeRawUnsafe(`SET LOCAL lock_timeout = '5s'`);
+          await tx.$executeRawUnsafe(`
+            ALTER TABLE "PostGroup"
+            ADD COLUMN IF NOT EXISTS "isSystem" BOOLEAN NOT NULL DEFAULT false,
+            ADD COLUMN IF NOT EXISTS "systemKey" TEXT
+          `);
+          await tx.$executeRawUnsafe(`
+            CREATE UNIQUE INDEX IF NOT EXISTS "PostGroup_telegramChannelId_systemKey_key"
+            ON "PostGroup"("telegramChannelId", "systemKey")
+          `);
+        });
+      }
       this.postGroupSystemColumnsAvailable = true;
-      this.logger.warn(
-        'PostGroup system columns were missing in the database and were created automatically for compatibility.',
-      );
+      if (
+        !schemaState?.hasIsSystem ||
+        !schemaState.hasSystemKey ||
+        !schemaState.hasSystemKeyIndex
+      ) {
+        this.logger.warn(
+          'PostGroup system columns were missing in the database and were created automatically for compatibility.',
+        );
+      }
     })();
     try {
       await this.ensurePostGroupSystemColumnsPromise;

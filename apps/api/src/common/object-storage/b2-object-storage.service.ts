@@ -25,6 +25,7 @@ const mimeExtensions: Record<string, string> = {
   'image/webp': 'webp',
   'image/gif': 'gif',
   'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
   'video/webm': 'webm',
 };
 
@@ -32,6 +33,9 @@ export function isSupportedImmutableImageMimeType(value: string) {
   const mimeType = value.toLowerCase().split(';', 1)[0].trim();
   return Boolean(mimeExtensions[mimeType]);
 }
+
+export const isSupportedImmutableMediaMimeType =
+  isSupportedImmutableImageMimeType;
 
 @Injectable()
 export class B2ObjectStorageService {

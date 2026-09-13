@@ -67,7 +67,12 @@ describe("ProtectedRoute", () => {
       </ProtectedRoute>,
     );
 
-    expect(screen.getByRole("status")).toBeInTheDocument();
+    const loader = screen.getByRole("status");
+    expect(loader).toHaveClass("min-h-dvh");
+    expect(loader.querySelector("header")).toHaveClass("fixed");
+    expect(loader.querySelector("main")).toHaveClass(
+      "pt-[calc(4.5rem+env(safe-area-inset-top))]",
+    );
     expect(screen.queryByText("Settings page")).not.toBeInTheDocument();
   });
 

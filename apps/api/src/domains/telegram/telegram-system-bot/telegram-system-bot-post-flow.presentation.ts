@@ -7,11 +7,12 @@ import {
   TELEGRAM_BOT_ACTION_TEXT,
   telegramBotApiActionRow,
 } from '../../../telegram/shared/telegram-bot-action-buttons';
-import type {
-  TelegramSystemBotPostFlowScope,
-  TelegramSystemBotPostGroupOption,
-  TelegramSystemBotPostPayload,
-  TelegramSystemBotPostWorkflow,
+import {
+  isTelegramSystemBotModalImport,
+  type TelegramSystemBotPostFlowScope,
+  type TelegramSystemBotPostGroupOption,
+  type TelegramSystemBotPostPayload,
+  type TelegramSystemBotPostWorkflow,
 } from './telegram-system-bot-post-flow.types';
 import {
   escapeSystemBotHtml,
@@ -42,10 +43,9 @@ export function renderTelegramSystemBotPostCard(input: {
 
   if (workflow.status === TelegramSystemBotWorkflowStatus.COMPLETED) {
     return {
-      text:
-        payload.destination === 'AD_SALE_MODAL'
-          ? '✅ Post added to the Ad Sale form. Return to the website.'
-          : `✅ Post saved${workflow.resultManagedPostId ? `\nID: ${workflow.resultManagedPostId}` : ''}`,
+      text: isTelegramSystemBotModalImport(payload.destination)
+        ? `✅ Post added to the ${payload.destination === 'PROMO_MODAL' ? 'Promo' : 'Ad Sale'} form. Return to the website.`
+        : `✅ Post saved${workflow.resultManagedPostId ? `\nID: ${workflow.resultManagedPostId}` : ''}`,
     };
   }
   if (workflow.status === TelegramSystemBotWorkflowStatus.CANCELLED) {
@@ -100,7 +100,7 @@ export function renderTelegramSystemBotPostCard(input: {
     });
   }
   if (workflow.step === 'CHOOSE_ACTION') {
-    if (payload.destination === 'AD_SALE_MODAL') {
+    if (isTelegramSystemBotModalImport(payload.destination)) {
       return present({
         text: preview.html,
         reply_markup: {
@@ -119,7 +119,10 @@ export function renderTelegramSystemBotPostCard(input: {
                 callback_data: `${prefix}cancel`,
               },
               {
-                text: '✅ Add to Ad Sale',
+                text:
+                  payload.destination === 'PROMO_MODAL'
+                    ? '✅ Add to Promo'
+                    : '✅ Add to Ad Sale',
                 callback_data: `${prefix}confirm`,
               },
             ],
@@ -163,7 +166,7 @@ export function renderTelegramSystemBotPostCard(input: {
     });
   }
   if (
-    payload.destination === 'AD_SALE_MODAL' &&
+    isTelegramSystemBotModalImport(payload.destination) &&
     (workflow.step === 'AWAIT_EDIT_TEXT' ||
       workflow.step === 'AWAIT_EDIT_BUTTONS')
   ) {

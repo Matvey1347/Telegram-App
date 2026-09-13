@@ -81,7 +81,7 @@ export default function SettingsPage() {
   return (
     <AppShell>
       <PageHeader
-        title="Workspace settings"
+        title="Settings"
         subtitle="People, access, automation and workspace defaults in one place."
       />
       {me.isLoading ? <LoadingState /> : null}

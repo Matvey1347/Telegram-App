@@ -72,6 +72,7 @@ export class FinanceBillingService {
         capabilities: [...definition.capabilities],
         features: [...definition.features],
         usageLimits: { ...definition.usageLimits },
+        usagePeriods: { ...definition.usagePeriods },
         canPurchase: canStartFinanceCheckout(
           current.tier,
           tier,

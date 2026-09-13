@@ -54,4 +54,66 @@ describe('TelegramChannelLifecycleService system groups', () => {
     );
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
+
+  it('enforces zero seed adjustments when the channel is marked as no-seed', async () => {
+    const update = jest.fn((input: { data: Record<string, unknown> }) => {
+      void input;
+      return Promise.resolve({});
+    });
+    const tx = {
+      telegramChannel: { update },
+    };
+    const prisma = {
+      icon: { findFirst: jest.fn() },
+      telegramInviteLink: { findFirst: jest.fn() },
+      $transaction: jest.fn(
+        async (callback: (client: typeof tx) => Promise<unknown>) =>
+          callback(tx),
+      ),
+    };
+    const support = {
+      workspace: jest.fn().mockResolvedValue('workspace-1'),
+      normalizeUsername: jest.fn(),
+    };
+    const importPolicy = {
+      resolveImportPolicy: jest.fn().mockResolvedValue({
+        acquisitionType: 'CREATED',
+        postsSyncFrom: null,
+        inviteLinksSyncFrom: null,
+        purchaseTransactionId: null,
+      }),
+    };
+    const catalog = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'channel-1',
+        targetCpa: null,
+        stopCpaFrom: null,
+      }),
+    };
+    const service = new TelegramChannelLifecycleService(
+      prisma as never,
+      {} as never,
+      support as never,
+      importPolicy as never,
+      {} as never,
+      catalog as never,
+      {} as never,
+    );
+
+    await service.update('user-1', 'channel-1', {
+      seedDisabled: true,
+      seedSubscribersCount: 100,
+      knownFakeSubscribersCount: 25,
+      ownViewsPerPost: 40,
+      ownReactionsPerPost: 5,
+    });
+
+    expect(update.mock.calls[0]?.[0]?.data).toMatchObject({
+      seedDisabled: true,
+      seedSubscribersCount: 0,
+      knownFakeSubscribersCount: 0,
+      ownViewsPerPost: 0,
+      ownReactionsPerPost: 0,
+    });
+  });
 });
