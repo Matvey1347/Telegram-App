@@ -7,23 +7,21 @@ import type {
   TelegramSystemBotTaskSubscriptionView,
   UpdateTelegramSystemBotGroupSubscriptionsPayload,
   UpdateTelegramSystemBotSubscriptionPayload,
+  TelegramSystemBotPostDraft,
 } from "@telegram-system/shared";
 
-export type TelegramSystemBotAdSalePostDraft = {
-  title: string;
-  text: string;
-  imageUrls: string[];
-  buttonRows: Array<
-    Array<{
-      text: string;
-      url: string;
-      style: "default" | "primary" | "success" | "danger";
-    }>
-  >;
-};
+export type TelegramSystemBotAdSalePostDraft = TelegramSystemBotPostDraft;
 
 export type TelegramSystemBotMutualPromotionPostDraft =
   TelegramSystemBotAdSalePostDraft;
+
+const editablePostPayload = (draft: TelegramSystemBotPostDraft) => ({
+  title: draft.title,
+  text: draft.text,
+  imageUrls: draft.imageUrls,
+  ...(draft.mediaItems ? { mediaItems: draft.mediaItems } : {}),
+  buttonRows: draft.buttonRows,
+});
 
 export function createTelegramSystemBotApi(api: AxiosInstance) {
   const silentFeedback = {
@@ -105,7 +103,7 @@ export function createTelegramSystemBotApi(api: AxiosInstance) {
       (
         await api.post<{ status: "SENT" }>(
           "/telegram/system-bot/ad-sale-post-preview",
-          draft,
+          editablePostPayload(draft),
           silentFeedback,
         )
       ).data,
@@ -115,7 +113,7 @@ export function createTelegramSystemBotApi(api: AxiosInstance) {
       (
         await api.post<{ status: "SENT" }>(
           "/telegram/system-bot/mutual-promotion-post-preview",
-          draft,
+          editablePostPayload(draft),
           silentFeedback,
         )
       ).data,

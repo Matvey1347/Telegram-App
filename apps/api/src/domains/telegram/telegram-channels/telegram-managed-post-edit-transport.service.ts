@@ -23,6 +23,7 @@ import {
   TELEGRAM_TEXT_MESSAGE_LIMIT,
 } from './telegram-channels.internal';
 import { TelegramManagedPostPresentationService } from './telegram-managed-post-presentation.service';
+import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 
 @Injectable()
 export class TelegramManagedPostEditTransportService {
@@ -43,6 +44,7 @@ export class TelegramManagedPostEditTransportService {
       status: TelegramManagedPostStatus;
       text: string | null;
       imageUrls: string[];
+      mediaItems?: Prisma.JsonValue;
       publishMode: string | null;
       sourceId: string | null;
       sourceType: TelegramSourceType | null;
@@ -149,10 +151,14 @@ export class TelegramManagedPostEditTransportService {
           ? post.scheduledAt || undefined
           : undefined,
       );
+    const mediaItems = normalizeTelegramPostMediaItems(
+      post.mediaItems,
+      post.imageUrls,
+    );
     const rendered =
       this.telegramManagedPostPresentationService.renderManagedPostText(
         resolvedText,
-        post.imageUrls,
+        mediaItems,
         {
           captionLengthMax:
             (post as { captionLengthMaxUsed?: number | null })
@@ -167,8 +173,8 @@ export class TelegramManagedPostEditTransportService {
       );
     const expectedMessageCount = rendered.richHtml
       ? 1
-      : post.imageUrls.length
-        ? post.imageUrls.length + rendered.followupHtmlParts.length
+      : mediaItems.length
+        ? mediaItems.length + rendered.followupHtmlParts.length
         : rendered.textHtmlParts.length;
 
     if (source.sourceType === TelegramSourceType.MTPROTO) {
@@ -288,7 +294,7 @@ export class TelegramManagedPostEditTransportService {
         ...this.telegramChannelAccessService.accountCredentials(account),
         channel: channelReference,
         messageIds: effectiveMessageIds,
-        imageCount: post.imageUrls.length,
+        imageCount: mediaItems.length,
         publishMode: rendered.publishMode,
         captionHtml: rendered.captionHtml,
         followupHtmlParts: rendered.followupHtmlParts,
@@ -371,7 +377,7 @@ export class TelegramManagedPostEditTransportService {
         message_id: Number(effectiveMessageIds[0]),
         rich_message: { html: rendered.richHtml },
       });
-    } else if (post.imageUrls.length) {
+    } else if (mediaItems.length) {
       const caption = toBotFormattedText(rendered.captionHtml);
       await call('editMessageCaption', {
         message_id: Number(effectiveMessageIds[0]),
@@ -385,9 +391,7 @@ export class TelegramManagedPostEditTransportService {
       ) {
         const message = toBotFormattedText(rendered.followupHtmlParts[index]);
         await call('editMessageText', {
-          message_id: Number(
-            effectiveMessageIds[post.imageUrls.length + index],
-          ),
+          message_id: Number(effectiveMessageIds[mediaItems.length + index]),
           text: message.text,
           entities: message.entities,
         });

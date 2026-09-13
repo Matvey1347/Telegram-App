@@ -4,6 +4,7 @@ import {
   TelegramUserAccountStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 import { requiresNativeTelegramRichMessage } from '../../../telegram/shared/telegram-markup';
 import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
 import { preflightTelegramAdDeletionCapability } from './domain/deletion-capability';
@@ -16,6 +17,7 @@ type DeletionFormat = {
 type DeliveryContent = {
   text?: string | null;
   imageUrls?: string[];
+  mediaItems?: unknown;
   buttonRows?: unknown;
   sourceType?: string | null;
 };
@@ -73,7 +75,10 @@ export class TelegramAdSalesBotDeletionPreflightService {
     const requiresBot =
       (Array.isArray(input.content.buttonRows) &&
         input.content.buttonRows.length > 0) ||
-      (!(input.content.imageUrls?.length ?? 0) &&
+      (!normalizeTelegramPostMediaItems(
+        input.content.mediaItems,
+        input.content.imageUrls,
+      ).length &&
         requiresNativeTelegramRichMessage(input.content.text ?? ''));
 
     for (const channelId of input.channelIds) {

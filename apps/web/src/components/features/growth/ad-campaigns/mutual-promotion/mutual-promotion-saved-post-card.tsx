@@ -6,6 +6,7 @@ import type {
   MutualPromotionFolderPost,
   UpdateMutualPromotionPostPayload,
 } from "@telegram-system/shared";
+import { normalizeTelegramPostMediaItems } from "@telegram-system/shared";
 import { formatDateTime } from "@/lib/date-format";
 import {
   channelLocalDateKey,
@@ -20,6 +21,7 @@ import {
   TimeInput,
 } from "@/components/ui/primitives";
 import { MutualPromotionPostComposer } from "./mutual-promotion-post-composer";
+import type { TelegramSystemBotMutualPromotionPostDraft } from "@/lib/features/telegram/telegram-system-bot-api";
 
 export function MutualPromotionSavedPostCard({
   post,
@@ -52,7 +54,9 @@ export function MutualPromotionSavedPostCard({
   const [editing, setEditing] = useState(false);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
-  const [draft, setDraft] = useState(() => postDraft(post));
+  const [draft, setDraft] = useState<TelegramSystemBotMutualPromotionPostDraft>(
+    () => postDraft(post),
+  );
   const [error, setError] = useState<string | null>(null);
 
   const beginEditing = () => {
@@ -78,7 +82,8 @@ export function MutualPromotionSavedPostCard({
     }
     if (
       !draft.title.trim() ||
-      (!draft.text.trim() && !draft.imageUrls.length)
+      (!draft.text.trim() &&
+        !(draft.mediaItems?.length || draft.imageUrls.length))
     ) {
       setError("Add a title and publishable text or an image.");
       return;
@@ -181,6 +186,10 @@ function postDraft(post: MutualPromotionFolderPost) {
     title: post.title,
     text: post.text ?? "",
     imageUrls: post.imageUrls,
+    mediaItems: normalizeTelegramPostMediaItems(
+      post.mediaItems,
+      post.imageUrls,
+    ),
     buttonRows: post.buttonRows,
   };
 }

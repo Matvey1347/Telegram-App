@@ -32,7 +32,10 @@ import {
   TelegramBotRuntimeRegistryService,
 } from './telegram-bot-runtime-registry.service';
 import type { TelegramBotWebhookUpdate } from './telegram-bot-update.types';
-import { publicApiOrigin } from '../../../../config/deployment-config';
+import {
+  deploymentValue,
+  publicApiOrigin,
+} from '../../../../config/deployment-config';
 import { assertSafeTelegramWebhookBase } from './telegram-bot-webhook-url';
 
 @Injectable()
@@ -58,6 +61,15 @@ export class TelegramBotRuntimeService implements OnModuleInit {
     if (!environment) {
       this.logger.log(
         'Workspace Telegram bot startup is disabled until TELEGRAM_BOT_RUNTIME_ENVIRONMENT is set.',
+      );
+      return;
+    }
+    if (
+      environment === TelegramBotRuntimeEnvironment.LOCAL &&
+      deploymentValue('LOCAL_DEV_BOTS_CONTROL_SECRET')
+    ) {
+      this.logger.log(
+        'Workspace Telegram bot startup is deferred until the local development runner activates it after the API is ready.',
       );
       return;
     }

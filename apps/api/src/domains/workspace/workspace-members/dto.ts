@@ -8,6 +8,10 @@ import {
   IsEnum,
   IsOptional,
   IsString,
+  IsNumber,
+  Max,
+  Min,
+  ValidateIf,
   MinLength,
   ArrayUnique,
 } from 'class-validator';
@@ -80,4 +84,11 @@ export class UpdateWorkspaceMemberDto {
   @ArrayUnique()
   @IsString({ each: true })
   telegramUserAccountIds?: string[];
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  salesCommissionRate?: number | null;
 }

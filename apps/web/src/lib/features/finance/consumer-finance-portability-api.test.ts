@@ -42,6 +42,7 @@ describe("importConsumerFinanceData", () => {
       importConsumerFinanceData({
         botId: "bot/with spaces",
         file: new File(["{}"], "finance.json", { type: "application/json" }),
+        mode: "REPLACE",
         onProgress,
       }),
     ).resolves.toEqual(result);
@@ -60,6 +61,8 @@ describe("importConsumerFinanceData", () => {
         }),
       }),
     );
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect((request.body as FormData).get("mode")).toBe("REPLACE");
   });
 
   it("surfaces a structured streamed validation error", async () => {
@@ -81,6 +84,7 @@ describe("importConsumerFinanceData", () => {
       importConsumerFinanceData({
         botId: "bot",
         file: new File(["{}"], "finance.json"),
+        mode: "ADD",
         onProgress: vi.fn(),
       }),
     ).rejects.toMatchObject({
@@ -96,6 +100,7 @@ describe("importConsumerFinanceData", () => {
       importConsumerFinanceData({
         botId: "bot",
         file: new File(["{}"], "finance.json"),
+        mode: "ADD",
         onProgress: vi.fn(),
       }),
     ).rejects.toThrow("Import stream ended before completion");

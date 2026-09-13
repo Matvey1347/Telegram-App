@@ -170,7 +170,11 @@ export class CurrencyConversionService {
       ...new Map(dates.map((date) => [date.toISOString(), date])).values(),
     ];
     if (!unique.length) return new Map<string, PreparedCurrencyRateSource>();
-    const values = Prisma.join(unique.map((date) => Prisma.sql`(${date})`));
+    // PostgreSQL cannot infer the VALUES column type through Prisma's bound
+    // parameters here and otherwise treats it as text.
+    const values = Prisma.join(
+      unique.map((date) => Prisma.sql`(CAST(${date} AS TIMESTAMP))`),
+    );
     const rows = await this.prisma.$queryRaw<DatedCurrencyRateRow[]>(Prisma.sql`
       WITH requested("asOf") AS (VALUES ${values})
       SELECT

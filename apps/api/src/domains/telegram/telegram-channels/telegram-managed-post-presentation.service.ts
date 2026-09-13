@@ -13,6 +13,10 @@ import {
   TelegramPostRenderingLimits,
 } from './telegram-channels.internal';
 import { TelegramManagedPostIdentityService } from './telegram-managed-post-identity.service';
+import {
+  normalizeTelegramPostMediaItems,
+  type TelegramPostMediaItem,
+} from '@telegram-system/shared';
 
 @Injectable()
 export class TelegramManagedPostPresentationService {
@@ -36,36 +40,42 @@ export class TelegramManagedPostPresentationService {
 
   public renderManagedPostText(
     text: string,
-    imageUrls: string[],
+    mediaInput: string[] | TelegramPostMediaItem[],
     limits: TelegramPostRenderingLimits = {
       captionLengthMax: TELEGRAM_CAPTION_LIMIT,
       messageLengthMax: TELEGRAM_TEXT_MESSAGE_LIMIT,
     },
     longTextMode: 'IMAGES_THEN_TEXT' | 'CAPTION_THEN_TEXT' = 'IMAGES_THEN_TEXT',
   ): ManagedPostPublishRender {
+    const mediaItems =
+      mediaInput.length && typeof mediaInput[0] === 'string'
+        ? normalizeTelegramPostMediaItems([], mediaInput)
+        : (mediaInput as TelegramPostMediaItem[]);
+    const imageUrls = mediaItems
+      .filter((item) => item.kind === 'PHOTO')
+      .map((item) => item.url);
+    const mediaCount = mediaItems.length;
     const html = telegramMarkupToHtml(text);
-    const richHtml = requiresNativeTelegramRichMessage(text)
-      ? [
-          ...imageUrls.map(
-            (url) =>
-              `<img src="${url.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"/>`,
-          ),
-          telegramMarkupToRichHtml(text),
-        ].join('\n')
-      : null;
+    const richHtml =
+      requiresNativeTelegramRichMessage(text) &&
+      mediaItems.every((item) => item.kind === 'PHOTO')
+        ? [
+            ...imageUrls.map(
+              (url) =>
+                `<img src="${url.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"/>`,
+            ),
+            telegramMarkupToRichHtml(text),
+          ].join('\n')
+        : null;
     const [plainText] = parseTelegramHtml(html);
     let captionHtml = html;
     let followupHtmlParts: string[] = [];
     let textHtmlParts = [html];
-    let publishMode = imageUrls.length ? 'IMAGE_WITH_CAPTION' : 'TEXT_ONLY';
+    let publishMode = mediaCount ? 'MEDIA_WITH_CAPTION' : 'TEXT_ONLY';
 
     if (richHtml) publishMode = 'RICH_MESSAGE';
 
-    if (
-      !richHtml &&
-      imageUrls.length &&
-      plainText.length > limits.captionLengthMax
-    ) {
+    if (!richHtml && mediaCount && plainText.length > limits.captionLengthMax) {
       publishMode = longTextMode;
       if (longTextMode === 'CAPTION_THEN_TEXT') {
         const [caption, remainder] = this.splitTelegramMarkupOnce(
@@ -86,7 +96,7 @@ export class TelegramManagedPostPresentationService {
       }
     } else if (
       !richHtml &&
-      !imageUrls.length &&
+      !mediaCount &&
       plainText.length > limits.messageLengthMax
     ) {
       publishMode = 'TEXT_PARTS';
@@ -110,6 +120,23 @@ export class TelegramManagedPostPresentationService {
     return (
       left.length === right.length &&
       left.every((value, index) => value === right[index])
+    );
+  }
+
+  public sameMediaItems(
+    left: unknown,
+    right: unknown,
+    leftImages: string[] = [],
+    rightImages: string[] = [],
+  ) {
+    const a = normalizeTelegramPostMediaItems(left, leftImages);
+    const b = normalizeTelegramPostMediaItems(right, rightImages);
+    return (
+      a.length === b.length &&
+      a.every(
+        (item, index) =>
+          item.kind === b[index]?.kind && item.url === b[index]?.url,
+      )
     );
   }
 

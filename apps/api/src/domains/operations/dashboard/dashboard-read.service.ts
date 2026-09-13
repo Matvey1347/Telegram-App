@@ -55,7 +55,6 @@ export class DashboardReadService {
       channels,
       hypothesisStatuses,
       members,
-      periodInvestments,
       categories,
       legacyCategories,
       transactionBalances,
@@ -63,47 +62,26 @@ export class DashboardReadService {
       incomingTransfers,
       totalInvestments,
       investmentsBeforePeriod,
+      periodInvestments,
     ] = await Promise.all([
-      access.finance ? this.prisma.workspace.findUniqueOrThrow({
-        where: { id: workspaceId },
-        select: { primaryCurrency: true, secondaryCurrency: true },
-      }) : Promise.resolve({ primaryCurrency: '', secondaryCurrency: '' }),
-      access.finance ? this.prisma.account.findMany({
-        where: {
-          workspaceId,
-          isActive: true,
-          OR: [
-            { assignedMemberId: null },
-            { assignedMember: { isHidden: false } },
-          ],
-        },
-        include: {
-          assignedMember: WorkspaceService.assignedMemberInclude,
-          icon: {
-            select: {
-              id: true,
-              type: true,
-              name: true,
-              emoji: true,
-              imageUrl: true,
+      access.finance
+        ? this.prisma.workspace.findUniqueOrThrow({
+            where: { id: workspaceId },
+            select: { primaryCurrency: true, secondaryCurrency: true },
+          })
+        : Promise.resolve({ primaryCurrency: '', secondaryCurrency: '' }),
+      access.finance
+        ? this.prisma.account.findMany({
+            where: {
+              workspaceId,
+              isActive: true,
+              OR: [
+                { assignedMemberId: null },
+                { assignedMember: { isHidden: false } },
+              ],
             },
-          },
-        },
-      }) : Promise.resolve([] as any[]),
-      access.finance ? this.prisma.transaction.findMany({
-        where: { workspaceId, deletedAt: null, date: period },
-        select: {
-          date: true,
-          type: true,
-          amountInPrimaryCurrency: true,
-          telegramChannelId: true,
-          category: true,
-          categoryId: true,
-          categoryRef: {
-            select: {
-              key: true,
-              name: true,
-              iconId: true,
+            include: {
+              assignedMember: WorkspaceService.assignedMemberInclude,
               icon: {
                 select: {
                   id: true,
@@ -114,103 +92,220 @@ export class DashboardReadService {
                 },
               },
             },
-          },
-        },
-      }) : Promise.resolve([] as any[]),
-      access.advertising ? this.prisma.adCampaign.findMany({
-        where: campaignPeriodWhere(workspaceId, from, to),
-        include: {
-          inviteLinks: { select: { joinedCount: true, requestedCount: true } },
-          telegramChannel: {
+          })
+        : Promise.resolve([] as any[]),
+      access.finance
+        ? this.prisma.transaction.findMany({
+            where: { workspaceId, deletedAt: null, date: period },
+            select: {
+              id: true,
+              date: true,
+              type: true,
+              amount: true,
+              currency: true,
+              amountInPrimaryCurrency: true,
+              description: true,
+              telegramChannelId: true,
+              adCampaignId: true,
+              mutualPromotionParticipantId: true,
+              category: true,
+              categoryId: true,
+              icon: {
+                select: {
+                  id: true,
+                  type: true,
+                  name: true,
+                  emoji: true,
+                  imageUrl: true,
+                },
+              },
+              account: {
+                select: {
+                  id: true,
+                  name: true,
+                  currency: true,
+                  icon: {
+                    select: {
+                      id: true,
+                      type: true,
+                      name: true,
+                      emoji: true,
+                      imageUrl: true,
+                    },
+                  },
+                },
+              },
+              telegramChannel: {
+                select: {
+                  id: true,
+                  title: true,
+                  photoUrl: true,
+                },
+              },
+              categoryRef: {
+                select: {
+                  key: true,
+                  name: true,
+                  iconId: true,
+                  icon: {
+                    select: {
+                      id: true,
+                      type: true,
+                      name: true,
+                      emoji: true,
+                      imageUrl: true,
+                    },
+                  },
+                },
+              },
+            },
+          })
+        : Promise.resolve([] as any[]),
+      access.advertising
+        ? this.prisma.adCampaign.findMany({
+            where: campaignPeriodWhere(workspaceId, from, to),
+            include: {
+              inviteLinks: {
+                select: { joinedCount: true, requestedCount: true },
+              },
+              telegramChannel: {
+                select: {
+                  id: true,
+                  title: true,
+                  username: true,
+                  photoUrl: true,
+                  kpiCurrency: true,
+                  targetCpaFrom: true,
+                  targetCpa: true,
+                  acceptableCpaFrom: true,
+                  acceptableCpa: true,
+                  stopCpaFrom: true,
+                  stopCpa: true,
+                },
+              },
+              promo: { select: { title: true } },
+            },
+          })
+        : Promise.resolve([] as any[]),
+      access.advertising
+        ? this.prisma.adCampaign.groupBy({
+            by: ['status'],
+            where: { workspaceId },
+            _count: { _all: true },
+          })
+        : Promise.resolve([] as any[]),
+      access.channels
+        ? this.prisma.telegramChannel.findMany({
+            where: { workspaceId, archivedAt: null },
             select: {
               id: true,
               title: true,
               username: true,
               photoUrl: true,
-              kpiCurrency: true,
-              targetCpaFrom: true,
-              targetCpa: true,
-              acceptableCpaFrom: true,
-              acceptableCpa: true,
-              stopCpaFrom: true,
-              stopCpa: true,
+              currentSubscribersCount: true,
+              isActive: true,
+              purchaseTransaction: access.finance
+                ? {
+                    select: {
+                      id: true,
+                      amountInPrimaryCurrency: true,
+                      date: true,
+                    },
+                  }
+                : false,
+              adminLinks: { select: { id: true }, take: 1 },
+              audienceSnapshots: {
+                where: { collectedAt: { lte: to } },
+                orderBy: { collectedAt: 'desc' },
+                take: 1,
+                select: {
+                  subscribersCount: true,
+                  activeSubscribersEstimate: true,
+                  viewRate: true,
+                  dataQuality: true,
+                  hasExternalTrafficAnomaly: true,
+                },
+              },
             },
-          },
-          promo: { select: { title: true } },
-        },
-      }) : Promise.resolve([] as any[]),
-      access.advertising ? this.prisma.adCampaign.groupBy({
-        by: ['status'],
-        where: { workspaceId },
-        _count: { _all: true },
-      }) : Promise.resolve([] as any[]),
-      access.channels ? this.prisma.telegramChannel.findMany({
-        where: { workspaceId, archivedAt: null },
-        select: {
-          id: true,
-          title: true,
-          username: true,
-          photoUrl: true,
-          currentSubscribersCount: true,
-          isActive: true,
-          purchaseTransaction: access.finance
-            ? { select: { id: true, amountInPrimaryCurrency: true, date: true } }
-            : false,
-          adminLinks: { select: { id: true }, take: 1 },
-          audienceSnapshots: {
-            orderBy: { collectedAt: 'desc' },
-            take: 1,
+          })
+        : Promise.resolve([] as any[]),
+      access.advertising
+        ? this.prisma.adHypothesis.groupBy({
+            by: ['status'],
+            where: { workspaceId },
+            _count: { _all: true },
+          })
+        : Promise.resolve([] as any[]),
+      access.members
+        ? this.prisma.workspaceMember.count({ where: { workspaceId } })
+        : Promise.resolve(0),
+      access.finance
+        ? this.prisma.transactionCategory.findMany({
+            where: { workspaceId },
+            select: { id: true, key: true, name: true },
+          })
+        : Promise.resolve([] as any[]),
+      access.finance
+        ? this.prisma.transaction.groupBy({
+            by: ['category'],
+            where: { workspaceId, deletedAt: null, categoryId: null },
+          })
+        : Promise.resolve([] as any[]),
+      access.finance
+        ? this.prisma.transaction.groupBy({
+            by: ['accountId', 'type'],
+            where: { workspaceId, deletedAt: null },
+            _sum: { amount: true },
+          })
+        : Promise.resolve([] as any[]),
+      access.finance
+        ? this.prisma.transfer.groupBy({
+            by: ['fromAccountId'],
+            where: { workspaceId, deletedAt: null },
+            _sum: { fromAmount: true },
+          })
+        : Promise.resolve([] as any[]),
+      access.finance
+        ? this.prisma.transfer.groupBy({
+            by: ['toAccountId'],
+            where: { workspaceId, deletedAt: null },
+            _sum: { toAmount: true },
+          })
+        : Promise.resolve([] as any[]),
+      access.finance
+        ? this.prisma.investment.groupBy({
+            by: ['origin', 'movementType'],
+            where: { workspaceId },
+            _sum: { amountInPrimaryCurrency: true },
+          })
+        : Promise.resolve([] as any[]),
+      access.finance
+        ? this.prisma.investment.groupBy({
+            by: ['origin', 'movementType'],
+            where: { workspaceId, date: { lt: from } },
+            _sum: { amountInPrimaryCurrency: true },
+          })
+        : Promise.resolve([] as any[]),
+      access.finance
+        ? this.prisma.investment.findMany({
+            where: { workspaceId, date: period },
             select: {
-              subscribersCount: true,
-              activeSubscribersEstimate: true,
-              viewRate: true,
-              dataQuality: true,
-              hasExternalTrafficAnomaly: true,
+              id: true,
+              date: true,
+              amount: true,
+              currency: true,
+              amountInPrimaryCurrency: true,
+              origin: true,
+              movementType: true,
+              notes: true,
+              workspaceMember: {
+                select: { id: true, user: { select: { name: true } } },
+              },
+              account: { select: { id: true, name: true, currency: true } },
             },
-          },
-        },
-      }) : Promise.resolve([] as any[]),
-      access.advertising ? this.prisma.adHypothesis.groupBy({
-        by: ['status'],
-        where: { workspaceId },
-        _count: { _all: true },
-      }) : Promise.resolve([] as any[]),
-      access.members ? this.prisma.workspaceMember.count({ where: { workspaceId } }) : Promise.resolve(0),
-      access.finance ? this.prisma.investment.findMany({
-        where: { workspaceId, date: period },
-        select: { id: true, amountInPrimaryCurrency: true, date: true },
-      }) : Promise.resolve([] as any[]),
-      access.finance ? this.prisma.transactionCategory.findMany({
-        where: { workspaceId },
-        select: { id: true, key: true, name: true },
-      }) : Promise.resolve([] as any[]),
-      access.finance ? this.prisma.transaction.groupBy({
-        by: ['category'],
-        where: { workspaceId, deletedAt: null, categoryId: null },
-      }) : Promise.resolve([] as any[]),
-      access.finance ? this.prisma.transaction.groupBy({
-        by: ['accountId', 'type'],
-        where: { workspaceId, deletedAt: null },
-        _sum: { amount: true },
-      }) : Promise.resolve([] as any[]),
-      access.finance ? this.prisma.transfer.groupBy({
-        by: ['fromAccountId'],
-        where: { workspaceId, deletedAt: null },
-        _sum: { fromAmount: true },
-      }) : Promise.resolve([] as any[]),
-      access.finance ? this.prisma.transfer.groupBy({
-        by: ['toAccountId'],
-        where: { workspaceId, deletedAt: null },
-        _sum: { toAmount: true },
-      }) : Promise.resolve([] as any[]),
-      access.finance ? this.prisma.investment.aggregate({
-        where: { workspaceId },
-        _sum: { amountInPrimaryCurrency: true },
-      }) : Promise.resolve({ _sum: { amountInPrimaryCurrency: null } }),
-      access.finance ? this.prisma.investment.aggregate({
-        where: { workspaceId, date: { lt: from } },
-        _sum: { amountInPrimaryCurrency: true },
-      }) : Promise.resolve({ _sum: { amountInPrimaryCurrency: null } }),
+            orderBy: [{ date: 'desc' }, { id: 'desc' }],
+          })
+        : Promise.resolve([] as any[]),
     ]);
 
     const revenueCategoryIds = categories
@@ -244,32 +339,40 @@ export class DashboardReadService {
       expenseTotals,
       expensesBeforePeriod,
     ] = await Promise.all([
-      access.finance ? this.prisma.transaction.groupBy({
-        by: ['telegramChannelId'],
-        where: revenueWhere,
-        _sum: { amountInPrimaryCurrency: true },
-      }) : Promise.resolve([] as any[]),
-      access.finance ? this.prisma.transaction.aggregate({
-        where: { ...revenueWhere, date: { lt: from } },
-        _sum: { amountInPrimaryCurrency: true },
-      }) : Promise.resolve({ _sum: { amountInPrimaryCurrency: null } }),
-      access.finance ? this.prisma.transaction.aggregate({
-        where: {
-          workspaceId,
-          deletedAt: null,
-          type: TransactionType.expense,
-        },
-        _sum: { amountInPrimaryCurrency: true },
-      }) : Promise.resolve({ _sum: { amountInPrimaryCurrency: null } }),
-      access.finance ? this.prisma.transaction.aggregate({
-        where: {
-          workspaceId,
-          deletedAt: null,
-          type: TransactionType.expense,
-          date: { lt: from },
-        },
-        _sum: { amountInPrimaryCurrency: true },
-      }) : Promise.resolve({ _sum: { amountInPrimaryCurrency: null } }),
+      access.finance
+        ? this.prisma.transaction.groupBy({
+            by: ['telegramChannelId'],
+            where: revenueWhere,
+            _sum: { amountInPrimaryCurrency: true },
+          })
+        : Promise.resolve([] as any[]),
+      access.finance
+        ? this.prisma.transaction.aggregate({
+            where: { ...revenueWhere, date: { lt: from } },
+            _sum: { amountInPrimaryCurrency: true },
+          })
+        : Promise.resolve({ _sum: { amountInPrimaryCurrency: null } }),
+      access.finance
+        ? this.prisma.transaction.aggregate({
+            where: {
+              workspaceId,
+              deletedAt: null,
+              type: TransactionType.expense,
+            },
+            _sum: { amountInPrimaryCurrency: true },
+          })
+        : Promise.resolve({ _sum: { amountInPrimaryCurrency: null } }),
+      access.finance
+        ? this.prisma.transaction.aggregate({
+            where: {
+              workspaceId,
+              deletedAt: null,
+              type: TransactionType.expense,
+              date: { lt: from },
+            },
+            _sum: { amountInPrimaryCurrency: true },
+          })
+        : Promise.resolve({ _sum: { amountInPrimaryCurrency: null } }),
     ]);
 
     const campaignStatusCounts = Object.fromEntries(
@@ -317,7 +420,6 @@ export class DashboardReadService {
       periodCampaigns,
       channels,
       members,
-      periodInvestments,
       accountRows,
       campaignStatusCounts,
       campaignsCount: campaignStatuses.reduce(
@@ -325,12 +427,24 @@ export class DashboardReadService {
         0,
       ),
       hypothesisStatusCounts,
-      totalInvestedPrimary: dec(totalInvestments._sum.amountInPrimaryCurrency),
+      totalInvestedPrimary: totalInvestments.reduce(
+        (sum, row) =>
+          sum +
+          dec(row._sum.amountInPrimaryCurrency) *
+            (row.movementType === 'WITHDRAWAL' ? -1 : 1),
+        0,
+      ),
       operatingProfitAllTime: allTimeRevenue - totalExpenses,
       cumulativeBeforePeriod:
         dec(revenueBeforePeriod._sum.amountInPrimaryCurrency) -
         dec(expensesBeforePeriod._sum.amountInPrimaryCurrency) -
-        dec(investmentsBeforePeriod._sum.amountInPrimaryCurrency),
+        investmentsBeforePeriod.reduce(
+          (sum, row) =>
+            sum +
+            dec(row._sum.amountInPrimaryCurrency) *
+              (row.movementType === 'WITHDRAWAL' ? -1 : 1),
+          0,
+        ),
       revenueByChannel: new Map(
         revenueByChannel
           .filter((row) => row.telegramChannelId)
@@ -339,6 +453,7 @@ export class DashboardReadService {
             dec(row._sum.amountInPrimaryCurrency),
           ]),
       ),
+      periodInvestments,
     };
   }
 

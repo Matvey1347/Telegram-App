@@ -69,7 +69,7 @@ export function renderTelegramSystemBotPostCard(input: {
   }
   if (workflow.step === 'AWAIT_CONTENT') {
     return present({
-      text: 'Forward a text or photo post here. URL buttons are preserved when Telegram includes them.',
+      text: 'Forward a text, photo, video or GIF post here. URL buttons are preserved when Telegram includes them.',
       reply_markup: {
         inline_keyboard: [
           [

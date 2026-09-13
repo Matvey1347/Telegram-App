@@ -3,7 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { FinanceTransactionSource, Prisma } from '@prisma/client';
+import {
+  FinanceExpenseNecessity,
+  FinanceTransactionPurpose,
+  FinanceTransactionSource,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { CurrencyConversionService } from '../../../../common/currency-conversion.service';
 import { FINANCE_UNDO_TTL_MS } from '../catalog/finance-defaults';
@@ -233,10 +238,21 @@ export class FinanceLedgerService {
     writeContext?: FinanceTransactionWriteContext,
     options?: {
       suppressMerchantMapping?: boolean;
-      purpose?: 'ORDINARY' | 'INVESTMENT_CONTRIBUTION' | 'INVESTMENT_RETURN';
+      purpose?: FinanceTransactionPurpose;
     },
   ) {
     const amount = this.positive(dto.amount, 'amount');
+    const purpose = options?.purpose ?? dto.purpose ?? 'ORDINARY';
+    const economicAmount = this.resolveEconomicAmount(
+      amount,
+      dto.economicAmount,
+      purpose,
+    );
+    this.assertPurposeDirection(purpose, dto.type, dto.categoryId);
+    const necessity =
+      dto.type === 'EXPENSE' && purpose === 'ORDINARY'
+        ? (dto.necessity ?? FinanceExpenseNecessity.UNSPECIFIED)
+        : FinanceExpenseNecessity.UNSPECIFIED;
     const account = writeContext
       ? writeContext.accounts.get(dto.accountId)
       : await tx.financeAccount.findFirst({
@@ -298,8 +314,9 @@ export class FinanceLedgerService {
         accountId: account.id,
         categoryId: category?.id || null,
         type: dto.type,
-        purpose: options?.purpose || 'ORDINARY',
+        purpose,
         amount,
+        economicAmount,
         currency,
         // These retain their original meaning: a snapshot in the profile's
         // default currency at write time. USD valuations live only below.
@@ -307,6 +324,7 @@ export class FinanceLedgerService {
         amountInDefaultCurrency: amount.mul(defaultSnapshot.rate),
         valuationCurrency: 'USD',
         amountInValuationCurrency: amount.mul(valuation.rate),
+        economicAmountInValuationCurrency: economicAmount.mul(valuation.rate),
         exchangeRateToValuation: valuation.rate,
         valuationRateAt: valuation.rateAt,
         occurredAt,
@@ -317,6 +335,7 @@ export class FinanceLedgerService {
             ? this.normalizeMerchant(merchantDisplay || description || '')
             : null,
         source,
+        necessity,
         items: items.length ? { create: items } : undefined,
       },
       select: financeTransactionSelect,
@@ -348,6 +367,7 @@ export class FinanceLedgerService {
           debtSettlement: { select: { id: true } },
           recurringPaymentOccurrence: { select: { id: true } },
           investmentCashFlow: { select: { id: true } },
+          originatedDebts: { select: { id: true }, take: 1 },
         },
       });
       if (!existing)
@@ -369,6 +389,17 @@ export class FinanceLedgerService {
     dto: UpdateFinanceTransactionDto,
   ) {
     const amount = this.positive(dto.amount, 'amount');
+    const purpose = dto.purpose ?? 'ORDINARY';
+    const economicAmount = this.resolveEconomicAmount(
+      amount,
+      dto.economicAmount,
+      purpose,
+    );
+    this.assertPurposeDirection(purpose, dto.type, dto.categoryId);
+    const necessity =
+      dto.type === 'EXPENSE' && purpose === 'ORDINARY'
+        ? (dto.necessity ?? FinanceExpenseNecessity.UNSPECIFIED)
+        : FinanceExpenseNecessity.UNSPECIFIED;
     const account = await tx.financeAccount.findFirst({
       where: {
         id: dto.accountId,
@@ -425,14 +456,18 @@ export class FinanceLedgerService {
         accountId: account.id,
         categoryId: category?.id || null,
         type: dto.type,
+        purpose,
         amount,
+        economicAmount,
         currency,
         exchangeRateToDefault: defaultSnapshot.rate,
         amountInDefaultCurrency: amount.mul(defaultSnapshot.rate),
         valuationCurrency: 'USD',
         amountInValuationCurrency: amount.mul(valuation.rate),
+        economicAmountInValuationCurrency: economicAmount.mul(valuation.rate),
         exchangeRateToValuation: valuation.rate,
         valuationRateAt: valuation.rateAt,
+        necessity,
         occurredAt,
         description,
         merchantDisplay,
@@ -470,6 +505,7 @@ export class FinanceLedgerService {
         debtSettlement: { is: null },
         recurringPaymentOccurrence: { is: null },
         investmentCashFlow: { is: null },
+        originatedDebts: { none: {} },
       },
       data: { deletedAt: new Date() },
     });
@@ -652,5 +688,54 @@ export class FinanceLedgerService {
     } catch {
       throw new BadRequestException(`${field} must be a positive decimal`);
     }
+  }
+
+  private resolveEconomicAmount(
+    amount: Prisma.Decimal,
+    value: string | undefined,
+    purpose: FinanceTransactionPurpose,
+  ) {
+    if (purpose !== FinanceTransactionPurpose.ORDINARY) {
+      if (value !== undefined && !new Prisma.Decimal(value).isZero())
+        throw new BadRequestException(
+          'Balance-only transactions cannot have an economic amount',
+        );
+      return new Prisma.Decimal(0);
+    }
+    const economicAmount =
+      value === undefined ? amount : new Prisma.Decimal(value || '');
+    if (
+      !economicAmount.isFinite() ||
+      economicAmount.isNegative() ||
+      economicAmount.gt(amount)
+    )
+      throw new BadRequestException(
+        'Economic amount must be between zero and the cash amount',
+      );
+    return economicAmount;
+  }
+
+  private assertPurposeDirection(
+    purpose: FinanceTransactionPurpose,
+    type: CreateFinanceTransactionDto['type'],
+    categoryId?: string,
+  ) {
+    const expectedType =
+      purpose === FinanceTransactionPurpose.REIMBURSEMENT ||
+      purpose === FinanceTransactionPurpose.PASS_THROUGH ||
+      purpose === FinanceTransactionPurpose.INVESTMENT_RETURN
+        ? 'INCOME'
+        : purpose === FinanceTransactionPurpose.DEBT_REPAYMENT ||
+            purpose === FinanceTransactionPurpose.INVESTMENT_CONTRIBUTION
+          ? 'EXPENSE'
+          : type;
+    if (type !== expectedType)
+      throw new BadRequestException(
+        'Transaction purpose does not match transaction type',
+      );
+    if (purpose !== FinanceTransactionPurpose.ORDINARY && categoryId)
+      throw new BadRequestException(
+        'Balance-only transactions cannot use an income or expense category',
+      );
   }
 }

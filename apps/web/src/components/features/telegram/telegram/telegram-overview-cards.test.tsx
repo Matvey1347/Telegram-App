@@ -204,6 +204,8 @@ describe("telegram overview cards", () => {
     expect(screen.getByText("Payback")).toBeInTheDocument();
     expect(screen.getByText("ads to break even")).toBeInTheDocument();
     expect(screen.getByText("No delete")).toBeInTheDocument();
+    expect(screen.getByText("700 UAH")).toBeInTheDocument();
+    expect(screen.queryByText("700.00 UAH")).not.toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: "Choose emoji for Creators" }),
     );

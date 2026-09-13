@@ -6,6 +6,36 @@ import { describe, expect, it, vi } from "vitest";
 import { TelegramPostPreview } from "@/components/features/telegram/telegram/telegram-post-preview";
 
 describe("TelegramPostPreview", () => {
+  it("renders video and GIF animation media instead of an unsupported placeholder", () => {
+    const { container } = render(
+      <TelegramPostPreview
+        channelTitle="Channel"
+        text="Motion post"
+        imageUrls={[]}
+        mediaItems={[
+          {
+            kind: "VIDEO",
+            url: "https://cdn.test/video.mp4",
+            mimeType: "video/mp4",
+          },
+          {
+            kind: "PHOTO",
+            url: "https://cdn.test/animation.gif",
+            mimeType: "image/gif",
+          },
+        ]}
+      />,
+    );
+    const video = container.querySelector("video");
+    const gif = container.querySelector(
+      'img[src="https://cdn.test/animation.gif"]',
+    );
+    expect(video).toHaveAttribute("controls");
+    expect(video).toHaveAttribute("playsinline");
+    expect(gif).toBeTruthy();
+    expect(screen.queryByText(/media attached/i)).toBeNull();
+  });
+
   it("renders per-message engagement metrics and reaction breakdowns when provided", () => {
     render(
       <TelegramPostPreview
@@ -112,6 +142,90 @@ describe("TelegramPostPreview", () => {
     );
     expect(container.querySelectorAll(".tg-hashtag")).toHaveLength(2);
     expect(container.querySelector(".tg-hashtag")).toHaveTextContent("#емоції");
+  });
+
+  it("renders imported adjacent and multiline Telegram entities without exposing markup", () => {
+    const { container } = render(
+      <TelegramPostPreview
+        channelTitle="Channel"
+        text={
+          "🔮****[СЕВЕР\\|Цинічний Мольфар](https://t.me/example)****\n**Перший рядок\nдругий рядок**\n||прихований текст||"
+        }
+        plainText={
+          "🔮СЕВЕР|Цинічний Мольфар\nПерший рядок\nдругий рядок\nприхований текст"
+        }
+        imageUrls={[]}
+      />,
+    );
+
+    const preview = container.querySelector(".telegram-preview-text");
+    expect(preview).not.toHaveTextContent("**");
+    expect(preview).not.toHaveTextContent("\\|");
+    expect(preview?.querySelector("b a")).toHaveTextContent(
+      "СЕВЕР|Цинічний Мольфар",
+    );
+    expect(preview?.querySelector(".tg-spoiler")).toHaveTextContent(
+      "прихований текст",
+    );
+  });
+
+  it("renders exact imported Telegram HTML in the editable preview", () => {
+    const onTextChange = vi.fn();
+    const { container } = render(
+      <TelegramPostPreview
+        channelTitle="Channel"
+        text="****Broken**** [link](https://example.test) ||hidden||"
+        plainText="Broken link hidden"
+        formattedHtml={
+          '<b>Broken</b> <a href="https://example.test">link</a> <tg-spoiler>hidden</tg-spoiler>'
+        }
+        imageUrls={[]}
+        onTextChange={onTextChange}
+      />,
+    );
+
+    const preview = container.querySelector<HTMLDivElement>(
+      '.telegram-preview-text[contenteditable="true"]',
+    );
+    expect(preview).not.toBeNull();
+    expect(preview).not.toHaveTextContent("**");
+    expect(preview?.querySelector("b")).toHaveTextContent("Broken");
+    expect(preview?.querySelector("a")).toHaveAttribute(
+      "href",
+      "https://example.test",
+    );
+    expect(preview?.querySelector(".tg-spoiler")).toHaveTextContent("hidden");
+
+    if (!preview) throw new Error("Editable Telegram preview was not rendered");
+    preview.innerHTML = "<b>Changed</b>";
+    fireEvent.input(preview);
+    expect(onTextChange).toHaveBeenLastCalledWith("**Changed**");
+  });
+
+  it("uses visible Telegram text length instead of markup and URL length", () => {
+    const linkedLines = Array.from(
+      { length: 80 },
+      (_, index) =>
+        `**[Post ${index}](https://example.com/a-very-long-tracking-path/${"x".repeat(80)}/${index})**`,
+    ).join("\n");
+    const plainText = Array.from(
+      { length: 80 },
+      (_, index) => `Post ${index}`,
+    ).join("\n");
+    const { container } = render(
+      <TelegramPostPreview
+        channelTitle="Channel"
+        text={linkedLines}
+        plainText={plainText}
+        imageUrls={[]}
+        messageLengthMax={4_096}
+      />,
+    );
+
+    expect(linkedLines.length).toBeGreaterThan(4_096);
+    expect(container.querySelectorAll(".telegram-message-bubble")).toHaveLength(
+      1,
+    );
   });
 
   it("starts animated Premium emoji in the editable preview and keeps its ALT fallback", () => {

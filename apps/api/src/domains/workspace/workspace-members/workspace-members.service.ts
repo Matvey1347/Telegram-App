@@ -96,6 +96,10 @@ export class WorkspaceMembersService {
     ).roleDefinition;
     return {
       ...row,
+      salesCommissionRate:
+        'salesCommissionRate' in row && row.salesCommissionRate != null
+          ? Number(row.salesCommissionRate)
+          : null,
       avatarPresentation: iconToResolvedEmoji(avatarIcon),
       roleDefinition: roleDefinition
         ? {
@@ -198,18 +202,16 @@ export class WorkspaceMembersService {
   }
 
   private async investmentTransactions(workspaceId: string) {
-    return (this.prisma as any).transaction.findMany({
+    return this.prisma.investment.findMany({
       where: {
         workspaceId,
-        type: 'income',
-        memberId: { not: null },
-        categoryRef: { key: 'investment' },
       },
       select: {
-        memberId: true,
+        workspaceMemberId: true,
         amount: true,
         currency: true,
         amountInPrimaryCurrency: true,
+        movementType: true,
       },
     });
   }
@@ -297,19 +299,20 @@ export class WorkspaceMembersService {
       }
     >();
     for (const tx of investments) {
-      const memberId = tx.memberId as string;
+      const memberId = tx.workspaceMemberId;
       const prev = byMember.get(memberId) ?? {
         total: 0,
         count: 0,
         byCurrency: new Map(),
       };
-      const primary = Number(tx.amountInPrimaryCurrency ?? 0);
+      const direction = tx.movementType === 'WITHDRAWAL' ? -1 : 1;
+      const primary = Number(tx.amountInPrimaryCurrency ?? 0) * direction;
       const currency = String(tx.currency || '').toUpperCase();
       const byCurrency = prev.byCurrency.get(currency) ?? {
         amount: 0,
         primary: 0,
       };
-      byCurrency.amount += Number(tx.amount ?? 0);
+      byCurrency.amount += Number(tx.amount ?? 0) * direction;
       byCurrency.primary += primary;
       prev.byCurrency.set(currency, byCurrency);
       prev.total += primary;
@@ -388,19 +391,20 @@ export class WorkspaceMembersService {
       }
     >();
     for (const tx of investments) {
-      const memberId = tx.memberId as string;
+      const memberId = tx.workspaceMemberId;
       const prev = byMember.get(memberId) ?? {
         total: 0,
         count: 0,
         byCurrency: new Map(),
       };
-      const primary = Number(tx.amountInPrimaryCurrency ?? 0);
+      const direction = tx.movementType === 'WITHDRAWAL' ? -1 : 1;
+      const primary = Number(tx.amountInPrimaryCurrency ?? 0) * direction;
       const currency = String(tx.currency || '').toUpperCase();
       const byCurrency = prev.byCurrency.get(currency) ?? {
         amount: 0,
         primary: 0,
       };
-      byCurrency.amount += Number(tx.amount ?? 0);
+      byCurrency.amount += Number(tx.amount ?? 0) * direction;
       byCurrency.primary += primary;
       prev.byCurrency.set(currency, byCurrency);
       prev.total += primary;
@@ -589,6 +593,11 @@ export class WorkspaceMembersService {
     );
 
     if (current.role === WorkspaceRole.admin) {
+      if (dto.salesCommissionRate !== undefined) {
+        throw new ForbiddenException(
+          'Only owner can change sales commission rates',
+        );
+      }
       if (member.role !== WorkspaceRole.member) {
         throw new ForbiddenException('Admin cannot edit owner/admin');
       }
@@ -713,6 +722,10 @@ export class WorkspaceMembersService {
             nextTelegramUsername === undefined
               ? undefined
               : nextTelegramUsername,
+          salesCommissionRate:
+            dto.salesCommissionRate === undefined
+              ? undefined
+              : dto.salesCommissionRate,
         },
         include: this.memberInclude,
       });

@@ -100,7 +100,6 @@ import {
   TelegramAdvertisersQueryDto,
   UpdateTelegramAdChannelPricingDto,
   UpdateTelegramAdSalesMemberPreferencesDto,
-  UpdateTelegramAdSalesWorkspaceSettingsDto,
   UpdateTelegramAdSalePaymentDto,
   UpdateTelegramAdvertiserContactDto,
   UpdateTelegramAdvertiserDto,
@@ -115,6 +114,7 @@ import { decimal, decimalOrNull, decimalToString } from './domain/decimal';
 import { ACTIVE_TELEGRAM_AD_PLACEMENT_STATUSES } from './telegram-ad-sales-reservation';
 import { reconcileTelegramAdPlacementMetrics } from './telegram-ad-placement-metrics';
 import { calculateAdPlacementDeleteAt } from './domain/sales-text';
+import { resolveAdSaleCommissionSnapshot } from './telegram-ad-sales-commission';
 import {
   isTelegramMessageAlreadyAbsent,
   resolveAdPlacementDeletionMessageIds,
@@ -158,10 +158,7 @@ import {
   normalizeDefaultAdSalesProductName,
   TELEGRAM_AD_SALES_DEFAULT_PRODUCTS,
 } from './telegram-ad-sales-default-products';
-import {
-  findOrCreateAdSalesWorkspaceSettings,
-  mapAdSalesWorkspaceSettings,
-} from './telegram-ad-sales-workspace-settings';
+import { findOrCreateAdSalesWorkspaceSettings } from './telegram-ad-sales-workspace-settings';
 import { TelegramAdSalesSaleReadService } from './telegram-ad-sales-sale-read.service';
 import {
   assertNoActiveSalePayments,
@@ -740,8 +737,7 @@ export class TelegramAdSalesService {
             select: {
               id: true,
               title: true,
-              text: true,
-              imageUrls: true,
+              text: true, imageUrls: true, mediaItems: true,
               buttonRows: true,
               telegramChannelId: true,
               sourceType: true,
@@ -1725,34 +1721,6 @@ export class TelegramAdSalesService {
     });
     this.invalidateAvailabilityCache(workspaceId);
     return { success: true };
-  }
-
-  async getAdSalesWorkspaceSettings(userId: string) {
-    const workspaceId = await this.workspace(userId);
-    return mapAdSalesWorkspaceSettings(
-      await findOrCreateAdSalesWorkspaceSettings(this.prisma, workspaceId),
-    );
-  }
-
-  async updateAdSalesWorkspaceSettings(
-    userId: string,
-    dto: UpdateTelegramAdSalesWorkspaceSettingsDto,
-  ) {
-    const workspaceId = await this.workspace(userId);
-    const settings = await this.prisma.telegramAdSalesWorkspaceSettings.upsert({
-      where: { workspaceId },
-      create: {
-        workspaceId,
-        defaultOrganicPostsPerAdSlot: dto.defaultOrganicPostsPerAdSlot ?? 3,
-      },
-      update: {
-        ...(dto.defaultOrganicPostsPerAdSlot === undefined
-          ? {}
-          : { defaultOrganicPostsPerAdSlot: dto.defaultOrganicPostsPerAdSlot }),
-      },
-    });
-    this.invalidateAvailabilityCache(workspaceId);
-    return mapAdSalesWorkspaceSettings(settings);
   }
 
   async getAdSalesMemberPreferences(userId: string) {
@@ -3509,6 +3477,11 @@ export class TelegramAdSalesService {
       dto,
       assignedMemberId,
     );
+    const commissionSnapshot = await resolveAdSaleCommissionSnapshot(
+      this.prisma,
+      workspaceId,
+      assignedMemberId,
+    );
     const sale = await this.prisma.telegramAdSale.create({
       data: {
         workspaceId,
@@ -3539,6 +3512,7 @@ export class TelegramAdSalesService {
         sourceAdvertiserActivityId: dto.sourceAdvertiserActivityId ?? null,
         createdByUserId: userId,
         assignedMemberId,
+        ...commissionSnapshot,
       },
       include: this.includeSaleRelations(),
     });
@@ -4466,6 +4440,7 @@ export class TelegramAdSalesService {
             `[AD] ${sale.title?.trim() || sale.advertiserName} / ${sale.id}`,
           text: dto.text ?? undefined,
           imageUrls: dto.imageUrls ?? [],
+          mediaItems: dto.mediaItems,
           assignedMemberId:
             dto.assignedMemberId ?? sale.assignedMemberId ?? undefined,
           icon: dto.icon ?? null,

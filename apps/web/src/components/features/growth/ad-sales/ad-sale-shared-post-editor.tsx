@@ -31,6 +31,7 @@ export function AdSaleSharedPostEditor({
     title: source?.title ?? "Advertising post",
     text: source?.text ?? "",
     imageUrls: source?.imageUrls ?? [],
+    mediaItems: source?.mediaItems,
     buttonRows: source?.buttonRows ?? [],
   }));
   const [saving, setSaving] = useState(false);

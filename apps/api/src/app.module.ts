@@ -42,6 +42,7 @@ import { TelegramCustomEmojiModule } from './domains/telegram/telegram-custom-em
 import { TrashModule } from './domains/operations/trash/trash.module';
 import { TelegramCrmModule } from './domains/telegram/telegram-crm/telegram-crm.module';
 import { OperationsNotificationsModule } from './domains/operations/notifications/operations-notifications.module';
+import { MemberFinanceModule } from './domains/finance/member-finance/member-finance.module';
 
 @Module({
   imports: [
@@ -82,6 +83,7 @@ import { OperationsNotificationsModule } from './domains/operations/notification
     TelegramAdSalesModule,
     TelegramCrmModule,
     OperationsNotificationsModule,
+    MemberFinanceModule,
     ScheduledTasksModule,
     TelegramSystemBotModule,
     BotBillingModule,

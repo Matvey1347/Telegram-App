@@ -12,6 +12,7 @@ import type { Request } from 'express';
 import {
   FinanceDebtInputDto,
   FinanceDebtQueryDto,
+  FinanceSharedExpenseInputDto,
 } from '../finance-obligation.dto';
 import { FinanceConsumerRequestService } from '../../http/finance-consumer-request.service';
 import { FinanceDebtService } from './finance-debt.service';
@@ -41,6 +42,16 @@ export class FinanceDebtController {
   ) {
     const session = this.requests.authenticate(botId, request);
     return this.debts.create(session.profileId, input);
+  }
+
+  @Post('shared-expense')
+  createSharedExpense(
+    @Param('botId') botId: string,
+    @Req() request: Request,
+    @Body() input: FinanceSharedExpenseInputDto,
+  ) {
+    const session = this.requests.authenticate(botId, request);
+    return this.debts.createSharedExpense(session.profileId, input);
   }
 
   @Patch(':id')

@@ -1,14 +1,41 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatCompactMoney,
   formatMoneyPreview,
   getDominantMoneyAmount,
   getMoneyPreview,
 } from "./money";
 
+describe("compact money", () => {
+  it("hides zero cents but keeps real cents", () => {
+    expect(formatCompactMoney(500, "UAH", "symbol")).toBe("₴ 500");
+    expect(formatCompactMoney(500.65, "UAH", "symbol")).toBe("₴ 500.65");
+    expect(formatCompactMoney(493.5, "UAH", "code")).toBe("493.50 UAH");
+  });
+});
+
 const rates = [
-  { id: "1", baseCurrency: "USD", targetCurrency: "EUR", rate: 0.5, date: "2026-08-08" },
-  { id: "2", baseCurrency: "USD", targetCurrency: "UAH", rate: 40, date: "2026-08-08" },
-  { id: "3", baseCurrency: "USD", targetCurrency: "PLN", rate: 3.639732, date: "2026-08-08" },
+  {
+    id: "1",
+    baseCurrency: "USD",
+    targetCurrency: "EUR",
+    rate: 0.5,
+    date: "2026-08-08",
+  },
+  {
+    id: "2",
+    baseCurrency: "USD",
+    targetCurrency: "UAH",
+    rate: 40,
+    date: "2026-08-08",
+  },
+  {
+    id: "3",
+    baseCurrency: "USD",
+    targetCurrency: "PLN",
+    rate: 3.639732,
+    date: "2026-08-08",
+  },
 ];
 
 describe("money preview", () => {
@@ -20,9 +47,9 @@ describe("money preview", () => {
       currencyDisplayMode: "code" as const,
     };
 
-    expect(formatMoneyPreview({ amount: 100, currency: "USD", settings, rates })).toBe(
-      "100.00 USD / 50.00 EUR\n4,000.00 UAH",
-    );
+    expect(
+      formatMoneyPreview({ amount: 100, currency: "USD", settings, rates }),
+    ).toBe("100.00 USD / 50.00 EUR\n4,000.00 UAH");
   });
 
   it("keeps preview currencies unique when UAH is already secondary", () => {
@@ -33,7 +60,9 @@ describe("money preview", () => {
       currencyDisplayMode: "code" as const,
     };
 
-    expect(getMoneyPreview({ amount: 100, currency: "USD", settings, rates })).toHaveLength(2);
+    expect(
+      getMoneyPreview({ amount: 100, currency: "USD", settings, rates }),
+    ).toHaveLength(2);
   });
 
   it("converts secondary currency through a shared base rate", () => {
@@ -44,9 +73,9 @@ describe("money preview", () => {
       currencyDisplayMode: "symbol" as const,
     };
 
-    expect(formatMoneyPreview({ amount: 4000, currency: "UAH", settings, rates })).toBe(
-      "₴ 4,000.00 / $ 100.00\nzł 363.97",
-    );
+    expect(
+      formatMoneyPreview({ amount: 4000, currency: "UAH", settings, rates }),
+    ).toBe("₴ 4,000.00 / $ 100.00\nzł 363.97");
   });
 
   it("keeps the source transaction currency first when it is not the workspace primary", () => {
@@ -57,9 +86,9 @@ describe("money preview", () => {
       currencyDisplayMode: "code" as const,
     };
 
-    expect(formatMoneyPreview({ amount: 1200, currency: "PLN", settings, rates })).toBe(
-      "1,200.00 PLN / 329.69 USD\n13,187.78 UAH",
-    );
+    expect(
+      formatMoneyPreview({ amount: 1200, currency: "PLN", settings, rates }),
+    ).toBe("1,200.00 PLN / 329.69 USD\n13,187.78 UAH");
   });
 
   it("uses the largest normalized currency total for mixed-currency aggregates", () => {

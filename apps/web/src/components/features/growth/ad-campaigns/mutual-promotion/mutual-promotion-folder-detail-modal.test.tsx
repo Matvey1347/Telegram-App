@@ -52,6 +52,14 @@ describe("MutualPromotionFolderDetailModal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Edit invite links" }));
     expect(onEditInviteLinks).toHaveBeenCalledOnce();
+    expect(screen.getByText("Active")).toHaveClass(
+      "border-emerald-600/70",
+      "bg-emerald-950/80",
+      "text-emerald-200",
+    );
+    expect(screen.getByTestId("folder-status-dot")).toHaveClass(
+      "bg-emerald-400",
+    );
     expect(
       screen.queryByRole("button", { name: "Edit setup" }),
     ).not.toBeInTheDocument();
@@ -116,9 +124,30 @@ describe("MutualPromotionFolderDetailModal", () => {
                   unsubscribedCount: 33,
                   unsubscribedIsEstimate: true,
                   audienceDelta: -4,
-                  subscriberPrice: null,
+                  retainedCount: 0,
+                  subscriberPrice: 350 / 29,
+                  retainedSubscriberPrice: null,
                   currency: "UAH",
                   dataQuality: "PENDING",
+                },
+                attributionHistory: {
+                  startsAt: "2026-09-08T08:00:00.000Z",
+                  endsAt: "2026-09-11T08:00:00.000Z",
+                  endsAtSource: "CURRENT_TIME",
+                  points: [
+                    {
+                      at: "2026-09-08T08:00:00.000Z",
+                      joinedCount: 0,
+                      unsubscribedCount: 0,
+                      audienceDelta: 0,
+                    },
+                    {
+                      at: "2026-09-11T08:00:00.000Z",
+                      joinedCount: 29,
+                      unsubscribedCount: 33,
+                      audienceDelta: -4,
+                    },
+                  ],
                 },
               },
             ],
@@ -170,16 +199,18 @@ describe("MutualPromotionFolderDetailModal", () => {
     expect(screen.getByText("😇")).toBeVisible();
     const metricLabels = Array.from(document.querySelectorAll("dt"));
     expect(metricLabels.map((label) => label.textContent?.trim())).toEqual([
-      "Arrivals",
-      "Unsubscribed ≈",
-      "Audience",
+      "Joined",
     ]);
     expect(metricLabels[0].querySelector("svg")).toHaveClass(
       "text-emerald-300",
     );
-    expect(metricLabels[1].querySelector("svg")).toHaveClass("text-rose-300");
-    expect(metricLabels[2].querySelector("svg")).toHaveClass("text-violet-300");
-    expect(screen.queryByText("Audience Δ")).not.toBeInTheDocument();
+    expect(screen.getByText("12.07 UAH / paid subscriber")).toBeInTheDocument();
+    expect(screen.getByText("Invite-link history")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Invite-link arrivals chart"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Unsubscribed ≈")).not.toBeInTheDocument();
+    expect(screen.queryByText("Net audience")).not.toBeInTheDocument();
   });
 
   it("places the activation explanation and action after the publications", () => {
@@ -245,5 +276,6 @@ describe("MutualPromotionFolderDetailModal", () => {
     expect(
       screen.getByText(/added immediately to Telegram Scheduled Messages/),
     ).toBeVisible();
+    expect(screen.getByText("Unsubscribed")).toBeVisible();
   });
 });

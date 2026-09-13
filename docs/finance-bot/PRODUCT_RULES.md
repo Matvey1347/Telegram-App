@@ -17,6 +17,46 @@ Finance Bot serves people who may have never tracked personal finances before.
 - Never silently corrupt monetary data.
 - Historical analysis must remain correct if the user changes their base currency.
 
+### Cash movement versus economic meaning
+
+- An account balance follows the full cash movement (`amount`). Income, expense,
+  and budget analytics follow only the user's economic share (`economicAmount`).
+- Ordinary income and expense default to the full amount. Reimbursements,
+  pass-through receipts, and debt repayments have zero economic impact and must
+  never inflate income or expense analytics.
+- A shared payment is one atomic operation: create the full account expense,
+  record only the payer's own share as economic expense, and create one
+  receivable per participant. The own share plus all receivables must exactly
+  equal the cash payment in the account currency.
+- A transaction that originated linked shared-expense debts cannot be edited or
+  deleted independently while those debts exist. This preserves the allocation
+  invariant instead of silently desynchronizing cash, analytics, and obligations.
+- Investment contributions and returns are reported separately from spendable
+  cash and ordinary expense/income. Current investment value may contribute to
+  net worth, but never to the available account balance.
+- Expense necessity is `REQUIRED`, `DISCRETIONARY`, or `UNSPECIFIED`. A recurring
+  payment passes its necessity to each generated expense so analytics can use the
+  classification without guessing from a category name.
+
+### AI write safety
+
+- AI input is always a proposal, never a ledger write. Text, receipt images, and
+  voice are parsed into a reviewable batch and require explicit confirmation.
+- Confirmation is idempotent and scoped to the authenticated Finance profile and
+  exact bot integration. A cancelled or expired proposal cannot be committed.
+- The assistant must state uncertainty and ask for missing financial meaning; it
+  must not silently reinterpret a reimbursement, pass-through payment, debt, or
+  investment as ordinary income or expense.
+- The assistant is the primary natural-language entry point. One message router
+  decides whether to answer, ask one focused clarification, prepare a reviewable
+  ledger proposal, or recommend the dedicated Finance screen for a transfer,
+  debt, recurring payment, saving, investment, account, category, budget, or
+  reminder. The user must not have to classify the request before sending it.
+- Balance investigations use bounded, profile-scoped expected account balances
+  and recent ledger entries. When the user supplies the real balance, the
+  assistant may calculate the difference and identify possible candidates, but
+  must label uncertainty and never invent the missing operation.
+
 ### Valuation migration and rate history
 
 - New transactions retain their legacy default-currency fields as a snapshot of
@@ -32,6 +72,19 @@ Finance Bot serves people who may have never tracked personal finances before.
   UTC day. This makes repeated daily syncs idempotent and bounds growth. Rates
   are retained while historical entries can use dated conversion; any retention
   change must first preserve supported entry dates and immutable snapshots.
+
+### Portable data imports
+
+- Import instructions teach semantic migration, not field renaming: own-account
+  movements become transfers; reimbursements and pass-through receipts have zero
+  economic impact; shared purchases preserve the user's share and debts;
+  subscriptions, savings and investments use their dedicated models.
+- `ADD` preserves existing Finance records and remains fingerprint-idempotent.
+  `REPLACE` atomically clears only profile-scoped ledger and planning data before
+  writing the validated file. It never deletes identity, authentication, billing,
+  bot configuration, AI credentials or assistant preferences.
+- A replacement is never short-circuited by an earlier import receipt because its
+  purpose is to make the current dataset match the file again after later edits.
 
 ## Localization
 

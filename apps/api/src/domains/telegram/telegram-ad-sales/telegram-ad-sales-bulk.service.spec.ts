@@ -38,6 +38,15 @@ function createService() {
     telegramChannelNetwork: { findFirst: jest.fn() },
     telegramAdProduct: { findMany: jest.fn().mockResolvedValue([]) },
     telegramPost: { findMany: jest.fn().mockResolvedValue([]) },
+    telegramAdSalesWorkspaceSettings: {
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
+    workspaceMember: {
+      findFirst: jest.fn().mockResolvedValue({
+        id: 'member-1',
+        salesCommissionRate: null,
+      }),
+    },
   } as any;
   const workspaceService = {
     resolveAssignedMemberId: jest.fn().mockResolvedValue({
@@ -142,7 +151,9 @@ describe('TelegramAdSalesBulkService', () => {
 
   it('reuses an existing advertiser with the same display name instead of failing on unique constraint', async () => {
     const { service, tx } = createService();
-    tx.telegramAdvertiser.findFirst.mockResolvedValueOnce({ id: 'advertiser-existing' });
+    tx.telegramAdvertiser.findFirst.mockResolvedValueOnce({
+      id: 'advertiser-existing',
+    });
 
     await service.create('user-1', {
       target: { type: 'CHANNEL', channelId: 'channel-1' },
@@ -203,8 +214,14 @@ describe('TelegramAdSalesBulkService', () => {
     });
     expect(result.createdPlacementCount).toBe(2);
     expect(result.rows).toEqual([
-      expect.objectContaining({ clientRowId: 'row-2026-07-31-0', placementIds: ['placement-1'] }),
-      expect.objectContaining({ clientRowId: 'row-2026-07-31-1', placementIds: ['placement-2'] }),
+      expect.objectContaining({
+        clientRowId: 'row-2026-07-31-0',
+        placementIds: ['placement-1'],
+      }),
+      expect.objectContaining({
+        clientRowId: 'row-2026-07-31-1',
+        placementIds: ['placement-2'],
+      }),
     ]);
   });
 

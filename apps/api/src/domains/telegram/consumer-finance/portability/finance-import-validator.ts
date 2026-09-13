@@ -34,7 +34,7 @@ export function validateFinanceImportDocument(
   if (root.format !== FORMAT) fail('format', `Expected ${FORMAT}`);
   if (root.version !== 1)
     fail('version', 'Only import format version 1 is supported');
-  if (root.mode !== 'ADD') fail('mode', 'Only ADD mode is supported');
+  oneOf(root.mode, 'mode', ['ADD', 'REPLACE']);
   if (root.settings != null) {
     const settings = object(root.settings, 'settings');
     exactKeys(settings, 'settings', [
@@ -219,6 +219,12 @@ export function validateFinanceImportDocument(
     ]);
     if (row.status != null)
       oneOf(row.status, `${path}.status`, ['ACTIVE', 'PAUSED', 'CANCELED']);
+    if (row.necessity != null)
+      oneOf(row.necessity, `${path}.necessity`, [
+        'UNSPECIFIED',
+        'REQUIRED',
+        'DISCRETIONARY',
+      ]);
     instant(row.nextOccurrenceAt, `${path}.nextOccurrenceAt`);
     timezone(row.scheduleTimezone, `${path}.scheduleTimezone`);
     text(row.note, `${path}.note`, { optional: true, max: 500 });

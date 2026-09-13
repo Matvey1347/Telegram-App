@@ -78,6 +78,29 @@ export function AnalyticsPresentation({
         />
       </div>
       <section>
+        <h3 className="text-sm font-medium">{t.expensePriority}</h3>
+        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <Metric
+            label={t.requiredExpenses}
+            value={data.summary.requiredExpenses ?? "0"}
+            currency={data.currency}
+            tone="text-rose-200"
+          />
+          <Metric
+            label={t.discretionaryExpenses}
+            value={data.summary.discretionaryExpenses ?? "0"}
+            currency={data.currency}
+            tone="text-amber-200"
+          />
+          <Metric
+            label={t.unspecifiedExpenses}
+            value={data.summary.unspecifiedExpenses ?? "0"}
+            currency={data.currency}
+            tone="text-neutral-300"
+          />
+        </div>
+      </section>
+      <section>
         <h3 className="text-sm font-medium">{t.periodComparison}</h3>
         {data.comparison.legacyFallback ? (
           <p role="note" className="mt-1 text-xs text-amber-300">

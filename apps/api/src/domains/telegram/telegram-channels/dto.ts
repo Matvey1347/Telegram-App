@@ -195,6 +195,7 @@ export class CreateTelegramManagedPostDto {
   @IsString() title!: string;
   @IsOptional() @IsString() text?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) imageUrls?: string[];
+  @IsOptional() @IsArray() mediaItems?: unknown[];
   @IsOptional() @IsString() assignedMemberId?: string;
   @IsOptional() @IsString() icon?: string | null;
   @IsOptional()
@@ -248,6 +249,7 @@ export class UpdateTelegramManagedPostDto {
   @IsOptional() @IsString() title?: string;
   @IsOptional() @IsString() text?: string | null;
   @IsOptional() @IsArray() @IsString({ each: true }) imageUrls?: string[];
+  @IsOptional() @IsArray() mediaItems?: unknown[];
   @IsOptional() @IsString() assignedMemberId?: string;
   @IsOptional() @IsString() icon?: string | null;
   @IsOptional() @IsBoolean() inPlaceOnly?: boolean;

@@ -1,4 +1,5 @@
 import type { TelegramPostButtonRows } from "./telegram-post-buttons";
+import type { TelegramPostMediaItem } from "./telegram-post-media";
 import type { ResolvedEmoji } from "./resolved-emoji";
 
 export type MutualPromotionFolderStatus =
@@ -61,6 +62,7 @@ export type CreateMutualPromotionPostPayload = {
     title: string;
     text: string;
     imageUrls: string[];
+    mediaItems?: TelegramPostMediaItem[];
     buttonRows: TelegramPostButtonRows;
   }>;
 };
@@ -70,6 +72,7 @@ export type UpdateMutualPromotionPostPayload = {
   title: string;
   text: string;
   imageUrls: string[];
+  mediaItems?: TelegramPostMediaItem[];
   buttonRows: TelegramPostButtonRows;
 };
 
@@ -124,6 +127,16 @@ export type MutualPromotionFolderListItem = {
     username: string | null;
     photoUrl: string | null;
     role: MutualPromotionParticipantRole;
+    stats: MutualPromotionFolderParticipantStats;
+    kpi: {
+      currency: string;
+      targetFrom: number | null;
+      targetTo: number | null;
+      acceptableFrom: number | null;
+      acceptableTo: number | null;
+      stopFrom: number | null;
+      stopTo: number | null;
+    };
   }>;
   createdAt: string;
   updatedAt: string;
@@ -143,13 +156,27 @@ export type MutualPromotionFolderParticipantStats = {
   unsubscribedCount: number | null;
   unsubscribedIsEstimate: boolean;
   audienceDelta: number | null;
+  retainedCount: number | null;
   subscriberPrice: number | null;
+  retainedSubscriberPrice: number | null;
   currency: string | null;
   dataQuality:
     | "PENDING"
     | "CURRENT_COUNTERS"
     | "CACHED_BOUNDARIES"
     | "INCOMPLETE";
+};
+
+export type MutualPromotionAttributionHistory = {
+  startsAt: string;
+  endsAt: string;
+  endsAtSource: "NEXT_FOLDER" | "CURRENT_TIME";
+  points: Array<{
+    at: string;
+    joinedCount: number;
+    unsubscribedCount: number | null;
+    audienceDelta: number | null;
+  }>;
 };
 
 export type MutualPromotionFolderParticipant = {
@@ -185,6 +212,7 @@ export type MutualPromotionFolderParticipant = {
   finalCapturedAt: string | null;
   expense: MutualPromotionFolderExpense | null;
   stats: MutualPromotionFolderParticipantStats;
+  attributionHistory: MutualPromotionAttributionHistory;
 };
 
 export type MutualPromotionPostDelivery = {
@@ -203,6 +231,7 @@ export type MutualPromotionFolderPost = {
   title: string;
   text: string | null;
   imageUrls: string[];
+  mediaItems?: TelegramPostMediaItem[];
   buttonRows: TelegramPostButtonRows;
   scheduledAt: string;
   position: number;

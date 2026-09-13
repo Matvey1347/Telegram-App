@@ -48,7 +48,8 @@ export function TransactionRowsSkeleton({ count }: { count: number }) {
       {Array.from({ length: count }, (_, index) => (
         <div
           key={index}
-          className="grid min-h-[65px] gap-3 border-b border-neutral-800 bg-neutral-950 px-4 py-3 last:border-0 sm:grid-cols-[minmax(0,1fr)_auto_32px] sm:items-center"
+          data-skeleton-row={index + 1}
+          className={`min-h-[65px] gap-3 border-b border-neutral-800 bg-neutral-950 px-4 py-3 last:border-0 sm:grid-cols-[minmax(0,1fr)_auto_32px] sm:items-center ${index >= 5 ? "hidden sm:grid" : "grid"}`}
         >
           <div className="flex min-w-0 items-center gap-3">
             <AvatarSkeleton />
@@ -89,18 +90,19 @@ export function TransferRowsSkeleton({ count }: { count: number }) {
       {Array.from({ length: count }, (_, index) => (
         <div
           key={index}
-          className="grid min-h-[86px] gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_32px] md:items-center"
+          data-skeleton-row={index + 1}
+          className={`relative min-h-[86px] gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 pr-12 md:grid-cols-[minmax(0,1fr)_minmax(4rem,0.45fr)_minmax(0,1fr)] md:items-center md:pr-4 ${index >= 5 ? "hidden sm:grid" : "grid"}`}
         >
           <div className="flex items-center gap-3">
             <AvatarSkeleton />
             <TextSkeleton />
           </div>
           <Skeleton className="hidden h-5 w-5 md:block" />
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 md:pr-8">
             <AvatarSkeleton />
             <TextSkeleton />
           </div>
-          <Skeleton className="h-7 w-7 rounded-md" />
+          <Skeleton className="absolute right-3 top-3 h-7 w-7 rounded-md" />
         </div>
       ))}
     </div>

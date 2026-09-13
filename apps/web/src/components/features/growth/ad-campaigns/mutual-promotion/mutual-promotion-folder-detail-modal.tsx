@@ -32,6 +32,9 @@ import { MutualPromotionSavedPostCard } from "./mutual-promotion-saved-post-card
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { TelegramInviteLinkCreatorAvatar } from "@/components/features/telegram/telegram/telegram-invite-link-creator-avatar";
 import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
+import { MutualPromotionFolderStatusBadge } from "./mutual-promotion-folder-status-badge";
+import { MutualPromotionAttributionChart } from "./mutual-promotion-attribution-chart";
+import { MutualPromotionParticipantRoleBadge } from "./mutual-promotion-participant-role-badge";
 
 function Count({ value }: { value: number | null }) {
   return <>{value == null ? "—" : new Intl.NumberFormat().format(value)}</>;
@@ -61,7 +64,7 @@ function ExpenseEditor({
   );
   const validAmount = Number(amount) > 0;
   return (
-    <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px_auto] sm:items-end">
+    <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_120px_auto] sm:items-end">
       <FormField label="Expense account">
         <CustomSelect
           value={accountId}
@@ -162,11 +165,7 @@ export function MutualPromotionFolderDetailModal({
       onClose={onClose}
       title={folder.title}
       size="xl"
-      headerAction={
-        <span className="rounded-full border border-neutral-700 bg-neutral-800 px-2 py-0.5 text-xs text-neutral-200">
-          {folder.status.toLowerCase()}
-        </span>
-      }
+      headerAction={<MutualPromotionFolderStatusBadge status={folder.status} />}
     >
       <div className="space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-950/40 p-4">
@@ -238,15 +237,16 @@ export function MutualPromotionFolderDetailModal({
               Channels and attribution
             </h4>
             <p className="mt-1 text-sm text-neutral-400">
-              Arrivals use invite-link counter boundaries. Unsubscribes are
-              estimated when Telegram does not provide exact leave events.
+              Arrivals use invite-link counter boundaries. For publishers,
+              unsubscribes are estimated when Telegram does not provide exact
+              leave events.
             </p>
           </div>
           <div className="grid gap-3 lg:grid-cols-2">
             {folder.participants.map((participant) => (
               <div
                 key={participant.id}
-                className="rounded-xl border border-neutral-800 bg-neutral-950/40 p-4"
+                className="rounded-xl border border-neutral-800 bg-neutral-950/40 p-3"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2.5">
@@ -261,7 +261,7 @@ export function MutualPromotionFolderDetailModal({
                           : null
                       }
                       label={participant.channel.title}
-                      size="md"
+                      size="sm"
                       className="rounded-full"
                     />
                     <div className="min-w-0">
@@ -290,15 +290,15 @@ export function MutualPromotionFolderDetailModal({
                       </div>
                     </div>
                   </div>
-                  <span
-                    className={`rounded-full px-2 py-1 text-xs ${participant.role === "PUBLISHER" ? "bg-blue-950 text-blue-200" : "bg-amber-950 text-amber-200"}`}
-                  >
-                    {participant.role === "PUBLISHER"
-                      ? "📣 Publisher"
-                      : "💳 Paid"}
-                  </span>
+                  <MutualPromotionParticipantRoleBadge
+                    role={participant.role}
+                  />
                 </div>
-                <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                <dl
+                  className={`mt-2 grid gap-2 text-sm ${
+                    participant.role === "PAID" ? "grid-cols-1" : "grid-cols-3"
+                  }`}
+                >
                   <div>
                     <dt className="flex items-center gap-1.5 text-xs text-neutral-500">
                       <UserPlus
@@ -306,56 +306,55 @@ export function MutualPromotionFolderDetailModal({
                         className="text-emerald-300"
                         aria-hidden="true"
                       />
-                      Arrivals
+                      Joined
                     </dt>
                     <dd className="mt-1 text-white">
                       <Count value={participant.stats.joinedCount} />
+                      {participant.role === "PAID" ? (
+                        <ParticipantUnitCost
+                          value={participant.stats.subscriberPrice}
+                          currency={participant.stats.currency}
+                          label="paid subscriber"
+                        />
+                      ) : null}
                     </dd>
                   </div>
-                  <div>
-                    <dt className="flex items-center gap-1.5 text-xs text-neutral-500">
-                      <UserMinus
-                        size={14}
-                        className="text-rose-300"
-                        aria-hidden="true"
-                      />
-                      Unsubscribed
-                      {participant.stats.unsubscribedIsEstimate ? " ≈" : ""}
-                    </dt>
-                    <dd className="mt-1 text-white">
-                      <Count value={participant.stats.unsubscribedCount} />
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="flex items-center gap-1.5 text-xs text-neutral-500">
-                      <UserRound
-                        size={14}
-                        className="text-violet-300"
-                        aria-hidden="true"
-                      />
-                      Audience
-                    </dt>
-                    <dd className="mt-1 text-white">
-                      <Count value={participant.stats.audienceDelta} />
-                    </dd>
-                  </div>
+                  {participant.role === "PUBLISHER" ? (
+                    <>
+                      <div>
+                        <dt className="flex items-center gap-1.5 text-xs text-neutral-500">
+                          <UserMinus
+                            size={14}
+                            className="text-rose-300"
+                            aria-hidden="true"
+                          />
+                          Unsubscribed
+                          {participant.stats.unsubscribedIsEstimate ? " ≈" : ""}
+                        </dt>
+                        <dd className="mt-1 text-white">
+                          <Count value={participant.stats.unsubscribedCount} />
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="flex items-center gap-1.5 text-xs text-neutral-500">
+                          <UserRound
+                            size={14}
+                            className="text-violet-300"
+                            aria-hidden="true"
+                          />
+                          Net audience
+                        </dt>
+                        <dd className="mt-1 text-white">
+                          <Count value={participant.stats.audienceDelta} />
+                        </dd>
+                      </div>
+                    </>
+                  ) : null}
                 </dl>
-                {participant.expense ? (
-                  <p className="mt-3 text-sm text-neutral-300">
-                    Expense:{" "}
-                    {formatMoney(
-                      participant.expense.amount,
-                      participant.expense.currency,
-                    )}{" "}
-                    · subscriber price:{" "}
-                    {participant.stats.subscriberPrice == null
-                      ? "—"
-                      : formatMoney(
-                          participant.stats.subscriberPrice,
-                          participant.stats.currency,
-                        )}
-                  </p>
-                ) : null}
+                <MutualPromotionAttributionChart
+                  history={participant.attributionHistory}
+                  showUnsubscribed={participant.role === "PUBLISHER"}
+                />
                 {participant.role === "PAID" ? (
                   <ExpenseEditor
                     key={`${participant.id}:${participant.expense?.transactionId ?? "new"}`}
@@ -441,5 +440,21 @@ export function MutualPromotionFolderDetailModal({
         ) : null}
       </div>
     </Modal>
+  );
+}
+
+function ParticipantUnitCost({
+  value,
+  currency,
+  label,
+}: {
+  value: number | null;
+  currency: string | null;
+  label: string;
+}) {
+  return (
+    <span className="mt-1 block text-[11px] text-neutral-500">
+      {value == null ? "—" : formatMoney(value, currency)} / {label}
+    </span>
   );
 }

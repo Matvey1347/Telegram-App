@@ -23,6 +23,7 @@ import {
 import type {
   FinanceDebtInputDto,
   FinanceDebtQueryDto,
+  FinanceSharedExpenseInputDto,
 } from '../finance-obligation.dto';
 import {
   financeObligationDeliveryTarget,
@@ -100,6 +101,97 @@ export class FinanceDebtService {
     });
     if (result.scheduledAt) this.delivery.notify(result.scheduledAt);
     return result.value;
+  }
+
+  async createSharedExpense(
+    profileId: string,
+    input: FinanceSharedExpenseInputDto,
+  ) {
+    const total = this.amount(input.amount);
+    const ownShare = this.nonNegativeAmount(input.ownShare, 'Own share');
+    const participants = input.participants.map((participant) => ({
+      ...participant,
+      name: this.name(participant.name),
+      amountValue: this.amount(participant.amount),
+    }));
+    const allocated = participants.reduce(
+      (sum, participant) => sum.plus(participant.amountValue),
+      ownShare,
+    );
+    if (!allocated.equals(total))
+      throw new BadRequestException(
+        'Own share and participant debts must equal the paid amount',
+      );
+
+    const [profile, account] = await Promise.all([
+      this.ledger.profileContext(profileId),
+      this.prisma.financeAccount.findFirst({
+        where: { id: input.accountId, profileId, archivedAt: null },
+        select: { id: true, currency: true },
+      }),
+    ]);
+    if (!account) throw new NotFoundException('Finance account not found');
+    const rates = await this.ledger.prepareTransactionRateSource(profile, [
+      { currency: account.currency, occurredAt: input.occurredAt },
+    ]);
+    const result = await this.prisma.$transaction(async (tx) => {
+      const obligationProfile = await financeObligationProfile(tx, profileId);
+      const transactionInput = {
+        accountId: input.accountId,
+        categoryId: input.categoryId,
+        type: 'EXPENSE' as const,
+        amount: total.toString(),
+        economicAmount: ownShare.toString(),
+        necessity: input.necessity,
+        description: input.description,
+        occurredAt: input.occurredAt,
+      };
+      const writeContext = await this.ledger.prepareTransactionWriteContext(
+        tx,
+        profileId,
+        [transactionInput],
+        rates,
+      );
+      const transaction = await this.ledger.createTransactionInTransaction(
+        tx,
+        profile,
+        transactionInput,
+        'MINI_APP',
+        undefined,
+        writeContext,
+      );
+      const debts: Array<ReturnType<typeof financeDebtView>> = [];
+      const scheduledAt: Date[] = [];
+      for (const participant of participants) {
+        const debt = await tx.financeDebt.create({
+          data: {
+            profileId,
+            accountId: account.id,
+            direction: 'OWED_TO_ME',
+            name: participant.name,
+            amount: participant.amountValue,
+            currency: account.currency,
+            dueAt: financeObligationDate(
+              participant.dueDate,
+              obligationProfile.timezone,
+            ),
+            scheduleTimezone: obligationProfile.timezone,
+            note: input.description?.trim() || null,
+            originTransactionId: transaction.id,
+          },
+          select: financeDebtSelect,
+        });
+        const schedule = await this.schedule(tx, obligationProfile, debt);
+        if (schedule) scheduledAt.push(schedule);
+        debts.push(financeDebtView(debt, obligationProfile.timezone));
+      }
+      return { transaction, debts, scheduledAt };
+    });
+    const nextSchedule = result.scheduledAt.sort(
+      (left, right) => left.getTime() - right.getTime(),
+    )[0];
+    if (nextSchedule) this.delivery.notify(nextSchedule);
+    return { transaction: result.transaction, debts: result.debts };
   }
 
   async update(profileId: string, id: string, input: FinanceDebtInputDto) {
@@ -237,6 +329,11 @@ export class FinanceDebtService {
         'MINI_APP',
         undefined,
         writeContext,
+        {
+          suppressMerchantMapping: true,
+          purpose:
+            existing.direction === 'I_OWE' ? 'DEBT_REPAYMENT' : 'REIMBURSEMENT',
+        },
       );
       const claimed = await tx.financeDebt.updateMany({
         where: { id, profileId, status: 'OPEN', version: existing.version },
@@ -296,6 +393,16 @@ export class FinanceDebtService {
     if (!amount.isFinite() || !amount.isPositive())
       throw new BadRequestException('Debt amount must be positive');
     return amount;
+  }
+
+  private nonNegativeAmount(value: string, label: string) {
+    try {
+      const amount = new Prisma.Decimal(value);
+      if (!amount.isFinite() || amount.isNegative()) throw new Error();
+      return amount;
+    } catch {
+      throw new BadRequestException(`${label} must be zero or positive`);
+    }
   }
 
   private name(value: string) {

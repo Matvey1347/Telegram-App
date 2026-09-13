@@ -7,12 +7,16 @@ import type {
 } from "@telegram-system/shared";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
 import { FinanceTransactionEditor } from "./finance-transaction-editor";
+import { consumerFinanceObligationsApi } from "@/lib/features/finance/consumer-finance-obligations-api";
 
 vi.mock("@/lib/features/finance/consumer-finance-api", () => ({
   consumerFinanceApi: {
     createTransaction: vi.fn(),
     updateTransaction: vi.fn(),
   },
+}));
+vi.mock("@/lib/features/finance/consumer-finance-obligations-api", () => ({
+  consumerFinanceObligationsApi: { createSharedExpense: vi.fn() },
 }));
 
 beforeEach(() => vi.clearAllMocks());
@@ -153,6 +157,9 @@ describe("FinanceTransactionEditor", () => {
       view.container.querySelector('input[inputmode="decimal"]')!,
       { target: { value: "12.34" } },
     );
+    expect(
+      screen.getByRole("button", { name: "Save transaction" }),
+    ).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "Save transaction" }));
 
     await waitFor(() =>
@@ -166,6 +173,167 @@ describe("FinanceTransactionEditor", () => {
       ),
     );
     expect(onSaved).toHaveBeenCalledWith(created);
+  });
+
+  it("persists cash movement separately from the user's economic share", async () => {
+    const created: ConsumerFinanceTransaction = {
+      id: "shared-bill",
+      accountId: "a",
+      type: "EXPENSE",
+      purpose: "ORDINARY",
+      amount: "100",
+      economicAmount: "25",
+      necessity: "DISCRETIONARY",
+      currency: "PLN",
+      occurredAt: "2026-09-11T12:00:00.000Z",
+    };
+    vi.mocked(consumerFinanceApi.createTransaction).mockResolvedValue(created);
+    const view = render(
+      <QueryClientProvider client={new QueryClient()}>
+        <FinanceTransactionEditor
+          botId="bot"
+          accounts={[
+            {
+              id: "a",
+              name: "Card",
+              iconPresentation: { type: "unicode", value: "💳" },
+              type: "CARD",
+              currency: "PLN",
+              openingBalance: "0",
+              balance: "0",
+              defaultCurrency: "PLN",
+            },
+          ]}
+          categories={[]}
+          editing={null}
+          locale="en"
+          timezone="UTC"
+          initiallyOpenType="EXPENSE"
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    const moneyInputs = view.container.querySelectorAll(
+      'input[inputmode="decimal"]',
+    );
+    fireEvent.change(moneyInputs[0]!, { target: { value: "100" } });
+    fireEvent.change(moneyInputs[1]!, { target: { value: "25" } });
+    fireEvent.click(screen.getByRole("button", { name: "Not specified" }));
+    fireEvent.click(screen.getByRole("option", { name: "Optional" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save transaction" }));
+
+    await waitFor(() =>
+      expect(consumerFinanceApi.createTransaction).toHaveBeenCalledWith(
+        "bot",
+        expect.objectContaining({
+          amount: "100",
+          economicAmount: "25",
+          necessity: "DISCRETIONARY",
+        }),
+      ),
+    );
+  });
+
+  it("creates a shared expense and one debt per participant", async () => {
+    const client = new QueryClient();
+    client.setQueryData(
+      ["consumer-finance", "bot", "debts", { status: "OPEN" }],
+      { pages: [], pageParams: [] },
+    );
+    const transaction: ConsumerFinanceTransaction = {
+      id: "shared",
+      accountId: "a",
+      type: "EXPENSE",
+      purpose: "ORDINARY",
+      amount: "100",
+      economicAmount: "25",
+      currency: "PLN",
+      occurredAt: "2026-09-12T12:00:00.000Z",
+    };
+    vi.mocked(
+      consumerFinanceObligationsApi.createSharedExpense,
+    ).mockResolvedValue({
+      transaction,
+      debts: [],
+    });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <FinanceTransactionEditor
+          botId="bot"
+          accounts={[
+            {
+              id: "a",
+              name: "Card",
+              iconPresentation: { type: "unicode", value: "💳" },
+              type: "CARD",
+              currency: "PLN",
+              openingBalance: "0",
+              balance: "0",
+              defaultCurrency: "PLN",
+            },
+          ]}
+          categories={[]}
+          editing={null}
+          locale="en"
+          timezone="UTC"
+          initiallyOpenType="EXPENSE"
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "My expense" }));
+    fireEvent.click(
+      screen.getByRole("option", { name: "Shared expense with repayments" }),
+    );
+    const moneyInputs = view.container.querySelectorAll(
+      'input[inputmode="decimal"]',
+    );
+    fireEvent.change(moneyInputs[0]!, { target: { value: "100" } });
+    fireEvent.change(
+      view.container.querySelector('input[placeholder="100"]')!,
+      {
+        target: { value: "25" },
+      },
+    );
+    fireEvent.change(screen.getByLabelText("Person"), {
+      target: { value: "Ana" },
+    });
+    fireEvent.change(screen.getByLabelText("Owes"), {
+      target: { value: "75" },
+    });
+    expect(screen.getByText(/^Allocated:/)).toHaveTextContent(
+      "100.00 / 100.00 PLN",
+    );
+    expect(
+      screen.getByRole("button", { name: "Save transaction" }),
+    ).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Save transaction" }));
+
+    await waitFor(() =>
+      expect(
+        consumerFinanceObligationsApi.createSharedExpense,
+      ).toHaveBeenCalledWith(
+        "bot",
+        expect.objectContaining({
+          amount: "100",
+          ownShare: "25",
+          participants: [
+            expect.objectContaining({ name: "Ana", amount: "75" }),
+          ],
+        }),
+      ),
+    );
+    expect(
+      client.getQueryState([
+        "consumer-finance",
+        "bot",
+        "debts",
+        { status: "OPEN" },
+      ])?.isInvalidated,
+    ).toBe(true);
   });
 
   it("keeps the editor open and shows an API mutation failure", async () => {

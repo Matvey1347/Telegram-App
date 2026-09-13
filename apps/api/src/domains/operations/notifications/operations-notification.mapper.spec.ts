@@ -46,6 +46,7 @@ describe('mapOperationsNotification', () => {
       senderName: 'Ada',
       avatarUrl: 'https://cdn.example/ada.jpg',
       messageCount: 3,
+      notificationIds: ['notification-1'],
     });
   });
 });

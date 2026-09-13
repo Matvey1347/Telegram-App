@@ -30,6 +30,7 @@ import {
 } from "@/lib/query-keys";
 import { useI18n } from "@/providers/i18n-provider";
 import { localizedAccountError } from "@/lib/features/workspace/account-error";
+import { AccountMemberFinance } from "./account-member-finance";
 
 type AccountTab = "profile" | "password";
 type IdentityMode = "username" | "account";
@@ -163,45 +164,52 @@ export function AccountWorkspace() {
       ) : account.isLoading || !account.data ? (
         <LoadingState />
       ) : tab === "profile" ? (
-        <ProfileForm
-          data={account.data}
-          form={profileForm}
-          avatarIconId={avatarIconId}
-          setAvatarIconId={setAvatarIconId}
-          identityMode={identityMode}
-          setIdentityMode={setIdentityMode}
-          accounts={availableAccounts}
-          accountsLoading={telegramAccounts.isLoading}
-          accountsError={telegramAccounts.isError}
-          retryAccounts={() => void telegramAccounts.refetch()}
-          selectedAccount={selectedAccount}
-          selectedAccountId={selectedAccountId}
-          error={
-            profileError
-              ? localizedAccountError(
-                  profileError,
-                  t,
-                  "account.errors.updateProfile",
-                )
-              : ""
-          }
-          pending={updateProfile.isPending}
-          onSubmit={(values) =>
-            updateProfile.mutate({
-              name: values.name,
-              email: values.email,
-              avatarIconId,
-              telegramUsername:
-                identityMode === "username"
-                  ? values.telegramUsername.trim() || null
-                  : null,
-              telegramUserAccountIds:
-                identityMode === "account" && selectedAccountId
-                  ? [selectedAccountId]
-                  : [],
-            })
-          }
-        />
+        <>
+          <ProfileForm
+            data={account.data}
+            form={profileForm}
+            avatarIconId={avatarIconId}
+            setAvatarIconId={setAvatarIconId}
+            identityMode={identityMode}
+            setIdentityMode={setIdentityMode}
+            accounts={availableAccounts}
+            accountsLoading={telegramAccounts.isLoading}
+            accountsError={telegramAccounts.isError}
+            retryAccounts={() => void telegramAccounts.refetch()}
+            selectedAccount={selectedAccount}
+            selectedAccountId={selectedAccountId}
+            error={
+              profileError
+                ? localizedAccountError(
+                    profileError,
+                    t,
+                    "account.errors.updateProfile",
+                  )
+                : ""
+            }
+            pending={updateProfile.isPending}
+            onSubmit={(values) =>
+              updateProfile.mutate({
+                name: values.name,
+                email: values.email,
+                avatarIconId,
+                telegramUsername:
+                  identityMode === "username"
+                    ? values.telegramUsername.trim() || null
+                    : null,
+                telegramUserAccountIds:
+                  identityMode === "account" && selectedAccountId
+                    ? [selectedAccountId]
+                    : [],
+              })
+            }
+          />
+          <AccountMemberFinance
+            memberId={account.data.workspaceMemberId}
+            name={account.data.name}
+            canManage={account.data.workspace.role === "owner"}
+          />
+        </>
       ) : (
         <PasswordForm
           form={passwordForm}

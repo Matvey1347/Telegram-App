@@ -37,6 +37,7 @@ import {
   type ConsumerFinanceScreen,
 } from "./consumer-finance-navigation";
 import { useFinanceBotBranding } from "./use-finance-bot-branding";
+import { FinanceAssistantDrawer } from "./finance-assistant-drawer";
 
 const subscribeToStaticBrowserState = () => () => undefined;
 
@@ -268,6 +269,13 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
           </p>
         ) : null}
         {children}
+        {profile?.onboardingCompletedAt ? (
+          <FinanceAssistantDrawer
+            botId={botId}
+            locale={locale}
+            onNavigate={navigate}
+          />
+        ) : null}
       </FinanceVisualContextProvider>
     );
     return surface === "browser" ? (

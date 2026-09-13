@@ -62,5 +62,9 @@ function crmMessagePresentation(
     senderName: value.senderName,
     avatarUrl: typeof value.avatarUrl === 'string' ? value.avatarUrl : null,
     messageCount: value.messageCount,
+    notificationIds:
+      typeof value.notificationIds === 'string'
+        ? value.notificationIds.split(',').filter(Boolean)
+        : [row.id],
   };
 }

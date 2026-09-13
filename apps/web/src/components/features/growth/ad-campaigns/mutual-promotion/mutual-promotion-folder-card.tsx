@@ -1,51 +1,15 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type {
-  MutualPromotionFolderListItem,
-  MutualPromotionFolderStatus,
-} from "@telegram-system/shared";
+import type { MutualPromotionFolderListItem } from "@telegram-system/shared";
 import { ArrowUpRight, CalendarClock } from "lucide-react";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import { formatDateTime } from "@/lib/date-format";
-
-const statusPresentation: Record<
-  MutualPromotionFolderStatus,
-  { label: string; badge: string; dot: string }
-> = {
-  DRAFT: {
-    label: "Draft",
-    badge: "border-slate-700 bg-slate-900 text-slate-300",
-    dot: "bg-slate-400",
-  },
-  SCHEDULED: {
-    label: "Scheduled",
-    badge: "border-sky-700/70 bg-sky-950/70 text-sky-200",
-    dot: "bg-sky-400",
-  },
-  ACTIVE: {
-    label: "Active",
-    badge: "border-emerald-600/70 bg-emerald-950/80 text-emerald-200",
-    dot: "bg-emerald-400",
-  },
-  DELETING: {
-    label: "Finishing",
-    badge: "border-amber-700/70 bg-amber-950/70 text-amber-200",
-    dot: "bg-amber-400",
-  },
-  COMPLETED: {
-    label: "Completed",
-    badge: "border-violet-800/70 bg-violet-950/60 text-violet-200",
-    dot: "bg-violet-400",
-  },
-  CANCELLED: {
-    label: "Cancelled",
-    badge: "border-rose-900/70 bg-rose-950/50 text-rose-300",
-    dot: "bg-rose-500",
-  },
-};
+import { MutualPromotionFolderStatusBadge } from "./mutual-promotion-folder-status-badge";
+import { MutualPromotionPaidSubscriberPrice } from "./mutual-promotion-paid-subscriber-price";
+import { MutualPromotionParticipantRoleBadge } from "./mutual-promotion-participant-role-badge";
 
 export function MutualPromotionFolderCard({
   folder,
@@ -54,7 +18,6 @@ export function MutualPromotionFolderCard({
   folder: MutualPromotionFolderListItem;
   onOpen: () => void;
 }) {
-  const status = statusPresentation[folder.status];
   const publisherChannels = folder.channels.filter(
     (channel) => channel.role === "PUBLISHER",
   );
@@ -66,7 +29,7 @@ export function MutualPromotionFolderCard({
     <article className="group relative rounded-2xl border border-neutral-800 bg-neutral-950/80 transition duration-200 hover:border-neutral-700">
       <button
         type="button"
-        className="block w-full p-5 pb-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+        className="block w-full rounded-t-2xl p-4 pb-0 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-neutral-600"
         onClick={onOpen}
         aria-label={`Open folder ${folder.title}`}
       >
@@ -75,29 +38,26 @@ export function MutualPromotionFolderCard({
             <h3 className="truncate text-base font-semibold text-white">
               {folder.title}
             </h3>
-            <p className="mt-1.5 flex items-center gap-1.5 text-xs text-neutral-400">
-              <CalendarClock size={14} />
+            <p className="mt-1.5 flex items-center gap-1.5 whitespace-nowrap text-[11px] text-neutral-400">
+              <CalendarClock size={14} className="shrink-0" />
               <span>{formatDateTime(folder.startsAt)}</span>
               <span className="text-neutral-600">→</span>
               <span>{formatDateTime(folder.endsAt)}</span>
             </p>
           </div>
-          <span
-            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${status.badge}`}
-          >
-            <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
-            {status.label}
-          </span>
+          <MutualPromotionFolderStatusBadge status={folder.status} />
         </div>
       </button>
 
-      <div className="mx-5 mt-5 grid grid-cols-3 divide-x divide-white/10 rounded-xl border border-white/5 bg-black/25 py-3 text-center">
+      <div className="mx-4 mt-3 grid grid-cols-3 divide-x divide-white/10 rounded-lg border border-white/5 bg-black/25 py-2 text-center">
         <Metric value={folder.postCount} label="Posts" />
         <ChannelMetric channels={publisherChannels} label="Publishers" />
         <ChannelMetric channels={paidChannels} label="Paid" />
       </div>
 
-      <div className="mt-4 flex justify-end border-t border-white/10 px-5 py-3">
+      <ChannelPerformance channels={folder.channels} />
+
+      <div className="mt-3 flex justify-end border-t border-white/10 px-4 py-2">
         <button
           type="button"
           onClick={onOpen}
@@ -108,6 +68,81 @@ export function MutualPromotionFolderCard({
       </div>
     </article>
   );
+}
+
+function ChannelPerformance({
+  channels,
+}: {
+  channels: MutualPromotionFolderListItem["channels"];
+}) {
+  if (!channels.length) return null;
+
+  return (
+    <div
+      className="mx-4 mt-3 divide-y divide-neutral-800 overflow-hidden rounded-lg border border-neutral-800 bg-black/20"
+      aria-label="Channel performance"
+    >
+      {channels.map((channel) => (
+        <div key={`${channel.role}:${channel.id}`} className="px-2.5 py-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <TelegramEntityAvatar
+              imageUrl={channel.photoUrl}
+              alt=""
+              kind="channel"
+              size="xs"
+            />
+            <span className="min-w-0 flex-1 truncate text-xs font-medium text-neutral-100">
+              {channel.title}
+            </span>
+            <MutualPromotionParticipantRoleBadge role={channel.role} compact />
+          </div>
+          <dl className="mt-1.5 grid grid-cols-2 gap-2 pl-7 text-[10px]">
+            <ChannelStat
+              label="Joined"
+              value={formatCount(channel.stats.joinedCount)}
+              tone="text-emerald-300"
+            />
+            {channel.role === "PUBLISHER" ? (
+              <ChannelStat
+                label="Left ≈"
+                value={formatCount(channel.stats.unsubscribedCount)}
+                tone="text-rose-300"
+              />
+            ) : null}
+            {channel.role === "PAID" ? (
+              <ChannelStat
+                label="Price"
+                value={<MutualPromotionPaidSubscriberPrice channel={channel} />}
+              />
+            ) : null}
+          </dl>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ChannelStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: ReactNode;
+  tone?: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-neutral-600">{label}</dt>
+      <dd className={`truncate font-medium tabular-nums ${tone ?? ""}`}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function formatCount(value: number | null) {
+  return value == null ? "—" : new Intl.NumberFormat().format(value);
 }
 
 function Metric({ value, label }: { value: number; label: string }) {

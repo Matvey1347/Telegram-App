@@ -113,8 +113,7 @@ const pageHookAllowances = [
   ["(telegram)/telegram-channels/page.tsx", 18],
   ["(telegram)/telegram-posts/page.tsx", 17],
   ["(telegram)/telegram/channels/[id]/page.tsx", 14],
-  ["(workspace)/settings/page.tsx", 7],
-  ["page.tsx", 6],
+  ["(workspace)/settings/page.tsx", 5],
 ];
 for (const [suffix, count] of pageHookAllowances) {
   allowPattern(
@@ -136,7 +135,6 @@ const pageApiAllowances = [
   ["(telegram)/telegram-posts/page.tsx", 6],
   ["(telegram)/telegram/channels/[id]/page.tsx", 2],
   ["(workspace)/settings/page.tsx", 1],
-  ["page.tsx", 3],
 ];
 for (const [suffix, count] of pageApiAllowances) {
   allowPattern(

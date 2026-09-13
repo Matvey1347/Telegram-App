@@ -1,12 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { normalizeTelegramPostMediaItems, type TelegramPostMediaItem } from '@telegram-system/shared';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { normalizeTelegramPostButtonRows } from '../../../telegram/shared/telegram-inline-keyboard';
-import {
-  CreateTelegramManagedPostDto,
-  ReorderManagedPostSidebarDto,
-} from './dto';
+import { CreateTelegramManagedPostDto, ReorderManagedPostSidebarDto } from './dto';
 import { TelegramChannelCatalogService } from './telegram-channel-catalog.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 import { TelegramManagedPostGroupPresentationService } from './telegram-managed-post-group-presentation.service';
@@ -14,10 +12,7 @@ import { TelegramManagedPostPublicationService } from './telegram-managed-post-p
 import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-media-storage.service';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
-import {
-  telegramPostsBadRequest,
-  telegramPostsNotFound,
-} from './telegram-posts.errors';
+import { telegramPostsBadRequest, telegramPostsNotFound } from './telegram-posts.errors';
 
 @Injectable()
 export class TelegramManagedPostCommandService {
@@ -67,13 +62,8 @@ export class TelegramManagedPostCommandService {
     },
   } as const;
 
-  async reorderManagedPostSidebar(
-    userId: string,
-    channelId: string,
-    dto: ReorderManagedPostSidebarDto,
-  ) {
-    const workspaceId =
-      await this.telegramChannelsSupportService.workspace(userId);
+  async reorderManagedPostSidebar(userId: string, channelId: string, dto: ReorderManagedPostSidebarDto) {
+    const workspaceId = await this.telegramChannelsSupportService.workspace(userId);
     await this.telegramChannelCatalogService.findOne(userId, channelId);
     const [groups, posts] = await Promise.all([
       this.prisma.postGroup.findMany({
@@ -85,10 +75,7 @@ export class TelegramManagedPostCommandService {
         select: { id: true },
       }),
     ]);
-    const expected = [
-      ...groups.map((group) => `group:${group.id}`),
-      ...posts.map((post) => `post:${post.id}`),
-    ];
+    const expected = [...groups.map((group) => `group:${group.id}`), ...posts.map((post) => `post:${post.id}`)];
     if (
       dto.orderedItems.length !== expected.length ||
       new Set(dto.orderedItems).size !== dto.orderedItems.length ||
@@ -125,6 +112,7 @@ export class TelegramManagedPostCommandService {
       title: string;
       text?: string | null;
       imageUrls?: string[];
+      mediaItems?: TelegramPostMediaItem[];
       buttonRows?: unknown;
       icon?: string | null;
       groupId?: string | null;
@@ -139,6 +127,7 @@ export class TelegramManagedPostCommandService {
         title: params.title,
         text: params.text ?? null,
         imageUrls: params.imageUrls ?? [],
+        mediaItems: (params.mediaItems ?? []) as unknown as Prisma.InputJsonValue,
         buttonRows: normalizeTelegramPostButtonRows(params.buttonRows),
         origin: 'SYSTEM',
         assignedMemberId: params.assignedMemberId,
@@ -151,78 +140,46 @@ export class TelegramManagedPostCommandService {
     });
   }
 
-  public async prepareManagedPostCreate(
-    userId: string,
-    channelId: string,
-    dto: CreateTelegramManagedPostDto,
-  ) {
+  public async prepareManagedPostCreate(userId: string, channelId: string, dto: CreateTelegramManagedPostDto) {
     if (dto.assignedMemberId === null) {
-      throw telegramPostsBadRequest(
-        'TELEGRAM_POST_ASSIGNED_MEMBER_REQUIRED',
-        'Assigned member is required',
-      );
+      throw telegramPostsBadRequest('TELEGRAM_POST_ASSIGNED_MEMBER_REQUIRED', 'Assigned member is required');
     }
-    const { workspaceId, assignedMemberId } =
-      await this.workspaceService.resolveAssignedMemberId(
-        userId,
-        dto.assignedMemberId,
-      );
+    const { workspaceId, assignedMemberId } = await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId);
     if (!assignedMemberId) {
-      throw telegramPostsBadRequest(
-        'TELEGRAM_POST_ASSIGNED_MEMBER_REQUIRED',
-        'Assigned member is required',
-      );
+      throw telegramPostsBadRequest('TELEGRAM_POST_ASSIGNED_MEMBER_REQUIRED', 'Assigned member is required');
     }
     await this.telegramChannelCatalogService.findOne(userId, channelId);
     const title = dto.title.trim();
-    if (!title)
-      throw telegramPostsBadRequest(
-        'TELEGRAM_POST_TITLE_REQUIRED',
-        'Title is required',
-      );
-    const imageUrls =
-      await this.telegramManagedPostMediaStorageService.persistImageUrls(
-        dto.imageUrls ?? [],
-      );
+    if (!title) throw telegramPostsBadRequest('TELEGRAM_POST_TITLE_REQUIRED', 'Title is required');
+    const persistMediaUrls = this.telegramManagedPostMediaStorageService.persistMediaUrls;
+    const { imageUrls, mediaItems } = persistMediaUrls
+      ? persistMediaUrls.call(this.telegramManagedPostMediaStorageService, dto.mediaItems, dto.imageUrls)
+      : {
+          imageUrls: await this.telegramManagedPostMediaStorageService.persistImageUrls(dto.imageUrls ?? []),
+          mediaItems: normalizeTelegramPostMediaItems(dto.mediaItems, dto.imageUrls),
+        };
     return {
       workspaceId,
       channelId,
       title,
       text: dto.text ?? null,
       imageUrls,
+      mediaItems,
       buttonRows: dto.buttonRows,
       assignedMemberId,
       icon: dto.icon?.trim() || null,
     };
   }
 
-  async createManagedPost(
-    userId: string,
-    channelId: string,
-    dto: CreateTelegramManagedPostDto,
-    options: { groupId?: string | null } = {},
-  ) {
-    const prepared = await this.prepareManagedPostCreate(
-      userId,
-      channelId,
-      dto,
-    );
-    const create = async (
-      client: Prisma.TransactionClient | PrismaService,
-      groupId?: string | null,
-      groupPosition?: number | null,
-    ) => {
+  async createManagedPost(userId: string, channelId: string, dto: CreateTelegramManagedPostDto, options: { groupId?: string | null } = {}) {
+    const prepared = await this.prepareManagedPostCreate(userId, channelId, dto);
+    const create = async (client: Prisma.TransactionClient | PrismaService, groupId?: string | null, groupPosition?: number | null) => {
       const created = await this.createManagedPostRecord(client, {
         ...prepared,
         groupId,
         groupPosition,
       });
-      await this.telegramManagedPostRevisionStore.createManagedPostRevision(
-        client,
-        created,
-        'created',
-        userId,
-      );
+      await this.telegramManagedPostRevisionStore.createManagedPostRevision(client, created, 'created', userId);
       return created;
     };
     const requestedGroupId = options.groupId?.trim() || null;
@@ -236,11 +193,7 @@ export class TelegramManagedPostCommandService {
           },
           select: { id: true },
         });
-        if (!group)
-          throw telegramPostsNotFound(
-            'TELEGRAM_POST_GROUP_NOT_FOUND',
-            'Post group is unavailable',
-          );
+        if (!group) throw telegramPostsNotFound('TELEGRAM_POST_GROUP_NOT_FOUND', 'Post group is unavailable');
         const groupPosition = await tx.telegramManagedPost.count({
           where: { groupId: group.id },
         });
@@ -248,10 +201,7 @@ export class TelegramManagedPostCommandService {
       }
       return create(tx);
     });
-    const [hydrated] =
-      await this.telegramManagedPostGroupPresentationService.attachManagedPostIcons(
-        [post],
-      );
+    const [hydrated] = await this.telegramManagedPostGroupPresentationService.attachManagedPostIcons([post]);
     return hydrated;
   }
 }

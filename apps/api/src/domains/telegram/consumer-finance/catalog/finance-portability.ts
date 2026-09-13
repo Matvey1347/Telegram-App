@@ -38,7 +38,11 @@ async function financeDataSnapshot(
     prisma.financeAccount.findMany({ where: { profileId } }),
     prisma.financeCategory.findMany({ where: { profileId } }),
     prisma.financeTransaction.findMany({
-      where: { profileId, deletedAt: null, purpose: 'ORDINARY' },
+      where: {
+        profileId,
+        deletedAt: null,
+        purpose: { notIn: ['INVESTMENT_CONTRIBUTION', 'INVESTMENT_RETURN'] },
+      },
       include: { items: true },
     }),
     prisma.financeTransfer.findMany({
@@ -97,6 +101,13 @@ async function financeDataSnapshot(
         categoryRef: row.categoryId,
         type: row.type,
         amount: decimal(row.amount),
+        economicAmount: decimal(row.economicAmount ?? row.amount),
+        purpose:
+          row.purpose === 'INVESTMENT_CONTRIBUTION' ||
+          row.purpose === 'INVESTMENT_RETURN'
+            ? 'ORDINARY'
+            : row.purpose,
+        necessity: row.necessity ?? 'UNSPECIFIED',
         occurredAt: row.occurredAt.toISOString(),
         description: row.description,
         merchantDisplay: row.merchantDisplay,
@@ -158,6 +169,7 @@ async function financeDataSnapshot(
         scheduleTimezone: row.scheduleTimezone,
         note: row.note,
         status: row.status,
+        necessity: row.necessity,
       })),
       savingsGoals: savingsGoals.map((row) => ({
         ref: row.id,

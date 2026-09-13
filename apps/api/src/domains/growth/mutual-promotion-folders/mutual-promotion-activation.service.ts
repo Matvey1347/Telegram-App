@@ -173,6 +173,7 @@ export class MutualPromotionActivationService {
               title: post.title,
               text: post.text,
               imageUrls: post.imageUrls,
+              mediaItems: post.mediaItems as Prisma.InputJsonValue,
               buttonRows: post.buttonRows ?? Prisma.JsonNull,
               origin: 'SYSTEM',
               status: 'DRAFT',

@@ -95,6 +95,8 @@ test("local bot development survives Prisma schema and tunnel transport changes"
   assert.match(runner, /"prisma",\s*"generate",\s*"--watch"/u);
   assert.match(runner, /TUNNEL_TRANSPORT_PROTOCOL:\s*"http2"/u);
   assert.match(runner, /await terminateDevChildren\(children\)/u);
+  assert.match(runner, /localBotActivationTimeoutMs = 5 \* 60_000/u);
+  assert.match(runner, /waitForHttpReady/u);
   assert.match(runner, /\["SIGHUP"\]/u);
   assert.match(apiPackage.scripts.dev, /--config nest-cli\.dev\.json/u);
   assert.equal(developmentNestConfig.compilerOptions.deleteOutDir, false);

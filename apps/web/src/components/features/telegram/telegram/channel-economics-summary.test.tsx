@@ -308,8 +308,8 @@ describe("ChannelEconomicsSummary", () => {
     expect(screen.getByText("No delete")).toBeInTheDocument();
     expect(screen.getByText("244 views")).toBeInTheDocument();
     expect(screen.getByText("73.2 UAH")).toBeInTheDocument();
-    expect(screen.getByText("3.0 UAH")).toBeInTheDocument();
-    expect(screen.getByText("59.0 UAH")).toBeInTheDocument();
+    expect(screen.getByText("3 UAH")).toBeInTheDocument();
+    expect(screen.getByText("59 UAH")).toBeInTheDocument();
     expect(screen.getByText("Sub")).toBeInTheDocument();
     expect(screen.getByText("Active")).toBeInTheDocument();
     expect(screen.getByText("Sub").parentElement).toHaveClass("flex");
@@ -321,7 +321,7 @@ describe("ChannelEconomicsSummary", () => {
     );
     expect(container.querySelector(".lucide-circle-minus")).toBeNull();
     expect(screen.queryByText("Audience")).not.toBeInTheDocument();
-    expect(screen.getByText("CPM 300.00 UAH")).toBeInTheDocument();
+    expect(screen.getByText("CPM 300 UAH")).toBeInTheDocument();
     expect(screen.getByText("Aug 30")).toHaveClass("text-amber-300");
     expect(screen.getByLabelText("Booked through")).toBeInTheDocument();
     expect(screen.getByLabelText("Drafts")).toBeInTheDocument();

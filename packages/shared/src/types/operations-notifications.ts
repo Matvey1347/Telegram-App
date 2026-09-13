@@ -37,6 +37,7 @@ export type OperationsCrmMessageGroupPresentation = {
   senderName: string;
   avatarUrl: string | null;
   messageCount: number;
+  notificationIds: string[];
 };
 
 export type OperationsNotificationPresentation =

@@ -1,8 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ExternalLink, Forward } from "lucide-react";
-import type { CreateMutualPromotionPostPayload } from "@telegram-system/shared";
+import axios from "axios";
+import { ExternalLink, Forward, Plus } from "lucide-react";
+import {
+  TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE_ERROR_CODE,
+  type CreateMutualPromotionPostPayload,
+} from "@telegram-system/shared";
 import { telegramSystemBotApi } from "@/lib/api";
 import type { TelegramSystemBotMutualPromotionPostDraft } from "@/lib/features/telegram/telegram-system-bot-api";
 import {
@@ -66,6 +70,7 @@ export function MutualPromotionPostImport({
   const [items, setItems] = useState<MutualPromotionImportedPostItem[]>([]);
   const [resultLoaded, setResultLoaded] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [hasAddedPosts, setHasAddedPosts] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const botSend = useTransientActionStatus();
 
@@ -112,22 +117,35 @@ export function MutualPromotionPostImport({
           "noopener,noreferrer",
         );
       }
-    } catch {
+    } catch (error) {
       botSend.reset();
-      setError("Could not start the post import.");
+      setError(
+        axios.isAxiosError(error) &&
+          error.response?.data?.code ===
+            TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE_ERROR_CODE
+          ? "Finish the current post import in the bot before starting a new one."
+          : "Could not start the post import.",
+      );
     }
   };
 
   const addPosts = async () => {
     if (!workflowId || !items.length) return;
-    const posts = items.map((item) => ({
-      ...item.draft,
-      scheduledAt: zonedDateTimeToUtc(
-        item.date,
-        item.time,
-        timezone,
-      ).toISOString(),
-    }));
+    const posts = items.map((item) => {
+      const draft = item.draft;
+      return {
+        title: draft.title,
+        text: draft.text,
+        imageUrls: draft.imageUrls,
+        ...(draft.mediaItems ? { mediaItems: draft.mediaItems } : {}),
+        buttonRows: draft.buttonRows,
+        scheduledAt: zonedDateTimeToUtc(
+          item.date,
+          item.time,
+          timezone,
+        ).toISOString(),
+      };
+    });
     const invalid = posts.some(({ scheduledAt }) => {
       const instant = Date.parse(scheduledAt);
       return (
@@ -147,16 +165,9 @@ export function MutualPromotionPostImport({
       await onAddPost({ importWorkflowId: workflowId, posts });
       setItems([]);
       setResultLoaded(false);
-      try {
-        const next =
-          await telegramSystemBotApi.prepareMutualPromotionPostImport(folderId);
-        setWorkflowId(next.workflowId);
-      } catch {
-        setWorkflowId(null);
-        setError(
-          "Posts were added, but the next bot import could not be prepared.",
-        );
-      }
+      setWorkflowId(null);
+      setHasAddedPosts(true);
+      botSend.reset();
     } catch {
       setError("Could not add the imported posts to this folder.");
     }
@@ -179,14 +190,19 @@ export function MutualPromotionPostImport({
           type="button"
           onClick={() => void prepare()}
           disabled={
-            !botConnected || botSend.status !== "idle" || items.length > 0
+            !botConnected ||
+            botSend.status !== "idle" ||
+            workflowId !== null ||
+            items.length > 0
           }
           aria-label={
             botSend.status === "sending"
               ? "Sending to bot"
               : botSend.status === "sent"
                 ? "Sent to bot"
-                : "Forward posts via bot"
+                : hasAddedPosts
+                  ? "Add another post"
+                  : "Forward posts via bot"
           }
         >
           {botSend.status === "sending" ? (
@@ -195,6 +211,10 @@ export function MutualPromotionPostImport({
             </span>
           ) : botSend.status === "sent" ? (
             <span className="text-emerald-100">✅ Sent to bot</span>
+          ) : hasAddedPosts ? (
+            <>
+              <Plus size={16} /> Add another post
+            </>
           ) : (
             <>
               <Forward size={16} /> Forward posts via bot
@@ -259,7 +279,8 @@ export function MutualPromotionPostImport({
                 items.some(
                   ({ draft }) =>
                     !draft.title.trim() ||
-                    (!draft.text.trim() && !draft.imageUrls.length),
+                    (!draft.text.trim() &&
+                      !(draft.mediaItems?.length || draft.imageUrls.length)),
                 )
               }
             >

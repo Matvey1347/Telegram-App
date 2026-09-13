@@ -5,6 +5,7 @@ import type {
   TelegramPostEngagementMetrics,
   TelegramManagedPostIdVerificationStatus,
   TelegramManagedPostLinkSource,
+  TelegramPostMediaItem,
 } from "@telegram-system/shared";
 
 export type TelegramPost = {
@@ -18,6 +19,7 @@ export type TelegramPost = {
   hasMedia?: boolean;
   mediaKind?: string | null;
   imageUrls: string[];
+  mediaItems?: TelegramPostMediaItem[];
   viewsCount?: number | null;
   forwardsCount?: number | null;
   reactionsCount?: number | null;
@@ -74,6 +76,7 @@ export type TelegramManagedPost = {
   formattedText?: string | null;
   hasMedia?: boolean;
   imageUrls: string[];
+  mediaItems?: TelegramPostMediaItem[];
   buttonRows?: TelegramPostButtonRows;
   status: TelegramManagedPostStatus;
   scheduledAt?: string | null;
@@ -167,6 +170,7 @@ export type TelegramManagedPostRevision = {
   title: string;
   text?: string | null;
   imageUrls: string[];
+  mediaItems?: TelegramPostMediaItem[];
   buttonRows?: TelegramPostButtonRows;
   status: TelegramManagedPostStatus;
   scheduledAt?: string | null;

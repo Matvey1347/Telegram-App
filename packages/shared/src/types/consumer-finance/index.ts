@@ -1,4 +1,5 @@
 export type * from "./analytics";
+export type * from "./assistant";
 export type * from "./billing";
 export type * from "./debts";
 export type * from "./identity";

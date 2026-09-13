@@ -98,6 +98,7 @@ export class AccountService {
       await this.workspaceService.resolveWorkspaceMembershipForUser(userId);
     return {
       ...user,
+      workspaceMemberId: membership.id,
       editorShortcuts:
         (user.editorShortcuts as EditorShortcutPreferences | null) ?? {},
       locale: normalizeAppLocale(user.locale),

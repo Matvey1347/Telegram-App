@@ -1,4 +1,21 @@
 import type { ResolvedEmoji } from "./resolved-emoji";
+import type { TelegramPostButtonRows } from "./telegram-post-buttons";
+import type { TelegramPostMediaItem } from "./telegram-post-media";
+
+export const TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE_ERROR_CODE =
+  "TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE";
+
+export type TelegramSystemBotPostDraft = {
+  title: string;
+  text: string;
+  /** Exact visible text from Telegram, without URLs or markup delimiters. */
+  plainText?: string;
+  /** Exact sanitized Telegram entity rendering retained during import. */
+  formattedHtml?: string;
+  imageUrls: string[];
+  mediaItems?: TelegramPostMediaItem[];
+  buttonRows: TelegramPostButtonRows;
+};
 
 export type TelegramSystemBotConnectionStatus = {
   connected: boolean;

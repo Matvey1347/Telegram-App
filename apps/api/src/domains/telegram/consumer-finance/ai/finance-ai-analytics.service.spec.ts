@@ -94,4 +94,37 @@ describe('FinanceAiAnalyticsService', () => {
       .calls as unknown as Array<[{ data: { status: string } }]>;
     expect(updateCalls.at(-1)?.[0].data.status).toBe('FAILED');
   });
+
+  it('routes one assistant message to the right Finance function', async () => {
+    const { service } = setup();
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        output_text: JSON.stringify({
+          kind: 'GUIDANCE',
+          message: 'Use debts because this money is still owed to you.',
+          recommendedScreen: 'debts',
+          operations: [],
+        }),
+        usage: { input_tokens: 80, output_tokens: 20 },
+      }),
+    }) as never;
+
+    await expect(
+      service.routeAssistantMessage({
+        profileId: 'profile-1',
+        botIntegrationId: 'bot-1',
+        locale: 'en',
+        text: 'A friend still owes me 25 PLN',
+        history: [],
+        facts: { accountBalances: [], recentTransactions: [] },
+        reservationId: 'reservation-1',
+      }),
+    ).resolves.toEqual({
+      kind: 'GUIDANCE',
+      message: 'Use debts because this money is still owed to you.',
+      recommendedScreen: 'debts',
+      operations: [],
+    });
+  });
 });

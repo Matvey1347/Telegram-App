@@ -5,6 +5,7 @@ import type {
 } from '@telegram-system/shared';
 
 type ParticipantForStatistics = {
+  role: 'PUBLISHER' | 'PAID';
   subscribersAtStart: number | null;
   subscribersAtEnd: number | null;
   inviteJoinedAtStart: number | null;
@@ -53,38 +54,55 @@ export class MutualPromotionStatisticsService {
         ? Math.max(0, inviteJoinedAtEnd - row.inviteJoinedAtStart)
         : null;
     const audienceDelta =
-      row.subscribersAtStart !== null && subscribersAtEnd != null
+      row.role === 'PUBLISHER' &&
+      row.subscribersAtStart !== null &&
+      subscribersAtEnd != null
         ? subscribersAtEnd - row.subscribersAtStart
         : null;
     const unsubscribedCount =
       joinedCount !== null && audienceDelta !== null
         ? Math.max(0, joinedCount - audienceDelta)
         : null;
+    const retainedCount =
+      row.role === 'PUBLISHER' && joinedCount !== null && audienceDelta !== null
+        ? Math.min(joinedCount, Math.max(0, audienceDelta))
+        : null;
     const expense = this.expense(row);
+    const inviteBoundariesComplete =
+      row.baselineCapturedAt &&
+      row.finalCapturedAt &&
+      row.inviteJoinedAtStart !== null &&
+      row.inviteJoinedAtEnd !== null;
+    const audienceBoundariesComplete =
+      row.subscribersAtStart !== null && row.subscribersAtEnd !== null;
+    const currentInviteCountersComplete =
+      row.baselineCapturedAt &&
+      row.inviteJoinedAtStart !== null &&
+      inviteJoinedAtEnd != null;
+    const currentAudienceCountersComplete =
+      row.subscribersAtStart !== null && subscribersAtEnd != null;
     return {
       joinedCount,
       unsubscribedCount,
       unsubscribedIsEstimate: unsubscribedCount !== null,
       audienceDelta,
+      retainedCount,
       subscriberPrice:
         expense && joinedCount !== null && joinedCount > 0
           ? expense.amount / joinedCount
           : null,
+      retainedSubscriberPrice:
+        expense && retainedCount !== null && retainedCount > 0
+          ? expense.amount / retainedCount
+          : null,
       currency: expense?.currency ?? null,
       dataQuality:
-        row.baselineCapturedAt &&
-        row.finalCapturedAt &&
-        row.subscribersAtStart !== null &&
-        row.subscribersAtEnd !== null &&
-        row.inviteJoinedAtStart !== null &&
-        row.inviteJoinedAtEnd !== null
+        inviteBoundariesComplete &&
+        (row.role === 'PAID' || audienceBoundariesComplete)
           ? 'CACHED_BOUNDARIES'
           : options.useCurrentCounters &&
-              row.baselineCapturedAt &&
-              row.subscribersAtStart !== null &&
-              subscribersAtEnd != null &&
-              row.inviteJoinedAtStart !== null &&
-              inviteJoinedAtEnd != null
+              currentInviteCountersComplete &&
+              (row.role === 'PAID' || currentAudienceCountersComplete)
             ? 'CURRENT_COUNTERS'
             : row.baselineCapturedAt || row.finalCapturedAt
               ? 'INCOMPLETE'

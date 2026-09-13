@@ -23,9 +23,31 @@ export type ConsumerFinanceDebt = {
   isOverdue: boolean;
   settledAt?: string | null;
   settlementTransactionId?: string | null;
+  originTransactionId?: string | null;
   version: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type ConsumerFinanceSharedExpenseInput = {
+  accountId: string;
+  categoryId?: string;
+  amount: string;
+  ownShare: string;
+  description?: string;
+  occurredAt: string;
+  necessity?: "UNSPECIFIED" | "REQUIRED" | "DISCRETIONARY";
+  participants: Array<{
+    name: string;
+    amount: string;
+    /** Profile-local calendar date in YYYY-MM-DD format. */
+    dueDate: string;
+  }>;
+};
+
+export type ConsumerFinanceSharedExpense = {
+  transaction: ConsumerFinanceTransaction;
+  debts: ConsumerFinanceDebt[];
 };
 
 export type ConsumerFinanceDebtInput = {

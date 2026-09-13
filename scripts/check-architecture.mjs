@@ -20,17 +20,17 @@ const STRICT_MODE = process.env.ARCHITECTURE_STRICT === "1";
 // Transitional baseline: these files must shrink and may never grow.
 // Final strict mode ignores this map and fails every production file above policy.
 const TRANSITION_BASELINE = new Map([
-  ["apps/web/src/app/(internal)/(telegram)/telegram-posts/page.tsx", 7620],
+  ["apps/web/src/app/(internal)/(telegram)/telegram-posts/page.tsx", 6294],
   [
     "apps/api/src/domains/telegram/telegram-ad-sales/telegram-ad-sales.service.ts",
-    5482,
+    5457,
   ],
   [
     "apps/web/src/app/(internal)/(telegram)/telegram/channels/[id]/page.tsx",
     3867,
   ],
-  ["apps/web/src/app/(internal)/(telegram)/telegram-channels/page.tsx", 2910],
-  ["apps/api/src/telegram/shared/telegram-mtproto.client.ts", 3385],
+  ["apps/web/src/app/(internal)/(telegram)/telegram-channels/page.tsx", 2903],
+  ["apps/api/src/telegram/shared/telegram-mtproto.client.ts", 2938],
   ["apps/web/src/components/features/growth/ad-sales/ad-sales-page.tsx", 986],
   ["apps/web/src/lib/api.ts", 750],
   ["apps/web/src/app/(internal)/(growth)/ad-campaigns/page.tsx", 2464],
@@ -56,9 +56,8 @@ const TRANSITION_BASELINE = new Map([
   ["apps/api/src/domains/growth/ad-hypotheses/ad-hypotheses.service.ts", 903],
   [
     "apps/web/src/components/features/telegram/telegram/telegram-post-preview.tsx",
-    1153,
+    948,
   ],
-  ["apps/web/src/app/(internal)/page.tsx", 646],
   [
     "apps/web/src/app/(internal)/(telegram)/telegram-channel-networks/[id]/page.tsx",
     330,

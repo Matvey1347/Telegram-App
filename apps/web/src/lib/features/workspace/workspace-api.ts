@@ -10,6 +10,8 @@ import type {
   WorkspaceInfo,
   WorkspaceMember,
   WorkspaceMemberSelectOption,
+  MemberFinanceDetails,
+  MemberFinanceSummary,
 } from "../../api-types";
 
 type FeedbackConfigFactory = (
@@ -47,9 +49,15 @@ export function createWorkspaceApi({
       locale?: "en" | "ru";
     }) => (await api.post<AuthResponse>("/auth/register", payload)).data,
     forgotPassword: async (email: string) =>
-      (await api.post<{ message: string }>("/auth/forgot-password", { email })).data,
+      (await api.post<{ message: string }>("/auth/forgot-password", { email }))
+        .data,
     resetPassword: async (token: string, password: string) =>
-      (await api.post<{ message: string }>("/auth/reset-password", { token, password })).data,
+      (
+        await api.post<{ message: string }>("/auth/reset-password", {
+          token,
+          password,
+        })
+      ).data,
     me: async () => (await api.get<MeResponse>("/auth/me")).data,
   };
 
@@ -75,7 +83,9 @@ export function createWorkspaceApi({
     updatePassword: async (payload: {
       currentPassword: string;
       newPassword: string;
-    }) => (await api.patch<{ success: boolean }>("/account/password", payload)).data,
+    }) =>
+      (await api.patch<{ success: boolean }>("/account/password", payload))
+        .data,
     updateWorkspace: async (payload: {
       name: string;
       timezone?: string;
@@ -85,7 +95,8 @@ export function createWorkspaceApi({
 
   const workspacesApi = {
     list: async () => (await api.get<WorkspaceInfo[]>("/workspaces")).data,
-    selected: async () => (await api.get<WorkspaceInfo>("/workspaces/selected")).data,
+    selected: async () =>
+      (await api.get<WorkspaceInfo>("/workspaces/selected")).data,
     create: async (payload: { name: string; avatarIconId?: string | null }) =>
       (await api.post<WorkspaceInfo>("/workspaces", payload)).data,
     update: async (
@@ -102,12 +113,20 @@ export function createWorkspaceApi({
 
   const globalSearchApi = {
     search: async (query: string) =>
-      (await api.get<GlobalSearchResult[]>("/global-search", { params: { q: query } })).data,
+      (
+        await api.get<GlobalSearchResult[]>("/global-search", {
+          params: { q: query },
+        })
+      ).data,
   };
 
   const iconsApi = {
     list: async (search?: string) =>
-      (await api.get<Icon[]>("/icons", { params: search ? { search } : undefined })).data,
+      (
+        await api.get<Icon[]>("/icons", {
+          params: search ? { search } : undefined,
+        })
+      ).data,
     get: async (id: string) => (await api.get<Icon>(`/icons/${id}`)).data,
     upload: async (file: File): Promise<{ imageUrl: string }> => {
       const formData = new FormData();
@@ -124,23 +143,89 @@ export function createWorkspaceApi({
       ).data;
     },
     createCustom: async (payload: { name: string; imageUrl: string }) =>
-      (await api.post<Icon>("/icons/custom", payload, silentFeedbackConfig)).data,
-    createTemporaryImage: async (payload: { imageUrl: string; fileName?: string }) =>
-      (await api.post<Icon>("/icons/temporary-image", payload, silentFeedbackConfig)).data,
+      (await api.post<Icon>("/icons/custom", payload, silentFeedbackConfig))
+        .data,
+    createTemporaryImage: async (payload: {
+      imageUrl: string;
+      fileName?: string;
+    }) =>
+      (
+        await api.post<Icon>(
+          "/icons/temporary-image",
+          payload,
+          silentFeedbackConfig,
+        )
+      ).data,
     createEmoji: async (payload: { name: string; emoji: string }) =>
-      (await api.post<Icon>("/icons/emoji", payload, silentFeedbackConfig)).data,
+      (await api.post<Icon>("/icons/emoji", payload, silentFeedbackConfig))
+        .data,
     remove: async (id: string) =>
-      (await api.delete<{ success: boolean }>(`/icons/${id}`, silentFeedbackConfig)).data,
+      (
+        await api.delete<{ success: boolean }>(
+          `/icons/${id}`,
+          silentFeedbackConfig,
+        )
+      ).data,
   };
 
   const workspaceMembersApi = {
     ...crud<WorkspaceMember>("/workspace-members"),
     select: async () =>
-      (await api.get<WorkspaceMemberSelectOption[]>("/workspace-members/select")).data,
+      (
+        await api.get<WorkspaceMemberSelectOption[]>(
+          "/workspace-members/select",
+        )
+      ).data,
     investments: async (memberId: string) =>
-      (await api.get<Transaction[]>(`/workspace-members/${memberId}/investments`)).data,
+      (
+        await api.get<Transaction[]>(
+          `/workspace-members/${memberId}/investments`,
+        )
+      ).data,
     investmentsSummary: async () =>
       (await api.get("/workspace-members/investments/summary")).data,
+  };
+
+  const memberFinanceApi = {
+    summaries: async () =>
+      (await api.get<MemberFinanceSummary[]>("/member-finance/summaries")).data,
+    details: async (memberId: string) =>
+      (await api.get<MemberFinanceDetails>(`/member-finance/${memberId}`)).data,
+    pay: async (
+      memberId: string,
+      payload: {
+        amount: number;
+        accountId: string;
+        date?: string;
+        notes?: string;
+      },
+    ) => (await api.post(`/member-finance/${memberId}/pay`, payload)).data,
+    investSalary: async (
+      memberId: string,
+      payload: { amount: number; date?: string; notes?: string },
+    ) =>
+      (await api.post(`/member-finance/${memberId}/invest-salary`, payload))
+        .data,
+    withdrawReinvestment: async (
+      memberId: string,
+      payload: {
+        amount: number;
+        accountId: string;
+        date?: string;
+        notes?: string;
+      },
+    ) =>
+      (
+        await api.post(
+          `/member-finance/${memberId}/withdraw-reinvestment`,
+          payload,
+        )
+      ).data,
+    distributeReinvestment: async (payload: {
+      dateFrom: string;
+      dateTo: string;
+    }) =>
+      (await api.post("/member-finance/reinvestment/distribute", payload)).data,
   };
 
   return {
@@ -149,6 +234,7 @@ export function createWorkspaceApi({
     globalSearchApi,
     iconsApi,
     workspaceMembersApi,
+    memberFinanceApi,
     workspacesApi,
   };
 }

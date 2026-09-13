@@ -15,6 +15,10 @@ import { resolveTitleTemplate } from "@telegram-system/shared";
 import { AdCampaignsTable } from "@/components/features/growth/ad-campaigns/campaigns-table";
 import { PromoPreviewModal } from "@/components/features/growth/ad-campaigns/promo-preview-modal";
 import { usePromoDeepLink } from "@/components/features/growth/ad-campaigns/use-promo-deep-link";
+import {
+  AdCampaignSortMenu,
+  type AdCampaignSort,
+} from "@/components/features/growth/ad-campaigns/ad-campaign-sort-menu";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { IconPicker } from "@/components/icons/icon-picker";
 import { AppShell } from "@/components/layout/app-shell";
@@ -62,7 +66,6 @@ import {
   LoadingState,
   Modal,
   PageHeader,
-  Select,
   Textarea,
   TooltipBubble,
 } from "@/components/ui/primitives";
@@ -82,15 +85,11 @@ import { usePagination } from "@/hooks/use-pagination";
 import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
 import {
   AdsSectionTabs,
+  resolveAdsSection,
   type AdsSection,
 } from "@/components/features/growth/ad-campaigns/ads-section-tabs";
 import { MutualPromotionFoldersPage } from "@/components/features/growth/ad-campaigns/mutual-promotion/mutual-promotion-folders-page";
-import { usePersistedRouteTab } from "@/hooks/use-persisted-route-tab";
-import {
-  AD_CAMPAIGN_VIEW_MODES,
-  AD_CAMPAIGN_VIEW_OPTIONS,
-  accountAdCampaignSelectOption,
-} from "@/components/features/growth/ad-campaigns/ad-campaign-view-options";
+import { accountAdCampaignSelectOption } from "@/components/features/growth/ad-campaigns/ad-campaign-view-options";
 
 type CampaignValues = {
   telegramChannelId: string;
@@ -119,12 +118,8 @@ type CampaignSelectOption = {
 export default function AdsPage() {
   const searchParams = useSearchParams();
   const requestedSection = searchParams.get("section");
-  const section: AdsSection =
-    requestedSection === "mutual-promotion"
-      ? "mutual-promotion"
-      : requestedSection === "promo"
-        ? "promo"
-        : "campaigns";
+  const legacyView = searchParams.get("view");
+  const section: AdsSection = resolveAdsSection(requestedSection, legacyView);
   const sectionTabs = <AdsSectionTabs value={section} />;
   return section === "mutual-promotion" ? (
     <MutualPromotionFoldersPage sectionTabs={sectionTabs} />
@@ -138,7 +133,7 @@ function AdCampaignsPage({
   topSection,
 }: {
   sectionTabs: ReactNode;
-  topSection: "campaigns" | "promo";
+  topSection: "campaigns" | "hypotheses" | "promo";
 }) {
   const qc = useQueryClient();
   const searchParams = useSearchParams();
@@ -147,21 +142,14 @@ function AdCampaignsPage({
   const [editing, setEditing] = useState<any | null>(null);
   const [deleting, setDeleting] = useState<any | null>(null);
   const [channelFilter, setChannelFilter] = useState("");
-  const [storedViewMode, setViewMode] =
-    usePersistedRouteTab<AdCampaignsViewMode>({
-      param: "view",
-      storageKey: "ad-campaigns:view-mode",
-      allowedValues: AD_CAMPAIGN_VIEW_MODES,
-      defaultValue: "campaigns",
-    });
   const viewMode: AdCampaignsViewMode =
     topSection === "promo"
       ? "promos"
-      : storedViewMode === "promos"
-        ? "campaigns"
-        : storedViewMode;
+      : topSection === "hypotheses"
+        ? "hypotheses"
+        : "campaigns";
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState("date_desc");
+  const [sort, setSort] = useState<AdCampaignSort>("date_desc");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [hypothesisFormOpen, setHypothesisFormOpen] = useState(false);
@@ -459,9 +447,6 @@ function AdCampaignsPage({
   const visibleCampaigns = campaigns;
   const visibleHypotheses = hypotheses;
   const visiblePromos = promos;
-  const handleViewModeChange = (nextViewMode: AdCampaignsViewMode) => {
-    setViewMode(nextViewMode);
-  };
   const openCreateForCurrentView = () => {
     if (viewMode === "hypotheses") {
       setEditingHypothesis(null);
@@ -495,49 +480,37 @@ function AdCampaignsPage({
       />
       {sectionTabs}
       <Card className="mb-4">
-        <div className="grid min-w-0 gap-3 md:grid-cols-2 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,1.4fr)] 2xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.1fr)_minmax(0,1.25fr)_minmax(0,1.1fr)_minmax(0,0.9fr)] 2xl:items-end">
-          {topSection === "campaigns" ? (
+        <div
+          className={`grid min-w-0 gap-3 md:grid-cols-2 ${viewMode === "campaigns" ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)_auto] lg:items-end" : "lg:max-w-4xl"}`}
+        >
+          {viewMode !== "hypotheses" ? (
             <div className="min-w-0">
-              <FormField label="View">
+              <FormField label="Channel">
                 <CustomSelect
-                  value={viewMode}
-                  onChange={(value) =>
-                    handleViewModeChange(value as AdCampaignsViewMode)
-                  }
-                  options={AD_CAMPAIGN_VIEW_OPTIONS.filter(
-                    (option) => option.value !== "promos",
-                  )}
+                  value={channelFilter}
+                  onChange={(value) => {
+                    setChannelFilter(value);
+                    campaignsPagination.resetPage();
+                    promosPagination.resetPage();
+                  }}
+                  placeholder="All channels"
+                  options={[
+                    {
+                      value: "",
+                      label: "All channels",
+                      iconFallback: "All channels",
+                    },
+                    ...ownTelegramChannels.map((channel: any) => ({
+                      value: channel.id,
+                      label: channel.title,
+                      iconUrl: channel.photoUrl,
+                      iconFallback: channel.title,
+                    })),
+                  ]}
                 />
               </FormField>
             </div>
           ) : null}
-          <div className="min-w-0">
-            <FormField label="Channel">
-              <CustomSelect
-                value={channelFilter}
-                onChange={(value) => {
-                  setChannelFilter(value);
-                  campaignsPagination.resetPage();
-                  promosPagination.resetPage();
-                }}
-                disabled={viewMode === "hypotheses"}
-                placeholder="All channels"
-                options={[
-                  {
-                    value: "",
-                    label: "All channels",
-                    iconFallback: "All channels",
-                  },
-                  ...ownTelegramChannels.map((channel: any) => ({
-                    value: channel.id,
-                    label: channel.title,
-                    iconUrl: channel.photoUrl,
-                    iconFallback: channel.title,
-                  })),
-                ]}
-              />
-            </FormField>
-          </div>
           <div className="min-w-0">
             <FormField label="Search">
               <Input
@@ -574,21 +547,14 @@ function AdCampaignsPage({
             </div>
           ) : null}
           {viewMode === "campaigns" ? (
-            <div className="min-w-0">
-              <FormField label="Sort">
-                <Select
-                  value={sort}
-                  onChange={(e) => {
-                    setSort(e.target.value);
-                    campaignsPagination.resetPage();
-                  }}
-                >
-                  <option value="date_desc">Newest</option>
-                  <option value="date_asc">Oldest</option>
-                  <option value="cost_desc">Highest spend</option>
-                  <option value="joined_desc">Most joined</option>
-                </Select>
-              </FormField>
+            <div className="justify-self-start md:justify-self-end">
+              <AdCampaignSortMenu
+                value={sort}
+                onChange={(value) => {
+                  setSort(value);
+                  campaignsPagination.resetPage();
+                }}
+              />
             </div>
           ) : null}
         </div>
@@ -1491,7 +1457,7 @@ function PromoList({
           onClick={(event) => {
             if (event.metaKey || event.ctrlKey) {
               window.open(
-                `/ad-campaigns?view=promos&promoId=${promo.id}`,
+                `/ad-campaigns?section=promo&promoId=${promo.id}`,
                 "_blank",
                 "noopener,noreferrer",
               );

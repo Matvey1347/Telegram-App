@@ -61,6 +61,7 @@ function setup() {
     sendMessage: jest.fn().mockResolvedValue({ message_id: 99 }),
     sendPhoto: jest.fn().mockResolvedValue({ message_id: 100 }),
     sendMediaGroup: jest.fn().mockResolvedValue([{ message_id: 100 }]),
+    call: jest.fn().mockResolvedValue({ message_id: 101 }),
     deleteMessage: jest.fn().mockResolvedValue(true),
   };
   const workflows = {
@@ -91,6 +92,11 @@ function setup() {
   };
   const media = {
     persistImageBytes: jest.fn().mockResolvedValue(['https://cdn/photo.jpg']),
+    persistMediaBytes: jest.fn().mockResolvedValue({
+      kind: 'VIDEO',
+      url: 'https://cdn/video.mp4',
+      mimeType: 'video/mp4',
+    }),
   };
   const command = {
     createManagedPost: jest.fn().mockResolvedValue({ id: 'post-1' }),
@@ -170,7 +176,7 @@ describe('TelegramSystemBotPostFlowService', () => {
           ],
         ],
       }),
-    ).resolves.toEqual({ status: 'SENT' });
+    ).resolves.toEqual({ status: 'SENT', messageIds: [100] });
 
     expect(state.api.sendPhoto).toHaveBeenCalledWith('token', {
       chat_id: scope.chatId,
@@ -189,6 +195,28 @@ describe('TelegramSystemBotPostFlowService', () => {
         ],
       },
     });
+  });
+
+  it('sends a video preview through the Bot API without converting it to a photo', async () => {
+    const { service, api } = setup();
+    await expect(
+      service.sendPostPreview(scope, {
+        text: 'Video preview',
+        mediaItems: [
+          {
+            kind: 'VIDEO',
+            url: 'https://cdn.test/post.mp4',
+            mimeType: 'video/mp4',
+          },
+        ],
+      }),
+    ).resolves.toEqual({ status: 'SENT', messageIds: [101] });
+    expect(api.call).toHaveBeenCalledWith(
+      'token',
+      'sendVideo',
+      expect.objectContaining({ video: 'https://cdn.test/post.mp4' }),
+    );
+    expect(api.sendPhoto).not.toHaveBeenCalled();
   });
   it('proactively sends the Ad Sale import prompt to the connected bot chat', async () => {
     const { service, workflows, api } = setup();
@@ -437,7 +465,7 @@ describe('TelegramSystemBotPostFlowService', () => {
       'token',
       expect.objectContaining({
         text: expect.stringContaining(
-          'Could not download or store this photo. Forward the post again to retry.',
+          'Could not download or store this media. Forward the post again to retry.',
         ),
       }),
     );
@@ -556,14 +584,14 @@ describe('TelegramSystemBotPostFlowService', () => {
     );
   });
 
-  it('keeps unsupported media rejection inside the existing card', async () => {
+  it('keeps unsupported document rejection inside the existing card', async () => {
     const { service, workflows, api, media } = setup();
     workflows.active.mockResolvedValue(workflow());
 
     await service.input(scope, {
       message_id: 12,
-      text: 'Video caption',
-      video: { file_id: 'video' },
+      text: 'Document caption',
+      document: { file_id: 'document' },
       forward_date: 1_700_000_000,
     });
 
@@ -572,7 +600,7 @@ describe('TelegramSystemBotPostFlowService', () => {
     expect(api.editMessageText).toHaveBeenCalledWith(
       'token',
       expect.objectContaining({
-        text: expect.stringContaining('Unsupported media: video'),
+        text: expect.stringContaining('Unsupported media: document'),
       }),
     );
   });

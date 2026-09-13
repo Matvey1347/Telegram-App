@@ -208,6 +208,22 @@ enum TelegramAdSalePaymentStatus {
   VOIDED
 }
 
+enum InvestmentOrigin {
+  EXTERNAL
+  SALARY
+  REINVESTMENT
+}
+
+enum InvestmentMovementType {
+  CONTRIBUTION
+  WITHDRAWAL
+}
+
+enum MemberCompensationSettlementType {
+  PAYOUT
+  INVESTMENT
+}
+
 enum TelegramAdvertiserStatus {
   LEAD
   ACTIVE
@@ -680,8 +696,17 @@ enum FinanceTransactionType {
 
 enum FinanceTransactionPurpose {
   ORDINARY
+  REIMBURSEMENT
+  PASS_THROUGH
+  DEBT_REPAYMENT
   INVESTMENT_CONTRIBUTION
   INVESTMENT_RETURN
+}
+
+enum FinanceExpenseNecessity {
+  UNSPECIFIED
+  REQUIRED
+  DISCRETIONARY
 }
 
 enum FinanceSavingsGoalStatus {
@@ -983,6 +1008,8 @@ model Workspace {
   dailyAnalyticsSyncRuns                 DailyAnalyticsSyncRun[]
   exchangeRates                          ExchangeRate[]
   investments                            Investment[]
+  reinvestmentDistributions              ReinvestmentDistribution[]
+  memberCompensationSettlements          MemberCompensationSettlement[]
   transactionCategories                  TransactionCategory[]
   icons                                  Icon[]
   applicationLogs                        ApplicationLog[]
@@ -1124,20 +1151,23 @@ model TelegramChannelDataSource {
 }
 
 model WorkspaceMember {
-  id               String        @id @default(cuid())
-  workspaceId      String
-  userId           String
-  role             WorkspaceRole @default(admin)
-  roleDefinitionId String?
-  isHidden         Boolean       @default(false)
-  avatarIconId     String?
-  telegramUsername String?
+  id                  String        @id @default(cuid())
+  workspaceId         String
+  userId              String
+  role                WorkspaceRole @default(admin)
+  roleDefinitionId    String?
+  isHidden            Boolean       @default(false)
+  avatarIconId        String?
+  telegramUsername    String?
+  salesCommissionRate Decimal?
 
   workspace                                 Workspace                          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   roleDefinition                            WorkspaceRoleDefinition?           @relation(fields: [roleDefinitionId, workspaceId], references: [id, workspaceId], onDelete: Restrict)
   user                                      User                               @relation(fields: [userId], references: [id], onDelete: Cascade)
   avatarIcon                                Icon?                              @relation(fields: [avatarIconId], references: [id], onDelete: SetNull)
   investments                               Investment[]
+  soldTelegramAdSales                       TelegramAdSale[]                   @relation("TelegramAdSaleSellerMember")
+  compensationSettlements                   MemberCompensationSettlement[]
   investmentTransactions                    Transaction[]                      @relation("MemberInvestmentTransactions")
   assignedAccounts                          Account[]                          @relation("AccountAssignedMember")
   assignedTransactions                      Transaction[]                      @relation("TransactionAssignedMember")
@@ -1343,6 +1373,7 @@ model Transaction {
   investment                    Investment?
   telegramAdSalePayment         TelegramAdSalePayment?
   telegramAdSalePaymentReversal TelegramAdSalePayment?            @relation("TelegramAdSalePaymentReversalTransaction")
+  memberCompensationSettlement  MemberCompensationSettlement?
   purchasedTelegramChannel      TelegramChannel?                  @relation("TelegramChannelPurchaseTransaction")
   categoryRef                   TransactionCategory?              @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   member                        WorkspaceMember?                  @relation("MemberInvestmentTransactions", fields: [memberId], references: [id], onDelete: SetNull)
@@ -1382,31 +1413,75 @@ model TransactionCategory {
 }
 
 model Investment {
-  id                      String   @id @default(cuid())
-  workspaceId             String
-  workspaceMemberId       String
-  accountId               String
-  transactionId           String?  @unique
-  amount                  Decimal
-  currency                String   @db.VarChar(3)
-  amountInPrimaryCurrency Decimal
-  exchangeRateToPrimary   Decimal
-  date                    DateTime
-  notes                   String?
-  createdByUserId         String?
-  assignedMemberId        String?
+  id                         String                 @id @default(cuid())
+  workspaceId                String
+  workspaceMemberId          String
+  accountId                  String?
+  transactionId              String?                @unique
+  amount                     Decimal
+  currency                   String                 @db.VarChar(3)
+  amountInPrimaryCurrency    Decimal
+  exchangeRateToPrimary      Decimal
+  date                       DateTime
+  notes                      String?
+  createdByUserId            String?
+  assignedMemberId           String?
+  origin                     InvestmentOrigin       @default(EXTERNAL)
+  movementType               InvestmentMovementType @default(CONTRIBUTION)
+  reinvestmentDistributionId String?
 
-  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceMember WorkspaceMember  @relation(fields: [workspaceMemberId], references: [id], onDelete: Restrict)
-  account         Account          @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  transaction     Transaction?     @relation(fields: [transactionId], references: [id], onDelete: SetNull)
-  assignedMember  WorkspaceMember? @relation("InvestmentAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
-  createdByUser   User?            @relation("InvestmentCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  workspace                Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceMember          WorkspaceMember               @relation(fields: [workspaceMemberId], references: [id], onDelete: Restrict)
+  account                  Account?                      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  transaction              Transaction?                  @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  assignedMember           WorkspaceMember?              @relation("InvestmentAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdByUser            User?                         @relation("InvestmentCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  reinvestmentDistribution ReinvestmentDistribution?     @relation(fields: [reinvestmentDistributionId], references: [id], onDelete: SetNull)
+  compensationSettlement   MemberCompensationSettlement?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([workspaceId, assignedMemberId])
+  @@index([workspaceId, workspaceMemberId, origin, movementType])
+  @@index([reinvestmentDistributionId])
+}
+
+model MemberCompensationSettlement {
+  id                      String                           @id @default(cuid())
+  workspaceId             String
+  workspaceMemberId       String
+  type                    MemberCompensationSettlementType
+  amountInPrimaryCurrency Decimal
+  transactionId           String?                          @unique
+  investmentId            String?                          @unique
+  date                    DateTime
+  notes                   String?
+  createdByUserId         String?
+  createdAt               DateTime                         @default(now())
+
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceMember WorkspaceMember @relation(fields: [workspaceMemberId], references: [id], onDelete: Restrict)
+  transaction     Transaction?    @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  investment      Investment?     @relation(fields: [investmentId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, workspaceMemberId, date])
+}
+
+model ReinvestmentDistribution {
+  id                      String   @id @default(cuid())
+  workspaceId             String
+  periodStart             DateTime
+  periodEnd               DateTime
+  profitInPrimaryCurrency Decimal
+  createdByUserId         String?
+  createdAt               DateTime @default(now())
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  investments Investment[]
+
+  @@unique([workspaceId, periodStart, periodEnd])
+  @@index([workspaceId, createdAt])
 }
 
 model Transfer {
@@ -1845,6 +1920,8 @@ model TelegramAdSchedulePolicy {
 model TelegramAdSalesWorkspaceSettings {
   workspaceId                  String   @id
   defaultOrganicPostsPerAdSlot Int      @default(3)
+  salesCommissionEnabled       Boolean  @default(false)
+  defaultSalesCommissionRate   Decimal  @default(0)
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
 
@@ -1966,6 +2043,9 @@ model TelegramAdSale {
   sourceAdvertiserActivityId String?
   createdByUserId            String?
   assignedMemberId           String?
+  sellerMemberId             String?
+  sellerCommissionEnabled    Boolean                @default(false)
+  sellerCommissionRate       Decimal                @default(0)
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
 
@@ -1973,6 +2053,7 @@ model TelegramAdSale {
   advertiser               TelegramAdvertiser?                     @relation(fields: [advertiserId], references: [id], onDelete: SetNull)
   createdByUser            User?                                   @relation("TelegramAdSaleCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   assignedMember           WorkspaceMember?                        @relation("TelegramAdSaleAssignedMember", fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  sellerMember             WorkspaceMember?                        @relation("TelegramAdSaleSellerMember", fields: [sellerMemberId], references: [id], onDelete: SetNull)
   sourceTask               TelegramAdvertiserTask?                 @relation("TelegramAdSaleSourceTask", fields: [sourceTaskId], references: [id], onDelete: SetNull)
   sourceAdvertiserActivity TelegramAdvertiserActivity?             @relation("TelegramAdSaleSourceActivity", fields: [sourceAdvertiserActivityId], references: [id], onDelete: SetNull)
   placements               TelegramAdSalePlacement[]
@@ -1984,6 +2065,7 @@ model TelegramAdSale {
   @@unique([id, workspaceId])
   @@unique([workspaceId, idempotencyKey])
   @@index([workspaceId])
+  @@index([workspaceId, sellerMemberId])
   @@index([workspaceId, status, createdAt])
   @@index([workspaceId, assignedMemberId])
   @@index([workspaceId, advertiserId, createdAt])
@@ -3118,6 +3200,7 @@ model MutualPromotionFolderPost {
   title       String
   text        String?
   imageUrls   String[] @default([])
+  mediaItems  Json     @default("[]")
   buttonRows  Json?
   scheduledAt DateTime
   position    Int
@@ -3920,37 +4003,42 @@ model FinanceCategory {
 }
 
 model FinanceTransaction {
-  id                         String                             @id @default(cuid())
-  profileId                  String
-  accountId                  String
-  categoryId                 String?
-  type                       FinanceTransactionType
-  purpose                    FinanceTransactionPurpose          @default(ORDINARY)
-  amount                     Decimal
-  currency                   String                             @db.VarChar(3)
-  amountInDefaultCurrency    Decimal
-  exchangeRateToDefault      Decimal
+  id                                String                             @id @default(cuid())
+  profileId                         String
+  accountId                         String
+  categoryId                        String?
+  type                              FinanceTransactionType
+  purpose                           FinanceTransactionPurpose          @default(ORDINARY)
+  amount                            Decimal
+  /// Economic impact can differ from cash movement for shared and pass-through money.
+  economicAmount                    Decimal                            @default(0)
+  currency                          String                             @db.VarChar(3)
+  amountInDefaultCurrency           Decimal
+  exchangeRateToDefault             Decimal
   // Immutable USD valuation. Legacy rows may be null until they are edited;
   // do not reinterpret amountInDefaultCurrency after a default-currency change.
-  valuationCurrency          String?                            @db.VarChar(3)
-  amountInValuationCurrency  Decimal?
-  exchangeRateToValuation    Decimal?
-  valuationRateAt            DateTime?
-  occurredAt                 DateTime
-  description                String?
-  merchantDisplay            String?
-  merchantNormalized         String?
-  source                     FinanceTransactionSource           @default(CHAT)
-  deletedAt                  DateTime?
-  createdAt                  DateTime                           @default(now())
-  updatedAt                  DateTime                           @updatedAt
-  profile                    FinanceProfile                     @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  account                    FinanceAccount                     @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  category                   FinanceCategory?                   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  items                      FinanceTransactionItem[]
-  debtSettlement             FinanceDebt?
-  recurringPaymentOccurrence FinanceRecurringPaymentOccurrence?
-  investmentCashFlow         FinanceInvestmentCashFlow?
+  valuationCurrency                 String?                            @db.VarChar(3)
+  amountInValuationCurrency         Decimal?
+  economicAmountInValuationCurrency Decimal?
+  exchangeRateToValuation           Decimal?
+  valuationRateAt                   DateTime?
+  occurredAt                        DateTime
+  description                       String?
+  merchantDisplay                   String?
+  merchantNormalized                String?
+  source                            FinanceTransactionSource           @default(CHAT)
+  necessity                         FinanceExpenseNecessity            @default(UNSPECIFIED)
+  deletedAt                         DateTime?
+  createdAt                         DateTime                           @default(now())
+  updatedAt                         DateTime                           @updatedAt
+  profile                           FinanceProfile                     @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  account                           FinanceAccount                     @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  category                          FinanceCategory?                   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  items                             FinanceTransactionItem[]
+  debtSettlement                    FinanceDebt?
+  originatedDebts                   FinanceDebt[]                      @relation("FinanceDebtOrigin")
+  recurringPaymentOccurrence        FinanceRecurringPaymentOccurrence?
+  investmentCashFlow                FinanceInvestmentCashFlow?
 
   @@index([profileId, occurredAt])
   @@index([profileId, purpose, occurredAt])
@@ -4084,16 +4172,20 @@ model FinanceDebt {
   note                    String?               @db.Text
   settledAt               DateTime?
   settlementTransactionId String?               @unique
+  /// Present when the receivable was created as part of one shared expense.
+  originTransactionId     String?
   version                 Int                   @default(1)
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
   profile                 FinanceProfile        @relation(fields: [profileId], references: [id], onDelete: Cascade)
   account                 FinanceAccount        @relation(fields: [accountId], references: [id], onDelete: Restrict)
   settlementTransaction   FinanceTransaction?   @relation(fields: [settlementTransactionId], references: [id], onDelete: Restrict)
+  originTransaction       FinanceTransaction?   @relation("FinanceDebtOrigin", fields: [originTransactionId], references: [id], onDelete: Restrict)
   deliveries              TelegramBotDelivery[]
 
   @@index([profileId, status, dueAt, id])
   @@index([accountId])
+  @@index([originTransactionId])
 }
 
 model FinanceRecurringPayment {
@@ -4112,6 +4204,7 @@ model FinanceRecurringPayment {
   /// Timezone in which recurrence calendar anchors are interpreted.
   scheduleTimezone String
   note             String?                             @db.Text
+  necessity        FinanceExpenseNecessity             @default(UNSPECIFIED)
   status           FinanceRecurringPaymentStatus       @default(ACTIVE)
   version          Int                                 @default(1)
   createdAt        DateTime                            @default(now())
@@ -4149,6 +4242,7 @@ model FinanceRecurringPaymentRevision {
   nextOccurrenceAt   DateTime
   scheduleTimezone   String
   note               String?                             @db.Text
+  necessity          FinanceExpenseNecessity
   status             FinanceRecurringPaymentStatus
   effectiveAt        DateTime                            @default(now())
   recurringPayment   FinanceRecurringPayment             @relation(fields: [recurringPaymentId], references: [id], onDelete: Cascade)
@@ -4811,6 +4905,7 @@ model TelegramManagedPost {
   title                        String
   text                         String?
   imageUrls                    String[]                                @default([])
+  mediaItems                   Json                                    @default("[]")
   buttonRows                   Json?
   origin                       TelegramManagedPostOrigin               @default(SYSTEM)
   remoteImportKey              String?
@@ -4933,6 +5028,7 @@ model TelegramManagedPostRevision {
   title                        String
   text                         String?
   imageUrls                    String[]                                @default([])
+  mediaItems                   Json                                    @default("[]")
   buttonRows                   Json?
   origin                       TelegramManagedPostOrigin               @default(SYSTEM)
   remoteImportKey              String?

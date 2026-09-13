@@ -18,6 +18,9 @@ const copy = {
     cancelAutoRenew: "Cancel auto-renewal",
     resumeAutoRenew: "Resume auto-renewal",
     available: "Available plans",
+    heroTitle: "Your finances, with more room to grow",
+    heroDescription:
+      "Start with clear everyday tracking, then unlock automation and deeper financial intelligence when you need it.",
     mostPopular: "Most popular",
     freePositioning: "A solid foundation for everyday money management.",
     proPositioning: "Smart control and more room to grow.",
@@ -76,6 +79,9 @@ const copy = {
     cancelAutoRenew: "Скасувати автопоновлення",
     resumeAutoRenew: "Відновити автопоновлення",
     available: "Доступні тарифи",
+    heroTitle: "Ваші фінанси — з більшим простором для зростання",
+    heroDescription:
+      "Почніть із зрозумілого щоденного обліку, а коли знадобиться — відкрийте автоматизацію та глибшу фінансову аналітику.",
     mostPopular: "Найпопулярніший",
     freePositioning: "Надійна основа для щоденного керування грошима.",
     proPositioning: "Розумний контроль і більше простору для зростання.",
@@ -135,6 +141,9 @@ const copy = {
     cancelAutoRenew: "Отменить автопродление",
     resumeAutoRenew: "Возобновить автопродление",
     available: "Доступные тарифы",
+    heroTitle: "Ваши финансы — с большим пространством для роста",
+    heroDescription:
+      "Начните с понятного ежедневного учёта, а когда понадобится — откройте автоматизацию и более глубокую финансовую аналитику.",
     mostPopular: "Самый популярный",
     freePositioning: "Надёжная основа для ежедневного управления деньгами.",
     proPositioning: "Умный контроль и больше возможностей для роста.",

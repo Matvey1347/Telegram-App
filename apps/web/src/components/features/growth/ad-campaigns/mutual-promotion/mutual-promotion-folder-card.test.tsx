@@ -21,6 +21,21 @@ const folder = {
       username: "channel_one",
       photoUrl: "https://example.com/one.jpg",
       role: "PUBLISHER",
+      stats: {
+        joinedCount: 27,
+        unsubscribedCount: 63,
+        subscriberPrice: null,
+        currency: null,
+      },
+      kpi: {
+        currency: "UAH",
+        targetFrom: null,
+        targetTo: 9,
+        acceptableFrom: null,
+        acceptableTo: null,
+        stopFrom: 12,
+        stopTo: null,
+      },
     },
     {
       id: "channel-2",
@@ -28,6 +43,21 @@ const folder = {
       username: null,
       photoUrl: "https://example.com/two.jpg",
       role: "PAID",
+      stats: {
+        joinedCount: 29,
+        unsubscribedCount: 33,
+        subscriberPrice: 250 / 29,
+        currency: "UAH",
+      },
+      kpi: {
+        currency: "UAH",
+        targetFrom: null,
+        targetTo: 9,
+        acceptableFrom: null,
+        acceptableTo: null,
+        stopFrom: 12,
+        stopTo: null,
+      },
     },
     {
       id: "channel-3",
@@ -35,6 +65,21 @@ const folder = {
       username: null,
       photoUrl: "https://example.com/three.jpg",
       role: "PAID",
+      stats: {
+        joinedCount: 26,
+        unsubscribedCount: 23,
+        subscriberPrice: 250 / 26,
+        currency: "UAH",
+      },
+      kpi: {
+        currency: "UAH",
+        targetFrom: null,
+        targetTo: 9,
+        acceptableFrom: null,
+        acceptableTo: null,
+        stopFrom: 12,
+        stopTo: null,
+      },
     },
     {
       id: "channel-4",
@@ -42,6 +87,21 @@ const folder = {
       username: null,
       photoUrl: "https://example.com/four.jpg",
       role: "PUBLISHER",
+      stats: {
+        joinedCount: 30,
+        unsubscribedCount: 57,
+        subscriberPrice: null,
+        currency: null,
+      },
+      kpi: {
+        currency: "UAH",
+        targetFrom: null,
+        targetTo: 9,
+        acceptableFrom: null,
+        acceptableTo: null,
+        stopFrom: 12,
+        stopTo: null,
+      },
     },
   ],
 } as never;
@@ -54,6 +114,33 @@ describe("MutualPromotionFolderCard", () => {
     expect(screen.getByText("Active")).toHaveClass("text-emerald-200");
     expect(screen.getByRole("article").className).not.toContain("shadow-[");
     expect(screen.getAllByRole("img")).toHaveLength(4);
+    const performance = screen.getByLabelText("Channel performance");
+    expect(within(performance).getByText("29")).toBeInTheDocument();
+    expect(within(performance).queryByText("33")).not.toBeInTheDocument();
+    expect(within(performance).getByText("8.62 UAH")).toBeInTheDocument();
+    expect(within(performance).getByText("8.62 UAH")).toHaveClass(
+      "text-emerald-300",
+    );
+    expect(within(performance).getByText("9.62 UAH")).toHaveClass(
+      "text-yellow-300",
+    );
+    expect(within(performance).getAllByText("💳 Paid")).toHaveLength(2);
+    expect(within(performance).getAllByText("📣 Publisher")).toHaveLength(2);
+    expect(within(performance).getAllByText("Joined")).toHaveLength(4);
+    expect(within(performance).getAllByText("Left ≈")).toHaveLength(2);
+    expect(within(performance).getAllByText("Price")).toHaveLength(2);
+
+    await user.hover(within(performance).getByText("8.62 UAH"));
+    expect(await screen.findByText("KPI (UAH)")).toBeInTheDocument();
+    expect(screen.getByText("target to 9.00 UAH")).toBeInTheDocument();
+    expect(screen.getByText("ok 9.00–12.00 UAH")).toBeInTheDocument();
+    expect(screen.getByText("stop from 12.00 UAH")).toBeInTheDocument();
+    expect(screen.getByText("08/09/2026, 19:00").parentElement).toHaveClass(
+      "whitespace-nowrap",
+    );
+    expect(
+      screen.getByRole("button", { name: "Open folder September campaign" }),
+    ).not.toHaveClass("focus-visible:ring-blue-500");
     expect(
       screen.queryByRole("button", {
         name: "View 4 channels in September campaign",

@@ -824,7 +824,7 @@ function PromoList({
             if (event.metaKey || event.ctrlKey || !onOpenPromo) {
               if (event.metaKey || event.ctrlKey) {
                 window.open(
-                  `/ad-campaigns?view=promos&promoId=${promo.id}`,
+                  `/ad-campaigns?section=promo&promoId=${promo.id}`,
                   "_blank",
                   "noopener,noreferrer",
                 );

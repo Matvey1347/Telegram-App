@@ -110,6 +110,7 @@ export class FinanceRegularPaymentConfirmationService {
           type: 'EXPENSE' as const,
           amount: paidAmount.toString(),
           description: regularPayment.name,
+          necessity: regularPayment.necessity,
           occurredAt: now.toISOString(),
         };
         const writeContext = await this.ledger.prepareTransactionWriteContext(

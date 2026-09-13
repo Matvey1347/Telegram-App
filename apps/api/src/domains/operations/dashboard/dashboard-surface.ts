@@ -52,7 +52,11 @@ const KEYS_BY_FEATURE = {
     'primaryCurrency',
     'secondaryCurrency',
     'incomeForPeriod',
+    'incomeBreakdownForPeriod',
+    'excludedBalanceAdjustmentsForPeriod',
+    'revenuePerActiveSubscriber',
     'expensesForPeriod',
+    'expensesBreakdownForPeriod',
     'profitForPeriod',
     'investedCapital',
     'investedCapitalForPeriod',
@@ -102,6 +106,9 @@ export function filterDashboardSurface<T extends Record<string, unknown>>(
   }
   if (!(access.finance && access.advertising && access.channels)) {
     delete filtered.channelPerformance;
+  }
+  if (!(access.finance && access.channels)) {
+    delete filtered.revenuePerActiveSubscriber;
   }
   filtered.availableWidgetIds = [
     ...(featureIds.includes('dashboard') ? ['workspaceOverview'] : []),

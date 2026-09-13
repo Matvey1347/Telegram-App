@@ -131,6 +131,7 @@ export type ManagedPostRevisionSource = {
   title: string;
   text: string | null;
   imageUrls: string[];
+  mediaItems?: Prisma.JsonValue;
   buttonRows?: Prisma.JsonValue | null;
   origin: TelegramManagedPostOrigin;
   remoteImportKey: string | null;

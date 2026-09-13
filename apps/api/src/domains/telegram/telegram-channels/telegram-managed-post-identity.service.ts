@@ -6,6 +6,7 @@ import {
   TelegramManagedPostStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 import {
   extractInternalPostLinkIds,
   extractSynchronizedTelegramPostLinkIds,
@@ -226,6 +227,7 @@ export class TelegramManagedPostIdentityService {
             lastError: true,
             scheduledAt: true,
             imageUrls: true,
+            mediaItems: true,
             telegramMessageIds: true,
             telegramIdVerificationStatus: true,
             telegramChannel: { select: { telegramChatId: true } },
@@ -295,7 +297,10 @@ export class TelegramManagedPostIdentityService {
       }
       const primaryId = this.primaryMessageId(
         target.telegramMessageIds,
-        target.imageUrls.length,
+        normalizeTelegramPostMediaItems(
+          target.mediaItems,
+          target.imageUrls,
+        ).length,
       );
       return primaryId &&
         buildStableTelegramPostUrl({
@@ -325,7 +330,10 @@ export class TelegramManagedPostIdentityService {
       }
       const primaryId = this.primaryMessageId(
         target.telegramMessageIds,
-        target.imageUrls.length,
+        normalizeTelegramPostMediaItems(
+          target.mediaItems,
+          target.imageUrls,
+        ).length,
       );
       const url = primaryId
         ? buildStableTelegramPostUrl({
@@ -592,7 +600,10 @@ export class TelegramManagedPostIdentityService {
           this.findPublishedIdentity(
             {
               text: post.text,
-              imageCount: post.imageUrls.length,
+              imageCount: normalizeTelegramPostMediaItems(
+                post.mediaItems,
+                post.imageUrls,
+              ).length,
               publishMode: post.publishMode,
               scheduledAt: post.scheduledAt ?? post.publishedAt,
             },
@@ -658,7 +669,8 @@ export class TelegramManagedPostIdentityService {
         });
         const primaryId = this.primaryMessageId(
           match.messageIds,
-          post.imageUrls.length,
+          normalizeTelegramPostMediaItems(post.mediaItems, post.imageUrls)
+            .length,
         );
         const primaryUrl = primaryId
           ? buildStableTelegramPostUrl({

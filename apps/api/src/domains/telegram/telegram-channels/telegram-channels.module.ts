@@ -78,6 +78,7 @@ import { TelegramChannelBoundedReadsController } from './telegram-channel-bounde
 import { TelegramManagedPostLookupService } from './telegram-managed-post-lookup.service';
 import { TelegramPostGroupSummaryReadService } from './telegram-post-group-summary-read.service';
 import { TelegramManagedPostRemoteDeletionService } from './telegram-managed-post-remote-deletion.service';
+import { TelegramManagedPostMediaController } from './telegram-managed-post-media.controller';
 
 @Module({
   imports: [AdCampaignsModule],
@@ -86,6 +87,7 @@ import { TelegramManagedPostRemoteDeletionService } from './telegram-managed-pos
     TelegramManagedPostRecoveryController,
     TelegramPostCalendarPlannerController,
     TelegramChannelBoundedReadsController,
+    TelegramManagedPostMediaController,
   ],
   providers: [
     TelegramChannelsService,

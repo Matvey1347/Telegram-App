@@ -1,6 +1,7 @@
 import { parseTelegramSpoilers } from './telegram-spoilers';
 import { parseTelegramCustomEmojiTokens } from './telegram-custom-emoji-markup';
 import { parseTelegramTableCellMarkup } from '@telegram-system/shared/telegram-table-markup';
+import { normalizeTelegramManagedFormattingRuns } from '@telegram-system/shared';
 
 const escapeHtml = (value: string) =>
   value
@@ -105,115 +106,139 @@ function telegramTableHtml(options: string, body: string, rich = false) {
 }
 
 export function telegramMarkupToHtml(raw: string, rich = false) {
-  const normalizedRaw = raw.replace(/\r\n?/g, '\n');
   const tokens: string[] = [];
   const token = (html: string) => {
     const index = tokens.push(html) - 1;
     return `\uE000${index}\uE001`;
   };
+  const render = (source: string): string => {
+    const normalizedRaw = source.replace(/\r\n?/g, '\n');
 
-  let value = normalizedRaw
-    .replace(
-      /^:::(quote|pullquote)(?:[ \t]+([^\n]*))?\n([\s\S]*?)\n:::/gm,
-      (_match, kind: string, options: string, body: string) => {
-        const credit = options?.match(/credit="([^"]+)"/)?.[1];
-        const richAttribution = credit
-          ? `<cite>${escapeHtml(credit)}</cite>`
-          : '';
-        const fallbackAttribution = credit
-          ? `\n<i>— ${escapeHtml(credit)}</i>`
-          : '';
-        return token(
-          kind === 'pullquote'
-            ? rich
-              ? `<aside>${escapeHtml(body).replace(/\n/g, '<br>')}${richAttribution}</aside>`
-              : `<blockquote>${escapeHtml(body).replace(/\n/g, '<br>')}${fallbackAttribution}</blockquote>`
-            : `<blockquote>${escapeHtml(body).replace(/\n/g, '<br>')}${rich ? richAttribution : fallbackAttribution}</blockquote>`,
-        );
-      },
-    )
-    .replace(
-      /```([^\n\r`]*)((?:\r\n|[\n\r])?)([\s\S]*?)```/g,
-      (_match, info: string, lineBreak: string, code: string) => {
-        const parsed = parseFencedCodeBlock(info, lineBreak, code);
-        const languageClass = parsed.language
-          ? ` class="language-${escapeHtml(parsed.language)}"`
-          : '';
-        return token(
-          `<pre><code${languageClass}>${escapeHtml(parsed.code)}</code></pre>`,
-        );
-      },
+    // Imported Telegram text is escaped before managed-markup delimiters are
+    // added. Resolve those escapes first so literal **, [], ||, and backticks
+    // can never be interpreted as formatting on a later publish.
+    let value = normalizedRaw
+      .replace(/\\([\\`*_[\]()#+~|>:])/g, (_match, literal: string) =>
+        token(escapeHtml(literal)),
+      )
+      .replace(
+        /^:::(quote|pullquote)(?:[ \t]+([^\n]*))?\n([\s\S]*?)\n:::/gm,
+        (_match, kind: string, options: string, body: string) => {
+          const credit = options?.match(/credit="([^"]+)"/)?.[1];
+          const richAttribution = credit
+            ? `<cite>${escapeHtml(credit)}</cite>`
+            : '';
+          const fallbackAttribution = credit
+            ? `\n<i>— ${escapeHtml(credit)}</i>`
+            : '';
+          return token(
+            kind === 'pullquote'
+              ? rich
+                ? `<aside>${escapeHtml(body).replace(/\n/g, '<br>')}${richAttribution}</aside>`
+                : `<blockquote>${escapeHtml(body).replace(/\n/g, '<br>')}${fallbackAttribution}</blockquote>`
+              : `<blockquote>${escapeHtml(body).replace(/\n/g, '<br>')}${rich ? richAttribution : fallbackAttribution}</blockquote>`,
+          );
+        },
+      )
+      .replace(
+        /```([^\n\r`]*)((?:\r\n|[\n\r])?)([\s\S]*?)```/g,
+        (_match, info: string, lineBreak: string, code: string) => {
+          const parsed = parseFencedCodeBlock(info, lineBreak, code);
+          const languageClass = parsed.language
+            ? ` class="language-${escapeHtml(parsed.language)}"`
+            : '';
+          return token(
+            `<pre><code${languageClass}>${escapeHtml(parsed.code)}</code></pre>`,
+          );
+        },
+      );
+    value = value.replace(
+      /^:::table(?:[ \t]+([^\n]*))?\n([\s\S]*?)\n:::/gm,
+      (_match, options: string | undefined, body: string) =>
+        token(telegramTableHtml(options || '', body, rich)),
     );
-  value = value.replace(
-    /^:::table(?:[ \t]+([^\n]*))?\n([\s\S]*?)\n:::/gm,
-    (_match, options: string | undefined, body: string) =>
-      token(telegramTableHtml(options || '', body, rich)),
-  );
-  value = value.replace(
-    /^(#{1,6})\s+(.+)$/gm,
-    (_match, _marks: string, text: string) =>
-      token(
-        rich
-          ? `<h${_marks.length}>${telegramMarkupToHtml(text, true)}</h${_marks.length}>`
-          : `<b>${escapeHtml(text)}</b>`,
-      ),
-  );
-  // Keep the stored, GPT-readable custom emoji token out of the generic HTML
-  // escaping path. GramJS recognizes this Telegram-specific tag and creates a
-  // MessageEntityCustomEmoji for its ALT text and 64-bit document ID.
-  for (const customEmoji of [
-    ...parseTelegramCustomEmojiTokens(value),
-  ].reverse()) {
-    value =
-      value.slice(0, customEmoji.start) +
-      token(
-        `<tg-emoji emoji-id="${escapeHtml(customEmoji.documentId)}">${escapeHtml(customEmoji.alt)}</tg-emoji>`,
-      ) +
-      value.slice(customEmoji.end);
-  }
-  value = value.replace(/`([^`\n]+)`/g, (_match, code: string) =>
-    token(`<code>${escapeHtml(code)}</code>`),
-  );
-  value = value.replace(
-    /\[([^\]\n]+)\]\(((?:https?:\/\/|tg:\/\/)[^\s<>()]+)\)/gi,
-    (_match, label: string, href: string) => {
-      try {
-        const url = new URL(href);
-        const webUrl = url.protocol === 'http:' || url.protocol === 'https:';
-        if (
-          (!webUrl && url.protocol !== 'tg:') ||
-          (webUrl && !url.hostname.includes('.'))
-        ) {
+    value = value.replace(
+      /^(#{1,6})\s+(.+)$/gm,
+      (_match, _marks: string, text: string) =>
+        token(
+          rich
+            ? `<h${_marks.length}>${render(text)}</h${_marks.length}>`
+            : `<b>${escapeHtml(text)}</b>`,
+        ),
+    );
+    // Keep the stored, GPT-readable custom emoji token out of the generic HTML
+    // escaping path. GramJS recognizes this Telegram-specific tag and creates a
+    // MessageEntityCustomEmoji for its ALT text and 64-bit document ID.
+    for (const customEmoji of [
+      ...parseTelegramCustomEmojiTokens(value),
+    ].reverse()) {
+      value =
+        value.slice(0, customEmoji.start) +
+        token(
+          `<tg-emoji emoji-id="${escapeHtml(customEmoji.documentId)}">${escapeHtml(customEmoji.alt)}</tg-emoji>`,
+        ) +
+        value.slice(customEmoji.end);
+    }
+    value = value.replace(/`([^`\n]+)`/g, (_match, code: string) =>
+      token(`<code>${escapeHtml(code)}</code>`),
+    );
+    value = value.replace(
+      /\[((?:[^\]])+?)\]\(((?:https?:\/\/|tg:\/\/)[^\s<>()]+)\)/gi,
+      (_match, label: string, href: string) => {
+        try {
+          const url = new URL(href);
+          const webUrl = url.protocol === 'http:' || url.protocol === 'https:';
+          if (
+            (!webUrl && url.protocol !== 'tg:') ||
+            (webUrl && !url.hostname.includes('.'))
+          ) {
+            return _match;
+          }
+          if (url.protocol === 'tg:' && url.hostname === 'time') {
+            const unix = url.searchParams.get('unix');
+            const format = url.searchParams.get('format') ?? '';
+            if (
+              !unix ||
+              !/^-?\d+$/.test(unix) ||
+              !/^(?:r|w?[dD]?[tT]?)$/.test(format)
+            ) {
+              return _match;
+            }
+            return token(
+              `<tg-time unix="${unix}"${format ? ` format="${format}"` : ''}>${render(label)}</tg-time>`,
+            );
+          }
+          return token(
+            `<a href="${escapeHtml(url.toString())}">${render(label)}</a>`,
+          );
+        } catch {
           return _match;
         }
-        return token(
-          `<a href="${escapeHtml(url.toString())}">${escapeHtml(label)}</a>`,
-        );
-      } catch {
-        return _match;
-      }
-    },
-  );
-  const spoilers = parseTelegramSpoilers(value);
-  value = spoilers.text;
-  for (const entity of [...spoilers.entities].reverse()) {
-    const end = entity.offset + entity.length;
-    value = value.slice(0, end) + token('</tg-spoiler>') + value.slice(end);
-    value =
-      value.slice(0, entity.offset) +
-      token('<tg-spoiler>') +
-      value.slice(entity.offset);
-  }
-  value = escapeHtml(value)
-    .replace(/\*\*([^\n]+?)\*\*/g, '<b>$1</b>')
-    .replace(/__([^\n]+?)__/g, '<i>$1</i>')
-    .replace(/\+\+([^\n]+?)\+\+/g, '<u>$1</u>')
-    .replace(/~~([^\n]+?)~~/g, '<s>$1</s>');
+      },
+    );
+    value = normalizeTelegramManagedFormattingRuns(value);
+    const spoilers = parseTelegramSpoilers(value);
+    value = spoilers.text;
+    for (const entity of [...spoilers.entities].reverse()) {
+      const end = entity.offset + entity.length;
+      value = value.slice(0, end) + token('</tg-spoiler>') + value.slice(end);
+      value =
+        value.slice(0, entity.offset) +
+        token('<tg-spoiler>') +
+        value.slice(entity.offset);
+    }
+    value = escapeHtml(value)
+      .replace(/\*\*([\s\S]+?)\*\*/g, '<b>$1</b>')
+      .replace(/__([\s\S]+?)__/g, '<i>$1</i>')
+      .replace(/\+\+([\s\S]+?)\+\+/g, '<u>$1</u>')
+      .replace(/~~([\s\S]+?)~~/g, '<s>$1</s>');
 
-  return convertBlockquotes(value).replace(
-    /\uE000(\d+)\uE001/g,
-    (_match, index: string) => tokens[Number(index)] ?? '',
-  );
+    return convertBlockquotes(value).replace(
+      /\uE000(\d+)\uE001/g,
+      (_match, index: string) => tokens[Number(index)] ?? '',
+    );
+  };
+  return render(raw);
 }
 
 /** Native rich-message HTML for Bot API 10.2; standard HTML remains the MTProto fallback. */
@@ -257,6 +282,11 @@ export function telegramHtmlToGramJsAlbumHtml(html: string) {
 export function telegramHtmlToManagedMarkup(html: string) {
   return html
     .replace(
+      /<tg-time\s+unix="(-?\d+)"(?:\s+format="(r|w?[dD]?[tT]?)")?>([\s\S]*?)<\/tg-time>/gi,
+      (_match, unix: string, format: string | undefined, label: string) =>
+        `[${label}](tg://time?unix=${unix}${format ? `&format=${format}` : ''})`,
+    )
+    .replace(
       /<tg-emoji\s+emoji-id="([0-9]+)">([\s\S]*?)<\/tg-emoji>/gi,
       (_match, documentId: string, alt: string) =>
         `![${alt}](tg://emoji?id=${documentId})`,
@@ -274,7 +304,8 @@ export function telegramHtmlToManagedMarkup(html: string) {
     .replace(/<tg-spoiler>([\s\S]*?)<\/tg-spoiler>/gi, '||$1||')
     .replace(
       /<a href="([^"]+)">([\s\S]*?)<\/a>/gi,
-      (_match, href: string, label: string) => `[${label}](${href})`,
+      (_match, href: string, label: string) =>
+        `[${label}](${href.replace(/\(/g, '%28').replace(/\)/g, '%29')})`,
     )
     .replace(
       /<blockquote( expandable)?>([\s\S]*?)<\/blockquote>/gi,

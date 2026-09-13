@@ -236,7 +236,8 @@ export function MutualPromotionFoldersPage({
     onSuccess: reconcile,
   });
 
-  const folder = detailQuery.data ?? null;
+  const folder =
+    detailQuery.data?.id === selectedFolderId ? detailQuery.data : null;
   const selectedFolderTitle = foldersQuery.data?.items.find(
     (item) => item.id === selectedFolderId,
   )?.title;
@@ -342,7 +343,11 @@ export function MutualPromotionFoldersPage({
       ) : null}
 
       <MutualPromotionFolderDetailSkeletonModal
-        open={Boolean(selectedFolderId && detailQuery.isLoading)}
+        open={Boolean(
+          selectedFolderId &&
+          !folder &&
+          (detailQuery.isLoading || detailQuery.isFetching),
+        )}
         title={selectedFolderTitle}
         onClose={() => setSelectedFolderId(null)}
       />
@@ -364,6 +369,7 @@ export function MutualPromotionFoldersPage({
         </div>
       </Modal>
       <MutualPromotionFolderDetailModal
+        key={selectedFolderId ?? "closed"}
         open={Boolean(selectedFolderId && folder && !inviteLinksEditorOpen)}
         folder={folder}
         timezone={workspaceTimezone}

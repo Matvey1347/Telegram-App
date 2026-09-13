@@ -1,8 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { TelegramPostButtonRows } from "@telegram-system/shared";
-import { TelegramImageUpload } from "@/components/features/telegram/telegram/telegram-image-upload";
+import {
+  normalizeTelegramPostMediaItems,
+  telegramPostPhotoUrls,
+  type TelegramPostButtonRows,
+  type TelegramPostMediaItem,
+} from "@telegram-system/shared";
+import { TelegramPostMediaUpload } from "@/components/features/telegram/telegram/telegram-post-media-upload";
 import { TelegramPostPreview } from "@/components/features/telegram/telegram/telegram-post-preview";
 import { TelegramTextEditor } from "@/components/features/telegram/telegram/telegram-text-editor";
 import { FormField, Input, Select, Tooltip } from "@/components/ui/primitives";
@@ -11,6 +16,7 @@ export type PlacementManagedPostDraft = {
   title: string;
   text: string;
   imageUrls: string[];
+  mediaItems?: TelegramPostMediaItem[];
   buttonRows: TelegramPostButtonRows;
 };
 
@@ -49,6 +55,10 @@ export function PlacementPostComposer({
     publishedAt?: string;
   }) => void;
 }) {
+  const mediaItems = normalizeTelegramPostMediaItems(
+    draft?.mediaItems,
+    draft?.imageUrls,
+  );
   const autoCreatedForFutureRef = useRef(false);
   const [existingInputMode, setExistingInputMode] = useState<"select" | "link">(
     "select",
@@ -129,6 +139,7 @@ export function PlacementPostComposer({
             channelPhotoUrl={channelPhotoUrl}
             text={draft.text}
             imageUrls={draft.imageUrls}
+            mediaItems={mediaItems}
             buttonRows={draft.buttonRows}
           />
           <div className="space-y-3">
@@ -150,9 +161,14 @@ export function PlacementPostComposer({
                 }
               />
             </FormField>
-            <TelegramImageUpload
-              value={draft.imageUrls}
-              onChange={(imageUrls) => updateDraft({ imageUrls })}
+            <TelegramPostMediaUpload
+              value={mediaItems}
+              onChange={(nextMedia) =>
+                updateDraft({
+                  mediaItems: nextMedia,
+                  imageUrls: telegramPostPhotoUrls(nextMedia),
+                })
+              }
               compact
             />
           </div>

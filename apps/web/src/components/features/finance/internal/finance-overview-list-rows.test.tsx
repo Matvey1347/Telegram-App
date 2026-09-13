@@ -80,8 +80,20 @@ describe("internal finance overview list rows", () => {
     const row = screen.getByText("Poland Card").closest("[data-finance-row]");
     const actions = row?.querySelector('[data-finance-row-actions="true"]');
     const arrow = screen.getByRole("img", { name: "Transfer direction" });
-    expect(row).toHaveClass("relative", "pr-12", "md:pr-4");
-    expect(actions).toHaveClass("absolute", "right-3", "top-3", "md:static");
+    expect(row).toHaveClass(
+      "relative",
+      "pr-12",
+      "md:pr-4",
+      "md:grid-cols-[minmax(0,1fr)_minmax(4rem,0.45fr)_minmax(0,1fr)]",
+    );
+    expect(actions).toHaveClass("absolute", "right-3", "top-3");
+    expect(actions).not.toHaveClass("md:static");
+    expect(arrow).toHaveClass(
+      "justify-start",
+      "pl-3",
+      "md:justify-center",
+      "md:pl-0",
+    );
     expect(arrow.querySelectorAll("svg")).toHaveLength(4);
     expect(arrow.querySelector(".md\\:flex svg")).toHaveClass("flex-1");
   });

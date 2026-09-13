@@ -11,6 +11,7 @@ type B2Context = {
 };
 
 export type ImmutableImage = { bytes: Buffer; mimeType: string };
+export type ImmutableMedia = ImmutableImage;
 
 export type ImmutableImageUploadResult = {
   urls: string[];
@@ -23,6 +24,8 @@ const mimeExtensions: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp',
   'image/gif': 'gif',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
 };
 
 export function isSupportedImmutableImageMimeType(value: string) {
@@ -36,6 +39,19 @@ export class B2ObjectStorageService {
 
   async persistImmutableImages(
     images: ImmutableImage[],
+  ): Promise<ImmutableImageUploadResult> {
+    return this.persistImmutableObjects(images, 'post-images');
+  }
+
+  async persistImmutableMedia(
+    images: ImmutableMedia[],
+  ): Promise<ImmutableImageUploadResult> {
+    return this.persistImmutableObjects(images, 'post-media');
+  }
+
+  private async persistImmutableObjects(
+    images: ImmutableMedia[],
+    folder: 'post-images' | 'post-media',
   ): Promise<ImmutableImageUploadResult> {
     if (!images.length) return { urls: [], uploaded: 0, reused: 0 };
     const context = await this.context();
@@ -55,7 +71,7 @@ export class B2ObjectStorageService {
             );
           }
           const hash = createHash('sha256').update(image.bytes).digest('hex');
-          const key = `telegram/post-images/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash}.${extension}`;
+          const key = `telegram/${folder}/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash}.${extension}`;
           let pending = operation.get(hash);
           if (!pending) {
             pending = this.persistOne(context, key, image.bytes, mimeType);

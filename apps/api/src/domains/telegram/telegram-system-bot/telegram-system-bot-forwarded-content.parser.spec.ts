@@ -1,3 +1,9 @@
+import { Api } from 'telegram';
+import { HTMLParser } from 'telegram/extensions/html';
+import {
+  telegramHtmlToMtprotoHtml,
+  telegramMarkupToHtml,
+} from '../../../telegram/shared/telegram-markup';
 import { parseTelegramSystemBotForwardedContent } from './telegram-system-bot-forwarded-content.parser';
 
 describe('parseTelegramSystemBotForwardedContent', () => {
@@ -61,7 +67,7 @@ describe('parseTelegramSystemBotForwardedContent', () => {
 
   it('preserves every Bot API formatting entity supported by Telegram posts', () => {
     const text =
-      '😀 Bold Italic Under Strike Secret Code Pre\nQuote\nHidden\nPerson Premium';
+      '😀 Bold Italic Under Strike Secret Code Pre\nQuote\nHidden\nPerson Premium Tomorrow';
     const entity = (
       type: string,
       value: string,
@@ -88,6 +94,10 @@ describe('parseTelegramSystemBotForwardedContent', () => {
         entity('custom_emoji', 'Premium', {
           custom_emoji_id: '5368324170671202286',
         }),
+        entity('date_time', 'Tomorrow', {
+          unix_time: 1_700_086_400,
+          date_time_format: 'wDT',
+        }),
       ],
       forward_date: 1_700_000_000,
     });
@@ -96,7 +106,7 @@ describe('parseTelegramSystemBotForwardedContent', () => {
       ok: true,
       content: {
         managedText:
-          '😀 **Bold** __Italic__ ++Under++ ~~Strike~~ ||Secret|| `Code` ```ts\nPre```\n> Quote\n>> Hidden\n[Person](tg://user?id=42) ![Premium](tg://emoji?id=5368324170671202286)',
+          '😀 **Bold** __Italic__ ++Under++ ~~Strike~~ ||Secret|| `Code` ```ts\nPre```\n> Quote\n>> Hidden\n[Person](tg://user?id=42) ![Premium](tg://emoji?id=5368324170671202286) [Tomorrow](tg://time?unix=1700086400&format=wDT)',
       },
     });
   });
@@ -137,6 +147,121 @@ describe('parseTelegramSystemBotForwardedContent', () => {
       });
     },
   );
+
+  it('merges duplicate and adjacent formatting entities into unambiguous markup', () => {
+    const result = parseTelegramSystemBotForwardedContent({
+      text: 'FirstSecond',
+      entities: [
+        { type: 'bold', offset: 0, length: 5 },
+        { type: 'bold', offset: 0, length: 5 },
+        { type: 'bold', offset: 5, length: 6 },
+        {
+          type: 'text_link',
+          offset: 0,
+          length: 11,
+          url: 'https://example.com/post',
+        },
+      ],
+      forward_date: 1_700_000_000,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      content: {
+        managedText: '**[FirstSecond](https://example.com/post)**',
+        formattedHtml:
+          '<b><a href="https://example.com/post">FirstSecond</a></b>',
+      },
+    });
+  });
+
+  it('round-trips multiline links, nested formatting, spoilers, emoji offsets, and literal markup', () => {
+    const text = [
+      '🥑Твоє здорове',
+      'життя',
+      '🌷Квітучий сад',
+      'прихований тест',
+      'Literal ** [] || `code`',
+    ].join('\n');
+    const span = (value: string) => ({
+      offset: text.indexOf(value),
+      length: value.length,
+    });
+    const linkedLines = '🥑Твоє здорове\nжиття';
+    const result = parseTelegramSystemBotForwardedContent({
+      text,
+      entities: [
+        {
+          type: 'text_link',
+          ...span(linkedLines),
+          url: 'https://t.me/+Pc5DA7eKOCRmOTQ6',
+        },
+        { type: 'bold', ...span(linkedLines) },
+        {
+          type: 'text_link',
+          ...span('🌷Квітучий сад'),
+          url: 'https://example.com/flower_(garden)',
+        },
+        { type: 'bold', ...span('🌷Квітучий сад') },
+        { type: 'spoiler', ...span('прихований тест') },
+      ],
+      forward_date: 1_700_000_000,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('Expected forwarded content');
+    const html = telegramMarkupToHtml(result.content.managedText);
+    const [roundTrippedText, entities] = HTMLParser.parse(
+      telegramHtmlToMtprotoHtml(html),
+    );
+
+    expect(roundTrippedText).toBe(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity instanceof Api.MessageEntityTextUrl &&
+          entity.offset === span(linkedLines).offset &&
+          entity.length === span(linkedLines).length &&
+          entity.url === 'https://t.me/+Pc5DA7eKOCRmOTQ6',
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) =>
+          entity instanceof Api.MessageEntityBold &&
+          entity.offset === span(linkedLines).offset &&
+          entity.length === span(linkedLines).length,
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) =>
+          entity instanceof Api.MessageEntitySpoiler &&
+          entity.offset === span('прихований тест').offset &&
+          entity.length === span('прихований тест').length,
+      ),
+    ).toBe(true);
+    expect(html).not.toContain('&#x20;');
+  });
+
+  it('does not interpret literal managed-markup characters in an unformatted forwarded post', () => {
+    const text =
+      'Literal **bold** [link](https://example.com) ||visible|| `code`';
+    const result = parseTelegramSystemBotForwardedContent({
+      text,
+      forward_date: 1_700_000_000,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('Expected forwarded content');
+    const html = telegramMarkupToHtml(result.content.managedText);
+    const [roundTrippedText, entities] = HTMLParser.parse(
+      telegramHtmlToMtprotoHtml(html),
+    );
+
+    expect(roundTrippedText).toBe(text);
+    expect(entities).toEqual([]);
+  });
 
   it('selects the best photo and uses its caption', () => {
     const result = parseTelegramSystemBotForwardedContent({
@@ -200,7 +325,7 @@ describe('parseTelegramSystemBotForwardedContent', () => {
     ]);
   });
 
-  it.each(['video', 'document', 'sticker'] as const)(
+  it.each(['document', 'sticker'] as const)(
     'rejects unsupported %s media explicitly',
     (media) => {
       expect(
@@ -214,6 +339,40 @@ describe('parseTelegramSystemBotForwardedContent', () => {
         reason: 'UNSUPPORTED_MEDIA',
         unsupportedMedia: [media],
         warnings: [],
+      });
+    },
+  );
+
+  it.each([
+    ['VIDEO', 'video', 'video/mp4'],
+    ['ANIMATION', 'animation', 'image/gif'],
+  ] as const)(
+    'captures %s media instead of rejecting it',
+    (kind, field, mimeType) => {
+      const result = parseTelegramSystemBotForwardedContent({
+        caption: 'Motion caption',
+        forward_date: 1_700_000_000,
+        [field]: {
+          file_id: `${field}-file`,
+          file_unique_id: `${field}-unique`,
+          file_size: 1024,
+          width: 640,
+          height: 360,
+          duration: 4,
+          mime_type: mimeType,
+        },
+      });
+      expect(result).toMatchObject({
+        ok: true,
+        content: {
+          text: 'Motion caption',
+          media: {
+            kind,
+            fileId: `${field}-file`,
+            mimeType,
+            durationSeconds: 4,
+          },
+        },
       });
     },
   );

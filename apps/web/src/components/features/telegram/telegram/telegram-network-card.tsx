@@ -20,7 +20,7 @@ import type {
 } from "@/lib/api";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { IconPicker } from "@/components/icons/icon-picker";
-import { formatMoney } from "@/lib/features/finance/money";
+import { formatCompactMoney } from "@/lib/features/finance/money";
 import { TelegramEntityAvatar } from "./telegram-entity-avatar";
 import {
   TelegramCardActionsMenu,
@@ -48,7 +48,7 @@ function money(
 ) {
   return amount == null
     ? "—"
-    : formatMoney(
+    : formatCompactMoney(
         amount,
         currency || settings?.primaryCurrency,
         settings?.currencyDisplayMode,
@@ -253,7 +253,11 @@ export function TelegramNetworkCard({
           <TelegramCardActionsMenu label={`Actions for ${network.name}`}>
             {network.canEdit ? (
               <TelegramCardMenuAction
-                label={network.isSystem ? "Configure included channels" : "Edit network"}
+                label={
+                  network.isSystem
+                    ? "Configure included channels"
+                    : "Edit network"
+                }
                 icon={<Pencil size={17} />}
                 onClick={onEdit}
               />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ConsumerBillingCatalog,
@@ -21,6 +22,7 @@ import {
   type ConsumerFinanceCheckoutOffer,
 } from "./finance-consumer-billing-format";
 import { FinancePlanVisual } from "./finance-plan-visual";
+import styles from "./finance-plans.module.css";
 
 export function FinancePlans({
   botId,
@@ -104,10 +106,34 @@ export function FinancePlans({
   );
   return (
     <div className="space-y-4">
+      <section className="relative isolate min-h-[250px] overflow-hidden rounded-3xl border border-cyan-900/70 bg-[#05090e] shadow-[0_24px_70px_rgba(0,0,0,0.32)] sm:min-h-[290px]">
+        <div
+          className={`${styles.heroGlow} absolute inset-0 bg-[radial-gradient(circle_at_78%_50%,rgba(45,212,191,0.2),transparent_34%),radial-gradient(circle_at_90%_15%,rgba(139,92,246,0.18),transparent_30%)]`}
+        />
+        <Image
+          src="/finance/states/plans-hero.webp"
+          alt=""
+          fill
+          priority
+          sizes="(max-width: 768px) 100vw, 900px"
+          className={`${styles.heroArtwork} object-cover object-[70%_50%] opacity-70 [mask-image:linear-gradient(to_right,transparent_2%,black_38%)] sm:opacity-90`}
+        />
+        <div className="relative z-10 flex min-h-[250px] max-w-xl flex-col justify-end p-5 sm:min-h-[290px] sm:justify-center sm:p-8">
+          <span className="mb-3 w-fit rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-emerald-200">
+            Finance
+          </span>
+          <h1 className="max-w-lg text-2xl font-semibold tracking-tight text-white sm:text-4xl">
+            {t.heroTitle}
+          </h1>
+          <p className="mt-3 max-w-md text-sm leading-6 text-neutral-300 sm:text-base">
+            {t.heroDescription}
+          </p>
+        </div>
+      </section>
       <Card>
         <h2 className="text-lg font-semibold">{t.available}</h2>
         {catalog.data.plans.length ? (
-          <div className="mt-3 grid gap-3 lg:grid-cols-3">
+          <div className={`${styles.planGrid} mt-3 grid gap-3 lg:grid-cols-3`}>
             {catalog.data.plans.map((plan) => {
               const selected = plan.code === current.tier;
               const featured = plan.code === "PRO";
@@ -133,7 +159,7 @@ export function FinancePlans({
                   key={plan.code}
                   data-finance-plan={plan.code}
                   data-featured={featured || undefined}
-                  className={`group relative flex h-full flex-col overflow-hidden rounded-2xl border p-3.5 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(0,0,0,0.24)] motion-reduce:transform-none ${featured ? "border-sky-500 bg-sky-950/20 before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-sky-400" : selected ? "border-sky-700 bg-sky-950/15" : plan.code === "ULTIMATE" ? "border-violet-800/80 bg-violet-950/10 before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-violet-400" : "border-neutral-800 bg-neutral-950/50 hover:border-neutral-700"}`}
+                  className={`${styles.planCard} group relative flex h-full flex-col overflow-hidden rounded-2xl border p-3.5 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(0,0,0,0.24)] motion-reduce:transform-none ${featured ? "border-sky-500 bg-sky-950/20 before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-sky-400" : selected ? "border-sky-700 bg-sky-950/15" : plan.code === "ULTIMATE" ? "border-violet-800/80 bg-violet-950/10 before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-violet-400" : "border-neutral-800 bg-neutral-950/50 hover:border-neutral-700"}`}
                 >
                   <FinancePlanVisual tier={plan.code} />
                   <div className="mt-3 flex items-start justify-between gap-2">

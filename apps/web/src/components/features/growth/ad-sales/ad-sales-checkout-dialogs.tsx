@@ -77,6 +77,7 @@ export function AdSalesCheckoutDialogs({
             title: draft.title,
             text: draft.text,
             imageUrls: draft.imageUrls,
+            mediaItems: draft.mediaItems,
             buttonRows: draft.buttonRows,
           });
         }}

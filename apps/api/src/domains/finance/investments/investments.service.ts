@@ -4,7 +4,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { createPaginatedResponse, normalizePagination } from '../../../common/pagination/pagination.utils';
+import {
+  createPaginatedResponse,
+  normalizePagination,
+} from '../../../common/pagination/pagination.utils';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { CreateInvestmentDto, UpdateInvestmentDto } from './dto';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
@@ -75,7 +78,12 @@ export class InvestmentsService {
     });
     if (!row) throw new NotFoundException('Investment not found');
     if (await this.authorization.can(userId, 'finance.editOwn'))
-      await this.authorization.requireOwnOrAny(userId, row, 'finance.editOwn', 'finance.editAny');
+      await this.authorization.requireOwnOrAny(
+        userId,
+        row,
+        'finance.editOwn',
+        'finance.editAny',
+      );
     return row;
   }
 
@@ -94,7 +102,11 @@ export class InvestmentsService {
 
   async create(userId: string, dto: CreateInvestmentDto) {
     await this.authorization.require(userId, 'finance.create');
-    const { workspaceId, assignedMemberId } = await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId);
+    const { workspaceId, assignedMemberId } =
+      await this.workspaceService.resolveAssignedMemberId(
+        userId,
+        dto.assignedMemberId,
+      );
     const [workspace, workspaceMember, account] = await Promise.all([
       this.prisma.workspace.findFirst({ where: { id: workspaceId } }),
       this.prisma.workspaceMember.findFirst({
@@ -173,10 +185,31 @@ export class InvestmentsService {
       include: { workspaceMember: { include: { user: true } } },
     });
     if (!existing) throw new NotFoundException('Investment not found');
-    await this.authorization.requireOwnOrAny(userId, existing, 'finance.editOwn', 'finance.editAny');
-    const assignedMemberId = dto.assignedMemberId === undefined ? undefined : (
-      await this.workspaceService.resolveAssignedMemberId(userId, dto.assignedMemberId)
-    ).assignedMemberId;
+    await this.authorization.requireOwnOrAny(
+      userId,
+      existing,
+      'finance.editOwn',
+      'finance.editAny',
+    );
+    if (
+      existing.origin !== 'EXTERNAL' ||
+      !existing.accountId ||
+      !existing.transactionId
+    ) {
+      throw new BadRequestException(
+        'System-generated salary and reinvestment movements cannot be edited here',
+      );
+    }
+    const transactionId = existing.transactionId;
+    const assignedMemberId =
+      dto.assignedMemberId === undefined
+        ? undefined
+        : (
+            await this.workspaceService.resolveAssignedMemberId(
+              userId,
+              dto.assignedMemberId,
+            )
+          ).assignedMemberId;
 
     const workspaceMemberId =
       dto.workspaceMemberId ?? existing.workspaceMemberId;
@@ -206,22 +239,19 @@ export class InvestmentsService {
     const notes = dto.notes ?? existing.notes ?? undefined;
 
     return this.prisma.$transaction(async (tx) => {
-      if (existing.transactionId) {
-        await tx.transaction.update({
-          where: { id: existing.transactionId },
-          data: {
-            accountId,
-            amount,
-            currency: account.currency,
-            amountInPrimaryCurrency,
-            exchangeRateToPrimary,
-            description:
-              notes || `Investment from ${workspaceMember.user.name}`,
-            date,
-            assignedMemberId,
-          },
-        });
-      }
+      await tx.transaction.update({
+        where: { id: transactionId },
+        data: {
+          accountId,
+          amount,
+          currency: account.currency,
+          amountInPrimaryCurrency,
+          exchangeRateToPrimary,
+          description: notes || `Investment from ${workspaceMember.user.name}`,
+          date,
+          assignedMemberId,
+        },
+      });
 
       return tx.investment.update({
         where: { id },
@@ -257,7 +287,17 @@ export class InvestmentsService {
       where: { id, workspaceId },
     });
     if (!existing) throw new NotFoundException('Investment not found');
-    await this.authorization.requireOwnOrAny(userId, existing, 'finance.deleteOwn', 'finance.deleteAny');
+    await this.authorization.requireOwnOrAny(
+      userId,
+      existing,
+      'finance.deleteOwn',
+      'finance.deleteAny',
+    );
+    if (existing.origin !== 'EXTERNAL') {
+      throw new BadRequestException(
+        'System-generated salary and reinvestment movements cannot be deleted here',
+      );
+    }
 
     return this.prisma.$transaction(async (tx) => {
       if (existing.transactionId) {

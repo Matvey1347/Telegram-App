@@ -28,6 +28,7 @@ import { ApplicationLoggerService } from '../../operations/application-logs/appl
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import { decimal, decimalOrNull } from './domain/decimal';
 import { calculateAdPlacementDeleteAt } from './domain/sales-text';
+import { resolveAdSaleCommissionSnapshot } from './telegram-ad-sales-commission';
 import {
   CreateTelegramAdSaleCheckoutDto,
   CreateTelegramAdSaleCheckoutPaymentDto,
@@ -484,6 +485,11 @@ export class TelegramAdSalesCheckoutService {
     if (payment && !category)
       throw new NotFoundException('Advertising revenue category not found');
 
+    const commissionSnapshot = await resolveAdSaleCommissionSnapshot(
+      this.prisma,
+      workspaceId,
+      assignedMemberId,
+    );
     const saleId = await this.prisma.$transaction(async (tx) => {
       const resolvedAdvertiser = await this.advertiserResolver.resolve(
         tx,
@@ -519,6 +525,7 @@ export class TelegramAdSalesCheckoutService {
           crmDealStage: TelegramAdCrmDealStage.SLOT_RESERVED,
           createdByUserId: userId,
           assignedMemberId,
+          ...commissionSnapshot,
         },
       });
       if (advertiserId) {

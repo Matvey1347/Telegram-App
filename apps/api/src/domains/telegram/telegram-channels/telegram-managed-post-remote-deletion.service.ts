@@ -13,6 +13,7 @@ import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto
 import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
 import { TelegramManagedPostIdentityService } from './telegram-managed-post-identity.service';
+import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 
 const BOT_DELETE_BATCH_SIZE = 100;
 const CHANNEL_DELETE_CONCURRENCY = 5;
@@ -27,6 +28,7 @@ type ManagedPostDeletionCandidate = {
   id: string;
   text: string | null;
   imageUrls: string[];
+  mediaItems: unknown;
   scheduledAt: Date | null;
   scheduleMode: string | null;
   publishMode: string | null;
@@ -78,6 +80,7 @@ export class TelegramManagedPostRemoteDeletionService {
         id: true,
         text: true,
         imageUrls: true,
+        mediaItems: true,
         scheduledAt: true,
         scheduleMode: true,
         publishMode: true,
@@ -295,7 +298,10 @@ export class TelegramManagedPostRemoteDeletionService {
           : this.identity.findPublishedIdentity(
               {
                 text: post.text,
-                imageCount: post.imageUrls.length,
+                imageCount: normalizeTelegramPostMediaItems(
+                  post.mediaItems,
+                  post.imageUrls,
+                ).length,
                 publishMode: post.publishMode,
                 scheduledAt: post.scheduledAt,
               },

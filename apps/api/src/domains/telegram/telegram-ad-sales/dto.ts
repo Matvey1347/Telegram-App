@@ -17,6 +17,7 @@ import {
   TelegramAdvertiserTaskType,
 } from '@prisma/client';
 import {
+  Allow,
   ArrayMaxSize,
   IsArray,
   IsBoolean,
@@ -157,6 +158,17 @@ export class UpdateTelegramAdSalesWorkspaceSettingsDto {
   @IsInt()
   @Min(1)
   defaultOrganicPostsPerAdSlot?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  salesCommissionEnabled?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  defaultSalesCommissionRate?: number;
 }
 
 export class UpdateTelegramAdChannelPricingDto {
@@ -683,6 +695,7 @@ export class CreatePlacementManagedPostDto {
   @IsOptional() @IsString() title?: string;
   @IsOptional() @IsString() text?: string | null;
   @IsOptional() @IsArray() @IsString({ each: true }) imageUrls?: string[];
+  @IsOptional() @Allow() mediaItems?: unknown[];
   @IsOptional() @IsString() assignedMemberId?: string | null;
   @IsOptional() @IsString() icon?: string | null;
   @IsOptional()

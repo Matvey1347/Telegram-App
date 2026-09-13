@@ -39,6 +39,7 @@ function streamError(event: Extract<ImportStreamEvent, { type: "error" }>) {
 export async function importConsumerFinanceData(input: {
   botId: string;
   file: File;
+  mode: "ADD" | "REPLACE";
   signal?: AbortSignal;
   onProgress: (
     progress: ConsumerFinanceImportProgress,
@@ -49,6 +50,7 @@ export async function importConsumerFinanceData(input: {
   const correlationId = createRequestCorrelationId();
   const form = new FormData();
   form.append("file", input.file, input.file.name);
+  form.append("mode", input.mode);
   const response = await fetch(
     `${resolveConsumerFinanceApiBase()}${consumerFinanceRoot(encodeURIComponent(input.botId))}/import-stream`,
     {

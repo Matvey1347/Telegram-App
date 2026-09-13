@@ -9,6 +9,7 @@ import type {
   BulkActionResultItem,
   ManagedPostsSyncResult,
 } from '@telegram-system/shared';
+import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { parseTelegramPostUrl } from '../../../telegram/shared/telegram-post-url';
 import { ApplicationLoggerService } from '../../operations/application-logs/application-logger.service';
@@ -122,7 +123,10 @@ export class TelegramManagedPostRemoteSyncService {
         this.identityService.findPublishedIdentity(
           {
             text: post.text,
-            imageCount: post.imageUrls.length,
+            imageCount: normalizeTelegramPostMediaItems(
+              post.mediaItems,
+              post.imageUrls,
+            ).length,
             publishMode: post.publishMode,
             scheduledAt: post.scheduledAt ?? post.publishedAt,
           },
@@ -346,11 +350,13 @@ export class TelegramManagedPostRemoteSyncService {
         : this.telegramChannelAccessService.telegramMessageUrlsForPost(
             channel,
             actualMessageIds,
-            post.imageUrls.length,
+            normalizeTelegramPostMediaItems(post.mediaItems, post.imageUrls)
+              .length,
           );
       const hasRemoteMedia = messages.some((message) => message.hasMedia);
       const mediaNote =
-        hasRemoteMedia && !post.imageUrls.length
+        hasRemoteMedia &&
+        !normalizeTelegramPostMediaItems(post.mediaItems, post.imageUrls).length
           ? 'Telegram media changed, but media download is not implemented.'
           : null;
       const nextPublishedAt =

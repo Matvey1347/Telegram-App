@@ -229,6 +229,49 @@ describe('TelegramChannelPerformanceHistoryService', () => {
     expect(result.periodDays).toBe(days);
   });
 
+  it('keeps Today points inside today while providing yesterday as comparison', async () => {
+    const { service } = createService({
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            collectedAt: new Date('2026-09-06T20:00:00.000Z'),
+            subscribers: 1_880,
+          },
+          {
+            collectedAt: new Date('2026-09-07T10:00:00.000Z'),
+            subscribers: 1_900,
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            date: new Date('2026-09-06T00:00:00.000Z'),
+            averageViews: 400,
+            averageReactions: 16,
+            postsPublished: 2,
+          },
+          {
+            date: new Date('2026-09-07T00:00:00.000Z'),
+            averageViews: 450,
+            averageReactions: 18,
+            postsPublished: 3,
+          },
+        ]),
+    });
+
+    const result = await service.history('user-1', 'channel-1', '1d', now);
+
+    expect(result.points.every((point) => point.date >= '2026-09-07')).toBe(
+      true,
+    );
+    expect(result.comparisonPoint).toEqual({
+      date: '2026-09-06T20:00:00.000Z',
+      subscribers: 1_880,
+      averageViews: 400,
+      averageReactions: 16,
+    });
+  });
+
   it('keeps history workspace-isolated and rejects an unknown channel', async () => {
     const { service, prisma } = createService({
       telegramChannel: { findFirst: jest.fn().mockResolvedValue(null) },

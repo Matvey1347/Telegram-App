@@ -40,4 +40,10 @@ export type TelegramChannelPerformanceHistory = {
   periodDays: 1 | 7 | 30 | 90 | null;
   currency: string;
   points: TelegramChannelPerformanceHistoryPoint[];
+  comparisonPoint: {
+    date: string;
+    subscribers: number | null;
+    averageViews: number | null;
+    averageReactions: number | null;
+  } | null;
 };

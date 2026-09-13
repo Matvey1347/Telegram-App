@@ -1,5 +1,8 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsDateString,
   IsIn,
   IsInt,
@@ -11,6 +14,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/u;
@@ -30,6 +34,30 @@ export class FinanceDebtQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 30;
 }
 
+export class FinanceSharedExpenseParticipantDto {
+  @IsString() @MinLength(1) @MaxLength(120) @Matches(/\S/u) name!: string;
+  @IsNumberString() amount!: string;
+  @IsString() @Matches(DATE_ONLY) dueDate!: string;
+}
+
+export class FinanceSharedExpenseInputDto {
+  @IsString() accountId!: string;
+  @IsOptional() @IsString() categoryId?: string;
+  @IsNumberString() amount!: string;
+  @IsNumberString() ownShare!: string;
+  @IsOptional() @IsString() @MaxLength(240) description?: string;
+  @IsDateString() occurredAt!: string;
+  @IsOptional()
+  @IsIn(['UNSPECIFIED', 'REQUIRED', 'DISCRETIONARY'])
+  necessity?: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => FinanceSharedExpenseParticipantDto)
+  participants!: FinanceSharedExpenseParticipantDto[];
+}
+
 export class FinanceRegularPaymentInputDto {
   @IsString() @MinLength(1) @MaxLength(120) @Matches(/\S/u) name!: string;
   @IsNumberString() amount!: string;
@@ -41,6 +69,9 @@ export class FinanceRegularPaymentInputDto {
     | 'YEARLY';
   @IsString() @Matches(DATE_ONLY) nextPaymentDate!: string;
   @IsOptional() @IsString() @MaxLength(500) note?: string | null;
+  @IsOptional()
+  @IsIn(['UNSPECIFIED', 'REQUIRED', 'DISCRETIONARY'])
+  necessity?: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
 }
 
 export class FinanceRegularPaymentQueryDto {

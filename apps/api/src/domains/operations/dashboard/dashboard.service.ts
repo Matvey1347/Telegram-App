@@ -19,9 +19,17 @@ import {
 } from './dashboard-period';
 import { DashboardReadService } from './dashboard-read.service';
 import { buildDashboardTrend } from './dashboard-trend';
+import { valueDashboardTransactions } from './dashboard-transaction-valuation';
+import {
+  buildDashboardCategoryBreakdown,
+  buildDashboardCashFlowBreakdown,
+  isDashboardBalanceAdjustmentTransaction,
+  isDashboardInvestmentTransaction,
+  isDashboardRevenueTransaction,
+  revenuePerActiveSubscriber,
+} from './dashboard-financial-metrics';
 import {
   dashboardReadAccess,
-  dashboardCategoryKey,
   filterDashboardSurface,
   type DashboardReadAccess,
 } from './dashboard-surface';
@@ -87,7 +95,6 @@ export class DashboardService {
       periodCampaigns: periodCampaignsRaw,
       channels,
       members,
-      periodInvestments,
       accountRows: nativeAccountRows,
       campaignStatusCounts,
       campaignsCount,
@@ -96,16 +103,41 @@ export class DashboardService {
       operatingProfitAllTime,
       cumulativeBeforePeriod,
       revenueByChannel,
+      periodInvestments,
     } = access
       ? await this.reads.load(workspaceId, from, to, access)
       : await this.reads.load(workspaceId, from, to);
 
-    const periodRevenueTransactions = periodTransactions.filter(
-      (transaction) =>
-        dashboardCategoryKey(transaction) === 'channel_advertising_revenue',
+    let preparedRateSource: Promise<PreparedCurrencyRateSource> | undefined;
+    const currentRateSource = () =>
+      (preparedRateSource ??=
+        this.conversionService.prepareRateSource(workspaceId));
+    const valuedPeriodTransactions = await valueDashboardTransactions({
+      transactions: periodTransactions,
+      primaryCurrency: workspace.primaryCurrency,
+      workspaceId,
+      conversionService: this.conversionService,
+    });
+    const periodRevenueTransactions = valuedPeriodTransactions.filter(
+      isDashboardRevenueTransaction,
     );
-    const periodExpenseTransactions = periodTransactions.filter(
-      (transaction) => transaction.type === 'expense',
+    const periodExpenseTransactions = valuedPeriodTransactions.filter(
+      (transaction) =>
+        transaction.type === 'expense' &&
+        !isDashboardInvestmentTransaction(transaction) &&
+        !isDashboardBalanceAdjustmentTransaction(transaction),
+    );
+    const periodInvestmentTransactions = valuedPeriodTransactions.filter(
+      isDashboardInvestmentTransaction,
+    );
+    const excludedBalanceAdjustmentTransactions =
+      valuedPeriodTransactions.filter((transaction) =>
+        isDashboardBalanceAdjustmentTransaction(transaction),
+      );
+    const cashFlowBreakdown = buildDashboardCashFlowBreakdown(
+      periodRevenueTransactions,
+      periodExpenseTransactions,
+      excludedBalanceAdjustmentTransactions,
     );
     const campaignDate = (campaign: DatedDashboardCampaign) =>
       campaign.placementDate ?? campaign.startedAt ?? campaign.createdAt;
@@ -119,8 +151,44 @@ export class DashboardService {
       0,
     );
     const investedForPeriod = periodInvestments.reduce(
-      (sum, investment) => sum + dec(investment.amountInPrimaryCurrency),
+      (sum, investment) =>
+        sum +
+        dec(investment.amountInPrimaryCurrency) *
+          (investment.movementType === 'WITHDRAWAL' ? -1 : 1),
       0,
+    );
+    const investmentBreakdownForPeriod = ['EXTERNAL', 'SALARY', 'REINVESTMENT'].map(
+      (origin) => {
+        const rows = periodInvestments.filter(
+          (investment) => investment.origin === origin,
+        );
+        return {
+          origin,
+          amount: rows.reduce(
+            (sum, investment) =>
+              sum +
+              dec(investment.amountInPrimaryCurrency) *
+                (investment.movementType === 'WITHDRAWAL' ? -1 : 1),
+            0,
+          ),
+          movements: rows.map((investment) => ({
+            id: investment.id,
+            date: investment.date.toISOString(),
+            amountInPrimaryCurrency:
+              dec(investment.amountInPrimaryCurrency) *
+              (investment.movementType === 'WITHDRAWAL' ? -1 : 1),
+            amount: dec(investment.amount),
+            currency: investment.currency,
+            movementType: investment.movementType,
+            notes: investment.notes,
+            member: {
+              id: investment.workspaceMember.id,
+              name: investment.workspaceMember.user.name,
+            },
+            account: investment.account,
+          })),
+        };
+      },
     );
     const remainingToBreakEven = Math.max(
       0,
@@ -158,16 +226,13 @@ export class DashboardService {
       const linkedJoined = sumInviteLinkJoinedSubscribers(campaign.inviteLinks);
       return Math.max(Number(campaign.joinedCount || 0), linkedJoined);
     };
-    let preparedRateSource: Promise<PreparedCurrencyRateSource> | undefined;
     const convertCurrency = async (
       amount: number,
       fromCurrency: string,
       toCurrency: string,
     ) => {
       if (fromCurrency === toCurrency) return amount;
-      preparedRateSource ??=
-        this.conversionService.prepareRateSource(workspaceId);
-      return (await preparedRateSource).convertCurrency(
+      return (await currentRateSource()).convertCurrency(
         amount,
         fromCurrency,
         toCurrency,
@@ -261,45 +326,13 @@ export class DashboardService {
       cumulativeBeforePeriod,
       revenue: periodRevenueTransactions,
       expenses: periodExpenseTransactions,
-      investments: periodInvestments,
+      investments: periodInvestmentTransactions,
       campaigns: periodCampaigns.map((campaign) => ({
         date: campaignDate(campaign),
         priceInPrimaryCurrency: campaign.priceInPrimaryCurrency,
         joinedCount: campaign.joinedCount,
       })),
     });
-
-    const categoryMap = new Map<
-      string,
-      {
-        id?: string | null;
-        name: string;
-        type: string;
-        amount: number;
-        count: number;
-        iconId?: string | null;
-        icon?: Parameters<typeof iconToResolvedEmoji>[0] | null;
-      }
-    >();
-    for (const transaction of [
-      ...periodRevenueTransactions,
-      ...periodExpenseTransactions,
-    ]) {
-      const category = transaction.categoryRef;
-      const key = `${transaction.type}:${transaction.categoryId ?? transaction.category}`;
-      const current = categoryMap.get(key) ?? {
-        id: transaction.categoryId,
-        name: category?.name ?? transaction.category,
-        type: transaction.type,
-        amount: 0,
-        count: 0,
-        iconId: category?.iconId ?? null,
-        icon: category?.icon ?? null,
-      };
-      current.amount += dec(transaction.amountInPrimaryCurrency);
-      current.count += 1;
-      categoryMap.set(key, current);
-    }
 
     const channelAdMap = new Map<
       string,
@@ -367,6 +400,10 @@ export class DashboardService {
       const latest = channel.audienceSnapshots[0];
       return sum + Number(latest?.activeSubscribersEstimate ?? 0);
     }, 0);
+    const incomePerActiveSubscriber = revenuePerActiveSubscriber(
+      cashFlowBreakdown.income.channels,
+      activeSubscribersEstimate,
+    );
     const anomalousChannelsCount = ownChannels.filter(
       (channel) => channel.audienceSnapshots[0]?.hasExternalTrafficAnomaly,
     ).length;
@@ -388,10 +425,16 @@ export class DashboardService {
       primaryCurrency: workspace.primaryCurrency,
       secondaryCurrency: workspace.secondaryCurrency,
       incomeForPeriod: income,
+      incomeBreakdownForPeriod: cashFlowBreakdown.income,
+      excludedBalanceAdjustmentsForPeriod:
+        cashFlowBreakdown.excludedBalanceAdjustments,
+      revenuePerActiveSubscriber: incomePerActiveSubscriber,
       expensesForPeriod: expenses,
+      expensesBreakdownForPeriod: cashFlowBreakdown.expenses,
       profitForPeriod: income - expenses,
       investedCapital: totalInvestedPrimary,
       investedCapitalForPeriod: investedForPeriod,
+      investmentBreakdownForPeriod,
       operatingProfitAllTime,
       remainingToBreakEven,
       projectedMonthlyProfit,
@@ -417,13 +460,12 @@ export class DashboardService {
       activeSubscribersEstimate,
       anomalousChannelsCount,
       dailyTrend,
-      categoryBreakdown: [...categoryMap.values()]
-        .sort((a, b) => b.amount - a.amount)
-        .slice(0, 8)
-        .map((row) => ({
-          ...row,
-          iconPresentation: iconToResolvedEmoji(row.icon),
-        })),
+      categoryBreakdown: buildDashboardCategoryBreakdown([
+        ...periodRevenueTransactions,
+        ...periodExpenseTransactions,
+        ...periodInvestmentTransactions,
+        ...excludedBalanceAdjustmentTransactions,
+      ]),
       accountBalances: accountRows
         .map((row) => ({
           id: row.account.id,

@@ -53,22 +53,24 @@ export class FinanceImportService {
     );
     const document = validateFinanceImportDocument(input);
     const fingerprint = financeRequestFingerprint(document);
-    const existing = await this.prisma.financeDataImportReceipt.findUnique({
-      where: {
-        profileId_requestFingerprint: {
-          profileId,
-          requestFingerprint: fingerprint,
+    if (document.mode === 'ADD') {
+      const existing = await this.prisma.financeDataImportReceipt.findUnique({
+        where: {
+          profileId_requestFingerprint: {
+            profileId,
+            requestFingerprint: fingerprint,
+          },
         },
-      },
-    });
-    if (existing) {
-      return {
-        importId: existing.id,
-        duplicate: true,
-        imported: existing.importedCount,
-        counts: existing.counts as ConsumerFinanceImportResult['counts'],
-        warnings: existing.warnings as string[],
-      };
+      });
+      if (existing) {
+        return {
+          importId: existing.id,
+          duplicate: true,
+          imported: existing.importedCount,
+          counts: existing.counts as ConsumerFinanceImportResult['counts'],
+          warnings: existing.warnings as string[],
+        };
+      }
     }
     const profile = await this.prisma.financeProfile.findUnique({
       where: { id: profileId },

@@ -29,6 +29,7 @@ export function financeRegularPaymentRevisionData(
     nextOccurrenceAt: row.nextOccurrenceAt,
     scheduleTimezone: row.scheduleTimezone,
     note: row.note,
+    necessity: row.necessity,
     status: row.status,
   };
 }

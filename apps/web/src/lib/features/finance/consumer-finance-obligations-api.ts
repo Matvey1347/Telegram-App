@@ -5,6 +5,8 @@ import type {
   ConsumerFinanceDebtPage,
   ConsumerFinanceDebtQuery,
   ConsumerFinanceDebtSettlement,
+  ConsumerFinanceSharedExpense,
+  ConsumerFinanceSharedExpenseInput,
   ConsumerFinanceRegularPayment,
   ConsumerFinanceRegularPaymentConfirmation,
   ConsumerFinanceRegularPaymentConfirmInput,
@@ -52,6 +54,17 @@ export const consumerFinanceObligationsApi = {
       await consumerFinanceHttp.post<ConsumerFinanceDebtSettlement>(
         `${consumerFinanceRoot(botId)}/debts/${id}/settle`,
         {},
+        consumerRequest(),
+      )
+    ).data,
+  createSharedExpense: async (
+    botId: string,
+    input: ConsumerFinanceSharedExpenseInput,
+  ) =>
+    (
+      await consumerFinanceHttp.post<ConsumerFinanceSharedExpense>(
+        `${consumerFinanceRoot(botId)}/debts/shared-expense`,
+        input,
         consumerRequest(),
       )
     ).data,

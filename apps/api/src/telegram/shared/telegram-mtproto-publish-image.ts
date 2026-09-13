@@ -173,3 +173,48 @@ export const downloadTelegramPublishImage = async (
     normalized.buffer,
   );
 };
+
+export const downloadTelegramPublishMotion = async (
+  url: string,
+  index: number,
+  kind: 'VIDEO' | 'ANIMATION',
+  fileName?: string | null,
+) => {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    throw new Error(`Media ${index + 1} has an invalid URL`);
+  }
+  if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+    throw new Error(`Media ${index + 1} must use an HTTP or HTTPS URL`);
+  }
+  const response = await fetch(parsedUrl, {
+    signal: AbortSignal.timeout(30_000),
+  }).catch(() => null);
+  if (!response?.ok) {
+    throw new Error(`Could not download media ${index + 1} before publishing`);
+  }
+  const maxMediaBytes = 20 * 1024 * 1024;
+  const declaredSize = Number(response.headers.get('content-length') || 0);
+  if (declaredSize > maxMediaBytes)
+    throw new Error(`Media ${index + 1} is larger than 20 MB`);
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (!buffer.length) throw new Error(`Media ${index + 1} is empty`);
+  if (buffer.length > maxMediaBytes)
+    throw new Error(`Media ${index + 1} is larger than 20 MB`);
+  const contentType = (response.headers.get('content-type') || '')
+    .split(';', 1)[0]
+    .trim()
+    .toLowerCase();
+  const extension =
+    contentType === 'image/gif'
+      ? 'gif'
+      : contentType === 'video/webm'
+        ? 'webm'
+        : 'mp4';
+  const safeName =
+    fileName?.trim().replace(/[^\p{L}\p{N}._-]+/gu, '-') ||
+    `telegram-${kind.toLowerCase()}-${index + 1}.${extension}`;
+  return new CustomFile(safeName, buffer.length, '', buffer);
+};

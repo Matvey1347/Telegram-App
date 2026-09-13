@@ -1,6 +1,7 @@
 import type {
   ConsumerFinanceAccountSummary,
   ConsumerFinanceCategorySummary,
+  ConsumerFinanceExpenseNecessity,
   ConsumerFinanceTransaction,
 } from "./ledger";
 
@@ -35,6 +36,7 @@ export type ConsumerFinanceRegularPayment = {
   /** Timezone used for recurrence calendar anchors. */
   scheduleTimezone: string;
   note?: string | null;
+  necessity?: ConsumerFinanceExpenseNecessity;
   status: ConsumerFinanceRegularPaymentStatus;
   isDue: boolean;
   version: number;
@@ -51,6 +53,7 @@ export type ConsumerFinanceRegularPaymentInput = {
   /** Profile-local calendar date in YYYY-MM-DD format. */
   nextPaymentDate: string;
   note?: string | null;
+  necessity?: ConsumerFinanceExpenseNecessity;
 };
 
 export type ConsumerFinanceRegularPaymentQuery = {
@@ -81,6 +84,7 @@ export type ConsumerFinanceRegularPaymentRevision = {
   nextOccurrenceAt: string;
   scheduleTimezone: string;
   note?: string | null;
+  necessity?: ConsumerFinanceExpenseNecessity;
   status: ConsumerFinanceRegularPaymentStatus;
   effectiveAt: string;
 };

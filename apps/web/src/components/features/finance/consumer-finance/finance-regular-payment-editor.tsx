@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
   ConsumerFinanceRegularPayment,
   ConsumerFinanceRegularPaymentRecurrence,
+  ConsumerFinanceExpenseNecessity,
 } from "@telegram-system/shared";
 import {
   Button,
@@ -63,6 +64,9 @@ export function FinanceRegularPaymentEditor({
       : "",
   );
   const [note, setNote] = useState(editing?.note ?? "");
+  const [necessity, setNecessity] = useState<ConsumerFinanceExpenseNecessity>(
+    editing?.necessity ?? "UNSPECIFIED",
+  );
   const accountRows = (accounts.data ?? []).filter(
     (account) => !account.archivedAt || account.id === editing?.accountId,
   );
@@ -85,6 +89,7 @@ export function FinanceRegularPaymentEditor({
         recurrence,
         nextPaymentDate,
         note: note.trim() || null,
+        ...(necessity !== "UNSPECIFIED" ? { necessity } : {}),
       };
       return editing
         ? consumerFinanceObligationsApi.updateRegularPayment(
@@ -180,6 +185,21 @@ export function FinanceRegularPaymentEditor({
                 {localizeFinanceCategory(category.name, category.key, locale)}
               </option>
             ))}
+          </Select>
+        </FormField>
+        <FormField label={t.necessity}>
+          <Select
+            uiLocale={locale}
+            value={necessity}
+            onChange={(event) =>
+              setNecessity(
+                event.target.value as ConsumerFinanceExpenseNecessity,
+              )
+            }
+          >
+            <option value="UNSPECIFIED">{t.necessityUnspecified}</option>
+            <option value="REQUIRED">{t.necessityRequired}</option>
+            <option value="DISCRETIONARY">{t.necessityDiscretionary}</option>
           </Select>
         </FormField>
         <FormField label={t.recurrence}>

@@ -2,6 +2,7 @@ import type { PaginatedResponse } from "../pagination";
 import type { ResolvedEmoji } from "./resolved-emoji";
 import type { TelegramAdPlacementStatus } from "./telegram-ad-sales-status";
 import type { TelegramPostButtonRows } from "./telegram-post-buttons";
+import type { TelegramPostMediaItem } from "./telegram-post-media";
 
 export type { TelegramAdPlacementStatus } from "./telegram-ad-sales-status";
 
@@ -209,6 +210,8 @@ export type TelegramAdSchedulePolicy = {
 export type TelegramAdSalesWorkspaceSettings = {
   workspaceId: string;
   defaultOrganicPostsPerAdSlot: number;
+  salesCommissionEnabled: boolean;
+  defaultSalesCommissionRate: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -402,6 +405,7 @@ export type TelegramAdSalePlacement = {
     title: string;
     text: string | null;
     imageUrls: string[];
+    mediaItems?: TelegramPostMediaItem[];
     buttonRows: TelegramPostButtonRows;
     sourceType?: "MTPROTO" | "BOT" | null;
     status: string;

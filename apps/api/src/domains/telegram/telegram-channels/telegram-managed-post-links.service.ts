@@ -7,6 +7,7 @@ import {
   TelegramManagedPostStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 import {
   buildStableTelegramPostUrl,
   parseTelegramPostUrl,
@@ -309,6 +310,7 @@ export class TelegramManagedPostLinksService {
         publishedAt: true,
         scheduledAt: true,
         imageUrls: true,
+        mediaItems: true,
         telegramMessageIds: true,
         telegramMessageUrls: true,
         telegramIdVerificationStatus: true,
@@ -329,7 +331,10 @@ export class TelegramManagedPostLinksService {
       const primaryId =
         this.telegramChannelAccessService.primaryTelegramMessageId({
           messageIds: post.telegramMessageIds,
-          imageCount: post.imageUrls.length,
+          imageCount: normalizeTelegramPostMediaItems(
+            post.mediaItems,
+            post.imageUrls,
+          ).length,
         });
       const primaryTelegramMessageUrl = primaryId
         ? this.telegramChannelAccessService.telegramMessageUrl(

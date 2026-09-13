@@ -73,15 +73,17 @@ export class TelegramChannelPerformanceHistoryService {
       },
     });
     if (!channel) throw new NotFoundException('Telegram channel not found');
-    const from = startOfUtcDay(
+    const visibleFrom = startOfUtcDay(
       periodDays == null
         ? channel.createdAt
         : subtractUtcDays(now, periodDays - 1),
     );
+    const queryFrom =
+      range === '1d' ? subtractUtcDays(visibleFrom, 1) : visibleFrom;
     // A short lookback supplies the last known normalized reach for the
     // ads-left projection without extending the visible chart range.
     const postHistoryFrom =
-      periodDays == null ? from : subtractUtcDays(from, 30);
+      periodDays == null ? queryFrom : subtractUtcDays(queryFrom, 30);
 
     const [audienceRows, dailyPostRows, transactions, allocations, workspace] =
       await Promise.all([
@@ -111,7 +113,7 @@ export class TelegramChannelPerformanceHistoryService {
             WHERE snapshot."workspaceId" = ${workspaceId}
               AND snapshot."telegramChannelId" = ${channelId}
               AND snapshot."subscribersCount" IS NOT NULL
-              AND snapshot."collectedAt" >= ${from}
+              AND snapshot."collectedAt" >= ${queryFrom}
               AND snapshot."collectedAt" <= ${now}
           )
           SELECT "collectedAt", "subscribers"
@@ -246,20 +248,63 @@ export class TelegramChannelPerformanceHistoryService {
               workspaceId,
             );
 
+    const historyPoints = buildHistoryPoints(
+      audienceRows,
+      dailyPostRows,
+      events,
+      queryFrom,
+      now,
+      currentCpm,
+    );
     return {
       range,
       periodDays,
       currency: primaryCurrency,
-      points: buildHistoryPoints(
-        audienceRows,
-        dailyPostRows,
-        events,
-        from,
-        now,
-        currentCpm,
+      points: historyPoints.filter(
+        (point) => new Date(point.date) >= visibleFrom,
       ),
+      comparisonPoint:
+        range === '1d'
+          ? buildPreviousDayComparison(historyPoints, visibleFrom)
+          : null,
     };
   }
+}
+
+function buildPreviousDayComparison(
+  points: TelegramChannelPerformanceHistoryPoint[],
+  visibleFrom: Date,
+): TelegramChannelPerformanceHistory['comparisonPoint'] {
+  const previousPoints = points.filter(
+    (point) => new Date(point.date) < visibleFrom,
+  );
+  if (!previousPoints.length) return null;
+  const subscribers = lastMetricValue(previousPoints, 'subscribers');
+  const averageViews = lastMetricValue(previousPoints, 'averageViews');
+  const averageReactions = lastMetricValue(previousPoints, 'averageReactions');
+  if (subscribers == null && averageViews == null && averageReactions == null) {
+    return null;
+  }
+  return {
+    date: previousPoints.at(-1)!.date,
+    subscribers,
+    averageViews,
+    averageReactions,
+  };
+}
+
+function lastMetricValue(
+  points: TelegramChannelPerformanceHistoryPoint[],
+  metric: 'subscribers' | 'averageViews' | 'averageReactions',
+) {
+  return (
+    points
+      .map((point) => point[metric])
+      .filter(
+        (value): value is number => value != null && Number.isFinite(value),
+      )
+      .at(-1) ?? null
+  );
 }
 
 function buildHistoryPoints(

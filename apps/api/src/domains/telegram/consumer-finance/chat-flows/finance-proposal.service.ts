@@ -15,6 +15,9 @@ import { FinanceLedgerService } from '../ledger/finance-ledger.service';
 type ProposalPayload = {
   type: 'INCOME' | 'EXPENSE';
   amount: string;
+  economicAmount?: string;
+  purpose?: 'ORDINARY' | 'REIMBURSEMENT' | 'PASS_THROUGH' | 'DEBT_REPAYMENT';
+  necessity?: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
   currency: string;
   description: string | null;
   accountHint?: string;
@@ -240,6 +243,13 @@ export class FinanceProposalService {
     operations: Array<{
       type: 'INCOME' | 'EXPENSE';
       amount: string;
+      economicAmount?: string;
+      purpose?:
+        | 'ORDINARY'
+        | 'REIMBURSEMENT'
+        | 'PASS_THROUGH'
+        | 'DEBT_REPAYMENT';
+      necessity?: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
       currency: string;
       description: string;
       occurredAt: string;
@@ -282,11 +292,14 @@ export class FinanceProposalService {
         throw new BadRequestException(
           `No ${item.currency} account is available for an AI proposal`,
         );
-      const category = await this.resolveCategory(
-        input.profile.id,
-        item.type,
-        item.merchantDisplay || item.description,
-      );
+      const category =
+        !item.purpose || item.purpose === 'ORDINARY'
+          ? await this.resolveCategory(
+              input.profile.id,
+              item.type,
+              item.merchantDisplay || item.description,
+            )
+          : null;
       const payload = {
         ...item,
         accountId: account.id,

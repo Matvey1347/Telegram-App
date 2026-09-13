@@ -47,6 +47,7 @@ type RegularValues = {
   nextOccurrenceAt: Date;
   scheduleTimezone: string;
   note: string | null;
+  necessity: NonNullable<FinanceRegularPaymentInputDto['necessity']>;
 };
 
 @Injectable()
@@ -294,6 +295,7 @@ export class FinanceRegularPaymentService {
       nextOccurrenceAt,
       scheduleTimezone: profile.timezone,
       note: input.note?.trim() || null,
+      necessity: input.necessity ?? 'UNSPECIFIED',
     };
   }
 
@@ -333,7 +335,8 @@ export class FinanceRegularPaymentService {
       existing.nextOccurrenceAt.getTime() ===
         values.nextOccurrenceAt.getTime() &&
       existing.scheduleTimezone === values.scheduleTimezone &&
-      existing.note === values.note
+      existing.note === values.note &&
+      (existing.necessity ?? 'UNSPECIFIED') === values.necessity
     );
   }
 }

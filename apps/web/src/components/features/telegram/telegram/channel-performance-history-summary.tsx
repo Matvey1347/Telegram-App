@@ -1,5 +1,6 @@
 import { Eye, Smile, UsersRound } from "lucide-react";
 import type {
+  TelegramChannelPerformanceHistory,
   TelegramChannelPerformanceHistoryPoint,
   TelegramChannelPerformanceHistoryRange,
   TelegramChannelTrendMetric,
@@ -8,24 +9,39 @@ import { ChannelPaybackStatus } from "./channel-payback-status";
 
 export function ChannelPerformanceHistorySummary({
   points,
+  comparisonPoint,
   range,
   fallbackPaybackPercent,
   fallbackAdsLeft,
 }: {
   points: TelegramChannelPerformanceHistoryPoint[];
+  comparisonPoint?: TelegramChannelPerformanceHistory["comparisonPoint"];
   range: TelegramChannelPerformanceHistoryRange;
   fallbackPaybackPercent?: number | null;
   fallbackAdsLeft?: number | null;
 }) {
   const singleDay = range === "1d";
+  const subscribersToday = todayMetric(
+    points,
+    comparisonPoint,
+    "subscribers",
+    0,
+  );
+  const reachToday = todayMetric(points, comparisonPoint, "averageViews", 1);
+  const reactionsToday = todayMetric(
+    points,
+    comparisonPoint,
+    "averageReactions",
+    1,
+  );
   const subscribers = singleDay
-    ? latestMetric(points, "subscribers", 0)
+    ? subscribersToday.metric
     : endpointMetric(points, "subscribers", 0);
   const reach = singleDay
-    ? latestMetric(points, "averageViews", 1)
+    ? reachToday.metric
     : halfPeriodAverageMetric(points, "averageViews", 1);
   const reactions = singleDay
-    ? latestMetric(points, "averageReactions", 1)
+    ? reactionsToday.metric
     : halfPeriodAverageMetric(points, "averageReactions", 1);
   const firstDate = points[0]?.date;
   const lastDate = points.at(-1)?.date;
@@ -45,10 +61,14 @@ export function ChannelPerformanceHistorySummary({
               : "No dated observations"}
           </p>
         </div>
-        {!singleDay ? (
+        {!singleDay || subscribersToday.comparable || reachToday.comparable ? (
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <DeltaPill label="Subscribers" metric={subscribers} />
-            <DeltaPill label="24h reach trend" metric={reach} />
+            {!singleDay || subscribersToday.comparable ? (
+              <DeltaPill label="Subscribers" metric={subscribers} />
+            ) : null}
+            {!singleDay || reachToday.comparable ? (
+              <DeltaPill label="24h reach trend" metric={reach} />
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -57,37 +77,43 @@ export function ChannelPerformanceHistorySummary({
           label="Subscribers"
           explanation={
             singleDay
-              ? "Latest recorded subscriber count today"
+              ? subscribersToday.comparable
+                ? "Today versus yesterday"
+                : "Latest recorded subscriber count today"
               : "Last recorded value versus first in this period"
           }
           icon={UsersRound}
           metric={subscribers}
           digits={0}
-          showComparison={!singleDay}
+          showComparison={!singleDay || subscribersToday.comparable}
         />
         <SummaryCard
           label="24h average post reach"
           explanation={
             singleDay
-              ? "Latest recorded 24h post reach today"
+              ? reachToday.comparable
+                ? "Today versus yesterday"
+                : "Latest recorded 24h post reach today"
               : "Second half average versus first half"
           }
           icon={Eye}
           metric={reach}
           digits={1}
-          showComparison={!singleDay}
+          showComparison={!singleDay || reachToday.comparable}
         />
         <SummaryCard
           label="24h average reactions"
           explanation={
             singleDay
-              ? "Latest recorded 24h reactions today"
+              ? reactionsToday.comparable
+                ? "Today versus yesterday"
+                : "Latest recorded 24h reactions today"
               : "Second half average versus first half"
           }
           icon={Smile}
           metric={reactions}
           digits={1}
-          showComparison={!singleDay}
+          showComparison={!singleDay || reactionsToday.comparable}
         />
       </div>
       <ChannelPaybackStatus
@@ -179,13 +205,20 @@ function DeltaPill({
   );
 }
 
-function latestMetric(
+function todayMetric(
   points: TelegramChannelPerformanceHistoryPoint[],
+  comparisonPoint:
+    | TelegramChannelPerformanceHistory["comparisonPoint"]
+    | undefined,
   metric: "subscribers" | "averageViews" | "averageReactions",
   digits: number,
 ) {
-  const value = metricValues(points, metric).at(-1)?.value;
-  return value == null ? null : trendMetric(value, value, digits);
+  const current = metricValues(points, metric).at(-1)?.value;
+  const previous = comparisonPoint?.[metric];
+  if (current == null) return { metric: null, comparable: false };
+  return previous == null
+    ? { metric: trendMetric(current, current, digits), comparable: false }
+    : { metric: trendMetric(current, previous, digits), comparable: true };
 }
 function endpointMetric(
   points: TelegramChannelPerformanceHistoryPoint[],

@@ -52,7 +52,7 @@ function prismaFixture(accountCount: number) {
     transfer: { groupBy: transferGroupBy },
     investment: {
       findMany: jest.fn().mockResolvedValue([]),
-      aggregate: jest.fn().mockImplementation(emptySum),
+      groupBy: jest.fn().mockResolvedValue([]),
     },
     adCampaign: {
       findMany: jest.fn().mockResolvedValue([]),
@@ -87,12 +87,9 @@ describe('DashboardReadService', () => {
         },
       }),
     );
-    expect(prisma.investment.findMany).toHaveBeenCalledWith(
+    expect(prisma.transaction.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {
-          workspaceId: 'workspace-1',
-          date: { gte: from, lte: to },
-        },
+        select: expect.objectContaining({ amount: true, currency: true }),
       }),
     );
     expect(prisma.adCampaign.findMany).toHaveBeenCalledWith(
@@ -114,6 +111,17 @@ describe('DashboardReadService', () => {
         },
       }),
     );
+    expect(prisma.telegramChannel.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          audienceSnapshots: expect.objectContaining({
+            where: { collectedAt: { lte: to } },
+            orderBy: { collectedAt: 'desc' },
+            take: 1,
+          }),
+        }),
+      }),
+    );
   });
 
   it('keeps Prisma call counts constant from one to 100 accounts', async () => {
@@ -133,7 +141,7 @@ describe('DashboardReadService', () => {
       expect(prisma.transaction.aggregate).toHaveBeenCalledTimes(3);
       expect(prisma.transfer.groupBy).toHaveBeenCalledTimes(2);
       expect(prisma.investment.findMany).toHaveBeenCalledTimes(1);
-      expect(prisma.investment.aggregate).toHaveBeenCalledTimes(2);
+      expect(prisma.investment.groupBy).toHaveBeenCalledTimes(2);
       expect(prisma.adCampaign.findMany).toHaveBeenCalledTimes(1);
       expect(prisma.adCampaign.groupBy).toHaveBeenCalledTimes(1);
     }

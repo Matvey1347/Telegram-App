@@ -16,7 +16,7 @@ const copy = {
     importData: "Import data",
     importTitle: "Import Finance data",
     importDescription:
-      "Add accounts, categories, operations, planning and investment data from one JSON file.",
+      "Transform legacy data into accounts, true income and expenses, debts, recurring payments, savings and investments, then import one JSON file.",
     importInstruction: "Format instructions",
     copyInstruction: "Copy instructions",
     instructionCopied: "Instructions copied",
@@ -26,6 +26,14 @@ const copy = {
     invalidImportFile: "Choose a valid JSON file in the documented format.",
     importAddsData:
       "I understand that the import adds data and does not delete existing records.",
+    importMode: "What to do with current data",
+    importModeAdd: "Keep and add",
+    importModeAddHelp: "Keep current Finance records and add the file to them.",
+    importModeReplace: "Replace all",
+    importModeReplaceHelp:
+      "Delete current ledger and planning records, then load only this file. Profile, plan and access stay intact.",
+    importReplacesData:
+      "I understand that current Finance records will be permanently deleted and replaced by this file.",
     startImport: "Start import",
     importingData: "Importing data…",
     cancelImport: "Cancel import",
@@ -79,7 +87,7 @@ const copy = {
     importData: "Імпортувати дані",
     importTitle: "Імпорт даних Finance",
     importDescription:
-      "Додайте рахунки, категорії, операції, планування та інвестиції з одного JSON-файлу.",
+      "Перетворіть старі дані на рахунки, реальні доходи й витрати, борги, регулярні платежі, заощадження та інвестиції, а потім імпортуйте один JSON-файл.",
     importInstruction: "Інструкція формату",
     copyInstruction: "Скопіювати інструкцію",
     instructionCopied: "Інструкцію скопійовано",
@@ -89,6 +97,14 @@ const copy = {
     invalidImportFile: "Оберіть коректний JSON-файл у документованому форматі.",
     importAddsData:
       "Я розумію, що імпорт додає дані й не видаляє наявні записи.",
+    importMode: "Що зробити з поточними даними",
+    importModeAdd: "Зберегти й додати",
+    importModeAddHelp: "Зберегти поточні записи Finance й додати до них файл.",
+    importModeReplace: "Замінити все",
+    importModeReplaceHelp:
+      "Видалити поточні фінансові та планові записи, а потім завантажити лише цей файл. Профіль, тариф і доступ залишаться.",
+    importReplacesData:
+      "Я розумію, що поточні записи Finance буде безповоротно видалено й замінено цим файлом.",
     startImport: "Почати імпорт",
     importingData: "Імпортуємо дані…",
     cancelImport: "Скасувати імпорт",
@@ -141,7 +157,7 @@ const copy = {
     importData: "Импортировать данные",
     importTitle: "Импорт данных Finance",
     importDescription:
-      "Добавьте счета, категории, операции, планирование и инвестиции из одного JSON-файла.",
+      "Преобразуйте старые данные в счета, реальные доходы и расходы, долги, регулярные платежи, накопления и инвестиции, затем импортируйте один JSON-файл.",
     importInstruction: "Инструкция по формату",
     copyInstruction: "Скопировать инструкцию",
     instructionCopied: "Инструкция скопирована",
@@ -151,6 +167,15 @@ const copy = {
     invalidImportFile: "Выберите корректный JSON-файл в описанном формате.",
     importAddsData:
       "Я понимаю, что импорт добавляет данные и не удаляет существующие записи.",
+    importMode: "Что сделать с текущими данными",
+    importModeAdd: "Сохранить и добавить",
+    importModeAddHelp:
+      "Сохранить текущие записи Finance и добавить к ним файл.",
+    importModeReplace: "Заменить всё",
+    importModeReplaceHelp:
+      "Удалить текущие финансовые и плановые записи, затем загрузить только этот файл. Профиль, тариф и доступ сохранятся.",
+    importReplacesData:
+      "Я понимаю, что текущие записи Finance будут безвозвратно удалены и заменены этим файлом.",
     startImport: "Начать импорт",
     importingData: "Импортируем данные…",
     cancelImport: "Отменить импорт",

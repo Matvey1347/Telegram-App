@@ -14,7 +14,7 @@ import {
 } from './telegram-system-bot-forwarded-content.parser';
 import type { TelegramSystemBotCapturedPostContent } from './telegram-system-bot-post-flow.types';
 
-const MAX_TELEGRAM_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_TELEGRAM_MEDIA_BYTES = 20 * 1024 * 1024;
 
 @Injectable()
 export class TelegramSystemBotPostContentService {
@@ -31,18 +31,23 @@ export class TelegramSystemBotPostContentService {
   async capture(message: TelegramSystemBotIncomingMessage) {
     const parsed = parseTelegramSystemBotForwardedContent(message);
     if (!parsed.ok) return parsed;
-    let imageUrls: string[] = [];
+    let mediaItems: TelegramSystemBotCapturedPostContent['mediaItems'] = [];
     try {
-      imageUrls = parsed.content.photo
-        ? [await this.persistPhoto(parsed.content.photo.fileId)]
+      mediaItems = parsed.content.media
+        ? [
+            {
+              ...(await this.persistMedia(parsed.content.media)),
+              sourceMessageId: parsed.content.telegramMessageId,
+            },
+          ]
         : [];
     } catch (error) {
       this.logger.warn(
-        `System Bot post photo import failed: ${sanitizeOperationalError(error)}`,
+        `System Bot post media import failed: ${sanitizeOperationalError(error)}`,
       );
       return {
         ok: false as const,
-        reason: 'PHOTO_IMPORT_FAILED' as const,
+        reason: 'MEDIA_IMPORT_FAILED' as const,
         unsupportedMedia: [],
         warnings: parsed.warnings,
       };
@@ -52,7 +57,11 @@ export class TelegramSystemBotPostContentService {
       content: {
         text: parsed.content.managedText,
         plainText: parsed.content.text,
-        imageUrls,
+        formattedHtml: parsed.content.formattedHtml,
+        imageUrls: mediaItems
+          .filter((item) => item.kind === 'PHOTO')
+          .map((item) => item.url),
+        mediaItems,
         buttonRows: parsed.content.buttonRows,
         mediaGroupId: parsed.content.mediaGroupId,
         sourceTitle: parsed.content.forward?.sourceChatTitle ?? null,
@@ -71,27 +80,53 @@ export class TelegramSystemBotPostContentService {
       .catch(() => undefined);
   }
 
-  private async persistPhoto(fileId: string) {
+  private async persistMedia(
+    media: NonNullable<
+      Extract<
+        ReturnType<typeof parseTelegramSystemBotForwardedContent>,
+        { ok: true }
+      >['content']['media']
+    >,
+  ) {
     let lastError: unknown;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
-        const file = await this.api.getFile(this.config.token!, fileId);
-        if ((file.file_size ?? 0) > MAX_TELEGRAM_IMAGE_BYTES) {
-          throw new BadRequestException('Telegram photo exceeds 10 MB');
+        const file = await this.api.getFile(this.config.token!, media.fileId);
+        if ((file.file_size ?? 0) > MAX_TELEGRAM_MEDIA_BYTES) {
+          throw new BadRequestException('Telegram media exceeds 20 MB');
         }
         if (!file.file_path)
           throw new NotFoundException('Telegram photo is unavailable');
         const downloaded = await this.api.downloadFile(
           this.config.token!,
           file.file_path,
-          MAX_TELEGRAM_IMAGE_BYTES,
+          MAX_TELEGRAM_MEDIA_BYTES,
         );
-        const [url] = await this.media.persistImageBytes([
-          { bytes: downloaded.bytes, contentType: downloaded.contentType },
-        ]);
-        if (!url)
-          throw new NotFoundException('Telegram photo could not be stored');
-        return url;
+        if (media.kind === 'PHOTO') {
+          const [url] = await this.media.persistImageBytes([
+            {
+              bytes: downloaded.bytes,
+              contentType: media.mimeType ?? downloaded.contentType,
+            },
+          ]);
+          if (!url)
+            throw new NotFoundException('Telegram photo could not be stored');
+          return {
+            kind: 'PHOTO' as const,
+            url,
+            width: media.width,
+            height: media.height,
+          };
+        }
+        return await this.media.persistMediaBytes({
+          bytes: downloaded.bytes,
+          kind: media.kind,
+          contentType: media.mimeType ?? downloaded.contentType,
+          fileName: media.fileName,
+          width: media.width,
+          height: media.height,
+          durationSeconds: media.durationSeconds,
+        });
       } catch (error) {
         if (error instanceof BadRequestException) throw error;
         lastError = error;

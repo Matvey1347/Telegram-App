@@ -36,6 +36,7 @@ export const financeDebtSelect = {
   note: true,
   settledAt: true,
   settlementTransactionId: true,
+  originTransactionId: true,
   version: true,
   createdAt: true,
   updatedAt: true,
@@ -57,6 +58,7 @@ export const financeRegularPaymentSelect = {
   nextOccurrenceAt: true,
   scheduleTimezone: true,
   note: true,
+  necessity: true,
   status: true,
   version: true,
   createdAt: true,
@@ -79,6 +81,7 @@ export const financeRegularPaymentRevisionSelect = {
   nextOccurrenceAt: true,
   scheduleTimezone: true,
   note: true,
+  necessity: true,
   status: true,
   effectiveAt: true,
 } satisfies Prisma.FinanceRecurringPaymentRevisionSelect;
@@ -156,6 +159,7 @@ export function financeDebtView(
     isOverdue: row.status === 'OPEN' && row.dueAt < now,
     settledAt: row.settledAt?.toISOString() ?? null,
     settlementTransactionId: row.settlementTransactionId,
+    originTransactionId: row.originTransactionId,
     version: row.version,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -180,6 +184,7 @@ export function financeRegularPaymentView(
     nextOccurrenceAt: row.nextOccurrenceAt.toISOString(),
     scheduleTimezone: row.scheduleTimezone,
     note: row.note,
+    necessity: row.necessity,
     status: row.status,
     isDue:
       row.status === 'ACTIVE' &&

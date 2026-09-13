@@ -47,6 +47,13 @@ export class CreateFinanceTransactionDto {
   @IsOptional() @IsString() categoryId?: string;
   @IsIn(['INCOME', 'EXPENSE']) type!: 'INCOME' | 'EXPENSE';
   @IsNumberString() amount!: string;
+  @IsOptional() @IsNumberString() economicAmount?: string;
+  @IsOptional()
+  @IsIn(['ORDINARY', 'REIMBURSEMENT', 'PASS_THROUGH', 'DEBT_REPAYMENT'])
+  purpose?: 'ORDINARY' | 'REIMBURSEMENT' | 'PASS_THROUGH' | 'DEBT_REPAYMENT';
+  @IsOptional()
+  @IsIn(['UNSPECIFIED', 'REQUIRED', 'DISCRETIONARY'])
+  necessity?: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
   // Currency and rates are derived from the selected account by the server.
   /** @deprecated Ignored; retained temporarily for API compatibility. */
   @IsOptional() @IsString() @MinLength(3) @MaxLength(3) currency?: string;
@@ -86,6 +93,20 @@ export class FinanceUltimateQuestionDto {
   @IsOptional() @IsDateString() from?: string;
   @IsOptional() @IsDateString() to?: string;
   @IsString() @MinLength(3) @MaxLength(500) question!: string;
+}
+export class FinanceAssistantEntryDto {
+  @IsString() @MinLength(1) @MaxLength(2000) text!: string;
+}
+export class FinanceAssistantHistoryItemDto {
+  @IsIn(['user', 'assistant']) role!: 'user' | 'assistant';
+  @IsString() @MinLength(1) @MaxLength(1200) text!: string;
+}
+export class FinanceAssistantMessageDto extends FinanceAssistantEntryDto {
+  @IsOptional()
+  @ArrayMaxSize(8)
+  @ValidateNested({ each: true })
+  @Type(() => FinanceAssistantHistoryItemDto)
+  history?: FinanceAssistantHistoryItemDto[];
 }
 export class UpdateFinanceSettingsDto {
   @IsString() @MinLength(3) @MaxLength(3) defaultCurrency!: string;

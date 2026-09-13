@@ -15,11 +15,9 @@ import {
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
+import Image from "next/image";
 import type { FinanceVisualContext } from "./finance-visual-context";
-import {
-  FinanceStateContextGraphic,
-  type FinanceStateGraphicKind,
-} from "./finance-state-context-graphic";
+import type { FinanceStateGraphicKind } from "./finance-state-context-graphic";
 import styles from "./finance-state-illustration.module.css";
 
 export type FinanceVisualState =
@@ -73,6 +71,15 @@ const stateTone: Record<FinanceVisualState, string> = {
   error: "text-rose-300",
 };
 
+const stateAsset: Record<FinanceVisualState, string> = {
+  loading: "/finance/states/wallet-loading.webp",
+  waiting: "/finance/states/wallet-loading.webp",
+  saving: "/finance/states/wallet-loading.webp",
+  syncing: "/finance/states/wallet-loading.webp",
+  empty: "/finance/states/wallet-empty.webp",
+  error: "/finance/states/wallet-error.webp",
+};
+
 export function FinanceStateIllustration({
   state,
   context,
@@ -83,7 +90,6 @@ export function FinanceStateIllustration({
   compact?: boolean;
 }) {
   const Icon = contextIcons[context];
-  const focusedScene = context === "transfers" || context === "reminders";
   return (
     <div
       data-finance-state={state}
@@ -93,44 +99,21 @@ export function FinanceStateIllustration({
       className={`${styles.illustration} ${styles[state]} relative aspect-[600/136] w-full shrink-0 ${stateTone[state]}`}
       aria-hidden="true"
     >
-      <svg
-        viewBox="0 0 600 136"
-        className="h-full w-full"
-        fill="none"
-        preserveAspectRatio="xMidYMid meet"
-      >
-        <rect
-          className={styles.frame}
-          x="1"
-          y="1"
-          width="598"
-          height="134"
-          rx="18"
+      <div className={styles.ambient} />
+      <div className={styles.walletStage} data-finance-scene={context}>
+        <Image
+          src={stateAsset[state]}
+          alt=""
+          width={720}
+          height={720}
+          sizes="(max-width: 640px) 150px, 190px"
+          className={styles.walletImage}
         />
-        <rect
-          className={styles.panel}
-          x="8"
-          y="8"
-          width="584"
-          height="120"
-          rx="14"
-        />
-        <FinanceStateContextGraphic context={context} />
-        <StateMark state={state} />
-        <rect
-          className={styles.sweep}
-          x="22"
-          y="17"
-          width="84"
-          height="102"
-          rx="18"
-        />
-      </svg>
-      {!focusedScene ? (
-        <span className={styles.iconTile}>
-          <Icon size={24} strokeWidth={1.8} />
-        </span>
-      ) : null}
+      </div>
+      <span className={styles.iconTile}>
+        <Icon size={compact ? 17 : 21} strokeWidth={1.8} />
+      </span>
+      <StateMark state={state} />
     </div>
   );
 }
@@ -138,27 +121,33 @@ export function FinanceStateIllustration({
 function StateMark({ state }: { state: FinanceVisualState }) {
   if (state === "error")
     return (
-      <path
-        data-finance-state-mark="error"
-        d="M548 22L566 40M566 22L548 40"
-        className={styles.errorMark}
-      />
+      <svg viewBox="0 0 32 32" className={styles.stateBadge} fill="none">
+        <path
+          data-finance-state-mark="error"
+          d="M10 10L22 22M22 10L10 22"
+          className={styles.errorMark}
+        />
+      </svg>
     );
   if (state === "saving")
     return (
-      <path
-        data-finance-state-mark="saving"
-        d="M542 31L552 41L570 19"
-        className={styles.successMark}
-      />
+      <svg viewBox="0 0 32 32" className={styles.stateBadge} fill="none">
+        <path
+          data-finance-state-mark="saving"
+          d="M8 16L14 22L24 10"
+          className={styles.successMark}
+        />
+      </svg>
     );
   if (state === "waiting")
     return (
-      <path
-        data-finance-state-mark="waiting"
-        d="M556 18V31L567 38"
-        className={styles.stateMark}
-      />
+      <svg viewBox="0 0 32 32" className={styles.stateBadge} fill="none">
+        <path
+          data-finance-state-mark="waiting"
+          d="M16 7V16L22 20"
+          className={styles.stateMark}
+        />
+      </svg>
     );
   return null;
 }

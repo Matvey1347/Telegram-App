@@ -16,6 +16,7 @@ import {
   toTelegramBotInlineKeyboard,
 } from '../../../telegram/shared/telegram-inline-keyboard';
 import { telegramMarkupToHtml } from '../../../telegram/shared/telegram-markup';
+import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 import { TelegramManagedPostCommandService } from '../telegram-channels/telegram-managed-post-command.service';
 import { TelegramManagedPostPublicationService } from '../telegram-channels/telegram-managed-post-publication.service';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
@@ -102,11 +103,19 @@ export class TelegramSystemBotPostFlowService {
   ) {
     const text = String(draft.text ?? '');
     const formattedText = telegramMarkupToHtml(text);
-    const imageUrls = (draft.imageUrls ?? [])
-      .map((url) => String(url).trim())
-      .filter(Boolean)
-      .slice(0, 10);
-    if (!text.trim() && !imageUrls.length)
+    const mediaItems = normalizeTelegramPostMediaItems(
+      draft.mediaItems,
+      draft.imageUrls,
+    ).slice(0, 10);
+    if (
+      mediaItems.some((item) => item.kind === 'ANIMATION') &&
+      mediaItems.length !== 1
+    ) {
+      throw new ConflictException(
+        'An animation must be the only media item in a post',
+      );
+    }
+    if (!text.trim() && !mediaItems.length)
       throw new ConflictException('Telegram post is empty');
     const replyMarkup = toTelegramBotInlineKeyboard(
       normalizeTelegramPostButtonRows(
@@ -120,31 +129,66 @@ export class TelegramSystemBotPostFlowService {
       ),
     ) ?? { inline_keyboard: [] };
     const token = this.config.token!;
-    if (imageUrls.length === 1 && text.length <= 1024) {
-      await this.api.sendPhoto(token, {
+    const messageIds: number[] = [];
+    if (mediaItems.length === 1 && text.length <= 1024) {
+      const media = mediaItems[0];
+      const method =
+        media.kind === 'VIDEO'
+          ? 'sendVideo'
+          : media.kind === 'ANIMATION'
+            ? 'sendAnimation'
+            : 'sendPhoto';
+      const field =
+        media.kind === 'VIDEO'
+          ? 'video'
+          : media.kind === 'ANIMATION'
+            ? 'animation'
+            : 'photo';
+      const commonBody = {
         chat_id: scope.chatId,
-        photo: imageUrls[0],
         caption: formattedText || undefined,
         parse_mode: 'HTML',
         reply_markup: replyMarkup,
-      });
-    } else {
-      if (imageUrls.length) {
-        await this.api.sendMediaGroup(token, {
-          chat_id: scope.chatId,
-          media: imageUrls.map((media) => ({ type: 'photo', media })),
+      };
+      if (media.kind === 'PHOTO') {
+        const sent = await this.api.sendPhoto(token, {
+          ...commonBody,
+          photo: media.url,
         });
+        messageIds.push(sent.message_id);
+      } else {
+        const sent = await this.api.call<{ message_id: number }>(
+          token,
+          method,
+          {
+            ...commonBody,
+            [field]: media.url,
+          },
+        );
+        messageIds.push(sent.message_id);
+      }
+    } else {
+      if (mediaItems.length) {
+        const sent = await this.api.sendMediaGroup(token, {
+          chat_id: scope.chatId,
+          media: mediaItems.map((media) => ({
+            type: media.kind === 'VIDEO' ? 'video' : 'photo',
+            media: media.url,
+          })),
+        });
+        messageIds.push(...sent.map((message) => message.message_id));
       }
       if (text || replyMarkup.inline_keyboard.length) {
-        await this.api.sendMessage(token, {
+        const sent = await this.api.sendMessage(token, {
           chat_id: scope.chatId,
           text: formattedText || 'Advertising post',
           parse_mode: 'HTML',
           reply_markup: replyMarkup,
         });
+        messageIds.push(sent.message_id);
       }
     }
-    return { status: 'SENT' as const };
+    return { status: 'SENT' as const, messageIds };
   }
 
   async resumeAdSaleImport(
@@ -176,6 +220,7 @@ export class TelegramSystemBotPostFlowService {
         title: telegramSystemBotPostTitle(payload.content),
         text: payload.content.text,
         imageUrls: payload.content.imageUrls,
+        mediaItems: payload.content.mediaItems,
         buttonRows: payload.content.buttonRows,
       },
     };
@@ -242,10 +287,10 @@ export class TelegramSystemBotPostFlowService {
               active,
               scope,
               capture.reason === 'UNSUPPORTED_MEDIA'
-                ? `Unsupported media: ${capture.unsupportedMedia.join(', ')}. Send text or photos.`
-                : capture.reason === 'PHOTO_IMPORT_FAILED'
-                  ? 'Could not download or store this photo. Forward the post again to retry.'
-                  : 'Forward a text or photo post.',
+                ? `Unsupported media: ${capture.unsupportedMedia.join(', ')}. Send text, photos, video or GIF.`
+                : capture.reason === 'MEDIA_IMPORT_FAILED'
+                  ? 'Could not download or store this media. Forward the post again to retry.'
+                  : 'Forward a post with text, photos, video, or GIF.',
             )
           : null;
       }
@@ -464,6 +509,7 @@ export class TelegramSystemBotPostFlowService {
             title: telegramSystemBotPostTitle(payload.content),
             text: payload.content.text || undefined,
             imageUrls: payload.content.imageUrls,
+            mediaItems: payload.content.mediaItems,
             buttonRows: payload.content.buttonRows,
           },
           { groupId: payload.groupId },

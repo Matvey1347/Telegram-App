@@ -37,6 +37,7 @@ export function FinanceImportModal({
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState("");
   const [confirmed, setConfirmed] = useState(false);
+  const [mode, setMode] = useState<"ADD" | "REPLACE">("ADD");
   const [dragging, setDragging] = useState(false);
   const [copyDone, setCopyDone] = useState(false);
   const [progress, setProgress] =
@@ -81,7 +82,7 @@ export function FinanceImportModal({
       if (
         parsed.format !== "telegram-system.consumer-finance" ||
         parsed.version !== 1 ||
-        parsed.mode !== "ADD" ||
+        (parsed.mode !== "ADD" && parsed.mode !== "REPLACE") ||
         !parsed.data
       ) {
         throw new Error("invalid envelope");
@@ -104,6 +105,7 @@ export function FinanceImportModal({
       const imported = await importConsumerFinanceData({
         botId,
         file,
+        mode,
         signal: controller.signal,
         onProgress: (next, current, total) => {
           setProgress(next);
@@ -132,6 +134,7 @@ export function FinanceImportModal({
     setFile(null);
     setFileError("");
     setConfirmed(false);
+    setMode("ADD");
     setProgress(null);
     setResult(null);
     setError(null);
@@ -236,7 +239,49 @@ export function FinanceImportModal({
             </p>
           ) : null}
 
-          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-neutral-800 bg-neutral-950/45 p-3 text-sm leading-5 text-neutral-300">
+          <fieldset className="rounded-xl border border-neutral-800 bg-neutral-950/45 p-3">
+            <legend className="px-1 text-sm font-medium text-neutral-200">
+              {copy.importMode}
+            </legend>
+            <div
+              role="radiogroup"
+              className="mt-1 grid grid-cols-2 gap-1 rounded-xl bg-neutral-900 p-1"
+            >
+              {(["ADD", "REPLACE"] as const).map((value) => {
+                const active = mode === value;
+                const destructive = value === "REPLACE";
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    disabled={importing}
+                    onClick={() => {
+                      setMode(value);
+                      setConfirmed(false);
+                      setResult(null);
+                      setError(null);
+                    }}
+                    className={`min-h-10 rounded-lg px-3 text-sm font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-sky-300 ${active ? (destructive ? "bg-rose-950 text-rose-200 shadow-[inset_0_0_0_1px_rgb(244_63_94/0.5)]" : "bg-sky-600 text-white") : "text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"}`}
+                  >
+                    {destructive ? copy.importModeReplace : copy.importModeAdd}
+                  </button>
+                );
+              })}
+            </div>
+            <p
+              className={`mt-2 text-xs leading-5 ${mode === "REPLACE" ? "text-rose-300" : "text-neutral-500"}`}
+            >
+              {mode === "REPLACE"
+                ? copy.importModeReplaceHelp
+                : copy.importModeAddHelp}
+            </p>
+          </fieldset>
+
+          <label
+            className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm leading-5 ${mode === "REPLACE" ? "border-rose-900/80 bg-rose-950/20 text-rose-100" : "border-neutral-800 bg-neutral-950/45 text-neutral-300"}`}
+          >
             <input
               type="checkbox"
               checked={confirmed}
@@ -244,7 +289,11 @@ export function FinanceImportModal({
               onChange={(event) => setConfirmed(event.target.checked)}
               className="mt-0.5 h-4 w-4 accent-blue-500"
             />
-            <span>{copy.importAddsData}</span>
+            <span>
+              {mode === "REPLACE"
+                ? copy.importReplacesData
+                : copy.importAddsData}
+            </span>
           </label>
 
           {progress || importing ? (

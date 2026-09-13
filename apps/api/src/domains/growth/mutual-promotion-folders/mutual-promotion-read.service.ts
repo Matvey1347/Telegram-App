@@ -6,6 +6,7 @@ import type {
   MutualPromotionInviteLinkOption,
   PaginatedResponse,
 } from '@telegram-system/shared';
+import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -16,6 +17,7 @@ import type {
   MutualPromotionInviteOptionsQueryDto,
 } from './dto';
 import { MutualPromotionStatisticsService } from './mutual-promotion-statistics.service';
+import { MutualPromotionAttributionHistoryService } from './mutual-promotion-attribution-history.service';
 
 const detailInclude = {
   participants: {
@@ -28,6 +30,13 @@ const detailInclude = {
           username: true,
           photoUrl: true,
           currentSubscribersCount: true,
+          kpiCurrency: true,
+          targetCpaFrom: true,
+          targetCpa: true,
+          acceptableCpaFrom: true,
+          acceptableCpa: true,
+          stopCpaFrom: true,
+          stopCpa: true,
         },
       },
       inviteLink: {
@@ -74,6 +83,7 @@ export class MutualPromotionReadService {
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
     private readonly statistics: MutualPromotionStatisticsService,
+    private readonly attributionHistory: MutualPromotionAttributionHistoryService,
   ) {}
 
   private async workspace(userId: string) {
@@ -99,13 +109,31 @@ export class MutualPromotionReadService {
             orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
             select: {
               role: true,
+              subscribersAtStart: true,
+              subscribersAtEnd: true,
+              inviteJoinedAtStart: true,
+              inviteJoinedAtEnd: true,
+              baselineCapturedAt: true,
+              finalCapturedAt: true,
               telegramChannel: {
                 select: {
                   id: true,
                   title: true,
                   username: true,
                   photoUrl: true,
+                  currentSubscribersCount: true,
+                  kpiCurrency: true,
+                  targetCpaFrom: true,
+                  targetCpa: true,
+                  acceptableCpaFrom: true,
+                  acceptableCpa: true,
+                  stopCpaFrom: true,
+                  stopCpa: true,
                 },
+              },
+              inviteLink: { select: { joinedCount: true } },
+              expense: {
+                include: { account: { select: { name: true } } },
               },
             },
           },
@@ -128,8 +156,21 @@ export class MutualPromotionReadService {
       paidCount: row.participants.filter((item) => item.role === 'PAID').length,
       postCount: row._count.posts,
       channels: row.participants.map((participant) => ({
-        ...participant.telegramChannel,
+        id: participant.telegramChannel.id,
+        title: participant.telegramChannel.title,
+        username: participant.telegramChannel.username,
+        photoUrl: participant.telegramChannel.photoUrl,
         role: participant.role,
+        kpi: channelKpi(participant.telegramChannel),
+        stats: this.statistics.participant(
+          {
+            ...participant,
+            currentSubscribersCount:
+              participant.telegramChannel.currentSubscribersCount,
+            currentInviteJoinedCount: participant.inviteLink.joinedCount,
+          },
+          { useCurrentCounters: row.status === 'ACTIVE' },
+        ),
       })),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
@@ -165,11 +206,19 @@ export class MutualPromotionReadService {
       include: detailInclude,
     });
     if (!row) throw new NotFoundException('Mutual-promotion folder not found');
-    const hydratedInviteLinks = await hydrateTelegramInviteCreatorProfiles(
-      this.prisma,
-      workspaceId,
-      row.participants.map((participant) => participant.inviteLink),
-    );
+    const [hydratedInviteLinks, attributionHistory] = await Promise.all([
+      hydrateTelegramInviteCreatorProfiles(
+        this.prisma,
+        workspaceId,
+        row.participants.map((participant) => participant.inviteLink),
+      ),
+      this.attributionHistory.load({
+        workspaceId,
+        folderId: row.id,
+        folderStartsAt: row.startsAt,
+        participants: row.participants,
+      }),
+    ]);
     const inviteLinkById = new Map(
       hydratedInviteLinks.map((inviteLink) => [inviteLink.id, inviteLink]),
     );
@@ -190,8 +239,21 @@ export class MutualPromotionReadService {
       paidCount: row.participants.length - publisherCount,
       postCount: row.posts.length,
       channels: row.participants.map((participant) => ({
-        ...participant.telegramChannel,
+        id: participant.telegramChannel.id,
+        title: participant.telegramChannel.title,
+        username: participant.telegramChannel.username,
+        photoUrl: participant.telegramChannel.photoUrl,
         role: participant.role,
+        kpi: channelKpi(participant.telegramChannel),
+        stats: this.statistics.participant(
+          {
+            ...participant,
+            currentSubscribersCount:
+              participant.telegramChannel.currentSubscribersCount,
+            currentInviteJoinedCount: participant.inviteLink.joinedCount,
+          },
+          { useCurrentCounters: row.status === 'ACTIVE' },
+        ),
       })),
       participants: row.participants.map((participant) => {
         const inviteLink =
@@ -243,6 +305,7 @@ export class MutualPromotionReadService {
             },
             { useCurrentCounters: row.status === 'ACTIVE' },
           ),
+          attributionHistory: attributionHistory.get(participant.id)!,
         };
       }),
       posts: row.posts.map((post) => ({
@@ -250,6 +313,10 @@ export class MutualPromotionReadService {
         title: post.title,
         text: post.text,
         imageUrls: post.imageUrls,
+        mediaItems: normalizeTelegramPostMediaItems(
+          post.mediaItems,
+          post.imageUrls,
+        ),
         buttonRows: normalizeTelegramPostButtonRows(post.buttonRows),
         scheduledAt: post.scheduledAt.toISOString(),
         position: post.position,
@@ -387,4 +454,26 @@ export class MutualPromotionReadService {
       };
     });
   }
+}
+
+function channelKpi(channel: {
+  kpiCurrency: string;
+  targetCpaFrom: Prisma.Decimal | null;
+  targetCpa: Prisma.Decimal | null;
+  acceptableCpaFrom: Prisma.Decimal | null;
+  acceptableCpa: Prisma.Decimal | null;
+  stopCpaFrom: Prisma.Decimal | null;
+  stopCpa: Prisma.Decimal | null;
+}) {
+  const number = (value: Prisma.Decimal | null) =>
+    value == null ? null : Number(value);
+  return {
+    currency: channel.kpiCurrency,
+    targetFrom: number(channel.targetCpaFrom),
+    targetTo: number(channel.targetCpa),
+    acceptableFrom: number(channel.acceptableCpaFrom),
+    acceptableTo: number(channel.acceptableCpa),
+    stopFrom: number(channel.stopCpaFrom),
+    stopTo: number(channel.stopCpa),
+  };
 }

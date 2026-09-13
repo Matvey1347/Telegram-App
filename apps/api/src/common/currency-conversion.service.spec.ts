@@ -115,5 +115,7 @@ describe('CurrencyConversionService', () => {
       statement.values.filter((value) => value instanceof Date),
     ).toHaveLength(2);
     expect(statement.strings.join(' ')).toContain('CROSS JOIN LATERAL');
+    expect(statement.strings.join(' ')).toContain('CAST(');
+    expect(statement.strings.join(' ')).toContain('AS TIMESTAMP');
   });
 });

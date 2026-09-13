@@ -24,6 +24,7 @@ vi.mock("@/lib/api", () => ({
 
 describe("ChannelPerformanceHistoryPanel", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     queryState.lastOptions = null;
     queryState.value = {
       isLoading: false,
@@ -117,6 +118,40 @@ describe("ChannelPerformanceHistoryPanel", () => {
     expect(screen.queryByText("Subscribers 0.0%")).not.toBeInTheDocument();
   });
 
+  it("compares today's latest values with yesterday's final values", async () => {
+    const data = queryState.value.data as {
+      points: Array<Record<string, number | string | null>>;
+      comparisonPoint: Record<string, number | string | null> | null;
+    };
+    data.points = [
+      {
+        date: "2026-09-10T10:00:00.000Z",
+        subscribers: 12_330,
+        averageViews: 714,
+        averageReactions: 8,
+        postsPublished: 1,
+        invested: 1_000,
+        revenue: 25,
+        paybackPercent: 2.5,
+        adsLeft: 105,
+      },
+    ];
+    data.comparisonPoint = {
+      date: "2026-09-09T20:00:00.000Z",
+      subscribers: 12_300,
+      averageViews: 700,
+      averageReactions: 10,
+    };
+
+    render(<ChannelPerformanceHistoryPanel channelId="channel-1" />);
+    await userEvent.click(screen.getByRole("button", { name: "Today" }));
+
+    expect(screen.getAllByText("Today versus yesterday")).toHaveLength(3);
+    expect(screen.getByText("+30 · +0.2%")).toBeInTheDocument();
+    expect(screen.getByText("+14.0 · +2.0%")).toBeInTheDocument();
+    expect(screen.getByText("-2.0 · -20.0%")).toBeInTheDocument();
+  });
+
   it("shows the exact subscriber loss for the selected period", () => {
     const data = queryState.value.data as {
       points: Array<Record<string, number | string | null>>;
@@ -140,15 +175,37 @@ describe("ChannelPerformanceHistoryPanel", () => {
     expect(queryState.lastOptions?.queryKey.at(-1)).toBe("7d");
   });
 
+  it("remembers one selected period across every channel", async () => {
+    const user = userEvent.setup();
+    const view = render(
+      <ChannelPerformanceHistoryPanel channelId="channel-1" />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Today" }));
+    expect(window.localStorage.getItem("telegram-channel-dynamics:range")).toBe(
+      "1d",
+    );
+
+    view.unmount();
+    render(<ChannelPerformanceHistoryPanel channelId="channel-2" />);
+
+    expect(screen.getByText("Today", { selector: "h4" })).toBeInTheDocument();
+    expect(queryState.lastOptions?.queryKey.at(-1)).toBe("1d");
+  });
+
   it("shows chart-sized skeletons while switching the period", async () => {
     render(<ChannelPerformanceHistoryPanel channelId="channel-1" />);
 
     await userEvent.click(screen.getByRole("button", { name: "90 days" }));
 
     expect(screen.getByText("Last 90 days")).toBeInTheDocument();
-    expect(
-      screen.getByRole("status", { name: "Loading channel dynamics" }),
-    ).toBeInTheDocument();
+    const skeleton = screen.getByRole("status", {
+      name: "Loading channel dynamics",
+    });
+    expect(skeleton).toBeInTheDocument();
+    expect(skeleton.querySelectorAll(".animate-pulse").length).toBeGreaterThan(
+      10,
+    );
     expect(screen.getAllByTestId("history-metric-skeleton")).toHaveLength(3);
     expect(screen.getAllByTestId("history-chart-skeleton")).toHaveLength(4);
     expect(queryState.lastOptions?.queryKey.at(-1)).toBe("90d");

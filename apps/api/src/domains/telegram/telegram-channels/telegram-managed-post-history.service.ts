@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import {
   TelegramManagedPostIdVerificationStatus,
   TelegramManagedPostLinkSource,
@@ -160,6 +161,7 @@ export class TelegramManagedPostHistoryService {
             : revision.title,
           text: revision.text,
           imageUrls: revision.imageUrls,
+          mediaItems: revision.mediaItems as Prisma.InputJsonValue,
           buttonRows: normalizeTelegramPostButtonRows(revision.buttonRows),
           assignedMemberId: revision.assignedMemberId,
           icon: revision.icon,
@@ -236,8 +238,10 @@ export class TelegramManagedPostHistoryService {
     if (
       (post.status === TelegramManagedPostStatus.PUBLISHED ||
         post.status === TelegramManagedPostStatus.SCHEDULED) &&
-      dto.imageUrls !== undefined &&
-      !this.telegramManagedPostPresentationService.sameImageUrls(
+      (dto.imageUrls !== undefined || dto.mediaItems !== undefined) &&
+      !this.telegramManagedPostPresentationService.sameMediaItems(
+        dto.mediaItems,
+        post.mediaItems,
         dto.imageUrls,
         post.imageUrls,
       )
@@ -249,9 +253,12 @@ export class TelegramManagedPostHistoryService {
     }
     if (
       post.origin === 'TELEGRAM' &&
-      post.imageUrls.length > 0 &&
-      dto.imageUrls !== undefined &&
-      !this.telegramManagedPostPresentationService.sameImageUrls(
+      (post.imageUrls.length > 0 ||
+        (Array.isArray(post.mediaItems) && post.mediaItems.length > 0)) &&
+      (dto.imageUrls !== undefined || dto.mediaItems !== undefined) &&
+      !this.telegramManagedPostPresentationService.sameMediaItems(
+        dto.mediaItems,
+        post.mediaItems,
         dto.imageUrls,
         post.imageUrls,
       )
@@ -282,10 +289,11 @@ export class TelegramManagedPostHistoryService {
       dto.buttonRows === undefined
         ? normalizeTelegramPostButtonRows(post.buttonRows)
         : normalizeTelegramPostButtonRows(dto.buttonRows);
-    const nextImageUrls =
-      dto.imageUrls === undefined
+    const nextMedia =
+      dto.imageUrls === undefined && dto.mediaItems === undefined
         ? undefined
-        : await this.telegramManagedPostMediaStorageService.persistImageUrls(
+        : this.telegramManagedPostMediaStorageService.persistMediaUrls(
+            dto.mediaItems,
             dto.imageUrls,
           );
     const convertsNativeScheduleToLocal =
@@ -380,7 +388,10 @@ export class TelegramManagedPostHistoryService {
         data: {
           title: dto.title?.trim(),
           text: dto.text,
-          imageUrls: nextImageUrls,
+          imageUrls: nextMedia?.imageUrls,
+          mediaItems: nextMedia?.mediaItems as unknown as
+            | Prisma.InputJsonValue
+            | undefined,
           buttonRows: dto.buttonRows === undefined ? undefined : nextButtonRows,
           scheduleMode: convertsNativeScheduleToLocal ? 'LOCAL' : undefined,
           telegramRemoteStatus: convertsNativeScheduleToLocal

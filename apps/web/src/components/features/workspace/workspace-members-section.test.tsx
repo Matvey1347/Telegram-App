@@ -2,7 +2,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { telegramUserAccountsApi, workspaceMembersApi } from "@/lib/api";
+import {
+  memberFinanceApi,
+  telegramUserAccountsApi,
+  workspaceMembersApi,
+} from "@/lib/api";
 import { workspaceRolesApi } from "@/lib/features/workspace/workspace-roles-api";
 import { WorkspaceMembersSection } from "./workspace-members-section";
 
@@ -49,6 +53,7 @@ describe("WorkspaceMembersSection", () => {
     ] as never);
     vi.spyOn(workspaceMembersApi, "create").mockResolvedValue({} as never);
     vi.spyOn(workspaceMembersApi, "update").mockResolvedValue({} as never);
+    vi.spyOn(memberFinanceApi, "summaries").mockResolvedValue([]);
     vi.spyOn(workspaceRolesApi, "list").mockResolvedValue([
       {
         id: "role-content",

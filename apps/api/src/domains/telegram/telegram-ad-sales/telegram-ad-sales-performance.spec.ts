@@ -11,6 +11,7 @@ import {
   TelegramAdSalesPricingReader,
 } from './telegram-ad-sales-pricing-reader';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
+import { TelegramAdSalesWorkspaceSettingsService } from './telegram-ad-sales-workspace-settings.service';
 
 const decimal = (value: number | string) => new Prisma.Decimal(value);
 
@@ -92,7 +93,12 @@ function createPerformanceService() {
     noop,
     noop,
   );
-  return { service, prisma, workspaceService };
+  const workspaceSettingsService = new TelegramAdSalesWorkspaceSettingsService(
+    prisma as never,
+    workspaceService as never,
+    responseCache as never,
+  );
+  return { service, workspaceSettingsService, prisma, workspaceService };
 }
 
 function channels(count: number) {
@@ -220,13 +226,14 @@ function workspaceSettings(
 
 describe('TelegramAdSalesService performance contracts', () => {
   it('reads established workspace settings with one query and zero writes', async () => {
-    const { service, prisma } = createPerformanceService();
+    const { workspaceSettingsService, prisma } = createPerformanceService();
 
-    const result = await service.getAdSalesWorkspaceSettings('user-1');
+    const result = await workspaceSettingsService.get('user-1');
 
     expect(result).toEqual({
       workspaceId: 'ws-1',
       defaultOrganicPostsPerAdSlot: 3,
+      defaultSalesCommissionRate: 0,
       createdAt: '2026-08-01T00:00:00.000Z',
       updatedAt: '2026-08-01T00:00:00.000Z',
     });
@@ -243,7 +250,7 @@ describe('TelegramAdSalesService performance contracts', () => {
   });
 
   it('creates workspace settings only when the workspace row is missing', async () => {
-    const { service, prisma } = createPerformanceService();
+    const { workspaceSettingsService, prisma } = createPerformanceService();
     prisma.telegramAdSalesWorkspaceSettings.findUnique.mockResolvedValueOnce(
       null,
     );
@@ -251,9 +258,7 @@ describe('TelegramAdSalesService performance contracts', () => {
       workspaceSettings(),
     );
 
-    await expect(
-      service.getAdSalesWorkspaceSettings('user-1'),
-    ).resolves.toEqual(
+    await expect(workspaceSettingsService.get('user-1')).resolves.toEqual(
       expect.objectContaining({
         workspaceId: 'ws-1',
         defaultOrganicPostsPerAdSlot: 3,
@@ -279,7 +284,7 @@ describe('TelegramAdSalesService performance contracts', () => {
   });
 
   it('recovers a concurrent workspace-settings create from the winning row', async () => {
-    const { service, prisma } = createPerformanceService();
+    const { workspaceSettingsService, prisma } = createPerformanceService();
     const winner = workspaceSettings({
       defaultOrganicPostsPerAdSlot: 5,
       updatedAt: new Date('2026-08-02T00:00:00.000Z'),
@@ -294,11 +299,10 @@ describe('TelegramAdSalesService performance contracts', () => {
       }),
     );
 
-    await expect(
-      service.getAdSalesWorkspaceSettings('user-1'),
-    ).resolves.toEqual({
+    await expect(workspaceSettingsService.get('user-1')).resolves.toEqual({
       workspaceId: 'ws-1',
       defaultOrganicPostsPerAdSlot: 5,
+      defaultSalesCommissionRate: 0,
       createdAt: '2026-08-01T00:00:00.000Z',
       updatedAt: '2026-08-02T00:00:00.000Z',
     });

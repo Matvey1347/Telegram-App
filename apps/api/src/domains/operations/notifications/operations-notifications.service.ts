@@ -3,7 +3,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import type {
   OperationsNotificationPage,
   OperationsNotificationPreferences,
@@ -20,6 +19,10 @@ import { mapOperationsNotification } from './operations-notification.mapper';
 import { OperationsWebPushConfigService } from './operations-web-push-config.service';
 import { OperationsNotificationPermissionService } from './operations-notification-permission.service';
 import { OPERATIONS_PUSH_MAX_ACTIVE_DEVICES } from './operations-notification-policy';
+import {
+  groupCrmNotificationRows,
+  notificationConversationIds,
+} from './operations-notification-list-presentation';
 
 type Cursor = { createdAt: Date; id: string };
 
@@ -64,8 +67,34 @@ export class OperationsNotificationsService {
     });
     const items = rows.slice(0, limit);
     const last = items.at(-1);
+    const conversationIds = notificationConversationIds(items);
+    const conversations = conversationIds.length
+      ? await this.prisma.telegramCrmConversation.findMany({
+          where: {
+            workspaceId: access.workspaceId,
+            id: { in: conversationIds },
+          },
+          select: {
+            id: true,
+            contactId: true,
+            unreadCount: true,
+            contact: { select: { displayName: true } },
+            peer: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                photoUrl: true,
+              },
+            },
+          },
+        })
+      : [];
     return {
-      items: items.map(mapOperationsNotification),
+      items: groupCrmNotificationRows(items, conversations).map(
+        mapOperationsNotification,
+      ),
       nextCursor:
         rows.length > limit && last
           ? this.encodeCursor({ createdAt: last.createdAt, id: last.id })

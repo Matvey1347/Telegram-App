@@ -68,6 +68,9 @@ export type ConsumerFinanceAnalytics = {
     invested: string;
     investmentReturns: string;
     netCashflow: string;
+    requiredExpenses?: string;
+    discretionaryExpenses?: string;
+    unspecifiedExpenses?: string;
   };
   comparison: {
     period: { from: string; to: string };
@@ -78,6 +81,9 @@ export type ConsumerFinanceAnalytics = {
       invested: string;
       investmentReturns: string;
       netCashflow: string;
+      requiredExpenses?: string;
+      discretionaryExpenses?: string;
+      unspecifiedExpenses?: string;
     };
     legacyFallback?: ConsumerFinanceLegacyFallback | null;
   };

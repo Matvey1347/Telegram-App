@@ -1,0 +1,8 @@
+ALTER TABLE "FinanceRecurringPaymentRevision"
+ALTER COLUMN "necessity" DROP DEFAULT;
+
+ALTER INDEX "Investment_workspaceId_workspaceMemberId_origin_movementType_id"
+RENAME TO "Investment_workspaceId_workspaceMemberId_origin_movementTyp_idx";
+
+ALTER INDEX "MemberCompensationSettlement_workspaceId_workspaceMemberId_date"
+RENAME TO "MemberCompensationSettlement_workspaceId_workspaceMemberId__idx";

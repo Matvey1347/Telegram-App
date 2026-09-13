@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { TelegramChannelPerformanceHistoryRange } from "@telegram-system/shared";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -17,6 +17,8 @@ const RANGE_OPTIONS = [
   { value: "90d", label: "90 days" },
   { value: "all", label: "All time" },
 ] as const;
+const RANGE_STORAGE_KEY = "telegram-channel-dynamics:range";
+const RANGE_VALUES = RANGE_OPTIONS.map(({ value }) => value);
 
 export function ChannelPerformanceHistoryPanel({
   channelId,
@@ -28,7 +30,14 @@ export function ChannelPerformanceHistoryPanel({
   fallbackAdsLeft?: number | null;
 }) {
   const [range, setRange] =
-    useState<TelegramChannelPerformanceHistoryRange>("30d");
+    useState<TelegramChannelPerformanceHistoryRange>(readStoredRange);
+  const changeRange = useCallback(
+    (nextRange: TelegramChannelPerformanceHistoryRange) => {
+      window.localStorage.setItem(RANGE_STORAGE_KEY, nextRange);
+      setRange(nextRange);
+    },
+    [],
+  );
   const historyQuery = useQuery({
     queryKey: telegramChannelKeys.performanceHistory(channelId, range),
     queryFn: () => telegramChannelsApi.performanceHistory(channelId, range),
@@ -49,7 +58,7 @@ export function ChannelPerformanceHistoryPanel({
         <SegmentedControl
           value={range}
           options={RANGE_OPTIONS}
-          onChange={setRange}
+          onChange={changeRange}
           ariaLabel="Channel history period"
         />
       </div>
@@ -69,6 +78,7 @@ export function ChannelPerformanceHistoryPanel({
         <>
           <ChannelPerformanceHistorySummary
             points={historyQuery.data.points}
+            comparisonPoint={historyQuery.data.comparisonPoint}
             range={range}
             fallbackPaybackPercent={fallbackPaybackPercent}
             fallbackAdsLeft={fallbackAdsLeft}
@@ -78,6 +88,14 @@ export function ChannelPerformanceHistoryPanel({
       )}
     </section>
   );
+}
+
+function readStoredRange(): TelegramChannelPerformanceHistoryRange {
+  if (typeof window === "undefined") return "30d";
+  const stored = window.localStorage.getItem(RANGE_STORAGE_KEY);
+  return RANGE_VALUES.includes(stored as TelegramChannelPerformanceHistoryRange)
+    ? (stored as TelegramChannelPerformanceHistoryRange)
+    : "30d";
 }
 
 function rangeLabel(range: TelegramChannelPerformanceHistoryRange) {

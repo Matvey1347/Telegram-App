@@ -122,4 +122,54 @@ describe('TelegramManagedPostMediaStorageService', () => {
       expect.objectContaining({ mimeType: 'image/webp' }),
     ]);
   });
+
+  it.each([
+    ['VIDEO', 'video/mp4', Buffer.from('0000ftypisom')],
+    ['ANIMATION', 'image/gif', Buffer.from('GIF89a-motion')],
+  ] as const)(
+    'persists %s bytes without image conversion',
+    async (kind, mimeType, bytes) => {
+      const persistImmutableMedia = jest.fn().mockResolvedValue({
+        urls: [
+          `https://cdn.test/post.${mimeType === 'image/gif' ? 'gif' : 'mp4'}`,
+        ],
+        uploaded: 1,
+        reused: 0,
+      });
+      const service = new TelegramManagedPostMediaStorageService({
+        persistImmutableMedia,
+      } as unknown as B2ObjectStorageService);
+      const result = await service.persistMediaBytes({
+        bytes,
+        kind,
+        contentType: mimeType,
+      });
+      expect(result).toMatchObject({ kind, mimeType });
+      expect(persistImmutableMedia).toHaveBeenCalledWith([{ bytes, mimeType }]);
+    },
+  );
+
+  it('keeps mixed photo/video order and rejects an animation album', () => {
+    const service = new TelegramManagedPostMediaStorageService(
+      {} as B2ObjectStorageService,
+    );
+    expect(
+      service.persistMediaUrls([
+        { kind: 'PHOTO', url: 'https://cdn.test/a.jpg' },
+        { kind: 'VIDEO', url: 'https://cdn.test/b.mp4' },
+      ]),
+    ).toMatchObject({
+      mediaItems: [
+        { kind: 'PHOTO', url: 'https://cdn.test/a.jpg' },
+        { kind: 'VIDEO', url: 'https://cdn.test/b.mp4' },
+      ],
+      imageUrls: ['https://cdn.test/a.jpg'],
+    });
+    expect(() =>
+      service.persistMediaUrls([
+        { kind: 'ANIMATION', url: 'https://cdn.test/a.gif' },
+        { kind: 'PHOTO', url: 'https://cdn.test/b.jpg' },
+      ]),
+    ).toThrow(BadRequestException);
+  });
 });

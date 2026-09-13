@@ -26,6 +26,7 @@ import { utcDateKey, zonedDateTimeToUtc } from './domain/timezone';
 import { TelegramAdSalesBulkCreateDto } from './dto';
 import { telegramAdSalesAdvisoryLockKey } from './telegram-ad-sales-reservation';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
+import { resolveAdSaleCommissionSnapshot } from './telegram-ad-sales-commission';
 
 type ResolvedChannel = {
   id: string;
@@ -89,6 +90,11 @@ export class TelegramAdSalesBulkService {
         dto.defaults.assignedMemberId,
       );
     const channels = await this.resolveTargetChannels(workspaceId, dto);
+    const commissionSnapshot = await resolveAdSaleCommissionSnapshot(
+      this.prisma,
+      workspaceId,
+      assignedMemberId,
+    );
     const expanded = await this.expandPlacements(workspaceId, channels, dto);
     if (expanded.length > 500) {
       throw new BadRequestException(
@@ -128,6 +134,7 @@ export class TelegramAdSalesBulkService {
             settlementCurrency: dto.defaults.settlementCurrency,
             createdByUserId: userId,
             assignedMemberId,
+            ...commissionSnapshot,
           },
         });
         saleIds.add(sale.id);

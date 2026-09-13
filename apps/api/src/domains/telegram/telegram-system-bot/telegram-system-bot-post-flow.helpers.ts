@@ -56,7 +56,34 @@ export function mergeTelegramSystemBotAlbumContent(
     ...current,
     text: current.text || incoming.text,
     plainText: current.plainText || incoming.plainText,
+    formattedHtml: current.formattedHtml || incoming.formattedHtml,
     imageUrls: [...new Set([...current.imageUrls, ...incoming.imageUrls])],
+    mediaItems: [
+      ...(current.mediaItems ??
+        current.imageUrls.map((url) => ({
+          kind: 'PHOTO' as const,
+          url,
+          sourceMessageId: null,
+        }))),
+      ...(
+        incoming.mediaItems ??
+        incoming.imageUrls.map((url) => ({
+          kind: 'PHOTO' as const,
+          url,
+          sourceMessageId: null,
+        }))
+      ).filter(
+        (item) =>
+          !(current.mediaItems ?? []).some(
+            (existing) =>
+              existing.kind === item.kind && existing.url === item.url,
+          ),
+      ),
+    ].sort(
+      (left, right) =>
+        (left.sourceMessageId ?? Number.MAX_SAFE_INTEGER) -
+        (right.sourceMessageId ?? Number.MAX_SAFE_INTEGER),
+    ),
     buttonRows: current.buttonRows.length
       ? current.buttonRows
       : incoming.buttonRows,

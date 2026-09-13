@@ -64,7 +64,16 @@ export type TelegramSystemBotIncomingMessage = {
   };
   forward_sender_name?: string;
   forward_date?: number;
-  animation?: unknown;
+  animation?: {
+    file_id?: string;
+    file_unique_id?: string;
+    file_size?: number;
+    width?: number;
+    height?: number;
+    duration?: number;
+    mime_type?: string;
+    file_name?: string;
+  };
   audio?: unknown;
   document?: {
     file_id?: string;
@@ -75,7 +84,16 @@ export type TelegramSystemBotIncomingMessage = {
   paid_media?: unknown;
   sticker?: unknown;
   story?: unknown;
-  video?: unknown;
+  video?: {
+    file_id?: string;
+    file_unique_id?: string;
+    file_size?: number;
+    width?: number;
+    height?: number;
+    duration?: number;
+    mime_type?: string;
+    file_name?: string;
+  };
   video_note?: unknown;
   voice?: unknown;
 };
@@ -90,6 +108,7 @@ export type TelegramSystemBotForwardedContent = {
   mediaGroupId: string | null;
   text: string;
   managedText: string;
+  formattedHtml: string;
   textSource: 'text' | 'caption' | null;
   entities: unknown[];
   photo: {
@@ -98,6 +117,17 @@ export type TelegramSystemBotForwardedContent = {
     fileSize: number | null;
     width: number | null;
     height: number | null;
+  } | null;
+  media: {
+    kind: 'PHOTO' | 'VIDEO' | 'ANIMATION';
+    fileId: string;
+    fileUniqueId: string | null;
+    fileSize: number | null;
+    width: number | null;
+    height: number | null;
+    durationSeconds: number | null;
+    mimeType: string | null;
+    fileName: string | null;
   } | null;
   buttonRows: Array<
     Array<{
@@ -141,13 +171,11 @@ const supportedButtonStyles = new Set([
 ]);
 
 const unsupportedMediaKeys = [
-  'animation',
   'audio',
   'document',
   'paid_media',
   'sticker',
   'story',
-  'video',
   'video_note',
   'voice',
 ] as const;
@@ -180,7 +208,8 @@ export function parseTelegramSystemBotForwardedContent(
         : null;
   const text = normalizeText(rawText);
   const photo = bestPhoto(message.photo);
-  if (!text.trim() && !photo) {
+  const media = normalizeMedia(message, photo);
+  if (!text.trim() && !media) {
     return {
       ok: false,
       reason: 'EMPTY_MESSAGE',
@@ -190,20 +219,22 @@ export function parseTelegramSystemBotForwardedContent(
   }
 
   const buttonRows = normalizeButtons(message, warnings);
+  const preservedText = entitiesToPreservedContent(
+    rawText ?? '',
+    textSource === 'text'
+      ? message.entities
+      : textSource === 'caption'
+        ? message.caption_entities
+        : [],
+  );
   return {
     ok: true,
     content: {
       telegramMessageId: message.message_id ?? null,
       mediaGroupId: message.media_group_id ?? null,
       text,
-      managedText: entitiesToManagedMarkup(
-        rawText ?? '',
-        textSource === 'text'
-          ? message.entities
-          : textSource === 'caption'
-            ? message.caption_entities
-            : [],
-      ),
+      managedText: preservedText.managedText,
+      formattedHtml: preservedText.formattedHtml,
       textSource,
       entities:
         textSource === 'text'
@@ -212,10 +243,53 @@ export function parseTelegramSystemBotForwardedContent(
             ? [...(message.caption_entities ?? [])]
             : [],
       photo,
+      media,
       buttonRows,
       forward,
     },
     warnings: [...warnings],
+  };
+}
+
+function normalizeMedia(
+  message: TelegramSystemBotIncomingMessage,
+  photo: TelegramSystemBotForwardedContent['photo'],
+): TelegramSystemBotForwardedContent['media'] {
+  if (message.animation?.file_id) {
+    return telegramFileMedia('ANIMATION', message.animation);
+  }
+  if (message.video?.file_id) {
+    return telegramFileMedia('VIDEO', message.video);
+  }
+  return photo
+    ? {
+        kind: 'PHOTO',
+        fileId: photo.fileId,
+        fileUniqueId: photo.fileUniqueId,
+        fileSize: photo.fileSize,
+        width: photo.width,
+        height: photo.height,
+        durationSeconds: null,
+        mimeType: null,
+        fileName: null,
+      }
+    : null;
+}
+
+function telegramFileMedia(
+  kind: 'VIDEO' | 'ANIMATION',
+  file: NonNullable<TelegramSystemBotIncomingMessage['video']>,
+): NonNullable<TelegramSystemBotForwardedContent['media']> {
+  return {
+    kind,
+    fileId: file.file_id!,
+    fileUniqueId: file.file_unique_id ?? null,
+    fileSize: file.file_size ?? null,
+    width: file.width ?? null,
+    height: file.height ?? null,
+    durationSeconds: file.duration ?? null,
+    mimeType: file.mime_type ?? null,
+    fileName: file.file_name ?? null,
   };
 }
 
@@ -226,34 +300,48 @@ type BotEntity = {
   url?: string;
   language?: string;
   custom_emoji_id?: string;
+  unix_time?: number;
+  date_time_format?: string;
   user?: { id?: number | string };
 };
 
-function entitiesToManagedMarkup(text: string, rawEntities: unknown[] = []) {
-  const entities = rawEntities
-    .filter((value): value is BotEntity =>
-      Boolean(value && typeof value === 'object'),
-    )
-    .flatMap((entity, order) => {
-      const offset = entity.offset ?? -1;
-      const length = entity.length ?? 0;
-      const tags = entityTags(entity);
-      return offset >= 0 && length > 0 && offset + length <= text.length && tags
-        ? [
-            {
-              offset,
-              end: offset + length,
-              order,
-              linkDepth: entity.type === 'text_link' ? 1 : 0,
-              ...tags,
-            },
-          ]
-        : [];
-    });
-  if (!entities.length) return normalizeText(text);
-  let html = '';
+function entitiesToPreservedContent(text: string, rawEntities: unknown[] = []) {
+  const entities = mergeCompatibleEntities(
+    rawEntities
+      .filter((value): value is BotEntity =>
+        Boolean(value && typeof value === 'object'),
+      )
+      .flatMap((entity, order) => {
+        const offset = entity.offset ?? -1;
+        const length = entity.length ?? 0;
+        const tags = entityTags(entity);
+        return offset >= 0 &&
+          length > 0 &&
+          offset + length <= text.length &&
+          tags
+          ? [
+              {
+                offset,
+                end: offset + length,
+                order,
+                linkDepth: entity.type === 'text_link' ? 1 : 0,
+                mergeKey: mergeableEntityKey(entity),
+                ...tags,
+              },
+            ]
+          : [];
+      }),
+  );
+  if (!entities.length) {
+    return {
+      managedText: escapeManagedText(normalizeText(text)),
+      formattedHtml: escapeHtml(normalizeText(text)),
+    };
+  }
+  let managedHtml = '';
+  let formattedHtml = '';
   for (let index = 0; index <= text.length; index += 1) {
-    html += entities
+    const closingTags = entities
       .filter((entity) => entity.end === index)
       .sort(
         (left, right) =>
@@ -263,7 +351,9 @@ function entitiesToManagedMarkup(text: string, rawEntities: unknown[] = []) {
       )
       .map((entity) => entity.close)
       .join('');
-    html += entities
+    managedHtml += closingTags;
+    formattedHtml += closingTags;
+    const openingTags = entities
       .filter((entity) => entity.offset === index)
       .sort(
         (left, right) =>
@@ -273,9 +363,94 @@ function entitiesToManagedMarkup(text: string, rawEntities: unknown[] = []) {
       )
       .map((entity) => entity.open)
       .join('');
-    if (index < text.length) html += escapeHtml(text[index]);
+    managedHtml += openingTags;
+    formattedHtml += openingTags;
+    if (index < text.length) {
+      managedHtml += escapeHtml(escapeManagedTextCharacter(text[index]));
+      formattedHtml += escapeHtml(text[index]);
+    }
   }
-  return telegramHtmlToManagedMarkup(html).replace(/\r\n?/g, '\n');
+  return {
+    managedText: telegramHtmlToManagedMarkup(managedHtml).replace(
+      /\r\n?/g,
+      '\n',
+    ),
+    formattedHtml: formattedHtml.replace(/\r\n?/g, '\n'),
+  };
+}
+
+type RenderEntity = {
+  offset: number;
+  end: number;
+  order: number;
+  linkDepth: number;
+  mergeKey: string | null;
+  open: string;
+  close: string;
+};
+
+function mergeCompatibleEntities(entities: RenderEntity[]) {
+  const merged: RenderEntity[] = [];
+  for (const entity of [...entities].sort(
+    (left, right) =>
+      left.offset - right.offset ||
+      left.end - right.end ||
+      left.order - right.order,
+  )) {
+    const existing = entity.mergeKey
+      ? [...merged]
+          .reverse()
+          .find(
+            (candidate) =>
+              candidate.mergeKey === entity.mergeKey &&
+              entity.offset <= candidate.end,
+          )
+      : merged.find(
+          (candidate) =>
+            candidate.offset === entity.offset &&
+            candidate.end === entity.end &&
+            candidate.open === entity.open &&
+            candidate.close === entity.close,
+        );
+    if (existing) {
+      existing.end = Math.max(existing.end, entity.end);
+      continue;
+    }
+    merged.push({ ...entity });
+  }
+  return merged;
+}
+
+function mergeableEntityKey(entity: BotEntity) {
+  if (
+    entity.type &&
+    [
+      'bold',
+      'italic',
+      'underline',
+      'strikethrough',
+      'spoiler',
+      'code',
+      'blockquote',
+      'expandable_blockquote',
+    ].includes(entity.type)
+  ) {
+    return entity.type;
+  }
+  if (entity.type === 'pre') return `pre:${entity.language ?? ''}`;
+  if (entity.type === 'text_link') return `link:${entity.url ?? ''}`;
+  if (entity.type === 'text_mention') {
+    return `mention:${String(entity.user?.id ?? '')}`;
+  }
+  return null;
+}
+
+function escapeManagedTextCharacter(value: string) {
+  return /[\\`*_[\]()#+~|>:]/.test(value) ? `\\${value}` : value;
+}
+
+function escapeManagedText(value: string) {
+  return [...value].map(escapeManagedTextCharacter).join('');
 }
 
 function entityTags(entity: BotEntity) {
@@ -321,7 +496,22 @@ function entityTags(entity: BotEntity) {
       close: '</tg-emoji>',
     };
   }
+  if (
+    entity.type === 'date_time' &&
+    Number.isSafeInteger(entity.unix_time) &&
+    isTelegramDateTimeFormat(entity.date_time_format)
+  ) {
+    const format = entity.date_time_format;
+    return {
+      open: `<tg-time unix="${entity.unix_time}"${format ? ` format="${format}"` : ''}>`,
+      close: '</tg-time>',
+    };
+  }
   return null;
+}
+
+function isTelegramDateTimeFormat(value: string | undefined) {
+  return value === undefined || /^(?:r|w?[dD]?[tT]?)$/.test(value);
 }
 
 function safeEntityUrl(value: string | undefined) {

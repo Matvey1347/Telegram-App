@@ -10,6 +10,11 @@ import {
   TelegramSystemBotWorkflowStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  normalizeTelegramPostMediaItems,
+  TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE_ERROR_CODE,
+  type TelegramSystemBotPostDraft,
+} from '@telegram-system/shared';
 import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import type { TelegramSystemBotIncomingMessage } from './telegram-system-bot-forwarded-content.parser';
@@ -28,12 +33,14 @@ import {
   telegramSystemBotPostPreview,
 } from './telegram-system-bot-post-preview';
 import { TelegramSystemBotPostContentService } from './telegram-system-bot-post-content.service';
+import { TelegramSystemBotPostFlowService } from './telegram-system-bot-post-flow.service';
 import { TelegramSystemBotWorkflowStore } from './telegram-system-bot-workflow.store';
 
 type MutualPromotionPostPayload = {
   folderId?: string;
   content?: TelegramSystemBotCapturedPostContent;
   contents?: TelegramSystemBotCapturedPostContent[];
+  previewMessageIds?: number[];
 };
 
 const MAX_POSTS_PER_IMPORT = 50;
@@ -46,6 +53,7 @@ export class TelegramSystemBotMutualPromotionPostFlowService {
     private readonly api: TelegramBotApiClient,
     private readonly workflows: TelegramSystemBotWorkflowStore,
     private readonly content: TelegramSystemBotPostContentService,
+    private readonly postFlow: TelegramSystemBotPostFlowService,
   ) {}
 
   isCallback(value: string | undefined) {
@@ -60,14 +68,10 @@ export class TelegramSystemBotMutualPromotionPostFlowService {
       TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
     );
     if (existing) {
-      if (this.payload(existing.payload).folderId === normalizedFolderId) {
-        await this.render(existing, scope);
-        return { workflowId: existing.id };
-      }
-      await this.workflows.cancel({
-        ...scope,
-        id: existing.id,
-        expectedVersion: existing.version,
+      throw new ConflictException({
+        code: TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE_ERROR_CODE,
+        message:
+          'Finish the current post import in the bot before starting a new one.',
       });
     }
     const workflow = await this.workflows.create({
@@ -98,12 +102,25 @@ export class TelegramSystemBotMutualPromotionPostFlowService {
     }
     return {
       ready: true as const,
-      drafts: this.contents(payload).map((content) => ({
-        title: telegramSystemBotPostTitle(content),
-        text: content.text,
-        imageUrls: content.imageUrls,
-        buttonRows: content.buttonRows,
-      })),
+      drafts: this.contents(payload).map(
+        (content) =>
+          ({
+            title: telegramSystemBotPostTitle(content),
+            text: content.text,
+            plainText: content.plainText ?? content.text,
+            ...(content.formattedHtml
+              ? { formattedHtml: content.formattedHtml }
+              : {}),
+            imageUrls: content.imageUrls,
+            mediaItems:
+              content.mediaItems ??
+              content.imageUrls.map((url) => ({
+                kind: 'PHOTO' as const,
+                url,
+              })),
+            buttonRows: content.buttonRows,
+          }) satisfies TelegramSystemBotPostDraft,
+      ),
     };
   }
 
@@ -123,58 +140,103 @@ export class TelegramSystemBotMutualPromotionPostFlowService {
         active,
         scope,
         capture.reason === 'UNSUPPORTED_MEDIA'
-          ? 'Unsupported media. Forward a text or photo post.'
+          ? 'Unsupported media. Forward a text, photo, video or GIF post.'
           : 'Could not import this post. Forward it again to retry.',
       );
     }
     if (!['AWAIT_CONTENT', 'COLLECT_CONTENT'].includes(active.step))
       return null;
-    const next = await this.transitionCaptured(scope, active, capture.content);
+    const captured = await this.transitionCaptured(
+      scope,
+      active,
+      capture.content,
+    );
+    const next = captured.workflow;
     await this.content.removeInput(scope.chatId, message.message_id);
+    await this.removePreviewMessages(scope, captured.previewMessageIds);
+    const latestContent = this.contents(this.payload(next.payload)).at(-1)!;
+    const mediaItems = normalizeTelegramPostMediaItems(
+      latestContent.mediaItems,
+      latestContent.imageUrls,
+    );
+    const hasMotion = mediaItems.some(
+      (item) => item.kind === 'VIDEO' || item.kind === 'ANIMATION',
+    );
+    if (hasMotion) {
+      try {
+        const sent = await this.postFlow.sendPostPreview(scope, {
+          text: latestContent.text,
+          imageUrls: [],
+          mediaItems,
+          buttonRows: latestContent.buttonRows,
+        });
+        if (next.controlMessageId) {
+          await this.api.deleteMessage(this.config.token!, {
+            chat_id: scope.chatId,
+            message_id: next.controlMessageId,
+          });
+        }
+        return this.render(
+          {
+            ...next,
+            controlMessageId: null,
+            payload: this.toJson({
+              ...this.payload(next.payload),
+              previewMessageIds: sent.messageIds,
+            }) as Prisma.JsonValue,
+          },
+          scope,
+        );
+      } catch {
+        return this.render(
+          next,
+          scope,
+          'The media was saved, but Telegram could not place its preview above the controls. You can still finish the import.',
+        );
+      }
+    }
     return this.render(next, scope);
   }
 
   async callback(scope: TelegramSystemBotPostFlowScope, callback: string) {
-    const match = /^sbm:([^:]+):(\d+):(finish|confirm|cancel|next)$/.exec(
+    const match = /^sbm:([^:]+):(\d+):(finish|confirm|cancel|add|next)$/.exec(
       callback,
     );
     if (!match) return null;
     const workflow = await this.requireWorkflow(scope, match[1]);
     const action = match[3];
-    if (workflow.version !== Number(match[2]) && action === 'next') {
-      return this.render(workflow, scope, 'This view was refreshed.');
-    }
-    if (action === 'next') {
-      if (workflow.status !== TelegramSystemBotWorkflowStatus.COMPLETED) {
-        throw new ConflictException('Finish the current post first');
+    // Completed messages created by an older version may still contain the
+    // former `next` button. Clicking it only refreshes the completed card and
+    // removes that obsolete control; it never starts another import.
+    if (action === 'next') return this.render(workflow, scope);
+    if (action === 'add') {
+      if (workflow.status !== TelegramSystemBotWorkflowStatus.ACTIVE) {
+        return this.render(workflow, scope);
       }
-      const folderId = this.payload(workflow.payload).folderId!;
-      const active = await this.workflows.active(
-        scope,
-        TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
-      );
-      if (active) {
-        if (this.payload(active.payload).folderId !== folderId) {
-          throw new ConflictException(
-            'Another mutual-promotion folder import is already active',
-          );
-        }
-        return this.render(active, scope);
+      const payload = this.payload(workflow.payload);
+      if (this.contents(payload).length >= MAX_POSTS_PER_IMPORT) {
+        return this.render(workflow, scope);
       }
-      const nextWorkflow = await this.workflows.create({
+      if (workflow.step === 'AWAIT_CONTENT') {
+        return this.render(workflow, scope);
+      }
+      await this.removePreviewMessages(scope, this.previewMessageIds(payload));
+      const next = await this.workflows.transition({
         ...scope,
-        kind: TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
+        id: workflow.id,
+        expectedVersion: workflow.version,
         step: 'AWAIT_CONTENT',
-        payload: this.toJson({ folderId }),
-        controlMessageId: workflow.controlMessageId,
-        mutualPromotionFolderId: folderId,
-        expiresAt: telegramSystemBotPostWorkflowExpiry(),
+        payload: this.toJson(this.withoutPreviewMessages(payload)),
       });
-      return this.render(nextWorkflow, scope);
+      return this.render(next, scope);
     }
     if (workflow.status !== TelegramSystemBotWorkflowStatus.ACTIVE) {
       return this.render(workflow, scope);
     }
+    await this.removePreviewMessages(
+      scope,
+      this.previewMessageIds(this.payload(workflow.payload)),
+    );
     const next =
       action === 'cancel'
         ? await this.workflows.cancel({
@@ -211,7 +273,7 @@ export class TelegramSystemBotMutualPromotionPostFlowService {
     incoming: TelegramSystemBotCapturedPostContent,
   ) {
     let current = workflow;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < MAX_POSTS_PER_IMPORT; attempt += 1) {
       const payload = this.payload(current.payload);
       const contents = this.contents(payload);
       const last = contents.at(-1);
@@ -230,7 +292,7 @@ export class TelegramSystemBotMutualPromotionPostFlowService {
           ]
         : [...contents, incoming];
       try {
-        return await this.workflows.transition({
+        const next = await this.workflows.transition({
           ...scope,
           id: current.id,
           expectedVersion: current.version,
@@ -240,8 +302,17 @@ export class TelegramSystemBotMutualPromotionPostFlowService {
             contents: nextContents,
           }),
         });
+        return {
+          workflow: next,
+          previewMessageIds: this.previewMessageIds(payload),
+        };
       } catch (error) {
-        if (!(error instanceof ConflictException) || attempt === 2) throw error;
+        if (
+          !(error instanceof ConflictException) ||
+          attempt === MAX_POSTS_PER_IMPORT - 1
+        ) {
+          throw error;
+        }
         current = await this.requireWorkflow(scope, current.id);
       }
     }
@@ -260,42 +331,52 @@ export class TelegramSystemBotMutualPromotionPostFlowService {
     const cancelled =
       workflow.status === TelegramSystemBotWorkflowStatus.CANCELLED;
     const contents = this.contents(payload);
-    const preview = telegramSystemBotPostPreview(contents.at(-1));
+    const latestContent = contents.at(-1);
+    const preview = telegramSystemBotPostPreview(latestContent);
+    const motionKind = normalizeTelegramPostMediaItems(
+      latestContent?.mediaItems,
+      latestContent?.imageUrls,
+    ).find((item) => item.kind === 'VIDEO' || item.kind === 'ANIMATION')?.kind;
     const count = contents.length;
     const text = completed
       ? `✅ ${count} post(s) captured. Return to the website to set publication times and add them to the folder.`
       : cancelled
         ? 'Import cancelled.'
         : workflow.step === 'COLLECT_CONTENT' && count
-          ? [
-              notice ? `⚠️ ${escapeSystemBotHtml(notice)}` : null,
-              `<b>Captured posts: ${count}</b>`,
-              preview.html,
-              '<i>Forward more posts, or finish the import.</i>',
-            ]
-              .filter(Boolean)
-              .join('\n\n')
+          ? motionKind
+            ? [
+                notice ? `⚠️ ${escapeSystemBotHtml(notice)}` : null,
+                `✅ Post ${count} captured with ${motionKind === 'VIDEO' ? 'video' : 'GIF'}.`,
+              ]
+                .filter(Boolean)
+                .join('\n\n')
+            : preview.html
           : [
               notice ? `⚠️ ${escapeSystemBotHtml(notice)}` : null,
-              '🤝 Forward a text or photo post for this folder.',
+              count
+                ? '🤝 Forward the next post (text, photo, video, or GIF). It will be added to this import.'
+                : '🤝 Forward a post with text, photos, video, or GIF for this folder.',
             ]
               .filter(Boolean)
               .join('\n\n');
     const reply_markup = {
       inline_keyboard: completed
-        ? [
-            [
-              {
-                text: '➕ Forward next post',
-                callback_data: `sbm:${workflow.id}:${workflow.version}:next`,
-              },
-            ],
-          ]
+        ? []
         : workflow.status !== TelegramSystemBotWorkflowStatus.ACTIVE
           ? []
           : workflow.step === 'COLLECT_CONTENT'
             ? [
                 ...preview.buttonRows,
+                ...(count < MAX_POSTS_PER_IMPORT
+                  ? [
+                      [
+                        {
+                          text: '➕ Add another post',
+                          callback_data: `sbm:${workflow.id}:${workflow.version}:add`,
+                        },
+                      ],
+                    ]
+                  : []),
                 [
                   {
                     text: `✅ Finish import (${count})`,
@@ -307,23 +388,39 @@ export class TelegramSystemBotMutualPromotionPostFlowService {
                   },
                 ],
               ]
-            : [
-                [
-                  {
-                    text: '❌ Cancel',
-                    callback_data: `sbm:${workflow.id}:${workflow.version}:cancel`,
-                  },
+            : count
+              ? [
+                  [
+                    {
+                      text: `✅ Finish import (${count})`,
+                      callback_data: `sbm:${workflow.id}:${workflow.version}:finish`,
+                    },
+                    {
+                      text: '❌ Cancel',
+                      callback_data: `sbm:${workflow.id}:${workflow.version}:cancel`,
+                    },
+                  ],
+                ]
+              : [
+                  [
+                    {
+                      text: '❌ Cancel',
+                      callback_data: `sbm:${workflow.id}:${workflow.version}:cancel`,
+                    },
+                  ],
                 ],
-              ],
     };
     const linkPreview =
-      workflow.step === 'COLLECT_CONTENT' && preview.imageUrl
+      workflow.step === 'COLLECT_CONTENT'
         ? {
-            link_preview_options: {
-              url: preview.imageUrl,
-              prefer_large_media: true,
-              show_above_text: true,
-            },
+            link_preview_options:
+              !motionKind && preview.imageUrl
+                ? {
+                    url: preview.imageUrl,
+                    prefer_large_media: true,
+                    show_above_text: true,
+                  }
+                : { is_disabled: true },
           }
         : {};
     if (workflow.controlMessageId) {
@@ -399,6 +496,35 @@ export class TelegramSystemBotMutualPromotionPostFlowService {
       : payload.content
         ? [payload.content]
         : [];
+  }
+
+  private previewMessageIds(payload: MutualPromotionPostPayload) {
+    return Array.isArray(payload.previewMessageIds)
+      ? payload.previewMessageIds.filter(
+          (messageId) => Number.isInteger(messageId) && messageId > 0,
+        )
+      : [];
+  }
+
+  private withoutPreviewMessages(payload: MutualPromotionPostPayload) {
+    const { previewMessageIds: _previewMessageIds, ...rest } = payload;
+    return rest;
+  }
+
+  private async removePreviewMessages(
+    scope: TelegramSystemBotPostFlowScope,
+    messageIds: number[],
+  ) {
+    for (const messageId of messageIds) {
+      try {
+        await this.api.deleteMessage(this.config.token!, {
+          chat_id: scope.chatId,
+          message_id: messageId,
+        });
+      } catch {
+        // A missing/already removed preview must not break the import workflow.
+      }
+    }
   }
 
   private toJson(value: MutualPromotionPostPayload) {

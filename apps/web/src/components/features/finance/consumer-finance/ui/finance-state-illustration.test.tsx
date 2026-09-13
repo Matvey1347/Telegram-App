@@ -64,7 +64,7 @@ describe("Finance state illustration system", () => {
     ).toBeInTheDocument();
   });
 
-  it("uses context-specific fintech visuals instead of one generic empty graphic", () => {
+  it("keeps the visual context while using the shared branded wallet", () => {
     const { rerender } = render(
       <EmptyState text="No transfers" context="transfers" />,
     );
@@ -126,8 +126,8 @@ describe("Finance state illustration system", () => {
       document.querySelector("[data-finance-scene='reminders']"),
     ).toBeInTheDocument();
     expect(
-      document.querySelector("[data-finance-context='reminders'] span"),
-    ).toBeNull();
+      document.querySelector("[data-finance-context='reminders'] img"),
+    ).toHaveAttribute("src", expect.stringContaining("wallet-empty"));
   });
 
   it.each(contexts)("renders a dedicated %s scene", (context) => {
@@ -138,12 +138,25 @@ describe("Finance state illustration system", () => {
     ).toBeInTheDocument();
   });
 
-  it("keeps one graph endpoint without a duplicate generic status dot", () => {
-    render(<EmptyState text="No analytics" context="analytics" />);
+  it("uses distinct assets for loading, empty and error states", () => {
+    const { rerender } = render(
+      <LoadingState text="Loading" context="analytics" />,
+    );
+    expect(document.querySelector("img")).toHaveAttribute(
+      "src",
+      expect.stringContaining("wallet-loading"),
+    );
 
-    expect(
-      document.querySelectorAll("[data-finance-chart-endpoint]"),
-    ).toHaveLength(1);
-    expect(document.querySelector("[data-finance-state-mark]")).toBeNull();
+    rerender(<EmptyState text="Empty" context="analytics" />);
+    expect(document.querySelector("img")).toHaveAttribute(
+      "src",
+      expect.stringContaining("wallet-empty"),
+    );
+
+    rerender(<ErrorState text="Error" context="analytics" />);
+    expect(document.querySelector("img")).toHaveAttribute(
+      "src",
+      expect.stringContaining("wallet-error"),
+    );
   });
 });

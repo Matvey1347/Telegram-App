@@ -103,7 +103,11 @@ describe("FinanceImportModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Начать импорт" }));
 
     expect(portability.importData).toHaveBeenCalledWith(
-      expect.objectContaining({ botId: "bot-1", file: expect.any(File) }),
+      expect.objectContaining({
+        botId: "bot-1",
+        file: expect.any(File),
+        mode: "ADD",
+      }),
     );
     expect(
       await screen.findByText("Добавляем данные · Операции"),
@@ -112,6 +116,36 @@ describe("FinanceImportModal", () => {
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: ["consumer-finance", "bot-1"],
     });
+  });
+
+  it("requires destructive confirmation and imports in replace mode", async () => {
+    portability.importData.mockResolvedValue({
+      importId: "replacement",
+      duplicate: false,
+      imported: 1,
+      counts: { accounts: 1 },
+      warnings: [],
+    });
+    const { container } = renderModal("en");
+    const input = container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+
+    fireEvent.change(input, { target: { files: [importFile()] } });
+    await screen.findByText("finance.json");
+    fireEvent.click(screen.getByRole("radio", { name: "Replace all" }));
+    expect(screen.getByRole("button", { name: "Start import" })).toBeDisabled();
+    expect(
+      screen.getByText(/current Finance records will be permanently deleted/i),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "Start import" }));
+
+    await waitFor(() =>
+      expect(portability.importData).toHaveBeenCalledWith(
+        expect.objectContaining({ mode: "REPLACE" }),
+      ),
+    );
   });
 
   it("rejects a malformed file before making a network request", async () => {

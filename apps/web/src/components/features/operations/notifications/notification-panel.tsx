@@ -172,7 +172,7 @@ export function NotificationPanel({
                 className="!px-2.5 !py-1.5 text-xs"
                 onClick={() => onSettingsChange(true)}
               >
-                <Settings size={14} /> Push & app
+                <Settings size={14} /> Push
               </Button>
               <Button
                 variant="secondary"

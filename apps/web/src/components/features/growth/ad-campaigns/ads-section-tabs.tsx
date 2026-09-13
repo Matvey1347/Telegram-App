@@ -1,6 +1,10 @@
 import Link from "next/link";
 
-export type AdsSection = "campaigns" | "network" | "promo" | "mutual-promotion";
+export type AdsSection =
+  | "campaigns"
+  | "hypotheses"
+  | "promo"
+  | "mutual-promotion";
 
 const ADS_SECTIONS: ReadonlyArray<{
   value: AdsSection;
@@ -10,17 +14,17 @@ const ADS_SECTIONS: ReadonlyArray<{
   {
     value: "campaigns",
     label: "Ad campaigns",
-    href: "/ad-campaigns?section=campaigns&view=campaigns",
+    href: "/ad-campaigns?section=campaigns",
   },
   {
-    value: "network",
-    label: "Network",
-    href: "/telegram-channels?tab=networks",
+    value: "hypotheses",
+    label: "Hypotheses",
+    href: "/ad-campaigns?section=hypotheses",
   },
   {
     value: "promo",
     label: "Promo",
-    href: "/ad-campaigns?section=promo&view=promos",
+    href: "/ad-campaigns?section=promo",
   },
   {
     value: "mutual-promotion",
@@ -28,6 +32,18 @@ const ADS_SECTIONS: ReadonlyArray<{
     href: "/ad-campaigns?section=mutual-promotion",
   },
 ];
+
+export function resolveAdsSection(
+  requestedSection: string | null,
+  legacyView: string | null,
+): AdsSection {
+  if (requestedSection === "mutual-promotion") return "mutual-promotion";
+  if (requestedSection === "promo") return "promo";
+  if (requestedSection === "hypotheses") return "hypotheses";
+  if (legacyView === "promos") return "promo";
+  if (legacyView === "hypotheses") return "hypotheses";
+  return "campaigns";
+}
 
 export function AdsSectionTabs({ value }: { value: AdsSection }) {
   return (

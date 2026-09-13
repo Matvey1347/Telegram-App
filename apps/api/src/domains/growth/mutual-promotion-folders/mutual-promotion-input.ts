@@ -1,6 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { normalizeTelegramPostButtonRows } from '../../../telegram/shared/telegram-inline-keyboard';
+import {
+  normalizeTelegramPostMediaItems,
+  telegramPostPhotoUrls,
+} from '@telegram-system/shared';
 
 export function mutualPromotionFolderTitle(value: string) {
   const title = value.trim();
@@ -34,6 +38,7 @@ export function mutualPromotionPostData(
     title: string;
     text: string;
     imageUrls: string[];
+    mediaItems?: unknown[];
     buttonRows: unknown[];
   },
 ) {
@@ -46,6 +51,7 @@ export function mutualPromotionPostData(
         editedDraft?.text ??
         (typeof content?.text === 'string' ? content.text : ''),
       imageUrls: editedDraft?.imageUrls ?? content?.imageUrls,
+      mediaItems: editedDraft?.mediaItems ?? content?.mediaItems,
       buttonRows: editedDraft?.buttonRows ?? content?.buttonRows,
     },
     typeof content?.sourceTitle === 'string'
@@ -66,22 +72,39 @@ export function mutualPromotionPostContent(
     title?: string;
     text: string;
     imageUrls: unknown;
+    mediaItems?: unknown;
     buttonRows: unknown;
   },
   fallbackTitle: string,
 ) {
   const text = draft.text;
-  const rawImageUrls = draft.imageUrls;
-  const imageUrls = Array.isArray(rawImageUrls)
-    ? rawImageUrls
-        .filter((value): value is string => typeof value === 'string')
-        .map((value) => value.trim())
-        .filter(Boolean)
-        .slice(0, 10)
-    : [];
-  if (!text.trim() && !imageUrls.length) {
+  const mediaItems = normalizeTelegramPostMediaItems(
+    draft.mediaItems,
+    draft.imageUrls,
+  ).slice(0, 10);
+  for (const [index, item] of mediaItems.entries()) {
+    try {
+      const url = new URL(item.url);
+      if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
+      item.url = url.toString();
+    } catch {
+      throw new BadRequestException(
+        `Media ${index + 1} must use a valid HTTP or HTTPS URL`,
+      );
+    }
+  }
+  if (
+    mediaItems.some((item) => item.kind === 'ANIMATION') &&
+    mediaItems.length !== 1
+  ) {
     throw new BadRequestException(
-      'System Bot import has no publishable text or images',
+      'An animation must be the only media item in a post',
+    );
+  }
+  const imageUrls = telegramPostPhotoUrls(mediaItems);
+  if (!text.trim() && !mediaItems.length) {
+    throw new BadRequestException(
+      'System Bot import has no publishable text or media',
     );
   }
   const title =
@@ -96,6 +119,7 @@ export function mutualPromotionPostContent(
     title,
     text: text || null,
     imageUrls,
+    mediaItems: JSON.parse(JSON.stringify(mediaItems)) as Prisma.InputJsonValue,
     buttonRows: normalizeTelegramPostButtonRows(draft.buttonRows),
   };
 }

@@ -4,8 +4,15 @@ export type ConsumerFinanceAccountType = "CASH" | "CARD" | "SAVINGS" | "OTHER";
 export type ConsumerFinanceTransactionType = "INCOME" | "EXPENSE";
 export type ConsumerFinanceTransactionPurpose =
   | "ORDINARY"
+  | "REIMBURSEMENT"
+  | "PASS_THROUGH"
+  | "DEBT_REPAYMENT"
   | "INVESTMENT_CONTRIBUTION"
   | "INVESTMENT_RETURN";
+export type ConsumerFinanceExpenseNecessity =
+  | "UNSPECIFIED"
+  | "REQUIRED"
+  | "DISCRETIONARY";
 export type ConsumerFinanceTransactionSource =
   | "CHAT"
   | "MINI_APP"
@@ -70,7 +77,10 @@ export type ConsumerFinanceTransaction = {
   type: ConsumerFinanceTransactionType;
   purpose: ConsumerFinanceTransactionPurpose;
   amount: string;
+  /** Amount that belongs in income/expense analytics; cash balance always uses amount. */
+  economicAmount?: string;
   currency: string;
+  necessity?: ConsumerFinanceExpenseNecessity;
   valuationSnapshot?: ConsumerFinanceValuationSnapshot | null;
   occurredAt: string;
   description?: string | null;
@@ -123,6 +133,13 @@ export type ConsumerFinanceTransactionInput = {
   categoryId?: string;
   type: ConsumerFinanceTransactionType;
   amount: string;
+  /** Defaults to amount for ordinary operations and to zero for balance-only movements. */
+  economicAmount?: string;
+  purpose?: Extract<
+    ConsumerFinanceTransactionPurpose,
+    "ORDINARY" | "REIMBURSEMENT" | "PASS_THROUGH" | "DEBT_REPAYMENT"
+  >;
+  necessity?: ConsumerFinanceExpenseNecessity;
   description?: string;
   merchantDisplay?: string;
   /** Optional product detail is retained identically for every tier. */

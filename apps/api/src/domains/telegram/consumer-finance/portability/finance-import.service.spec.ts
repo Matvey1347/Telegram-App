@@ -41,13 +41,13 @@ function setup() {
 describe('FinanceImportService', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('stops before database or rate work when the document is invalid', async () => {
+  it('stops before database or rate work when the import mode is invalid', async () => {
     const test = setup();
 
     await expect(
       test.service.import(
         'profile-1',
-        { ...validDocument, mode: 'REPLACE' },
+        { ...validDocument, mode: 'MERGE' },
         jest.fn(),
         new AbortController().signal,
       ),
@@ -57,6 +57,37 @@ describe('FinanceImportService', () => {
     ).not.toHaveBeenCalled();
     expect(prepareFinanceImportRates).not.toHaveBeenCalled();
     expect(test.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('does not treat a replace import as a duplicate of an earlier replacement', async () => {
+    const test = setup();
+    test.prisma.financeProfile.findUnique.mockResolvedValue({
+      defaultCurrency: 'USD',
+      botIntegration: { workspaceId: 'workspace-1' },
+    });
+    jest.mocked(prepareFinanceImportRates).mockResolvedValue({} as never);
+    jest.mocked(writeFinanceImport).mockResolvedValue({
+      result: {
+        importId: 'replacement',
+        duplicate: false,
+        imported: 1,
+        counts: { accounts: 1 },
+        warnings: ['Existing Finance data was replaced before import.'],
+      },
+      scheduledAt: [],
+    });
+
+    await test.service.import(
+      'profile-1',
+      { ...validDocument, mode: 'REPLACE' },
+      jest.fn(),
+      new AbortController().signal,
+    );
+
+    expect(
+      test.prisma.financeDataImportReceipt.findUnique,
+    ).not.toHaveBeenCalled();
+    expect(test.prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 
   it('returns an existing receipt without duplicating an exact file', async () => {

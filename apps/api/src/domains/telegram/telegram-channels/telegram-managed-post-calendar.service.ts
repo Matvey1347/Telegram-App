@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, TelegramManagedPostStatus } from '@prisma/client';
-import type { TelegramManagedPostCalendarResult } from '@telegram-system/shared';
+import {
+  normalizeTelegramPostMediaItems,
+  type TelegramManagedPostCalendarResult,
+} from '@telegram-system/shared';
 import { ResponseCacheService } from '../../../common/response-cache.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -131,7 +134,9 @@ export class TelegramManagedPostCalendarService {
             telegramMessageUrls: item.telegramMessageUrls,
             telegramIdVerificationStatus: item.telegramIdVerificationStatus,
             telegramLinkSource: item.telegramLinkSource,
-            hasMedia: item.imageUrls.length > 0,
+            hasMedia:
+              normalizeTelegramPostMediaItems(item.mediaItems, item.imageUrls)
+                .length > 0,
             plannerFormatId: item.plannerFormatId,
             plannerSlotId: item.plannerSlotId,
             plannerRunId: item.plannerRunId,

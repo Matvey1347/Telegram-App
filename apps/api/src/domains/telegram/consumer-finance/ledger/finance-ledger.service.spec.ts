@@ -291,6 +291,91 @@ describe('FinanceLedgerService tenant and money rules', () => {
     );
   });
 
+  it('keeps cash movement separate from the user share used by analytics', async () => {
+    const occurredAt = new Date('2026-09-11T12:00:00.000Z').toISOString();
+    const create = jest.fn().mockImplementation(({ data }) => ({
+      ...data,
+      id: 'shared-cafe',
+      categoryId: null,
+      merchantNormalized: null,
+      deletedAt: null,
+      account: null,
+      category: null,
+      _count: { items: 0 },
+    }));
+    const prisma: any = {
+      financeAccount: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'card', currency: 'USD' }),
+      },
+      financeTransaction: { create },
+    };
+    prisma.$transaction = jest.fn((callback) => callback(prisma));
+
+    await new FinanceLedgerService(prisma).createTransaction(
+      { id: 'profile-a', defaultCurrency: 'USD', workspaceId: 'workspace-a' },
+      {
+        accountId: 'card',
+        type: 'EXPENSE',
+        amount: '100',
+        economicAmount: '25',
+        necessity: 'DISCRETIONARY',
+        occurredAt,
+      },
+    );
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          amount: new Prisma.Decimal(100),
+          economicAmount: new Prisma.Decimal(25),
+          economicAmountInValuationCurrency: new Prisma.Decimal(25),
+          necessity: 'DISCRETIONARY',
+        }),
+      }),
+    );
+  });
+
+  it('records pass-through cash with zero economic income', async () => {
+    const create = jest.fn().mockImplementation(({ data }) => ({
+      ...data,
+      id: 'family-money',
+      categoryId: null,
+      merchantNormalized: null,
+      deletedAt: null,
+      account: null,
+      category: null,
+      _count: { items: 0 },
+    }));
+    const prisma: any = {
+      financeAccount: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'card', currency: 'USD' }),
+      },
+      financeTransaction: { create },
+    };
+    prisma.$transaction = jest.fn((callback) => callback(prisma));
+
+    await new FinanceLedgerService(prisma).createTransaction(
+      { id: 'profile-a', defaultCurrency: 'USD', workspaceId: 'workspace-a' },
+      {
+        accountId: 'card',
+        type: 'INCOME',
+        purpose: 'PASS_THROUGH',
+        amount: '300',
+        occurredAt: new Date().toISOString(),
+      },
+    );
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          amount: new Prisma.Decimal(300),
+          economicAmount: new Prisma.Decimal(0),
+          purpose: 'PASS_THROUGH',
+        }),
+      }),
+    );
+  });
+
   it('rejects a stale rate for a current write even when occurredAt is provided', async () => {
     const old = new Date(Date.now() - 72 * 60 * 60 * 1000);
     const prisma: any = {
@@ -385,8 +470,7 @@ describe('FinanceLedgerService tenant and money rules', () => {
           statement.values.includes('workspace-a') &&
           statement.values.some(
             (value) =>
-              value instanceof Date &&
-              value.getTime() === occurredAt.getTime(),
+              value instanceof Date && value.getTime() === occurredAt.getTime(),
           ),
       ),
     ).toBe(true);

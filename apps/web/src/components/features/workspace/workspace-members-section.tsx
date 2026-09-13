@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import {
   telegramUserAccountsApi,
+  memberFinanceApi,
   workspaceMembersApi,
   type WorkspaceMember,
   type WorkspaceRole,
@@ -22,12 +23,14 @@ import {
   PageHeader,
 } from "@/components/ui/primitives";
 import { workspaceRolesApi } from "@/lib/features/workspace/workspace-roles-api";
-import { workspaceKeys } from "@/lib/query-keys";
+import { memberFinanceKeys, workspaceKeys } from "@/lib/query-keys";
 
 import {
   WorkspaceMemberModal,
   type MemberFormValues,
 } from "./workspace-member-modal";
+import { WorkspaceMemberFinance } from "./workspace-member-finance";
+import { WorkspaceReinvestmentAction } from "./workspace-reinvestment-action";
 
 const ROLE_LABELS: Record<WorkspaceRole, string> = {
   owner: "Owner",
@@ -94,7 +97,7 @@ export function WorkspaceMembersSection({
     isLoading,
     error: membersError,
   } = useQuery({
-    queryKey: ["workspace-members"],
+    queryKey: workspaceKeys.members(),
     queryFn: workspaceMembersApi.list,
   });
   const { data: telegramAccounts } = useQuery({
@@ -106,6 +109,15 @@ export function WorkspaceMembersSection({
     queryFn: workspaceRolesApi.list,
     enabled: canAdd,
   });
+  const memberFinance = useQuery({
+    queryKey: memberFinanceKeys.summaries(),
+    queryFn: memberFinanceApi.summaries,
+  });
+  const financeByMember = useMemo(
+    () =>
+      new Map((memberFinance.data ?? []).map((item) => [item.memberId, item])),
+    [memberFinance.data],
+  );
 
   const ownersCount = useMemo(
     () => (data || []).filter((member) => member.role === "owner").length,
@@ -127,7 +139,7 @@ export function WorkspaceMembersSection({
       workspaceMembersApi.create(payload),
     onSuccess: (res: WorkspaceMember & { temporaryPassword?: string }) => {
       setError("");
-      qc.invalidateQueries({ queryKey: ["workspace-members"] });
+      qc.invalidateQueries({ queryKey: workspaceKeys.members() });
       qc.invalidateQueries({ queryKey: workspaceKeys.roles() });
       setOpen(false);
       setTempPassword(res?.temporaryPassword || "");
@@ -149,11 +161,12 @@ export function WorkspaceMembersSection({
         avatarIconId?: string | null;
         telegramUsername?: string | null;
         telegramUserAccountIds?: string[];
+        salesCommissionRate?: number | null;
       };
     }) => workspaceMembersApi.update(id, payload),
     onSuccess: () => {
       setError("");
-      qc.invalidateQueries({ queryKey: ["workspace-members"] });
+      qc.invalidateQueries({ queryKey: workspaceKeys.members() });
       qc.invalidateQueries({ queryKey: ["telegram-user-accounts"] });
       qc.invalidateQueries({ queryKey: workspaceKeys.roles() });
       setEditingMember(null);
@@ -166,7 +179,7 @@ export function WorkspaceMembersSection({
     mutationFn: (id: string) => workspaceMembersApi.remove(id),
     onSuccess: () => {
       setError("");
-      qc.invalidateQueries({ queryKey: ["workspace-members"] });
+      qc.invalidateQueries({ queryKey: workspaceKeys.members() });
       qc.invalidateQueries({ queryKey: workspaceKeys.roles() });
     },
     onError: (error: unknown) =>
@@ -197,7 +210,10 @@ export function WorkspaceMembersSection({
             </p>
           </div>
           {canAdd ? (
-            <Button onClick={() => setOpen(true)}>Add Member</Button>
+            <div className="flex flex-wrap gap-2">
+              {currentRole === "owner" ? <WorkspaceReinvestmentAction /> : null}
+              <Button onClick={() => setOpen(true)}>Add Member</Button>
+            </div>
           ) : null}
         </div>
       ) : (
@@ -220,6 +236,14 @@ export function WorkspaceMembersSection({
       ) : null}
       <FormError message={error} />
       {isLoading ? <LoadingState /> : null}
+      {memberFinance.isError ? (
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-rose-900/60 bg-rose-950/20 px-3 py-2 text-sm text-rose-200">
+          <span>Could not load salary and investment balances.</span>
+          <Button variant="secondary" onClick={() => memberFinance.refetch()}>
+            Retry
+          </Button>
+        </div>
+      ) : null}
 
       <div className="columns-1 gap-4 md:columns-2 xl:columns-3">
         {data?.map((member: WorkspaceMember) => {
@@ -350,6 +374,11 @@ export function WorkspaceMembersSection({
                     </span>
                   </div>
                 ) : null}
+                <WorkspaceMemberFinance
+                  member={member}
+                  summary={financeByMember.get(member.id)}
+                  canManage={currentRole === "owner"}
+                />
               </div>
             </Card>
           );
@@ -396,6 +425,7 @@ export function WorkspaceMembersSection({
               avatarIconId: values.avatarIconId,
               telegramUsername: values.telegramUsername?.trim() || null,
               telegramUserAccountIds: values.telegramUserAccountIds,
+              salesCommissionRate: values.salesCommissionRate,
             },
           });
         }}

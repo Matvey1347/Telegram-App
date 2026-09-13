@@ -26,6 +26,15 @@ export const accountKeys = {
   transactions: () => ["transactions"] as const,
 };
 
+export const memberFinanceKeys = {
+  summaries: () => ["member-finance", "summaries"] as const,
+  detail: (memberId: string) => ["member-finance", "detail", memberId] as const,
+};
+
+export const telegramAdSalesKeys = {
+  workspaceSettings: () => ["telegram-ad-sales", "workspace-settings"] as const,
+};
+
 export const dashboardKeys = {
   summary: (
     rangeMode?: string,

@@ -159,7 +159,7 @@ describe('MutualPromotionCommandService', () => {
           },
         ],
       }),
-    ).rejects.toThrow('has no publishable text or images');
+    ).rejects.toThrow('has no publishable text or media');
     expect(
       tx.mutualPromotionFolderPost.createManyAndReturn,
     ).not.toHaveBeenCalled();
@@ -229,6 +229,7 @@ describe('MutualPromotionCommandService', () => {
         title: 'Updated title',
         text: '**Updated** body',
         imageUrls: ['https://cdn.test/updated.jpg'],
+        mediaItems: [{ kind: 'PHOTO', url: 'https://cdn.test/updated.jpg' }],
         buttonRows: [
           [{ text: 'Open', url: 'https://example.test', style: 'primary' }],
         ],

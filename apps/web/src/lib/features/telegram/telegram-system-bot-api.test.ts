@@ -63,6 +63,8 @@ describe("telegramSystemBotApi subscriptions", () => {
     const draft = {
       title: "Post",
       text: "**Preview**",
+      plainText: "Preview",
+      formattedHtml: "<b>Preview</b>",
       imageUrls: ["https://cdn.test/post.jpg"],
       buttonRows: [],
     };
@@ -76,7 +78,12 @@ describe("telegramSystemBotApi subscriptions", () => {
     );
     expect(post).toHaveBeenCalledWith(
       "/telegram/system-bot/mutual-promotion-post-preview",
-      draft,
+      {
+        title: "Post",
+        text: "**Preview**",
+        imageUrls: ["https://cdn.test/post.jpg"],
+        buttonRows: [],
+      },
       { feedback: { mode: "silent" } },
     );
   });

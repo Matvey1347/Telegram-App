@@ -23,13 +23,19 @@ export function FinanceMobileTransactionRow({
 }) {
   const t = financeTransactionsCopy(locale);
   const income = item.type === "INCOME" || item.purpose === "INVESTMENT_RETURN";
-  const generated = item.purpose !== "ORDINARY";
+  const generated = item.purpose.startsWith("INVESTMENT_");
   const purposeTitle =
     item.purpose === "INVESTMENT_CONTRIBUTION"
       ? t.investmentContribution
       : item.purpose === "INVESTMENT_RETURN"
         ? t.investmentReturn
-        : undefined;
+        : item.purpose === "REIMBURSEMENT"
+          ? t.reimbursement
+          : item.purpose === "PASS_THROUGH"
+            ? t.passThrough
+            : item.purpose === "DEBT_REPAYMENT"
+              ? t.debtRepayment
+              : undefined;
   const title =
     purposeTitle ||
     item.merchantDisplay ||

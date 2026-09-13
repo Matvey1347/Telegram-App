@@ -202,6 +202,7 @@ function makePayment(overrides: Record<string, unknown> = {}) {
 function createService() {
   const prisma: any = {
     workspace: { findUnique: jest.fn(), findUniqueOrThrow: jest.fn() },
+    workspaceMember: { findFirst: jest.fn() },
     account: { findFirst: jest.fn() },
     transactionCategory: { findFirst: jest.fn() },
     transaction: { create: jest.fn(), deleteMany: jest.fn() },
@@ -330,6 +331,10 @@ function createService() {
       assignedMemberId: 'member-1',
     }),
   };
+  prisma.workspaceMember.findFirst.mockResolvedValue({
+    id: 'member-1',
+    salesCommissionRate: null,
+  });
   prisma.workspace.findUniqueOrThrow.mockResolvedValue({ timezone: 'UTC' });
   prisma.telegramAdSalesWorkspaceSettings.upsert.mockResolvedValue({
     workspaceId: 'ws-1',

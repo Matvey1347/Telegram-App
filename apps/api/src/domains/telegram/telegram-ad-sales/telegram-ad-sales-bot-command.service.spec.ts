@@ -383,6 +383,9 @@ describe('TelegramAdSalesBotCommandService', () => {
         title: 'Campaign post',
         text: 'Buy now',
         imageUrls: ['https://cdn.example/post.jpg'],
+        mediaItems: [
+          { kind: 'VIDEO', url: 'https://cdn.example/post.mp4' },
+        ],
         buttonRows: [
           [{ text: 'Open', url: 'https://example.com', style: 'default' }],
         ],
@@ -395,6 +398,9 @@ describe('TelegramAdSalesBotCommandService', () => {
       'placement-1',
       expect.objectContaining({
         assignedMemberId: 'member-2',
+        mediaItems: [
+          { kind: 'VIDEO', url: 'https://cdn.example/post.mp4' },
+        ],
         buttonRows: [
           [
             {

@@ -14,6 +14,7 @@ describe('TelegramSystemBotMutualPromotionPostFlowService', () => {
   const api = {
     sendMessage: jest.fn(),
     editMessageText: jest.fn(),
+    deleteMessage: jest.fn(),
   };
   const workflows = {
     active: jest.fn(),
@@ -25,12 +26,18 @@ describe('TelegramSystemBotMutualPromotionPostFlowService', () => {
     complete: jest.fn(),
   };
   const content = { capture: jest.fn(), removeInput: jest.fn() };
+  const postFlow = {
+    sendPostPreview: jest
+      .fn()
+      .mockResolvedValue({ status: 'SENT', messageIds: [200] }),
+  };
   const service = new TelegramSystemBotMutualPromotionPostFlowService(
     prisma as never,
     { token: 'token' } as never,
     api as never,
     workflows as never,
     content as never,
+    postFlow as never,
   );
   const scope = {
     connectionId: 'connection-1',
@@ -49,6 +56,7 @@ describe('TelegramSystemBotMutualPromotionPostFlowService', () => {
     workflows.active.mockResolvedValue(null);
     api.sendMessage.mockResolvedValue({ message_id: 10 });
     api.editMessageText.mockResolvedValue({ message_id: 10 });
+    api.deleteMessage.mockResolvedValue(true);
     workflows.transition.mockImplementation(
       (input: {
         id: string;
@@ -169,6 +177,8 @@ describe('TelegramSystemBotMutualPromotionPostFlowService', () => {
           {
             text: '**[Mutual promotion copy](https://example.test/post)**',
             plainText: 'Mutual promotion copy',
+            formattedHtml:
+              '<b><a href="https://example.test/post">Mutual promotion copy</a></b>',
             imageUrls: ['https://example.test/image.jpg'],
             buttonRows: [],
             mediaGroupId: null,
@@ -194,13 +204,21 @@ describe('TelegramSystemBotMutualPromotionPostFlowService', () => {
         {
           title: 'Mutual promotion copy',
           text: '**[Mutual promotion copy](https://example.test/post)**',
+          plainText: 'Mutual promotion copy',
+          formattedHtml:
+            '<b><a href="https://example.test/post">Mutual promotion copy</a></b>',
           imageUrls: ['https://example.test/image.jpg'],
+          mediaItems: [
+            { kind: 'PHOTO', url: 'https://example.test/image.jpg' },
+          ],
           buttonRows: [],
         },
         {
           title: 'Second post',
           text: 'Second post',
+          plainText: 'Second post',
           imageUrls: [],
+          mediaItems: [],
           buttonRows: [],
         },
       ],
@@ -274,6 +292,7 @@ describe('TelegramSystemBotMutualPromotionPostFlowService', () => {
                 style: 'primary',
               },
             ],
+            [expect.objectContaining({ text: '➕ Add another post' })],
             [
               expect.objectContaining({ text: '✅ Finish import (1)' }),
               expect.objectContaining({ text: '❌ Cancel' }),
@@ -282,6 +301,297 @@ describe('TelegramSystemBotMutualPromotionPostFlowService', () => {
         },
       }),
     );
+    expect(api.editMessageText).toHaveBeenCalledWith(
+      'token',
+      expect.objectContaining({
+        text: expect.not.stringContaining('Captured posts:'),
+      }),
+    );
+    expect(api.editMessageText).toHaveBeenCalledWith(
+      'token',
+      expect.objectContaining({
+        text: '<b>Forwarded</b> <a href="https://example.test/post">copy</a>',
+      }),
+    );
+  });
+
+  it('sends a native video preview after a forwarded video is stored', async () => {
+    workflows.active.mockResolvedValue({
+      id: 'workflow-video',
+      kind: TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
+      status: TelegramSystemBotWorkflowStatus.ACTIVE,
+      version: 1,
+      step: 'AWAIT_CONTENT',
+      payload: { folderId: 'folder-1' },
+      controlMessageId: 10,
+    });
+    content.capture.mockResolvedValue({
+      ok: true,
+      content: {
+        text: 'Video caption',
+        plainText: 'Video caption',
+        imageUrls: [],
+        mediaItems: [
+          {
+            kind: 'VIDEO',
+            url: 'https://cdn.test/forwarded.mp4',
+            mimeType: 'video/mp4',
+          },
+        ],
+        buttonRows: [],
+        mediaGroupId: null,
+        sourceTitle: 'Source',
+        warnings: [],
+      },
+    });
+
+    await service.input(scope, { message_id: 92, video: { file_id: 'video' } });
+
+    expect(postFlow.sendPostPreview).toHaveBeenCalledWith(
+      scope,
+      expect.objectContaining({
+        text: 'Video caption',
+        mediaItems: [
+          expect.objectContaining({
+            kind: 'VIDEO',
+            url: 'https://cdn.test/forwarded.mp4',
+          }),
+        ],
+      }),
+    );
+    expect(api.deleteMessage).toHaveBeenCalledWith('token', {
+      chat_id: '42',
+      message_id: 10,
+    });
+    expect(api.sendMessage).toHaveBeenCalledWith(
+      'token',
+      expect.objectContaining({
+        chat_id: '42',
+        text: expect.stringContaining('Post 1 captured with video.'),
+      }),
+    );
+    expect(api.editMessageText).toHaveBeenLastCalledWith(
+      'token',
+      expect.objectContaining({
+        message_id: 10,
+        text: expect.stringContaining('Post 1 captured with video.'),
+        link_preview_options: { is_disabled: true },
+      }),
+    );
+    expect(workflows.transition).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ previewMessageIds: [200] }),
+        controlMessageId: 10,
+      }),
+    );
+  });
+
+  it('keeps every item in a mixed photo and video album preview', async () => {
+    workflows.active.mockResolvedValue({
+      id: 'workflow-album',
+      kind: TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
+      status: TelegramSystemBotWorkflowStatus.ACTIVE,
+      version: 1,
+      step: 'AWAIT_CONTENT',
+      payload: { folderId: 'folder-1' },
+      controlMessageId: 10,
+    });
+    content.capture.mockResolvedValue({
+      ok: true,
+      content: {
+        text: 'Album caption',
+        plainText: 'Album caption',
+        imageUrls: ['https://cdn.test/first.jpg'],
+        mediaItems: [
+          { kind: 'PHOTO', url: 'https://cdn.test/first.jpg' },
+          {
+            kind: 'VIDEO',
+            url: 'https://cdn.test/second.mp4',
+            mimeType: 'video/mp4',
+          },
+        ],
+        buttonRows: [],
+        mediaGroupId: 'album-1',
+        sourceTitle: 'Source',
+        warnings: [],
+      },
+    });
+
+    await service.input(scope, { message_id: 93, video: { file_id: 'video' } });
+
+    expect(postFlow.sendPostPreview).toHaveBeenCalledWith(
+      scope,
+      expect.objectContaining({
+        imageUrls: [],
+        mediaItems: [
+          { kind: 'PHOTO', url: 'https://cdn.test/first.jpg' },
+          expect.objectContaining({
+            kind: 'VIDEO',
+            url: 'https://cdn.test/second.mp4',
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('removes the previous video preview when a newer text post is captured', async () => {
+    workflows.active.mockResolvedValue({
+      id: 'workflow-latest',
+      kind: TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
+      status: TelegramSystemBotWorkflowStatus.ACTIVE,
+      version: 3,
+      step: 'COLLECT_CONTENT',
+      payload: {
+        folderId: 'folder-1',
+        contents: [
+          {
+            text: 'Old video',
+            plainText: 'Old video',
+            imageUrls: [],
+            mediaItems: [{ kind: 'VIDEO', url: 'https://cdn.test/old.mp4' }],
+            buttonRows: [],
+            mediaGroupId: null,
+            sourceTitle: 'Source',
+            warnings: [],
+          },
+        ],
+        previewMessageIds: [70],
+      },
+      controlMessageId: 10,
+    });
+    content.capture.mockResolvedValue({
+      ok: true,
+      content: {
+        text: 'Newest text post',
+        plainText: 'Newest text post',
+        imageUrls: [],
+        mediaItems: [],
+        buttonRows: [],
+        mediaGroupId: null,
+        sourceTitle: 'Source',
+        warnings: [],
+      },
+    });
+
+    await service.input(scope, { message_id: 94, text: 'Newest text post' });
+
+    expect(api.deleteMessage).toHaveBeenCalledWith('token', {
+      chat_id: '42',
+      message_id: 70,
+    });
+    expect(postFlow.sendPostPreview).not.toHaveBeenCalled();
+    expect(api.editMessageText).toHaveBeenLastCalledWith(
+      'token',
+      expect.objectContaining({
+        message_id: 10,
+        text: 'Newest text post',
+      }),
+    );
+    expect(workflows.transition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.not.objectContaining({ previewMessageIds: [70] }),
+      }),
+    );
+  });
+
+  it('removes the visible video preview when Add another post is pressed', async () => {
+    const payload = {
+      folderId: 'folder-1',
+      contents: [
+        {
+          text: 'Video post',
+          plainText: 'Video post',
+          imageUrls: [],
+          mediaItems: [{ kind: 'VIDEO', url: 'https://cdn.test/post.mp4' }],
+          buttonRows: [],
+          mediaGroupId: null,
+          sourceTitle: null,
+          warnings: [],
+        },
+      ],
+      previewMessageIds: [71],
+    };
+    workflows.get.mockResolvedValue({
+      id: 'workflow-1',
+      kind: TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
+      status: TelegramSystemBotWorkflowStatus.ACTIVE,
+      version: 4,
+      step: 'COLLECT_CONTENT',
+      payload,
+      controlMessageId: 10,
+    });
+
+    await service.callback(scope, 'sbm:workflow-1:4:add');
+
+    expect(api.deleteMessage).toHaveBeenCalledWith('token', {
+      chat_id: '42',
+      message_id: 71,
+    });
+    expect(workflows.transition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedVersion: 4,
+        step: 'AWAIT_CONTENT',
+        payload: {
+          folderId: 'folder-1',
+          contents: payload.contents,
+        },
+      }),
+    );
+  });
+
+  it('moves to a visible wait-for-next-post state when Add another post is pressed', async () => {
+    const payload = {
+      folderId: 'folder-1',
+      contents: [
+        {
+          text: '**First post**',
+          plainText: 'First post',
+          imageUrls: [],
+          buttonRows: [],
+          mediaGroupId: null,
+          sourceTitle: null,
+          warnings: [],
+        },
+      ],
+    };
+    workflows.get.mockResolvedValue({
+      id: 'workflow-1',
+      kind: TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
+      status: TelegramSystemBotWorkflowStatus.ACTIVE,
+      version: 2,
+      step: 'COLLECT_CONTENT',
+      payload,
+      controlMessageId: 10,
+    });
+
+    await service.callback(scope, 'sbm:workflow-1:2:add');
+
+    expect(workflows.transition).toHaveBeenCalledWith({
+      ...scope,
+      id: 'workflow-1',
+      expectedVersion: 2,
+      step: 'AWAIT_CONTENT',
+      payload,
+    });
+    expect(api.editMessageText).toHaveBeenLastCalledWith('token', {
+      chat_id: '42',
+      message_id: 10,
+      text: '🤝 Forward the next post (text, photo, video, or GIF). It will be added to this import.',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: '✅ Finish import (1)',
+              callback_data: 'sbm:workflow-1:3:finish',
+            },
+            {
+              text: '❌ Cancel',
+              callback_data: 'sbm:workflow-1:3:cancel',
+            },
+          ],
+        ],
+      },
+    });
   });
 
   it('appends independently forwarded messages to one import batch', async () => {
@@ -333,6 +643,12 @@ describe('TelegramSystemBotMutualPromotionPostFlowService', () => {
           folderId: 'folder-1',
           contents: [firstContent, secondContent],
         },
+      }),
+    );
+    expect(api.editMessageText).toHaveBeenLastCalledWith(
+      'token',
+      expect.objectContaining({
+        link_preview_options: { is_disabled: true },
       }),
     );
   });
@@ -399,6 +715,92 @@ describe('TelegramSystemBotMutualPromotionPostFlowService', () => {
     );
   });
 
+  it('keeps a fifth rapidly forwarded post after more than three write conflicts', async () => {
+    const existing = [1, 2, 3, 4].map((number) => ({
+      text: `Post ${number}`,
+      plainText: `Post ${number}`,
+      imageUrls: [],
+      buttonRows: [],
+      mediaGroupId: null,
+      sourceTitle: null,
+      warnings: [],
+    }));
+    const fifth = { ...existing[0], text: 'Post 5', plainText: 'Post 5' };
+    workflows.active.mockResolvedValue({
+      id: 'workflow-1',
+      kind: TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
+      status: TelegramSystemBotWorkflowStatus.ACTIVE,
+      version: 1,
+      step: 'COLLECT_CONTENT',
+      payload: { folderId: 'folder-1', contents: [] },
+      controlMessageId: 10,
+    });
+    workflows.get
+      .mockResolvedValueOnce({
+        id: 'workflow-1',
+        kind: TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
+        status: TelegramSystemBotWorkflowStatus.ACTIVE,
+        version: 2,
+        step: 'COLLECT_CONTENT',
+        payload: { folderId: 'folder-1', contents: existing.slice(0, 1) },
+        controlMessageId: 10,
+      })
+      .mockResolvedValueOnce({
+        id: 'workflow-1',
+        kind: TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
+        status: TelegramSystemBotWorkflowStatus.ACTIVE,
+        version: 3,
+        step: 'COLLECT_CONTENT',
+        payload: { folderId: 'folder-1', contents: existing.slice(0, 2) },
+        controlMessageId: 10,
+      })
+      .mockResolvedValueOnce({
+        id: 'workflow-1',
+        kind: TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
+        status: TelegramSystemBotWorkflowStatus.ACTIVE,
+        version: 4,
+        step: 'COLLECT_CONTENT',
+        payload: { folderId: 'folder-1', contents: existing.slice(0, 3) },
+        controlMessageId: 10,
+      })
+      .mockResolvedValueOnce({
+        id: 'workflow-1',
+        kind: TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
+        status: TelegramSystemBotWorkflowStatus.ACTIVE,
+        version: 5,
+        step: 'COLLECT_CONTENT',
+        payload: { folderId: 'folder-1', contents: existing },
+        controlMessageId: 10,
+      });
+    content.capture.mockResolvedValue({ ok: true, content: fifth });
+    workflows.transition
+      .mockRejectedValueOnce(new ConflictException('stale workflow'))
+      .mockRejectedValueOnce(new ConflictException('stale workflow'))
+      .mockRejectedValueOnce(new ConflictException('stale workflow'))
+      .mockRejectedValueOnce(new ConflictException('stale workflow'))
+      .mockImplementationOnce(
+        (input: { id: string; step: string; payload: unknown }) =>
+          Promise.resolve({
+            id: input.id,
+            kind: TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
+            status: TelegramSystemBotWorkflowStatus.ACTIVE,
+            version: 6,
+            step: input.step,
+            payload: input.payload,
+            controlMessageId: 10,
+          }),
+      );
+
+    await service.input(scope, { message_id: 5, text: 'Post 5' });
+
+    expect(workflows.transition).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        expectedVersion: 5,
+        payload: { folderId: 'folder-1', contents: [...existing, fifth] },
+      }),
+    );
+  });
+
   it('finishes the latest batch when Telegram sends a callback from a stale button', async () => {
     const active = {
       id: 'workflow-1',
@@ -455,7 +857,7 @@ describe('TelegramSystemBotMutualPromotionPostFlowService', () => {
     );
   });
 
-  it('reuses an active next-post import for the same folder', async () => {
+  it('returns a structured conflict while another bot post import is active', async () => {
     workflows.active.mockResolvedValue({
       id: 'workflow-next',
       kind: TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
@@ -466,21 +868,21 @@ describe('TelegramSystemBotMutualPromotionPostFlowService', () => {
       controlMessageId: 10,
     });
 
-    await expect(service.prepare(scope, 'folder-1')).resolves.toEqual({
-      workflowId: 'workflow-next',
+    await expect(service.prepare(scope, 'folder-1')).rejects.toMatchObject({
+      status: 409,
+      response: {
+        code: 'TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE',
+        message:
+          'Finish the current post import in the bot before starting a new one.',
+      },
     });
 
     expect(workflows.cancel).not.toHaveBeenCalled();
     expect(workflows.create).not.toHaveBeenCalled();
-    expect(api.editMessageText).toHaveBeenCalledWith(
-      'token',
-      expect.objectContaining({
-        text: '🤝 Forward a text or photo post for this folder.',
-      }),
-    );
+    expect(api.editMessageText).not.toHaveBeenCalled();
   });
 
-  it('offers and starts the next post from a completed bot workflow', async () => {
+  it('renders a completed import without another-post controls', async () => {
     const completed = {
       id: 'workflow-1',
       kind: TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
@@ -508,45 +910,20 @@ describe('TelegramSystemBotMutualPromotionPostFlowService', () => {
       'token',
       expect.objectContaining({
         reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: '➕ Forward next post',
-                callback_data: 'sbm:workflow-1:4:next',
-              },
-            ],
-          ],
+          inline_keyboard: [],
         },
       }),
     );
+    expect(workflows.create).not.toHaveBeenCalled();
 
-    const next = {
-      ...completed,
-      id: 'workflow-2',
-      status: TelegramSystemBotWorkflowStatus.ACTIVE,
-      version: 1,
-      step: 'AWAIT_CONTENT',
-      payload: { folderId: 'folder-1' },
-    };
-    workflows.active.mockResolvedValue(null);
-    workflows.create.mockResolvedValue(next);
     api.editMessageText.mockClear();
-
     await service.callback(scope, 'sbm:workflow-1:4:next');
-
-    expect(workflows.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        kind: TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
-        payload: { folderId: 'folder-1' },
-        controlMessageId: 10,
-        mutualPromotionFolderId: 'folder-1',
-      }),
-    );
     expect(api.editMessageText).toHaveBeenCalledWith(
       'token',
       expect.objectContaining({
-        text: '🤝 Forward a text or photo post for this folder.',
+        reply_markup: { inline_keyboard: [] },
       }),
     );
+    expect(workflows.create).not.toHaveBeenCalled();
   });
 });

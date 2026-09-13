@@ -1,5 +1,7 @@
 import type {
+  ConsumerFinanceExpenseNecessity,
   ConsumerFinanceAccountType,
+  ConsumerFinanceTransactionPurpose,
   ConsumerFinanceTransactionType,
 } from "./ledger";
 import type {
@@ -83,6 +85,12 @@ export type ConsumerFinanceImportTransaction = RefRow & {
   categoryRef?: string | null;
   type: ConsumerFinanceTransactionType;
   amount: string;
+  economicAmount?: string;
+  purpose?: Exclude<
+    ConsumerFinanceTransactionPurpose,
+    "INVESTMENT_CONTRIBUTION" | "INVESTMENT_RETURN"
+  >;
+  necessity?: ConsumerFinanceExpenseNecessity;
   occurredAt: string;
   description?: string | null;
   merchantDisplay?: string | null;
@@ -144,6 +152,7 @@ export type ConsumerFinanceImportRegularPayment = RefRow & {
   scheduleTimezone: string;
   note?: string | null;
   status?: ConsumerFinanceRegularPaymentStatus;
+  necessity?: ConsumerFinanceExpenseNecessity;
 };
 
 export type ConsumerFinanceImportSavingsGoal = RefRow & {
@@ -198,7 +207,7 @@ export type ConsumerFinanceImportInvestmentValuation = RefRow & {
 export type ConsumerFinanceImportDocumentV1 = {
   format: "telegram-system.consumer-finance";
   version: 1;
-  mode: "ADD";
+  mode: "ADD" | "REPLACE";
   settings?: {
     defaultCurrency?: string;
     timezone?: string;

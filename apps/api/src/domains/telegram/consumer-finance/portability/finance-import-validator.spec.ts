@@ -163,6 +163,13 @@ describe('validateFinanceImportDocument', () => {
     expect(validateFinanceImportDocument(document)).toBe(document);
   });
 
+  it('accepts REPLACE as an explicit destructive import mode', () => {
+    const document = completeDocument();
+    document.mode = 'REPLACE';
+
+    expect(validateFinanceImportDocument(document)).toBe(document);
+  });
+
   it('rejects unknown fields instead of silently losing imported data', () => {
     const document = completeDocument() as ConsumerFinanceImportDocumentV1 & {
       surprise?: boolean;

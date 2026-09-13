@@ -4,6 +4,7 @@ import {
   TelegramManagedPostStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 
 export type TelegramChannelBookingSummary = {
   futureScheduledTotal: number;
@@ -57,12 +58,13 @@ function isStandaloneSubscriptionEnding(post: {
   title: string;
   text: string | null;
   imageUrls: string[];
+  mediaItems?: unknown;
   buttonRows: unknown;
 }) {
   if (
     post.origin !== TelegramManagedPostOrigin.TELEGRAM ||
     !post.remoteImportKey ||
-    post.imageUrls.length > 0 ||
+    normalizeTelegramPostMediaItems(post.mediaItems, post.imageUrls).length > 0 ||
     (Array.isArray(post.buttonRows)
       ? post.buttonRows.length > 0
       : post.buttonRows != null)
@@ -112,6 +114,7 @@ export class TelegramChannelBookingReadService {
           title: true,
           text: true,
           imageUrls: true,
+          mediaItems: true,
           buttonRows: true,
         },
         orderBy: { scheduledAt: 'asc' },

@@ -4,10 +4,10 @@ import {
   request as httpRequest,
 } from "node:http";
 import { connect as connectToUpstream, createServer } from "node:net";
-import { setTimeout as delay } from "node:timers/promises";
 import { randomBytes } from "node:crypto";
 import { assertPortAvailable } from "./dev-port-availability.mjs";
 import { terminateDevChildren } from "./dev-process-termination.mjs";
+import { waitForHttpReady } from "./dev-service-readiness.mjs";
 import { localBotPublicEnvironment } from "./public-origin-environment.mjs";
 
 const withCloudflare = process.argv.includes("--cloudflare");
@@ -17,6 +17,7 @@ const withSystemBot =
 const withBotRuntime = withWorkspaceBots || withSystemBot;
 const tunnelTargetPort = Number(process.env.TUNNEL_TARGET_PORT || 3000);
 const botGatewayPort = 4100;
+const localBotActivationTimeoutMs = 5 * 60_000;
 const children = new Set();
 let stopping = false;
 let backendReady = false;
@@ -144,26 +145,13 @@ function runOnce(name, command, args, env = {}) {
   });
 }
 
-async function waitFor(name, url) {
-  for (let attempt = 0; attempt < 240; attempt += 1) {
-    try {
-      const response = await fetch(url);
-      if (response.ok || response.status < 500) return;
-    } catch {
-      // The process is still compiling or connecting to its dependencies.
-    }
-    await delay(250);
-  }
-  throw new Error(`did not become ready at ${url}`);
-}
-
 async function activateLocalBots() {
   const response = await fetch(
     "http://127.0.0.1:4000/api/telegram/bots/runtime/local-development/start",
     {
       method: "POST",
       headers: { "x-local-dev-control-secret": localDevControlSecret },
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(localBotActivationTimeoutMs),
     },
   );
   if (!response.ok) {
@@ -392,8 +380,7 @@ start(
 );
 
 try {
-  const backendStartup = waitFor(
-    "Backend",
+  const backendStartup = waitForHttpReady(
     "http://127.0.0.1:4000/api/health",
   ).then(() => {
     backendReady = true;
@@ -401,7 +388,7 @@ try {
   });
   await Promise.all([
     backendStartup,
-    waitFor("Frontend", "http://127.0.0.1:3000"),
+    waitForHttpReady("http://127.0.0.1:3000"),
   ]);
   status("Backend", "http://localhost:4000/api");
   status("Frontend", "http://localhost:3000");

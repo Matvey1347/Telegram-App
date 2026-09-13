@@ -34,6 +34,7 @@ import { TelegramSystemBotConfigService } from './telegram-system-bot-config.ser
 import type { TelegramSystemBotIncomingMessage } from './telegram-system-bot-forwarded-content.parser';
 import { parseTelegramSystemBotPostButtonsInput } from './telegram-system-bot-post-edit-input';
 import { TelegramSystemBotPostContentService } from './telegram-system-bot-post-content.service';
+import { mergeTelegramSystemBotAlbumContent } from './telegram-system-bot-post-flow.helpers';
 import { TelegramSystemBotWorkflowStore } from './telegram-system-bot-workflow.store';
 
 const WORKFLOW_TTL_MS = 30 * 60_000;
@@ -414,30 +415,15 @@ export class TelegramSystemBotAdSaleFlowService {
     const captured = await this.postContent.capture(message);
     await this.postContent.removeInput(scope.chatId, message.message_id);
     if (!captured.ok)
-      return this.render(workflow, scope, 'Send or forward a text/photo post.');
+      return this.render(workflow, scope, 'Send or forward a text, photo, video or GIF post.');
     const sameAlbum =
       captured.content.mediaGroupId &&
       payload.content?.mediaGroupId === captured.content.mediaGroupId;
     const content = sameAlbum
-      ? {
-          ...payload.content!,
-          text: payload.content?.text || captured.content.text,
-          imageUrls: [
-            ...new Set([
-              ...(payload.content?.imageUrls ?? []),
-              ...captured.content.imageUrls,
-            ]),
-          ],
-          buttonRows: payload.content?.buttonRows.length
-            ? payload.content.buttonRows
-            : captured.content.buttonRows,
-          warnings: [
-            ...new Set([
-              ...(payload.content?.warnings ?? []),
-              ...captured.content.warnings,
-            ]),
-          ],
-        }
+      ? mergeTelegramSystemBotAlbumContent(
+          payload.content!,
+          captured.content,
+        )
       : captured.content;
     return this.afterContent(scope, workflow, {
       ...this.clearPost(payload),
@@ -562,6 +548,7 @@ export class TelegramSystemBotAdSaleFlowService {
             title: telegramSystemBotAdSaleTitle(payload.content),
             text: payload.content.text || undefined,
             imageUrls: payload.content.imageUrls,
+            mediaItems: payload.content.mediaItems,
             buttonRows: payload.content.buttonRows,
           },
         }

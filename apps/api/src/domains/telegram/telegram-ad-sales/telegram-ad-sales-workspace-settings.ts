@@ -45,6 +45,9 @@ export function mapAdSalesWorkspaceSettings(
 ) {
   return {
     ...settings,
+    defaultSalesCommissionRate: Number(
+      settings.defaultSalesCommissionRate ?? 0,
+    ),
     createdAt: settings.createdAt.toISOString(),
     updatedAt: settings.updatedAt.toISOString(),
   };

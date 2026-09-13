@@ -13,6 +13,7 @@ import {
   type FinanceAnalyticsCategoryRow,
   type FinanceAnalyticsLegacyRow,
   type FinanceAnalyticsMoneyRow,
+  type FinanceAnalyticsNecessityRow,
   type FinanceAnalyticsSummaryRow,
   type FinanceAnalyticsTimelineRow,
   type FinanceSavingsAnalyticsRow,
@@ -35,12 +36,14 @@ export class FinanceAnalyticsService {
       this.prisma.$queryRaw<FinanceAnalyticsCategoryRow[]>(Prisma.sql`
         SELECT t."type", t."purpose", t."categoryId", c."name" AS "categoryName",
           c."key" AS "categoryKey",
-          SUM(t."amount") FILTER (
+          SUM(CASE WHEN t."purpose" IN ('INVESTMENT_CONTRIBUTION', 'INVESTMENT_RETURN')
+            THEN t."amount" ELSE t."economicAmount" END) FILTER (
             WHERE t."currency" = ${profile.defaultCurrency}
               AND t."valuationCurrency" = 'USD'
               AND t."amountInValuationCurrency" IS NOT NULL
           ) AS "nativeAmount",
-          SUM(t."amountInValuationCurrency") FILTER (
+          SUM(CASE WHEN t."purpose" IN ('INVESTMENT_CONTRIBUTION', 'INVESTMENT_RETURN')
+            THEN t."amountInValuationCurrency" ELSE t."economicAmountInValuationCurrency" END) FILTER (
             WHERE t."currency" <> ${profile.defaultCurrency}
               AND t."valuationCurrency" = 'USD'
               AND t."amountInValuationCurrency" IS NOT NULL
@@ -118,21 +121,30 @@ export class FinanceAnalyticsService {
     const { from, to, comparisonFrom, comparisonTo } =
       financeAnalyticsDateRange(input, profile.timezone || 'UTC');
     const amountColumns = Prisma.sql`
-      SUM(t."amount") FILTER (
+      SUM(CASE WHEN t."purpose" IN ('INVESTMENT_CONTRIBUTION', 'INVESTMENT_RETURN')
+        THEN t."amount" ELSE t."economicAmount" END) FILTER (
         WHERE t."currency" = ${profile.defaultCurrency}
           AND t."valuationCurrency" = 'USD'
           AND t."amountInValuationCurrency" IS NOT NULL
       ) AS "nativeAmount",
-      SUM(t."amountInValuationCurrency") FILTER (
+      SUM(CASE WHEN t."purpose" IN ('INVESTMENT_CONTRIBUTION', 'INVESTMENT_RETURN')
+        THEN t."amountInValuationCurrency" ELSE t."economicAmountInValuationCurrency" END) FILTER (
         WHERE t."currency" <> ${profile.defaultCurrency}
           AND t."valuationCurrency" = 'USD'
           AND t."amountInValuationCurrency" IS NOT NULL
       ) AS "valuedAmount"`;
 
     // Separate bounded aggregates avoid a day x account x category result.
-    const [summaries, categories, accounts, timeline, legacy, savingsRows] =
-      await Promise.all([
-        this.prisma.$queryRaw<FinanceAnalyticsSummaryRow[]>(Prisma.sql`
+    const [
+      summaries,
+      categories,
+      accounts,
+      timeline,
+      legacy,
+      savingsRows,
+      necessityRows,
+    ] = await Promise.all([
+      this.prisma.$queryRaw<FinanceAnalyticsSummaryRow[]>(Prisma.sql`
           SELECT CASE WHEN t."occurredAt" >= ${from}
             THEN 'CURRENT' ELSE 'PREVIOUS' END AS "segment",
             t."type", t."purpose", ${amountColumns}
@@ -142,7 +154,7 @@ export class FinanceAnalyticsService {
             AND t."occurredAt" >= ${comparisonFrom}
             AND t."occurredAt" < ${to}
           GROUP BY 1, t."type", t."purpose"`),
-        this.prisma.$queryRaw<FinanceAnalyticsCategoryRow[]>(Prisma.sql`
+      this.prisma.$queryRaw<FinanceAnalyticsCategoryRow[]>(Prisma.sql`
           SELECT t."type", t."purpose", t."categoryId", c."name" AS "categoryName",
             c."key" AS "categoryKey", ${amountColumns}
           FROM "FinanceTransaction" t
@@ -154,7 +166,7 @@ export class FinanceAnalyticsService {
           GROUP BY t."type", t."purpose", t."categoryId", c."name", c."key"
           ORDER BY COALESCE(SUM(t."amountInValuationCurrency"), 0) DESC
           LIMIT ${MAX_BREAKDOWN_ROWS}`),
-        this.prisma.$queryRaw<FinanceAnalyticsAccountRow[]>(Prisma.sql`
+      this.prisma.$queryRaw<FinanceAnalyticsAccountRow[]>(Prisma.sql`
           SELECT t."type", t."purpose", t."accountId", a."name" AS "accountName",
             ${amountColumns}
           FROM "FinanceTransaction" t
@@ -165,7 +177,7 @@ export class FinanceAnalyticsService {
           GROUP BY t."type", t."purpose", t."accountId", a."name"
           ORDER BY COALESCE(SUM(t."amountInValuationCurrency"), 0) DESC
           LIMIT ${MAX_BREAKDOWN_ROWS}`),
-        this.prisma.$queryRaw<FinanceAnalyticsTimelineRow[]>(Prisma.sql`
+      this.prisma.$queryRaw<FinanceAnalyticsTimelineRow[]>(Prisma.sql`
           SELECT t."type", t."purpose",
             to_char(t."occurredAt" AT TIME ZONE ${profile.timezone || 'UTC'}, 'YYYY-MM-DD') AS "day",
             ${amountColumns}
@@ -174,7 +186,7 @@ export class FinanceAnalyticsService {
             AND t."deletedAt" IS NULL
             AND t."occurredAt" >= ${from} AND t."occurredAt" < ${to}
           GROUP BY t."type", t."purpose", 3 ORDER BY 3`),
-        this.prisma.$queryRaw<FinanceAnalyticsLegacyRow[]>(Prisma.sql`
+      this.prisma.$queryRaw<FinanceAnalyticsLegacyRow[]>(Prisma.sql`
           SELECT CASE WHEN t."occurredAt" >= ${from}
               THEN 'CURRENT' ELSE 'PREVIOUS' END AS "segment",
             t."currency", SUM(t."amount") AS "amount",
@@ -188,7 +200,7 @@ export class FinanceAnalyticsService {
               OR t."amountInValuationCurrency" IS NULL)
           GROUP BY 1, t."currency" ORDER BY 1, t."currency"
           LIMIT ${MAX_LEGACY_CURRENCIES}`),
-        this.prisma.$queryRaw<FinanceSavingsAnalyticsRow[]>(Prisma.sql`
+      this.prisma.$queryRaw<FinanceSavingsAnalyticsRow[]>(Prisma.sql`
           SELECT CASE WHEN m."occurredAt" >= ${from}
               THEN 'CURRENT' ELSE 'PREVIOUS' END AS "segment",
             to_char(m."occurredAt" AT TIME ZONE ${profile.timezone || 'UTC'}, 'YYYY-MM-DD') AS "day",
@@ -204,7 +216,28 @@ export class FinanceAnalyticsService {
           WHERE m."profileId" = ${profile.id}
             AND m."occurredAt" >= ${comparisonFrom} AND m."occurredAt" < ${to}
           GROUP BY 1, 2 ORDER BY 2`),
-      ]);
+      this.prisma.$queryRaw<FinanceAnalyticsNecessityRow[]>(Prisma.sql`
+          SELECT CASE WHEN t."occurredAt" >= ${from}
+              THEN 'CURRENT' ELSE 'PREVIOUS' END AS "segment",
+            t."necessity",
+            SUM(t."economicAmount") FILTER (
+              WHERE t."currency" = ${profile.defaultCurrency}
+                AND t."valuationCurrency" = 'USD'
+                AND t."economicAmountInValuationCurrency" IS NOT NULL
+            ) AS "nativeAmount",
+            SUM(t."economicAmountInValuationCurrency") FILTER (
+              WHERE t."currency" <> ${profile.defaultCurrency}
+                AND t."valuationCurrency" = 'USD'
+                AND t."economicAmountInValuationCurrency" IS NOT NULL
+            ) AS "valuedAmount"
+          FROM "FinanceTransaction" t
+          WHERE t."profileId" = ${profile.id}
+            AND t."deletedAt" IS NULL
+            AND t."type" = 'EXPENSE'
+            AND t."purpose" = 'ORDINARY'
+            AND t."occurredAt" >= ${comparisonFrom} AND t."occurredAt" < ${to}
+          GROUP BY 1, t."necessity"`),
+    ]);
     const resolvedSavingsRows = savingsRows || [];
     const requiresRate = [
       summaries,
@@ -212,6 +245,7 @@ export class FinanceAnalyticsService {
       accounts,
       timeline,
       resolvedSavingsRows,
+      necessityRows || [],
     ]
       .flat()
       .some(
@@ -230,6 +264,7 @@ export class FinanceAnalyticsService {
       accounts,
       timeline,
       savingsRows: resolvedSavingsRows,
+      necessityRows: necessityRows || [],
       legacy,
       rate,
       currency: profile.defaultCurrency,

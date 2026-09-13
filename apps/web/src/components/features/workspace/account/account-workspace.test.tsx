@@ -1,7 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { accountApi, telegramUserAccountsApi } from "@/lib/api";
+import {
+  accountApi,
+  memberFinanceApi,
+  telegramUserAccountsApi,
+} from "@/lib/api";
 import { AccountWorkspace } from "./account-workspace";
 import { I18nProvider } from "@/providers/i18n-provider";
 import accountEn from "@/i18n/locales/en/account";
@@ -15,11 +19,13 @@ vi.mock("@/components/icons/icon-picker", () => ({
 }));
 vi.mock("@/lib/api", () => ({
   accountApi: { me: vi.fn(), updateMe: vi.fn(), updatePassword: vi.fn() },
+  memberFinanceApi: { summaries: vi.fn(), details: vi.fn() },
   telegramUserAccountsApi: { list: vi.fn() },
 }));
 
 const me = {
   id: "user-1",
+  workspaceMemberId: "member-1",
   email: "alex@example.com",
   name: "Alex",
   createdAt: "2026-08-29",
@@ -78,6 +84,7 @@ describe("AccountWorkspace", () => {
     ]);
     vi.mocked(accountApi.updateMe).mockResolvedValue(me);
     vi.mocked(accountApi.updatePassword).mockResolvedValue({ success: true });
+    vi.mocked(memberFinanceApi.summaries).mockResolvedValue([]);
   });
 
   it("shows profile and password as two separate tabs", async () => {

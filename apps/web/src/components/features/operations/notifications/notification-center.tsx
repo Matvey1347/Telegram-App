@@ -187,12 +187,23 @@ export function NotificationCenter({
           markVisible.mutate(
             items
               .filter((item) => !item.readAt)
-              .slice(0, 50)
-              .map((item) => item.id),
+              .flatMap((item) =>
+                item.presentation?.kind === "crm-message"
+                  ? item.presentation.notificationIds
+                  : [item.id],
+              )
+              .slice(0, 50),
           )
         }
         onOpenNotification={(notification: OperationsNotificationItem) => {
-          if (!busy && !notification.readAt) markRead.mutate(notification.id);
+          if (!busy && !notification.readAt) {
+            const groupedIds =
+              notification.presentation?.kind === "crm-message"
+                ? notification.presentation.notificationIds
+                : [];
+            if (groupedIds.length > 1) markVisible.mutate(groupedIds);
+            else markRead.mutate(notification.id);
+          }
           close();
         }}
         onRetry={() => void listQuery.refetch()}

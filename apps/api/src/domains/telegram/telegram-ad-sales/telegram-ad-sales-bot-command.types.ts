@@ -1,6 +1,7 @@
 import type {
   TelegramAdSale,
   TelegramPostButtonRows,
+  TelegramPostMediaItem,
 } from '@telegram-system/shared';
 
 export type TelegramAdSalesBotSale = TelegramAdSale & {
@@ -21,6 +22,7 @@ export type TelegramAdSalesBotPostInput = {
   title?: string;
   text?: string | null;
   imageUrls?: string[];
+  mediaItems?: TelegramPostMediaItem[];
   buttonRows?: TelegramPostButtonRows;
   icon?: string | null;
   longTextMode?: 'IMAGES_THEN_TEXT' | 'CAPTION_THEN_TEXT';

@@ -16,10 +16,13 @@ import { ChannelPaybackStatus } from "./channel-payback-status";
 
 function number(value: unknown, digits = 0) {
   const parsed = Number(value);
+  const hasFraction =
+    digits > 0 &&
+    Math.round(Math.abs(parsed) * 10 ** digits) % 10 ** digits !== 0;
   return Number.isFinite(parsed)
     ? parsed.toLocaleString(undefined, {
         maximumFractionDigits: digits,
-        minimumFractionDigits: digits,
+        minimumFractionDigits: hasFraction ? digits : 0,
       })
     : "—";
 }

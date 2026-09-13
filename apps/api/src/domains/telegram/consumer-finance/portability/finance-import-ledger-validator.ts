@@ -1,4 +1,5 @@
 import type { AnyRow, ImportSection } from './finance-import-validation';
+import { Prisma } from '@prisma/client';
 import {
   currency,
   decimal,
@@ -48,6 +49,19 @@ export function validateFinanceImportLedger(data: ImportData) {
     const path = `data.categories[${index}]`;
     text(row.name, `${path}.name`, { max: 80 });
     oneOf(row.type, `${path}.type`, ['INCOME', 'EXPENSE']);
+    if (row.purpose != null)
+      oneOf(row.purpose, `${path}.purpose`, [
+        'ORDINARY',
+        'REIMBURSEMENT',
+        'PASS_THROUGH',
+        'DEBT_REPAYMENT',
+      ]);
+    if (row.necessity != null)
+      oneOf(row.necessity, `${path}.necessity`, [
+        'UNSPECIFIED',
+        'REQUIRED',
+        'DISCRETIONARY',
+      ]);
     text(row.emoji, `${path}.emoji`, { optional: true, max: 2048 });
     text(row.key, `${path}.key`, { optional: true, max: 120 });
     requireRef(row.parentRef, `${path}.parentRef`, categoryRefs, true);
@@ -75,7 +89,44 @@ export function validateFinanceImportLedger(data: ImportData) {
       categoryByRef.get(row.categoryRef)?.type !== row.type
     )
       fail(`${path}.categoryRef`, 'Transaction and category types must match');
+    const purpose = row.purpose ?? 'ORDINARY';
+    if (purpose !== 'ORDINARY' && row.categoryRef != null)
+      fail(
+        `${path}.categoryRef`,
+        'Balance-only transactions cannot use a category',
+      );
+    if (
+      (purpose === 'REIMBURSEMENT' || purpose === 'PASS_THROUGH') &&
+      row.type !== 'INCOME'
+    )
+      fail(`${path}.purpose`, 'This purpose requires an income cash movement');
+    if (purpose === 'DEBT_REPAYMENT' && row.type !== 'EXPENSE')
+      fail(
+        `${path}.purpose`,
+        'Debt repayment requires an expense cash movement',
+      );
     decimal(row.amount, `${path}.amount`);
+    if (row.economicAmount != null) {
+      decimal(row.economicAmount, `${path}.economicAmount`, true);
+      if (
+        new Prisma.Decimal(String(row.economicAmount)).gt(
+          new Prisma.Decimal(String(row.amount)),
+        )
+      )
+        fail(
+          `${path}.economicAmount`,
+          'Economic amount cannot exceed cash amount',
+        );
+    }
+    if (
+      purpose !== 'ORDINARY' &&
+      row.economicAmount != null &&
+      !new Prisma.Decimal(String(row.economicAmount)).isZero()
+    )
+      fail(
+        `${path}.economicAmount`,
+        'Balance-only transactions have zero economic impact',
+      );
     instant(row.occurredAt, `${path}.occurredAt`);
     text(row.description, `${path}.description`, { optional: true, max: 240 });
     text(row.merchantDisplay, `${path}.merchantDisplay`, {

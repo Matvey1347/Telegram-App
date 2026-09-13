@@ -105,10 +105,13 @@ describe('TelegramBotRuntimeService environment isolation', () => {
   const executionContext = new TelegramBotRuntimeExecutionContext();
   let service: TelegramBotRuntimeService;
   const originalBase = process.env.API_PUBLIC_URL;
+  const originalLocalControlSecret =
+    process.env.LOCAL_DEV_BOTS_CONTROL_SECRET;
 
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.API_PUBLIC_URL = 'https://api.example';
+    delete process.env.LOCAL_DEV_BOTS_CONTROL_SECRET;
     prisma.telegramBotRuntimeInstance.findMany.mockResolvedValue([]);
     registry.bootstrap.mockResolvedValue([]);
     service = new TelegramBotRuntimeService(
@@ -129,10 +132,25 @@ describe('TelegramBotRuntimeService environment isolation', () => {
   afterAll(() => {
     if (originalBase === undefined) delete process.env.API_PUBLIC_URL;
     else process.env.API_PUBLIC_URL = originalBase;
+    if (originalLocalControlSecret === undefined)
+      delete process.env.LOCAL_DEV_BOTS_CONTROL_SECRET;
+    else
+      process.env.LOCAL_DEV_BOTS_CONTROL_SECRET = originalLocalControlSecret;
   });
 
   it('does no workspace runtime work in an ordinary development process', async () => {
     environment.current.mockReturnValue(null);
+
+    await service.onModuleInit();
+
+    expect(registry.bootstrap).not.toHaveBeenCalled();
+    expect(prisma.telegramBotRuntimeInstance.findMany).not.toHaveBeenCalled();
+    expect(api.setWebhook).not.toHaveBeenCalled();
+  });
+
+  it('defers LOCAL reconciliation until the dev runner calls its bounded activation endpoint', async () => {
+    environment.current.mockReturnValue(TelegramBotRuntimeEnvironment.LOCAL);
+    process.env.LOCAL_DEV_BOTS_CONTROL_SECRET = 'control-secret';
 
     await service.onModuleInit();
 

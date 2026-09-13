@@ -80,6 +80,7 @@ export type TelegramAccountCapabilitySummary = {
 };
 export type AccountMe = {
   id: string;
+  workspaceMemberId: string;
   email: string;
   name: string;
   editorShortcuts?: EditorShortcutPreferences;
@@ -139,6 +140,7 @@ export type WorkspaceMember = {
   avatarIcon?: Icon | null;
   avatarPresentation?: ResolvedEmoji | null;
   telegramUsername?: string | null;
+  salesCommissionRate?: number | null;
   createdAt: string;
   user: User;
   isCurrentUser: boolean;
@@ -167,6 +169,30 @@ export type WorkspaceMember = {
     investmentsCount: number;
   };
   temporaryPassword?: string;
+};
+export type MemberFinanceSummary = {
+  memberId: string;
+  primaryCurrency: Currency;
+  commissionEarned: number;
+  commissionSettled: number;
+  commissionPayable: number;
+  investments: {
+    external: number;
+    salary: number;
+    reinvestment: number;
+    total: number;
+    reinvestmentPercent: number;
+  };
+};
+export type MemberFinanceDetails = MemberFinanceSummary & {
+  member: { id: string; name: string; email: string };
+  timeline: Array<{
+    id: string;
+    type: string;
+    date: string;
+    amount: number;
+    title?: string | null;
+  }>;
 };
 export type AssignedMember = WorkspaceMember;
 export type EntityAssignment = {

@@ -10,6 +10,7 @@ import type { FinanceObligationPresentationPort } from '../obligations/finance-o
 import type { FinanceImportRates } from './finance-import-rates';
 import { writeFinanceAssetImport } from './finance-import-asset-writer';
 import { writeFinanceObligationImport } from './finance-import-obligation-writer';
+import { clearFinanceDataForReplacement } from './finance-import-replace';
 
 type Progress = (
   item: ConsumerFinanceImportProgress,
@@ -88,27 +89,35 @@ export async function writeFinanceImport(input: {
   await tx.$executeRaw(
     Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`finance-import:${profileId}`}, 0))`,
   );
-  const duplicate = await tx.financeDataImportReceipt.findUnique({
-    where: {
-      profileId_requestFingerprint: {
-        profileId,
-        requestFingerprint: fingerprint,
+  if (document.mode === 'ADD') {
+    const duplicate = await tx.financeDataImportReceipt.findUnique({
+      where: {
+        profileId_requestFingerprint: {
+          profileId,
+          requestFingerprint: fingerprint,
+        },
       },
-    },
-  });
-  if (duplicate) {
-    return {
-      result: {
-        importId: duplicate.id,
-        duplicate: true,
-        imported: duplicate.importedCount,
-        counts: duplicate.counts as ConsumerFinanceImportResult['counts'],
-        warnings: duplicate.warnings as string[],
-      },
-      scheduledAt: [],
-    };
+    });
+    if (duplicate) {
+      return {
+        result: {
+          importId: duplicate.id,
+          duplicate: true,
+          imported: duplicate.importedCount,
+          counts: duplicate.counts as ConsumerFinanceImportResult['counts'],
+          warnings: duplicate.warnings as string[],
+        },
+        scheduledAt: [],
+      };
+    }
   }
   stopIfAborted(signal);
+
+  if (document.mode === 'REPLACE') {
+    await clearFinanceDataForReplacement(tx, profileId);
+    warnings.push('Existing Finance data was replaced before import.');
+    stopIfAborted(signal);
+  }
 
   if (document.settings) {
     await tx.financeProfile.update({
@@ -202,14 +211,20 @@ export async function writeFinanceImport(input: {
       const account = accountByRef.get(row.accountRef)!;
       const snapshot = rates.transactions.get(row.ref)!;
       const amount = decimal(row.amount);
+      const purpose = row.purpose ?? ('ORDINARY' as const);
+      const economicAmount =
+        purpose === 'ORDINARY'
+          ? decimal(row.economicAmount ?? row.amount)
+          : new Prisma.Decimal(0);
       return {
         id: transactionIds.get(row.ref)!,
         profileId,
         accountId: accountIds.get(row.accountRef)!,
         categoryId: row.categoryRef ? categoryIds.get(row.categoryRef)! : null,
         type: row.type,
-        purpose: 'ORDINARY' as const,
+        purpose,
         amount,
+        economicAmount,
         currency: account.currency,
         amountInDefaultCurrency: amount
           .mul(snapshot.default.rate)
@@ -219,12 +234,19 @@ export async function writeFinanceImport(input: {
         amountInValuationCurrency: amount
           .mul(snapshot.usd.rate)
           .toDecimalPlaces(8),
+        economicAmountInValuationCurrency: economicAmount
+          .mul(snapshot.usd.rate)
+          .toDecimalPlaces(8),
         exchangeRateToValuation: decimal(snapshot.usd.rate),
         valuationRateAt: snapshot.usd.rateAt,
         occurredAt: new Date(row.occurredAt),
         description: row.description?.trim() || null,
         merchantDisplay: row.merchantDisplay?.trim() || null,
         source: 'MINI_APP' as const,
+        necessity:
+          row.type === 'EXPENSE' && purpose === 'ORDINARY'
+            ? (row.necessity ?? 'UNSPECIFIED')
+            : 'UNSPECIFIED',
       };
     }),
   });

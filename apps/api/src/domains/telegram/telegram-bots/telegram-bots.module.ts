@@ -48,6 +48,7 @@ import { FinanceAiConfigController } from '../consumer-finance/ai/finance-ai-con
 import { FinanceController } from '../consumer-finance/http/finance.controller';
 import { FinanceUltimateController } from '../consumer-finance/ultimate/finance-ultimate.controller';
 import { FinanceUltimateService } from '../consumer-finance/ultimate/finance-ultimate.service';
+import { FinanceAssistantEntryService } from '../consumer-finance/ultimate/finance-assistant-entry.service';
 import { FinanceContextService } from '../consumer-finance/identity/finance-context.service';
 import { FinanceConsumerSessionService } from '../consumer-finance/identity/finance-consumer-session.service';
 import { FinanceConsumerRuntimeEnvironmentService } from '../consumer-finance/identity/finance-consumer-runtime-environment.service';
@@ -185,6 +186,7 @@ import { FinanceConsumerAuthGuard } from '../consumer-finance/portability/financ
     FinanceBillingService,
     FinanceTransferService,
     FinanceUltimateService,
+    FinanceAssistantEntryService,
     FinanceProposalService,
     FinanceAiProviderService,
     FinanceAiAnalyticsService,

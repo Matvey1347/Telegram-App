@@ -28,6 +28,9 @@ function analyticsFixture(): ConsumerFinanceAnalytics {
       invested: '0',
       investmentReturns: '0',
       netCashflow: '600',
+      requiredExpenses: '300',
+      discretionaryExpenses: '100',
+      unspecifiedExpenses: '0',
     },
     comparison: {
       period: {
@@ -41,6 +44,9 @@ function analyticsFixture(): ConsumerFinanceAnalytics {
         invested: '0',
         investmentReturns: '0',
         netCashflow: '300',
+        requiredExpenses: '300',
+        discretionaryExpenses: '100',
+        unspecifiedExpenses: '100',
       },
     },
     expensesByCategory: Array.from({ length: 8 }, (_, index) => ({
@@ -120,6 +126,22 @@ function setup() {
       }),
     },
     aiUsageEvent: { update: jest.fn().mockResolvedValue({}) },
+    financeTransaction: {
+      findMany: jest.fn().mockResolvedValue([
+        {
+          type: 'EXPENSE',
+          purpose: 'ORDINARY',
+          amount: { toString: () => '25' },
+          economicAmount: { toString: () => '25' },
+          currency: 'UAH',
+          necessity: 'REQUIRED',
+          occurredAt: new Date('2026-09-10T10:00:00.000Z'),
+          description: 'Groceries',
+          account: { name: 'Card' },
+          category: { name: 'Food' },
+        },
+      ]),
+    },
   };
   const analytics = {
     analytics: jest.fn().mockResolvedValue(analyticsFixture()),
@@ -129,20 +151,48 @@ function setup() {
       answer: 'Generated answer',
       suggestedQuestions: ['Next question?'],
     }),
+    routeAssistantMessage: jest.fn().mockResolvedValue({
+      kind: 'ANSWER',
+      message: 'Expected card balance is 75 UAH.',
+      recommendedScreen: null,
+      operations: [],
+    }),
   };
   const entitlements = {
     reserveCapability: jest.fn().mockResolvedValue({ id: 'reservation-1' }),
+  };
+  const ledger = {
+    accounts: jest.fn().mockResolvedValue([
+      {
+        name: 'Card',
+        type: 'CARD',
+        balance: '75',
+        currency: 'UAH',
+        archivedAt: null,
+      },
+    ]),
+  };
+  const proposals = {
+    createBatch: jest.fn().mockResolvedValue({
+      token: 'proposal-token',
+      operations: [],
+      preview: [],
+    }),
   };
   return {
     prisma,
     analytics,
     ai,
     entitlements,
+    ledger,
+    proposals,
     service: new FinanceUltimateService(
       prisma as never,
       analytics as never,
       ai as never,
       entitlements as never,
+      ledger as never,
+      proposals as never,
     ),
   };
 }
@@ -214,5 +264,84 @@ describe('FinanceUltimateService', () => {
       data: { status: 'FAILED' },
     });
     expect(ai.interpret).not.toHaveBeenCalled();
+  });
+
+  it('uses account balances and recent ledger rows to explain a mismatch without writing', async () => {
+    const { service, ai, proposals } = setup();
+
+    await expect(
+      service.message(context, {
+        text: 'My real Card balance is 70 UAH, why is it different?',
+        history: [],
+      }),
+    ).resolves.toEqual({
+      kind: 'ANSWER',
+      message: 'Expected card balance is 75 UAH.',
+      recommendedScreen: null,
+    });
+    const routeCalls = ai.routeAssistantMessage.mock.calls as unknown as Array<
+      [
+        {
+          facts: {
+            accountBalances: Array<{ name: string; balance: string }>;
+            recentTransactions: Array<{
+              description: string;
+              amount: string;
+            }>;
+          };
+        },
+      ]
+    >;
+    expect(routeCalls[0]?.[0].facts.accountBalances[0]?.name).toBe('Card');
+    expect(routeCalls[0]?.[0].facts.accountBalances[0]?.balance).toBe('75');
+    expect(routeCalls[0]?.[0].facts.recentTransactions[0]?.description).toBe(
+      'Groceries',
+    );
+    expect(routeCalls[0]?.[0].facts.recentTransactions[0]?.amount).toBe('25');
+    expect(proposals.createBatch).not.toHaveBeenCalled();
+  });
+
+  it('turns a concrete message into a reviewable proposal', async () => {
+    const { service, ai, proposals } = setup();
+    ai.routeAssistantMessage.mockResolvedValue({
+      kind: 'RECORD',
+      message: 'I classified this as pass-through money, not income.',
+      recommendedScreen: null,
+      operations: [
+        {
+          type: 'INCOME',
+          purpose: 'PASS_THROUGH',
+          amount: '300',
+          economicAmount: '0',
+          currency: 'UAH',
+          description: 'Money for a shared gift',
+          occurredAt: '2026-09-12T12:00:00.000Z',
+          accountHint: 'Card',
+        },
+      ],
+    });
+
+    await expect(
+      service.message(context, {
+        text: 'My wife sent 300 PLN for the gift',
+        history: [{ role: 'assistant', text: 'Which account?' }],
+      }),
+    ).resolves.toEqual({
+      kind: 'PROPOSAL',
+      message: 'I classified this as pass-through money, not income.',
+      recommendedScreen: null,
+      proposal: { token: 'proposal-token', operations: [] },
+    });
+    expect(proposals.createBatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profile: { id: 'profile-1', defaultCurrency: 'UAH' },
+        operations: [
+          expect.objectContaining({
+            purpose: 'PASS_THROUGH',
+            economicAmount: '0',
+          }),
+        ],
+      }),
+    );
   });
 });

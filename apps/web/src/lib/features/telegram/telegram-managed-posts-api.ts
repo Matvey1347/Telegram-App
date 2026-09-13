@@ -14,6 +14,7 @@ import type {
   TelegramPostPlannerSlot,
   TelegramPublishingCapabilities,
   TelegramPostButtonRows,
+  TelegramPostMediaItem,
 } from "@telegram-system/shared";
 export type { TelegramManagedPostLookupItem } from "@telegram-system/shared";
 import type {
@@ -47,6 +48,20 @@ export function createTelegramManagedPostsApi({
   ) => Promise<TResult>;
 }) {
   return {
+    uploadManagedPostMedia: async (
+      file: File,
+      kind?: TelegramPostMediaItem["kind"],
+    ) => {
+      const form = new FormData();
+      form.append("file", file);
+      if (kind) form.append("kind", kind);
+      return (
+        await api.post<{ media: TelegramPostMediaItem }>(
+          "/telegram-post-media/upload",
+          form,
+        )
+      ).data.media;
+    },
     managedPostsPage: async (
       channelId: string,
       params?: PaginationParams & {
@@ -348,6 +363,7 @@ export function createTelegramManagedPostsApi({
         title: string;
         text?: string;
         imageUrls?: string[];
+        mediaItems?: TelegramPostMediaItem[];
         buttonRows?: TelegramPostButtonRows;
         assignedMemberId?: string;
         icon?: string | null;
@@ -393,6 +409,7 @@ export function createTelegramManagedPostsApi({
         title?: string;
         text?: string | null;
         imageUrls?: string[];
+        mediaItems?: TelegramPostMediaItem[];
         buttonRows?: TelegramPostButtonRows;
         assignedMemberId?: string;
         icon?: string | null;

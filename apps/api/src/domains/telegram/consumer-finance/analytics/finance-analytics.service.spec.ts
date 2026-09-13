@@ -123,6 +123,20 @@ describe('FinanceAnalyticsService', () => {
           nativeAmount: decimal(15),
           valuedAmount: null,
         },
+      ])
+      .mockResolvedValueOnce([
+        {
+          segment: 'CURRENT',
+          necessity: 'REQUIRED',
+          nativeAmount: decimal(30),
+          valuedAmount: null,
+        },
+        {
+          segment: 'CURRENT',
+          necessity: 'DISCRETIONARY',
+          nativeAmount: decimal(10),
+          valuedAmount: null,
+        },
       ]);
     const service = new FinanceAnalyticsService({
       $queryRaw: queryRaw,
@@ -140,6 +154,9 @@ describe('FinanceAnalyticsService', () => {
       saved: '15',
       invested: '10',
       investmentReturns: '5',
+      requiredExpenses: '30',
+      discretionaryExpenses: '10',
+      unspecifiedExpenses: '0',
       netCashflow: '55',
     });
     expect(result.comparison.summary).toEqual({
@@ -148,6 +165,9 @@ describe('FinanceAnalyticsService', () => {
       saved: '0',
       invested: '0',
       investmentReturns: '0',
+      requiredExpenses: '0',
+      discretionaryExpenses: '0',
+      unspecifiedExpenses: '0',
       netCashflow: '30',
     });
     expect(result.expensesByCategory[0]).toEqual(
@@ -185,7 +205,7 @@ describe('FinanceAnalyticsService', () => {
     expect(result.comparison.legacyFallback).toEqual(
       expect.objectContaining({ transactionCount: 1 }),
     );
-    expect(queryRaw).toHaveBeenCalledTimes(6);
+    expect(queryRaw).toHaveBeenCalledTimes(7);
   });
 
   it('keeps query count constant for a 100-account profile and caps breakdown result sets', async () => {
@@ -203,6 +223,7 @@ describe('FinanceAnalyticsService', () => {
       .mockResolvedValueOnce(accounts)
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
     const service = new FinanceAnalyticsService({
       $queryRaw: queryRaw,
@@ -215,7 +236,7 @@ describe('FinanceAnalyticsService', () => {
     });
 
     expect(result.accounts).toHaveLength(100);
-    expect(queryRaw).toHaveBeenCalledTimes(6);
+    expect(queryRaw).toHaveBeenCalledTimes(7);
     const calls = queryRaw.mock.calls as unknown as Array<
       [{ strings: string[] }]
     >;
@@ -247,6 +268,9 @@ describe('FinanceAnalyticsService', () => {
         saved: '0',
         invested: '0',
         investmentReturns: '0',
+        requiredExpenses: '0',
+        discretionaryExpenses: '0',
+        unspecifiedExpenses: '0',
         netCashflow: '0',
       },
       expensesByCategory: [],

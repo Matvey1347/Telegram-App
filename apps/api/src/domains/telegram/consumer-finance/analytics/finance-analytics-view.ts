@@ -8,24 +8,30 @@ export type FinanceAnalyticsMoneyRow = {
 export type FinanceAnalyticsSummaryRow = FinanceAnalyticsMoneyRow & {
   segment: 'CURRENT' | 'PREVIOUS';
   type: 'INCOME' | 'EXPENSE';
-  purpose: 'ORDINARY' | 'INVESTMENT_CONTRIBUTION' | 'INVESTMENT_RETURN';
+  purpose:
+    | 'ORDINARY'
+    | 'REIMBURSEMENT'
+    | 'PASS_THROUGH'
+    | 'DEBT_REPAYMENT'
+    | 'INVESTMENT_CONTRIBUTION'
+    | 'INVESTMENT_RETURN';
 };
 export type FinanceAnalyticsCategoryRow = FinanceAnalyticsMoneyRow & {
   type: 'INCOME' | 'EXPENSE';
-  purpose: 'ORDINARY' | 'INVESTMENT_CONTRIBUTION' | 'INVESTMENT_RETURN';
+  purpose: FinanceAnalyticsSummaryRow['purpose'];
   categoryId: string | null;
   categoryName: string | null;
   categoryKey: string | null;
 };
 export type FinanceAnalyticsAccountRow = FinanceAnalyticsMoneyRow & {
   type: 'INCOME' | 'EXPENSE';
-  purpose: 'ORDINARY' | 'INVESTMENT_CONTRIBUTION' | 'INVESTMENT_RETURN';
+  purpose: FinanceAnalyticsSummaryRow['purpose'];
   accountId: string;
   accountName: string;
 };
 export type FinanceAnalyticsTimelineRow = FinanceAnalyticsMoneyRow & {
   type: 'INCOME' | 'EXPENSE';
-  purpose: 'ORDINARY' | 'INVESTMENT_CONTRIBUTION' | 'INVESTMENT_RETURN';
+  purpose: FinanceAnalyticsSummaryRow['purpose'];
   day: string;
 };
 export type FinanceSavingsAnalyticsRow = FinanceAnalyticsMoneyRow & {
@@ -38,6 +44,10 @@ export type FinanceAnalyticsLegacyRow = {
   amount: Prisma.Decimal | null;
   transactions: bigint;
 };
+export type FinanceAnalyticsNecessityRow = FinanceAnalyticsMoneyRow & {
+  segment: 'CURRENT' | 'PREVIOUS';
+  necessity: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
+};
 
 type Totals = {
   income: Prisma.Decimal;
@@ -45,6 +55,9 @@ type Totals = {
   saved: Prisma.Decimal;
   invested: Prisma.Decimal;
   investmentReturns: Prisma.Decimal;
+  requiredExpenses: Prisma.Decimal;
+  discretionaryExpenses: Prisma.Decimal;
+  unspecifiedExpenses: Prisma.Decimal;
 };
 
 export function financeAnalyticsView(input: {
@@ -54,6 +67,7 @@ export function financeAnalyticsView(input: {
   timeline: FinanceAnalyticsTimelineRow[];
   savingsRows: FinanceSavingsAnalyticsRow[];
   legacy: FinanceAnalyticsLegacyRow[];
+  necessityRows?: FinanceAnalyticsNecessityRow[];
   rate: Prisma.Decimal;
   currency: string;
   period: ConsumerFinanceAnalyticsQuery & { from: string; to: string };
@@ -67,6 +81,15 @@ export function financeAnalyticsView(input: {
     );
   const current = totalsFor(input.summaries, 'CURRENT', money);
   const previous = totalsFor(input.summaries, 'PREVIOUS', money);
+  for (const row of input.necessityRows ?? []) {
+    const totals = row.segment === 'CURRENT' ? current : previous;
+    const value = money(row);
+    if (row.necessity === 'REQUIRED')
+      totals.requiredExpenses = totals.requiredExpenses.plus(value);
+    else if (row.necessity === 'DISCRETIONARY')
+      totals.discretionaryExpenses = totals.discretionaryExpenses.plus(value);
+    else totals.unspecifiedExpenses = totals.unspecifiedExpenses.plus(value);
+  }
   for (const row of input.savingsRows) {
     const totals = row.segment === 'CURRENT' ? current : previous;
     totals.saved = totals.saved.plus(money(row));
@@ -232,6 +255,9 @@ function zeroTotals(): Totals {
     saved: new Prisma.Decimal(0),
     invested: new Prisma.Decimal(0),
     investmentReturns: new Prisma.Decimal(0),
+    requiredExpenses: new Prisma.Decimal(0),
+    discretionaryExpenses: new Prisma.Decimal(0),
+    unspecifiedExpenses: new Prisma.Decimal(0),
   };
 }
 
@@ -261,6 +287,9 @@ function contractTotals(totals: Totals) {
     saved: totals.saved.toString(),
     invested: totals.invested.toString(),
     investmentReturns: totals.investmentReturns.toString(),
+    requiredExpenses: totals.requiredExpenses.toString(),
+    discretionaryExpenses: totals.discretionaryExpenses.toString(),
+    unspecifiedExpenses: totals.unspecifiedExpenses.toString(),
     netCashflow: totals.income
       .plus(totals.investmentReturns)
       .minus(totals.expenses)

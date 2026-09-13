@@ -5,37 +5,50 @@ import { MutualPromotionPostComposer } from "./mutual-promotion-post-composer";
 vi.mock(
   "@/components/features/telegram/telegram/telegram-post-preview",
   () => ({
-    TelegramPostPreview: ({ text }: { text: string }) => (
-      <div data-testid="telegram-preview">{text}</div>
+    TelegramPostPreview: ({
+      text,
+      formattedHtml,
+      onTextChange,
+      captionLengthMax,
+      messageLengthMax,
+    }: {
+      text: string;
+      formattedHtml?: string | null;
+      onTextChange?: (value: string) => void;
+      captionLengthMax?: number;
+      messageLengthMax?: number;
+    }) => (
+      <button
+        type="button"
+        data-testid="telegram-preview"
+        data-caption-limit={captionLengthMax}
+        data-message-limit={messageLengthMax}
+        data-formatted-html={formattedHtml}
+        onClick={() => onTextChange?.("__Edited__")}
+      >
+        {text}
+      </button>
     ),
   }),
 );
 
-vi.mock("@/components/features/telegram/telegram/telegram-text-editor", () => ({
-  TelegramTextEditor: ({
-    value,
-    onChange,
-  }: {
-    value: string;
-    onChange: (value: string) => void;
-  }) => (
-    <textarea
-      aria-label="Post text"
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-    />
-  ),
-}));
+vi.mock(
+  "@/components/features/telegram/telegram/telegram-inline-keyboard-editor",
+  () => ({
+    TelegramInlineKeyboardEditor: () => null,
+    TelegramInlineKeyboardSummary: () => <div>Telegram buttons</div>,
+  }),
+);
 
 vi.mock(
-  "@/components/features/telegram/telegram/telegram-image-upload",
+  "@/components/features/telegram/telegram/telegram-post-media-upload",
   () => ({
-    TelegramImageUpload: () => <div>Image editor</div>,
+    TelegramPostMediaUpload: () => <div>Media editor</div>,
   }),
 );
 
 describe("MutualPromotionPostComposer", () => {
-  it("renders managed Telegram markup in preview and exposes manual editing", () => {
+  it("edits imported text visually and uses Premium Telegram limits", () => {
     const onChange = vi.fn();
     render(
       <MutualPromotionPostComposer
@@ -43,6 +56,8 @@ describe("MutualPromotionPostComposer", () => {
         draft={{
           title: "Imported",
           text: "**Bold** [link](https://example.test)",
+          plainText: "Bold link",
+          formattedHtml: '<b>Bold</b> <a href="https://example.test">link</a>',
           imageUrls: [],
           buttonRows: [],
         }}
@@ -53,11 +68,22 @@ describe("MutualPromotionPostComposer", () => {
     expect(screen.getByTestId("telegram-preview")).toHaveTextContent(
       "**Bold** [link](https://example.test)",
     );
-    fireEvent.change(screen.getByLabelText("Post text"), {
-      target: { value: "__Edited__" },
-    });
+    expect(screen.getByTestId("telegram-preview")).toHaveAttribute(
+      "data-caption-limit",
+      "4096",
+    );
+    expect(screen.getByTestId("telegram-preview")).toHaveAttribute(
+      "data-formatted-html",
+      '<b>Bold</b> <a href="https://example.test">link</a>',
+    );
+    expect(screen.queryByLabelText("Post text")).toBeNull();
+    fireEvent.click(screen.getByTestId("telegram-preview"));
     expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({ text: "__Edited__" }),
+      expect.objectContaining({
+        text: "__Edited__",
+        plainText: undefined,
+        formattedHtml: undefined,
+      }),
     );
   });
 });

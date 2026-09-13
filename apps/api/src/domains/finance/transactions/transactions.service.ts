@@ -389,8 +389,16 @@ export class TransactionsService {
 
     const existing = await this.prisma.transaction.findFirst({
       where: { id, workspaceId, deletedAt: null },
+      include: {
+        memberCompensationSettlement: { select: { id: true } },
+      },
     });
     if (!existing) throw new NotFoundException('Transaction not found');
+    if (existing.memberCompensationSettlement) {
+      throw new BadRequestException(
+        'Salary transactions are managed from the member finance history',
+      );
+    }
     await this.authorization.requireOwnOrAny(
       userId,
       existing,
@@ -555,8 +563,16 @@ export class TransactionsService {
       await this.workspaceService.resolveWorkspaceIdForUser(userId);
     const existing = await this.prisma.transaction.findFirst({
       where: { id, workspaceId, deletedAt: null },
+      include: {
+        memberCompensationSettlement: { select: { id: true } },
+      },
     });
     if (!existing) throw new NotFoundException('Transaction not found');
+    if (existing.memberCompensationSettlement) {
+      throw new BadRequestException(
+        'Salary transactions are managed from the member finance history',
+      );
+    }
     await this.authorization.requireOwnOrAny(
       userId,
       existing,

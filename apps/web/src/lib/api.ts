@@ -624,7 +624,6 @@ const quietCrud = <T>(path: string) => ({
   remove: async (id: string) =>
     (await api.delete<T>(`${path}/${id}`, quietMutationConfig)).data,
 });
-
 const workspaceApi = createWorkspaceApi({
   api,
   crud,
@@ -638,6 +637,7 @@ export const {
   globalSearchApi,
   iconsApi,
   workspaceMembersApi,
+  memberFinanceApi,
   workspacesApi,
 } = workspaceApi;
 

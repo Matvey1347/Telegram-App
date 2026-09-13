@@ -72,7 +72,7 @@ export function FinanceTransferRow({
   return (
     <div
       data-finance-row="transfer"
-      className="relative grid gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 pr-12 md:grid-cols-[minmax(0,1fr)_minmax(4rem,0.45fr)_minmax(0,1fr)_32px] md:items-center md:pr-4"
+      className="relative grid gap-3 rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3 pr-12 md:grid-cols-[minmax(0,1fr)_minmax(4rem,0.45fr)_minmax(0,1fr)] md:items-center md:pr-4"
     >
       <TransferAccount
         account={transfer.fromAccount}
@@ -82,16 +82,18 @@ export function FinanceTransferRow({
         amountClassName="text-rose-300"
       />
       <TransferFlowArrow />
-      <TransferAccount
-        account={transfer.toAccount}
-        label="Received"
-        amount={transfer.toAmount}
-        currency={transfer.toCurrency}
-        amountClassName="text-emerald-300"
-      />
+      <div className="min-w-0 md:pr-8">
+        <TransferAccount
+          account={transfer.toAccount}
+          label="Received"
+          amount={transfer.toAmount}
+          currency={transfer.toCurrency}
+          amountClassName="text-emerald-300"
+        />
+      </div>
       <div
         data-finance-row-actions="true"
-        className="absolute right-3 top-3 md:static"
+        className="absolute right-3 top-3"
       >
         <FinanceActionMenu
           label="transfer"
@@ -137,7 +139,7 @@ export function TransferFlowArrow() {
       data-testid="transfer-flow-arrow"
       aria-label="Transfer direction"
       role="img"
-      className="flex h-10 items-center justify-center text-neutral-600 md:h-auto md:w-full"
+      className="flex h-10 items-center justify-start pl-3 text-neutral-600 md:h-auto md:w-full md:justify-center md:pl-0"
     >
       <div className="flex h-full flex-col items-center md:hidden">
         <svg className="min-h-0 w-3 flex-1" aria-hidden="true">

@@ -1,18 +1,9 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { Api, TelegramClient } from 'telegram';
 import { returnBigInt } from 'telegram/Helpers';
 import { HTMLParser } from 'telegram/extensions/html';
 import { normalizeTelegramChannelId } from './telegram-post-url';
-import {
-  telegramHtmlToGramJsAlbumHtml,
-  telegramHtmlToMtprotoHtml,
-} from './telegram-markup';
+import { telegramHtmlToGramJsAlbumHtml, telegramHtmlToMtprotoHtml } from './telegram-markup';
 import {
   MatchScore,
   canonicalTelegramInviteLink,
@@ -22,33 +13,22 @@ import {
   type ResolvedTelegramEntity,
   type TelegramTitleCandidate,
 } from './telegram-import.helpers';
-import type { TelegramChannelSyncProgressItem } from '@telegram-system/shared';
+import type { TelegramChannelSyncProgressItem, TelegramPostMediaItem } from '@telegram-system/shared';
+import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 import type { TelegramAccountCapabilities } from '@telegram-system/shared';
-import {
-  normalizeTelegramCustomEmojiPackSource,
-  parseTelegramCustomEmojiDocumentId,
-} from './telegram-custom-emoji-pack';
-import {
-  maskTelegramInviteHash,
-  maskTelegramReferenceForLog,
-} from './telegram-invite-log';
+import { normalizeTelegramCustomEmojiPackSource, parseTelegramCustomEmojiDocumentId } from './telegram-custom-emoji-pack';
+import { maskTelegramInviteHash, maskTelegramReferenceForLog } from './telegram-invite-log';
 import { getTelegramFloodWaitSeconds } from './telegram-session-errors';
 import { loginWithTelegramQr } from './telegram-qr-login.adapter';
 import type { TelegramQrLoginProgress } from '@telegram-system/shared';
-import {
-  signInTelegramWithCode,
-  signInTelegramWithPassword,
-  startTelegramPhoneLogin,
-} from './telegram-phone-login.adapter';
+import { signInTelegramWithCode, signInTelegramWithPassword, startTelegramPhoneLogin } from './telegram-phone-login.adapter';
 import {
   convertTelegramPublishImageWithSips,
   downloadTelegramPublishImage,
+  downloadTelegramPublishMotion,
 } from './telegram-mtproto-publish-image';
 import type { TelegramAccountProfile } from './telegram-mtproto-account-profile';
-import {
-  closeTelegramMtprotoSession,
-  createTelegramMtprotoSession,
-} from './telegram-mtproto-session.factory';
+import { closeTelegramMtprotoSession, createTelegramMtprotoSession } from './telegram-mtproto-session.factory';
 import { livePending } from './telegram-pending-join-requests';
 import type { BroadcastStatsGraphField } from './telegram-broadcast-stats.types';
 
@@ -57,12 +37,7 @@ export type { TelegramAccountProfile } from './telegram-mtproto-account-profile'
 type ApiCredentials = { apiId: string; apiHash: string };
 type SessionParams = ApiCredentials & { session?: string };
 type ImportableTelegramEntity = Api.User | Api.Channel | Api.Chat;
-type TelegramChannelAccessMode =
-  | 'PUBLIC'
-  | 'PRIVATE'
-  | 'PRIVATE_INVITE'
-  | 'PRIVATE_JOIN_REQUEST'
-  | 'UNKNOWN';
+type TelegramChannelAccessMode = 'PUBLIC' | 'PRIVATE' | 'PRIVATE_INVITE' | 'PRIVATE_JOIN_REQUEST' | 'UNKNOWN';
 type StoredTelegramChannelReference = {
   username?: string | null;
   telegramChatId?: string | null;
@@ -156,9 +131,7 @@ type ExportedInvitePayload = {
   invite?: unknown;
   newInvite?: unknown;
 };
-type InviteLinksProgressCallback = (
-  item: TelegramChannelSyncProgressItem,
-) => void | Promise<void>;
+type InviteLinksProgressCallback = (item: TelegramChannelSyncProgressItem) => void | Promise<void>;
 type InviteLinkLoadedCallback = (
   link: TelegramInviteLinksResult['links'][number],
   loadedCount: number,
@@ -238,9 +211,7 @@ export class TelegramMtprotoClient {
     return normalizeTelegramChannelId(value);
   }
 
-  private unwrapExportedChatInvite(
-    invite: unknown,
-  ): ExportedInvitePayload | null {
+  private unwrapExportedChatInvite(invite: unknown): ExportedInvitePayload | null {
     if (!invite || typeof invite !== 'object') {
       return null;
     }
@@ -267,11 +238,7 @@ export class TelegramMtprotoClient {
   }
 
   private toBigInt(value: unknown) {
-    const normalized = this.normalizeChatId(
-      typeof value === 'string'
-        ? value
-        : this.toFiniteNumber(value)?.toString(),
-    );
+    const normalized = this.normalizeChatId(typeof value === 'string' ? value : this.toFiniteNumber(value)?.toString());
     if (!normalized) return null;
     try {
       return BigInt(normalized);
@@ -285,10 +252,7 @@ export class TelegramMtprotoClient {
     if (typeof value === 'bigint') return true;
     if (typeof value === 'number') return Number.isFinite(value);
     if (typeof value === 'string') return value.trim().length > 0;
-    return (
-      typeof value === 'object' &&
-      typeof (value as { toString?: unknown }).toString === 'function'
-    );
+    return typeof value === 'object' && typeof (value as { toString?: unknown }).toString === 'function';
   }
 
   private telegramLongToString(value: unknown) {
@@ -343,11 +307,7 @@ export class TelegramMtprotoClient {
     return current;
   }
 
-  private rememberKnownUser(
-    knownUsers: Map<string, Api.User>,
-    user: Api.User,
-    source: string,
-  ) {
+  private rememberKnownUser(knownUsers: Map<string, Api.User>, user: Api.User, source: string) {
     const userId = String(user.id);
     const previous = knownUsers.get(userId) ?? null;
     const preferred = this.choosePreferredUser(previous, user);
@@ -365,43 +325,26 @@ export class TelegramMtprotoClient {
         deleted: Boolean(preferred.deleted),
         self: Boolean(preferred.self),
         hasAccessHash: Boolean(this.entityAccessHashValue(preferred)),
-        accessHashType: typeof (preferred as { accessHash?: unknown })
-          .accessHash,
+        accessHashType: typeof (preferred as { accessHash?: unknown }).accessHash,
         accessHashCtor:
-          ((preferred as { accessHash?: { constructor?: { name?: string } } })
-            .accessHash?.constructor?.name as string | undefined) ?? null,
+          ((preferred as { accessHash?: { constructor?: { name?: string } } }).accessHash?.constructor?.name as string | undefined) ?? null,
       });
     }
   }
 
-  private isImportableTelegramEntity(
-    entity: unknown,
-  ): entity is ImportableTelegramEntity {
-    return (
-      entity instanceof Api.User ||
-      entity instanceof Api.Channel ||
-      entity instanceof Api.Chat
-    );
+  private isImportableTelegramEntity(entity: unknown): entity is ImportableTelegramEntity {
+    return entity instanceof Api.User || entity instanceof Api.Channel || entity instanceof Api.Chat;
   }
 
-  private asImportableTelegramEntity(
-    entity: unknown,
-    context: string,
-  ): ImportableTelegramEntity {
+  private asImportableTelegramEntity(entity: unknown, context: string): ImportableTelegramEntity {
     if (this.isImportableTelegramEntity(entity)) {
       return entity;
     }
-    throw new BadRequestException(
-      `Telegram ${context} could not be resolved to a supported entity.`,
-    );
+    throw new BadRequestException(`Telegram ${context} could not be resolved to a supported entity.`);
   }
 
   private isInputUser(entity: unknown): entity is Api.TypeInputUser {
-    return (
-      entity instanceof Api.InputUser ||
-      entity instanceof Api.InputUserFromMessage ||
-      entity instanceof Api.InputUserSelf
-    );
+    return entity instanceof Api.InputUser || entity instanceof Api.InputUserFromMessage || entity instanceof Api.InputUserSelf;
   }
 
   private inferAccessMode(params: {
@@ -440,12 +383,7 @@ export class TelegramMtprotoClient {
 
   private normalizeTelegramLimit(value: unknown, fallback: number) {
     const numeric = this.toFiniteNumber(value);
-    if (
-      numeric == null ||
-      !Number.isInteger(numeric) ||
-      numeric < 1 ||
-      numeric > 100_000
-    ) {
+    if (numeric == null || !Number.isInteger(numeric) || numeric < 1 || numeric > 100_000) {
       return fallback;
     }
     return numeric;
@@ -457,20 +395,14 @@ export class TelegramMtprotoClient {
     return Math.max(1, Math.round(numeric / (1024 * 1024)));
   }
 
-  private async getAccountProfileFromClient(
-    client: TelegramClient,
-    fallbackUser?: Api.User | null,
-  ): Promise<TelegramAccountProfile> {
+  private async getAccountProfileFromClient(client: TelegramClient, fallbackUser?: Api.User | null): Promise<TelegramAccountProfile> {
     const meRaw = fallbackUser ?? ((await client.getMe()) as Api.User);
     const me = (await this.getSelfUserWithDetails(client, meRaw)) || meRaw;
     const isPremium = Boolean(me.premium);
-    const fallbackCaptionLengthMax = isPremium
-      ? PREMIUM_MT_PROTO_CAPTION_LIMIT
-      : DEFAULT_MT_PROTO_CAPTION_LIMIT;
+    const fallbackCaptionLengthMax = isPremium ? PREMIUM_MT_PROTO_CAPTION_LIMIT : DEFAULT_MT_PROTO_CAPTION_LIMIT;
     const checkedAt = new Date().toISOString();
     let config: Awaited<ReturnType<TelegramClient['invoke']>> | null = null;
-    let limitsSource: TelegramAccountCapabilities['limitsSource'] =
-      'telegram_config';
+    let limitsSource: TelegramAccountCapabilities['limitsSource'] = 'telegram_config';
 
     try {
       config = await client.invoke(new Api.help.GetConfig());
@@ -487,20 +419,12 @@ export class TelegramMtprotoClient {
       DEFAULT_TELEGRAM_MESSAGE_LIMIT,
     );
     const maxUploadFileSizeMb =
-      this.toMegabytes(
-        (config as { uploadMaxFilepartsPremium?: unknown } | null)
-          ?.uploadMaxFilepartsPremium,
-      ) ??
-      this.toMegabytes(
-        (config as { uploadMaxFilepartsDefault?: unknown } | null)
-          ?.uploadMaxFilepartsDefault,
-      ) ??
+      this.toMegabytes((config as { uploadMaxFilepartsPremium?: unknown } | null)?.uploadMaxFilepartsPremium) ??
+      this.toMegabytes((config as { uploadMaxFilepartsDefault?: unknown } | null)?.uploadMaxFilepartsDefault) ??
       0;
 
     const username = me.username || null;
-    const photoUrl =
-      (await this.profilePhotoDataUrl(client, me)) ||
-      this.telegramPublicPhotoUrl(username);
+    const photoUrl = (await this.profilePhotoDataUrl(client, me)) || this.telegramPublicPhotoUrl(username);
 
     return {
       id: String(me.id),
@@ -521,21 +445,11 @@ export class TelegramMtprotoClient {
     };
   }
 
-  private async createClient(
-    { apiId, apiHash, session }: SessionParams,
-    signal?: AbortSignal,
-  ) {
+  private async createClient({ apiId, apiHash, session }: SessionParams, signal?: AbortSignal) {
     const startedAt = this.now();
-    this.logger.log(
-      `Connecting MTProto client: apiId=${apiId} session=${session ? 'present' : 'empty'}`,
-    );
-    const client = await createTelegramMtprotoSession(
-      { apiId, apiHash, session },
-      signal,
-    );
-    this.logger.log(
-      `MTProto client connected in ${this.elapsed(startedAt)}: apiId=${apiId}`,
-    );
+    this.logger.log(`Connecting MTProto client: apiId=${apiId} session=${session ? 'present' : 'empty'}`);
+    const client = await createTelegramMtprotoSession({ apiId, apiHash, session }, signal);
+    this.logger.log(`MTProto client connected in ${this.elapsed(startedAt)}: apiId=${apiId}`);
     return client;
   }
 
@@ -543,11 +457,7 @@ export class TelegramMtprotoClient {
     await closeTelegramMtprotoSession(client);
   }
 
-  private async withTimeout<T>(
-    promise: Promise<T>,
-    timeoutMs: number,
-    label: string,
-  ) {
+  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
     return await Promise.race<T>([
       promise,
       new Promise<T>((_, reject) => {
@@ -579,8 +489,7 @@ export class TelegramMtprotoClient {
       code: (error as any).code || null,
       seconds: this.toFiniteNumber((error as any).seconds),
       newDc: this.toFiniteNumber((error as any).newDc),
-      stack:
-        typeof (error as any).stack === 'string' ? (error as any).stack : null,
+      stack: typeof (error as any).stack === 'string' ? (error as any).stack : null,
     };
   }
 
@@ -591,19 +500,12 @@ export class TelegramMtprotoClient {
 
   private isMessageNotModifiedError(error: unknown) {
     const message = String(
-      (error as { errorMessage?: string | null })?.errorMessage ||
-        (error as { message?: string | null })?.message ||
-        '',
+      (error as { errorMessage?: string | null })?.errorMessage || (error as { message?: string | null })?.message || '',
     ).toUpperCase();
     return message.includes('MESSAGE_NOT_MODIFIED');
   }
 
-  private async sendTextMessageWithEntities(
-    client: TelegramClient,
-    entity: unknown,
-    html: string,
-    schedule?: number,
-  ) {
+  private async sendTextMessageWithEntities(client: TelegramClient, entity: unknown, html: string, schedule?: number) {
     const { text, entities } = this.parseMtprotoHtml(html);
     if (!text) return null;
     const peer = await client.getInputEntity(entity as never);
@@ -616,11 +518,7 @@ export class TelegramMtprotoClient {
     const result = await client.invoke(request);
     return (
       client as unknown as {
-        _getResponseMessage: (
-          request: Api.messages.SendMessage,
-          result: unknown,
-          inputChat: unknown,
-        ) => Api.Message | undefined;
+        _getResponseMessage: (request: Api.messages.SendMessage, result: unknown, inputChat: unknown) => Api.Message | undefined;
       }
     )._getResponseMessage(request, result, peer);
   }
@@ -640,9 +538,7 @@ export class TelegramMtprotoClient {
           id: Number(messageId),
           message: text,
           entities,
-          scheduleDate: scheduleAt
-            ? Math.floor(scheduleAt.getTime() / 1000)
-            : undefined,
+          scheduleDate: scheduleAt ? Math.floor(scheduleAt.getTime() / 1000) : undefined,
         }),
       );
       return true;
@@ -652,11 +548,7 @@ export class TelegramMtprotoClient {
     }
   }
   private toJsonSafe(value: unknown): unknown {
-    if (
-      value == null ||
-      typeof value === 'string' ||
-      typeof value === 'boolean'
-    ) {
+    if (value == null || typeof value === 'string' || typeof value === 'boolean') {
       return value;
     }
     if (typeof value === 'number') return Number.isFinite(value) ? value : null;
@@ -686,14 +578,10 @@ export class TelegramMtprotoClient {
   private graphTimestampToDate(value: unknown) {
     const timestamp = this.toFiniteNumber(value);
     if (timestamp == null) return null;
-    return this.toTelegramDate(
-      timestamp < 100_000_000_000 ? timestamp * 1000 : timestamp,
-    );
+    return this.toTelegramDate(timestamp < 100_000_000_000 ? timestamp * 1000 : timestamp);
   }
 
-  private extractGraphStatsPeriod(
-    graphs: Partial<Record<BroadcastStatsGraphField, unknown>>,
-  ) {
+  private extractGraphStatsPeriod(graphs: Partial<Record<BroadcastStatsGraphField, unknown>>) {
     let minDate: Date | null = null;
     let maxDate: Date | null = null;
 
@@ -701,9 +589,7 @@ export class TelegramMtprotoClient {
       if ((graph as any)?.status !== 'available') continue;
       const columns = (graph as any)?.data?.columns;
       if (!Array.isArray(columns)) continue;
-      const dates = columns.find(
-        (column: unknown) => Array.isArray(column) && column[0] === 'x',
-      );
+      const dates = columns.find((column: unknown) => Array.isArray(column) && column[0] === 'x');
       if (!Array.isArray(dates)) continue;
       for (const value of dates.slice(1)) {
         const date = this.graphTimestampToDate(value);
@@ -732,21 +618,13 @@ export class TelegramMtprotoClient {
     if (resolvedGraph instanceof Api.StatsGraphAsync) {
       const token = resolvedGraph.token;
       try {
-        const response = await this.invokeWithStatsDcMigration(
-          client,
-          () => new Api.stats.LoadAsyncGraph({ token }),
-          statsDcId,
-        );
+        const response = await this.invokeWithStatsDcMigration(client, () => new Api.stats.LoadAsyncGraph({ token }), statsDcId);
         resolvedGraph = response.result;
         if (response.migrated) {
-          warnings.push(
-            `${field}: async graph request was retried on Telegram stats DC ${response.dcId}`,
-          );
+          warnings.push(`${field}: async graph request was retried on Telegram stats DC ${response.dcId}`);
         }
       } catch (error) {
-        warnings.push(
-          `${field}: async graph could not be loaded (${this.getTelegramErrorCode(error)})`,
-        );
+        warnings.push(`${field}: async graph could not be loaded (${this.getTelegramErrorCode(error)})`);
         return { status: 'pending', token };
       }
     }
@@ -781,11 +659,7 @@ export class TelegramMtprotoClient {
   }
 
   private getTelegramErrorCode(error: unknown) {
-    return String(
-      this.getErrorProperty(error, 'errorMessage') ||
-        this.getErrorProperty(error, 'message') ||
-        'UNKNOWN_ERROR',
-    );
+    return String(this.getErrorProperty(error, 'errorMessage') || this.getErrorProperty(error, 'message') || 'UNKNOWN_ERROR');
   }
 
   private getMigrationDc(error: unknown) {
@@ -824,14 +698,9 @@ export class TelegramMtprotoClient {
     }
   }
 
-  private async getBroadcastStatsDc(
-    client: TelegramClient,
-    entity: unknown,
-  ): Promise<number | null> {
+  private async getBroadcastStatsDc(client: TelegramClient, entity: unknown): Promise<number | null> {
     try {
-      const full = await client.invoke(
-        new Api.channels.GetFullChannel({ channel: entity as any }),
-      );
+      const full = await client.invoke(new Api.channels.GetFullChannel({ channel: entity as any }));
       return this.toFiniteNumber((full as any)?.fullChat?.statsDc);
     } catch {
       return null;
@@ -868,9 +737,7 @@ export class TelegramMtprotoClient {
         errorCode,
         floodWaitSeconds,
         warnings: [
-          floodWaitSeconds != null
-            ? `Telegram rate limit: retry after ${floodWaitSeconds} seconds`
-            : `Telegram rate limit: ${errorCode}`,
+          floodWaitSeconds != null ? `Telegram rate limit: retry after ${floodWaitSeconds} seconds` : `Telegram rate limit: ${errorCode}`,
         ],
       };
     }
@@ -880,37 +747,23 @@ export class TelegramMtprotoClient {
         errorCode,
         floodWaitSeconds: null,
         dcId: migrationDc,
-        warnings: [
-          `Telegram asked to retry broadcast stats on DC ${migrationDc}: ${errorCode}`,
-        ],
+        warnings: [`Telegram asked to retry broadcast stats on DC ${migrationDc}: ${errorCode}`],
       };
     }
-    if (
-      errorCode.includes('CHAT_ADMIN_REQUIRED') ||
-      errorCode.includes('CHANNEL_PRIVATE') ||
-      errorCode.includes('RIGHT_FORBIDDEN')
-    ) {
+    if (errorCode.includes('CHAT_ADMIN_REQUIRED') || errorCode.includes('CHANNEL_PRIVATE') || errorCode.includes('RIGHT_FORBIDDEN')) {
       return {
         status: 'no_admin_rights',
         errorCode,
         floodWaitSeconds: null,
-        warnings: [
-          `Broadcast stats require channel admin rights: ${errorCode}`,
-        ],
+        warnings: [`Broadcast stats require channel admin rights: ${errorCode}`],
       };
     }
-    if (
-      errorCode.includes('STATS') ||
-      errorCode.includes('CHANNEL_INVALID') ||
-      errorCode.includes('BROADCAST_REQUIRED')
-    ) {
+    if (errorCode.includes('STATS') || errorCode.includes('CHANNEL_INVALID') || errorCode.includes('BROADCAST_REQUIRED')) {
       return {
         status: 'unavailable',
         errorCode,
         floodWaitSeconds: null,
-        warnings: [
-          `Broadcast stats are unavailable for this channel: ${errorCode}`,
-        ],
+        warnings: [`Broadcast stats are unavailable for this channel: ${errorCode}`],
       };
     }
     return {
@@ -930,8 +783,7 @@ export class TelegramMtprotoClient {
     return {
       closeClient: (client: TelegramClient) => this.closeClient(client),
       saveSession: (client: TelegramClient) => this.saveSession(client),
-      getProfile: (client: TelegramClient, user?: Api.User | null) =>
-        this.getAccountProfileFromClient(client, user),
+      getProfile: (client: TelegramClient, user?: Api.User | null) => this.getAccountProfileFromClient(client, user),
     };
   }
 
@@ -947,10 +799,7 @@ export class TelegramMtprotoClient {
 
   private entityTitle(entity: ImportableTelegramEntity) {
     if (entity instanceof Api.User) {
-      return [entity.firstName, entity.lastName]
-        .filter(Boolean)
-        .join(' ')
-        .trim();
+      return [entity.firstName, entity.lastName].filter(Boolean).join(' ').trim();
     }
     return String(entity.title || '').trim();
   }
@@ -961,11 +810,7 @@ export class TelegramMtprotoClient {
       message?: string;
       errorCode?: string;
     };
-    const raw =
-      candidate?.errorMessage ||
-      candidate?.errorCode ||
-      candidate?.message ||
-      '';
+    const raw = candidate?.errorMessage || candidate?.errorCode || candidate?.message || '';
     const match = String(raw).match(/[A-Z_]+/);
     return match?.[0] || '';
   }
@@ -978,13 +823,9 @@ export class TelegramMtprotoClient {
       case 'INVITE_HASH_EXPIRED':
         throw new BadRequestException('Telegram invite link has expired.');
       case 'INVITE_REQUEST_SENT':
-        throw new ConflictException(
-          'Join request was sent. Wait for approval and retry the import.',
-        );
+        throw new ConflictException('Join request was sent. Wait for approval and retry the import.');
       case 'CHANNELS_TOO_MUCH':
-        throw new ForbiddenException(
-          'The connected Telegram account has reached its channel limit.',
-        );
+        throw new ForbiddenException('The connected Telegram account has reached its channel limit.');
       default:
         throw error;
     }
@@ -1015,55 +856,28 @@ export class TelegramMtprotoClient {
         );
       } catch {
         fullChannel = null;
-        this.logger.warn(
-          `Telegram full channel lookup failed or timed out for id=${this.entityIdToString(entity) || 'n/a'}`,
-        );
+        this.logger.warn(`Telegram full channel lookup failed or timed out for id=${this.entityIdToString(entity) || 'n/a'}`);
       }
     }
 
-    const username = normalizeTelegramUsername(
-      (entity as { username?: string | null }).username,
-    );
+    const username = normalizeTelegramUsername((entity as { username?: string | null }).username);
     const requiresJoinRequest = Boolean(
       rawExtra?.requiresJoinRequest ||
       (entity as { joinToSend?: boolean }).joinToSend ||
       (fullChannel as { requestsPending?: unknown } | null)?.requestsPending ||
-      (fullChannel as { joinRequestsEnabled?: unknown } | null)
-        ?.joinRequestsEnabled,
+      (fullChannel as { joinRequestsEnabled?: unknown } | null)?.joinRequestsEnabled,
     );
-    const inviteLink =
-      typeof rawExtra?.inviteLink === 'string' && rawExtra.inviteLink.trim()
-        ? rawExtra.inviteLink.trim()
-        : null;
+    const inviteLink = typeof rawExtra?.inviteLink === 'string' && rawExtra.inviteLink.trim() ? rawExtra.inviteLink.trim() : null;
     const telegramAccessHash = this.entityAccessHash(entity);
-    const firstName =
-      entity instanceof Api.User
-        ? String(entity.firstName || '') || null
-        : null;
-    const lastName =
-      entity instanceof Api.User ? String(entity.lastName || '') || null : null;
+    const firstName = entity instanceof Api.User ? String(entity.firstName || '') || null : null;
+    const lastName = entity instanceof Api.User ? String(entity.lastName || '') || null : null;
     const participantsCount =
-      this.toFiniteNumber(
-        (fullChannel as { participantsCount?: unknown } | null)
-          ?.participantsCount,
-      ) ??
-      this.toFiniteNumber(
-        (entity as { participantsCount?: unknown }).participantsCount,
-      );
-    const pendingJoinRequestsCount = await livePending(
-      client,
-      entity,
-      fullChannel,
-      (request) =>
-        this.withTimeout(
-          request,
-          this.telegramMetadataTimeoutMs,
-          'Telegram pending join requests lookup',
-        ),
+      this.toFiniteNumber((fullChannel as { participantsCount?: unknown } | null)?.participantsCount) ??
+      this.toFiniteNumber((entity as { participantsCount?: unknown }).participantsCount);
+    const pendingJoinRequestsCount = await livePending(client, entity, fullChannel, (request) =>
+      this.withTimeout(request, this.telegramMetadataTimeoutMs, 'Telegram pending join requests lookup'),
     );
-    const photoUrl =
-      (await this.profilePhotoDataUrl(client, entity)) ||
-      this.telegramPublicPhotoUrl(username);
+    const photoUrl = (await this.profilePhotoDataUrl(client, entity)) || this.telegramPublicPhotoUrl(username);
     this.logger.log(
       `Telegram entity described in ${this.elapsed(startedAt)}: kind=${this.entityKind(entity)} id=${this.entityIdToString(entity) || 'n/a'} username=${username || 'n/a'}`,
     );
@@ -1072,10 +886,7 @@ export class TelegramMtprotoClient {
       telegramChatId: this.entityIdToString(entity),
       title: this.entityTitle(entity) || username || fallbackRef,
       username,
-      description:
-        ((fullChannel as { about?: string | null } | null)?.about as
-          | string
-          | null) || null,
+      description: ((fullChannel as { about?: string | null } | null)?.about as string | null) || null,
       participantsCount,
       pendingJoinRequestsCount,
       photoUrl,
@@ -1096,36 +907,24 @@ export class TelegramMtprotoClient {
           lastName,
           username,
           accessHash: telegramAccessHash,
-          participantsCount: (entity as { participantsCount?: unknown })
-            .participantsCount,
+          participantsCount: (entity as { participantsCount?: unknown }).participantsCount,
         }),
         fullChannel: this.toJsonSafe({
           about: (fullChannel as { about?: unknown } | null)?.about,
-          participantsCount: (
-            fullChannel as { participantsCount?: unknown } | null
-          )?.participantsCount,
-          requestsPending: (fullChannel as { requestsPending?: unknown } | null)
-            ?.requestsPending,
+          participantsCount: (fullChannel as { participantsCount?: unknown } | null)?.participantsCount,
+          requestsPending: (fullChannel as { requestsPending?: unknown } | null)?.requestsPending,
         }),
       },
     };
   }
 
   private searchResultCandidates(result: unknown): ImportableTelegramEntity[] {
-    const users = Array.isArray((result as { users?: unknown[] } | null)?.users)
-      ? (result as { users: unknown[] }).users
-      : [];
-    const chats = Array.isArray((result as { chats?: unknown[] } | null)?.chats)
-      ? (result as { chats: unknown[] }).chats
-      : [];
-    return [...chats, ...users].filter((entity) =>
-      this.isImportableTelegramEntity(entity),
-    ) as ImportableTelegramEntity[];
+    const users = Array.isArray((result as { users?: unknown[] } | null)?.users) ? (result as { users: unknown[] }).users : [];
+    const chats = Array.isArray((result as { chats?: unknown[] } | null)?.chats) ? (result as { chats: unknown[] }).chats : [];
+    return [...chats, ...users].filter((entity) => this.isImportableTelegramEntity(entity)) as ImportableTelegramEntity[];
   }
 
-  private dedupeTitleCandidates(
-    candidates: Array<TelegramTitleCandidate<ImportableTelegramEntity>>,
-  ) {
+  private dedupeTitleCandidates(candidates: Array<TelegramTitleCandidate<ImportableTelegramEntity>>) {
     const seen = new Set<string>();
     return candidates.filter((candidate) => {
       const key = `${candidate.kind}:${candidate.entityId}`;
@@ -1146,50 +945,32 @@ export class TelegramMtprotoClient {
           entityId: this.entityIdToString(row.entity),
           kind: this.entityKind(row.entity),
           title: String(row.title || this.entityTitle(row.entity)).trim(),
-          username: normalizeTelegramUsername(
-            (row.entity as { username?: string | null }).username,
-          ),
+          username: normalizeTelegramUsername((row.entity as { username?: string | null }).username),
           source: 'dialogs' as const,
         };
       })
-      .filter(Boolean) as Array<
-      TelegramTitleCandidate<ImportableTelegramEntity>
-    >;
+      .filter(Boolean) as Array<TelegramTitleCandidate<ImportableTelegramEntity>>;
 
-    const searchResult = await client.invoke(
-      new Api.contacts.Search({ q: titleQuery, limit: 50 }),
-    );
-    const searchCandidates = this.searchResultCandidates(searchResult).map(
-      (entity) => ({
-        entity,
-        entityId: this.entityIdToString(entity),
-        kind: this.entityKind(entity),
-        title: this.entityTitle(entity),
-        username: normalizeTelegramUsername(
-          (entity as { username?: string | null }).username,
-        ),
-        source: 'search' as const,
-      }),
-    );
+    const searchResult = await client.invoke(new Api.contacts.Search({ q: titleQuery, limit: 50 }));
+    const searchCandidates = this.searchResultCandidates(searchResult).map((entity) => ({
+      entity,
+      entityId: this.entityIdToString(entity),
+      kind: this.entityKind(entity),
+      title: this.entityTitle(entity),
+      username: normalizeTelegramUsername((entity as { username?: string | null }).username),
+      source: 'search' as const,
+    }));
 
-    return this.dedupeTitleCandidates([
-      ...dialogCandidates,
-      ...searchCandidates,
-    ]);
+    return this.dedupeTitleCandidates([...dialogCandidates, ...searchCandidates]);
   }
 
-  private suggestionsMessage(
-    titleQuery: string,
-    suggestions: Array<{ title: string; username: string | null }>,
-  ) {
+  private suggestionsMessage(titleQuery: string, suggestions: Array<{ title: string; username: string | null }>) {
     if (!suggestions.length) {
       return 'Private channels that are not accessible to the connected Telegram account require an invite link.';
     }
     const rendered = suggestions
       .slice(0, 5)
-      .map((item) =>
-        item.username ? `${item.title} (@${item.username})` : item.title,
-      )
+      .map((item) => (item.username ? `${item.title} (@${item.username})` : item.title))
       .join(', ');
     return `Channel "${titleQuery}" was not found. Possible matches: ${rendered}.`;
   }
@@ -1211,20 +992,11 @@ export class TelegramMtprotoClient {
     }>;
   }
 
-  private async findDialogEntityByChatId(
-    client: TelegramClient,
-    telegramChatId?: string | null,
-  ) {
+  private async findDialogEntityByChatId(client: TelegramClient, telegramChatId?: string | null) {
     const normalizedChatId = this.normalizeChatId(telegramChatId);
     if (!normalizedChatId) return null;
     const dialogs = await this.dialogCandidates(client);
-    return (
-      dialogs.find(
-        (dialog) =>
-          this.normalizeChatId(this.entityIdToString(dialog.entity)) ===
-          normalizedChatId,
-      )?.entity || null
-    );
+    return dialogs.find((dialog) => this.normalizeChatId(this.entityIdToString(dialog.entity)) === normalizedChatId)?.entity || null;
   }
 
   private storedInputPeer(channel: StoredTelegramChannelReference) {
@@ -1237,25 +1009,17 @@ export class TelegramMtprotoClient {
     });
   }
 
-  private async tryResolveEntity(
-    client: TelegramClient,
-    ref: unknown,
-  ): Promise<ImportableTelegramEntity | null> {
+  private async tryResolveEntity(client: TelegramClient, ref: unknown): Promise<ImportableTelegramEntity | null> {
     if (ref == null) return null;
     try {
       const entity = await client.getEntity(ref as never);
-      return this.isImportableTelegramEntity(entity)
-        ? (entity as ImportableTelegramEntity)
-        : null;
+      return this.isImportableTelegramEntity(entity) ? (entity as ImportableTelegramEntity) : null;
     } catch {
       return null;
     }
   }
 
-  private async tryResolvePeer(
-    client: TelegramClient,
-    ref: unknown,
-  ): Promise<Api.TypeInputPeer | null> {
+  private async tryResolvePeer(client: TelegramClient, ref: unknown): Promise<Api.TypeInputPeer | null> {
     if (ref == null) return null;
     try {
       return await client.getInputEntity(ref as never);
@@ -1268,19 +1032,11 @@ export class TelegramMtprotoClient {
     client: TelegramClient,
     channel: StoredTelegramChannelReference,
   ): Promise<ResolvedStoredTelegramChannel> {
-    const dialogEntity = await this.findDialogEntityByChatId(
-      client,
-      channel.telegramChatId,
-    );
+    const dialogEntity = await this.findDialogEntityByChatId(client, channel.telegramChatId);
     if (dialogEntity) {
-      const described = await this.describeEntity(
-        client,
-        dialogEntity,
-        channel.username || channel.telegramChatId || 'Telegram channel',
-        {
-          inviteLink: channel.inviteLink || null,
-        },
-      );
+      const described = await this.describeEntity(client, dialogEntity, channel.username || channel.telegramChatId || 'Telegram channel', {
+        inviteLink: channel.inviteLink || null,
+      });
       const peer = await this.tryResolvePeer(client, dialogEntity);
       if (peer) {
         return {
@@ -1288,10 +1044,7 @@ export class TelegramMtprotoClient {
           peer,
           channel: {
             ...described,
-            telegramAccessHash:
-              described.telegramAccessHash ||
-              channel.telegramAccessHash ||
-              null,
+            telegramAccessHash: described.telegramAccessHash || channel.telegramAccessHash || null,
             inviteLink: described.inviteLink || channel.inviteLink || null,
             accessMode:
               (described.accessMode as TelegramChannelAccessMode | undefined) ||
@@ -1311,23 +1064,15 @@ export class TelegramMtprotoClient {
     if (storedPeer) {
       const entity = await this.tryResolveEntity(client, storedPeer);
       if (entity) {
-        const described = await this.describeEntity(
-          client,
-          entity,
-          channel.username || channel.telegramChatId || 'Telegram channel',
-          {
-            inviteLink: channel.inviteLink || null,
-          },
-        );
+        const described = await this.describeEntity(client, entity, channel.username || channel.telegramChatId || 'Telegram channel', {
+          inviteLink: channel.inviteLink || null,
+        });
         return {
           entity,
           peer: storedPeer,
           channel: {
             ...described,
-            telegramAccessHash:
-              described.telegramAccessHash ||
-              channel.telegramAccessHash ||
-              null,
+            telegramAccessHash: described.telegramAccessHash || channel.telegramAccessHash || null,
             inviteLink: described.inviteLink || channel.inviteLink || null,
             accessMode:
               (described.accessMode as TelegramChannelAccessMode | undefined) ||
@@ -1349,32 +1094,21 @@ export class TelegramMtprotoClient {
       if (entity) {
         const peer = await this.tryResolvePeer(client, entity);
         if (peer) {
-          const described = await this.describeEntity(
-            client,
-            entity,
-            `@${username}`,
-            {
-              inviteLink: channel.inviteLink || null,
-            },
-          );
+          const described = await this.describeEntity(client, entity, `@${username}`, {
+            inviteLink: channel.inviteLink || null,
+          });
           return {
             entity,
             peer,
             channel: {
               ...described,
-              telegramAccessHash:
-                described.telegramAccessHash ||
-                channel.telegramAccessHash ||
-                null,
+              telegramAccessHash: described.telegramAccessHash || channel.telegramAccessHash || null,
               inviteLink: described.inviteLink || channel.inviteLink || null,
               accessMode:
-                (described.accessMode as
-                  | TelegramChannelAccessMode
-                  | undefined) ||
+                (described.accessMode as TelegramChannelAccessMode | undefined) ||
                 this.inferAccessMode({
                   username: described.username,
-                  inviteLink:
-                    described.inviteLink || channel.inviteLink || null,
+                  inviteLink: described.inviteLink || channel.inviteLink || null,
                   requiresJoinRequest: described.requiresJoinRequest,
                 }),
               requiresJoinRequest: Boolean(described.requiresJoinRequest),
@@ -1385,15 +1119,9 @@ export class TelegramMtprotoClient {
       }
     }
 
-    const inviteHash = String(channel.inviteLink || '').match(
-      /(?:joinchat\/|\+)([A-Za-z0-9_-]+)/i,
-    )?.[1];
+    const inviteHash = String(channel.inviteLink || '').match(/(?:joinchat\/|\+)([A-Za-z0-9_-]+)/i)?.[1];
     if (inviteHash) {
-      const resolved = await this.resolveInviteLinkInfo(
-        client,
-        channel.inviteLink || 'Telegram channel',
-        inviteHash,
-      );
+      const resolved = await this.resolveInviteLinkInfo(client, channel.inviteLink || 'Telegram channel', inviteHash);
       const entity = await this.tryResolveEntity(
         client,
         this.storedInputPeer({
@@ -1431,9 +1159,7 @@ export class TelegramMtprotoClient {
       }
     }
 
-    throw new BadRequestException(
-      'Could not resolve the Telegram channel for this connected account.',
-    );
+    throw new BadRequestException('Could not resolve the Telegram channel for this connected account.');
   }
 
   private async importEntityFromInviteUpdates(
@@ -1444,15 +1170,9 @@ export class TelegramMtprotoClient {
     joinedByInvite: boolean,
   ) {
     const candidates = this.searchResultCandidates(updates);
-    const entity =
-      candidates.find(
-        (candidate) =>
-          candidate instanceof Api.Channel || candidate instanceof Api.Chat,
-      ) || candidates[0];
+    const entity = candidates.find((candidate) => candidate instanceof Api.Channel || candidate instanceof Api.Chat) || candidates[0];
     if (!entity) {
-      throw new BadRequestException(
-        'Could not resolve a real Telegram channel from the invite link.',
-      );
+      throw new BadRequestException('Could not resolve a real Telegram channel from the invite link.');
     }
     const described = await this.describeEntity(client, entity, fallbackRef, {
       inviteLink,
@@ -1465,17 +1185,10 @@ export class TelegramMtprotoClient {
     };
   }
 
-  private async findInviteAlreadyEntity(
-    client: TelegramClient,
-    invite: Api.ChatInviteAlready,
-    fallbackRef: string,
-    inviteLink: string,
-  ) {
+  private async findInviteAlreadyEntity(client: TelegramClient, invite: Api.ChatInviteAlready, fallbackRef: string, inviteLink: string) {
     const entity = await client.getEntity(invite.chat);
     if (!this.isImportableTelegramEntity(entity)) {
-      throw new BadRequestException(
-        'Could not resolve a real Telegram channel from the invite link.',
-      );
+      throw new BadRequestException('Could not resolve a real Telegram channel from the invite link.');
     }
     const described = await this.describeEntity(client, entity, fallbackRef, {
       invite: this.toJsonSafe(invite),
@@ -1487,27 +1200,14 @@ export class TelegramMtprotoClient {
     };
   }
 
-  private async resolveInviteParticipantConflict(
-    client: TelegramClient,
-    inviteLink: string,
-    previewTitle: string,
-  ) {
+  private async resolveInviteParticipantConflict(client: TelegramClient, inviteLink: string, previewTitle: string) {
     const normalizedTitle = previewTitle.normalize('NFKC').trim();
     const dialogs = await this.dialogCandidates(client);
-    const exactDialogs = dialogs.filter(
-      (dialog) => dialog.title.normalize('NFKC').trim() === normalizedTitle,
-    );
+    const exactDialogs = dialogs.filter((dialog) => dialog.title.normalize('NFKC').trim() === normalizedTitle);
     if (exactDialogs.length !== 1) {
-      throw new BadRequestException(
-        'Could not resolve a real Telegram channel from the invite link.',
-      );
+      throw new BadRequestException('Could not resolve a real Telegram channel from the invite link.');
     }
-    const described = await this.describeEntity(
-      client,
-      exactDialogs[0].entity,
-      previewTitle,
-      { matchedBy: 'invite-participant-conflict' },
-    );
+    const described = await this.describeEntity(client, exactDialogs[0].entity, previewTitle, { matchedBy: 'invite-participant-conflict' });
     return {
       ...described,
       inviteLink,
@@ -1515,16 +1215,10 @@ export class TelegramMtprotoClient {
     };
   }
 
-  private async resolveInviteLinkInfo(
-    client: TelegramClient,
-    fallbackRef: string,
-    inviteHash: string,
-  ) {
+  private async resolveInviteLinkInfo(client: TelegramClient, fallbackRef: string, inviteHash: string) {
     const inviteLink = canonicalTelegramInviteLink(inviteHash);
     const maskedInvite = maskTelegramInviteHash(inviteHash);
-    this.logger.log(
-      `Resolving Telegram invite link: invite=${maskedInvite} fallback=${maskTelegramReferenceForLog(fallbackRef)}`,
-    );
+    this.logger.log(`Resolving Telegram invite link: invite=${maskedInvite} fallback=${maskTelegramReferenceForLog(fallbackRef)}`);
     let invite: Api.TypeChatInvite;
     try {
       const checkStartedAt = this.now();
@@ -1538,31 +1232,19 @@ export class TelegramMtprotoClient {
         `Telegram invite check completed in ${this.elapsed(checkStartedAt)}: invite=${maskedInvite} result=${invite?.constructor?.name || 'unknown'}`,
       );
     } catch (error) {
-      this.logger.error(
-        `Telegram invite check failed: invite=${maskedInvite}`,
-        JSON.stringify(this.errorSummary(error)),
-      );
+      this.logger.error(`Telegram invite check failed: invite=${maskedInvite}`, JSON.stringify(this.errorSummary(error)));
       this.mapInviteError(error);
     }
 
     if (invite instanceof Api.ChatInviteAlready) {
       this.logger.log(`Telegram invite already joined: invite=${maskedInvite}`);
-      return this.findInviteAlreadyEntity(
-        client,
-        invite,
-        fallbackRef,
-        inviteLink,
-      );
+      return this.findInviteAlreadyEntity(client, invite, fallbackRef, inviteLink);
     }
 
-    const previewTitle = String(
-      (invite as { title?: string }).title || fallbackRef,
-    );
+    const previewTitle = String((invite as { title?: string }).title || fallbackRef);
     try {
       const importStartedAt = this.now();
-      this.logger.log(
-        `Importing Telegram invite: invite=${maskedInvite} previewTitle=${previewTitle}`,
-      );
+      this.logger.log(`Importing Telegram invite: invite=${maskedInvite} previewTitle=${previewTitle}`);
       const updates = await this.withTimeout(
         client.invoke(new Api.messages.ImportChatInvite({ hash: inviteHash })),
         this.telegramResolveTimeoutMs,
@@ -1571,13 +1253,7 @@ export class TelegramMtprotoClient {
       this.logger.log(
         `Telegram invite import completed in ${this.elapsed(importStartedAt)}: invite=${maskedInvite} updatesType=${(updates as any)?.constructor?.name || typeof updates}`,
       );
-      return this.importEntityFromInviteUpdates(
-        client,
-        updates,
-        previewTitle,
-        inviteLink,
-        true,
-      );
+      return this.importEntityFromInviteUpdates(client, updates, previewTitle, inviteLink, true);
     } catch (error) {
       this.logger.error(
         `Telegram invite import failed: invite=${maskedInvite} previewTitle=${previewTitle}`,
@@ -1585,11 +1261,7 @@ export class TelegramMtprotoClient {
       );
       const code = this.inviteErrorCode(error);
       if (code === 'USER_ALREADY_PARTICIPANT') {
-        return this.resolveInviteParticipantConflict(
-          client,
-          inviteLink,
-          previewTitle,
-        );
+        return this.resolveInviteParticipantConflict(client, inviteLink, previewTitle);
       }
       this.mapInviteError(error);
     }
@@ -1599,26 +1271,16 @@ export class TelegramMtprotoClient {
     const candidates = await this.titleCandidates(client, titleQuery);
     const resolved = resolveTelegramTitleCandidates(titleQuery, candidates);
     if (!resolved.resolved) {
-      throw new BadRequestException(
-        this.suggestionsMessage(titleQuery, resolved.suggestions),
-      );
+      throw new BadRequestException(this.suggestionsMessage(titleQuery, resolved.suggestions));
     }
     return this.describeEntity(client, resolved.resolved.entity, titleQuery, {
-      matchedBy:
-        resolved.resolved.score === MatchScore.EXACT_USERNAME
-          ? 'exact-username'
-          : 'exact-title',
+      matchedBy: resolved.resolved.score === MatchScore.EXACT_USERNAME ? 'exact-username' : 'exact-title',
     });
   }
 
-  private async getSelfUserWithDetails(
-    client: TelegramClient,
-    fallback?: Api.User,
-  ) {
+  private async getSelfUserWithDetails(client: TelegramClient, fallback?: Api.User) {
     try {
-      const full = await client.invoke(
-        new Api.users.GetFullUser({ id: new Api.InputUserSelf() }),
-      );
+      const full = await client.invoke(new Api.users.GetFullUser({ id: new Api.InputUserSelf() }));
       const users = ((full as any)?.users || []) as any[];
       const meId = fallback ? String((fallback as any).id) : null;
       const exact = meId ? users.find((u) => String(u?.id) === meId) : null;
@@ -1629,12 +1291,7 @@ export class TelegramMtprotoClient {
     }
   }
 
-  async startLogin(
-    apiId: string,
-    apiHash: string,
-    phone: string,
-    forceSms = false,
-  ) {
+  async startLogin(apiId: string, apiHash: string, phone: string, forceSms = false) {
     return startTelegramPhoneLogin(apiId, apiHash, phone, forceSms, {
       createClient: () => this.createClient({ apiId, apiHash }),
       ...this.loginAdapterDependencies(),
@@ -1648,12 +1305,10 @@ export class TelegramMtprotoClient {
     onProgress: (progress: TelegramQrLoginProgress) => void | Promise<void>,
   ) {
     return loginWithTelegramQr(apiId, apiHash, signal, onProgress, {
-      createClient: (operationSignal) =>
-        this.createClient({ apiId, apiHash }, operationSignal),
+      createClient: (operationSignal) => this.createClient({ apiId, apiHash }, operationSignal),
       closeClient: (client) => this.closeClient(client),
       saveSession: (client) => this.saveSession(client),
-      getProfile: (client, user) =>
-        this.getAccountProfileFromClient(client, user),
+      getProfile: (client, user) => this.getAccountProfileFromClient(client, user),
     });
   }
 
@@ -1676,12 +1331,7 @@ export class TelegramMtprotoClient {
     });
   }
 
-  async signInWithPassword(params: {
-    apiId: string;
-    apiHash: string;
-    password: string;
-    tempSession?: string;
-  }) {
+  async signInWithPassword(params: { apiId: string; apiHash: string; password: string; tempSession?: string }) {
     return signInTelegramWithPassword(params, {
       createClient: (session) =>
         this.createClient({
@@ -1693,11 +1343,7 @@ export class TelegramMtprotoClient {
     });
   }
 
-  async getAccountProfile(params: {
-    apiId: string;
-    apiHash: string;
-    session: string;
-  }) {
+  async getAccountProfile(params: { apiId: string; apiHash: string; session: string }) {
     const client = await this.createClient(params);
     try {
       return await this.getAccountProfileFromClient(client);
@@ -1718,11 +1364,7 @@ export class TelegramMtprotoClient {
     };
   }
 
-  async getAdminChannels(params: {
-    apiId: string;
-    apiHash: string;
-    session: string;
-  }) {
+  async getAdminChannels(params: { apiId: string; apiHash: string; session: string }) {
     const client = await this.createClient(params);
     try {
       const dialogs = await client.getDialogs({ limit: 200 });
@@ -1737,27 +1379,17 @@ export class TelegramMtprotoClient {
           title: d.title || 'Untitled',
           username: d.entity?.username || null,
           isCreator: !!d.entity?.creator,
-          adminRights: this.toJsonSafe(d.entity?.adminRights) as Record<
-            string,
-            unknown
-          > | null,
+          adminRights: this.toJsonSafe(d.entity?.adminRights) as Record<string, unknown> | null,
         }));
     } finally {
       await this.closeClient(client);
     }
   }
 
-  async getAdminChannelsWithProfile(params: {
-    apiId: string;
-    apiHash: string;
-    session: string;
-  }) {
+  async getAdminChannelsWithProfile(params: { apiId: string; apiHash: string; session: string }) {
     const client = await this.createClient(params);
     try {
-      const [dialogs, profile] = await Promise.all([
-        client.getDialogs({ limit: 200 }),
-        this.getAccountProfileFromClient(client),
-      ]);
+      const [dialogs, profile] = await Promise.all([client.getDialogs({ limit: 200 }), this.getAccountProfileFromClient(client)]);
       const channels = dialogs
         .filter((d: any) => {
           if (!d?.isChannel) return false;
@@ -1769,10 +1401,7 @@ export class TelegramMtprotoClient {
           title: d.title || 'Untitled',
           username: d.entity?.username || null,
           isCreator: !!d.entity?.creator,
-          adminRights: this.toJsonSafe(d.entity?.adminRights) as Record<
-            string,
-            unknown
-          > | null,
+          adminRights: this.toJsonSafe(d.entity?.adminRights) as Record<string, unknown> | null,
         }));
       return { channels, profile };
     } finally {
@@ -1807,10 +1436,7 @@ export class TelegramMtprotoClient {
       }
 
       if (params.channel) {
-        const resolved = await this.resolveStoredChannel(
-          client,
-          params.channel,
-        );
+        const resolved = await this.resolveStoredChannel(client, params.channel);
         this.logger.log(
           `Telegram stored-channel lookup finished in ${this.elapsed(startedAt)}: chatId=${resolved.channel.telegramChatId || 'n/a'} via=${resolved.channel.resolvedBy}`,
         );
@@ -1827,15 +1453,9 @@ export class TelegramMtprotoClient {
         `Telegram entity lookup completed in ${this.elapsed(entityStartedAt)}: ref=${maskTelegramReferenceForLog(params.channelRef)} type=${entity?.constructor?.name || 'unknown'}`,
       );
       if (!this.isImportableTelegramEntity(entity)) {
-        throw new BadRequestException(
-          `Cannot find any entity corresponding to "${params.channelRef}"`,
-        );
+        throw new BadRequestException(`Cannot find any entity corresponding to "${params.channelRef}"`);
       }
-      const described = await this.describeEntity(
-        client,
-        entity,
-        params.channelRef || 'Telegram channel',
-      );
+      const described = await this.describeEntity(client, entity, params.channelRef || 'Telegram channel');
       this.logger.log(
         `Telegram public channel lookup finished in ${this.elapsed(startedAt)}: ref=${maskTelegramReferenceForLog(params.channelRef)} chatId=${described.telegramChatId || 'n/a'}`,
       );
@@ -1845,12 +1465,7 @@ export class TelegramMtprotoClient {
     }
   }
 
-  async findAccessibleChannelInfoByTitle(params: {
-    apiId: string;
-    apiHash: string;
-    session: string;
-    titleQuery: string;
-  }) {
+  async findAccessibleChannelInfoByTitle(params: { apiId: string; apiHash: string; session: string; titleQuery: string }) {
     const client = await this.createClient(params);
     try {
       return this.resolveTitleInfo(client, params.titleQuery);
@@ -1873,22 +1488,15 @@ export class TelegramMtprotoClient {
   }) {
     const client = await this.createClient(params);
     try {
-      const resolved = params.channel
-        ? await this.resolveStoredChannel(client, params.channel)
-        : null;
-      const entity = resolved
-        ? resolved.entity
-        : await client.getEntity(params.channelRef as string);
+      const resolved = params.channel ? await this.resolveStoredChannel(client, params.channel) : null;
+      const entity = resolved ? resolved.entity : await client.getEntity(params.channelRef as string);
       const posts = params.postsFrom
         ? await this.getChannelMessagesFromCutoff(client, entity, {
             postLimit: params.postLimit,
             postsFrom: params.postsFrom,
           })
         : await client.getMessages(entity, {
-            limit: Math.max(
-              1,
-              Math.min(this.maxPostBackfillLimit, params.postLimit || 100),
-            ),
+            limit: Math.max(1, Math.min(this.maxPostBackfillLimit, params.postLimit || 100)),
           });
       const dailyMap = new Map<
         string,
@@ -1902,9 +1510,7 @@ export class TelegramMtprotoClient {
       for (const post of posts as any[]) {
         if (!post?.date) continue;
         const day = new Date(post.date);
-        const date = new Date(day.getFullYear(), day.getMonth(), day.getDate())
-          .toISOString()
-          .slice(0, 10);
+        const date = new Date(day.getFullYear(), day.getMonth(), day.getDate()).toISOString().slice(0, 10);
         const existing = dailyMap.get(date) || {
           date,
           viewsCount: 0,
@@ -1912,10 +1518,7 @@ export class TelegramMtprotoClient {
           forwardsCount: 0,
         };
         const reactionsCount = Array.isArray(post.reactions?.results)
-          ? post.reactions.results.reduce(
-              (sum: number, row: any) => sum + Number(row?.count || 0),
-              0,
-            )
+          ? post.reactions.results.reduce((sum: number, row: any) => sum + Number(row?.count || 0), 0)
           : 0;
         existing.viewsCount += Number(post.views || 0);
         existing.forwardsCount += Number(post.forwards || 0);
@@ -1944,9 +1547,7 @@ export class TelegramMtprotoClient {
         inviteLinkWarnings: inviteLinksResult.warnings,
         inviteLinksScope: inviteLinksResult.scope,
         inviteLinksExpectedTotal: inviteLinksResult.expectedTotalLinks,
-        dailyStats: Array.from(dailyMap.values()).sort((a, b) =>
-          a.date.localeCompare(b.date),
-        ),
+        dailyStats: Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date)),
       };
     } finally {
       await this.closeClient(client);
@@ -1963,12 +1564,8 @@ export class TelegramMtprotoClient {
     let client: TelegramClient | null = null;
     try {
       client = await this.createClient(params);
-      const resolved = params.channel
-        ? await this.resolveStoredChannel(client, params.channel)
-        : null;
-      const entity = resolved
-        ? resolved.entity
-        : await client.getEntity(params.channelRef as string);
+      const resolved = params.channel ? await this.resolveStoredChannel(client, params.channel) : null;
+      const entity = resolved ? resolved.entity : await client.getEntity(params.channelRef as string);
       const warnings: string[] = [];
       const preferredStatsDcId = await this.getBroadcastStatsDc(client, entity);
       const statsResponse = await this.invokeWithStatsDcMigration(
@@ -1979,9 +1576,7 @@ export class TelegramMtprotoClient {
       const rawStats = statsResponse.result;
       const statsDcId = statsResponse.dcId;
       if (statsResponse.migrated) {
-        warnings.push(
-          `Broadcast stats request was retried on Telegram stats DC ${statsDcId}`,
-        );
+        warnings.push(`Broadcast stats request was retried on Telegram stats DC ${statsDcId}`);
       }
       const rawStatsRecord = rawStats as unknown as Record<string, unknown>;
       const graphs: Partial<Record<BroadcastStatsGraphField, unknown>> = {};
@@ -1991,9 +1586,7 @@ export class TelegramMtprotoClient {
         const normalizedGraph = await this.normalizeStatsGraph(
           client,
           field.normalized,
-          field.raw
-            .map((rawField) => rawStatsRecord[rawField])
-            .find((graph) => graph != null),
+          field.raw.map((rawField) => rawStatsRecord[rawField]).find((graph) => graph != null),
           warnings,
           statsDcId,
         );
@@ -2053,25 +1646,15 @@ export class TelegramMtprotoClient {
     const record = row as Record<string, unknown> | null;
     return {
       active: Math.max(0, this.toFiniteNumber(record?.invitesCount) ?? 0),
-      revoked: Math.max(
-        0,
-        this.toFiniteNumber(record?.revokedInvitesCount) ?? 0,
-      ),
+      revoked: Math.max(0, this.toFiniteNumber(record?.revokedInvitesCount) ?? 0),
     };
   }
 
-  private logInviteSyncEvent(
-    level: 'log' | 'warn' | 'error',
-    payload: Record<string, unknown>,
-  ) {
+  private logInviteSyncEvent(level: 'log' | 'warn' | 'error', payload: Record<string, unknown>) {
     this.logger[level](JSON.stringify(payload));
   }
 
-  private async loadChannelInviteAdminsDirectory(
-    client: TelegramClient,
-    entity: ImportableTelegramEntity,
-    warnings: string[],
-  ) {
+  private async loadChannelInviteAdminsDirectory(client: TelegramClient, entity: ImportableTelegramEntity, warnings: string[]) {
     const usersById = new Map<string, Api.User>();
     let offset = 0;
     const limit = 200;
@@ -2097,17 +1680,13 @@ export class TelegramMtprotoClient {
             usersById.set(String(user.id), user);
           }
         }
-        const participants = Array.isArray(response?.participants)
-          ? response.participants
-          : [];
+        const participants = Array.isArray(response?.participants) ? response.participants : [];
         if (!participants.length || participants.length < limit) {
           break;
         }
         offset += participants.length;
       } catch (error) {
-        warnings.push(
-          `Telegram admin directory lookup failed: ${this.getTelegramErrorCode(error)}`,
-        );
+        warnings.push(`Telegram admin directory lookup failed: ${this.getTelegramErrorCode(error)}`);
         break;
       }
     }
@@ -2181,8 +1760,7 @@ export class TelegramMtprotoClient {
             connectedTelegramUserId: params.connectedTelegramUserId ?? null,
             adminId: String(params.user.id),
             strategy,
-            inputUserClass:
-              (resolved as { className?: string }).className ?? null,
+            inputUserClass: (resolved as { className?: string }).className ?? null,
           });
           return resolved;
         }
@@ -2202,9 +1780,7 @@ export class TelegramMtprotoClient {
       errors: attemptErrors,
     });
 
-    throw new BadRequestException(
-      `Telegram admin ${String(params.user.id)} could not be resolved as an input user.`,
-    );
+    throw new BadRequestException(`Telegram admin ${String(params.user.id)} could not be resolved as an input user.`);
   }
 
   private async fetchInviteLinksPage(params: {
@@ -2240,9 +1816,7 @@ export class TelegramMtprotoClient {
     revoked: boolean;
     createdFrom?: Date | null;
     warnings: string[];
-    onInviteLinkLoaded?: (
-      link: TelegramInviteLinksResult['links'][number],
-    ) => void | Promise<void>;
+    onInviteLinkLoaded?: (link: TelegramInviteLinksResult['links'][number]) => void | Promise<void>;
   }) {
     const links: TelegramInviteLinksResult['links'] = [];
     const seenUrls = new Set<string>();
@@ -2253,17 +1827,11 @@ export class TelegramMtprotoClient {
     let stoppedByCutoff = false;
     const photoUrlCache = new Map<string, string | null>();
 
-    const creatorSnapshot = async (
-      creator: Api.User | null,
-      fallback: Api.User,
-    ) => {
+    const creatorSnapshot = async (creator: Api.User | null, fallback: Api.User) => {
       const user = creator ?? fallback;
       const userId = String(user.id);
       if (!photoUrlCache.has(userId)) {
-        photoUrlCache.set(
-          userId,
-          await this.getInviteAdminPhotoUrl(params.client, user),
-        );
+        photoUrlCache.set(userId, await this.getInviteAdminPhotoUrl(params.client, user));
       }
       return {
         telegramCreatorUserId: userId,
@@ -2284,41 +1852,26 @@ export class TelegramMtprotoClient {
         offsetLink,
       })) as any;
       pagesLoaded += 1;
-      const responseUsers = Array.isArray(response?.users)
-        ? response.users
-        : [];
+      const responseUsers = Array.isArray(response?.users) ? response.users : [];
       for (const user of responseUsers) {
         if (user instanceof Api.User) {
-          this.rememberKnownUser(
-            params.knownUsers,
-            user,
-            `GetExportedChatInvites:${params.revoked ? 'revoked' : 'active'}`,
-          );
+          this.rememberKnownUser(params.knownUsers, user, `GetExportedChatInvites:${params.revoked ? 'revoked' : 'active'}`);
         }
       }
       const invites = Array.isArray(response?.invites) ? response.invites : [];
       if (!invites.length) break;
       const pageDates = invites
-        .map((invite) =>
-          this.toTelegramDate(this.unwrapExportedChatInvite(invite)?.date),
-        )
+        .map((invite) => this.toTelegramDate(this.unwrapExportedChatInvite(invite)?.date))
         .filter((date): date is Date => Boolean(date))
         .map((date) => date.getTime());
-      const pageSortedNewToOld =
-        pageDates.length > 1 &&
-        pageDates.every(
-          (value, index) => index === 0 || value <= pageDates[index - 1]!,
-        );
+      const pageSortedNewToOld = pageDates.length > 1 && pageDates.every((value, index) => index === 0 || value <= pageDates[index - 1]!);
 
       for (const invite of invites) {
         const resolvedInvite = this.unwrapExportedChatInvite(invite);
         const url = String(resolvedInvite?.link || '').trim();
         if (!url || seenUrls.has(url)) continue;
-        const creatorTelegramUserId =
-          this.toBigInt(resolvedInvite?.adminId)?.toString() ??
-          String(params.adminUser.id);
-        const creatorUser =
-          params.knownUsers.get(creatorTelegramUserId) ?? params.adminUser;
+        const creatorTelegramUserId = this.toBigInt(resolvedInvite?.adminId)?.toString() ?? String(params.adminUser.id);
+        const creatorUser = params.knownUsers.get(creatorTelegramUserId) ?? params.adminUser;
         const snapshot = await creatorSnapshot(creatorUser, params.adminUser);
         const createdAt = this.toTelegramDate(resolvedInvite?.date);
         if (params.createdFrom) {
@@ -2339,11 +1892,7 @@ export class TelegramMtprotoClient {
         seenUrls.add(url);
         links.push({
           url,
-          title:
-            typeof resolvedInvite?.title === 'string' &&
-            resolvedInvite.title.trim()
-              ? resolvedInvite.title
-              : null,
+          title: typeof resolvedInvite?.title === 'string' && resolvedInvite.title.trim() ? resolvedInvite.title : null,
           ...snapshot,
           createdAt,
           startDate: this.toTelegramDate(resolvedInvite?.startDate),
@@ -2389,11 +1938,7 @@ export class TelegramMtprotoClient {
     const channelTelegramId = this.entityIdToString(entity) || 'unknown';
     const selfUser = await this.getSelfUserWithDetails(
       client,
-      (await this.withTimeout(
-        client.getMe(),
-        this.telegramResolveTimeoutMs,
-        'Telegram self lookup',
-      )) as Api.User,
+      (await this.withTimeout(client.getMe(), this.telegramResolveTimeoutMs, 'Telegram self lookup')) as Api.User,
     );
     const connectedTelegramUserId = selfUser ? String(selfUser.id) : null;
     await onProgress?.({
@@ -2401,9 +1946,7 @@ export class TelegramMtprotoClient {
       message: 'Discovering invite-link creators',
     });
     const adminsResult = (await this.withTimeout(
-      client.invoke(
-        new Api.messages.GetAdminsWithInvites({ peer: entity as any }),
-      ),
+      client.invoke(new Api.messages.GetAdminsWithInvites({ peer: entity as any })),
       this.telegramResolveTimeoutMs,
       'Telegram admins with invites request',
     )) as any;
@@ -2417,18 +1960,12 @@ export class TelegramMtprotoClient {
     if (selfUser) {
       this.rememberKnownUser(knownUsers, selfUser, 'getMe/GetFullUser');
     }
-    const adminDirectoryUsers = await this.loadChannelInviteAdminsDirectory(
-      client,
-      entity,
-      warnings,
-    );
+    const adminDirectoryUsers = await this.loadChannelInviteAdminsDirectory(client, entity, warnings);
     for (const [userId, user] of adminDirectoryUsers.entries()) {
       this.rememberKnownUser(knownUsers, user, 'GetParticipants');
     }
 
-    const adminRows = Array.isArray(adminsResult?.admins)
-      ? adminsResult.admins
-      : [];
+    const adminRows = Array.isArray(adminsResult?.admins) ? adminsResult.admins : [];
     const expectedTotalLinks = adminRows.reduce((sum: number, row: unknown) => {
       const counts = this.inviteAdminCounts(row);
       return sum + counts.active + counts.revoked;
@@ -2442,22 +1979,15 @@ export class TelegramMtprotoClient {
     });
     await onProgress?.({
       phase: 'loading_invite_links',
-      message:
-        expectedTotalLinks > 0
-          ? `Loading invite links 0/${expectedTotalLinks}`
-          : 'Loading invite links',
+      message: expectedTotalLinks > 0 ? `Loading invite links 0/${expectedTotalLinks}` : 'Loading invite links',
       stageCurrent: 0,
       stageTotal: expectedTotalLinks,
     });
 
     const summaries: InviteAdminSummary[] = [];
-    const linksByUrl = new Map<
-      string,
-      TelegramInviteLinksResult['links'][number]
-    >();
+    const linksByUrl = new Map<string, TelegramInviteLinksResult['links'][number]>();
     const failedAdminWarningPattern = /^Admin .+ invite-link sync failed: /;
-    const fallbackAdminUser =
-      selfUser ?? knownUsers.values().next().value ?? null;
+    const fallbackAdminUser = selfUser ?? knownUsers.values().next().value ?? null;
     let failedAdmins = 0;
     let attemptedAdmins = 0;
     let loadedLinksCount = 0;
@@ -2466,9 +1996,7 @@ export class TelegramMtprotoClient {
       const adminUserId = this.inviteAdminUserId(row);
       const counts = this.inviteAdminCounts(row);
       const shouldFetch = counts.active > 0 || counts.revoked > 0;
-      const adminUser = adminUserId
-        ? (knownUsers.get(adminUserId) ?? null)
-        : null;
+      const adminUser = adminUserId ? (knownUsers.get(adminUserId) ?? null) : null;
 
       if (adminUser) {
         summaries.push({
@@ -2486,9 +2014,7 @@ export class TelegramMtprotoClient {
       attemptedAdmins += 1;
       if (!adminUserId || !adminUser) {
         failedAdmins += 1;
-        warnings.push(
-          `Admin ${adminUserId || 'unknown'} could not be resolved from Telegram users payload.`,
-        );
+        warnings.push(`Admin ${adminUserId || 'unknown'} could not be resolved from Telegram users payload.`);
         continue;
       }
 
@@ -2505,11 +2031,10 @@ export class TelegramMtprotoClient {
           deleted: Boolean(adminUser.deleted),
           self: Boolean(adminUser.self),
           hasAccessHash: Boolean(this.entityAccessHashValue(adminUser)),
-          accessHashType: typeof (adminUser as { accessHash?: unknown })
-            .accessHash,
+          accessHashType: typeof (adminUser as { accessHash?: unknown }).accessHash,
           accessHashCtor:
-            ((adminUser as { accessHash?: { constructor?: { name?: string } } })
-              .accessHash?.constructor?.name as string | undefined) ?? null,
+            ((adminUser as { accessHash?: { constructor?: { name?: string } } }).accessHash?.constructor?.name as string | undefined) ??
+            null,
           expectedActiveLinks: counts.active,
           expectedRevokedLinks: counts.revoked,
         });
@@ -2530,10 +2055,8 @@ export class TelegramMtprotoClient {
               ? 'self'
               : inputUser instanceof Api.InputUser
                 ? 'direct_input_user'
-                : ((inputUser as { className?: string }).className ??
-                  'unknown'),
-          inputUserClass:
-            (inputUser as { className?: string }).className ?? null,
+                : ((inputUser as { className?: string }).className ?? 'unknown'),
+          inputUserClass: (inputUser as { className?: string }).className ?? null,
         });
         const [activeLinks, revokedLinks] = await Promise.all([
           this.collectInviteLinksForAdmin({
@@ -2553,12 +2076,7 @@ export class TelegramMtprotoClient {
                 stageCurrent: loadedLinksCount,
                 stageTotal: expectedTotalLinks,
               });
-              await onInviteLinkLoaded?.(
-                link,
-                loadedLinksCount,
-                expectedTotalLinks,
-                warnings,
-              );
+              await onInviteLinkLoaded?.(link, loadedLinksCount, expectedTotalLinks, warnings);
             },
           }),
           this.collectInviteLinksForAdmin({
@@ -2578,12 +2096,7 @@ export class TelegramMtprotoClient {
                 stageCurrent: loadedLinksCount,
                 stageTotal: expectedTotalLinks,
               });
-              await onInviteLinkLoaded?.(
-                link,
-                loadedLinksCount,
-                expectedTotalLinks,
-                warnings,
-              );
+              await onInviteLinkLoaded?.(link, loadedLinksCount, expectedTotalLinks, warnings);
             },
           }),
         ]);
@@ -2605,9 +2118,7 @@ export class TelegramMtprotoClient {
       } catch (error) {
         failedAdmins += 1;
         const errorCode = this.getTelegramErrorCode(error);
-        warnings.push(
-          `Admin ${adminUserId} invite-link sync failed: ${errorCode}`,
-        );
+        warnings.push(`Admin ${adminUserId} invite-link sync failed: ${errorCode}`);
         this.logInviteSyncEvent('warn', {
           phase: 'loading_invite_links',
           channelTelegramId,
@@ -2619,9 +2130,7 @@ export class TelegramMtprotoClient {
     }
 
     const shouldTryGlobalFallback =
-      expectedTotalLinks > linksByUrl.size &&
-      (failedAdmins > 0 || linksByUrl.size === 0) &&
-      fallbackAdminUser;
+      expectedTotalLinks > linksByUrl.size && (failedAdmins > 0 || linksByUrl.size === 0) && fallbackAdminUser;
     if (shouldTryGlobalFallback) {
       this.logInviteSyncEvent('warn', {
         phase: 'loading_invite_links',
@@ -2652,12 +2161,7 @@ export class TelegramMtprotoClient {
                 stageCurrent: Math.min(loadedLinksCount, expectedTotalLinks),
                 stageTotal: expectedTotalLinks,
               });
-              await onInviteLinkLoaded?.(
-                link,
-                Math.min(loadedLinksCount, expectedTotalLinks),
-                expectedTotalLinks,
-                warnings,
-              );
+              await onInviteLinkLoaded?.(link, Math.min(loadedLinksCount, expectedTotalLinks), expectedTotalLinks, warnings);
             },
           }),
           this.collectInviteLinksForAdmin({
@@ -2678,12 +2182,7 @@ export class TelegramMtprotoClient {
                 stageCurrent: Math.min(loadedLinksCount, expectedTotalLinks),
                 stageTotal: expectedTotalLinks,
               });
-              await onInviteLinkLoaded?.(
-                link,
-                Math.min(loadedLinksCount, expectedTotalLinks),
-                expectedTotalLinks,
-                warnings,
-              );
+              await onInviteLinkLoaded?.(link, Math.min(loadedLinksCount, expectedTotalLinks), expectedTotalLinks, warnings);
             },
           }),
         ]);
@@ -2722,9 +2221,7 @@ export class TelegramMtprotoClient {
     }
 
     if (attemptedAdmins > 0 && failedAdmins >= attemptedAdmins) {
-      throw new BadRequestException(
-        'Telegram invite-link sync failed for every expected administrator.',
-      );
+      throw new BadRequestException('Telegram invite-link sync failed for every expected administrator.');
     }
 
     return {
@@ -2746,12 +2243,8 @@ export class TelegramMtprotoClient {
   }) {
     const client = await this.createClient(params);
     try {
-      const resolved = params.channel
-        ? await this.resolveStoredChannel(client, params.channel)
-        : null;
-      const entity = resolved
-        ? resolved.entity
-        : await client.getEntity(params.channelRef as string);
+      const resolved = params.channel ? await this.resolveStoredChannel(client, params.channel) : null;
+      const entity = resolved ? resolved.entity : await client.getEntity(params.channelRef as string);
       return this.getAllChannelInviteLinksInternal(
         client,
         this.asImportableTelegramEntity(entity, 'channel'),
@@ -2775,9 +2268,7 @@ export class TelegramMtprotoClient {
   }): Promise<TelegramInviteLinksResult['links'][number]> {
     const parsed = parseTelegramImportInput(params.inviteLink);
     if (parsed.type !== 'invite') {
-      throw new BadRequestException(
-        'Enter a valid private Telegram invite link.',
-      );
+      throw new BadRequestException('Enter a valid private Telegram invite link.');
     }
     const client = await this.createClient(params);
     try {
@@ -2802,17 +2293,10 @@ export class TelegramMtprotoClient {
       const url = String(invite?.link || '').trim();
       const creatorTelegramUserId = this.toBigInt(invite?.adminId)?.toString();
       if (!invite || !url || !creatorTelegramUserId) {
-        throw new BadRequestException(
-          'Telegram did not return this invite link for the selected channel.',
-        );
+        throw new BadRequestException('Telegram did not return this invite link for the selected channel.');
       }
-      const users = Array.isArray((response as { users?: unknown[] })?.users)
-        ? (response as { users: unknown[] }).users
-        : [];
-      let creator = users.find(
-        (user): user is Api.User =>
-          user instanceof Api.User && String(user.id) === creatorTelegramUserId,
-      );
+      const users = Array.isArray((response as { users?: unknown[] })?.users) ? (response as { users: unknown[] }).users : [];
+      let creator = users.find((user): user is Api.User => user instanceof Api.User && String(user.id) === creatorTelegramUserId);
       if (!creator) {
         const directory = await this.loadChannelInviteAdminsDirectory(
           client,
@@ -2821,9 +2305,7 @@ export class TelegramMtprotoClient {
         );
         creator = directory.get(creatorTelegramUserId) ?? creator;
       }
-      creator = creator
-        ? await this.getInviteCreatorWithDetails(client, creator)
-        : undefined;
+      creator = creator ? await this.getInviteCreatorWithDetails(client, creator) : undefined;
       const joinedWithinPeriod = params.joinedFrom
         ? await this.countInviteLinkJoinsInPeriod({
             client,
@@ -2836,19 +2318,12 @@ export class TelegramMtprotoClient {
 
       return {
         url: canonicalTelegramInviteLink(parsed.inviteHash),
-        title:
-          typeof invite.title === 'string' && invite.title.trim()
-            ? invite.title
-            : null,
+        title: typeof invite.title === 'string' && invite.title.trim() ? invite.title : null,
         telegramCreatorUserId: creatorTelegramUserId,
-        creatorUsername: creator
-          ? normalizeTelegramUsername(creator.username)
-          : null,
+        creatorUsername: creator ? normalizeTelegramUsername(creator.username) : null,
         creatorFirstName: creator?.firstName || null,
         creatorLastName: creator?.lastName || null,
-        creatorPhotoUrl: creator
-          ? await this.getInviteAdminPhotoUrl(client, creator)
-          : null,
+        creatorPhotoUrl: creator ? await this.getInviteAdminPhotoUrl(client, creator) : null,
         createdAt: this.toTelegramDate(invite.date),
         startDate: this.toTelegramDate(invite.startDate),
         expireDate: this.toTelegramDate(invite.expireDate),
@@ -2865,10 +2340,7 @@ export class TelegramMtprotoClient {
     }
   }
 
-  private async getInviteCreatorWithDetails(
-    client: TelegramClient,
-    fallback: Api.User,
-  ) {
+  private async getInviteCreatorWithDetails(client: TelegramClient, fallback: Api.User) {
     try {
       const inputUser = await this.resolveInviteAdminInputUser({
         client,
@@ -2881,10 +2353,8 @@ export class TelegramMtprotoClient {
         'Telegram invite creator profile lookup',
       )) as { users?: unknown[] };
       return (
-        (response.users ?? []).find(
-          (user): user is Api.User =>
-            user instanceof Api.User && String(user.id) === String(fallback.id),
-        ) ?? fallback
+        (response.users ?? []).find((user): user is Api.User => user instanceof Api.User && String(user.id) === String(fallback.id)) ??
+        fallback
       );
     } catch {
       return fallback;
@@ -2923,9 +2393,7 @@ export class TelegramMtprotoClient {
           importers?: Array<{ date?: unknown; userId?: unknown }>;
           users?: unknown[];
         };
-        const importers = Array.isArray(response.importers)
-          ? response.importers
-          : [];
+        const importers = Array.isArray(response.importers) ? response.importers : [];
         if (!importers.length) return count;
 
         let reachedBeforePeriod = false;
@@ -2943,8 +2411,7 @@ export class TelegramMtprotoClient {
         const last = importers[importers.length - 1]!;
         const lastUserId = this.toBigInt(last.userId)?.toString();
         const lastUser = (response.users ?? []).find(
-          (user): user is Api.User =>
-            user instanceof Api.User && String(user.id) === lastUserId,
+          (user): user is Api.User => user instanceof Api.User && String(user.id) === lastUserId,
         );
         const nextOffsetDate = this.toFiniteNumber(last.date) ?? 0;
         const nextCursor = `${nextOffsetDate}:${lastUserId ?? ''}`;
@@ -2970,9 +2437,7 @@ export class TelegramMtprotoClient {
     source: string;
   }): Promise<ResolvedTelegramCustomEmojiPack> {
     const documentId = parseTelegramCustomEmojiDocumentId(params.source);
-    const shortName = documentId
-      ? null
-      : normalizeTelegramCustomEmojiPackSource(params.source);
+    const shortName = documentId ? null : normalizeTelegramCustomEmojiPackSource(params.source);
     const client = await this.createClient(params);
     try {
       let stickerSet: any = new Api.InputStickerSetShortName({
@@ -2984,13 +2449,8 @@ export class TelegramMtprotoClient {
             documentId: [returnBigInt(documentId)],
           }),
         );
-        const attribute = documents[0]?.attributes?.find(
-          (item: any) => item?.className === 'DocumentAttributeCustomEmoji',
-        );
-        if (!attribute?.stickerset)
-          throw new BadRequestException(
-            'Telegram could not resolve this Custom Emoji document to a pack.',
-          );
+        const attribute = documents[0]?.attributes?.find((item: any) => item?.className === 'DocumentAttributeCustomEmoji');
+        if (!attribute?.stickerset) throw new BadRequestException('Telegram could not resolve this Custom Emoji document to a pack.');
         stickerSet = attribute.stickerset;
       }
       const result: any = await client.invoke(
@@ -3005,25 +2465,15 @@ export class TelegramMtprotoClient {
           const attributes = document.attributes ?? [];
           const sticker = attributes.find(
             (attribute: any) =>
-              attribute?.className === 'DocumentAttributeCustomEmoji' ||
-              attribute?.className === 'DocumentAttributeSticker',
+              attribute?.className === 'DocumentAttributeCustomEmoji' || attribute?.className === 'DocumentAttributeSticker',
           );
           const alt = String(sticker?.alt ?? '');
           const mimeType = document.mimeType ? String(document.mimeType) : null;
-          const kind =
-            mimeType === 'application/x-tgsticker'
-              ? 'ANIMATED'
-              : mimeType === 'video/webm'
-                ? 'VIDEO'
-                : 'STATIC';
+          const kind = mimeType === 'application/x-tgsticker' ? 'ANIMATED' : mimeType === 'video/webm' ? 'VIDEO' : 'STATIC';
           let originalAsset: Buffer | null = null;
           try {
             const downloaded = await client.downloadMedia(document, {});
-            originalAsset = Buffer.isBuffer(downloaded)
-              ? downloaded
-              : downloaded
-                ? Buffer.from(downloaded as any)
-                : null;
+            originalAsset = Buffer.isBuffer(downloaded) ? downloaded : downloaded ? Buffer.from(downloaded as any) : null;
             if (!originalAsset?.length) {
               throw new Error('Telegram returned an empty media payload');
             }
@@ -3066,25 +2516,23 @@ export class TelegramMtprotoClient {
     captionHtml?: string;
     followupHtmlParts?: string[];
     imageUrls: string[];
+    mediaItems?: TelegramPostMediaItem[];
   }) {
     const client = await this.createClient(params);
     try {
-      const resolved = params.channel
-        ? await this.resolveStoredChannel(client, params.channel)
-        : null;
-      const entity = resolved
-        ? resolved.entity
-        : await client.getEntity(params.channelRef as string);
-      const schedule = params.scheduleAt
-        ? Math.floor(params.scheduleAt.getTime() / 1000)
-        : undefined;
+      const resolved = params.channel ? await this.resolveStoredChannel(client, params.channel) : null;
+      const entity = resolved ? resolved.entity : await client.getEntity(params.channelRef as string);
+      const schedule = params.scheduleAt ? Math.floor(params.scheduleAt.getTime() / 1000) : undefined;
       const messageIds: string[] = [];
-      if (params.imageUrls.length) {
+      const mediaItems = normalizeTelegramPostMediaItems(params.mediaItems, params.imageUrls);
+      if (mediaItems.length) {
         const captionSourceHtml = params.captionHtml ?? params.html;
         const caption = this.parseMtprotoHtml(captionSourceHtml);
         const files = await Promise.all(
-          params.imageUrls.map((url, index) =>
-            this.downloadPublishImage(url, index),
+          mediaItems.map((media, index) =>
+            media.kind === 'PHOTO'
+              ? this.downloadPublishImage(media.url, index)
+              : downloadTelegramPublishMotion(media.url, index, media.kind, media.fileName),
           ),
         );
         const result =
@@ -3093,9 +2541,7 @@ export class TelegramMtprotoClient {
                 file: files,
                 // GramJS album uploads ignore formattingEntities, so provide
                 // compatible HTML while working around its `+` URL parser bug.
-                caption: captionSourceHtml
-                  ? [telegramHtmlToGramJsAlbumHtml(captionSourceHtml)]
-                  : [''],
+                caption: captionSourceHtml ? [telegramHtmlToGramJsAlbumHtml(captionSourceHtml)] : [''],
                 parseMode: 'html',
                 scheduleDate: schedule,
               })
@@ -3111,22 +2557,12 @@ export class TelegramMtprotoClient {
           if (message?.id != null) messageIds.push(String(message.id));
         }
         for (const followupHtml of params.followupHtmlParts ?? []) {
-          const textMessage = await this.sendTextMessageWithEntities(
-            client,
-            entity,
-            followupHtml,
-            schedule,
-          );
+          const textMessage = await this.sendTextMessageWithEntities(client, entity, followupHtml, schedule);
           if (textMessage?.id != null) messageIds.push(String(textMessage.id));
         }
       } else {
         for (const textHtml of params.textHtmlParts ?? [params.html]) {
-          const message = await this.sendTextMessageWithEntities(
-            client,
-            entity,
-            textHtml,
-            schedule,
-          );
+          const message = await this.sendTextMessageWithEntities(client, entity, textHtml, schedule);
           if (message?.id != null) messageIds.push(String(message.id));
         }
       }
@@ -3154,9 +2590,7 @@ export class TelegramMtprotoClient {
     let updatedCount = 0;
     let unchangedCount = 0;
     try {
-      const resolved = params.channel
-        ? await this.resolveStoredChannel(client, params.channel)
-        : null;
+      const resolved = params.channel ? await this.resolveStoredChannel(client, params.channel) : null;
       const peerRef = resolved?.entity || params.channelRef;
       const mediaMessageIds = params.messageIds.slice(0, params.imageCount);
       const followupMessageIds = params.messageIds.slice(params.imageCount);
@@ -3203,9 +2637,7 @@ export class TelegramMtprotoClient {
     return convertTelegramPublishImageWithSips(buffer, contentType);
   }
   private downloadPublishImage(url: string, index: number) {
-    return downloadTelegramPublishImage(url, index, (buffer, contentType) =>
-      this.convertImageBufferWithSips(buffer, contentType),
-    );
+    return downloadTelegramPublishImage(url, index, (buffer, contentType) => this.convertImageBufferWithSips(buffer, contentType));
   }
   async deleteScheduledPost(params: {
     apiId: string;
@@ -3217,12 +2649,8 @@ export class TelegramMtprotoClient {
   }) {
     const client = await this.createClient(params);
     try {
-      const resolved = params.channel
-        ? await this.resolveStoredChannel(client, params.channel)
-        : null;
-      const peer =
-        resolved?.peer ||
-        (await client.getInputEntity(params.channelRef as string));
+      const resolved = params.channel ? await this.resolveStoredChannel(client, params.channel) : null;
+      const peer = resolved?.peer || (await client.getInputEntity(params.channelRef as string));
       await client.invoke(
         new Api.messages.DeleteScheduledMessages({
           peer,
@@ -3244,12 +2672,8 @@ export class TelegramMtprotoClient {
   }) {
     const client = await this.createClient(params);
     try {
-      const resolved = params.channel
-        ? await this.resolveStoredChannel(client, params.channel)
-        : null;
-      const peer =
-        resolved?.peer ||
-        (await client.getInputEntity(params.channelRef as string));
+      const resolved = params.channel ? await this.resolveStoredChannel(client, params.channel) : null;
+      const peer = resolved?.peer || (await client.getInputEntity(params.channelRef as string));
       await client.invoke(
         new Api.channels.DeleteMessages({
           channel: peer as unknown as Api.TypeInputChannel,
@@ -3272,24 +2696,12 @@ export class TelegramMtprotoClient {
   }) {
     const client = await this.createClient(params);
     try {
-      const resolved = params.channel
-        ? await this.resolveStoredChannel(client, params.channel)
-        : null;
-      const entity = resolved
-        ? resolved.entity
-        : await client.getEntity(params.channelRef as string);
-      const peer =
-        resolved?.peer ||
-        (await client.getInputEntity(params.channelRef as string));
-      const publishedIds = params.publishedMessageIds
-        .map(Number)
-        .filter(Number.isFinite);
-      const scheduledIds = params.scheduledMessageIds
-        .map(Number)
-        .filter(Number.isFinite);
-      const published = publishedIds.length
-        ? await client.getMessages(entity, { ids: publishedIds })
-        : [];
+      const resolved = params.channel ? await this.resolveStoredChannel(client, params.channel) : null;
+      const entity = resolved ? resolved.entity : await client.getEntity(params.channelRef as string);
+      const peer = resolved?.peer || (await client.getInputEntity(params.channelRef as string));
+      const publishedIds = params.publishedMessageIds.map(Number).filter(Number.isFinite);
+      const scheduledIds = params.scheduledMessageIds.map(Number).filter(Number.isFinite);
+      const published = publishedIds.length ? await client.getMessages(entity, { ids: publishedIds }) : [];
       const recentPublished = await client.getMessages(entity, { limit: 200 });
       const scheduledResult = scheduledIds.length
         ? await client.invoke(
@@ -3299,21 +2711,14 @@ export class TelegramMtprotoClient {
             }),
           )
         : null;
-      const scheduled = Array.isArray((scheduledResult as any)?.messages)
-        ? (scheduledResult as any).messages
-        : [];
-      const serialize = (message: any, isScheduled: boolean) =>
-        this.serializeManagedPostMessage(message, isScheduled);
+      const scheduled = Array.isArray((scheduledResult as any)?.messages) ? (scheduledResult as any).messages : [];
+      const serialize = (message: any, isScheduled: boolean) => this.serializeManagedPostMessage(message, isScheduled);
       return {
-        published: (published as any[])
-          .filter((message) => message?.id && message?.date)
-          .map((message) => serialize(message, false)),
+        published: (published as any[]).filter((message) => message?.id && message?.date).map((message) => serialize(message, false)),
         recentPublished: (recentPublished as any[])
           .filter((message) => message?.id && message?.date)
           .map((message) => serialize(message, false)),
-        scheduled: (scheduled as any[])
-          .filter((message) => message?.id && message?.date)
-          .map((message) => serialize(message, true)),
+        scheduled: (scheduled as any[]).filter((message) => message?.id && message?.date).map((message) => serialize(message, true)),
       };
     } finally {
       await this.closeClient(client);
@@ -3329,24 +2734,16 @@ export class TelegramMtprotoClient {
   }): Promise<TelegramScheduledMessage[]> {
     const client = await this.createClient(params);
     try {
-      const resolved = params.channel
-        ? await this.resolveStoredChannel(client, params.channel)
-        : null;
-      const peer =
-        resolved?.peer ||
-        (await client.getInputEntity(params.channelRef as string));
+      const resolved = params.channel ? await this.resolveStoredChannel(client, params.channel) : null;
+      const peer = resolved?.peer || (await client.getInputEntity(params.channelRef as string));
       const result = await client.invoke(
         new Api.messages.GetScheduledHistory({
           peer,
           hash: returnBigInt(0),
         }),
       );
-      const messages = Array.isArray((result as any)?.messages)
-        ? (result as any).messages
-        : [];
-      return messages
-        .filter((message) => message?.id && message?.date)
-        .map((message) => this.serializeManagedPostMessage(message, true));
+      const messages = Array.isArray((result as any)?.messages) ? (result as any).messages : [];
+      return messages.filter((message) => message?.id && message?.date).map((message) => this.serializeManagedPostMessage(message, true));
     } finally {
       await this.closeClient(client);
     }
@@ -3356,16 +2753,11 @@ export class TelegramMtprotoClient {
     return {
       id: String(message.id),
       text: String(message.message || ''),
-      html: HTMLParser.unparse(
-        String(message.message || ''),
-        message.entities || [],
-      ),
+      html: HTMLParser.unparse(String(message.message || ''), message.entities || []),
       date: this.toTelegramDate(message.date)?.toISOString() ?? null,
       isScheduled,
       hasMedia: Boolean(message.media),
-      mediaKind: message.media?.className
-        ? String(message.media.className)
-        : null,
+      mediaKind: message.media?.className ? String(message.media.className) : null,
       groupedId: message.groupedId != null ? String(message.groupedId) : null,
     };
   }
@@ -3382,12 +2774,8 @@ export class TelegramMtprotoClient {
   }) {
     const client = await this.createClient(params);
     try {
-      const resolved = params.channel
-        ? await this.resolveStoredChannel(client, params.channel)
-        : null;
-      const entity = resolved
-        ? resolved.entity
-        : await client.getEntity(params.channelRef as string);
+      const resolved = params.channel ? await this.resolveStoredChannel(client, params.channel) : null;
+      const entity = resolved ? resolved.entity : await client.getEntity(params.channelRef as string);
       const messages = params.postsFrom
         ? await this.getChannelMessagesFromCutoff(client, entity, {
             postLimit: params.postLimit,
@@ -3395,14 +2783,8 @@ export class TelegramMtprotoClient {
             postsFrom: params.postsFrom,
           })
         : await client.getMessages(entity, {
-            limit: Math.max(
-              1,
-              Math.min(this.maxPostBackfillLimit, params.postLimit || 100),
-            ),
-            offsetId:
-              this.toFiniteNumber(params.beforeMessageId) != null
-                ? Number(this.toFiniteNumber(params.beforeMessageId))
-                : 0,
+            limit: Math.max(1, Math.min(this.maxPostBackfillLimit, params.postLimit || 100)),
+            offsetId: this.toFiniteNumber(params.beforeMessageId) != null ? Number(this.toFiniteNumber(params.beforeMessageId)) : 0,
           });
 
       return (messages as any[])
@@ -3410,9 +2792,7 @@ export class TelegramMtprotoClient {
         .map((message) => {
           const postDate = this.toTelegramDate(message.date);
           if (!postDate) return null;
-          const reactionRows = Array.isArray(message?.reactions?.results)
-            ? message.reactions.results
-            : [];
+          const reactionRows = Array.isArray(message?.reactions?.results) ? message.reactions.results : [];
           const reactions = reactionRows
             .map((row: any) => {
               const count = this.toFiniteNumber(row?.count) ?? 0;
@@ -3420,32 +2800,19 @@ export class TelegramMtprotoClient {
               const reaction =
                 typeof rawReaction === 'string'
                   ? rawReaction
-                  : rawReaction?.emoticon ||
-                    rawReaction?.emoticonId ||
-                    String(rawReaction || '');
+                  : rawReaction?.emoticon || rawReaction?.emoticonId || String(rawReaction || '');
               return { reaction, count };
             })
-            .filter(
-              (row: { reaction: string; count: number }) => !!row.reaction,
-            );
-          const reactionsCount = reactions.reduce(
-            (sum: number, row: { reaction: string; count: number }) =>
-              sum + row.count,
-            0,
-          );
+            .filter((row: { reaction: string; count: number }) => !!row.reaction);
+          const reactionsCount = reactions.reduce((sum: number, row: { reaction: string; count: number }) => sum + row.count, 0);
 
           return {
             telegramMessageId: String(message.id),
             postDate,
             text: message.message || null,
-            formattedText: HTMLParser.unparse(
-              String(message.message || ''),
-              message.entities || [],
-            ),
+            formattedText: HTMLParser.unparse(String(message.message || ''), message.entities || []),
             hasMedia: Boolean(message.media),
-            mediaKind: message.media?.className
-              ? String(message.media.className)
-              : null,
+            mediaKind: message.media?.className ? String(message.media.className) : null,
             viewsCount: this.toFiniteNumber(message.views),
             forwardsCount: this.toFiniteNumber(message.forwards),
             reactionsCount,
@@ -3469,15 +2836,9 @@ export class TelegramMtprotoClient {
       postsFrom: Date;
     },
   ) {
-    const hardCap = Math.max(
-      1,
-      Math.min(this.maxPostBackfillLimit, params.postLimit || 100),
-    );
+    const hardCap = Math.max(1, Math.min(this.maxPostBackfillLimit, params.postLimit || 100));
     const pageSize = Math.min(this.postCutoffPageSize, hardCap);
-    let offsetId =
-      this.toFiniteNumber(params.beforeMessageId) != null
-        ? Number(this.toFiniteNumber(params.beforeMessageId))
-        : 0;
+    let offsetId = this.toFiniteNumber(params.beforeMessageId) != null ? Number(this.toFiniteNumber(params.beforeMessageId)) : 0;
     let processed = 0;
     let previousOldestId: number | null = null;
     const accepted: any[] = [];
@@ -3501,9 +2862,7 @@ export class TelegramMtprotoClient {
         }
         accepted.push(message);
       }
-      const pageIds = page
-        .map((message) => this.toFiniteNumber(message?.id))
-        .filter((value): value is number => value != null);
+      const pageIds = page.map((message) => this.toFiniteNumber(message?.id)).filter((value): value is number => value != null);
       const oldestId = pageIds.length > 0 ? Math.min(...pageIds) : null;
       if (reachedCutoff || oldestId == null || oldestId === previousOldestId) {
         break;
@@ -3523,19 +2882,12 @@ export class TelegramMtprotoClient {
     messageIds: string[];
   }) {
     const uniqueMessageIds = [...new Set(params.messageIds)];
-    if (uniqueMessageIds.length > 100)
-      throw new BadRequestException(
-        'Telegram media batch limit is 100 messages.',
-      );
+    if (uniqueMessageIds.length > 100) throw new BadRequestException('Telegram media batch limit is 100 messages.');
     if (!uniqueMessageIds.length) return [];
     const client = await this.createClient(params);
     try {
-      const resolved = params.channel
-        ? await this.resolveStoredChannel(client, params.channel)
-        : null;
-      const entity = resolved
-        ? resolved.entity
-        : await client.getEntity(params.channelRef as string);
+      const resolved = params.channel ? await this.resolveStoredChannel(client, params.channel) : null;
+      const entity = resolved ? resolved.entity : await client.getEntity(params.channelRef as string);
       const media: Array<{
         messageId: string;
         buffer: Buffer;
@@ -3555,9 +2907,7 @@ export class TelegramMtprotoClient {
           continue;
         }
         const byId = new Map(
-          messages
-            .filter((message) => message?.id && message?.media)
-            .map((message) => [String(message.id), message] as const),
+          messages.filter((message) => message?.id && message?.media).map((message) => [String(message.id), message] as const),
         );
         for (const messageId of chunk) {
           const message = byId.get(messageId);
@@ -3574,9 +2924,7 @@ export class TelegramMtprotoClient {
           if (!Buffer.isBuffer(downloaded)) continue;
           const mimeType = String(
             message.media?.document?.mimeType ||
-              (String(message.media?.className || '').includes('Photo')
-                ? 'image/jpeg'
-                : 'application/octet-stream'),
+              (String(message.media?.className || '').includes('Photo') ? 'image/jpeg' : 'application/octet-stream'),
           );
           media.push({ messageId, buffer: downloaded, mimeType });
         }

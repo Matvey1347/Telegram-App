@@ -131,7 +131,7 @@ beforeEach(() => {
 });
 
 describe("FinancePlans", () => {
-  it("uses the detailed plan SVG instead of skeleton blocks while loading", () => {
+  it("uses the branded wallet loading scene instead of skeleton blocks", () => {
     api.billing.mockReturnValue(new Promise(() => undefined));
     renderPlans();
 
@@ -139,7 +139,7 @@ describe("FinancePlans", () => {
     expect(loading).toHaveAttribute("data-finance-feedback", "loading");
     expect(loading).toHaveTextContent("Loading plan…");
     expect(
-      loading.querySelector("[data-finance-context='plan'] svg"),
+      loading.querySelector("[data-finance-context='plan'] img"),
     ).toBeInTheDocument();
     expect(document.querySelector(".animate-pulse")).toBeNull();
   });
@@ -158,6 +158,12 @@ describe("FinancePlans", () => {
     renderPlans();
 
     expect(await screen.findAllByText("Finance Free")).toHaveLength(1);
+    expect(
+      screen.getByText("Your finances, with more room to grow"),
+    ).toBeVisible();
+    expect(
+      document.querySelector("img[src*='plans-hero']"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Current plan")).toBeInTheDocument();
     expect(screen.queryByText("Usage")).not.toBeInTheDocument();
     expect(screen.getByText("Most popular")).toBeInTheDocument();

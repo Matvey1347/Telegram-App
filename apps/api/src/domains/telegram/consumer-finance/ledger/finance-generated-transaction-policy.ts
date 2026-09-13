@@ -5,6 +5,7 @@ type GeneratedTransactionLinks = {
   debtSettlement: { id: string } | null;
   recurringPaymentOccurrence: { id: string } | null;
   investmentCashFlow: { id: string } | null;
+  originatedDebts?: Array<{ id: string }>;
 };
 
 export function assertFinanceTransactionMutable(
@@ -13,7 +14,8 @@ export function assertFinanceTransactionMutable(
   if (
     transaction.debtSettlement ||
     transaction.recurringPaymentOccurrence ||
-    transaction.investmentCashFlow
+    transaction.investmentCashFlow ||
+    transaction.originatedDebts?.length
   )
     throw new ConflictException(
       'Generated finance transactions must be changed through their source record',
@@ -33,6 +35,7 @@ export async function assertFinanceTransactionRemoved(
       debtSettlement: { select: { id: true } },
       recurringPaymentOccurrence: { select: { id: true } },
       investmentCashFlow: { select: { id: true } },
+      originatedDebts: { select: { id: true }, take: 1 },
     },
   });
   if (transaction) assertFinanceTransactionMutable(transaction);

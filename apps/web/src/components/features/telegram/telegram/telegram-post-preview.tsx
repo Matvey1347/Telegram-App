@@ -25,7 +25,11 @@ import { createPortal } from "react-dom";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import { editorHtmlToTelegramMarkup } from "./telegram-text-editor-format";
 import { TelegramInlineKeyboardPreview } from "./telegram-inline-keyboard-preview";
-import type { TelegramPostButtonRows } from "@telegram-system/shared";
+import {
+  normalizeTelegramPostMediaItems,
+  type TelegramPostButtonRows,
+  type TelegramPostMediaItem,
+} from "@telegram-system/shared";
 import type { TelegramCustomEmojiPackSummary } from "@telegram-system/shared";
 import { parseTelegramTableCellMarkup } from "@telegram-system/shared/telegram-table-markup";
 import { useTelegramTableCellEditor } from "./telegram-table-cell-editor";
@@ -35,15 +39,19 @@ import { normalizeTelegramFormattedHtml } from "./telegram-formatted-html";
 import {
   escapeTelegramPreviewHtml as escapeHtml,
   renderTelegramPreviewInlineMarkup,
+  telegramPreviewPlainText,
 } from "./telegram-post-preview-markup";
 import { useI18n } from "@/providers/i18n-provider";
+import { TelegramPostMediaPreview } from "./telegram-post-media-preview";
 
 type TelegramPostPreviewProps = {
   channelTitle: string;
   channelPhotoUrl?: string | null;
   text: string;
+  plainText?: string | null;
   formattedHtml?: string | null;
   imageUrls: string[];
+  mediaItems?: TelegramPostMediaItem[];
   hasMedia?: boolean;
   engagement?:
     | TelegramPostEngagementMetrics
@@ -58,8 +66,17 @@ type TelegramPostPreviewProps = {
   buttonRows?: TelegramPostButtonRows;
   customEmojiPacks?: TelegramCustomEmojiPackSummary[];
 };
-type PreviewLabels = { copy: string; copyCode: string; internalPostLink: string };
-function renderFencedCodeBlock(info: string, lineBreak: string, code: string, labels: PreviewLabels) {
+type PreviewLabels = {
+  copy: string;
+  copyCode: string;
+  internalPostLink: string;
+};
+function renderFencedCodeBlock(
+  info: string,
+  lineBreak: string,
+  code: string,
+  labels: PreviewLabels,
+) {
   const normalizedInfo = info.replace(/\r/g, "");
   const normalizedLineBreak = lineBreak.replace(/\r/g, "\n");
   const normalizedCode = code.replace(/\r/g, "");
@@ -196,7 +213,10 @@ function previewHtml(
   value = value.replace(
     /```([^\n\r\u2028\u2029`]*)((?:\r\n|[\n\r\u2028\u2029])?)([\s\S]*?)```/g,
     (_match, info: string, lineBreak: string, code: string) => {
-      return token(renderFencedCodeBlock(info, lineBreak, code, labels), "block");
+      return token(
+        renderFencedCodeBlock(info, lineBreak, code, labels),
+        "block",
+      );
     },
   );
   value = value.replace(/`([^`\n]+)`/g, (_match, code: string) =>
@@ -206,17 +226,17 @@ function previewHtml(
     /\[([^\]\n]+)\]\(tg-post:([a-zA-Z0-9_-]+)\)/g,
     (_match, label: string, postId: string) =>
       token(
-        `<a href="tg-post:${escapeHtml(postId)}" data-internal-post-link="${escapeHtml(postId)}" data-internal-post-id="${escapeHtml(postId)}" title="${escapeHtml(labels.internalPostLink)}">${escapeHtml(label)}</a>`,
+        `<a href="tg-post:${escapeHtml(postId)}" data-internal-post-link="${escapeHtml(postId)}" data-internal-post-id="${escapeHtml(postId)}" title="${escapeHtml(labels.internalPostLink)}">${renderTelegramPreviewInlineMarkup(label)}</a>`,
       ),
   );
   value = value.replace(
-    /\[([^\]\n]+)\]\((https?:\/\/[^\s<>()]+)\)/gi,
+    /\[([^\]]+)\]\((https?:\/\/[^\s<>()]+)\)/gi,
     (_match, label: string, href: string) => {
       try {
         const url = new URL(href);
         if (!url.hostname.includes(".")) return _match;
         return token(
-          `<a href="${escapeHtml(url.toString())}" target="_blank" rel="noreferrer">${escapeHtml(label)}</a>`,
+          `<a href="${escapeHtml(url.toString())}" target="_blank" rel="noreferrer">${renderTelegramPreviewInlineMarkup(label)}</a>`,
         );
       } catch {
         return _match;
@@ -327,11 +347,11 @@ function previewHtml(
 function useRetainedCustomEmojiPacks(
   packs: TelegramCustomEmojiPackSummary[] | undefined,
 ) {
-  const lastAvailableRef = useRef<TelegramCustomEmojiPackSummary[]>([]);
-  useEffect(() => {
-    if (packs !== undefined) lastAvailableRef.current = packs;
-  }, [packs]);
-  return packs ?? lastAvailableRef.current;
+  const [lastAvailable, setLastAvailable] = useState<
+    TelegramCustomEmojiPackSummary[]
+  >(packs ?? []);
+  if (packs !== undefined && packs !== lastAvailable) setLastAvailable(packs);
+  return packs ?? lastAvailable;
 }
 function useTelegramCustomEmojiLottie(
   rootRef: RefObject<HTMLDivElement | null>,
@@ -394,10 +414,15 @@ function RenderedPreviewText({
     <div
       ref={ref}
       className="telegram-preview-text whitespace-pre-wrap break-words text-[14px] leading-[1.3] text-[#f5f5f5]"
-      dangerouslySetInnerHTML={{ __html: previewHtml(text, customEmojiPacks, {
-        copy: t("telegram.posts.editorComponents.preview.copy"), copyCode: t("telegram.posts.editorComponents.preview.copyCode"),
-        internalPostLink: t("telegram.posts.editorComponents.preview.internalPostLink"),
-      }) }}
+      dangerouslySetInnerHTML={{
+        __html: previewHtml(text, customEmojiPacks, {
+          copy: t("telegram.posts.editorComponents.preview.copy"),
+          copyCode: t("telegram.posts.editorComponents.preview.copyCode"),
+          internalPostLink: t(
+            "telegram.posts.editorComponents.preview.internalPostLink",
+          ),
+        }),
+      }}
       onClick={handlePreviewContentClick}
     />
   );
@@ -406,8 +431,10 @@ export function TelegramPostPreview({
   channelTitle,
   channelPhotoUrl,
   text,
+  plainText,
   formattedHtml,
   imageUrls,
+  mediaItems,
   hasMedia = false,
   engagement,
   onTextChange,
@@ -422,14 +449,20 @@ export function TelegramPostPreview({
   const { locale, t } = useI18n();
   const resolvedCustomEmojiPacks =
     useRetainedCustomEmojiPacks(customEmojiPacks);
-  const hasContent = text.trim() || imageUrls.length || hasMedia;
+  const resolvedMediaItems = normalizeTelegramPostMediaItems(
+    mediaItems,
+    imageUrls,
+  );
+  const hasContent = text.trim() || resolvedMediaItems.length || hasMedia;
+  const visibleTextLength = (plainText ?? telegramPreviewPlainText(text))
+    .length;
   const time = new Intl.DateTimeFormat(locale, {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   }).format(new Date());
   const messages =
-    imageUrls.length && text.length > captionLengthMax
+    resolvedMediaItems.length && visibleTextLength > captionLengthMax
       ? longTextMode === "CAPTION_THEN_TEXT"
         ? (() => {
             const [caption, remainderText] = splitPreviewTextOnce(
@@ -438,26 +471,26 @@ export function TelegramPostPreview({
             );
             const remainder = splitPreviewText(remainderText, messageLengthMax);
             return [
-              { text: caption, imageUrls },
-              ...remainder.map((part) => ({ text: part, imageUrls: [] })),
+              { text: caption, mediaItems: resolvedMediaItems },
+              ...remainder.map((part) => ({ text: part, mediaItems: [] })),
             ];
           })()
         : [
-            { text: "", imageUrls },
+            { text: "", mediaItems: resolvedMediaItems },
             ...splitPreviewText(text, messageLengthMax).map((part) => ({
               text: part,
-              imageUrls: [],
+              mediaItems: [],
             })),
           ]
-      : imageUrls.length
-        ? [{ text, imageUrls }]
-        : splitPreviewText(text, messageLengthMax).map((part) => ({
-            text: part,
-            imageUrls: [],
-          }));
-  const previewEditable = Boolean(
-    onTextChange && !formattedHtml && messages.length === 1,
-  );
+      : resolvedMediaItems.length
+        ? [{ text, mediaItems: resolvedMediaItems }]
+        : visibleTextLength > messageLengthMax
+          ? splitPreviewText(text, messageLengthMax).map((part) => ({
+              text: part,
+              mediaItems: [],
+            }))
+          : [{ text, mediaItems: [] }];
+  const previewEditable = Boolean(onTextChange && messages.length === 1);
 
   return (
     <aside className="min-w-0">
@@ -473,16 +506,19 @@ export function TelegramPostPreview({
             <p className="truncate text-sm font-semibold text-white">
               {channelTitle}
             </p>
-            <p className="text-xs text-[#7f91a4]">{t("telegram.posts.editorComponents.preview.channel")}</p>
+            <p className="text-xs text-[#7f91a4]">
+              {t("telegram.posts.editorComponents.preview.channel")}
+            </p>
           </div>
         </div>
 
         <div className="telegram-preview-wallpaper min-h-[460px] px-3 py-5">
           {hasContent ? (
             <div className="max-w-full space-y-2">
-              {hasMedia && !imageUrls.length ? (
+              {hasMedia && !resolvedMediaItems.length ? (
                 <div className="flex min-h-28 items-center justify-center gap-2 rounded-[18px] rounded-bl-[5px] bg-[#182533] text-sm text-[#9fb2c3]">
-                  <ImageIcon size={18} /> {t("telegram.posts.editorComponents.preview.mediaAttached")}
+                  <ImageIcon size={18} />{" "}
+                  {t("telegram.posts.editorComponents.preview.mediaAttached")}
                 </div>
               ) : null}
               {messages.map((message, index) => (
@@ -490,7 +526,7 @@ export function TelegramPostPreview({
                   key={index}
                   text={message.text}
                   formattedHtml={index === 0 ? formattedHtml : null}
-                  imageUrls={message.imageUrls}
+                  mediaItems={message.mediaItems}
                   time={time}
                   editable={previewEditable && index === 0}
                   onTextChange={
@@ -530,7 +566,7 @@ export function TelegramPostPreview({
 function TelegramMessageBubble({
   text,
   formattedHtml,
-  imageUrls,
+  mediaItems,
   time,
   editable = false,
   onTextChange,
@@ -540,7 +576,7 @@ function TelegramMessageBubble({
 }: {
   text: string;
   formattedHtml?: string | null;
-  imageUrls: string[];
+  mediaItems: TelegramPostMediaItem[];
   time: string;
   editable?: boolean;
   onTextChange?: (value: string) => void;
@@ -551,28 +587,34 @@ function TelegramMessageBubble({
   const { t } = useI18n();
   return (
     <div className="telegram-message-bubble overflow-hidden rounded-[18px] rounded-bl-[5px] bg-[#182533] shadow-md">
-      {imageUrls.length ? <TelegramMediaGrid imageUrls={imageUrls} /> : null}
+      {mediaItems.length ? (
+        <TelegramPostMediaPreview mediaItems={mediaItems} />
+      ) : null}
       {text.trim() ? (
         <div
           className={
-            imageUrls.length ? "px-4 pb-2.5 pt-2.5" : "px-3.5 pb-2.5 pt-3"
+            mediaItems.length ? "px-4 pb-2.5 pt-2.5" : "px-3.5 pb-2.5 pt-3"
           }
         >
-          {formattedHtml ? (
-            <div
-              className="telegram-preview-text whitespace-pre-wrap break-words text-[14px] leading-[1.3] text-[#f5f5f5]"
-              dangerouslySetInnerHTML={{
-                __html: normalizeTelegramFormattedHtml(formattedHtml, t("telegram.posts.editorComponents.preview.copyCode")),
-              }}
-              onClick={handlePreviewContentClick}
-            />
-          ) : editable && onTextChange ? (
+          {editable && onTextChange ? (
             <EditableTelegramPreviewText
               value={text}
+              formattedHtml={formattedHtml}
               customEmojiPacks={customEmojiPacks}
               onChange={onTextChange}
               onUndo={onUndo}
               onRedo={onRedo}
+            />
+          ) : formattedHtml ? (
+            <div
+              className="telegram-preview-text whitespace-pre-wrap break-words text-[14px] leading-[1.3] text-[#f5f5f5]"
+              dangerouslySetInnerHTML={{
+                __html: normalizeTelegramFormattedHtml(
+                  formattedHtml,
+                  t("telegram.posts.editorComponents.preview.copyCode"),
+                ),
+              }}
+              onClick={handlePreviewContentClick}
             />
           ) : (
             <RenderedPreviewText
@@ -599,20 +641,30 @@ function TelegramMessageBubble({
 }
 function EditableTelegramPreviewText({
   value,
+  formattedHtml,
   onChange,
   onUndo,
   onRedo,
   customEmojiPacks = [],
 }: {
   value: string;
+  formattedHtml?: string | null;
   onChange: (value: string) => void;
   onUndo?: () => void;
   onRedo?: () => void;
   customEmojiPacks?: TelegramCustomEmojiPackSummary[];
 }) {
   const { t } = useI18n();
-  const previewLabels = useMemo<PreviewLabels>(() => ({ copy: t("telegram.posts.editorComponents.preview.copy"),
-    copyCode: t("telegram.posts.editorComponents.preview.copyCode"), internalPostLink: t("telegram.posts.editorComponents.preview.internalPostLink") }), [t]);
+  const previewLabels = useMemo<PreviewLabels>(
+    () => ({
+      copy: t("telegram.posts.editorComponents.preview.copy"),
+      copyCode: t("telegram.posts.editorComponents.preview.copyCode"),
+      internalPostLink: t(
+        "telegram.posts.editorComponents.preview.internalPostLink",
+      ),
+    }),
+    [t],
+  );
   const contentRef = useRef<HTMLDivElement>(null);
   const savedRangeRef = useRef<Range | null>(null);
   const undoStackRef = useRef<string[]>([]);
@@ -649,7 +701,9 @@ function EditableTelegramPreviewText({
   useEffect(() => {
     const element = contentRef.current;
     if (!element) return;
-    const nextHtml = previewHtml(value, customEmojiPacks, previewLabels);
+    const nextHtml = formattedHtml
+      ? normalizeTelegramFormattedHtml(formattedHtml, previewLabels.copyCode)
+      : previewHtml(value, customEmojiPacks, previewLabels);
     if (!hasRenderedValueRef.current) {
       element.innerHTML = nextHtml;
       hasRenderedValueRef.current = true;
@@ -673,7 +727,13 @@ function EditableTelegramPreviewText({
         setToolbar(null);
       }, 0);
     }
-  }, [collapseSelectionToPreviewEnd, customEmojiPacks, previewLabels, value]);
+  }, [
+    collapseSelectionToPreviewEnd,
+    customEmojiPacks,
+    formattedHtml,
+    previewLabels,
+    value,
+  ]);
 
   const applyMarkup = useCallback(
     (
@@ -753,7 +813,11 @@ function EditableTelegramPreviewText({
     (nextValue: string) => {
       const element = contentRef.current;
       if (!element) return;
-      element.innerHTML = previewHtml(nextValue, customEmojiPacks, previewLabels);
+      element.innerHTML = previewHtml(
+        nextValue,
+        customEmojiPacks,
+        previewLabels,
+      );
       collapseSelectionToPreviewEnd();
     },
     [collapseSelectionToPreviewEnd, customEmojiPacks, previewLabels],
@@ -943,7 +1007,9 @@ function EditableTelegramPreviewText({
                 onClick={() => wrapSelection("u")}
               />
               <PreviewFormatButton
-                label={t("telegram.posts.editorComponents.format.strikethrough")}
+                label={t(
+                  "telegram.posts.editorComponents.format.strikethrough",
+                )}
                 icon={Strikethrough}
                 onClick={() => wrapSelection("s")}
               />
@@ -1060,7 +1126,9 @@ function splitPreviewTextOnce(
   rawText: string,
   maxLength: number,
 ): [string, string] {
-  if (rawText.length <= maxLength) return [rawText, ""];
+  if (telegramPreviewPlainText(rawText).length <= maxLength) {
+    return [rawText, ""];
+  }
   const boundaries = new Set<number>();
   for (const match of rawText.matchAll(/\n\s*\n/g)) {
     boundaries.add((match.index || 0) + match[0].length);
@@ -1076,7 +1144,8 @@ function splitPreviewTextOnce(
     .find((position) => {
       const candidate = rawText.slice(0, position).trimEnd();
       return (
-        candidate.length <= maxLength && hasBalancedPreviewMarkup(candidate)
+        telegramPreviewPlainText(candidate).length <= maxLength &&
+        hasBalancedPreviewMarkup(candidate)
       );
     });
   const fallbackAt = splitAt ?? findHardPreviewSplit(rawText, maxLength);
@@ -1087,13 +1156,15 @@ function splitPreviewTextOnce(
   ];
 }
 function findHardPreviewSplit(rawText: string, maxLength: number) {
-  for (
-    let position = Math.min(rawText.length, maxLength);
-    position > 0;
-    position -= 1
-  ) {
+  for (let position = rawText.length; position > 0; position -= 1) {
     const candidate = rawText.slice(0, position).trimEnd();
-    if (candidate && hasBalancedPreviewMarkup(candidate)) return position;
+    if (
+      candidate &&
+      telegramPreviewPlainText(candidate).length <= maxLength &&
+      hasBalancedPreviewMarkup(candidate)
+    ) {
+      return position;
+    }
   }
   return 0;
 }
@@ -1110,43 +1181,4 @@ function hasBalancedPreviewMarkup(value: string) {
     }
     return count % 2 === 0;
   });
-}
-function TelegramMediaGrid({ imageUrls }: { imageUrls: string[] }) {
-  const visible = imageUrls.slice(0, 4);
-
-  if (visible.length === 1) {
-    return (
-      <div className="w-full bg-[#101b27]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={visible[0]}
-          alt=""
-          className="block h-auto w-full max-w-full object-contain"
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid grid-cols-2 gap-0.5 bg-[#0e1621]">
-      {visible.map((url, index) => (
-        <div
-          key={`${url}-${index}`}
-          className={`relative overflow-hidden bg-[#101b27] ${
-            visible.length === 3 && index === 0
-              ? "row-span-2 aspect-auto min-h-56"
-              : "aspect-square"
-          }`}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={url} alt="" className="h-full w-full object-cover" />
-          {index === 3 && imageUrls.length > 4 ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-2xl font-semibold text-white">
-              +{imageUrls.length - 4}
-            </div>
-          ) : null}
-        </div>
-      ))}
-    </div>
-  );
 }

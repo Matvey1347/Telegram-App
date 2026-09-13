@@ -21,12 +21,7 @@ export function TelegramPostPreviewModal({
   const telegramUrl = post?.primaryTelegramMessageUrl || null;
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Post preview"
-      size="xl"
-    >
+    <Modal open={open} onClose={onClose} title="Post preview" size="xl">
       {post ? (
         <div className="grid items-start gap-4 xl:grid-cols-[minmax(260px,0.78fr)_minmax(0,1.22fr)]">
           <TelegramPostPreview
@@ -35,6 +30,7 @@ export function TelegramPostPreviewModal({
             text={post.text || ""}
             formattedHtml={post.formattedText || null}
             imageUrls={post.imageUrls}
+            mediaItems={post.mediaItems}
             hasMedia={post.hasMedia}
           />
           <div className="space-y-4 rounded-lg border border-slate-800 bg-slate-900/25 p-4">
@@ -86,7 +82,9 @@ export function TelegramPostPreviewModal({
               </div>
             </div>
 
-            {post.hasMedia && !post.imageUrls.length ? (
+            {post.hasMedia &&
+            !post.imageUrls.length &&
+            !post.mediaItems?.length ? (
               <div className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-sm text-slate-400">
                 Media preview is available only for image posts.
               </div>

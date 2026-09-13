@@ -23,9 +23,22 @@ vi.mock("@/components/features/telegram/telegram/telegram-text-editor", () => ({
   ),
 }));
 vi.mock(
-  "@/components/features/telegram/telegram/telegram-image-upload",
+  "@/components/features/telegram/telegram/telegram-post-media-upload",
   () => ({
-    TelegramImageUpload: () => <div data-testid="telegram-image-upload" />,
+    TelegramPostMediaUpload: ({
+      onChange,
+    }: {
+      onChange: (items: Array<{ kind: "VIDEO"; url: string }>) => void;
+    }) => (
+      <button
+        type="button"
+        onClick={() =>
+          onChange([{ kind: "VIDEO", url: "https://cdn.test/post.mp4" }])
+        }
+      >
+        Add video
+      </button>
+    ),
   }),
 );
 
@@ -111,6 +124,29 @@ describe("PlacementPostComposer", () => {
       "data-inline-buttons",
       "locked",
     );
+  });
+
+  it("keeps video media when editing an advertising post", async () => {
+    const { onChange } = renderComposer({
+      draft: {
+        title: "Advertising post",
+        text: "Video",
+        imageUrls: [],
+        buttonRows: [],
+      },
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Add video" }));
+
+    expect(onChange).toHaveBeenCalledWith({
+      draft: expect.objectContaining({
+        mediaItems: [
+          { kind: "VIDEO", url: "https://cdn.test/post.mp4" },
+        ],
+        imageUrls: [],
+      }),
+      telegramPostId: null,
+    });
   });
 
   it("resolves a pasted Telegram link without using the placement date", async () => {

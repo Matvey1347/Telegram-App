@@ -6,6 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE_ERROR_CODE } from "@telegram-system/shared";
 import { telegramSystemBotApi } from "@/lib/api";
 import { MutualPromotionPostImport } from "./mutual-promotion-post-import";
 
@@ -113,13 +114,57 @@ describe("MutualPromotionPostImport", () => {
     act(() => vi.advanceTimersByTime(1800));
     expect(
       screen.getByRole("button", { name: "Forward posts via bot" }),
+    ).toBeDisabled();
+  });
+
+  it("asks the user to finish an active bot import instead of showing a generic server error", async () => {
+    vi.mocked(
+      telegramSystemBotApi.prepareMutualPromotionPostImport,
+    ).mockRejectedValue({
+      isAxiosError: true,
+      response: {
+        status: 409,
+        data: {
+          code: TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE_ERROR_CODE,
+          message:
+            "Finish the current post import in the bot before starting a new one.",
+        },
+      },
+    });
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    render(
+      <MutualPromotionPostImport
+        folderId="folder-1"
+        timezone="Europe/Warsaw"
+        startsAt="2026-09-08T17:00:00.000Z"
+        endsAt="2026-09-10T20:00:00.000Z"
+        botConnected
+        botUsername="system_bot"
+        previewChannelTitle="Publisher"
+        saving={false}
+        onAddPost={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Forward posts via bot" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "Finish the current post import in the bot before starting a new one.",
+      ),
+    ).toBeVisible();
+    expect(open).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "Forward posts via bot" }),
     ).toBeEnabled();
   });
 
-  it("edits and previews imported markup, saves the edited draft, and prepares the next post", async () => {
-    vi.mocked(telegramSystemBotApi.prepareMutualPromotionPostImport)
-      .mockResolvedValueOnce({ workflowId: "workflow-1" })
-      .mockResolvedValueOnce({ workflowId: "workflow-2" });
+  it("edits and previews imported markup, saves the edited draft, and offers another post", async () => {
+    vi.mocked(
+      telegramSystemBotApi.prepareMutualPromotionPostImport,
+    ).mockResolvedValue({ workflowId: "workflow-1" });
     vi.mocked(
       telegramSystemBotApi.mutualPromotionPostImportResult,
     ).mockResolvedValue({
@@ -213,12 +258,19 @@ describe("MutualPromotionPostImport", () => {
         }),
       ),
     );
+    expect(
+      screen.getByRole("button", { name: "Add another post" }),
+    ).toBeVisible();
+    expect(
+      telegramSystemBotApi.prepareMutualPromotionPostImport,
+    ).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add another post" }));
     await waitFor(() =>
       expect(
         telegramSystemBotApi.prepareMutualPromotionPostImport,
-      ).toHaveBeenLastCalledWith("folder-1"),
+      ).toHaveBeenCalledTimes(2),
     );
-    expect(screen.getByText(/Forward several posts in Telegram/)).toBeVisible();
   });
 
   it("keeps a deliberately cleared imported batch empty", async () => {

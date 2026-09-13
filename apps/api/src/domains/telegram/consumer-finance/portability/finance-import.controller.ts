@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Post,
   Req,
@@ -50,6 +51,7 @@ export class FinanceImportController {
     @Req() request: FinanceImportRequest,
     @Res() response: Response,
     @UploadedFile() file: Express.Multer.File | undefined,
+    @Body('mode') requestedMode?: string,
   ) {
     return this.streams.stream(response, {
       eventPrefix: 'consumer-finance.import',
@@ -65,6 +67,23 @@ export class FinanceImportController {
             message: 'The import file is not valid JSON',
             path: '$',
           });
+        }
+        if (requestedMode != null) {
+          if (requestedMode !== 'ADD' && requestedMode !== 'REPLACE') {
+            throw new BadRequestException({
+              code: 'FINANCE_IMPORT_INVALID_MODE',
+              message: 'Import mode must be ADD or REPLACE',
+              path: 'mode',
+            });
+          }
+          if (
+            !document ||
+            typeof document !== 'object' ||
+            Array.isArray(document)
+          ) {
+            throw new BadRequestException('Import document must be an object');
+          }
+          document = { ...document, mode: requestedMode };
         }
         return this.imports.import(
           request.financeConsumerSession.profileId,

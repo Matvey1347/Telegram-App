@@ -11,5 +11,6 @@ export function hasPlacementPostContent(
     draft.imageUrls.some(
       (imageUrl) => typeof imageUrl === "string" && imageUrl.trim().length > 0,
     );
-  return hasText || hasImage;
+  const hasMedia = Array.isArray(draft.mediaItems) && draft.mediaItems.length > 0;
+  return hasText || hasImage || hasMedia;
 }

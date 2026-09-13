@@ -135,6 +135,7 @@ export const TELEGRAM_POSTS_ERROR_CODES = [
   "TELEGRAM_POST_MEDIA_EMPTY",
   "TELEGRAM_POST_MEDIA_TOO_LARGE",
   "TELEGRAM_POST_MEDIA_INVALID",
+  "TELEGRAM_POST_MEDIA_ALBUM_INVALID",
 ] as const;
 
 export type TelegramPostsErrorCode =
@@ -189,6 +190,7 @@ export const TELEGRAM_POSTS_ERROR_KEYS: Readonly<
   TELEGRAM_POST_MEDIA_EMPTY: "telegramPosts.errors.mediaEmpty",
   TELEGRAM_POST_MEDIA_TOO_LARGE: "telegramPosts.errors.mediaTooLarge",
   TELEGRAM_POST_MEDIA_INVALID: "telegramPosts.errors.mediaInvalid",
+  TELEGRAM_POST_MEDIA_ALBUM_INVALID: "telegramPosts.errors.mediaInvalid",
 };
 import type {
   TelegramAdSaleComputedPaymentStatus,

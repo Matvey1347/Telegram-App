@@ -11,6 +11,16 @@ import {
 } from './telegram-markup';
 
 describe('telegramMarkupToHtml', () => {
+  it('does not expose duplicate or touching imported formatting delimiters', () => {
+    expect(
+      telegramMarkupToHtml(
+        '🔮****[СЕВЕР\\|Цинічний Мольфар](https://t.me/example)****\n**Перший рядок\nдругий рядок**',
+      ),
+    ).toBe(
+      '🔮<b><a href="https://t.me/example">СЕВЕР|Цинічний Мольфар</a></b>\n<b>Перший рядок\nдругий рядок</b>',
+    );
+  });
+
   it('uses native rich message HTML for pull quotes and a visible fallback elsewhere', () => {
     expect(telegramMarkupToHtml(':::quote credit="Ada"\nQuote\n:::')).toBe(
       '<blockquote>Quote\n<i>— Ada</i></blockquote>',
@@ -175,6 +185,23 @@ describe('telegramMarkupToHtml', () => {
     ).toBe(
       'Открой <a href="https://example.com/">мой сайт</a> и <a href="https://example.com/a?x=1&amp;y=2">страницу</a>',
     );
+  });
+
+  it('renders formatting nested inside forwarded Telegram links', () => {
+    expect(
+      telegramMarkupToHtml('[**Bold channel**](https://t.me/bold_channel)'),
+    ).toBe('<a href="https://t.me/bold_channel"><b>Bold channel</b></a>');
+  });
+
+  it('round-trips current Telegram date-time entities', () => {
+    const html =
+      '<tg-time unix="1700086400" format="wDT">Tomorrow at 10:00</tg-time>';
+    const managed = telegramHtmlToManagedMarkup(html);
+
+    expect(managed).toBe(
+      '[Tomorrow at 10:00](tg://time?unix=1700086400&format=wDT)',
+    );
+    expect(telegramMarkupToHtml(managed)).toBe(html);
   });
 
   it('round-trips Telegram text mentions and expandable blockquotes', () => {

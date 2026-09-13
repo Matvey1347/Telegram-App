@@ -161,6 +161,7 @@ describe("NotificationCenter", () => {
             senderName: "Ada Client",
             avatarUrl: "https://cdn.example/ada.jpg",
             messageCount: 4,
+            notificationIds: ["conversation-1", "conversation-1-message-2"],
           },
         },
       ],
@@ -171,11 +172,25 @@ describe("NotificationCenter", () => {
       await screen.findByRole("button", { name: "Notifications, 101 unread" }),
     );
 
+    expect(screen.getByRole("button", { name: "Push" })).toBeInTheDocument();
     expect(await screen.findByText("Ada Client")).toBeInTheDocument();
     expect(screen.getByText("4 messages")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Ada Client" })).toHaveAttribute(
       "src",
       "https://cdn.example/ada.jpg",
+    );
+    const groupedNotification = screen.getByRole("link", {
+      name: "Unread NORMAL notification",
+    });
+    groupedNotification.addEventListener("click", (event) =>
+      event.preventDefault(),
+    );
+    await userEvent.click(groupedNotification);
+    await waitFor(() =>
+      expect(operationsNotificationsApi.markVisibleRead).toHaveBeenCalledWith(
+        ["conversation-1", "conversation-1-message-2"],
+        expect.anything(),
+      ),
     );
   });
 

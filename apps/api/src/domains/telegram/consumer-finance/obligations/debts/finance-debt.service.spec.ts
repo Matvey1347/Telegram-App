@@ -25,6 +25,7 @@ function debtRow(overrides: Record<string, unknown> = {}) {
     note: null,
     settledAt: null,
     settlementTransactionId: null,
+    originTransactionId: null,
     version: 1,
     createdAt: new Date('2026-08-01T00:00:00.000Z'),
     updatedAt: new Date('2026-08-01T00:00:00.000Z'),
@@ -50,6 +51,116 @@ function obligationProfile() {
 }
 
 describe('FinanceDebtService', () => {
+  it('creates one shared payment and individual receivables atomically', async () => {
+    const rates = { resolve: jest.fn() };
+    const writeContext = { accounts: new Map(), categories: new Map(), rates };
+    const ledger = {
+      profileContext: jest.fn().mockResolvedValue({
+        id: 'profile-1',
+        defaultCurrency: 'EUR',
+        timezone: 'UTC',
+        workspaceId: 'workspace-1',
+      }),
+      prepareTransactionRateSource: jest.fn().mockResolvedValue(rates),
+      prepareTransactionWriteContext: jest.fn().mockResolvedValue(writeContext),
+      createTransactionInTransaction: jest.fn().mockResolvedValue({
+        id: 'shared-transaction',
+        amount: '100',
+        economicAmount: '25',
+      }),
+    };
+    const tx = {
+      financeProfile: {
+        findUnique: jest.fn().mockResolvedValue(obligationProfile()),
+      },
+      financeDebt: {
+        create: jest.fn().mockImplementation(({ data }) =>
+          Promise.resolve(
+            debtRow({
+              id: `debt-${data.name}`,
+              name: data.name,
+              amount: data.amount,
+              direction: 'OWED_TO_ME',
+              originTransactionId: data.originTransactionId,
+            }),
+          ),
+        ),
+      },
+    };
+    const prisma = {
+      financeAccount: { findFirst: jest.fn().mockResolvedValue(account) },
+      $transaction: jest.fn((callback) => callback(tx)),
+    };
+    const delivery = {
+      enqueueInTransaction: jest.fn().mockResolvedValue({ scheduledAt: null }),
+      notify: jest.fn(),
+    };
+    const presentation = {
+      debtDue: jest.fn().mockReturnValue({ text: 'Due' }),
+    };
+    const service = new FinanceDebtService(
+      prisma as never,
+      ledger as never,
+      delivery as never,
+      presentation as never,
+    );
+
+    const result = await service.createSharedExpense('profile-1', {
+      accountId: account.id,
+      amount: '100',
+      ownShare: '25',
+      description: 'Dinner',
+      occurredAt: '2026-09-12T12:00:00.000Z',
+      necessity: 'DISCRETIONARY',
+      participants: [
+        { name: 'Ana', amount: '25', dueDate: '2026-09-20' },
+        { name: 'Bob', amount: '25', dueDate: '2026-09-20' },
+        { name: 'Chris', amount: '25', dueDate: '2026-09-20' },
+      ],
+    });
+
+    expect(result).toMatchObject({
+      transaction: { id: 'shared-transaction', economicAmount: '25' },
+      debts: [
+        { name: 'Ana', originTransactionId: 'shared-transaction' },
+        { name: 'Bob', originTransactionId: 'shared-transaction' },
+        { name: 'Chris', originTransactionId: 'shared-transaction' },
+      ],
+    });
+    expect(ledger.createTransactionInTransaction).toHaveBeenCalledWith(
+      tx,
+      expect.anything(),
+      expect.objectContaining({
+        type: 'EXPENSE',
+        amount: '100',
+        economicAmount: '25',
+      }),
+      'MINI_APP',
+      undefined,
+      writeContext,
+    );
+    expect(tx.financeDebt.create).toHaveBeenCalledTimes(3);
+  });
+
+  it('rejects a shared expense whose shares do not equal the payment', async () => {
+    const prisma = { $transaction: jest.fn() };
+    await expect(
+      new FinanceDebtService(
+        prisma as never,
+        {} as never,
+        {} as never,
+        {} as never,
+      ).createSharedExpense('profile-1', {
+        accountId: account.id,
+        amount: '100',
+        ownShare: '25',
+        occurredAt: '2026-09-12T12:00:00.000Z',
+        participants: [{ name: 'Ana', amount: '25', dueDate: '2026-09-20' }],
+      }),
+    ).rejects.toThrow('must equal the paid amount');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it('keeps debt lists bounded, profile-scoped, and derives exact overdue state', async () => {
     const overdue = debtRow({ dueAt: new Date('2020-01-01T00:00:00.000Z') });
     const prisma = {
@@ -314,6 +425,7 @@ describe('FinanceDebtService', () => {
       'MINI_APP',
       undefined,
       writeContext,
+      { purpose: 'DEBT_REPAYMENT', suppressMerchantMapping: true },
     );
     expect(delivery.cancelPendingInTransaction).toHaveBeenCalledWith(tx, {
       financeDebtId: 'debt-1',
@@ -322,11 +434,11 @@ describe('FinanceDebtService', () => {
   });
 
   it.each([
-    ['I_OWE', 'EXPENSE'],
-    ['OWED_TO_ME', 'INCOME'],
+    ['I_OWE', 'EXPENSE', 'DEBT_REPAYMENT'],
+    ['OWED_TO_ME', 'INCOME', 'REIMBURSEMENT'],
   ] as const)(
-    'maps %s settlement to a generated %s',
-    async (direction, type) => {
+    'maps %s settlement to a balance-only %s',
+    async (direction, type, purpose) => {
       const open = debtRow({ direction });
       const settled = debtRow({
         direction,
@@ -379,6 +491,7 @@ describe('FinanceDebtService', () => {
         'MINI_APP',
         undefined,
         expect.anything(),
+        { purpose, suppressMerchantMapping: true },
       );
     },
   );

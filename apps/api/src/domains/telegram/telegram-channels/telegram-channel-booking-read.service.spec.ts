@@ -67,6 +67,7 @@ describe('TelegramChannelBookingReadService', () => {
         title: true,
         text: true,
         imageUrls: true,
+        mediaItems: true,
         buttonRows: true,
       },
       orderBy: { scheduledAt: 'asc' },

@@ -103,6 +103,15 @@ function setup(overrides?: { account?: unknown }) {
     telegramAdvertiser: { findFirst: jest.fn() },
     telegramAdSale: { findFirst: jest.fn().mockResolvedValue(null) },
     telegramAdSalePayment: { findFirst: jest.fn().mockResolvedValue(null) },
+    telegramAdSalesWorkspaceSettings: {
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
+    workspaceMember: {
+      findFirst: jest.fn().mockResolvedValue({
+        id: 'member-1',
+        salesCommissionRate: null,
+      }),
+    },
     transactionCategory: {
       findFirst: jest.fn().mockResolvedValue({
         id: 'category-1',

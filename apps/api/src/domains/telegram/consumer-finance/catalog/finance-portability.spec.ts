@@ -127,7 +127,9 @@ describe('exportFinanceData', () => {
       where: {
         profileId: 'profile-1',
         deletedAt: null,
-        purpose: 'ORDINARY',
+        purpose: {
+          notIn: ['INVESTMENT_CONTRIBUTION', 'INVESTMENT_RETURN'],
+        },
       },
       include: { items: true },
     });

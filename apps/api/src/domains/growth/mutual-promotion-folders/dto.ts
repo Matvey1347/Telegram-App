@@ -67,6 +67,7 @@ export class MutualPromotionPostDraftDto {
   @IsString() @MaxLength(160) title!: string;
   @IsString() text!: string;
   @IsArray() @ArrayMaxSize(10) @IsString({ each: true }) imageUrls!: string[];
+  @IsOptional() @IsArray() @ArrayMaxSize(10) mediaItems?: unknown[];
   @IsArray() buttonRows!: unknown[];
 }
 

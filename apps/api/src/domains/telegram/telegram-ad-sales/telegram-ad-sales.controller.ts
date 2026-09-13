@@ -73,6 +73,7 @@ import { TelegramAdSalesCrmAdvertisersService } from './telegram-ad-sales-crm-ad
 import { TelegramAdSalesCrmSettingsService } from './telegram-ad-sales-crm-settings.service';
 import { TelegramAdSalesService } from './telegram-ad-sales.service';
 import { TelegramAdSalesLegacyCrmService } from './telegram-ad-sales-legacy-crm.service';
+import { TelegramAdSalesWorkspaceSettingsService } from './telegram-ad-sales-workspace-settings.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('telegram-ad-sales')
@@ -84,12 +85,13 @@ export class TelegramAdSalesController {
     private readonly crmAdvertisersService: TelegramAdSalesCrmAdvertisersService,
     private readonly crmSettingsService: TelegramAdSalesCrmSettingsService,
     private readonly legacyCrmService: TelegramAdSalesLegacyCrmService,
+    private readonly workspaceSettingsService: TelegramAdSalesWorkspaceSettingsService,
     private readonly streamResponse: StreamResponseService,
   ) {}
 
   @Get('settings/workspace')
   getWorkspaceSettings(@CurrentUser() user: JwtUser) {
-    return this.service.getAdSalesWorkspaceSettings(user.sub);
+    return this.workspaceSettingsService.get(user.sub);
   }
 
   @Put('settings/workspace')
@@ -97,7 +99,7 @@ export class TelegramAdSalesController {
     @CurrentUser() user: JwtUser,
     @Body() dto: UpdateTelegramAdSalesWorkspaceSettingsDto,
   ) {
-    return this.service.updateAdSalesWorkspaceSettings(user.sub, dto);
+    return this.workspaceSettingsService.update(user.sub, dto);
   }
 
   @Get('preferences')
