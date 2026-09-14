@@ -38,7 +38,9 @@ export function ChannelAudienceTrendButton({
   estimatedAdsRemaining?: number | null;
 }) {
   const [open, setOpen] = useState(false);
-  if (!trend) return null;
+  // Channel cards intentionally show only the short operational window. A
+  // cached/monthly payload must never be presented as the weekly pulse.
+  if (!trend || trend.periodDays !== 7) return null;
 
   return (
     <>

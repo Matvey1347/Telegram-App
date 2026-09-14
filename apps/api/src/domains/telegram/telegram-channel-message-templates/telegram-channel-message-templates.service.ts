@@ -16,6 +16,8 @@ import {
   TelegramChannelMessageTemplatePayloadDto,
   TelegramMessageTemplateSourceDto,
 } from './dto';
+import { loadAdSalesProductsForChannelsWithDefaults } from '../telegram-ad-sales/telegram-ad-sales-default-products';
+import { TelegramAdSalesPricingReader } from '../telegram-ad-sales/telegram-ad-sales-pricing-reader';
 
 const uniqueIds = (values: string[]) => [
   ...new Set(values.map((value) => value.trim()).filter(Boolean)),
@@ -31,10 +33,14 @@ type TemplateRow = Prisma.TelegramChannelMessageTemplateGetPayload<{
 
 @Injectable()
 export class TelegramChannelMessageTemplatesService {
+  private readonly pricingReader: TelegramAdSalesPricingReader;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
-  ) {}
+  ) {
+    this.pricingReader = new TelegramAdSalesPricingReader(prisma);
+  }
 
   private workspace(userId: string) {
     return this.workspaceService.resolveWorkspaceIdForUser(userId);
@@ -210,6 +216,11 @@ export class TelegramChannelMessageTemplatesService {
         username: true,
         photoUrl: true,
         tgStatUrl: true,
+        currentSubscribersCount: true,
+        ownViewsPerPost: true,
+        adBaseCpm: true,
+        adBaseCurrency: true,
+        updatedAt: true,
         defaultInviteLinkId: true,
         presentationIcon: true,
         inviteLinks: {
@@ -224,26 +235,16 @@ export class TelegramChannelMessageTemplatesService {
         'One or more Telegram channels are unavailable',
       );
     }
-    const products = await this.prisma.telegramAdProduct.findMany({
-      where: {
+    const products = (
+      await loadAdSalesProductsForChannelsWithDefaults(this.prisma, {
         workspaceId,
-        telegramChannelId: { in: channelIds },
-        isActive: true,
-      },
-      orderBy: [
-        { telegramChannelId: 'asc' },
-        { position: 'asc' },
-        { id: 'asc' },
-      ],
-      select: {
-        id: true,
-        telegramChannelId: true,
-        name: true,
-        defaultFixedPrice: true,
-        minimumPrice: true,
-        currency: true,
-      },
-    });
+        channels,
+      })
+    ).filter((product) => product.isActive);
+    const pricingSources = await this.pricingReader.sourcesForChannels(
+      workspaceId,
+      channels,
+    );
     const productsByChannel = new Map<string, typeof products>();
     for (const product of products) {
       const items = productsByChannel.get(product.telegramChannelId) || [];
@@ -254,6 +255,7 @@ export class TelegramChannelMessageTemplatesService {
     return {
       channels: channelIds.map((id) => {
         const channel = byId.get(id)!;
+        const pricingSource = pricingSources.get(channel.id);
         return {
           id: channel.id,
           title: channel.title,
@@ -267,17 +269,18 @@ export class TelegramChannelMessageTemplatesService {
             ...link,
             isDefault: link.id === channel.defaultInviteLinkId,
           })),
-          products: (productsByChannel.get(channel.id) || []).map(
-            (product) => ({
+          products: (productsByChannel.get(channel.id) || []).map((product) => {
+            const preview = pricingSource
+              ? this.pricingReader.previewFromSource(pricingSource, product)
+              : null;
+            return {
               id: product.id,
               name: product.name,
-              price:
-                (
-                  product.defaultFixedPrice || product.minimumPrice
-                )?.toString() || null,
-              currency: product.currency,
-            }),
-          ),
+              price: preview?.recommendedPrice ?? null,
+              currency:
+                preview?.currency || channel.adBaseCurrency || product.currency,
+            };
+          }),
         };
       }),
     };

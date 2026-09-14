@@ -20,5 +20,14 @@ describe("TelegramChannelsHeaderActions", () => {
     );
     screen.getByRole("button", { name: "Message templates" }).click();
     expect(openTemplates).toHaveBeenCalledOnce();
+    for (const name of [
+      "Schedules",
+      "Message templates",
+      "Sync all channels",
+      "Export",
+      "Import",
+    ]) {
+      expect(screen.getByRole("button", { name })).toHaveClass("bg-blue-600");
+    }
   });
 });

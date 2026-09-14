@@ -7,6 +7,7 @@ import { ChannelSettingsModal } from "./channel-settings-modal";
 const mocks = vi.hoisted(() => ({
   analyticsSources: vi.fn(),
   updateQuiet: vi.fn(),
+  getScheduleAssignment: vi.fn(),
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -17,6 +18,10 @@ vi.mock("@/lib/api", async (importOriginal) => {
       ...actual.telegramChannelsApi,
       analyticsSources: mocks.analyticsSources,
       updateQuiet: mocks.updateQuiet,
+    },
+    telegramPublicationSchedulesApi: {
+      ...actual.telegramPublicationSchedulesApi,
+      getAssignment: mocks.getScheduleAssignment,
     },
   };
 });
@@ -65,6 +70,7 @@ describe("ChannelSettingsModal", () => {
   it("groups channel configuration into icon-labelled tabs and shows the channel avatar", async () => {
     mocks.analyticsSources.mockReset().mockResolvedValue({ sources: [] });
     mocks.updateQuiet.mockReset().mockResolvedValue({});
+    mocks.getScheduleAssignment.mockReset().mockResolvedValue(null);
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
@@ -106,9 +112,22 @@ describe("ChannelSettingsModal", () => {
       "true",
     );
     expect(screen.getByLabelText("Appearance URL")).toBeInTheDocument();
-    expect(screen.getByText("80%")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("67%")).toBeInTheDocument());
     expect(screen.getAllByTitle("Fully configured")).toHaveLength(3);
     expect(screen.getAllByTitle("Partially configured")).toHaveLength(2);
+    expect(screen.getByRole("tab", { name: "Schedule" })).toContainElement(
+      screen.getByTitle("Not configured"),
+    );
+    expect(
+      screen.getAllByRole("tab").map((tab) => tab.getAttribute("aria-label")),
+    ).toEqual([
+      "Appearance",
+      "Economics",
+      "Schedule",
+      "Seed",
+      "Bot",
+      "Sources",
+    ]);
 
     await userEvent.click(screen.getByRole("tab", { name: "Economics" }));
     expect(screen.getByLabelText("Draft CPM")).toBeInTheDocument();
@@ -119,6 +138,7 @@ describe("ChannelSettingsModal", () => {
   it("keeps one draft across tabs and saves no-seed together with other settings", async () => {
     mocks.analyticsSources.mockReset().mockResolvedValue({ sources: [] });
     mocks.updateQuiet.mockReset().mockResolvedValue({});
+    mocks.getScheduleAssignment.mockReset().mockResolvedValue(null);
     const onClose = vi.fn();
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -184,6 +204,7 @@ describe("ChannelSettingsModal", () => {
   it("edits and saves the channel post sync limit from Sources", async () => {
     mocks.analyticsSources.mockReset().mockResolvedValue({ sources: [] });
     mocks.updateQuiet.mockReset().mockResolvedValue({});
+    mocks.getScheduleAssignment.mockReset().mockResolvedValue(null);
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });

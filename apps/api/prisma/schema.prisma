@@ -1744,7 +1744,6 @@ model TelegramCustomEmoji {
 enum TelegramPublicationSlotKind {
   CONTENT
   AD
-  MUTUAL_PROMOTION
 }
 
 enum TelegramPublicationScheduleSelectionMode {

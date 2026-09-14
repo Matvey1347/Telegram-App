@@ -82,6 +82,12 @@ describe("PublicationSchedulesModal", () => {
       "type",
       "text",
     );
+    expect(screen.getByRole("button", { name: "Slot" })).toHaveClass(
+      "bg-blue-600",
+    );
+    expect(screen.getByRole("button", { name: "Remove slot 1" })).toHaveClass(
+      "bg-red-600",
+    );
     await user.click(
       screen.getByRole("button", { name: "📝 Regular publication" }),
     );
@@ -89,12 +95,24 @@ describe("PublicationSchedulesModal", () => {
       screen.getAllByRole("button", { name: "📝 Regular publication" }),
     ).toHaveLength(2);
     expect(
-      screen.getByRole("button", { name: "📣 Advertising" }),
+      screen.getByRole("button", {
+        name: "📣 Advertising / mutual promotion",
+      }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "🤝 Mutual promotion" }),
-    ).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "📣 Advertising" }));
+      screen.queryByRole("button", { name: "🤝 Mutual promotion" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Back" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Close" }),
+    ).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", {
+        name: "📣 Advertising / mutual promotion",
+      }),
+    );
     await user.click(screen.getByRole("button", { name: "Add emoji" }));
     await user.type(
       screen.getByPlaceholderText("Main publication plan"),

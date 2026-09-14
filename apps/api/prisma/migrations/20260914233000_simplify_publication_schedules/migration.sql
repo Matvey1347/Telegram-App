@@ -39,18 +39,27 @@ WHERE slot."id" = merge."duplicateId"
 
 DROP TABLE "_PublicationScheduleSlotMerge";
 
-ALTER TABLE "TelegramPublicationSchedule" ADD COLUMN "iconId" TEXT;
-ALTER TABLE "TelegramPublicationSchedule" DROP COLUMN "timezone";
-ALTER TABLE "TelegramPublicationScheduleSlot" DROP COLUMN "weekday";
-ALTER TABLE "TelegramPublicationScheduleSlot" DROP COLUMN "timezone";
+ALTER TABLE "TelegramPublicationSchedule" ADD COLUMN IF NOT EXISTS "iconId" TEXT;
+ALTER TABLE "TelegramPublicationSchedule" DROP COLUMN IF EXISTS "timezone";
+ALTER TABLE "TelegramPublicationScheduleSlot" DROP COLUMN IF EXISTS "weekday";
+ALTER TABLE "TelegramPublicationScheduleSlot" DROP COLUMN IF EXISTS "timezone";
 
-DROP INDEX "TelegramPublicationScheduleSlot_scheduleId_weekday_position_idx";
-CREATE INDEX "TelegramPublicationScheduleSlot_scheduleId_position_idx"
+DROP INDEX IF EXISTS "TelegramPublicationScheduleSlot_scheduleId_weekday_position_idx";
+CREATE INDEX IF NOT EXISTS "TelegramPublicationScheduleSlot_scheduleId_position_idx"
   ON "TelegramPublicationScheduleSlot"("scheduleId", "position");
-CREATE INDEX "TelegramPublicationSchedule_iconId_idx"
+CREATE INDEX IF NOT EXISTS "TelegramPublicationSchedule_iconId_idx"
   ON "TelegramPublicationSchedule"("iconId");
 
-ALTER TABLE "TelegramPublicationSchedule"
-  ADD CONSTRAINT "TelegramPublicationSchedule_iconId_fkey"
-  FOREIGN KEY ("iconId") REFERENCES "Icon"("id")
-  ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'TelegramPublicationSchedule_iconId_fkey'
+  ) THEN
+    ALTER TABLE "TelegramPublicationSchedule"
+      ADD CONSTRAINT "TelegramPublicationSchedule_iconId_fkey"
+      FOREIGN KEY ("iconId") REFERENCES "Icon"("id")
+      ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;

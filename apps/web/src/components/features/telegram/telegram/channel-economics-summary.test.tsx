@@ -189,7 +189,28 @@ describe("ChannelEconomicsSummary", () => {
       "src",
       "https://cdn.test/mentor.jpg",
     );
-    expect(await screen.findByText("Last 30 days")).toBeInTheDocument();
+    expect(await screen.findByText("Last 7 days")).toBeInTheDocument();
+  });
+
+  it("never renders a cached monthly trend in the weekly channel-card slot", () => {
+    render(
+      <ChannelEconomicsSummary
+        channel={
+          {
+            id: "channel-1",
+            title: "Mentor",
+            preview: {
+              audienceTrend: { ...audienceTrend, periodDays: 30 },
+              financialSummary: {},
+            },
+          } as never
+        }
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /channel dynamics/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("does not show a trend control until comparable history exists", () => {

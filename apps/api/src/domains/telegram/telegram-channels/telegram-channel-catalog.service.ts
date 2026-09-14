@@ -22,6 +22,8 @@ import { TelegramChannelFinancialReadService } from './telegram-channel-financia
 import { DEFAULT_TELEGRAM_CHANNEL_POST_SYNC_LIMIT } from './telegram-channel-sync-limits';
 import { TelegramSystemBotConfigService } from '../telegram-system-bot/telegram-system-bot-config.service';
 
+const CHANNEL_CARD_TREND_PERIOD_DAYS = 7;
+
 type TelegramChannelImportPolicyRow = {
   id: string;
   acquisitionType: 'CREATED' | 'PURCHASED' | null;
@@ -254,6 +256,7 @@ export class TelegramChannelCatalogService {
       this.telegramChannelAudienceTrendReadService.summariesForChannels(
         workspaceId,
         channelIds,
+        CHANNEL_CARD_TREND_PERIOD_DAYS,
       ),
     ]);
 

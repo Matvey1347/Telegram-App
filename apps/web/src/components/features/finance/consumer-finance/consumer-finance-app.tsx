@@ -96,11 +96,16 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
     if (!prepared || Date.parse(prepared.expiresAt) <= Date.now()) {
       resetBrowserTransfer();
       prepareBrowserTransfer();
-      return;
+      return false;
     }
-    openFinanceBrowserUrl(prepared.url);
-    resetBrowserTransfer();
-    prepareBrowserTransfer();
+    // Keep the native anchor navigation in the original click event. Rotating
+    // the one-time credential on the next task prevents this render from
+    // removing the link before Telegram dispatches the browser navigation.
+    window.setTimeout(() => {
+      resetBrowserTransfer();
+      prepareBrowserTransfer();
+    }, 0);
+    return true;
   }, [browserTransfer.data, prepareBrowserTransfer, resetBrowserTransfer]);
   const logout = useMutation({
     mutationFn: () => consumerFinanceAuthApi.logout(botId),
@@ -372,6 +377,7 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
         browserOpenError={
           browserTransfer.isError ? t.browserOpenError : undefined
         }
+        browserUrl={browserTransfer.data?.url}
         onOpenBrowser={openBrowser}
       >
         {contextualChildren}
@@ -431,19 +437,4 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
       onInvestmentBack={closeInvestment}
     />,
   );
-}
-
-function openFinanceBrowserUrl(url: string) {
-  const webApp = window.Telegram?.WebApp;
-  if (webApp?.openLink) {
-    try {
-      webApp.openLink(url, { try_instant_view: false });
-      return;
-    } catch {
-      // Older or embedded Telegram clients can reject the native bridge.
-    }
-  }
-  const opened = window.open(url, "_blank");
-  if (opened) opened.opener = null;
-  else window.location.assign(url);
 }

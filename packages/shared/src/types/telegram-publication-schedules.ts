@@ -1,6 +1,6 @@
 import type { ResolvedEmoji } from "./resolved-emoji";
 
-export type TelegramPublicationSlotKind = "CONTENT" | "AD" | "MUTUAL_PROMOTION";
+export type TelegramPublicationSlotKind = "CONTENT" | "AD";
 
 export type TelegramPublicationScheduleSelectionMode = "FULL" | "SUBSET";
 

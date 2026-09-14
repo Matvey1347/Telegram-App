@@ -552,7 +552,7 @@ describe("ConsumerFinanceApp bootstrap", () => {
     ).toBeEnabled();
   });
 
-  it("opens the server-prepared production URL directly inside the Telegram click", async () => {
+  it("uses a native external link when Telegram silently ignores openLink", async () => {
     const openLink = vi.fn();
     window.Telegram = { WebApp: { openLink } };
     mocks.bootstrap = { status: "ready", initData: "signed-init-data" };
@@ -566,16 +566,17 @@ describe("ConsumerFinanceApp bootstrap", () => {
 
     renderApp();
 
-    const button = await screen.findByRole("button", {
+    const link = await screen.findByRole("link", {
       name: "Open in browser",
     });
-    await waitFor(() => expect(button).toBeEnabled());
-    fireEvent.click(button);
-
-    expect(openLink).toHaveBeenCalledWith(
+    expect(link).toHaveAttribute(
+      "href",
       "https://nexeloq.com/finance/bot-1?browserTransfer=one-time-token",
-      { try_instant_view: false },
     );
+    expect(link).toHaveAttribute("target", "_blank");
+    fireEvent.click(link);
+
+    expect(openLink).not.toHaveBeenCalled();
   });
 
   it("keeps the full Finance shell visible while session data loads", () => {

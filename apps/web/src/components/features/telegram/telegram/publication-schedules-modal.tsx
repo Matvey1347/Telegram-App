@@ -29,8 +29,7 @@ import { useAppToast } from "@/providers/toast-provider";
 
 const KINDS: Array<{ value: TelegramPublicationSlotKind; label: string }> = [
   { value: "CONTENT", label: "📝 Regular publication" },
-  { value: "AD", label: "📣 Advertising" },
-  { value: "MUTUAL_PROMOTION", label: "🤝 Mutual promotion" },
+  { value: "AD", label: "📣 Advertising / mutual promotion" },
 ];
 
 const blankDraft = (): TelegramPublicationScheduleInput => ({
@@ -198,39 +197,33 @@ export function PublicationSchedulesModal({
           onEdit={edit}
         />
       )}
-      <div className="mt-5 flex flex-wrap justify-between gap-2 border-t border-neutral-800 pt-4">
-        <div>
-          {editorOpen && editingId ? (
-            <Button
-              type="button"
-              variant="danger"
-              disabled={remove.isPending}
-              onClick={() => remove.mutate(editingId)}
-            >
-              <Trash2 size={16} /> Delete
-            </Button>
-          ) : null}
+      {editorOpen ? (
+        <div className="mt-5 flex flex-wrap justify-between gap-2 border-t border-neutral-800 pt-4">
+          <div>
+            {editorOpen && editingId ? (
+              <Button
+                type="button"
+                variant="danger"
+                disabled={remove.isPending}
+                onClick={() => remove.mutate(editingId)}
+              >
+                <Trash2 size={16} /> Delete
+              </Button>
+            ) : null}
+          </div>
+          <div className="flex gap-2">
+            {editorOpen && (!modalDrafts.pendingDrafts.length || editingId) ? (
+              <Button
+                type="button"
+                disabled={save.isPending || !valid}
+                onClick={() => save.mutate()}
+              >
+                {save.isPending ? "Saving…" : "Save schedule"}
+              </Button>
+            ) : null}
+          </div>
         </div>
-        <div className="flex gap-2">
-          {editorOpen ? (
-            <Button type="button" variant="secondary" onClick={closeEditor}>
-              Back
-            </Button>
-          ) : null}
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Close
-          </Button>
-          {editorOpen && (!modalDrafts.pendingDrafts.length || editingId) ? (
-            <Button
-              type="button"
-              disabled={save.isPending || !valid}
-              onClick={() => save.mutate()}
-            >
-              {save.isPending ? "Saving…" : "Save schedule"}
-            </Button>
-          ) : null}
-        </div>
-      </div>
+      ) : null}
     </Modal>
   );
 }
@@ -374,7 +367,6 @@ function ScheduleEditor({
         </div>
         <Button
           type="button"
-          variant="secondary"
           onClick={() =>
             onChange({
               ...draft,
@@ -425,7 +417,7 @@ function ScheduleEditor({
             />
             <Button
               type="button"
-              variant="secondary"
+              variant="danger"
               aria-label={`Remove slot ${index + 1}`}
               onClick={() =>
                 onChange({

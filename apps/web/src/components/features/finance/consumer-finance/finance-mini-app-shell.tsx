@@ -31,6 +31,7 @@ export function FinanceMiniAppShell({
   onSignOut,
   signingOut = false,
   onOpenBrowser,
+  browserUrl,
   openingBrowser = false,
   browserOpenError,
 }: {
@@ -49,7 +50,8 @@ export function FinanceMiniAppShell({
   onAction: (action: ConsumerFinanceAction) => void;
   onSignOut: () => void;
   signingOut?: boolean;
-  onOpenBrowser?: () => void;
+  onOpenBrowser?: () => boolean;
+  browserUrl?: string;
   openingBrowser?: boolean;
   browserOpenError?: string;
 }) {
@@ -85,7 +87,20 @@ export function FinanceMiniAppShell({
                 onChange={onLocaleChange}
                 disabled={localeChanging || localeDisabled}
               />
-              {onOpenBrowser ? (
+              {browserUrl ? (
+                <a
+                  href={browserUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(event) => {
+                    if (onOpenBrowser?.() === false) event.preventDefault();
+                  }}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-neutral-700 px-3 text-sm text-neutral-200 outline-none focus-visible:ring-2 focus-visible:ring-sky-300 disabled:opacity-50"
+                >
+                  <ExternalLink size={17} aria-hidden="true" />
+                  <span className="hidden sm:inline">{copy.openBrowser}</span>
+                </a>
+              ) : onOpenBrowser ? (
                 <button
                   type="button"
                   disabled={openingBrowser}

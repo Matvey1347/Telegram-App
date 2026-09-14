@@ -41,7 +41,6 @@ export function TelegramChannelsHeaderActions({
       <PublicationSchedulesAction />
       <Button
         type="button"
-        variant="secondary"
         onClick={onOpenTemplates}
         className="inline-flex items-center gap-2"
       >
@@ -50,7 +49,6 @@ export function TelegramChannelsHeaderActions({
       </Button>
       <Button
         type="button"
-        variant="secondary"
         onClick={onSyncAll}
         className="inline-flex items-center gap-2"
       >
@@ -59,7 +57,6 @@ export function TelegramChannelsHeaderActions({
       </Button>
       <Button
         type="button"
-        variant="secondary"
         onClick={onExport}
         disabled={!hasChannels}
         className="inline-flex items-center gap-2"

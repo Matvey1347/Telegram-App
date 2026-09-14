@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bot,
   Cable,
@@ -14,8 +14,11 @@ import {
   CalendarClock,
 } from "lucide-react";
 import type { CurrencySettings, TelegramChannel } from "@/lib/api";
-import { telegramChannelsApi } from "@/lib/api";
-import { telegramChannelKeys } from "@/lib/query-keys";
+import { telegramChannelsApi, telegramPublicationSchedulesApi } from "@/lib/api";
+import {
+  telegramChannelKeys,
+  telegramPublicationScheduleKeys,
+} from "@/lib/query-keys";
 import {
   Button,
   FormField,
@@ -46,10 +49,10 @@ type SettingsTab = "appearance" | "economics" | "seed" | "bot" | "sources" | "sc
 const tabs = [
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "economics", label: "Economics", icon: ChartNoAxesCombined },
+  { id: "schedule", label: "Schedule", icon: CalendarClock },
   { id: "seed", label: "Seed", icon: Sprout },
   { id: "bot", label: "Bot", icon: Bot },
   { id: "sources", label: "Sources", icon: Cable },
-  { id: "schedule", label: "Schedule", icon: CalendarClock },
 ] as const;
 
 function CompletionIcon({
@@ -90,12 +93,23 @@ export function ChannelSettingsModal({
   const [registerPending, setRegisterPending] = useState(false);
   const queryClient = useQueryClient();
   const { pushToast } = useAppToast();
+  const scheduleAssignment = useQuery({
+    queryKey: telegramPublicationScheduleKeys.assignment(channel.id),
+    queryFn: () => telegramPublicationSchedulesApi.getAssignment(channel.id),
+  });
   const visibleTabs = tabs.filter((tab) => tab.id !== "bot" || canManageBot);
   const completion = getChannelSettingsCompletion(channel, draft);
-  const completionFor = (tab: (typeof tabs)[number]) =>
-    tab.id === "schedule" ? "empty" : completion[tab.id];
-  const setupTabs = visibleTabs.filter((tab) => tab.id !== "schedule");
-  const completionScore = setupTabs.reduce(
+  const completionFor = (
+    tab: (typeof tabs)[number],
+  ): ChannelSettingsCompletionStatus =>
+    tab.id === "schedule"
+      ? scheduleAssignment.data
+        ? "complete"
+        : scheduleAssignment.isLoading
+          ? "partial"
+          : "empty"
+      : completion[tab.id];
+  const completionScore = visibleTabs.reduce(
     (total, tab) =>
       total +
       (completionFor(tab) === "complete"
@@ -106,7 +120,7 @@ export function ChannelSettingsModal({
     0,
   );
   const completionPercent = Math.round(
-    (completionScore / setupTabs.length) * 100,
+    (completionScore / visibleTabs.length) * 100,
   );
   const updateDraft = (patch: Partial<ChannelSettingsDraft>) =>
     setDraft((current) => ({ ...current, ...patch }));
@@ -187,7 +201,7 @@ export function ChannelSettingsModal({
             >
               <Icon size={16} aria-hidden="true" />
               {tab.label}
-              {tab.id !== "schedule" ? <span
+              <span
                 className="ml-0.5"
                 title={
                   status === "complete"
@@ -198,7 +212,7 @@ export function ChannelSettingsModal({
                 }
               >
                 <CompletionIcon status={status} />
-              </span> : null}
+              </span>
             </button>
           );
         })}
