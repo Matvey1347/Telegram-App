@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   session: vi.fn(),
   createBrowserTransfer: vi.fn(),
+  consumeBrowserTransfer: vi.fn(),
   logout: vi.fn(),
   browserTransferUrl: vi.fn(),
   updateSettings: vi.fn(),
@@ -34,6 +35,7 @@ vi.mock("@/lib/features/finance/consumer-finance-auth-api", () => ({
     auth: mocks.auth,
     session: mocks.session,
     createBrowserTransfer: mocks.createBrowserTransfer,
+    consumeBrowserTransfer: mocks.consumeBrowserTransfer,
     browserTransferUrl: mocks.browserTransferUrl,
     logout: mocks.logout,
   },
@@ -148,6 +150,7 @@ beforeEach(() => {
   mocks.session.mockReset();
   mocks.session.mockResolvedValue({ authenticated: false });
   mocks.createBrowserTransfer.mockReset();
+  mocks.consumeBrowserTransfer.mockReset();
   mocks.browserTransferUrl.mockReset();
   mocks.updateSettings.mockReset();
   mocks.logout.mockReset();
@@ -326,6 +329,32 @@ describe("ConsumerFinanceApp bootstrap", () => {
         name: "Transactions",
       }),
     ).toBeVisible();
+  });
+
+  it("exchanges a browser transfer on the frontend route and removes it from the URL", async () => {
+    mocks.consumeBrowserTransfer.mockResolvedValue({
+      authenticated: true,
+      profile,
+    });
+    window.history.replaceState(
+      {},
+      "",
+      "/finance/bot-1?browserTransfer=one-time-token&screen=analytics",
+    );
+
+    renderApp();
+
+    expect(
+      await screen.findByText(/Finance profile profile-1/),
+    ).toBeInTheDocument();
+    expect(mocks.consumeBrowserTransfer).toHaveBeenCalledOnce();
+    expect(mocks.consumeBrowserTransfer).toHaveBeenCalledWith(
+      "bot-1",
+      "one-time-token",
+    );
+    expect(mocks.session).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe("/finance/bot-1");
+    expect(window.location.search).toBe("?screen=analytics");
   });
 
   it("checks the scoped session before using Telegram initData once", async () => {

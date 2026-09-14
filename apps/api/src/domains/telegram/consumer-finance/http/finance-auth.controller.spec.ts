@@ -83,6 +83,8 @@ describe('FinanceController consumer auth', () => {
       history: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
     };
     const transfers = {
+      create: jest.fn(),
+      consume: jest.fn(),
       createBrowserLogin: jest.fn().mockResolvedValue({
         token: 'a'.repeat(32),
         expiresAt: new Date('2026-08-21T10:05:00.000Z'),
@@ -530,6 +532,38 @@ describe('FinanceController consumer auth', () => {
       'finance_consumer_session',
       expect.any(String),
       expect.objectContaining({ secure: true, sameSite: 'none' }),
+    );
+  });
+
+  it('exchanges a Mini App transfer token for a scoped browser cookie', async () => {
+    const { controller, transfers, response } = setup();
+    transfers.consume.mockResolvedValue({
+      profileId: 'profile-1',
+      botIntegrationId: 'bot-1',
+      telegramBotUserId: 'telegram-user-1',
+      telegramChatId: '12345',
+      workspaceId: 'workspace-1',
+      defaultCurrency: 'UAH',
+    });
+
+    await expect(
+      controller.consumeTransferFromWebApp(
+        'bot-1',
+        { token: 'a'.repeat(32) },
+        trustedMutationRequest('https'),
+        response,
+      ),
+    ).resolves.toEqual({ authenticated: true, profile });
+    expect(transfers.consume).toHaveBeenCalledWith('a'.repeat(32), 'bot-1');
+    expect(response.cookie).toHaveBeenCalledWith(
+      'finance_consumer_session',
+      expect.any(String),
+      expect.objectContaining({
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        path: '/api/finance-bots/bot-1',
+      }),
     );
   });
 

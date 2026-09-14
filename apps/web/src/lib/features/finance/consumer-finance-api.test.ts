@@ -216,7 +216,37 @@ describe("consumerFinanceApi", () => {
     expect(request?.headers.get("X-Telegram-Init-Data")).toBeUndefined();
     expect(
       consumerFinanceApi.browserTransferUrl("bot-id", "one time"),
-    ).toContain("token=one%20time");
+    ).toBe(
+      "http://localhost:3000/finance/bot-id?browserTransfer=one%20time",
+    );
+  });
+
+  it("exchanges a one-time transfer token for a browser session", async () => {
+    let request: InternalAxiosRequestConfig | undefined;
+    consumerFinanceHttp.defaults.adapter = async (config) => {
+      request = config;
+      return {
+        data: { authenticated: true, profile: { id: "profile-1" } },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await consumerFinanceApi.consumeBrowserTransfer(
+      "bot-id",
+      "one-time-token",
+    );
+
+    expect(request?.url).toBe(
+      "/finance-bots/bot-id/auth/transfer/consume",
+    );
+    expect(request?.method).toBe("post");
+    expect(request?.headers.get("X-Finance-Consumer-Request")).toBe("1");
+    expect(JSON.parse(String(request?.data))).toEqual({
+      token: "one-time-token",
+    });
   });
 
   it("loads the browser login widget configuration with a safe return location", async () => {

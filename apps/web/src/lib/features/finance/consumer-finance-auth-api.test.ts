@@ -4,11 +4,11 @@ import { buildConsumerFinanceBrowserTransferUrl } from "./consumer-finance-auth-
 describe("consumerFinanceAuthApi.browserTransferUrl", () => {
   it("creates an absolute production URL when the API is served at relative /api", () => {
     expect(
-      buildConsumerFinanceBrowserTransferUrl("finance-bot", "a+b", "/api", {
+      buildConsumerFinanceBrowserTransferUrl("finance-bot", "a+b", {
         origin: "https://nexeloq.com",
       }),
     ).toBe(
-      "https://nexeloq.com/api/finance-bots/finance-bot/auth/transfer?token=a%2Bb",
+      "https://nexeloq.com/finance/finance-bot?browserTransfer=a%2Bb",
     );
   });
 });

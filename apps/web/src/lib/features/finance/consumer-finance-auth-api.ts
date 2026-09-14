@@ -3,7 +3,6 @@ import {
   consumerFinanceHttp,
   consumerFinanceRoot,
   consumerRequest,
-  resolveConsumerFinanceApiBase,
   startupRequest,
   telegramBootstrapRequest,
 } from "./consumer-finance-http";
@@ -28,12 +27,10 @@ export type ConsumerFinanceBrowserLoginStatus =
 export function buildConsumerFinanceBrowserTransferUrl(
   botId: string,
   token: string,
-  apiBase: string,
   location?: Pick<Location, "origin">,
 ) {
-  const path = `${apiBase}${consumerFinanceRoot(botId)}/auth/transfer?token=${encodeURIComponent(token)}`;
-  if (/^https?:\/\//u.test(path) || !location?.origin) return path;
-  return new URL(path, location.origin).toString();
+  const path = `/finance/${encodeURIComponent(botId)}?browserTransfer=${encodeURIComponent(token)}`;
+  return location?.origin ? new URL(path, location.origin).toString() : path;
 }
 
 export const consumerFinanceAuthApi = {
@@ -97,6 +94,17 @@ export const consumerFinanceAuthApi = {
         consumerRequest(),
       )
     ).data,
+  consumeBrowserTransfer: async (
+    botId: string,
+    token: string,
+  ): Promise<ConsumerFinanceSessionState> =>
+    (
+      await consumerFinanceHttp.post<ConsumerFinanceSessionState>(
+        `${consumerFinanceRoot(botId)}/auth/transfer/consume`,
+        { token },
+        consumerRequest(),
+      )
+    ).data,
   browserTransferUrl: (
     botId: string,
     token: string,
@@ -105,7 +113,6 @@ export const consumerFinanceAuthApi = {
     return buildConsumerFinanceBrowserTransferUrl(
       botId,
       token,
-      resolveConsumerFinanceApiBase(location),
       location,
     );
   },

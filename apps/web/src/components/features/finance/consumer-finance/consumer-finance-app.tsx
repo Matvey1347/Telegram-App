@@ -49,6 +49,19 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
   const session = useQuery({
     queryKey: consumerFinanceKeys.session(botId),
     queryFn: async (): Promise<ConsumerFinanceSessionState> => {
+      const transferToken = new URLSearchParams(window.location.search).get(
+        "browserTransfer",
+      );
+      if (transferToken) {
+        const transferred = await consumerFinanceAuthApi.consumeBrowserTransfer(
+          botId,
+          transferToken,
+        );
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete("browserTransfer");
+        window.history.replaceState(null, "", cleanUrl.toString());
+        return transferred;
+      }
       const existing = await consumerFinanceAuthApi.session(botId);
       if (existing.authenticated || bootstrap.status !== "ready") {
         return existing;

@@ -68,6 +68,11 @@ class FinanceBrowserLoginChallengeDto {
   @Matches(/^[A-Za-z0-9_-]{32}$/u)
   token!: string;
 }
+class FinanceBrowserTransferDto {
+  @IsString()
+  @Matches(/^[A-Za-z0-9_-]{32,}$/u)
+  token!: string;
+}
 @Controller('finance-bots/:botId')
 export class FinanceController {
   private readonly browserLoginStateCookie = 'finance_browser_login_state';
@@ -331,6 +336,21 @@ export class FinanceController {
     @Req() r: Request,
   ) {
     return this.transfers.create(this.auth(b, r));
+  }
+  @Post('auth/transfer/consume') async consumeTransferFromWebApp(
+    @Param('botId') b: string,
+    @Body() input: FinanceBrowserTransferDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    this.requests.assertMutation(request);
+    const session = await this.transfers.consume(input.token, b);
+    await this.setCookie(res, session, b, request);
+    const profile = await this.core.profile(session.profileId);
+    if (!profile) {
+      throw new InternalServerErrorException('Finance profile was not found');
+    }
+    return { authenticated: true as const, profile };
   }
   /** Navigate to this API endpoint from the Mini App; it consumes the one-time token and redirects to a clean app URL. */
   @Get('auth/transfer') async consumeTransfer(
