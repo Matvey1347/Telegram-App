@@ -198,6 +198,8 @@ describe("consumerFinanceApi", () => {
         data: {
           token: "one-time-token",
           expiresAt: "2026-08-20T12:00:00.000Z",
+          url: "https://nexeloq.com/finance/bot-id?browserTransfer=one-time-token",
+          diagnosticId: "transfer-1",
         },
         status: 200,
         statusText: "OK",
@@ -211,14 +213,11 @@ describe("consumerFinanceApi", () => {
     ).resolves.toEqual({
       token: "one-time-token",
       expiresAt: "2026-08-20T12:00:00.000Z",
+      url: "https://nexeloq.com/finance/bot-id?browserTransfer=one-time-token",
+      diagnosticId: "transfer-1",
     });
     expect(request?.url).toBe("/finance-bots/bot-id/auth/transfer");
     expect(request?.headers.get("X-Telegram-Init-Data")).toBeUndefined();
-    expect(
-      consumerFinanceApi.browserTransferUrl("bot-id", "one time"),
-    ).toBe(
-      "http://localhost:3000/finance/bot-id?browserTransfer=one%20time",
-    );
   });
 
   it("exchanges a one-time transfer token for a browser session", async () => {
@@ -234,14 +233,9 @@ describe("consumerFinanceApi", () => {
       };
     };
 
-    await consumerFinanceApi.consumeBrowserTransfer(
-      "bot-id",
-      "one-time-token",
-    );
+    await consumerFinanceApi.consumeBrowserTransfer("bot-id", "one-time-token");
 
-    expect(request?.url).toBe(
-      "/finance-bots/bot-id/auth/transfer/consume",
-    );
+    expect(request?.url).toBe("/finance-bots/bot-id/auth/transfer/consume");
     expect(request?.method).toBe("post");
     expect(request?.headers.get("X-Finance-Consumer-Request")).toBe("1");
     expect(JSON.parse(String(request?.data))).toEqual({

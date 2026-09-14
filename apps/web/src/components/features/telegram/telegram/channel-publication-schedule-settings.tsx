@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { TelegramPublicationScheduleSelectionMode } from "@telegram-system/shared";
+import type {
+  TelegramChannelPublicationScheduleAssignment,
+  TelegramPublicationSchedule,
+  TelegramPublicationScheduleSelectionMode,
+} from "@telegram-system/shared";
 import { telegramPublicationSchedulesApi } from "@/lib/api";
 import { telegramPublicationScheduleKeys } from "@/lib/query-keys";
 import { Button, FormField, Select } from "@/components/ui/primitives";
+import { IconAvatar } from "@/components/icons/icon-avatar";
 import { useAppToast } from "@/providers/toast-provider";
 
 export function ChannelPublicationScheduleSettings({
@@ -13,8 +18,6 @@ export function ChannelPublicationScheduleSettings({
 }: {
   channelId: string;
 }) {
-  const queryClient = useQueryClient();
-  const { pushToast } = useAppToast();
   const schedules = useQuery({
     queryKey: telegramPublicationScheduleKeys.lists(),
     queryFn: telegramPublicationSchedulesApi.list,
@@ -22,35 +25,6 @@ export function ChannelPublicationScheduleSettings({
   const assignment = useQuery({
     queryKey: telegramPublicationScheduleKeys.assignment(channelId),
     queryFn: () => telegramPublicationSchedulesApi.getAssignment(channelId),
-  });
-  const [scheduleId, setScheduleId] = useState("");
-  const [mode, setMode] =
-    useState<TelegramPublicationScheduleSelectionMode>("FULL");
-  const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>([]);
-  useEffect(() => {
-    if (!assignment.data) return;
-    setScheduleId(assignment.data.scheduleId);
-    setMode(assignment.data.selectionMode);
-    setSelectedSlotIds(assignment.data.selectedSlotIds);
-  }, [assignment.data]);
-  const selectedSchedule = schedules.data?.find(
-    (schedule) => schedule.id === scheduleId,
-  );
-  const save = useMutation({
-    mutationFn: () =>
-      telegramPublicationSchedulesApi.assign(channelId, {
-        scheduleId,
-        selectionMode: mode,
-        selectedSlotIds: mode === "SUBSET" ? selectedSlotIds : [],
-      }),
-    onSuccess: (next) => {
-      queryClient.setQueryData(
-        telegramPublicationScheduleKeys.assignment(channelId),
-        next,
-      );
-      pushToast("Publication schedule assigned", "success");
-    },
-    onError: () => pushToast("Could not assign publication schedule", "error"),
   });
   if (schedules.isLoading || assignment.isLoading)
     return (
@@ -69,6 +43,53 @@ export function ChannelPublicationScheduleSettings({
       </div>
     );
   return (
+    <ChannelPublicationScheduleForm
+      key={assignment.data?.updatedAt ?? "unassigned"}
+      channelId={channelId}
+      schedules={schedules.data}
+      assignment={assignment.data ?? null}
+    />
+  );
+}
+
+function ChannelPublicationScheduleForm({
+  channelId,
+  schedules,
+  assignment,
+}: {
+  channelId: string;
+  schedules: TelegramPublicationSchedule[];
+  assignment: TelegramChannelPublicationScheduleAssignment | null;
+}) {
+  const queryClient = useQueryClient();
+  const { pushToast } = useAppToast();
+  const [scheduleId, setScheduleId] = useState(assignment?.scheduleId ?? "");
+  const [mode, setMode] = useState<TelegramPublicationScheduleSelectionMode>(
+    assignment?.selectionMode ?? "FULL",
+  );
+  const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>(
+    assignment?.selectedSlotIds ?? [],
+  );
+  const selectedSchedule = schedules.find(
+    (schedule) => schedule.id === scheduleId,
+  );
+  const save = useMutation({
+    mutationFn: () =>
+      telegramPublicationSchedulesApi.assign(channelId, {
+        scheduleId,
+        selectionMode: mode,
+        selectedSlotIds: mode === "SUBSET" ? selectedSlotIds : [],
+      }),
+    onSuccess: (next) => {
+      queryClient.setQueryData(
+        telegramPublicationScheduleKeys.assignment(channelId),
+        next,
+      );
+      pushToast("Publication schedule assigned", "success");
+    },
+    onError: () => pushToast("Could not assign publication schedule", "error"),
+  });
+  return (
     <div className="space-y-4">
       <div>
         <h3 className="font-semibold text-neutral-100">
@@ -85,11 +106,18 @@ export function ChannelPublicationScheduleSettings({
             value={scheduleId}
             onChange={(event) => {
               setScheduleId(event.target.value);
-              setSelectedSlotIds([]);
+              const nextSchedule = schedules.find(
+                (schedule) => schedule.id === event.target.value,
+              );
+              setSelectedSlotIds(
+                mode === "SUBSET"
+                  ? (nextSchedule?.slots.map((slot) => slot.id) ?? [])
+                  : [],
+              );
             }}
           >
             <option value="">Select schedule</option>
-            {schedules.data.map((schedule) => (
+            {schedules.map((schedule) => (
               <option key={schedule.id} value={schedule.id}>
                 {schedule.name}
               </option>
@@ -99,21 +127,32 @@ export function ChannelPublicationScheduleSettings({
         <FormField label="Assignment">
           <Select
             value={mode}
-            onChange={(event) =>
-              setMode(
-                event.target.value as TelegramPublicationScheduleSelectionMode,
-              )
-            }
+            onChange={(event) => {
+              const nextMode = event.target
+                .value as TelegramPublicationScheduleSelectionMode;
+              setMode(nextMode);
+              if (nextMode === "SUBSET" && !selectedSlotIds.length) {
+                setSelectedSlotIds(
+                  selectedSchedule?.slots.map((slot) => slot.id) ?? [],
+                );
+              }
+            }}
           >
             <option value="FULL">Full plan</option>
             <option value="SUBSET">Selected slots only</option>
           </Select>
         </FormField>
       </div>
-      {mode === "SUBSET" && selectedSchedule ? (
+      {selectedSchedule ? (
         <fieldset className="space-y-2">
-          <legend className="mb-2 text-sm font-medium text-neutral-200">
-            Available slots
+          <legend className="mb-2 flex items-center gap-2 text-sm font-medium text-neutral-200">
+            <IconAvatar
+              icon={selectedSchedule.iconPresentation}
+              label={selectedSchedule.name}
+              size="xs"
+              decorative
+            />
+            {mode === "SUBSET" ? "Select channel slots" : "Plan slots"}
           </legend>
           {selectedSchedule.slots.map((slot) => (
             <label
@@ -122,7 +161,8 @@ export function ChannelPublicationScheduleSettings({
             >
               <input
                 type="checkbox"
-                checked={selectedSlotIds.includes(slot.id)}
+                disabled={mode === "FULL"}
+                checked={mode === "FULL" || selectedSlotIds.includes(slot.id)}
                 onChange={(event) =>
                   setSelectedSlotIds((current) =>
                     event.target.checked

@@ -323,7 +323,7 @@ export function createTelegramChannelsApi({
       ).data,
     performanceHistory: async (
       id: string,
-      range: TelegramChannelPerformanceHistoryRange = "30d",
+      range: TelegramChannelPerformanceHistoryRange = "7d",
     ) =>
       (
         await api.get<TelegramChannelPerformanceHistory>(

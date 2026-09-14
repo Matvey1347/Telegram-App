@@ -74,16 +74,34 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
   });
   const browserTransfer = useMutation({
     mutationFn: () => consumerFinanceAuthApi.createBrowserTransfer(botId),
-    onSuccess: ({ token }) => {
-      const url = consumerFinanceAuthApi.browserTransferUrl(botId, token);
-      const webApp = window.Telegram?.WebApp;
-      if (webApp?.openLink) {
-        webApp.openLink(url);
-        return;
-      }
-      window.open(url, "_blank", "noopener,noreferrer");
-    },
   });
+  const prepareBrowserTransfer = browserTransfer.mutate;
+  const resetBrowserTransfer = browserTransfer.reset;
+  useEffect(() => {
+    if (
+      bootstrap.status === "ready" &&
+      session.data?.authenticated &&
+      browserTransfer.isIdle
+    ) {
+      prepareBrowserTransfer();
+    }
+  }, [
+    bootstrap.status,
+    browserTransfer.isIdle,
+    prepareBrowserTransfer,
+    session.data?.authenticated,
+  ]);
+  const openBrowser = useCallback(() => {
+    const prepared = browserTransfer.data;
+    if (!prepared || Date.parse(prepared.expiresAt) <= Date.now()) {
+      resetBrowserTransfer();
+      prepareBrowserTransfer();
+      return;
+    }
+    openFinanceBrowserUrl(prepared.url);
+    resetBrowserTransfer();
+    prepareBrowserTransfer();
+  }, [browserTransfer.data, prepareBrowserTransfer, resetBrowserTransfer]);
   const logout = useMutation({
     mutationFn: () => consumerFinanceAuthApi.logout(botId),
     onSuccess: (state) => {
@@ -350,11 +368,11 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
         onAction={launchAction}
         onSignOut={() => logout.mutate()}
         signingOut={logout.isPending}
-        openingBrowser={browserTransfer.isPending}
+        openingBrowser={browserTransfer.isIdle || browserTransfer.isPending}
         browserOpenError={
           browserTransfer.isError ? t.browserOpenError : undefined
         }
-        onOpenBrowser={() => browserTransfer.mutate()}
+        onOpenBrowser={openBrowser}
       >
         {contextualChildren}
       </FinanceMiniAppShell>
@@ -413,4 +431,19 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
       onInvestmentBack={closeInvestment}
     />,
   );
+}
+
+function openFinanceBrowserUrl(url: string) {
+  const webApp = window.Telegram?.WebApp;
+  if (webApp?.openLink) {
+    try {
+      webApp.openLink(url, { try_instant_view: false });
+      return;
+    } catch {
+      // Older or embedded Telegram clients can reject the native bridge.
+    }
+  }
+  const opened = window.open(url, "_blank");
+  if (opened) opened.opener = null;
+  else window.location.assign(url);
 }

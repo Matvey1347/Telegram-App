@@ -26,6 +26,13 @@ export type ConsumerFinanceSessionState =
   | { authenticated: true; profile: ConsumerFinanceProfile }
   | { authenticated: false };
 
+export type ConsumerFinanceBrowserTransfer = {
+  token: string;
+  expiresAt: string;
+  url: string;
+  diagnosticId: string;
+};
+
 export type ConsumerFinanceSettingsInput = {
   defaultCurrency: string;
   timezone: string;

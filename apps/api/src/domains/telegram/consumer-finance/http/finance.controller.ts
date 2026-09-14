@@ -335,7 +335,7 @@ export class FinanceController {
     @Param('botId') b: string,
     @Req() r: Request,
   ) {
-    return this.transfers.create(this.auth(b, r));
+    return this.transfers.create(this.auth(b, r), publicWebOrigin());
   }
   @Post('auth/transfer/consume') async consumeTransferFromWebApp(
     @Param('botId') b: string,

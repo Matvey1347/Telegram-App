@@ -17,7 +17,7 @@ const RANGE_OPTIONS = [
   { value: "90d", label: "90 days" },
   { value: "all", label: "All time" },
 ] as const;
-const RANGE_STORAGE_KEY = "telegram-channel-dynamics:range";
+const RANGE_STORAGE_KEY = "telegram-channel-dynamics:range:v2";
 const RANGE_VALUES = RANGE_OPTIONS.map(({ value }) => value);
 
 export function ChannelPerformanceHistoryPanel({
@@ -91,11 +91,11 @@ export function ChannelPerformanceHistoryPanel({
 }
 
 function readStoredRange(): TelegramChannelPerformanceHistoryRange {
-  if (typeof window === "undefined") return "30d";
+  if (typeof window === "undefined") return "7d";
   const stored = window.localStorage.getItem(RANGE_STORAGE_KEY);
   return RANGE_VALUES.includes(stored as TelegramChannelPerformanceHistoryRange)
     ? (stored as TelegramChannelPerformanceHistoryRange)
-    : "30d";
+    : "7d";
 }
 
 function rangeLabel(range: TelegramChannelPerformanceHistoryRange) {

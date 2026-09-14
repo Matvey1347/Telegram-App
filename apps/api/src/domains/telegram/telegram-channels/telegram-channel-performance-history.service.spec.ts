@@ -229,6 +229,20 @@ describe('TelegramChannelPerformanceHistoryService', () => {
     expect(result.periodDays).toBe(days);
   });
 
+  it('uses seven days when the client omits the range', async () => {
+    const { service } = createService();
+
+    const result = await service.history(
+      'user-1',
+      'channel-1',
+      undefined,
+      now,
+    );
+
+    expect(result.range).toBe('7d');
+    expect(result.periodDays).toBe(7);
+  });
+
   it('keeps Today points inside today while providing yesterday as comparison', async () => {
     const { service } = createService({
       $queryRaw: jest

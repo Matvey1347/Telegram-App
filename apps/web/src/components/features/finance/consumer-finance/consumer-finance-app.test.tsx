@@ -23,7 +23,6 @@ const mocks = vi.hoisted(() => ({
   createBrowserTransfer: vi.fn(),
   consumeBrowserTransfer: vi.fn(),
   logout: vi.fn(),
-  browserTransferUrl: vi.fn(),
   updateSettings: vi.fn(),
 }));
 
@@ -36,7 +35,6 @@ vi.mock("@/lib/features/finance/consumer-finance-auth-api", () => ({
     session: mocks.session,
     createBrowserTransfer: mocks.createBrowserTransfer,
     consumeBrowserTransfer: mocks.consumeBrowserTransfer,
-    browserTransferUrl: mocks.browserTransferUrl,
     logout: mocks.logout,
   },
 }));
@@ -151,13 +149,13 @@ beforeEach(() => {
   mocks.session.mockResolvedValue({ authenticated: false });
   mocks.createBrowserTransfer.mockReset();
   mocks.consumeBrowserTransfer.mockReset();
-  mocks.browserTransferUrl.mockReset();
   mocks.updateSettings.mockReset();
   mocks.logout.mockReset();
   mocks.logout.mockResolvedValue({ authenticated: false });
   mocks.updateSettings.mockResolvedValue(profile);
   window.localStorage.clear();
   window.history.replaceState({}, "", "/finance/bot-1");
+  delete window.Telegram;
 });
 
 describe("ConsumerFinanceApp bootstrap", () => {
@@ -552,6 +550,32 @@ describe("ConsumerFinanceApp bootstrap", () => {
     expect(
       screen.getByRole("button", { name: "Open in browser" }),
     ).toBeEnabled();
+  });
+
+  it("opens the server-prepared production URL directly inside the Telegram click", async () => {
+    const openLink = vi.fn();
+    window.Telegram = { WebApp: { openLink } };
+    mocks.bootstrap = { status: "ready", initData: "signed-init-data" };
+    mocks.auth.mockResolvedValue({ authenticated: true, profile });
+    mocks.createBrowserTransfer.mockResolvedValue({
+      token: "one-time-token",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      url: "https://nexeloq.com/finance/bot-1?browserTransfer=one-time-token",
+      diagnosticId: "transfer-1",
+    });
+
+    renderApp();
+
+    const button = await screen.findByRole("button", {
+      name: "Open in browser",
+    });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+
+    expect(openLink).toHaveBeenCalledWith(
+      "https://nexeloq.com/finance/bot-1?browserTransfer=one-time-token",
+      { try_instant_view: false },
+    );
   });
 
   it("keeps the full Finance shell visible while session data loads", () => {

@@ -1,4 +1,7 @@
-import type { ConsumerFinanceSessionState } from "@telegram-system/shared";
+import type {
+  ConsumerFinanceBrowserTransfer,
+  ConsumerFinanceSessionState,
+} from "@telegram-system/shared";
 import {
   consumerFinanceHttp,
   consumerFinanceRoot,
@@ -23,15 +26,6 @@ export type ConsumerFinanceBrowserLoginStatus =
         { authenticated: true }
       >["profile"];
     };
-
-export function buildConsumerFinanceBrowserTransferUrl(
-  botId: string,
-  token: string,
-  location?: Pick<Location, "origin">,
-) {
-  const path = `/finance/${encodeURIComponent(botId)}?browserTransfer=${encodeURIComponent(token)}`;
-  return location?.origin ? new URL(path, location.origin).toString() : path;
-}
 
 export const consumerFinanceAuthApi = {
   auth: async (
@@ -88,7 +82,7 @@ export const consumerFinanceAuthApi = {
     ).data,
   createBrowserTransfer: async (botId: string) =>
     (
-      await consumerFinanceHttp.post<{ token: string; expiresAt: string }>(
+      await consumerFinanceHttp.post<ConsumerFinanceBrowserTransfer>(
         `${consumerFinanceRoot(botId)}/auth/transfer`,
         {},
         consumerRequest(),
@@ -105,15 +99,4 @@ export const consumerFinanceAuthApi = {
         consumerRequest(),
       )
     ).data,
-  browserTransferUrl: (
-    botId: string,
-    token: string,
-    location = typeof window === "undefined" ? undefined : window.location,
-  ) => {
-    return buildConsumerFinanceBrowserTransferUrl(
-      botId,
-      token,
-      location,
-    );
-  },
 };

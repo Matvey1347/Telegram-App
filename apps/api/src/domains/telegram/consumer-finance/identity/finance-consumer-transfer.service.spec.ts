@@ -1,4 +1,7 @@
-import { ForbiddenException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { FinanceConsumerTransferService } from './finance-consumer-transfer.service';
 
 describe('FinanceConsumerTransferService', () => {
@@ -12,6 +15,7 @@ describe('FinanceConsumerTransferService', () => {
   };
 
   function serviceFor(updateCount: number) {
+    const applicationLogger = { writeStructured: jest.fn() };
     const tx = {
       financeConsumerTransfer: {
         findUnique: jest.fn().mockResolvedValue({
@@ -29,22 +33,68 @@ describe('FinanceConsumerTransferService', () => {
       },
     };
     return {
-      service: new FinanceConsumerTransferService({
-        $transaction: (fn: (value: typeof tx) => unknown) => fn(tx),
-      } as never),
+      service: new FinanceConsumerTransferService(
+        {
+          $transaction: (fn: (value: typeof tx) => unknown) => fn(tx),
+        } as never,
+        applicationLogger as never,
+      ),
       tx,
+      applicationLogger,
     };
   }
 
   it('creates only a hashed, short-lived credential', async () => {
-    const create = jest.fn();
-    const service = new FinanceConsumerTransferService({
-      financeConsumerTransfer: { create },
-    } as never);
-    const result = await service.create(session);
+    const create = jest.fn().mockResolvedValue({ id: 'transfer-1' });
+    const applicationLogger = { writeStructured: jest.fn() };
+    const service = new FinanceConsumerTransferService(
+      {
+        financeConsumerTransfer: { create },
+      } as never,
+      applicationLogger as never,
+    );
+    const result = await service.create(session, 'https://nexeloq.com/');
     expect(result.token).toMatch(/^[A-Za-z0-9_-]{32,}$/);
-    expect(result.expiresAt.getTime() - Date.now()).toBeLessThanOrEqual(60_000);
+    expect(result.expiresAt.getTime() - Date.now()).toBeLessThanOrEqual(
+      10 * 60_000,
+    );
+    expect(result.url).toBe(
+      `https://nexeloq.com/finance/bot-1?browserTransfer=${result.token}`,
+    );
+    expect(result.diagnosticId).toBe('transfer-1');
     expect(create.mock.calls[0][0].data.tokenHash).not.toBe(result.token);
+    expect(create.mock.calls[0][0].select).toEqual({ id: true });
+    expect(applicationLogger.writeStructured).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'finance_browser_transfer.prepared',
+        metadata: expect.objectContaining({
+          diagnosticId: 'transfer-1',
+          targetOrigin: 'https://nexeloq.com',
+          targetPath: '/finance/bot-1',
+        }),
+      }),
+    );
+  });
+
+  it('records a diagnosable error when the canonical frontend URL is missing', async () => {
+    const applicationLogger = { writeStructured: jest.fn() };
+    const service = new FinanceConsumerTransferService(
+      {} as never,
+      applicationLogger as never,
+    );
+
+    await expect(service.create(session)).rejects.toBeInstanceOf(
+      InternalServerErrorException,
+    );
+    expect(applicationLogger.writeStructured).toHaveBeenCalledWith(
+      expect.objectContaining({
+        level: 'error',
+        event: 'finance_browser_transfer.configuration_error',
+        metadata: expect.objectContaining({
+          reason: 'missing_public_web_origin',
+        }),
+      }),
+    );
   });
 
   it('atomically consumes a transfer once and rejects a replay or expiry', async () => {
@@ -53,6 +103,12 @@ describe('FinanceConsumerTransferService', () => {
     await expect(
       available.service.consume(token, 'bot-1'),
     ).resolves.toMatchObject(session);
+    expect(available.applicationLogger.writeStructured).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'finance_browser_transfer.consumed',
+        metadata: expect.objectContaining({ diagnosticId: 'transfer-1' }),
+      }),
+    );
     expect(
       available.tx.financeConsumerTransfer.updateMany,
     ).toHaveBeenCalledWith(

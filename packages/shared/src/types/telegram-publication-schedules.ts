@@ -1,9 +1,6 @@
 import type { ResolvedEmoji } from "./resolved-emoji";
 
-export type TelegramPublicationSlotKind =
-  | "CONTENT"
-  | "AD"
-  | "MUTUAL_PROMOTION";
+export type TelegramPublicationSlotKind = "CONTENT" | "AD" | "MUTUAL_PROMOTION";
 
 export type TelegramPublicationScheduleSelectionMode = "FULL" | "SUBSET";
 
@@ -12,9 +9,7 @@ export type TelegramPublicationScheduleSlot = {
   scheduleId: string;
   title: string;
   kind: TelegramPublicationSlotKind;
-  weekday: number;
   time: string;
-  timezone: string;
   position: number;
   isActive: boolean;
   iconPresentation: ResolvedEmoji | null;
@@ -23,7 +18,8 @@ export type TelegramPublicationScheduleSlot = {
 export type TelegramPublicationSchedule = {
   id: string;
   name: string;
-  timezone: string;
+  iconId: string | null;
+  iconPresentation: ResolvedEmoji | null;
   isDefault: boolean;
   slots: TelegramPublicationScheduleSlot[];
   assignedChannelsCount: number;
@@ -43,13 +39,12 @@ export type TelegramChannelPublicationScheduleAssignment = {
 
 export type TelegramPublicationScheduleInput = {
   name: string;
-  timezone: string;
+  iconId?: string | null;
   isDefault?: boolean;
   slots: Array<{
     id?: string;
     title: string;
     kind: TelegramPublicationSlotKind;
-    weekday: number;
     time: string;
     position?: number;
     isActive?: boolean;

@@ -14,7 +14,7 @@ import {
 } from './telegram-channel-financial-row-classification';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 
-const DEFAULT_HISTORY_RANGE: TelegramChannelPerformanceHistoryRange = '30d';
+const DEFAULT_HISTORY_RANGE: TelegramChannelPerformanceHistoryRange = '7d';
 
 type AudienceHistoryRow = {
   collectedAt: Date;
@@ -397,7 +397,11 @@ function buildHistoryPoints(
 function normalizeRange(
   value: TelegramChannelPerformanceHistoryRange,
 ): TelegramChannelPerformanceHistoryRange {
-  return value === '1d' || value === '7d' || value === '90d' || value === 'all'
+  return value === '1d' ||
+    value === '7d' ||
+    value === '30d' ||
+    value === '90d' ||
+    value === 'all'
     ? value
     : DEFAULT_HISTORY_RANGE;
 }

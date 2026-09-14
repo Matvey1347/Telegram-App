@@ -1,9 +1,15 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  InternalServerErrorException,
+  Optional,
+} from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../../../../prisma/prisma.service';
+import { ApplicationLoggerService } from '../../../operations/application-logs/application-logger.service';
 import type { FinanceConsumerSession } from './finance-consumer-session.service';
 
-const TTL_SECONDS = 60;
+const TTL_SECONDS = 10 * 60;
 const BROWSER_LOGIN_TTL_SECONDS = 5 * 60;
 const BROWSER_LOGIN_PREFIX = 'finlogin_';
 
@@ -14,27 +20,68 @@ export type FinanceBrowserLoginStatus =
 
 @Injectable()
 export class FinanceConsumerTransferService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional()
+    private readonly applicationLogger?: ApplicationLoggerService,
+  ) {}
 
-  async create(session: FinanceConsumerSession) {
+  async create(session: FinanceConsumerSession, publicWebOrigin?: string) {
+    if (!publicWebOrigin) {
+      this.writeDiagnostic(
+        'error',
+        'finance_browser_transfer.configuration_error',
+        'Finance browser transfer could not be prepared.',
+        session,
+        { reason: 'missing_public_web_origin' },
+      );
+      throw new InternalServerErrorException(
+        'Finance browser URL is not configured',
+      );
+    }
     const token = randomBytes(32).toString('base64url');
     const expiresAt = new Date(Date.now() + TTL_SECONDS * 1000);
-    await this.prisma.financeConsumerTransfer.create({
+    const created = await this.prisma.financeConsumerTransfer.create({
       data: {
         profileId: session.profileId,
         tokenHash: this.hash(token),
         expiresAt,
       },
+      select: { id: true },
     });
-    return { token, expiresAt };
+    const url = new URL(
+      `/finance/${encodeURIComponent(session.botIntegrationId)}`,
+      `${publicWebOrigin.replace(/\/$/u, '')}/`,
+    );
+    url.searchParams.set('browserTransfer', token);
+    this.writeDiagnostic(
+      'warn',
+      'finance_browser_transfer.prepared',
+      'Finance browser transfer was prepared for a Mini App.',
+      session,
+      {
+        diagnosticId: created.id,
+        targetOrigin: url.origin,
+        targetPath: url.pathname,
+        expiresAt: expiresAt.toISOString(),
+      },
+    );
+    return {
+      token,
+      expiresAt,
+      url: url.toString(),
+      diagnosticId: created.id,
+    };
   }
 
   async consume(
     token: string,
     expectedBotIntegrationId: string,
   ): Promise<FinanceConsumerSession> {
-    if (!/^[A-Za-z0-9_-]{32,}$/.test(token))
+    if (!/^[A-Za-z0-9_-]{32,}$/.test(token)) {
+      this.logRejected(expectedBotIntegrationId, 'invalid_token_format');
       throw new ForbiddenException('Finance browser transfer is invalid');
+    }
     const hash = this.hash(token);
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
@@ -57,8 +104,10 @@ export class FinanceConsumerTransferService {
       if (
         !transfer ||
         transfer.profile.botIntegrationId !== expectedBotIntegrationId
-      )
+      ) {
+        this.logRejected(expectedBotIntegrationId, 'not_found_or_wrong_bot');
         throw new ForbiddenException('Finance browser transfer is invalid');
+      }
       const consumed = await tx.financeConsumerTransfer.updateMany({
         where: {
           id: transfer.id,
@@ -68,10 +117,29 @@ export class FinanceConsumerTransferService {
         },
         data: { consumedAt: now },
       });
-      if (consumed.count !== 1)
+      if (consumed.count !== 1) {
+        this.logRejected(
+          expectedBotIntegrationId,
+          'expired_or_already_consumed',
+          transfer.id,
+        );
         throw new ForbiddenException(
           'Finance browser transfer is expired or already used',
         );
+      }
+      this.writeDiagnostic(
+        'warn',
+        'finance_browser_transfer.consumed',
+        'Finance browser transfer reached the Web App successfully.',
+        {
+          workspaceId: transfer.profile.botIntegration.workspaceId,
+          profileId: transfer.profile.id,
+          botIntegrationId: transfer.profile.botIntegrationId,
+        },
+        {
+          diagnosticId: transfer.id,
+        },
+      );
       return {
         profileId: transfer.profile.id,
         botIntegrationId: transfer.profile.botIntegrationId,
@@ -210,6 +278,50 @@ export class FinanceConsumerTransferService {
 
   private validBrowserLoginToken(token: string) {
     return /^[A-Za-z0-9_-]{32}$/u.test(token);
+  }
+
+  private logRejected(
+    botIntegrationId: string,
+    reason: string,
+    diagnosticId?: string,
+  ) {
+    this.applicationLogger?.writeStructured({
+      level: 'warn',
+      kind: 'application',
+      source: FinanceConsumerTransferService.name,
+      event: 'finance_browser_transfer.rejected',
+      message: 'Finance browser transfer was rejected.',
+      metadata: {
+        botIntegrationId,
+        reason,
+        ...(diagnosticId ? { diagnosticId } : {}),
+      },
+    });
+  }
+
+  private writeDiagnostic(
+    level: 'warn' | 'error',
+    event: string,
+    message: string,
+    session: Pick<
+      FinanceConsumerSession,
+      'workspaceId' | 'profileId' | 'botIntegrationId'
+    >,
+    metadata: Record<string, unknown>,
+  ) {
+    this.applicationLogger?.writeStructured({
+      level,
+      kind: 'application',
+      source: FinanceConsumerTransferService.name,
+      event,
+      message,
+      workspaceId: session.workspaceId,
+      metadata: {
+        ...metadata,
+        profileId: session.profileId,
+        botIntegrationId: session.botIntegrationId,
+      },
+    });
   }
 
   private hash(token: string) {

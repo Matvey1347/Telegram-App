@@ -222,27 +222,49 @@ export class TelegramManagedPostPublicationService {
     const workspaceId =
       await this.telegramChannelsSupportService.workspace(userId);
     if (dto.publicationSlotId) {
-      const assignedSlot = await this.prisma.telegramPublicationScheduleSlot.findFirst({
-        where: {
-          id: dto.publicationSlotId,
-          isActive: true,
-          schedule: {
-            workspaceId,
-            channelAssignments: {
-              some: {
-                channelId,
-                OR: [
-                  { selectionMode: 'FULL' },
-                  { selectionMode: 'SUBSET', selectedSlots: { some: { slotId: dto.publicationSlotId } } },
-                ],
+      const assignedSlot =
+        await this.prisma.telegramPublicationScheduleSlot.findFirst({
+          where: {
+            id: dto.publicationSlotId,
+            isActive: true,
+            schedule: {
+              workspaceId,
+              channelAssignments: {
+                some: {
+                  channelId,
+                  OR: [
+                    { selectionMode: 'FULL' },
+                    {
+                      selectionMode: 'SUBSET',
+                      selectedSlots: {
+                        some: { slotId: dto.publicationSlotId },
+                      },
+                    },
+                  ],
+                },
               },
             },
           },
-        },
-        select: { id: true, weekday: true, time: true, timezone: true },
-      });
-      if (!assignedSlot || !this.matchesPublicationSlot(scheduledAt, assignedSlot)) {
-        throw telegramPostsBadRequest('TELEGRAM_PUBLICATION_SLOT_INVALID', 'Publication slot is not assigned to this channel or does not match the scheduled time');
+          select: {
+            id: true,
+            time: true,
+            schedule: {
+              select: { workspace: { select: { timezone: true } } },
+            },
+          },
+        });
+      if (
+        !assignedSlot ||
+        !this.matchesPublicationSlot(
+          scheduledAt,
+          assignedSlot.time,
+          assignedSlot.schedule.workspace.timezone,
+        )
+      ) {
+        throw telegramPostsBadRequest(
+          'TELEGRAM_PUBLICATION_SLOT_INVALID',
+          'Publication slot is not assigned to this channel or does not match the scheduled time',
+        );
       }
       await this.prisma.telegramManagedPost.updateMany({
         where: { id: postId, workspaceId, telegramChannelId: channelId },
@@ -261,11 +283,20 @@ export class TelegramManagedPostPublicationService {
     return result;
   }
 
-  private matchesPublicationSlot(scheduledAt: Date, slot: { weekday: number; time: string; timezone: string }) {
-    const parts = new Intl.DateTimeFormat('en-US', { timeZone: slot.timezone, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(scheduledAt);
-    const weekdays: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
-    const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
-    return weekdays[value('weekday')] === slot.weekday && `${value('hour')}:${value('minute')}` === slot.time;
+  private matchesPublicationSlot(
+    scheduledAt: Date,
+    time: string,
+    timezone: string,
+  ) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(scheduledAt);
+    const value = (type: string) =>
+      parts.find((part) => part.type === type)?.value ?? '';
+    return `${value('hour')}:${value('minute')}` === time;
   }
 
   public async cancelScheduledManagedPost(

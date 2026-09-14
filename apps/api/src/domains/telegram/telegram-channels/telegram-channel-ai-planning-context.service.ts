@@ -4,7 +4,10 @@ import { TelegramContentHypothesesService } from './telegram-content-hypotheses.
 
 @Injectable()
 export class TelegramChannelAiPlanningContextService {
-  constructor(private readonly prisma: PrismaService, private readonly hypotheses: TelegramContentHypothesesService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly hypotheses: TelegramContentHypothesesService,
+  ) {}
 
   async read(userId: string, workspaceId: string, channelId: string) {
     const [assignment, hypotheses] = await Promise.all([
@@ -17,17 +20,16 @@ export class TelegramChannelAiPlanningContextService {
             select: {
               id: true,
               name: true,
-              timezone: true,
+              workspace: { select: { timezone: true } },
               slots: {
                 where: { isActive: true },
                 select: {
                   id: true,
                   title: true,
                   kind: true,
-                  weekday: true,
                   time: true,
                 },
-                orderBy: [{ weekday: 'asc' }, { position: 'asc' }],
+                orderBy: [{ position: 'asc' }],
               },
             },
           },
@@ -35,13 +37,22 @@ export class TelegramChannelAiPlanningContextService {
       }),
       this.hypotheses.list(userId, channelId),
     ]);
-    const selected = new Set(assignment?.selectedSlots.map((row) => row.slotId));
-    const slots = assignment?.schedule.slots.filter(
-      (slot) => assignment.selectionMode === 'FULL' || selected.has(slot.id),
-    ) ?? [];
+    const selected = new Set(
+      assignment?.selectedSlots.map((row) => row.slotId),
+    );
+    const slots =
+      assignment?.schedule.slots.filter(
+        (slot) => assignment.selectionMode === 'FULL' || selected.has(slot.id),
+      ) ?? [];
     return {
       schedule: assignment
-        ? { ...assignment.schedule, selectionMode: assignment.selectionMode, slots }
+        ? {
+            id: assignment.schedule.id,
+            name: assignment.schedule.name,
+            timezone: assignment.schedule.workspace.timezone,
+            selectionMode: assignment.selectionMode,
+            slots,
+          }
         : null,
       hypotheses,
     };
@@ -51,7 +62,7 @@ export class TelegramChannelAiPlanningContextService {
     if (!context.schedule) return ['[] — no publication schedule is assigned'];
     return context.schedule.slots.map(
       (slot) =>
-        `- slot_id: ${slot.id} — ${slot.title} — type: ${slot.kind} — weekday: ${slot.weekday} — time: ${slot.time} — timezone: ${context.schedule!.timezone}`,
+        `- slot_id: ${slot.id} — ${slot.title} — type: ${slot.kind} — every day at: ${slot.time} — timezone: ${context.schedule!.timezone}`,
     );
   }
 

@@ -31,8 +31,8 @@ describe("ChannelPerformanceHistoryPanel", () => {
       isFetching: false,
       isError: false,
       data: {
-        range: "30d",
-        periodDays: 30,
+        range: "7d",
+        periodDays: 7,
         currency: "UAH",
         points: [
           {
@@ -62,10 +62,10 @@ describe("ChannelPerformanceHistoryPanel", () => {
     };
   });
 
-  it("defaults to 30 days and renders the four explained charts", () => {
+  it("defaults to 7 days and renders the four explained charts", () => {
     render(<ChannelPerformanceHistoryPanel channelId="channel-1" />);
 
-    expect(screen.getByText("Last 30 days")).toBeInTheDocument();
+    expect(screen.getByText("Last 7 days")).toBeInTheDocument();
     expect(screen.getAllByText("Subscribers").length).toBeGreaterThan(0);
     expect(
       screen.getAllByText("24h average post reach").length,
@@ -83,7 +83,16 @@ describe("ChannelPerformanceHistoryPanel", () => {
     expect(
       screen.getAllByText(/Data available from Sep 1, 2026/).length,
     ).toBeGreaterThan(0);
-    expect(queryState.lastOptions?.queryKey.at(-1)).toBe("30d");
+    expect(queryState.lastOptions?.queryKey.at(-1)).toBe("7d");
+  });
+
+  it("does not reuse the former 30-day default saved in production", () => {
+    window.localStorage.setItem("telegram-channel-dynamics:range", "30d");
+
+    render(<ChannelPerformanceHistoryPanel channelId="channel-1" />);
+
+    expect(screen.getByText("Last 7 days")).toBeInTheDocument();
+    expect(queryState.lastOptions?.queryKey.at(-1)).toBe("7d");
   });
 
   it("shows today's recorded values without meaningless comparisons", async () => {
@@ -182,9 +191,9 @@ describe("ChannelPerformanceHistoryPanel", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Today" }));
-    expect(window.localStorage.getItem("telegram-channel-dynamics:range")).toBe(
-      "1d",
-    );
+    expect(
+      window.localStorage.getItem("telegram-channel-dynamics:range:v2"),
+    ).toBe("1d");
 
     view.unmount();
     render(<ChannelPerformanceHistoryPanel channelId="channel-2" />);

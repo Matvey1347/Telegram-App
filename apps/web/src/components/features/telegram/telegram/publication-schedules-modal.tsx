@@ -1,45 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import type {
+  ResolvedEmoji,
   TelegramPublicationSchedule,
   TelegramPublicationScheduleInput,
   TelegramPublicationSlotKind,
 } from "@telegram-system/shared";
-import { telegramPublicationSchedulesApi } from "@/lib/api";
-import { telegramPublicationScheduleKeys } from "@/lib/query-keys";
+import { IconAvatar } from "@/components/icons/icon-avatar";
+import { IconPicker } from "@/components/icons/icon-picker";
+import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
 import {
   Button,
+  Card,
   FormField,
   Input,
   Modal,
   Select,
+  TimeInput,
+  canonicalizeTimeInputValue,
 } from "@/components/ui/primitives";
+import { useWorkspaceModalDrafts } from "@/hooks/use-workspace-modal-drafts";
+import { telegramPublicationSchedulesApi } from "@/lib/api";
+import { telegramPublicationScheduleKeys } from "@/lib/query-keys";
 import { useAppToast } from "@/providers/toast-provider";
 
-const WEEKDAYS = [
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-  "Sunday",
-];
 const KINDS: Array<{ value: TelegramPublicationSlotKind; label: string }> = [
-  { value: "CONTENT", label: "Regular publication" },
-  { value: "AD", label: "Advertising" },
-  { value: "MUTUAL_PROMOTION", label: "Mutual promotion" },
+  { value: "CONTENT", label: "📝 Regular publication" },
+  { value: "AD", label: "📣 Advertising" },
+  { value: "MUTUAL_PROMOTION", label: "🤝 Mutual promotion" },
 ];
 
 const blankDraft = (): TelegramPublicationScheduleInput => ({
-  name: "Publication plan",
-  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-  slots: [
-    { title: "Morning post", kind: "CONTENT", weekday: 1, time: "09:00" },
-  ],
+  name: "",
+  iconId: null,
+  slots: [{ title: "Morning post", kind: "CONTENT", time: "09:00" }],
 });
 
 export function PublicationSchedulesModal({
@@ -50,137 +47,287 @@ export function PublicationSchedulesModal({
   const queryClient = useQueryClient();
   const { pushToast } = useAppToast();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [draft, setDraft] =
     useState<TelegramPublicationScheduleInput>(blankDraft);
+  const [draftIcon, setDraftIcon] = useState<ResolvedEmoji | null>(null);
   const schedules = useQuery({
     queryKey: telegramPublicationScheduleKeys.lists(),
     queryFn: telegramPublicationSchedulesApi.list,
   });
-  const save = useMutation({
-    mutationFn: () =>
-      editingId
-        ? telegramPublicationSchedulesApi.update(editingId, draft)
-        : telegramPublicationSchedulesApi.create(draft),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: telegramPublicationScheduleKeys.lists(),
-      });
-      pushToast(editingId ? "Schedule updated" : "Schedule created", "success");
-      setEditingId(null);
-      setDraft(blankDraft());
+  const restoreDraft = useCallback(
+    (value: TelegramPublicationScheduleInput) => {
+      setDraft(value);
+      setDraftIcon(null);
     },
-    onError: () => pushToast("Could not save schedule", "error"),
-  });
-  const remove = useMutation({
-    mutationFn: telegramPublicationSchedulesApi.remove,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: telegramPublicationScheduleKeys.lists(),
-      });
-      setEditingId(null);
-      setDraft(blankDraft());
-      pushToast("Schedule deleted", "success");
+    [],
+  );
+  const isMeaningfulDraft = useCallback(
+    (value: TelegramPublicationScheduleInput) => {
+      const initial = blankDraft();
+      return Boolean(
+        value.name.trim() ||
+        value.iconId ||
+        JSON.stringify(value.slots) !== JSON.stringify(initial.slots),
+      );
     },
-    onError: () => pushToast("Could not delete schedule", "error"),
+    [],
+  );
+  const modalDrafts = useWorkspaceModalDrafts({
+    namespace: "telegram:publication-schedule:draft",
+    open: editorOpen,
+    enabled: editingId === null,
+    value: draft,
+    preview: { icon: draftIcon },
+    emptyValue: blankDraft,
+    onRestore: restoreDraft,
+    isMeaningful: isMeaningfulDraft,
   });
+
+  const closeEditor = () => {
+    setEditorOpen(false);
+    setEditingId(null);
+    setDraft(blankDraft());
+    setDraftIcon(null);
+  };
   const edit = (schedule: TelegramPublicationSchedule) => {
     setEditingId(schedule.id);
+    setDraftIcon(schedule.iconPresentation);
     setDraft({
       name: schedule.name,
-      timezone: schedule.timezone,
+      iconId: schedule.iconId,
       isDefault: schedule.isDefault,
       slots: schedule.slots.map(
-        ({ id, title, kind, weekday, time, position, isActive }) => ({
+        ({ id, title, kind, time, position, isActive }) => ({
           id,
           title,
           kind,
-          weekday,
           time,
           position,
           isActive,
         }),
       ),
     });
+    setEditorOpen(true);
   };
+  const save = useMutation({
+    mutationFn: () => {
+      const payload = {
+        ...draft,
+        slots: draft.slots.map((slot) => ({
+          ...slot,
+          time: canonicalizeTimeInputValue(slot.time) ?? slot.time,
+        })),
+      };
+      return editingId
+        ? telegramPublicationSchedulesApi.update(editingId, payload)
+        : telegramPublicationSchedulesApi.create(payload);
+    },
+    onSuccess: (saved) => {
+      queryClient.setQueryData<TelegramPublicationSchedule[]>(
+        telegramPublicationScheduleKeys.lists(),
+        (current = []) =>
+          current.some((item) => item.id === saved.id)
+            ? current.map((item) => (item.id === saved.id ? saved : item))
+            : [...current, saved],
+      );
+      if (!editingId) modalDrafts.clearCurrentDraft();
+      pushToast(editingId ? "Schedule updated" : "Schedule created", "success");
+      closeEditor();
+    },
+    onError: () =>
+      pushToast(
+        "Could not save schedule. Your draft is still available.",
+        "error",
+      ),
+  });
+  const remove = useMutation({
+    mutationFn: telegramPublicationSchedulesApi.remove,
+    onSuccess: (_, removedId) => {
+      queryClient.setQueryData<TelegramPublicationSchedule[]>(
+        telegramPublicationScheduleKeys.lists(),
+        (current = []) => current.filter((item) => item.id !== removedId),
+      );
+      closeEditor();
+      pushToast("Schedule deleted", "success");
+    },
+    onError: () => pushToast("Could not delete schedule", "error"),
+  });
+  const valid =
+    draft.name.trim() &&
+    draft.slots.length > 0 &&
+    draft.slots.every(
+      (slot) => slot.title.trim() && canonicalizeTimeInputValue(slot.time),
+    );
 
   return (
     <Modal open onClose={onClose} title="Publication schedules" size="xl">
-      <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="space-y-2">
-          <Button
-            type="button"
-            variant="secondary"
-            className="w-full"
-            onClick={() => {
-              setEditingId(null);
-              setDraft(blankDraft());
-            }}
-          >
-            <Plus size={16} /> New schedule
-          </Button>
-          {schedules.isLoading ? (
-            <p className="text-sm text-neutral-400">Loading schedules…</p>
-          ) : null}
-          {schedules.isError ? (
-            <p className="text-sm text-rose-300">Could not load schedules.</p>
-          ) : null}
-          {schedules.data?.map((schedule) => (
-            <button
-              key={schedule.id}
-              type="button"
-              onClick={() => edit(schedule)}
-              className={`w-full rounded-lg border p-3 text-left text-sm ${editingId === schedule.id ? "border-blue-600 bg-blue-950/30" : "border-neutral-800 bg-neutral-950/50 hover:bg-neutral-800"}`}
-            >
-              <span className="block font-medium text-neutral-100">
-                {schedule.name}
-              </span>
-              <span className="text-xs text-neutral-500">
-                {schedule.slots.length} slots · {schedule.assignedChannelsCount}{" "}
-                channels
-              </span>
-            </button>
-          ))}
-        </aside>
-        <ScheduleEditor draft={draft} onChange={setDraft} />
-      </div>
+      {editorOpen && !editingId && modalDrafts.pendingDrafts.length ? (
+        <ModalDraftPicker
+          drafts={modalDrafts.pendingDrafts}
+          titleFor={(value) => value.name.trim() || "Unfinished schedule"}
+          iconIdFor={(value) => value.iconId}
+          onContinue={(savedDraft) => {
+            modalDrafts.continueDraft(savedDraft);
+            setDraftIcon(savedDraft.preview?.icon ?? null);
+          }}
+          onDelete={modalDrafts.deleteDraft}
+          onCreateNew={modalDrafts.createNewDraft}
+        />
+      ) : editorOpen ? (
+        <ScheduleEditor
+          draft={draft}
+          icon={draftIcon}
+          onIconChange={(iconId, presentation) => {
+            setDraft((current) => ({ ...current, iconId }));
+            setDraftIcon(presentation ?? null);
+          }}
+          onChange={setDraft}
+        />
+      ) : (
+        <ScheduleOverview
+          schedules={schedules.data ?? []}
+          loading={schedules.isLoading}
+          error={schedules.isError}
+          onCreate={() => {
+            setEditingId(null);
+            setDraft(blankDraft());
+            setDraftIcon(null);
+            setEditorOpen(true);
+          }}
+          onEdit={edit}
+        />
+      )}
       <div className="mt-5 flex flex-wrap justify-between gap-2 border-t border-neutral-800 pt-4">
         <div>
-          {editingId ? (
+          {editorOpen && editingId ? (
             <Button
               type="button"
               variant="danger"
               disabled={remove.isPending}
               onClick={() => remove.mutate(editingId)}
             >
-              <Trash2 size={16} />
-              Delete
+              <Trash2 size={16} /> Delete
             </Button>
           ) : null}
         </div>
         <div className="flex gap-2">
+          {editorOpen ? (
+            <Button type="button" variant="secondary" onClick={closeEditor}>
+              Back
+            </Button>
+          ) : null}
           <Button type="button" variant="secondary" onClick={onClose}>
             Close
           </Button>
-          <Button
-            type="button"
-            disabled={
-              save.isPending || !draft.name.trim() || draft.slots.length === 0
-            }
-            onClick={() => save.mutate()}
-          >
-            {save.isPending ? "Saving…" : "Save schedule"}
-          </Button>
+          {editorOpen && (!modalDrafts.pendingDrafts.length || editingId) ? (
+            <Button
+              type="button"
+              disabled={save.isPending || !valid}
+              onClick={() => save.mutate()}
+            >
+              {save.isPending ? "Saving…" : "Save schedule"}
+            </Button>
+          ) : null}
         </div>
       </div>
     </Modal>
   );
 }
 
+function ScheduleOverview({
+  schedules,
+  loading,
+  error,
+  onCreate,
+  onEdit,
+}: {
+  schedules: TelegramPublicationSchedule[];
+  loading: boolean;
+  error: boolean;
+  onCreate: () => void;
+  onEdit: (schedule: TelegramPublicationSchedule) => void;
+}) {
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-neutral-100">Workspace plans</h3>
+          <p className="text-sm text-neutral-400">
+            Create reusable daily slot plans, then assign a full plan or
+            selected slots to each channel.
+          </p>
+        </div>
+        <Button type="button" onClick={onCreate}>
+          <Plus size={16} /> New schedule
+        </Button>
+      </div>
+      {loading ? (
+        <p className="text-sm text-neutral-400">Loading schedules…</p>
+      ) : null}
+      {error ? (
+        <p className="text-sm text-rose-300">Could not load schedules.</p>
+      ) : null}
+      {!loading && !error && !schedules.length ? (
+        <Card className="border-dashed text-center text-sm text-neutral-400">
+          No publication schedules yet.
+        </Card>
+      ) : null}
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {schedules.map((schedule) => (
+          <Card key={schedule.id} className="space-y-3">
+            <div className="flex items-start gap-3">
+              <IconAvatar
+                icon={schedule.iconPresentation}
+                label={schedule.name}
+                size="md"
+                decorative
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold text-neutral-100">
+                  {schedule.name}
+                </p>
+                <p className="text-xs text-neutral-500">
+                  {schedule.slots.length} slots ·{" "}
+                  {schedule.assignedChannelsCount} channels
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                aria-label={`Edit ${schedule.name}`}
+                onClick={() => onEdit(schedule)}
+              >
+                <Pencil size={15} />
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {schedule.slots.map((slot) => (
+                <span
+                  key={slot.id}
+                  className="rounded-md border border-neutral-800 bg-neutral-950/60 px-2 py-1 text-xs text-neutral-300"
+                >
+                  {slot.time} ·{" "}
+                  {KINDS.find((kind) => kind.value === slot.kind)?.label}
+                </span>
+              ))}
+            </div>
+          </Card>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ScheduleEditor({
   draft,
+  icon,
+  onIconChange,
   onChange,
 }: {
   draft: TelegramPublicationScheduleInput;
+  icon: ResolvedEmoji | null;
+  onIconChange: (iconId: string | null, icon?: ResolvedEmoji | null) => void;
   onChange: (next: TelegramPublicationScheduleInput) => void;
 }) {
   const patchSlot = (
@@ -194,30 +341,35 @@ function ScheduleEditor({
       ),
     });
   return (
-    <section className="min-w-0 space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <FormField label="Schedule name">
+    <section className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)]">
+        <FormField label="Emoji">
+          <IconPicker
+            compact
+            iconId={draft.iconId}
+            icon={icon}
+            onChange={onIconChange}
+            buttonLabel="Add emoji"
+          />
+        </FormField>
+        <FormField label="Schedule name" required>
           <Input
             value={draft.name}
+            placeholder="Main publication plan"
             onChange={(event) =>
               onChange({ ...draft, name: event.target.value })
             }
           />
         </FormField>
-        <FormField label="Timezone">
-          <Input
-            value={draft.timezone}
-            onChange={(event) =>
-              onChange({ ...draft, timezone: event.target.value })
-            }
-          />
-        </FormField>
       </div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="font-semibold text-neutral-100">Publication slots</h3>
+          <h3 className="font-semibold text-neutral-100">
+            Daily publication slots
+          </h3>
           <p className="text-xs text-neutral-500">
-            Separate editorial posts from advertising and mutual promotion.
+            The plan describes the busiest channel. Other channels can use only
+            the slots they need.
           </p>
         </div>
         <Button
@@ -228,25 +380,19 @@ function ScheduleEditor({
               ...draft,
               slots: [
                 ...draft.slots,
-                {
-                  title: "New slot",
-                  kind: "CONTENT",
-                  weekday: 1,
-                  time: "12:00",
-                },
+                { title: "New slot", kind: "CONTENT", time: "12:00" },
               ],
             })
           }
         >
-          <Plus size={16} />
-          Slot
+          <Plus size={16} /> Slot
         </Button>
       </div>
       <div className="space-y-2">
         {draft.slots.map((slot, index) => (
           <div
             key={slot.id ?? index}
-            className="grid gap-2 rounded-lg border border-neutral-800 bg-neutral-950/50 p-3 sm:grid-cols-[1fr_150px_130px_110px_40px]"
+            className="grid gap-2 rounded-lg border border-neutral-800 bg-neutral-950/50 p-3 sm:grid-cols-[minmax(0,1fr)_180px_120px_44px]"
           >
             <Input
               aria-label={`Slot ${index + 1} title`}
@@ -270,22 +416,8 @@ function ScheduleEditor({
                 </option>
               ))}
             </Select>
-            <Select
-              aria-label={`Slot ${index + 1} weekday`}
-              value={slot.weekday}
-              onChange={(event) =>
-                patchSlot(index, { weekday: Number(event.target.value) })
-              }
-            >
-              {WEEKDAYS.map((day, i) => (
-                <option key={day} value={i + 1}>
-                  {day}
-                </option>
-              ))}
-            </Select>
-            <Input
+            <TimeInput
               aria-label={`Slot ${index + 1} time`}
-              type="time"
               value={slot.time}
               onChange={(event) =>
                 patchSlot(index, { time: event.target.value })
