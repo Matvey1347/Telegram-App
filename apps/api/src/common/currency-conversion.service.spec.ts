@@ -41,6 +41,41 @@ describe('CurrencyConversionService', () => {
     ).resolves.toEqual(expect.objectContaining({ available: true, rate: 40 }));
   });
 
+  it('refreshes a stale current pair once and retries the shared rate graph', async () => {
+    const old = new Date(Date.now() - 72 * 60 * 60 * 1000);
+    const fresh = new Date();
+    const queryRaw = jest
+      .fn()
+      .mockResolvedValueOnce([
+        { baseCurrency: 'USD', targetCurrency: 'UAH', rate: 40, date: old },
+      ])
+      .mockResolvedValueOnce([
+        { baseCurrency: 'EUR', targetCurrency: 'UAH', rate: 41, date: fresh },
+        { baseCurrency: 'EUR', targetCurrency: 'USD', rate: 1, date: fresh },
+        { baseCurrency: 'USD', targetCurrency: 'UAH', rate: 40, date: old },
+      ]);
+    const externalRates = {
+      ensureCurrentRates: jest.fn().mockResolvedValue(1),
+    };
+    const conversion = new CurrencyConversionService(
+      { $queryRaw: queryRaw } as unknown as PrismaService,
+      externalRates as never,
+    );
+
+    await expect(
+      conversion.getRateMetadata('USD', 'UAH', 'workspace'),
+    ).resolves.toEqual(
+      expect.objectContaining({ available: true, rate: 41, rateAt: fresh }),
+    );
+    expect(externalRates.ensureCurrentRates).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'workspace',
+        currencies: ['UAH', 'USD'],
+      }),
+    );
+    expect(queryRaw).toHaveBeenCalledTimes(2);
+  });
+
   it('reuses one prepared graph across repeated request-scoped conversions', async () => {
     const queryRaw = jest.fn().mockResolvedValue([
       { baseCurrency: 'PLN', targetCurrency: 'USD', rate: 0.25, date: now },

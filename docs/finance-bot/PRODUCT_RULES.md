@@ -42,6 +42,10 @@ Finance Bot serves people who may have never tracked personal finances before.
 
 - AI input is always a proposal, never a ledger write. Text, receipt images, and
   voice are parsed into a reviewable batch and require explicit confirmation.
+- Web users may preview and submit up to five receipt images as one bounded batch
+  (8 MB per file, 16 MB total). Audio remains a single-file input and is never
+  mixed with receipt images. Selecting an unavailable voice capability explains
+  the plan limit inline instead of navigating away from the assistant.
 - Confirmation is idempotent and scoped to the authenticated Finance profile and
   exact bot integration. A cancelled or expired proposal cannot be committed.
 - The assistant must state uncertainty and ask for missing financial meaning; it
@@ -85,6 +89,21 @@ Finance Bot serves people who may have never tracked personal finances before.
   bot configuration, AI credentials or assistant preferences.
 - A replacement is never short-circuited by an earlier import receipt because its
   purpose is to make the current dataset match the file again after later edits.
+- Every successful import and export is recorded in the profile-scoped portability
+  history. Export history contains metadata only; exported files are not retained.
+- Before an import writes data, it records a compressed snapshot of the complete
+  active Finance dataset in the same transaction. A rollback replaces the current
+  dataset with that snapshot atomically and creates its own recovery point.
+- Recovery payloads are retained for the five newest import/rollback operations;
+  older history remains visible without a rollback action. Export metadata is
+  bounded separately. History is fetched on demand and must not introduce polling.
+- Regular payments use a calendar-aware recurrence unit plus a positive interval
+  count. Daily, weekly, monthly and yearly units support schedules such as every
+  90 days or every two weeks without cron expressions or a separate scheduler.
+- Import normalization preserves investment event timestamps and safely expands
+  each investment's start/closing boundaries to contain all of its imported cash
+  flows and valuations. Every automatic boundary adjustment is returned as an
+  import warning; malformed dates and unresolved references remain hard errors.
 
 ## Localization
 

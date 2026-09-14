@@ -25,6 +25,7 @@ import {
   managedPostNotFound,
   telegramPostsBadRequest,
 } from './telegram-posts.errors';
+import { requireNonBatchManagedPosts } from './telegram-managed-post-ownership';
 
 @Injectable()
 export class TelegramManagedPostPublicationService {
@@ -43,6 +44,46 @@ export class TelegramManagedPostPublicationService {
   ) {}
 
   async publishManagedPost(
+    workspaceId: string,
+    channelId: string,
+    postId: string,
+    scheduleAt?: Date,
+    longTextMode: 'IMAGES_THEN_TEXT' | 'CAPTION_THEN_TEXT' = 'IMAGES_THEN_TEXT',
+    actorUserId?: string,
+    requireTelegramNativeSchedule = false,
+  ) {
+    await requireNonBatchManagedPosts(this.prisma, {
+      workspaceId,
+      channelId,
+      postIds: [postId],
+    });
+    return this.publishManagedPostInternal(
+      workspaceId,
+      channelId,
+      postId,
+      scheduleAt,
+      longTextMode,
+      actorUserId,
+      requireTelegramNativeSchedule,
+    );
+  }
+
+  async publishBatchManagedPost(
+    workspaceId: string,
+    channelId: string,
+    postId: string,
+    longTextMode: 'IMAGES_THEN_TEXT' | 'CAPTION_THEN_TEXT',
+  ) {
+    return this.publishManagedPostInternal(
+      workspaceId,
+      channelId,
+      postId,
+      undefined,
+      longTextMode,
+    );
+  }
+
+  private async publishManagedPostInternal(
     workspaceId: string,
     channelId: string,
     postId: string,
@@ -239,6 +280,11 @@ export class TelegramManagedPostPublicationService {
   ) {
     const workspaceId =
       await this.telegramChannelsSupportService.workspace(userId);
+    await requireNonBatchManagedPosts(this.prisma, {
+      workspaceId,
+      channelId,
+      postIds: [postId],
+    });
     const post = await this.prisma.telegramManagedPost.findFirst({
       where: { id: postId, workspaceId, telegramChannelId: channelId },
       include: { telegramChannel: true },

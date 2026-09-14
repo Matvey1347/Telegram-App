@@ -38,7 +38,6 @@ import { mergeTelegramSystemBotAlbumContent } from './telegram-system-bot-post-f
 import { TelegramSystemBotWorkflowStore } from './telegram-system-bot-workflow.store';
 
 const WORKFLOW_TTL_MS = 30 * 60_000;
-
 @Injectable()
 export class TelegramSystemBotAdSaleFlowService {
   constructor(
@@ -54,7 +53,7 @@ export class TelegramSystemBotAdSaleFlowService {
   }
 
   async begin(scope: TelegramSystemBotAdSaleScope) {
-    const existing = await this.workflows.active(
+    const existing = await this.workflows.activeWithoutBatchImport(
       scope,
       TelegramSystemBotWorkflowKind.AD_SALE,
     );
@@ -415,15 +414,16 @@ export class TelegramSystemBotAdSaleFlowService {
     const captured = await this.postContent.capture(message);
     await this.postContent.removeInput(scope.chatId, message.message_id);
     if (!captured.ok)
-      return this.render(workflow, scope, 'Send or forward a text, photo, video or GIF post.');
+      return this.render(
+        workflow,
+        scope,
+        'Send or forward a text, photo, video or GIF post.',
+      );
     const sameAlbum =
       captured.content.mediaGroupId &&
       payload.content?.mediaGroupId === captured.content.mediaGroupId;
     const content = sameAlbum
-      ? mergeTelegramSystemBotAlbumContent(
-          payload.content!,
-          captured.content,
-        )
+      ? mergeTelegramSystemBotAlbumContent(payload.content!, captured.content)
       : captured.content;
     return this.afterContent(scope, workflow, {
       ...this.clearPost(payload),

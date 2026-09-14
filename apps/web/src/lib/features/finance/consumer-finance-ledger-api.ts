@@ -5,6 +5,7 @@ import type {
   ConsumerFinanceCategory,
   ConsumerFinanceCategoryInput,
   ConsumerFinanceCategoryUpdate,
+  ConsumerFinanceCustomIcon,
   ConsumerFinanceDeleteResult,
   ConsumerFinanceHistoryPage,
   ConsumerFinanceHistoryQuery,
@@ -24,6 +25,35 @@ import {
 } from "./consumer-finance-http";
 
 export const consumerFinanceLedgerApi = {
+  customIcons: async (botId: string) =>
+    (
+      await consumerFinanceHttp.get<ConsumerFinanceCustomIcon[]>(
+        `${consumerFinanceRoot(botId)}/custom-icons`,
+        consumerRequest(),
+      )
+    ).data,
+  uploadCustomIcon: async (botId: string, file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return (
+      await consumerFinanceHttp.post<{ imageUrl: string }>(
+        `${consumerFinanceRoot(botId)}/custom-icons/upload`,
+        body,
+        consumerRequest(),
+      )
+    ).data;
+  },
+  saveCustomIcon: async (
+    botId: string,
+    payload: { name: string; imageUrl: string },
+  ) =>
+    (
+      await consumerFinanceHttp.post<ConsumerFinanceCustomIcon>(
+        `${consumerFinanceRoot(botId)}/custom-icons`,
+        payload,
+        consumerRequest(),
+      )
+    ).data,
   accounts: async (botId: string) =>
     (
       await consumerFinanceHttp.get<ConsumerFinanceAccount[]>(

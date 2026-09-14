@@ -187,6 +187,22 @@ export class ScheduledTaskRegistryService {
         execute: this.executor.executors['mutual_promotion.lifecycle'],
       },
       {
+        key: 'telegram.post_batches.lifecycle',
+        name: 'Telegram post batch lifecycle',
+        description: 'Publishes and removes due durable post batch deliveries.',
+        scope: 'SYSTEM_MAINTENANCE',
+        defaultSchedule: {
+          frequency: 'INTERVAL',
+          intervalMinutes: 1,
+          timezone: 'Europe/Warsaw',
+        },
+        scheduleEditable: false,
+        supportedFrequencies: ['INTERVAL'],
+        notificationSupported: false,
+        dueDriven: true,
+        execute: this.executor.executors['telegram.post_batches.lifecycle'],
+      },
+      {
         key: 'application_logs.cleanup',
         name: 'Application logs cleanup',
         description:

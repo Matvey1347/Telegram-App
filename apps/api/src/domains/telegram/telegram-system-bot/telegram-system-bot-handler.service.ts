@@ -20,6 +20,7 @@ import { compactSystemBotInlineKeyboard } from './telegram-system-bot-inline-key
 import { TelegramSystemBotChannelAccessService } from './telegram-system-bot-channel-access.service';
 import { TelegramSystemBotWorkspaceFlowService } from './telegram-system-bot-workspace-flow.service';
 import { TelegramSystemBotMutualPromotionPostFlowService } from './telegram-system-bot-mutual-promotion-post-flow.service';
+import { TelegramSystemBotPostBatchFlowService } from './telegram-system-bot-post-batch-flow.service';
 import {
   resolveSystemBotAction,
   systemBotWorkflowScope,
@@ -51,6 +52,8 @@ export class TelegramSystemBotHandlerService {
     private readonly workspaceFlow?: TelegramSystemBotWorkspaceFlowService,
     @Optional()
     private readonly mutualPromotionPostFlow?: TelegramSystemBotMutualPromotionPostFlowService,
+    @Optional()
+    private readonly postBatchFlow?: TelegramSystemBotPostBatchFlowService,
   ) {}
 
   async handle(update: TelegramSystemBotUpdate) {
@@ -158,6 +161,8 @@ export class TelegramSystemBotHandlerService {
         return this.adSaleFlow.callback(workflowScope, callback);
       if (callback && this.mutualPromotionPostFlow?.isCallback(callback))
         return this.mutualPromotionPostFlow.callback(workflowScope, callback);
+      if (callback && this.postBatchFlow?.isCallback(callback))
+        return this.postBatchFlow.callback(workflowScope, callback);
       if (callback === 'posts:new') return this.postFlow?.begin(workflowScope);
       if (callback && this.posts?.isCallback(callback))
         return this.posts.callback(
@@ -182,6 +187,11 @@ export class TelegramSystemBotHandlerService {
           update.message,
         );
         if (workspaceResult) return workspaceResult;
+        const postBatchResult = await this.postBatchFlow?.input(
+          workflowScope,
+          update.message,
+        );
+        if (postBatchResult) return postBatchResult;
         const mutualPromotionPostResult =
           await this.mutualPromotionPostFlow?.input(
             workflowScope,

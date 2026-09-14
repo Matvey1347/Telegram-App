@@ -267,6 +267,21 @@ export const telegramSystemBotKeys = {
     ["telegram-system-bot", "link-preview", token] as const,
 };
 
+export const telegramPostBatchKeys = {
+  all: ["telegram-post-batches"] as const,
+  lists: () => ["telegram-post-batches", "list"] as const,
+  list: (params: { page: number; pageSize: number }) =>
+    ["telegram-post-batches", "list", params] as const,
+  detail: (batchId: string) =>
+    ["telegram-post-batches", "detail", batchId] as const,
+  deliveriesRoot: (batchId: string) =>
+    ["telegram-post-batches", "detail", batchId, "deliveries"] as const,
+  deliveries: (batchId: string, params: { page: number; pageSize: number }) =>
+    ["telegram-post-batches", "detail", batchId, "deliveries", params] as const,
+  linkTargets: (type: "AD_SALE" | "MUTUAL_PROMOTION_FOLDER") =>
+    ["telegram-post-batches", "link-targets", type] as const,
+};
+
 export const memberKeys = workspaceKeys;
 
 export const botBillingKeys = {

@@ -21,6 +21,9 @@ function setup() {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       update: jest.fn(),
     },
+    telegramSystemBotWorkflow: { findFirst: jest.fn().mockResolvedValue(null) },
+    $queryRaw: jest.fn(),
+    $transaction: jest.fn((work: (tx: unknown) => unknown) => work(prisma)),
   } as any;
   const transactions = { create: jest.fn().mockResolvedValue({ id: 'tx-1' }) };
   const transfers = {
@@ -70,6 +73,34 @@ describe('TelegramSystemBotFinanceService', () => {
     });
 
     expect(transactions.create).not.toHaveBeenCalled();
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('atomically rejects Finance draft creation while a batch import owns the interaction slot', async () => {
+    const { service, prisma } = setup();
+    prisma.account.findMany.mockResolvedValue([
+      { id: 'account', name: 'Main', currency: 'USD' },
+    ]);
+    prisma.transactionCategory.findMany.mockResolvedValue([
+      { id: 'category', name: 'Hosting' },
+    ]);
+    prisma.telegramSystemBotWorkflow.findFirst.mockResolvedValue({
+      id: 'batch-workflow',
+    });
+
+    await expect(
+      service.beginTransaction({
+        connectionId: 'connection',
+        userId: 'user',
+        workspaceId: 'workspace',
+        type: TransactionType.expense,
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE',
+      }),
+    });
+    expect(prisma.telegramSystemBotFinanceDraft.create).not.toHaveBeenCalled();
   });
 
   it('moves transaction selection from account to category and then amount input', async () => {

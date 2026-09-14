@@ -104,21 +104,29 @@ describe("Finance state illustration system", () => {
     expect(screen.getByText("Saving")).toHaveClass("text-center", "pt-3");
   });
 
-  it("uses the full-width visual by default for loading", () => {
+  it("uses the full-width universal money loader immediately", () => {
     render(<LoadingState text="Loading accounts" context="accounts" />);
 
     expect(
-      document.querySelector("[data-finance-state='loading']"),
+      document.querySelector("[data-finance-money-loader]"),
     ).toHaveAttribute("data-finance-compact", "false");
+    expect(
+      document.querySelector("[data-finance-amount-reel]"),
+    ).toBeInTheDocument();
+    expect(
+      document.querySelector("[data-finance-scene='accounts']"),
+    ).toBeNull();
     expect(screen.getByRole("status")).toHaveClass("min-h-48", "flex-col");
   });
 
-  it("uses focused scenes for transfers and reminders", () => {
+  it("uses one money loader for loading and focused scenes for empty states", () => {
     const { rerender } = render(
       <LoadingState text="Loading transfers" context="transfers" />,
     );
     expect(
-      document.querySelector("[data-finance-scene='transfers']"),
+      document.querySelector(
+        "[data-finance-money-loader][data-finance-context='transfers']",
+      ),
     ).toBeInTheDocument();
 
     rerender(<EmptyState text="No reminders" context="reminders" />);
@@ -138,12 +146,28 @@ describe("Finance state illustration system", () => {
     ).toBeInTheDocument();
   });
 
-  it("uses distinct lightweight SVG marks for loading, empty and error states", () => {
+  it.each(contexts)(
+    "uses the universal money loader for %s loading",
+    (context) => {
+      render(<LoadingState text="Loading" context={context} />);
+
+      expect(
+        document.querySelector(
+          `[data-finance-money-loader][data-finance-context='${context}']`,
+        ),
+      ).toBeInTheDocument();
+      expect(
+        document.querySelector(`[data-finance-scene='${context}']`),
+      ).toBeNull();
+    },
+  );
+
+  it("uses a money reel for loading and distinct marks for empty and error states", () => {
     const { rerender } = render(
       <LoadingState text="Loading" context="analytics" />,
     );
     expect(
-      document.querySelector("[data-finance-state-mark='loading']"),
+      document.querySelector("[data-finance-amount-reel]"),
     ).toBeInTheDocument();
     expect(document.querySelector("img")).toBeNull();
 

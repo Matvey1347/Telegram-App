@@ -15,8 +15,18 @@ const transfer: ConsumerFinanceTransfer = {
   exchangeRate: "0.9",
   occurredAt: "2026-08-21T12:00:00.000Z",
   description: "Rent",
-  fromAccount: { id: "a", name: "Cash", currency: "USD" },
-  toAccount: { id: "b", name: "Card", currency: "EUR" },
+  fromAccount: {
+    id: "a",
+    name: "Cash",
+    currency: "USD",
+    iconPresentation: { type: "unicode", value: "💵" },
+  },
+  toAccount: {
+    id: "b",
+    name: "Card",
+    currency: "EUR",
+    iconPresentation: { type: "unicode", value: "💳" },
+  },
 };
 
 describe("consumer Finance transfer cache", () => {
@@ -40,7 +50,12 @@ describe("consumer Finance transfer cache", () => {
     reconcileConsumerTransferCaches(client, "bot", {
       ...transfer,
       fromAccountId: "c",
-      fromAccount: { id: "c", name: "Bank", currency: "USD" },
+      fromAccount: {
+        id: "c",
+        name: "Bank",
+        currency: "USD",
+        iconPresentation: { type: "unicode", value: "🏦" },
+      },
       description: "Salary",
     });
     expect(

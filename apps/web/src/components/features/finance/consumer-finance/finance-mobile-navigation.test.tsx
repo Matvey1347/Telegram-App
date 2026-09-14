@@ -69,6 +69,22 @@ describe("Finance mobile navigation", () => {
     expect(onNavigate).not.toHaveBeenCalled();
   });
 
+  it("marks the dedicated Jarvis screen as active in the browser bar", () => {
+    render(
+      <FinanceMobileNavigation
+        screen="assistant"
+        copy={financeCoreCopy("en")}
+        onNavigate={vi.fn()}
+        onOpenAssistant={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Jarvis" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
   it("traps sheet focus, closes on Escape and restores the More trigger", async () => {
     render(
       <FinanceMobileNavigation

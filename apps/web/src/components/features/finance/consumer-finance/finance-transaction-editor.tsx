@@ -10,7 +10,15 @@ import type {
   ConsumerFinanceTransactionPurpose,
   ConsumerFinanceExpenseNecessity,
 } from "@telegram-system/shared";
-import { Button, DateInput, FormField, Input, Modal, Select } from "./ui";
+import {
+  Button,
+  DateInput,
+  FinanceNecessityToggle,
+  FormField,
+  Input,
+  Modal,
+  Select,
+} from "./ui";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
 import { consumerFinanceObligationsApi } from "@/lib/features/finance/consumer-finance-obligations-api";
 import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
@@ -35,6 +43,7 @@ export function FinanceTransactionEditor({
   onClose,
   onSaved,
   initiallyOpenType = null,
+  onSpecialAction,
 }: {
   botId: string;
   accounts: ConsumerFinanceAccount[];
@@ -45,6 +54,7 @@ export function FinanceTransactionEditor({
   onClose: () => void;
   onSaved: (item: ConsumerFinanceTransaction) => void;
   initiallyOpenType?: ConsumerFinanceTransactionInput["type"] | null;
+  onSpecialAction?: (action: "transfer" | "debt" | "investment") => void;
 }) {
   const client = useQueryClient();
   const t = financeTransactionsCopy(locale);
@@ -63,7 +73,7 @@ export function FinanceTransactionEditor({
   );
   const purpose = meaning === "SHARED_EXPENSE" ? "ORDINARY" : meaning;
   const [necessity, setNecessity] = useState<ConsumerFinanceExpenseNecessity>(
-    editing?.necessity ?? "UNSPECIFIED",
+    editing?.necessity ?? "DISCRETIONARY",
   );
   const [accountId, setAccountId] = useState(editing?.accountId ?? "");
   const [categoryId, setCategoryId] = useState(editing?.categoryId ?? "");
@@ -182,12 +192,27 @@ export function FinanceTransactionEditor({
       }}
       title={editing ? t.editTransaction : t.addTransaction}
     >
-      <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <FormField label={t.transactionType}>
           <Select
             uiLocale={locale}
             value={type}
             onChange={(event) => {
+              if (
+                event.target.value === "TRANSFER" ||
+                event.target.value === "DEBT" ||
+                event.target.value === "INVESTMENT"
+              ) {
+                onClose();
+                onSpecialAction?.(
+                  event.target.value === "TRANSFER"
+                    ? "transfer"
+                    : event.target.value === "DEBT"
+                      ? "debt"
+                      : "investment",
+                );
+                return;
+              }
               setType(event.target.value as typeof type);
               setCategoryId("");
               setMeaning("ORDINARY");
@@ -195,6 +220,11 @@ export function FinanceTransactionEditor({
           >
             <option value="EXPENSE">{t.expense}</option>
             <option value="INCOME">{t.income}</option>
+            {!editing ? <option value="TRANSFER">{t.transfers}</option> : null}
+            {!editing ? <option value="DEBT">{t.debts}</option> : null}
+            {!editing ? (
+              <option value="INVESTMENT">{t.investments}</option>
+            ) : null}
           </Select>
         </FormField>
         <FormField label={t.transactionMeaning}>
@@ -245,11 +275,17 @@ export function FinanceTransactionEditor({
             onChange={(event) => setAccountId(event.target.value)}
           >
             {activeAccounts.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.iconPresentation.type === "unicode"
-                  ? `${item.iconPresentation.value} `
-                  : ""}
-                {item.name} · {item.currency}
+              <option
+                key={item.id}
+                value={item.id}
+                data-icon-emoji={
+                  item.iconPresentation.type === "unicode"
+                    ? item.iconPresentation.value
+                    : undefined
+                }
+                data-option-meta={item.currency}
+              >
+                {item.name}
               </option>
             ))}
           </Select>
@@ -259,14 +295,26 @@ export function FinanceTransactionEditor({
             <Select
               uiLocale={locale}
               value={categoryId}
-              onChange={(event) => setCategoryId(event.target.value)}
+              onChange={(event) => {
+                setCategoryId(event.target.value);
+                const category = categories.find(
+                  (item) => item.id === event.target.value,
+                );
+                if (category?.necessity && category.necessity !== "UNSPECIFIED")
+                  setNecessity(category.necessity);
+              }}
             >
               <option value="">{t.uncategorized}</option>
               {visibleCategories.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.iconPresentation.type === "unicode"
-                    ? `${item.iconPresentation.value} `
-                    : ""}
+                <option
+                  key={item.id}
+                  value={item.id}
+                  data-icon-emoji={
+                    item.iconPresentation.type === "unicode"
+                      ? item.iconPresentation.value
+                      : undefined
+                  }
+                >
                   {localizeFinanceCategory(item.name, item.key, locale)}
                 </option>
               ))}
@@ -274,7 +322,7 @@ export function FinanceTransactionEditor({
           </FormField>
         ) : null}
         {meaning === "SHARED_EXPENSE" ? (
-          <div className="space-y-2 rounded-xl border border-sky-900/70 bg-sky-950/20 p-3">
+          <div className="space-y-2 rounded-xl border border-sky-900/70 bg-sky-950/20 p-3 sm:col-span-2">
             <p className="text-xs text-sky-200">{t.sharedExpenseHelp}</p>
             {participants.map((participant, index) => (
               <div
@@ -364,44 +412,37 @@ export function FinanceTransactionEditor({
           </FormField>
         ) : null}
         {type === "EXPENSE" && purpose === "ORDINARY" ? (
-          <FormField label={t.necessity}>
-            <Select
-              uiLocale={locale}
-              value={necessity}
-              onChange={(event) =>
-                setNecessity(
-                  event.target.value as ConsumerFinanceExpenseNecessity,
-                )
-              }
-            >
-              <option value="UNSPECIFIED">{t.necessityUnspecified}</option>
-              <option value="REQUIRED">{t.necessityRequired}</option>
-              <option value="DISCRETIONARY">{t.necessityDiscretionary}</option>
-            </Select>
-          </FormField>
+          <FinanceNecessityToggle
+            value={necessity}
+            locale={locale}
+            onChange={setNecessity}
+            className="sm:col-span-2"
+          />
         ) : null}
-        <FormField label={t.date}>
+        <FormField label={t.date} className="sm:col-span-2">
           <DateInput
             lang={locale}
             value={occurredAt}
             onChange={(event) => setOccurredAt(event.target.value)}
           />
         </FormField>
-        <FormField label={t.description}>
+        <FormField label={t.description} className="sm:col-span-2">
           <Input
             value={description}
             onChange={(event) => setDescription(event.target.value)}
           />
         </FormField>
         <Button
-          className="w-full"
+          className="w-full sm:col-span-2"
           disabled={!valid || mutation.isPending}
           onClick={() => mutation.mutate()}
         >
           {mutation.isPending ? t.saving : t.saveTransaction}
         </Button>
         {mutation.isError ? (
-          <p className="text-sm text-rose-300">{t.transactionSaveError}</p>
+          <p className="text-sm text-rose-300 sm:col-span-2">
+            {t.transactionSaveError}
+          </p>
         ) : null}
       </div>
     </Modal>

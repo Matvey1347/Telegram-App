@@ -121,12 +121,18 @@ export class CreateFinanceCategoryDto {
   @IsOptional() @IsString() @MaxLength(2048) emoji?: string | null;
   @IsIn(['INCOME', 'EXPENSE']) type!: 'INCOME' | 'EXPENSE';
   @IsOptional() @IsString() parentId?: string;
+  @IsOptional()
+  @IsIn(['UNSPECIFIED', 'REQUIRED', 'DISCRETIONARY'])
+  necessity?: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
 }
 export class UpdateFinanceCategoryDto {
   @IsString() @MinLength(1) @MaxLength(80) name!: string;
   @IsOptional() @IsString() @MaxLength(2048) emoji?: string | null;
   @IsIn(['INCOME', 'EXPENSE']) type!: 'INCOME' | 'EXPENSE';
   @IsOptional() @IsString() parentId?: string | null;
+  @IsOptional()
+  @IsIn(['UNSPECIFIED', 'REQUIRED', 'DISCRETIONARY'])
+  necessity?: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
 }
 export class FinanceTransferQueryDto {
   @IsOptional() @IsDateString() from?: string;

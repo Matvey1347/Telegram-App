@@ -16,15 +16,35 @@ function setup() {
     confirm: jest.fn(),
     cancel: jest.fn(),
   };
+  const workflows = { requireNoActiveBatchImport: jest.fn() };
   const service = new TelegramSystemBotFinanceHandlerService(
     { token: 'token' } as never,
     api as never,
     finance as never,
+    workflows as never,
   );
-  return { service, api, finance };
+  return { service, api, finance, workflows };
 }
 
 describe('TelegramSystemBotFinanceHandlerService', () => {
+  it('does not consume pending Finance input while a batch import is active', async () => {
+    const { service, finance, workflows } = setup();
+    workflows.requireNoActiveBatchImport.mockRejectedValue(
+      new Error('active batch'),
+    );
+
+    await expect(
+      service.pendingInput({
+        chatId: '44',
+        connectionId: 'connection-1',
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+        text: '100 USD',
+      }),
+    ).rejects.toThrow('active batch');
+    expect(finance.submitInput).not.toHaveBeenCalled();
+  });
+
   it('shows accounts, transaction types, and transfers in the finance menu', async () => {
     const { service, api } = setup();
 

@@ -17,6 +17,8 @@ describe('TelegramSystemBotMutualPromotionPostFlowService', () => {
     deleteMessage: jest.fn(),
   };
   const workflows = {
+    requireNoActiveBatchImport: jest.fn(),
+    activeWithoutBatchImport: jest.fn(),
     active: jest.fn(),
     create: jest.fn(),
     transition: jest.fn(),
@@ -25,6 +27,9 @@ describe('TelegramSystemBotMutualPromotionPostFlowService', () => {
     claimCommit: jest.fn(),
     complete: jest.fn(),
   };
+  workflows.activeWithoutBatchImport.mockImplementation((...args) =>
+    workflows.active(...args),
+  );
   const content = { capture: jest.fn(), removeInput: jest.fn() };
   const postFlow = {
     sendPostPreview: jest

@@ -14,7 +14,6 @@ import {
   Copy,
   Clock3,
   FileText,
-  FolderPlus,
   GripVertical,
   History,
   Layers3,
@@ -27,17 +26,12 @@ import {
   RotateCcw,
   Rocket,
   Trash2,
-  Upload,
 } from "lucide-react";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { IconPicker } from "@/components/icons/icon-picker";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageTabHead } from "@/components/layout/page-tab-head";
-import { ManagedPostsImportModal } from "@/components/features/telegram/telegram/managed-posts-import-modal";
 import { AddPostsModal } from "@/components/features/telegram/telegram/add-posts-to-group-modal";
-import { GptContextDownloadButton } from "@/components/features/telegram/telegram/gpt-context-download-button";
-import { PostGroupsImportModal } from "@/components/features/telegram/telegram/post-groups-import-modal";
-import { ChannelReimportDeleteModal } from "@/components/features/telegram/telegram/channel-reimport-delete-modal";
 import { ChannelImportNavigation, type ChannelImportMode } from "@/components/features/telegram/telegram/channel-import-navigation";
 import { TelegramCardActionsMenu, TelegramCardMenuAction } from "@/components/features/telegram/telegram/telegram-card-actions-menu";
 import { CalendarPostGroupSection } from "@/components/features/telegram/telegram/calendar-post-group-section";
@@ -55,7 +49,7 @@ import {
   managedPostScheduleUnchanged,
   type LongTextMode,
 } from "@/components/features/telegram/telegram/managed-post-presentation";
-import { AddTimePostButton, TimePostsControl } from "@/components/features/telegram/telegram/telegram-time-posts-control";
+import { AddTimePostButton } from "@/components/features/telegram/telegram/telegram-time-posts-control";
 import {
   ManagedPostTelegramIdentityIndicator,
   ManagedPostTelegramLink,
@@ -88,7 +82,7 @@ import {
   managedPostStatusTab,
   type ManagedPostStatusTab,
 } from "@/components/features/telegram/telegram/managed-post-deep-link";
-import { ResetChannelScheduledPostsButton } from "@/components/features/telegram/telegram/reset-channel-scheduled-posts-button";
+import { TelegramPostsHeaderWorkflows } from "@/components/features/telegram/telegram/telegram-posts-header-workflows";
 import { MemberBadge } from "@/components/features/workspace/member-badge";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 import {
@@ -167,7 +161,6 @@ import {
   LoadingState,
   Modal,
   MultiSelect,
-  PageHeader,
   Textarea,
   TimeInput,
   ToggleRow,
@@ -403,11 +396,9 @@ function scheduleDateForPreset(time: string) {
 }
 
 export function TelegramPostsPageClient({ routeChannelId, routePostView }: TelegramPostsPageProps = {}) {
-  const { locale, t, ensureNamespaces, hasNamespaces } = useI18n();
+  const { t, ensureNamespaces, hasNamespaces } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const queryClient = useQueryClient();
-  const { pushToast, setProgress, clearProgress } = useAppToast();
   const [newPostToken, setNewPostToken] = useState(0);
   const [newGroupRequested, setNewGroupRequested] = useState(false);
   const [importMode, setImportMode] = useState<ChannelImportMode | null>(null);
@@ -533,121 +524,47 @@ export function TelegramPostsPageClient({ routeChannelId, routePostView }: Teleg
 
   return (
     <AppShell>
-      <PageHeader
-        title={t("telegram.posts.title")}
-        subtitle={t("telegram.posts.subtitle")}
-        action={
-          channel ? (
-            <div className="flex w-full flex-col gap-2 sm:min-w-[620px] sm:flex-row">
-              <div className="min-w-0 flex-1 [&>div>button]:h-[42px] [&>div>button]:min-h-0">
-                <CustomSelect
-                  uiLocale={locale}
-                  value={channel.id}
-                  onChange={navigateToChannel}
-                  options={availableChannels.map((item) => ({
-                    value: item.id,
-                    label: item.title,
-                    iconUrl: item.photoUrl || undefined,
-                    iconFallback: item.title,
-                  }))}
-                />
-              </div>
-              <TelegramCardActionsMenu
-                label={t("telegram.posts.channelActions")}
-                keepMounted
-                triggerClassName="!h-[42px] !w-[42px] shrink-0 rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800"
-              >
-                <TelegramCardMenuAction
-                  label={t("common.import")}
-                  icon={<Upload size={17} />}
-                  onClick={() => setImportMode(pageWorkspaceView === "groups" ? "groups" : "posts")}
-                />
-                <TelegramCardMenuAction
-                  label={t("telegram.posts.newPost")}
-                  icon={<Plus size={17} />}
-                  onClick={() => {
-                    router.replace(
-                      buildTelegramPostsUrl({
-                        channelId: channel.id,
-                        postView: "editor",
-                      }),
-                    );
-                    setPageWorkspaceView("posts");
-                    setNewPostToken((value) => value + 1);
-                  }}
-                />
-                <TelegramCardMenuAction
-                  label={t("telegram.posts.newGroup")}
-                  icon={<FolderPlus size={17} />}
-                  onClick={() => {
-                    router.replace(
-                      buildTelegramPostsUrl({
-                        channelId: channel.id,
-                        postView: "groups",
-                      }),
-                    );
-                    setPageWorkspaceView("groups");
-                    setNewGroupRequested(true);
-                  }}
-                />
-                <TimePostsControl channelId={channel.id} timePosts={channel.timePosts || []} presentation="menu" />
-                <GptContextDownloadButton channelId={channel.id} channelTitle={channel.title} presentation="menu" />
-                <ResetChannelScheduledPostsButton
-                  channelId={channel.id}
-                  channelTitle={channel.title}
-                  presentation="menu"
-                  onCompleted={() => {
-                    router.replace(
-                      buildTelegramPostsUrl({
-                        channelId: channel.id,
-                        postView: "editor",
-                      }),
-                    );
-                    setNewPostToken((value) => value + 1);
-                  }}
-                />
-              </TelegramCardActionsMenu>
-            </div>
-          ) : undefined
-        }
+      <TelegramPostsHeaderWorkflows
+        channel={channel}
+        channels={availableChannels}
+        workspaceView={pageWorkspaceView}
+        importMode={importMode}
+        importTranslationsReady={importTranslationsReady}
+        onChannelChange={navigateToChannel}
+        onImportModeChange={setImportMode}
+        onNewPost={() => {
+          if (!channel) return;
+          router.replace(
+            buildTelegramPostsUrl({
+              channelId: channel.id,
+              postView: "editor",
+            }),
+          );
+          setPageWorkspaceView("posts");
+          setNewPostToken((value) => value + 1);
+        }}
+        onNewGroup={() => {
+          if (!channel) return;
+          router.replace(
+            buildTelegramPostsUrl({
+              channelId: channel.id,
+              postView: "groups",
+            }),
+          );
+          setPageWorkspaceView("groups");
+          setNewGroupRequested(true);
+        }}
+        onResetCompleted={() => {
+          if (!channel) return;
+          router.replace(
+            buildTelegramPostsUrl({
+              channelId: channel.id,
+              postView: "editor",
+            }),
+          );
+          setNewPostToken((value) => value + 1);
+        }}
       />
-      {channel && importTranslationsReady ? (
-        <ManagedPostsImportModal
-          open={importMode === "posts"}
-          onClose={() => setImportMode(null)}
-          channelId={channel.id}
-          channelTitle={channel.title}
-          channelPhotoUrl={channel.photoUrl}
-          channelTelegramChatId={channel.telegramChatId}
-          captionLengthMax={channel.publishingCapabilities.captionLengthMax}
-          messageLengthMax={channel.publishingCapabilities.messageLengthMax}
-          mode="posts"
-          onModeChange={setImportMode}
-        />
-      ) : null}
-      {channel && importTranslationsReady ? (
-        <PostGroupsImportModal
-          open={importMode === "groups"}
-          channelId={channel.id}
-          onClose={() => setImportMode(null)}
-          mode="groups"
-          onModeChange={setImportMode}
-          onImported={async () => {
-            await queryClient.invalidateQueries({
-              queryKey: telegramPostKeys.postGroups(channel.id),
-            });
-          }}
-        />
-      ) : null}
-      {channel && importTranslationsReady ? (
-        <ChannelReimportDeleteModal
-          open={importMode === "reimport"}
-          channelId={channel.id}
-          mode="reimport"
-          onModeChange={setImportMode}
-          onClose={() => setImportMode(null)}
-        />
-      ) : null}
       {channels.isLoading ? <LoadingState /> : null}
       {!channels.isLoading && !channels.error && !availableChannels.length ? <EmptyState text={t("telegram.posts.noChannels")} /> : null}
       {channel ? (

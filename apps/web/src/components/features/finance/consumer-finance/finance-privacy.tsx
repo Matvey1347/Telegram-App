@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Download, Trash2, Upload } from "lucide-react";
 import { Button, Card } from "./ui";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
 import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
@@ -9,6 +10,7 @@ import { FinanceConfirmModal } from "./finance-confirm-modal";
 import { type FinanceLocale } from "./i18n/core";
 import { financeSettingsCopy } from "./i18n/settings";
 import { FinanceImportModal } from "./finance-import-modal";
+import { FinancePortabilityHistory } from "./finance-portability-history";
 
 export function FinancePrivacy({
   botId,
@@ -32,6 +34,9 @@ export function FinancePrivacy({
       link.download = "finance-export.json";
       link.click();
       URL.revokeObjectURL(url);
+      void client.invalidateQueries({
+        queryKey: consumerFinanceKeys.portabilityHistory(botId),
+      });
     },
   });
   const deleteMutation = useMutation({
@@ -51,12 +56,15 @@ export function FinancePrivacy({
           disabled={exportMutation.isPending}
           onClick={() => exportMutation.mutate()}
         >
+          <Download aria-hidden size={16} />
           {exportMutation.isPending ? t.exportingData : t.exportData}
         </Button>
         <Button variant="secondary" onClick={() => setImportOpen(true)}>
+          <Upload aria-hidden size={16} />
           {t.importData}
         </Button>
         <Button variant="danger" onClick={() => setConfirmDelete(true)}>
+          <Trash2 aria-hidden size={16} />
           {t.deleteAllData}
         </Button>
       </div>
@@ -81,6 +89,7 @@ export function FinancePrivacy({
         locale={locale}
         onClose={() => setImportOpen(false)}
       />
+      <FinancePortabilityHistory botId={botId} locale={locale} />
     </Card>
   );
 }

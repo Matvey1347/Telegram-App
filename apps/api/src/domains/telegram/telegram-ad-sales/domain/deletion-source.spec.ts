@@ -3,6 +3,7 @@ import {
   resolveAdPlacementDeletionMessageIds,
   selectAdPlacementDeletionSource,
 } from './deletion-source';
+import { selectTelegramDeletionSource } from '../../../../telegram/shared/telegram-deletion-policy';
 
 const bot = {
   sourceType: 'BOT',
@@ -45,15 +46,42 @@ describe('selectAdPlacementDeletionSource', () => {
     },
   );
 
-  it('uses the original bot to confirm absence when no MTProto admin is connected', () => {
+  it('keeps neutral deletion MTProto-only after the Bot API window expires', () => {
     const publishedAt = new Date('2026-01-01T00:00:00Z');
     expect(
-      selectAdPlacementDeletionSource(
+      selectTelegramDeletionSource(
         [bot],
         { sourceType: 'BOT', sourceId: 'bot', publishedAt },
         new Date(publishedAt.getTime() + 48 * 60 * 60 * 1000),
       ),
-    ).toBe(bot);
+    ).toBeUndefined();
+  });
+
+  it('uses another capable bot when the publishing source lost delete permission', () => {
+    const fallback = { ...bot, sourceId: 'fallback-bot' };
+    expect(
+      selectAdPlacementDeletionSource(
+        [
+          {
+            ...bot,
+            permissions: { canDeleteMessages: false },
+          },
+          fallback,
+        ],
+        { sourceType: 'BOT', sourceId: 'bot', publishedAt: new Date() },
+      ),
+    ).toBe(fallback);
+  });
+
+  it('does not use a different capable bot after the 48-hour window', () => {
+    const publishedAt = new Date('2026-01-01T00:00:00Z');
+    expect(
+      selectTelegramDeletionSource(
+        [{ ...bot, sourceId: 'fallback-bot' }],
+        { sourceType: 'BOT', sourceId: 'missing-bot', publishedAt },
+        new Date(publishedAt.getTime() + 48 * 60 * 60 * 1000),
+      ),
+    ).toBeUndefined();
   });
 });
 
@@ -61,9 +89,16 @@ describe('isTelegramMessageAlreadyAbsent', () => {
   it.each([
     'Bad Request: message to delete not found',
     "Message doesn't exist",
-    'MESSAGE_ID_INVALID',
   ])('recognizes Telegram already-missing responses: %s', (message) => {
     expect(isTelegramMessageAlreadyAbsent(new Error(message))).toBe(true);
+  });
+
+  it('recognizes MSG_ID_INVALID only when one message was requested', () => {
+    const error = new Error('MSG_ID_INVALID');
+    expect(isTelegramMessageAlreadyAbsent(error)).toBe(false);
+    expect(isTelegramMessageAlreadyAbsent(error, { singleMessage: true })).toBe(
+      true,
+    );
   });
 
   it('does not hide real deletion failures', () => {

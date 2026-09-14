@@ -54,6 +54,7 @@ export class TelegramManagedPostScheduledResetService {
         workspaceId,
         telegramChannelId: channelId,
         status: TelegramManagedPostStatus.SCHEDULED,
+        postBatchDelivery: { is: null },
       },
       orderBy: { createdAt: 'asc' },
     });

@@ -14,6 +14,7 @@ import { TelegramManagedPostPublicationService } from './telegram-managed-post-p
 import { telegramPostsBadRequest } from './telegram-posts.errors';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
+import { requireNonBatchManagedPosts } from './telegram-managed-post-ownership';
 
 @Injectable()
 export class TelegramManagedPostDeletionService {
@@ -44,6 +45,11 @@ export class TelegramManagedPostDeletionService {
         'postIds must contain at least one post',
       );
     }
+    await requireNonBatchManagedPosts(this.prisma, {
+      workspaceId,
+      channelId,
+      postIds,
+    });
     const posts = await this.prisma.telegramManagedPost.findMany({
       where: {
         id: { in: postIds },

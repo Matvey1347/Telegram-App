@@ -6,10 +6,12 @@ import {
   Button,
   Card,
   ErrorState,
+  FinanceCardActionsMenu,
   FormField,
   Input,
   LoadingState,
   Select,
+  Modal,
 } from "./ui";
 import { consumerFinanceInsightsApi } from "@/lib/features/finance/consumer-finance-insights-api";
 import { consumerFinanceLedgerApi } from "@/lib/features/finance/consumer-finance-ledger-api";
@@ -19,6 +21,10 @@ import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-que
 import { type FinanceLocale } from "./i18n/core";
 import { financeBudgetCopy } from "./i18n/budget";
 import { localizeFinanceCategory } from "./finance-category-i18n";
+import { FinancePlanPromotion } from "./finance-plan-promotion";
+import { IconAvatar } from "./ui/finance-icon-avatar";
+import { Pencil, Trash2 } from "lucide-react";
+import { FinanceConfirmModal } from "./finance-confirm-modal";
 export function FinanceBudget({
   botId,
   locale,
@@ -32,6 +38,8 @@ export function FinanceBudget({
   const client = useQueryClient();
   const [categoryId, setCategoryId] = useState("");
   const [amount, setAmount] = useState("");
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [deleting, setDeleting] = useState<ConsumerFinanceLimit | null>(null);
   // Dashboard, references and planning reads are independent and start together.
   const dashboard = useQuery({
     queryKey: consumerFinanceKeys.dashboard(botId),
@@ -68,6 +76,23 @@ export function FinanceBudget({
         queryKey: consumerFinanceKeys.dashboard(botId),
       });
       setAmount("");
+      setCategoryId("");
+      setEditorOpen(false);
+    },
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) =>
+      consumerFinancePlanningApi.deleteLimit(botId, id),
+    onSuccess: (_result, id) => {
+      client.setQueryData(
+        consumerFinanceKeys.limits(botId),
+        (items: ConsumerFinanceLimit[] | undefined) =>
+          items?.filter((item) => item.id !== id),
+      );
+      void client.invalidateQueries({
+        queryKey: consumerFinanceKeys.dashboard(botId),
+      });
+      setDeleting(null);
     },
   });
   if (dashboard.isLoading || categories.isLoading)
@@ -89,46 +114,78 @@ export function FinanceBudget({
   const categoryRows = categories.data ?? [];
   return (
     <div className="space-y-4">
-      <Card>
-        <FormField label={t.expenseCategories}>
-          <Select
-            uiLocale={locale}
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-          >
-            <option value="">{t.selectCategory}</option>
-            {categoryRows
-              .filter(
-                (category) =>
-                  category.type === "EXPENSE" && !category.archivedAt,
-              )
-              .map((category) => (
-                <option key={category.id} value={category.id}>
-                  {localizeFinanceCategory(category.name, category.key, locale)}
-                </option>
-              ))}
-          </Select>
-        </FormField>
-        <FormField
-          label={`${t.monthlyBudget} (${dashboardData.profile.defaultCurrency})`}
-        >
-          <Input
-            inputMode="decimal"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-        </FormField>
+      <div className="flex justify-end">
         <Button
-          className="mt-3 w-full"
-          disabled={!categoryId || !amount || save.isPending}
-          onClick={() => save.mutate()}
+          onClick={() => {
+            setCategoryId("");
+            setAmount("");
+            setEditorOpen(true);
+          }}
         >
-          {t.saveBudget}
+          {t.addBudget}
         </Button>
-        {save.isError ? (
-          <p className="mt-2 text-sm text-rose-300">{t.financeUnavailable}</p>
-        ) : null}
-      </Card>
+      </div>
+      <Modal
+        open={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        closeLabel={t.close}
+        title={categoryId ? t.editBudget : t.addBudget}
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <FormField label={t.expenseCategories}>
+            <Select
+              uiLocale={locale}
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+            >
+              <option value="">{t.selectCategory}</option>
+              {categoryRows
+                .filter(
+                  (category) =>
+                    category.type === "EXPENSE" && !category.archivedAt,
+                )
+                .map((category) => (
+                  <option
+                    key={category.id}
+                    value={category.id}
+                    data-icon-emoji={
+                      category.iconPresentation.type === "unicode"
+                        ? category.iconPresentation.value
+                        : undefined
+                    }
+                  >
+                    {localizeFinanceCategory(
+                      category.name,
+                      category.key,
+                      locale,
+                    )}
+                  </option>
+                ))}
+            </Select>
+          </FormField>
+          <FormField
+            label={`${t.monthlyBudget} (${dashboardData.profile.defaultCurrency})`}
+          >
+            <Input
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </FormField>
+          <Button
+            className="w-full sm:col-span-2"
+            disabled={!categoryId || !amount || save.isPending}
+            onClick={() => save.mutate()}
+          >
+            {t.saveBudget}
+          </Button>
+          {save.isError ? (
+            <p className="mt-2 text-sm text-rose-300 sm:col-span-2">
+              {t.financeUnavailable}
+            </p>
+          ) : null}
+        </div>
+      </Modal>
       {dashboardData.limits.map((limit) => {
         const value = Math.min(100, limit.percentage);
         const categoryName = localizeFinanceCategory(
@@ -138,12 +195,37 @@ export function FinanceBudget({
         );
         return (
           <Card key={limit.id}>
-            <div className="flex justify-between text-sm">
-              <strong>{categoryName}</strong>
-              <span className={limit.percentage > 100 ? "text-rose-300" : ""}>
-                {formatMoney(limit.spent, limit.currency, "symbol")} /{" "}
-                {formatMoney(limit.amount, limit.currency, "symbol")}
-              </span>
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <div className="flex min-w-0 items-center gap-2">
+                <IconAvatar icon={limit.category.iconPresentation} size="sm" />
+                <strong className="truncate">{categoryName}</strong>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={limit.percentage > 100 ? "text-rose-300" : ""}>
+                  {formatMoney(limit.spent, limit.currency, "symbol")} /{" "}
+                  {formatMoney(limit.amount, limit.currency, "symbol")}
+                </span>
+                <FinanceCardActionsMenu
+                  label={t.actions}
+                  actions={[
+                    {
+                      label: t.editBudget,
+                      icon: <Pencil size={16} />,
+                      onSelect: () => {
+                        setCategoryId(limit.categoryId);
+                        setAmount(limit.amount);
+                        setEditorOpen(true);
+                      },
+                    },
+                    {
+                      label: t.deleteBudget,
+                      icon: <Trash2 size={16} />,
+                      onSelect: () => setDeleting(limit),
+                      danger: true,
+                    },
+                  ]}
+                />
+              </div>
             </div>
             {limit.legacyFallback ? (
               <p role="note" className="mt-2 text-xs text-amber-200">
@@ -173,48 +255,65 @@ export function FinanceBudget({
           </Card>
         );
       })}
-      <Card>
-        <p className="font-medium">{t.smartLimits}</p>
-        {smartLimits.isLoading ? (
-          <p className="mt-1 text-sm text-neutral-400">{t.checkingPro}</p>
-        ) : smartLimits.isError ? (
-          <div className="mt-2 space-y-2">
-            <ErrorState text={t.financeUnavailable} />
-            <Button variant="secondary" onClick={() => smartLimits.refetch()}>
-              {t.retry}
-            </Button>
-          </div>
-        ) : Array.isArray(smartLimits.data) ? (
-          <div className="mt-2 space-y-1 text-sm text-neutral-400">
-            {smartLimits.data.length ? (
-              smartLimits.data.map((limit) => (
-                <p key={limit.id}>
-                  {localizeFinanceCategory(
-                    limit.category.name,
-                    limit.category.key,
-                    locale,
-                  )}
-                  : {t.projected}{" "}
-                  {formatMoney(
-                    limit.forecast.projectedAmount,
-                    limit.currency,
-                    "symbol",
-                  )}
-                </p>
-              ))
-            ) : (
-              <p>{t.addBudgetForecast}</p>
-            )}
-          </div>
-        ) : (
-          <div className="mt-2 space-y-2">
-            <p className="text-sm text-neutral-400">{t.smartPro}</p>
-            <Button variant="secondary" onClick={onUpgrade}>
-              {t.upgradePlan}
-            </Button>
-          </div>
-        )}
-      </Card>
+      <FinanceConfirmModal
+        open={!!deleting}
+        locale={locale}
+        entityName={deleting?.category.name ?? ""}
+        actionLabel={t.deleteBudget}
+        description={t.deleteDescription}
+        onClose={() => setDeleting(null)}
+        onConfirm={() =>
+          deleting ? remove.mutateAsync(deleting.id) : undefined
+        }
+      />
+      {!smartLimits.isLoading &&
+      !smartLimits.isError &&
+      !Array.isArray(smartLimits.data) ? (
+        <FinancePlanPromotion
+          eyebrow={t.planEyebrow}
+          title={t.smartUpgrade}
+          description={t.smartPro}
+          cta={t.upgradePlan}
+          tier="PRO"
+          onUpgrade={onUpgrade}
+        />
+      ) : (
+        <Card>
+          <p className="font-medium">{t.smartLimits}</p>
+          {smartLimits.isLoading ? (
+            <p className="mt-1 text-sm text-neutral-400">{t.checkingPro}</p>
+          ) : smartLimits.isError ? (
+            <div className="mt-2 space-y-2">
+              <ErrorState text={t.financeUnavailable} />
+              <Button variant="secondary" onClick={() => smartLimits.refetch()}>
+                {t.retry}
+              </Button>
+            </div>
+          ) : Array.isArray(smartLimits.data) ? (
+            <div className="mt-2 space-y-1 text-sm text-neutral-400">
+              {smartLimits.data.length ? (
+                smartLimits.data.map((limit) => (
+                  <p key={limit.id}>
+                    {localizeFinanceCategory(
+                      limit.category.name,
+                      limit.category.key,
+                      locale,
+                    )}
+                    : {t.projected}{" "}
+                    {formatMoney(
+                      limit.forecast.projectedAmount,
+                      limit.currency,
+                      "symbol",
+                    )}
+                  </p>
+                ))
+              ) : (
+                <p>{t.addBudgetForecast}</p>
+              )}
+            </div>
+          ) : null}
+        </Card>
+      )}
     </div>
   );
 }

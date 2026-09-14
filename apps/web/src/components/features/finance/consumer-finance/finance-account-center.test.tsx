@@ -4,7 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
 import { FinanceAccountCenter } from "./finance-account-center";
 
-const api = vi.hoisted(() => ({ updateSettings: vi.fn() }));
+const api = vi.hoisted(() => ({
+  updateSettings: vi.fn(),
+  uploadAvatar: vi.fn(),
+  clearAvatar: vi.fn(),
+}));
 vi.mock("@/lib/features/finance/consumer-finance-profile-api", () => ({
   consumerFinanceProfileApi: api,
 }));
@@ -13,6 +17,12 @@ vi.mock("./finance-settings", () => ({
 }));
 vi.mock("./finance-plans", () => ({
   FinancePlans: () => <div>Billing and payments</div>,
+}));
+vi.mock("./use-finance-entitlements", () => ({
+  useFinanceEntitlements: () => ({
+    data: { tier: "FREE" },
+    isLoading: false,
+  }),
 }));
 
 const profile = {
@@ -53,6 +63,8 @@ describe("FinanceAccountCenter", () => {
 
     expect(screen.getByText("Finance preferences")).toBeInTheDocument();
     expect(screen.getByText("Billing and payments")).toBeInTheDocument();
+    expect(screen.getByText("Current plan")).toBeInTheDocument();
+    expect(screen.getByText("FREE")).toBeInTheDocument();
     expect(screen.getByLabelText("Display name")).toHaveValue("Ada Finance");
     fireEvent.change(screen.getByLabelText("Display name"), {
       target: { value: "Ada Money" },

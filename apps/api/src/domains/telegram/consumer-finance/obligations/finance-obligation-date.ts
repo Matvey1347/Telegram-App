@@ -75,6 +75,7 @@ export function financeRecurrenceAnchor(
 export function nextFinanceOccurrence(input: {
   current: Date;
   recurrence: FinanceRecurringPaymentRecurrence;
+  intervalCount?: number;
   anchorDay: number;
   anchorMonth: number | null;
   timezone: string;
@@ -82,10 +83,13 @@ export function nextFinanceOccurrence(input: {
   const current = parseCalendarDate(
     financeLocalCalendarDate(input.current, input.timezone),
   );
+  const intervalCount = input.intervalCount ?? 1;
   let next: CalendarDate;
-  if (input.recurrence === 'WEEKLY') {
+  if (input.recurrence === 'DAILY' || input.recurrence === 'WEEKLY') {
+    const days =
+      input.recurrence === 'DAILY' ? intervalCount : 7 * intervalCount;
     const value = new Date(
-      Date.UTC(current.year, current.month - 1, current.day + 7),
+      Date.UTC(current.year, current.month - 1, current.day + days),
     );
     next = {
       year: value.getUTCFullYear(),
@@ -93,7 +97,9 @@ export function nextFinanceOccurrence(input: {
       day: value.getUTCDate(),
     };
   } else if (input.recurrence === 'MONTHLY') {
-    const monthValue = new Date(Date.UTC(current.year, current.month, 1));
+    const monthValue = new Date(
+      Date.UTC(current.year, current.month - 1 + intervalCount, 1),
+    );
     const year = monthValue.getUTCFullYear();
     const month = monthValue.getUTCMonth() + 1;
     next = {
@@ -102,7 +108,7 @@ export function nextFinanceOccurrence(input: {
       day: Math.min(input.anchorDay, daysInMonth(year, month)),
     };
   } else {
-    const year = current.year + 1;
+    const year = current.year + intervalCount;
     const month = input.anchorMonth ?? current.month;
     next = {
       year,

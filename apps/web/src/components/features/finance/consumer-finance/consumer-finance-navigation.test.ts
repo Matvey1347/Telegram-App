@@ -31,6 +31,7 @@ describe("consumer Finance surface and browser navigation", () => {
     "regular-payments",
     "savings",
     "investments",
+    "assistant",
   ] as const)("preserves the %s browser section in the URL", (screen) => {
     const source = location("https://finance.example/finance/bot");
     const path = consumerFinanceScreenUrl(source, screen);

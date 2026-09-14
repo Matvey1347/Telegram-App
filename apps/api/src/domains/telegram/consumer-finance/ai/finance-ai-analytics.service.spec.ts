@@ -100,7 +100,7 @@ describe('FinanceAiAnalyticsService', () => {
 
   it('routes one assistant message to the right Finance function', async () => {
     const { service } = setup();
-    global.fetch = jest.fn().mockResolvedValue({
+    const fetchMock = jest.fn().mockResolvedValue({
       ok: true,
       json: jest.fn().mockResolvedValue({
         output_text: JSON.stringify({
@@ -111,7 +111,8 @@ describe('FinanceAiAnalyticsService', () => {
         }),
         usage: { input_tokens: 80, output_tokens: 20 },
       }),
-    }) as never;
+    });
+    global.fetch = fetchMock as never;
 
     await expect(
       service.routeAssistantMessage({
@@ -132,6 +133,108 @@ describe('FinanceAiAnalyticsService', () => {
       message: 'Use debts because this money is still owed to you.',
       recommendedScreen: 'debts',
       operations: [],
+    });
+
+    const fetchCalls = fetchMock.mock.calls as unknown as Array<
+      [RequestInfo | URL, RequestInit?]
+    >;
+    const requestBody = fetchCalls[0]?.[1]?.body;
+    expect(typeof requestBody).toBe('string');
+    const body = JSON.parse(requestBody as string) as {
+      text: {
+        format: {
+          schema: {
+            properties: {
+              operations: { items: unknown };
+            };
+          };
+        };
+      };
+    };
+    type ObjectSchema = {
+      required: string[];
+      properties: Record<string, unknown>;
+    };
+    const operationSchema = body.text.format.schema.properties.operations
+      .items as ObjectSchema;
+    expect(operationSchema.required).toEqual(
+      Object.keys(operationSchema.properties),
+    );
+    const lineItemSchema = (
+      operationSchema.properties.items as { items: ObjectSchema }
+    ).items;
+    expect(lineItemSchema.required).toEqual(
+      Object.keys(lineItemSchema.properties),
+    );
+  });
+
+  it('normalizes nullable strict-schema fields before returning a record', async () => {
+    const { service } = setup();
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        output_text: JSON.stringify({
+          kind: 'RECORD',
+          message: 'I prepared the expense for confirmation.',
+          recommendedScreen: null,
+          operations: [
+            {
+              type: 'EXPENSE',
+              amount: '25',
+              economicAmount: null,
+              purpose: null,
+              necessity: null,
+              currency: 'PLN',
+              description: 'Coffee',
+              occurredAt: new Date().toISOString(),
+              accountHint: null,
+              merchantDisplay: null,
+              items: [
+                {
+                  displayName: 'Coffee',
+                  quantity: null,
+                  unitPrice: null,
+                  totalAmount: '25',
+                  currency: 'PLN',
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    }) as never;
+
+    await expect(
+      service.routeAssistantMessage({
+        profileId: 'profile-1',
+        botIntegrationId: 'bot-1',
+        locale: 'en',
+        text: 'I spent 25 PLN on coffee',
+        history: [],
+        facts: { accountBalances: [], recentTransactions: [] },
+        reservationId: 'reservation-1',
+        usageContext: {
+          workspaceId: 'workspace-1',
+          telegramBotUserId: 'user-1',
+        },
+      }),
+    ).resolves.toMatchObject({
+      kind: 'RECORD',
+      operations: [
+        {
+          type: 'EXPENSE',
+          amount: '25',
+          currency: 'PLN',
+          description: 'Coffee',
+          items: [
+            {
+              displayName: 'Coffee',
+              totalAmount: '25',
+              currency: 'PLN',
+            },
+          ],
+        },
+      ],
     });
   });
 });

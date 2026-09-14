@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ConsumerBillingCatalog,
   ConsumerFinanceRenewalUpdate,
+  ConsumerFinanceTier,
 } from "@telegram-system/shared";
 import { Button, Card, EmptyState, ErrorState, LoadingState } from "./ui";
 import { consumerFinancePlanningApi } from "@/lib/features/finance/consumer-finance-planning-api";
@@ -13,15 +13,14 @@ import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-que
 import { financeIntlLocale, type FinanceLocale } from "./i18n/core";
 import { financePlansCopy } from "./i18n/plans";
 import {
-  consumerFinanceFeatureLabel,
-  consumerFinanceOffersForPlan,
   consumerFinanceProviderLabel,
   consumerFinanceSubscriptionStatusLabel,
   consumerFinanceTierLabel,
   formatConsumerFinancePlanPrice,
+  type ConsumerFinanceCatalogPlan,
   type ConsumerFinanceCheckoutOffer,
 } from "./finance-consumer-billing-format";
-import { FinancePlanVisual } from "./finance-plan-visual";
+import { FinancePlanCard } from "./finance-plan-card";
 import styles from "./finance-plans.module.css";
 
 export function FinancePlans({
@@ -34,6 +33,9 @@ export function FinancePlans({
   const t = financePlansCopy(locale);
   const client = useQueryClient();
   const [paymentPlan, setPaymentPlan] = useState<string | null>(null);
+  const [mobilePlan, setMobilePlan] = useState<ConsumerFinanceTier | null>(
+    null,
+  );
   const catalog = useQuery({
     queryKey: consumerFinanceKeys.billing(botId),
     queryFn: () => consumerFinancePlanningApi.billing(botId),
@@ -104,187 +106,74 @@ export function FinancePlans({
       subscription.source === "STRIPE" &&
       ["ACTIVE", "PAST_DUE"].includes(subscription.status),
   );
+  const activeMobileTier = catalog.data.plans.some(
+    (plan) => plan.code === mobilePlan,
+  )
+    ? mobilePlan
+    : catalog.data.plans.some((plan) => plan.code === current.tier)
+      ? current.tier
+      : catalog.data.plans[0]?.code;
+  const choosePlan = (
+    plan: ConsumerFinanceCatalogPlan,
+    offers: ConsumerFinanceCheckoutOffer[],
+  ) => {
+    if (offers.length === 1) {
+      checkout.mutate(offers[0]);
+      return;
+    }
+    setPaymentPlan(plan.code);
+  };
   return (
     <div className="space-y-4">
-      <section className="relative isolate min-h-[250px] overflow-hidden rounded-3xl border border-cyan-900/70 bg-[#05090e] shadow-[0_24px_70px_rgba(0,0,0,0.32)] sm:min-h-[290px]">
-        <div
-          className={`${styles.heroGlow} absolute inset-0 bg-[radial-gradient(circle_at_78%_50%,rgba(45,212,191,0.2),transparent_34%),radial-gradient(circle_at_90%_15%,rgba(139,92,246,0.18),transparent_30%)]`}
-        />
-        <Image
-          src="/finance/states/plans-hero-v2.webp"
-          alt=""
-          fill
-          priority
-          sizes="(max-width: 768px) 100vw, 900px"
-          className={`${styles.heroArtwork} object-cover object-[70%_50%] opacity-70 [mask-image:linear-gradient(to_right,transparent_2%,black_38%)] sm:opacity-90`}
-        />
-        <div className="relative z-10 flex min-h-[250px] max-w-xl flex-col justify-end p-5 sm:min-h-[290px] sm:justify-center sm:p-8">
-          <span className="mb-3 w-fit rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-emerald-200">
-            Finance
-          </span>
-          <h1 className="max-w-lg text-2xl font-semibold tracking-tight text-white sm:text-4xl">
-            {t.heroTitle}
-          </h1>
-          <p className="mt-3 max-w-md text-sm leading-6 text-neutral-300 sm:text-base">
-            {t.heroDescription}
-          </p>
-        </div>
-      </section>
       <Card>
         <h2 className="text-lg font-semibold">{t.available}</h2>
         {catalog.data.plans.length ? (
-          <div className={`${styles.planGrid} mt-3 grid gap-3 lg:grid-cols-3`}>
-            {catalog.data.plans.map((plan) => {
-              const selected = plan.code === current.tier;
-              const featured = plan.code === "PRO";
-              const offers = consumerFinanceOffersForPlan(
-                plan,
-                catalog.data.providers,
-              );
-              const positioning =
-                plan.code === "PRO"
-                  ? t.proPositioning
-                  : plan.code === "ULTIMATE"
-                    ? t.ultimatePositioning
-                    : t.freePositioning;
-              const choosePlan = () => {
-                if (offers.length === 1) {
-                  checkout.mutate(offers[0]);
-                  return;
-                }
-                setPaymentPlan(plan.code);
-              };
-              return (
-                <section
+          <>
+            <div
+              role="tablist"
+              aria-label={t.available}
+              className={styles.mobilePlanTabs}
+            >
+              {catalog.data.plans.map((plan) => (
+                <button
                   key={plan.code}
-                  data-finance-plan={plan.code}
-                  data-featured={featured || undefined}
-                  className={`${styles.planCard} group relative flex h-full flex-col overflow-hidden rounded-2xl border p-3.5 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(0,0,0,0.24)] motion-reduce:transform-none ${featured ? "border-sky-500 bg-sky-950/20 before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-sky-400" : selected ? "border-sky-700 bg-sky-950/15" : plan.code === "ULTIMATE" ? "border-violet-800/80 bg-violet-950/10 before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-violet-400" : "border-neutral-800 bg-neutral-950/50 hover:border-neutral-700"}`}
+                  id={`finance-plan-tab-${plan.code}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeMobileTier === plan.code}
+                  aria-controls={`finance-plan-panel-${plan.code}`}
+                  onClick={() => setMobilePlan(plan.code)}
                 >
-                  <FinancePlanVisual tier={plan.code} />
-                  <div className="mt-3 flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="font-semibold">
-                        {consumerFinanceTierLabel(plan.code, t)}
-                      </h3>
-                      <p className="mt-1 text-xs leading-5 text-neutral-400">
-                        {positioning}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1.5">
-                      {featured ? (
-                        <span className="rounded-full border border-sky-500/30 bg-sky-500/15 px-2 py-1 text-xs font-medium text-sky-200">
-                          {t.mostPopular}
-                        </span>
-                      ) : null}
-                      {selected ? (
-                        <span className="rounded-full bg-neutral-800 px-2 py-1 text-xs text-neutral-200">
-                          {t.currentPlan}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                  {plan.prices.length ? (
-                    <div className="mt-3 space-y-2.5 border-t border-neutral-800 pt-3">
-                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                        {plan.prices.map((price) => (
-                          <p
-                            key={price.id}
-                            className="font-medium tabular-nums"
-                          >
-                            {formatConsumerFinancePlanPrice(
-                              price.amountMinor,
-                              price.currency,
-                              locale,
-                            )}{" "}
-                            / {price.interval === "MONTH" ? t.month : t.year}
-                          </p>
-                        ))}
-                      </div>
-                      {selected ? null : plan.canPurchase && offers.length ? (
-                        <>
-                          <Button
-                            className="min-h-11 w-full"
-                            disabled={checkout.isPending}
-                            onClick={choosePlan}
-                          >
-                            {t.choose}
-                          </Button>
-                          {paymentPlan === plan.code && offers.length > 1 ? (
-                            <div
-                              role="group"
-                              aria-label={t.choosePaymentMethod}
-                              className="space-y-2 rounded-xl border border-sky-900/70 bg-neutral-950/70 p-3"
-                            >
-                              <p className="text-xs font-medium text-neutral-300">
-                                {t.choosePaymentMethod}
-                              </p>
-                              <div className="grid gap-2">
-                                {offers.map((offer) => (
-                                  <button
-                                    key={`${offer.price.id}-${offer.provider.provider}-${offer.provider.mode}`}
-                                    type="button"
-                                    disabled={checkout.isPending}
-                                    onClick={() => checkout.mutate(offer)}
-                                    className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-left text-sm outline-none transition hover:border-sky-600 hover:bg-sky-950/30 focus-visible:ring-2 focus-visible:ring-sky-300 disabled:opacity-50"
-                                  >
-                                    <span className="font-medium text-neutral-100">
-                                      {offer.provider.provider ===
-                                      "TELEGRAM_STARS"
-                                        ? t.payWithTelegramStars
-                                        : t.payByCard}
-                                    </span>
-                                    <span className="shrink-0 tabular-nums text-neutral-300">
-                                      {formatConsumerFinancePlanPrice(
-                                        offer.price.amountMinor,
-                                        offer.price.currency,
-                                        locale,
-                                      )}{" "}
-                                      /{" "}
-                                      {offer.price.interval === "MONTH"
-                                        ? t.month
-                                        : t.year}
-                                    </span>
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          ) : null}
-                        </>
-                      ) : (
-                        <p className="text-xs text-neutral-500">
-                          {t.unavailable}
-                        </p>
-                      )}
-                    </div>
-                  ) : plan.code === "FREE" ? (
-                    <p className="mt-3 border-t border-neutral-800 pt-3 text-sm text-neutral-400">
-                      {t.included}
-                    </p>
-                  ) : (
-                    <p className="mt-4 text-sm text-neutral-500">
-                      {t.unavailable}
-                    </p>
-                  )}
-                  <ul className="mt-3 grid flex-1 gap-x-3 gap-y-1.5 border-t border-neutral-800/80 pt-3 text-xs leading-5 text-neutral-300 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                    {plan.features.map((feature) => (
-                      <li key={feature} className="flex min-w-0 gap-2">
-                        <span
-                          aria-hidden="true"
-                          className="shrink-0 text-emerald-300"
-                        >
-                          ✓
-                        </span>
-                        <span>
-                          {consumerFinanceFeatureLabel(feature, plan, t)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              );
-            })}
-          </div>
+                  <span>
+                    {consumerFinanceTierLabel(plan.code, t).replace(
+                      /^Finance\s+/,
+                      "",
+                    )}
+                  </span>
+                  {plan.code === current.tier ? (
+                    <small aria-hidden="true">●</small>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+            <div className={styles.planGrid}>
+              {catalog.data.plans.map((plan) => (
+                <FinancePlanCard
+                  key={plan.code}
+                  plan={plan}
+                  providers={catalog.data.providers}
+                  currentTier={current.tier}
+                  locale={locale}
+                  copy={t}
+                  mobileActive={activeMobileTier === plan.code}
+                  paymentPlan={paymentPlan}
+                  checkoutPending={checkout.isPending}
+                  onChoose={choosePlan}
+                  onCheckout={(offer) => checkout.mutate(offer)}
+                />
+              ))}
+            </div>
+          </>
         ) : (
           <div className="mt-3">
             <EmptyState text={t.empty} context="plan" />

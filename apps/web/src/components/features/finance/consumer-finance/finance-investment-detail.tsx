@@ -226,6 +226,17 @@ export function FinanceInvestmentDetailScreen({
   const ResultIcon =
     pnl > 0 ? TrendingUp : pnl < 0 ? TrendingDown : CircleDollarSign;
   const active = item.status === "ACTIVE";
+  const statusLabel =
+    item.status === "ACTIVE"
+      ? t.active
+      : item.status === "CLOSED"
+        ? t.closed
+        : t.archived;
+  const statusTone = {
+    ACTIVE: "border-emerald-700/60 bg-emerald-950/50 text-emerald-300",
+    CLOSED: "border-sky-700/60 bg-sky-950/50 text-sky-300",
+    ARCHIVED: "border-neutral-700 bg-neutral-900 text-neutral-400",
+  }[item.status];
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -279,13 +290,15 @@ export function FinanceInvestmentDetailScreen({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold">{item.name}</h2>
-            <p className="mt-1 text-sm text-neutral-400">
-              {investmentTypeLabel(item.type, t)} · {item.currency} ·{" "}
-              {item.status === "ACTIVE"
-                ? t.active
-                : item.status === "CLOSED"
-                  ? t.closed
-                  : t.archived}
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-neutral-400">
+              <span>
+                {investmentTypeLabel(item.type, t)} · {item.currency}
+              </span>
+              <span
+                className={`rounded-md border px-2 py-0.5 text-xs ${statusTone}`}
+              >
+                {statusLabel}
+              </span>
             </p>
             <p className="mt-2 text-sm text-neutral-400">
               {item.description || t.noDescription}
@@ -306,18 +319,22 @@ export function FinanceInvestmentDetailScreen({
           <FinanceInvestmentMetric
             label={t.totalInvested}
             value={formatMoney(item.totalInvested, item.currency, "symbol")}
+            tone="sky"
           />
           <FinanceInvestmentMetric
             label={t.totalReturned}
             value={formatMoney(item.totalReturned, item.currency, "symbol")}
+            tone="emerald"
           />
           <FinanceInvestmentMetric
             label={t.currentValue}
             value={formatMoney(item.currentValue, item.currency, "symbol")}
+            tone="violet"
           />
           <FinanceInvestmentMetric
             label={t.profitLoss}
             value={formatMoney(item.profitLoss, item.currency, "symbol")}
+            tone={pnl < 0 ? "rose" : "emerald"}
           />
           <FinanceInvestmentMetric
             label={t.returnPercentage}
@@ -326,6 +343,7 @@ export function FinanceInvestmentDetailScreen({
                 ? "—"
                 : `${item.returnPercentage.toFixed(2)}%`
             }
+            tone={(item.returnPercentage ?? 0) < 0 ? "rose" : "emerald"}
           />
         </div>
         {item.returnPercentage == null ? (

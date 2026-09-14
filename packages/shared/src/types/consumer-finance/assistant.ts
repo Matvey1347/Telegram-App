@@ -55,3 +55,9 @@ export type ConsumerFinanceAssistantMessageResult = {
   recommendedScreen?: ConsumerFinanceAssistantScreen | null;
   proposal?: ConsumerFinanceAssistantProposal;
 };
+
+export type ConsumerFinanceAssistantStreamEvent =
+  | { type: "start" }
+  | { type: "delta"; delta: string }
+  | { type: "done"; result: ConsumerFinanceAssistantMessageResult }
+  | { type: "error"; message: string; code?: string };

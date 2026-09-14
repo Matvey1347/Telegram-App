@@ -14,6 +14,7 @@ import {
   type FinanceAnalyticsLegacyRow,
   type FinanceAnalyticsMoneyRow,
   type FinanceAnalyticsNecessityRow,
+  type FinanceAnalyticsRecurrenceRow,
   type FinanceAnalyticsSummaryRow,
   type FinanceAnalyticsTimelineRow,
   type FinanceSavingsAnalyticsRow,
@@ -143,6 +144,7 @@ export class FinanceAnalyticsService {
       legacy,
       savingsRows,
       necessityRows,
+      recurrenceRows,
     ] = await Promise.all([
       this.prisma.$queryRaw<FinanceAnalyticsSummaryRow[]>(Prisma.sql`
           SELECT CASE WHEN t."occurredAt" >= ${from}
@@ -168,13 +170,14 @@ export class FinanceAnalyticsService {
           LIMIT ${MAX_BREAKDOWN_ROWS}`),
       this.prisma.$queryRaw<FinanceAnalyticsAccountRow[]>(Prisma.sql`
           SELECT t."type", t."purpose", t."accountId", a."name" AS "accountName",
+            a."emoji" AS "accountEmoji", a."type" AS "accountType",
             ${amountColumns}
           FROM "FinanceTransaction" t
           JOIN "FinanceAccount" a ON a.id = t."accountId"
           WHERE t."profileId" = ${profile.id}
             AND t."deletedAt" IS NULL
             AND t."occurredAt" >= ${from} AND t."occurredAt" < ${to}
-          GROUP BY t."type", t."purpose", t."accountId", a."name"
+          GROUP BY t."type", t."purpose", t."accountId", a."name", a."emoji", a."type"
           ORDER BY COALESCE(SUM(t."amountInValuationCurrency"), 0) DESC
           LIMIT ${MAX_BREAKDOWN_ROWS}`),
       this.prisma.$queryRaw<FinanceAnalyticsTimelineRow[]>(Prisma.sql`
@@ -237,6 +240,29 @@ export class FinanceAnalyticsService {
             AND t."purpose" = 'ORDINARY'
             AND t."occurredAt" >= ${comparisonFrom} AND t."occurredAt" < ${to}
           GROUP BY 1, t."necessity"`),
+      this.prisma.$queryRaw<FinanceAnalyticsRecurrenceRow[]>(Prisma.sql`
+          SELECT CASE WHEN t."occurredAt" >= ${from}
+              THEN 'CURRENT' ELSE 'PREVIOUS' END AS "segment",
+            (o.id IS NOT NULL) AS "recurring",
+            SUM(t."economicAmount") FILTER (
+              WHERE t."currency" = ${profile.defaultCurrency}
+                AND t."valuationCurrency" = 'USD'
+                AND t."economicAmountInValuationCurrency" IS NOT NULL
+            ) AS "nativeAmount",
+            SUM(t."economicAmountInValuationCurrency") FILTER (
+              WHERE t."currency" <> ${profile.defaultCurrency}
+                AND t."valuationCurrency" = 'USD'
+                AND t."economicAmountInValuationCurrency" IS NOT NULL
+            ) AS "valuedAmount"
+          FROM "FinanceTransaction" t
+          LEFT JOIN "FinanceRecurringPaymentOccurrence" o
+            ON o."transactionId" = t.id
+          WHERE t."profileId" = ${profile.id}
+            AND t."deletedAt" IS NULL
+            AND t."type" = 'EXPENSE'
+            AND t."purpose" = 'ORDINARY'
+            AND t."occurredAt" >= ${comparisonFrom} AND t."occurredAt" < ${to}
+          GROUP BY 1, 2`),
     ]);
     const resolvedSavingsRows = savingsRows || [];
     const requiresRate = [
@@ -246,6 +272,7 @@ export class FinanceAnalyticsService {
       timeline,
       resolvedSavingsRows,
       necessityRows || [],
+      recurrenceRows || [],
     ]
       .flat()
       .some(
@@ -265,6 +292,7 @@ export class FinanceAnalyticsService {
       timeline,
       savingsRows: resolvedSavingsRows,
       necessityRows: necessityRows || [],
+      recurrenceRows: recurrenceRows || [],
       legacy,
       rate,
       currency: profile.defaultCurrency,

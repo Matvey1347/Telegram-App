@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { fetchOperationsNotificationStream } from "@/lib/features/operations/operations-notifications-api";
 import { patchCreatedNotification } from "@/lib/features/operations/operations-notifications-query";
 import { operationsNotificationKeys } from "@/lib/query-keys";
+import { useDocumentVisibility } from "@/hooks/use-document-visibility";
 
 const MAX_RECONNECT_ATTEMPTS = 6;
 
@@ -18,24 +19,28 @@ export function useNotificationRealtime({
   panelOpen: boolean;
 }) {
   const queryClient = useQueryClient();
+  const documentVisible = useDocumentVisibility();
   const panelOpenRef = useRef(panelOpen);
+  const streamAttemptedRef = useRef(false);
   useEffect(() => {
     panelOpenRef.current = panelOpen;
   }, [panelOpen]);
 
   useEffect(() => {
-    if (!workspaceId || !enabled) return;
+    if (!workspaceId || !enabled || !documentVisible) return;
     let stopped = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let attempt = 0;
-    let openedOnce = false;
     let controller: AbortController | null = null;
 
     const connect = () => {
       if (stopped) return;
-      controller = new AbortController();
+      const shouldReconcileOnOpen = streamAttemptedRef.current;
+      streamAttemptedRef.current = true;
+      const currentController = new AbortController();
+      controller = currentController;
       void fetchOperationsNotificationStream({
-        signal: controller.signal,
+        signal: currentController.signal,
         onEvent: (event) => {
           if (event.type === "notifications.invalidated") {
             if (panelOpenRef.current) {
@@ -63,24 +68,22 @@ export function useNotificationRealtime({
         },
         onOpen: () => {
           attempt = 0;
-          if (openedOnce) {
+          if (shouldReconcileOnOpen) {
+            void queryClient.invalidateQueries({
+              queryKey: operationsNotificationKeys.list(workspaceId),
+              exact: true,
+            });
             void queryClient.invalidateQueries({
               queryKey: operationsNotificationKeys.unread(workspaceId),
               exact: true,
             });
-            if (panelOpenRef.current) {
-              void queryClient.invalidateQueries({
-                queryKey: operationsNotificationKeys.list(workspaceId),
-                exact: true,
-              });
-            }
           }
-          openedOnce = true;
         },
       })
         .catch(() => undefined)
         .finally(() => {
-          if (stopped || controller?.signal.aborted) return;
+          if (controller === currentController) controller = null;
+          if (stopped || currentController.signal.aborted) return;
           attempt += 1;
           if (attempt > MAX_RECONNECT_ATTEMPTS) return;
           const delay = Math.min(30_000, 1_000 * 2 ** (attempt - 1));
@@ -94,5 +97,5 @@ export function useNotificationRealtime({
       controller?.abort();
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [enabled, queryClient, workspaceId]);
+  }, [documentVisible, enabled, queryClient, workspaceId]);
 }

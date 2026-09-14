@@ -12,6 +12,7 @@ export * from "./types/bot-billing";
 export * from "./types/consumer-finance";
 export * from "./types/telegram-system-bot";
 export * from "./types/telegram-managed-posts";
+export * from "./types/telegram-post-batches";
 export * from "./types/telegram-post-buttons";
 export * from "./types/telegram-post-media";
 export * from "./types/telegram-capabilities";

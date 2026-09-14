@@ -16,6 +16,7 @@ import {
 import type { FinanceLocale } from "./i18n/core";
 import { financeAnalyticsCopy } from "./i18n/analytics";
 import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
+import { FinancePlanPromotion } from "./finance-plan-promotion";
 
 export function FinanceAnalyticsAi({
   botId,
@@ -54,11 +55,14 @@ export function FinanceAnalyticsAi({
     entitlements.data.capabilities.includes("FINANCE_HISTORY_QA");
   if (!available)
     return (
-      <Card className="space-y-3">
-        <h2 className="font-medium">{t.aiTitle}</h2>
-        <p className="text-sm text-neutral-400">{t.aiUpgrade}</p>
-        <Button onClick={onUpgrade}>{t.viewPlans}</Button>
-      </Card>
+      <FinancePlanPromotion
+        eyebrow={t.aiPlanEyebrow}
+        title={t.aiUpgradeTitle}
+        description={t.aiUpgrade}
+        cta={t.viewPlans}
+        tier="ULTIMATE"
+        onUpgrade={onUpgrade}
+      />
     );
   return (
     <Card className="space-y-3">

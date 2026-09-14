@@ -148,15 +148,21 @@ export function CrmWorkspace({
     active: hasCrmView,
     onEvent,
     onReconnect: () => {
-      if (surface.kind === "inbox") {
-        void queryClient.invalidateQueries({
-          queryKey: telegramCrmKeys.inboxLists(),
-        });
-      } else {
-        void queryClient.invalidateQueries({
-          queryKey: telegramCrmKeys.contactLists(),
-        });
-      }
+      void queryClient.invalidateQueries({
+        queryKey: telegramCrmKeys.inboxLists(),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: telegramCrmKeys.contactLists(),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: telegramCrmKeys.contactDetails(),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: telegramCrmKeys.conversations(),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: telegramCrmKeys.messages(),
+      });
       void queryClient.invalidateQueries({
         queryKey: telegramCrmKeys.unread(),
       });

@@ -16,9 +16,6 @@ describe("FinanceConfirmModal", () => {
         onConfirm={onConfirm}
       />,
     );
-    fireEvent.change(screen.getByPlaceholderText("Рахунок"), {
-      target: { value: "Рахунок" },
-    });
     const submit = screen.getByRole("button", { name: "Архівувати" });
     fireEvent.click(submit);
     expect(

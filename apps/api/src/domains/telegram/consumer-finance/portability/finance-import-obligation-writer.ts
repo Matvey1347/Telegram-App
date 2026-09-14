@@ -237,12 +237,15 @@ export async function writeFinanceObligationImport(input: {
       status: row.status ?? ('ACTIVE' as const),
     };
   });
+  const paymentIdByRef = new Map(
+    preparedPayments.map(({ id, row }) => [row.ref, id]),
+  );
   processed = 0;
   for (const batch of batches(preparedPayments)) {
     stopIfAborted(signal);
     await tx.financeRecurringPayment.createMany({
       data: batch.map(
-        ({ id, row, account, nextOccurrenceAt, anchor, status }) => ({
+        ({ id, row, account, category, nextOccurrenceAt, anchor, status }) => ({
           id,
           profileId,
           accountId: input.accountIds.get(row.accountRef)!,
@@ -253,11 +256,12 @@ export async function writeFinanceObligationImport(input: {
           amount: decimal(row.amount),
           currency: account.currency,
           recurrence: row.recurrence,
+          intervalCount: row.intervalCount ?? 1,
           ...anchor,
           nextOccurrenceAt,
           scheduleTimezone: row.scheduleTimezone,
           note: row.note?.trim() || null,
-          necessity: row.necessity ?? 'UNSPECIFIED',
+          necessity: row.necessity ?? category?.necessity ?? 'UNSPECIFIED',
           status,
           version: 1,
         }),
@@ -280,11 +284,12 @@ export async function writeFinanceObligationImport(input: {
           categoryName: category?.name ?? null,
           categoryKey: category?.key ?? null,
           recurrence: row.recurrence,
+          intervalCount: row.intervalCount ?? 1,
           ...anchor,
           nextOccurrenceAt,
           scheduleTimezone: row.scheduleTimezone,
           note: row.note?.trim() || null,
-          necessity: row.necessity ?? 'UNSPECIFIED',
+          necessity: row.necessity ?? category?.necessity ?? 'UNSPECIFIED',
           status,
         }),
       ),
@@ -293,6 +298,36 @@ export async function writeFinanceObligationImport(input: {
     report(onProgress, 'regularPayments', processed, regularPayments.length, 8);
   }
   if (!preparedPayments.length) report(onProgress, 'regularPayments', 0, 0, 8);
+  const historicOccurrences = (document.data.transactions ?? [])
+    .filter(
+      (row): row is typeof row & { recurringPaymentRef: string } =>
+        typeof row.recurringPaymentRef === 'string',
+    )
+    .map((row) => {
+      const payment = regularPayments.find(
+        (item) => item.ref === row.recurringPaymentRef,
+      )!;
+      return {
+        id: randomUUID(),
+        recurringPaymentId: paymentIdByRef.get(row.recurringPaymentRef)!,
+        transactionId: input.transactionIds.get(row.ref)!,
+        scheduledFor: new Date(row.occurredAt),
+        scheduledAmount: decimal(payment.amount),
+        paidAmount: decimal(row.amount),
+        currency: accountByRef.get(row.accountRef)!.currency,
+      };
+    });
+  for (const batch of batches(historicOccurrences)) {
+    stopIfAborted(signal);
+    await tx.financeRecurringPaymentOccurrence.createMany({
+      data: batch.map((row) => ({
+        ...row,
+        profileId,
+        configVersion: 1,
+        confirmedAt: row.scheduledFor,
+      })),
+    });
+  }
   if (target) {
     const deliveries = preparedPayments.flatMap(
       ({ id, row, account, nextOccurrenceAt, status }) =>

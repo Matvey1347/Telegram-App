@@ -513,7 +513,7 @@ export class TelegramManagedPostIdentityService {
           ? {
               status: params.publishedOnly
                 ? TelegramManagedPostStatus.PUBLISHED
-                : { in: ['SCHEDULED', 'PUBLISHED'] },
+                : { not: TelegramManagedPostStatus.DRAFT },
               ...(params.publishedOnly
                 ? {
                     telegramIdVerificationStatus:

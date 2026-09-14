@@ -5,24 +5,18 @@ import {
   TelegramSourceType,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import {
-  TelegramBotApiClient,
-  TelegramBotApiError,
-} from '../../../telegram/shared/telegram-bot-api.client';
+import { selectTelegramDeletionSource } from '../../../telegram/shared/telegram-deletion-policy';
 import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
 import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
 import { TelegramChannelAccessService } from './telegram-channel-access.service';
 import { TelegramManagedPostIdentityService } from './telegram-managed-post-identity.service';
+import {
+  ManagedPostDeletionSource,
+  TelegramManagedPostRemoteDeleteExecutor,
+} from './telegram-managed-post-remote-delete-executor.service';
 import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 
-const BOT_DELETE_BATCH_SIZE = 100;
 const CHANNEL_DELETE_CONCURRENCY = 5;
-
-type DeletionSource = {
-  sourceId: string;
-  sourceType: TelegramSourceType;
-  permissions: { canDeleteMessages: boolean };
-};
 
 type ManagedPostDeletionCandidate = {
   id: string;
@@ -30,6 +24,7 @@ type ManagedPostDeletionCandidate = {
   imageUrls: string[];
   mediaItems: unknown;
   scheduledAt: Date | null;
+  publishedAt: Date | null;
   scheduleMode: string | null;
   publishMode: string | null;
   telegramScheduledMessageIds: string[];
@@ -64,9 +59,9 @@ export class TelegramManagedPostRemoteDeletionService {
     private readonly prisma: PrismaService,
     private readonly sourceAccess: TelegramSourceAccessService,
     private readonly access: TelegramChannelAccessService,
-    private readonly botApi: TelegramBotApiClient,
     private readonly mtproto: TelegramMtprotoClient,
     private readonly identity: TelegramManagedPostIdentityService,
+    private readonly executor: TelegramManagedPostRemoteDeleteExecutor,
   ) {}
 
   async deletePublishedManagedPosts(input: {
@@ -82,6 +77,7 @@ export class TelegramManagedPostRemoteDeletionService {
         imageUrls: true,
         mediaItems: true,
         scheduledAt: true,
+        publishedAt: true,
         scheduleMode: true,
         publishMode: true,
         status: true,
@@ -375,18 +371,22 @@ export class TelegramManagedPostRemoteDeletionService {
         continue;
       }
       try {
-        await this.deleteBatch(
+        const failures = await this.executor.deleteMessages({
           workspaceId,
           channelId,
-          sourcePosts[0].telegramChannel,
+          channel: sourcePosts[0].telegramChannel,
           source,
           sources,
-          sourcePosts.flatMap((post) => post.telegramMessageIds),
-        );
-        deletedPostIds.push(...sourcePosts.map((post) => post.id));
-        results.push(
-          ...sourcePosts.map((post) => ({ postId: post.id, success: true })),
-        );
+          rawMessageIds: sourcePosts.flatMap((post) => post.telegramMessageIds),
+        });
+        for (const post of sourcePosts) {
+          const error = post.telegramMessageIds
+            .map(Number)
+            .map((messageId) => failures.get(messageId))
+            .find(Boolean);
+          results.push({ postId: post.id, success: !error, error });
+          if (!error) deletedPostIds.push(post.id);
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         results.push(
@@ -401,159 +401,16 @@ export class TelegramManagedPostRemoteDeletionService {
     return { deletedPostIds, results };
   }
 
-  private selectDeletionSource<T extends DeletionSource>(
+  private selectDeletionSource<T extends ManagedPostDeletionSource>(
     sources: T[],
-    post: { sourceId: string | null; sourceType: TelegramSourceType | null },
-  ) {
-    const capable = sources.filter(
-      (source) => source.permissions.canDeleteMessages,
-    );
-    return (
-      capable.find(
-        (source) =>
-          source.sourceId === post.sourceId &&
-          source.sourceType === post.sourceType,
-      ) ??
-      capable.find(
-        (source) => source.sourceType === TelegramSourceType.MTPROTO,
-      ) ??
-      capable[0]
-    );
-  }
-
-  private async deleteBatch(
-    workspaceId: string,
-    channelId: string,
-    channel: {
-      username: string | null;
-      telegramChatId: string | null;
-      inviteLink: string | null;
-      telegramAccessHash: string | null;
+    post: {
+      sourceId: string | null;
+      sourceType: TelegramSourceType | null;
+      publishedAt: Date | null;
     },
-    source: DeletionSource,
-    sources: DeletionSource[],
-    rawMessageIds: string[],
   ) {
-    const messageIds = [
-      ...new Set(rawMessageIds.map(Number).filter(Number.isSafeInteger)),
-    ];
-    if (!messageIds.length) return;
-    if (source.sourceType === TelegramSourceType.BOT) {
-      try {
-        await this.deleteViaBot(
-          workspaceId,
-          channel,
-          source.sourceId,
-          messageIds,
-        );
-        return;
-      } catch (error) {
-        if (isTelegramMessageAlreadyAbsent(error)) return;
-        const fallback = sources.find(
-          (candidate) =>
-            candidate.sourceType === TelegramSourceType.MTPROTO &&
-            candidate.permissions.canDeleteMessages,
-        );
-        if (!fallback) throw error;
-        try {
-          await this.deleteViaMtproto(
-            workspaceId,
-            channelId,
-            channel,
-            fallback.sourceId,
-            messageIds,
-          );
-        } catch (fallbackError) {
-          if (!isTelegramMessageAlreadyAbsent(fallbackError)) {
-            throw fallbackError;
-          }
-        }
-        return;
-      }
-    }
-    try {
-      await this.deleteViaMtproto(
-        workspaceId,
-        channelId,
-        channel,
-        source.sourceId,
-        messageIds,
-      );
-    } catch (error) {
-      if (!isTelegramMessageAlreadyAbsent(error)) throw error;
-    }
+    return selectTelegramDeletionSource(sources, post);
   }
-
-  private async deleteViaBot(
-    workspaceId: string,
-    channel: { username: string | null; telegramChatId: string | null },
-    sourceId: string,
-    messageIds: number[],
-  ) {
-    const token = await this.access.botTokenForSource(workspaceId, sourceId);
-    const chatId = this.access.botChatId(channel);
-    if (!chatId) throw new Error('Channel has no Telegram chat reference');
-    for (
-      let index = 0;
-      index < messageIds.length;
-      index += BOT_DELETE_BATCH_SIZE
-    ) {
-      const batch = messageIds.slice(index, index + BOT_DELETE_BATCH_SIZE);
-      try {
-        await this.botApi.call<boolean>(token, 'deleteMessages', {
-          chat_id: chatId,
-          message_ids: batch,
-        });
-      } catch (bulkError) {
-        if (isTelegramMessageAlreadyAbsent(bulkError)) continue;
-        for (const messageId of batch) {
-          try {
-            await this.botApi.deleteMessage(token, {
-              chat_id: chatId,
-              message_id: messageId,
-            });
-          } catch (error) {
-            if (!isTelegramMessageAlreadyAbsent(error)) throw error;
-          }
-        }
-      }
-    }
-  }
-
-  private async deleteViaMtproto(
-    workspaceId: string,
-    channelId: string,
-    channel: {
-      username: string | null;
-      telegramChatId: string | null;
-      inviteLink: string | null;
-      telegramAccessHash: string | null;
-    },
-    accountId: string,
-    messageIds: number[],
-  ) {
-    const account = await this.access.connectedAccount(
-      workspaceId,
-      channelId,
-      accountId,
-    );
-    await this.mtproto.deletePublishedMessages({
-      ...this.access.accountCredentials(account),
-      channel: this.access.mtprotoChannelReference(channel),
-      messageIds: messageIds.map(String),
-    });
-  }
-}
-
-export function isTelegramMessageAlreadyAbsent(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error);
-  return (
-    (error instanceof TelegramBotApiError &&
-      /message (?:to delete )?not found|message_id_invalid/i.test(message)) ||
-    /MESSAGE_ID_INVALID|MESSAGE_DELETE_FORBIDDEN.*already|message.*already (?:deleted|absent)/i.test(
-      message,
-    )
-  );
 }
 
 function groupBy<T>(items: T[], key: (item: T) => string) {

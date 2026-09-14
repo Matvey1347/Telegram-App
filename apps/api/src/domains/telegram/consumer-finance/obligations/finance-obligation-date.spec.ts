@@ -54,6 +54,39 @@ describe('Finance obligation calendar dates', () => {
     });
   });
 
+  it('supports custom daily, weekly and monthly intervals', () => {
+    expect(
+      nextFinanceOccurrence({
+        current: new Date('2026-01-01T00:00:00.000Z'),
+        recurrence: 'DAILY',
+        intervalCount: 90,
+        anchorDay: 1,
+        anchorMonth: null,
+        timezone: 'UTC',
+      }),
+    ).toEqual(new Date('2026-04-01T00:00:00.000Z'));
+    expect(
+      nextFinanceOccurrence({
+        current: new Date('2026-03-22T23:00:00.000Z'),
+        recurrence: 'WEEKLY',
+        intervalCount: 2,
+        anchorDay: 1,
+        anchorMonth: null,
+        timezone: 'Europe/Warsaw',
+      }),
+    ).toEqual(new Date('2026-04-05T22:00:00.000Z'));
+    expect(
+      nextFinanceOccurrence({
+        current: new Date('2026-01-30T23:00:00.000Z'),
+        recurrence: 'MONTHLY',
+        intervalCount: 3,
+        anchorDay: 31,
+        anchorMonth: null,
+        timezone: 'Europe/Warsaw',
+      }),
+    ).toEqual(new Date('2026-04-29T22:00:00.000Z'));
+  });
+
   it('derives overdue and due state from the exact stored instant', () => {
     const now = new Date('2026-08-20T10:30:00.000Z');
     const sameLocalDay = new Date('2026-08-20T10:00:00.000Z');

@@ -114,7 +114,7 @@ export function FinanceTransferEditor({
         }}
         title={editing ? t.editTransfer : t.addTransfer}
       >
-        <div className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <FormField label={t.fromAccount}>
             <Select
               uiLocale={locale}
@@ -122,8 +122,17 @@ export function FinanceTransferEditor({
               onChange={(event) => setFrom(event.target.value)}
             >
               {fromOptions.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name} · {item.currency}
+                <option
+                  key={item.id}
+                  value={item.id}
+                  data-icon-emoji={
+                    item.iconPresentation.type === "unicode"
+                      ? item.iconPresentation.value
+                      : undefined
+                  }
+                  data-option-meta={item.currency}
+                >
+                  {item.name}
                 </option>
               ))}
             </Select>
@@ -136,8 +145,17 @@ export function FinanceTransferEditor({
             >
               <option value="">{t.selectAccount}</option>
               {toOptions.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name} · {item.currency}
+                <option
+                  key={item.id}
+                  value={item.id}
+                  data-icon-emoji={
+                    item.iconPresentation.type === "unicode"
+                      ? item.iconPresentation.value
+                      : undefined
+                  }
+                  data-option-meta={item.currency}
+                >
+                  {item.name}
                 </option>
               ))}
             </Select>
@@ -152,26 +170,37 @@ export function FinanceTransferEditor({
             />
           </FormField>
           {from && to && from.currency !== to.currency ? (
-            <p className="text-xs text-neutral-400">{t.automaticConversion}</p>
+            <p className="text-xs text-neutral-400 sm:col-span-2">
+              {t.automaticConversion}
+            </p>
           ) : null}
-          <FormField label={t.date}>
+          <FormField
+            label={t.date}
+            className={
+              from && to && from.currency !== to.currency
+                ? "sm:col-span-2"
+                : undefined
+            }
+          >
             <DateInput
               lang={locale}
               value={occurredAt}
               onChange={(event) => setOccurredAt(event.target.value)}
             />
           </FormField>
-          <FormField label={t.description}>
+          <FormField label={t.description} className="sm:col-span-2">
             <Input
               value={description}
               onChange={(event) => setDescription(event.target.value)}
             />
           </FormField>
           {same ? (
-            <p className="text-sm text-rose-300">{t.sameAccountError}</p>
+            <p className="text-sm text-rose-300 sm:col-span-2">
+              {t.sameAccountError}
+            </p>
           ) : null}
           <Button
-            className="w-full"
+            className="w-full sm:col-span-2"
             disabled={
               !from ||
               !to ||
@@ -185,7 +214,9 @@ export function FinanceTransferEditor({
             {mutation.isPending ? t.saving : t.saveTransfer}
           </Button>
           {mutation.isError ? (
-            <p className="text-sm text-rose-300">{t.transferSaveError}</p>
+            <p className="text-sm text-rose-300 sm:col-span-2">
+              {t.transferSaveError}
+            </p>
           ) : null}
         </div>
       </Modal>

@@ -1,0 +1,4 @@
+ALTER TABLE "FinanceProfile"
+DROP COLUMN IF EXISTS "avatarEmoji",
+ADD COLUMN IF NOT EXISTS "avatarImage" BYTEA,
+ADD COLUMN IF NOT EXISTS "avatarMimeType" TEXT;

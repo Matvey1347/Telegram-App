@@ -1,28 +1,31 @@
 "use client";
 
-import { Bot, PencilLine } from "lucide-react";
+import type { ReactNode } from "react";
+import { Bot, ChevronUp, PencilLine } from "lucide-react";
 import { Button, FormError } from "@/components/ui/primitives";
 
-export type PromoCreationMethod = "choose" | "bot" | "manual";
-
-export function PromoCreationMethodPicker({
-  mode,
+export function PromoPostEditorSection({
+  expanded,
+  hasContent,
   connected,
   connectionLoading,
   importStatus,
   dots,
   error,
-  onChooseBot,
-  onChooseManual,
+  onImport,
+  onToggleEditor,
+  children,
 }: {
-  mode: Exclude<PromoCreationMethod, "manual">;
+  expanded: boolean;
+  hasContent: boolean;
   connected: boolean;
   connectionLoading: boolean;
   importStatus: "idle" | "working" | "waiting" | "done";
   dots: number;
   error?: string;
-  onChooseBot: () => void;
-  onChooseManual: () => void;
+  onImport: () => void;
+  onToggleEditor: () => void;
+  children: ReactNode;
 }) {
   return (
     <section
@@ -37,11 +40,13 @@ export function PromoCreationMethodPicker({
           <div className="min-w-0">
             <h3 className="text-sm font-medium text-white">Promo post</h3>
             <p className="mt-0.5 text-xs text-neutral-400">
-              {mode === "bot"
-                ? importStatus === "working"
-                  ? `Preparing the bot${".".repeat(dots)}`
-                  : `Waiting for your forwarded post${".".repeat(dots)}`
-                : "Forward a Telegram post through the bot or start with an empty editor."}
+              {importStatus === "working"
+                ? `Preparing the bot${".".repeat(dots)}`
+                : importStatus === "waiting"
+                  ? `Waiting for your forwarded post${".".repeat(dots)}`
+                  : hasContent
+                    ? "Edit the current post manually or replace it with one forwarded through the bot."
+                    : "Edit the post manually or forward an existing Telegram post through the bot."}
             </p>
           </div>
         </div>
@@ -56,23 +61,31 @@ export function PromoCreationMethodPicker({
               importStatus === "working" ||
               importStatus === "waiting"
             }
-            onClick={onChooseBot}
+            onClick={onImport}
           >
             <Bot size={15} />
             {importStatus === "working"
               ? `Preparing${".".repeat(dots)}`
               : importStatus === "waiting"
                 ? "Waiting for bot…"
-                : error
-                  ? "Try again"
-                  : "Import from bot"}
+                : importStatus === "done"
+                  ? "✅ Imported from bot"
+                  : error
+                    ? "Try again"
+                    : "Import from bot"}
           </Button>
           <Button
             type="button"
             className="h-8 px-3 text-xs"
-            onClick={onChooseManual}
+            aria-expanded={expanded}
+            onClick={onToggleEditor}
           >
-            <PencilLine size={15} /> Create manually
+            {expanded ? <ChevronUp size={15} /> : <PencilLine size={15} />}
+            {expanded
+              ? "Hide editor"
+              : hasContent
+                ? "✅ Edit manually"
+                : "Edit manually"}
           </Button>
         </div>
       </div>
@@ -86,6 +99,7 @@ export function PromoCreationMethodPicker({
           Connect the workspace system bot to use post forwarding.
         </p>
       ) : null}
+      {expanded ? <div className="mt-3">{children}</div> : null}
     </section>
   );
 }

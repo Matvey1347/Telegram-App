@@ -34,6 +34,10 @@ export class FinanceUltimateService {
       telegramBotUserId: string;
     },
     dto: FinanceAssistantMessageDto,
+    stream?: {
+      onMessageDelta: (delta: string) => void;
+      signal?: AbortSignal;
+    },
   ): Promise<ConsumerFinanceAssistantMessageResult> {
     const reservation = await this.entitlements.reserve(
       input,
@@ -122,6 +126,8 @@ export class FinanceUltimateService {
           workspaceId: input.workspaceId,
           telegramBotUserId: input.telegramBotUserId,
         },
+        onMessageDelta: stream?.onMessageDelta,
+        signal: stream?.signal,
       });
       if (route.kind !== 'RECORD') {
         return {

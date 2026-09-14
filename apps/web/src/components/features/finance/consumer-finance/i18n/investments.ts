@@ -5,6 +5,17 @@ const en = {
   subtitle:
     "Track any asset with real account cash flows and manual valuations.",
   add: "Add investment",
+  investmentModalAction: "What do you want to add?",
+  newInvestmentAction: "New investment",
+  addContributionAction: "Contribution to an existing investment",
+  addReturnAction: "Return from an existing investment",
+  newInvestmentHelp: "Create an investment first, then record its cash movements.",
+  existingInvestmentHelp:
+    "Choose an active investment. This will be saved as a separate investment cash flow, not ordinary income or expense.",
+  chooseInvestment: "Choose an investment",
+  noActiveInvestments: "There are no active investments yet.",
+  continueToInvestment: "Continue",
+  continueToCashFlow: "Continue",
   empty:
     "No investments yet. Add an asset, business, property, security, or another investment.",
   loadError: "Investments could not be loaded.",
@@ -87,6 +98,18 @@ const uk: InvestmentsCopy = {
   subtitle:
     "Відстежуйте будь-які активи з реальними рухами коштів і ручними оцінками.",
   add: "Додати інвестицію",
+  investmentModalAction: "Що ви хочете додати?",
+  newInvestmentAction: "Нову інвестицію",
+  addContributionAction: "Внесок у наявну інвестицію",
+  addReturnAction: "Повернення з наявної інвестиції",
+  newInvestmentHelp:
+    "Спочатку створіть інвестицію, а потім фіксуйте її рухи коштів.",
+  existingInvestmentHelp:
+    "Оберіть активну інвестицію. Це буде окремий рух грошей інвестиції, а не звичайний дохід чи витрата.",
+  chooseInvestment: "Оберіть інвестицію",
+  noActiveInvestments: "Активних інвестицій ще немає.",
+  continueToInvestment: "Продовжити",
+  continueToCashFlow: "Продовжити",
   empty:
     "Інвестицій ще немає. Додайте актив, бізнес, нерухомість, цінні папери або іншу інвестицію.",
   loadError: "Не вдалося завантажити інвестиції.",
@@ -166,6 +189,18 @@ const ru: InvestmentsCopy = {
   subtitle:
     "Отслеживайте любые активы с реальными движениями денег и ручными оценками.",
   add: "Добавить инвестицию",
+  investmentModalAction: "Что вы хотите добавить?",
+  newInvestmentAction: "Новую инвестицию",
+  addContributionAction: "Вклад в существующую инвестицию",
+  addReturnAction: "Возврат из существующей инвестиции",
+  newInvestmentHelp:
+    "Сначала создайте инвестицию, затем фиксируйте движения денег по ней.",
+  existingInvestmentHelp:
+    "Выберите активную инвестицию. Это сохранится отдельным движением денег инвестиции, а не обычным доходом или расходом.",
+  chooseInvestment: "Выберите инвестицию",
+  noActiveInvestments: "Активных инвестиций пока нет.",
+  continueToInvestment: "Продолжить",
+  continueToCashFlow: "Продолжить",
   empty:
     "Инвестиций пока нет. Добавьте актив, бизнес, недвижимость, ценные бумаги или другую инвестицию.",
   loadError: "Не удалось загрузить инвестиции.",

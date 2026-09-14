@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   BarChart3,
   Bell,
+  Bot,
   CalendarClock,
   CalendarRange,
   ChevronDown,
@@ -215,6 +216,7 @@ export function FinanceScreenIcon({
     ({ profile: UserRound, billing: CreditCard, settings: Settings } as const)[
       screen as "profile" | "billing" | "settings"
     ] ??
+    (screen === "assistant" ? Bot : undefined) ??
     Menu;
   return (
     <span

@@ -1,9 +1,15 @@
+"use client";
+
+import { useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import type { ConsumerFinanceAnalytics } from "@telegram-system/shared";
 import { EmptyState } from "./ui";
 import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
 import type { FinanceLocale } from "./i18n/core";
 import { financeAnalyticsCopy } from "./i18n/analytics";
 import { localizeFinanceCategory } from "./finance-category-i18n";
+import { IconAvatar } from "./ui/finance-icon-avatar";
+import { CashflowChart } from "./finance-cashflow-chart";
 
 export function AnalyticsPresentation({
   data,
@@ -13,13 +19,9 @@ export function AnalyticsPresentation({
   locale?: FinanceLocale;
 }) {
   const t = financeAnalyticsCopy(locale);
-  const timelineMaximum = Math.max(
-    ...data.timeline.map((entry) => Math.abs(Number(entry.netCashflow))),
-    1,
-  );
   return (
-    <div className="mt-4 space-y-5">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+    <div className="mt-3 space-y-3">
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-9">
         <Metric
           label={t.income}
           value={data.summary.income}
@@ -56,8 +58,6 @@ export function AnalyticsPresentation({
           currency={data.currency}
           tone="text-sky-200"
         />
-      </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <Metric
           label={t.savingsSummary}
           value={data.savings.allocated}
@@ -77,29 +77,82 @@ export function AnalyticsPresentation({
           tone="text-emerald-200"
         />
       </div>
-      <section>
-        <h3 className="text-sm font-medium">{t.expensePriority}</h3>
-        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <Metric
-            label={t.requiredExpenses}
-            value={data.summary.requiredExpenses ?? "0"}
-            currency={data.currency}
-            tone="text-rose-200"
-          />
-          <Metric
-            label={t.discretionaryExpenses}
-            value={data.summary.discretionaryExpenses ?? "0"}
-            currency={data.currency}
-            tone="text-amber-200"
-          />
-          <Metric
-            label={t.unspecifiedExpenses}
-            value={data.summary.unspecifiedExpenses ?? "0"}
-            currency={data.currency}
-            tone="text-neutral-300"
-          />
-        </div>
-      </section>
+      <p className="text-[10px] text-neutral-500">
+        {t.net}: {t.netExplanation}
+      </p>
+      <div className="grid gap-2 lg:grid-cols-3">
+        <DonutBreakdown
+          title={t.expensesByCategory}
+          currency={data.currency}
+          rows={data.expensesByCategory.slice(0, 6).map((row) => ({
+            label:
+              row.categoryId || row.categoryKey
+                ? localizeFinanceCategory(row.name, row.categoryKey, locale)
+                : t.other,
+            value: Number(row.amount),
+          }))}
+          empty={t.expensesAppear}
+        />
+        <DonutBreakdown
+          title={t.expensePriority}
+          currency={data.currency}
+          rows={[
+            {
+              label: t.requiredExpenses,
+              value: Number(data.summary.requiredExpenses ?? 0),
+            },
+            {
+              label: t.discretionaryExpenses,
+              value: Number(data.summary.discretionaryExpenses ?? 0),
+            },
+            {
+              label: t.unspecifiedExpenses,
+              value: Number(data.summary.unspecifiedExpenses ?? 0),
+            },
+          ]}
+          empty={t.expensesAppear}
+        />
+        <DonutBreakdown
+          title={t.expenseRhythm}
+          currency={data.currency}
+          rows={[
+            {
+              label: t.recurringExpenses,
+              value: Number(data.summary.recurringExpenses ?? 0),
+            },
+            {
+              label: t.oneOffExpenses,
+              value: Number(data.summary.oneOffExpenses ?? 0),
+            },
+          ]}
+          empty={t.expensesAppear}
+        />
+      </div>
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <DonutBreakdown
+          title={t.moneyAllocation}
+          currency={data.currency}
+          rows={[
+            { label: t.expense, value: Number(data.summary.expenses) },
+            { label: t.saved, value: Number(data.summary.saved) },
+            { label: t.invested, value: Number(data.summary.invested) },
+          ]}
+          empty={t.timelineAppear}
+          horizontal
+        />
+        <section className="rounded-lg border border-neutral-800 bg-neutral-950/30 p-3">
+          <h3 className="text-sm font-medium">{t.moneyMovementCurve}</h3>
+          {data.timeline.length ? (
+            <CashflowChart
+              data={data}
+              locale={locale}
+              label={t.moneyMovementCurve}
+            />
+          ) : (
+            <EmptyState text={t.timelineAppear} compact />
+          )}
+        </section>
+      </div>
       <section>
         <h3 className="text-sm font-medium">{t.periodComparison}</h3>
         {data.comparison.legacyFallback ? (
@@ -111,7 +164,7 @@ export function AnalyticsPresentation({
           {data.trends.map((trend) => (
             <div
               key={trend.metric}
-              className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-3 text-xs"
+              className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-2 text-xs"
             >
               <p className="text-neutral-400">{trendLabel(trend.metric, t)}</p>
               <p className="mt-1 font-medium tabular-nums">
@@ -130,15 +183,7 @@ export function AnalyticsPresentation({
       {data.legacyFallback ? (
         <LegacyNotice data={data} locale={locale} />
       ) : null}
-      <div className="grid gap-5 lg:grid-cols-2">
-        <CategoryBreakdown
-          title={t.expensesByCategory}
-          empty={t.expensesAppear}
-          rows={data.expensesByCategory}
-          currency={data.currency}
-          locale={locale}
-          tone="bg-rose-400"
-        />
+      <div className="grid gap-3 lg:grid-cols-2">
         <CategoryBreakdown
           title={t.incomeByCategory}
           empty={t.incomeAppear}
@@ -168,7 +213,16 @@ export function AnalyticsPresentation({
               <tbody className="divide-y divide-neutral-800">
                 {data.accounts.map((account) => (
                   <tr key={account.accountId}>
-                    <td className="px-3 py-2">{account.name}</td>
+                    <td className="px-3 py-2">
+                      <span className="flex items-center gap-2">
+                        <IconAvatar
+                          icon={account.iconPresentation}
+                          label={account.name}
+                          size="xs"
+                        />
+                        <span>{account.name}</span>
+                      </span>
+                    </td>
                     <td className="px-3 py-2 text-right tabular-nums text-emerald-300">
                       {formatMoney(account.income, data.currency, "symbol")}
                     </td>
@@ -201,36 +255,250 @@ export function AnalyticsPresentation({
           <EmptyState text={t.accountsAppear} />
         )}
       </section>
-      <section>
-        <h3 className="text-sm font-medium">{t.cashflowTimeline}</h3>
-        {data.timeline.length ? (
-          <div
-            className="mt-2 flex h-20 items-end gap-1"
-            aria-label={t.cashflowTimeline}
+    </div>
+  );
+}
+
+const DONUT_COLORS = [
+  "#38bdf8",
+  "#a78bfa",
+  "#34d399",
+  "#fb7185",
+  "#fbbf24",
+  "#818cf8",
+];
+
+const DONUT_CENTER = 21;
+const DONUT_OUTER_RADIUS = 18.5;
+const DONUT_INNER_RADIUS = 11.5;
+
+function donutPoint(radius: number, angle: number) {
+  return {
+    x: DONUT_CENTER + Math.cos(angle) * radius,
+    y: DONUT_CENTER + Math.sin(angle) * radius,
+  };
+}
+
+function donutSegmentPath(startPercent: number, sharePercent: number) {
+  const startAngle = (startPercent / 100) * Math.PI * 2 - Math.PI / 2;
+  const endAngle =
+    ((startPercent + sharePercent) / 100) * Math.PI * 2 - Math.PI / 2;
+  const outerStart = donutPoint(DONUT_OUTER_RADIUS, startAngle);
+  const outerEnd = donutPoint(DONUT_OUTER_RADIUS, endAngle);
+  const innerStart = donutPoint(DONUT_INNER_RADIUS, startAngle);
+  const innerEnd = donutPoint(DONUT_INNER_RADIUS, endAngle);
+  const largeArc = sharePercent > 50 ? 1 : 0;
+  return [
+    `M ${outerStart.x} ${outerStart.y}`,
+    `A ${DONUT_OUTER_RADIUS} ${DONUT_OUTER_RADIUS} 0 ${largeArc} 1 ${outerEnd.x} ${outerEnd.y}`,
+    `L ${innerEnd.x} ${innerEnd.y}`,
+    `A ${DONUT_INNER_RADIUS} ${DONUT_INNER_RADIUS} 0 ${largeArc} 0 ${innerStart.x} ${innerStart.y}`,
+    "Z",
+  ].join(" ");
+}
+
+function DonutBreakdown({
+  title,
+  rows,
+  currency,
+  empty,
+  horizontal = false,
+}: {
+  title: string;
+  rows: Array<{ label: string; value: number }>;
+  currency: string;
+  empty: string;
+  horizontal?: boolean;
+}) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<CSSProperties | null>(
+    null,
+  );
+  const donutRef = useRef<HTMLDivElement>(null);
+  const visible = rows.filter((row) => row.value > 0);
+  const total = visible.reduce((sum, row) => sum + row.value, 0);
+  const hoveredShare =
+    hovered === null ? 0 : (visible[hovered].value / total) * 100;
+  const showTooltip = (index: number) => {
+    setHovered(index);
+    if (!donutRef.current) return;
+    const share = (visible[index].value / total) * 100;
+    const start = visible
+      .slice(0, index)
+      .reduce((sum, item) => sum + (item.value / total) * 100, 0);
+    // SVG segments start at 12 o'clock, so the tooltip anchor must use the
+    // same -90° rotation instead of the default 3 o'clock polar origin.
+    const angle = ((start + share / 2) / 100) * Math.PI * 2 - Math.PI / 2;
+    const rect = donutRef.current.getBoundingClientRect();
+    const x = rect.left + rect.width / 2 + Math.cos(angle) * rect.width * 0.48;
+    const y = rect.top + rect.height / 2 + Math.sin(angle) * rect.height * 0.48;
+    const opensLeft = x > window.innerWidth / 2;
+    const availableWidth = opensLeft ? x - 24 : window.innerWidth - x - 24;
+    setTooltipPosition({
+      position: "fixed" as const,
+      zIndex: 100,
+      left: opensLeft
+        ? Math.min(window.innerWidth - 12, x - 12)
+        : Math.max(12, x + 12),
+      top: Math.min(Math.max(12, y), window.innerHeight - 12),
+      maxWidth: `${Math.max(120, availableWidth)}px`,
+      transform: opensLeft ? "translate(-100%, -50%)" : "translate(0, -50%)",
+    });
+  };
+  const hideTooltip = () => {
+    setHovered(null);
+    setTooltipPosition(null);
+  };
+  if (!total)
+    return (
+      <section className="rounded-lg border border-neutral-800 p-3">
+        <h3 className="text-sm font-medium">{title}</h3>
+        <EmptyState text={empty} compact />
+      </section>
+    );
+  return (
+    <section className="rounded-lg border border-neutral-800 bg-neutral-950/30 p-3">
+      <div>
+        <h3 className="mb-2 text-sm font-medium">{title}</h3>
+        <div
+          ref={donutRef}
+          className={`relative mx-auto overflow-visible ${horizontal ? "h-56 w-56" : "h-48 w-48"}`}
+        >
+          <svg
+            viewBox="-3 -3 48 48"
+            className="h-full w-full overflow-visible"
+            role="img"
+            aria-label={title}
           >
-            {data.timeline.map((point) => {
-              const amount = Number(point.netCashflow);
-              return (
-                <div
-                  key={point.date}
-                  title={`${point.date}: ${formatMoney(point.netCashflow, data.currency, "symbol")}`}
-                  className="flex h-full min-w-1 flex-1 items-end"
-                >
-                  <div
-                    className={`w-full rounded-t ${amount >= 0 ? "bg-emerald-400" : "bg-rose-400"}`}
-                    style={{
-                      height: `${Math.max(6, (Math.abs(amount) / timelineMaximum) * 100)}%`,
-                    }}
-                  />
-                </div>
+            <circle
+              cx={DONUT_CENTER}
+              cy={DONUT_CENTER}
+              r={(DONUT_OUTER_RADIUS + DONUT_INNER_RADIUS) / 2}
+              fill="none"
+              stroke="#262626"
+              strokeWidth="7"
+            />
+            {visible.map((row, index) => {
+              const share = (row.value / total) * 100;
+              const start = visible
+                .slice(0, index)
+                .reduce((sum, item) => sum + (item.value / total) * 100, 0);
+              const interaction = {
+                "aria-label": `${row.label}: ${formatMoney(row.value.toFixed(2), currency, "symbol")}`,
+                fillOpacity: hovered === null || hovered === index ? 1 : 0.72,
+                className:
+                  "cursor-pointer transition-opacity duration-150 focus:outline-none",
+                tabIndex: 0,
+                onMouseEnter: () => showTooltip(index),
+                onMouseLeave: hideTooltip,
+                onFocus: () => showTooltip(index),
+                onBlur: hideTooltip,
+              };
+              // A solid annular path has exact shared edges. Stroke dashes use
+              // fractional circumference values and visibly tear at their joins.
+              return visible.length === 1 ? (
+                <circle
+                  key={row.label}
+                  cx={DONUT_CENTER}
+                  cy={DONUT_CENTER}
+                  r={(DONUT_OUTER_RADIUS + DONUT_INNER_RADIUS) / 2}
+                  fill="none"
+                  stroke={DONUT_COLORS[index % DONUT_COLORS.length]}
+                  strokeWidth="7"
+                  strokeOpacity={interaction.fillOpacity}
+                  {...interaction}
+                />
+              ) : (
+                <path
+                  key={row.label}
+                  d={donutSegmentPath(start, share)}
+                  fill={DONUT_COLORS[index % DONUT_COLORS.length]}
+                  {...interaction}
+                />
               );
             })}
+          </svg>
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs font-semibold tabular-nums">
+            100%
+          </span>
+          {hovered !== null &&
+          tooltipPosition &&
+          typeof document !== "undefined"
+            ? createPortal(
+                <div
+                  role="tooltip"
+                  className="pointer-events-none rounded-lg border bg-neutral-950/95 px-2.5 py-1.5 text-xs shadow-xl"
+                  style={{
+                    borderColor: DONUT_COLORS[hovered % DONUT_COLORS.length],
+                    ...tooltipPosition,
+                  }}
+                >
+                  <span
+                    className="mr-1.5 inline-block h-2 w-2 rounded-full"
+                    style={{
+                      backgroundColor:
+                        DONUT_COLORS[hovered % DONUT_COLORS.length],
+                    }}
+                  />
+                  <span
+                    className="font-medium"
+                    style={{
+                      color: DONUT_COLORS[hovered % DONUT_COLORS.length],
+                    }}
+                  >
+                    {visible[hovered].label}
+                  </span>
+                  <span
+                    className="ml-1.5 tabular-nums"
+                    style={{
+                      color: DONUT_COLORS[hovered % DONUT_COLORS.length],
+                    }}
+                  >
+                    {formatMoney(
+                      visible[hovered].value.toFixed(2),
+                      currency,
+                      "symbol",
+                    )}
+                  </span>
+                  <span
+                    className="ml-1"
+                    style={{
+                      color: DONUT_COLORS[hovered % DONUT_COLORS.length],
+                    }}
+                  >
+                    · {hoveredShare.toFixed(1)}%
+                  </span>
+                </div>,
+                document.body,
+              )
+            : null}
+        </div>
+      </div>
+      <div
+        className={`mx-auto mt-3 grid min-w-0 gap-1.5 ${horizontal ? "w-full max-w-lg" : "w-full"}`}
+      >
+        {visible.map((row, index) => (
+          <div
+            key={row.label}
+            className="flex items-center justify-between gap-2 text-xs"
+          >
+            <span className="flex min-w-0 items-center gap-1.5 text-neutral-300">
+              <i
+                className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                style={{
+                  backgroundColor: DONUT_COLORS[index % DONUT_COLORS.length],
+                }}
+              />
+              <span className="truncate">{row.label}</span>
+            </span>
+            <span className="shrink-0 tabular-nums text-neutral-400">
+              {formatMoney(row.value.toFixed(2), currency, "symbol")} ·{" "}
+              {Math.round((row.value / total) * 100)}%
+            </span>
           </div>
-        ) : (
-          <EmptyState text={t.timelineAppear} />
-        )}
-      </section>
-    </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -246,9 +514,14 @@ function Metric({
   tone: string;
 }) {
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-3">
-      <p className="text-xs text-neutral-500">{label}</p>
-      <p className={`mt-1 truncate font-medium tabular-nums ${tone}`}>
+    <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-2">
+      <p
+        title={label}
+        className="truncate whitespace-nowrap text-[10px] text-neutral-500"
+      >
+        {label}
+      </p>
+      <p className={`truncate text-sm font-medium tabular-nums ${tone}`}>
         {formatMoney(value, currency, "symbol")}
       </p>
     </div>

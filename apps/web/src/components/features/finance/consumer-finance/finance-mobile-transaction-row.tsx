@@ -23,7 +23,10 @@ export function FinanceMobileTransactionRow({
 }) {
   const t = financeTransactionsCopy(locale);
   const income = item.type === "INCOME" || item.purpose === "INVESTMENT_RETURN";
-  const generated = item.purpose.startsWith("INVESTMENT_");
+  const investment = item.purpose.startsWith("INVESTMENT_");
+  const generated = investment;
+  const debt = item.purpose === "DEBT_REPAYMENT";
+  const hasItemizedDetails = (item.itemCount ?? 0) > 0;
   const purposeTitle =
     item.purpose === "INVESTMENT_CONTRIBUTION"
       ? t.investmentContribution
@@ -63,12 +66,11 @@ export function FinanceMobileTransactionRow({
         : "text-sm";
 
   return (
-    <div className="flex min-w-0 items-center gap-1 px-3 py-1 sm:px-4">
-      <button
-        type="button"
-        aria-label={t.transactionDetails}
-        onClick={onDetail}
-        className="grid min-h-16 min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded px-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+    <div
+      className={`flex min-w-0 items-center gap-1 px-3 py-1 sm:px-4 ${investment ? "bg-violet-950/20" : debt ? "bg-amber-950/15" : ""}`}
+    >
+      <div
+        className={`relative grid min-h-16 min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded px-1 text-left ${hasItemizedDetails ? "cursor-pointer outline-none focus-within:ring-2 focus-within:ring-sky-300" : ""}`}
       >
         <IconAvatar
           icon={item.account?.iconPresentation}
@@ -76,7 +78,18 @@ export function FinanceMobileTransactionRow({
           size="sm"
         />
         <span className="min-w-0">
-          <span className="block truncate text-sm font-medium" title={title}>
+          {hasItemizedDetails ? (
+            <button
+              type="button"
+              aria-label={t.transactionDetails}
+              onClick={onDetail}
+              className="absolute inset-0 z-10 rounded outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+            />
+          ) : null}
+          <span
+            className={`block truncate text-sm font-medium ${investment ? "text-violet-300" : debt ? "text-amber-300" : ""}`}
+            title={title}
+          >
             {title}
           </span>
           <span className="block truncate text-xs text-neutral-500">
@@ -96,7 +109,7 @@ export function FinanceMobileTransactionRow({
         >
           {amount}
         </strong>
-      </button>
+      </div>
       {!generated ? (
         <MobileRowAction
           label={t.editTransactionLabel}

@@ -24,6 +24,7 @@ export function financeRegularPaymentRevisionData(
     categoryName: row.category?.name ?? null,
     categoryKey: row.category?.key ?? null,
     recurrence: row.recurrence,
+    intervalCount: row.intervalCount,
     anchorDay: row.anchorDay,
     anchorMonth: row.anchorMonth,
     nextOccurrenceAt: row.nextOccurrenceAt,

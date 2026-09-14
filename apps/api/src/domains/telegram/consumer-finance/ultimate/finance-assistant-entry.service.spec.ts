@@ -30,6 +30,7 @@ function setup() {
       },
     ]),
     extractReceipt: jest.fn(),
+    extractReceipts: jest.fn().mockResolvedValue([]),
     transcribeVoice: jest.fn(),
   };
   const proposals = {
@@ -115,6 +116,49 @@ describe('FinanceAssistantEntryService', () => {
         mimetype: 'audio/webm',
       } as Express.Multer.File),
     ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(ai.transcribeVoice).not.toHaveBeenCalled();
+  });
+
+  it('extracts up to five receipt images together as one reviewable proposal', async () => {
+    const { service, ai, proposals } = setup();
+    const files = ['front.png', 'back.png'].map(
+      (originalname) =>
+        ({
+          originalname,
+          buffer: Buffer.from(originalname),
+          mimetype: 'image/png',
+        }) as Express.Multer.File,
+    );
+
+    await service.fromFiles(identity, files);
+
+    expect(ai.extractReceipts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        files: files.map((file) => ({
+          bytes: file.buffer,
+          mime: 'image/png',
+        })),
+      }),
+    );
+    expect(proposals.createBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects mixed image and audio batches before calling AI', async () => {
+    const { service, ai } = setup();
+
+    await expect(
+      service.fromFiles(identity, [
+        {
+          buffer: Buffer.from('receipt'),
+          mimetype: 'image/png',
+        } as Express.Multer.File,
+        {
+          buffer: Buffer.from('voice'),
+          mimetype: 'audio/webm',
+        } as Express.Multer.File,
+      ]),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(ai.extractReceipts).not.toHaveBeenCalled();
     expect(ai.transcribeVoice).not.toHaveBeenCalled();
   });
 

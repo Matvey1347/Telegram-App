@@ -1,45 +1,40 @@
 import type {
+  ConsumerFinanceAnalyticsQuery,
   ConsumerFinanceDashboard,
-  ConsumerFinanceTransaction,
 } from "@telegram-system/shared";
-import { Button, Card, EmptyState } from "./ui";
+import { Card, EmptyState } from "./ui";
 import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
-import type {
-  ConsumerFinanceScreen,
-  ConsumerFinanceSurface,
-} from "./consumer-finance-navigation";
+import type { ConsumerFinanceSurface } from "./consumer-finance-navigation";
 import { IconAvatar } from "./ui/finance-icon-avatar";
-import { financeIntlLocale, type FinanceLocale } from "./i18n/core";
+import { type FinanceLocale } from "./i18n/core";
 import { financeDashboardCopy } from "./i18n/dashboard";
-import { financeInvestmentsCopy } from "./i18n/investments";
-import { localizeFinanceCategory } from "./finance-category-i18n";
+import { FinancePeriodSelector } from "./finance-period-selector";
 
 export function FinanceDashboard({
   data,
-  onNavigate,
   locale,
-  timezone,
   surface,
+  period = { period: "CURRENT_MONTH" },
+  onPeriodChange = () => undefined,
 }: {
   data: ConsumerFinanceDashboard;
-  onNavigate: (screen: ConsumerFinanceScreen) => void;
   locale: FinanceLocale;
-  timezone: string;
   surface: ConsumerFinanceSurface;
+  period?: ConsumerFinanceAnalyticsQuery;
+  onPeriodChange?: (period: ConsumerFinanceAnalyticsQuery) => void;
 }) {
   const t = financeDashboardCopy(locale);
   const { stats } = data;
   const accounts = stats.accounts.filter((account) => !account.archivedAt);
-  const categories = stats.categories.slice(0, 6);
   return (
-    <div
-      data-finance-dashboard={surface}
-      className={
-        surface === "browser" ? "grid gap-4 xl:grid-cols-2" : "space-y-4"
-      }
-    >
-      <Card className="xl:col-span-2">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div data-finance-dashboard={surface} className="space-y-2">
+      <FinancePeriodSelector
+        value={period}
+        locale={locale}
+        onChange={onPeriodChange}
+      />
+      <Card className="!p-3">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
           {[
             [t.cash, stats.netWorth.cashAmount, stats.netWorth.currency, ""],
             [
@@ -62,42 +57,56 @@ export function FinanceDashboard({
             ],
           ].map(([label, value, currency, tone]) => (
             <div key={label}>
-              <p className="text-xs uppercase text-neutral-500">{label}</p>
-              <p className={`mt-1 text-lg font-semibold tabular-nums ${tone}`}>
+              <p className="text-[10px] uppercase text-neutral-500">{label}</p>
+              <p className={`text-base font-semibold tabular-nums ${tone}`}>
                 {formatMoney(value, currency, "symbol")}
               </p>
             </div>
           ))}
         </div>
-        <p className="mt-3 text-xs text-neutral-500">{t.savingsPartCash}</p>
-        {!stats.netWorth.complete ? (
+        <p className="mt-2 text-[11px] text-neutral-500">{t.savingsPartCash}</p>
+        {!stats.netWorth.complete &&
+        (stats.netWorth.excludedAccountCount > 0 ||
+          data.investments.excludedInvestments.some(
+            (investment) => investment.reason === "RATE_UNAVAILABLE",
+          )) ? (
           <p className="mt-2 text-xs text-amber-300">{t.incompleteWorth}</p>
         ) : null}
+        <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-neutral-800 pt-2 sm:grid-cols-3 lg:grid-cols-6">
+          {[
+            [t.income, stats.income, "text-emerald-300"],
+            [t.expense, stats.expense, "text-rose-300"],
+            [t.saved, stats.saved, "text-sky-200"],
+            [t.invested, stats.invested, "text-violet-200"],
+            [t.investmentReturns, stats.investmentReturns, "text-emerald-200"],
+            [t.net, stats.net, "text-sky-200"],
+          ].map(([label, value, tone]) => (
+            <div key={label} className="min-w-0">
+              <p className="text-[10px] uppercase text-neutral-500">{label}</p>
+              <p
+                className={`truncate text-sm font-semibold tabular-nums ${tone}`}
+              >
+                {formatMoney(value, stats.currency, "symbol")}
+              </p>
+              {label === t.net ? (
+                <p
+                  className="mt-0.5 truncate text-[9px] text-neutral-500"
+                  title={t.netExplanation}
+                >
+                  {t.netExplanation}
+                </p>
+              ) : null}
+            </div>
+          ))}
+        </div>
       </Card>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:col-span-2">
-        {[
-          [t.income, stats.income, "text-emerald-300"],
-          [t.expense, stats.expense, "text-rose-300"],
-          [t.saved, stats.saved, "text-sky-200"],
-          [t.invested, stats.invested, "text-violet-200"],
-          [t.investmentReturns, stats.investmentReturns, "text-emerald-200"],
-          [t.net, stats.net, "text-sky-200"],
-        ].map(([label, value, tone]) => (
-          <Card key={label} className="p-3">
-            <p className="text-[10px] uppercase text-neutral-500">{label}</p>
-            <p className={`mt-1 truncate text-base font-semibold ${tone}`}>
-              {formatMoney(value, stats.currency, "symbol")}
-            </p>
-          </Card>
-        ))}
-      </div>
-      <Card>
-        <h2 className="mb-2 font-medium">{t.balancesByAccount}</h2>
+      <Card className="!p-3">
+        <h2 className="mb-1 text-sm font-medium">{t.balancesByAccount}</h2>
         {accounts.length ? (
           accounts.map((account) => (
             <div
               key={account.id}
-              className="flex items-center justify-between gap-3 border-t border-neutral-800 py-2 text-sm first:border-0"
+              className="flex items-center justify-between gap-3 border-t border-neutral-800 py-1.5 text-xs first:border-0"
             >
               <span className="flex min-w-0 items-center gap-2">
                 <IconAvatar
@@ -132,169 +141,6 @@ export function FinanceDashboard({
           <EmptyState text={t.addAccountHint} context="accounts" compact />
         )}
       </Card>
-      <Card>
-        <h2 className="mb-3 font-medium">{t.spendingMonth}</h2>
-        {categories.length ? (
-          categories.map((category) => (
-            <CategoryProgress
-              key={category.categoryId || category.name}
-              name={localizeFinanceCategory(
-                category.name,
-                category.categoryKey,
-                locale,
-              )}
-              amount={category.amount}
-              currency={category.currency}
-              maximum={Math.max(
-                ...stats.categories.map((row) => Number(row.amount)),
-                1,
-              )}
-            />
-          ))
-        ) : (
-          <EmptyState text={t.expensesAppear} context="analytics" compact />
-        )}
-      </Card>
-      {data.limits.length ? (
-        <Card>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="font-medium">{t.budget}</h2>
-            <Button variant="secondary" onClick={() => onNavigate("budget")}>
-              {t.edit}
-            </Button>
-          </div>
-          {data.limits.slice(0, 4).map((limit) => (
-            <div className="mb-3 last:mb-0" key={limit.id}>
-              <div className="flex justify-between gap-3 text-xs">
-                <span>
-                  {localizeFinanceCategory(
-                    limit.category.name,
-                    limit.category.key,
-                    locale,
-                  )}
-                </span>
-                <span>
-                  {formatMoney(limit.spent, limit.currency, "symbol")} /{" "}
-                  {formatMoney(limit.amount, limit.currency, "symbol")}
-                </span>
-              </div>
-              <div className="mt-1 h-2 rounded bg-neutral-800">
-                <div
-                  className={`h-2 rounded ${limit.percentage > 100 ? "bg-rose-400" : "bg-sky-400"}`}
-                  style={{ width: `${Math.min(100, limit.percentage)}%` }}
-                />
-              </div>
-            </div>
-          ))}
-        </Card>
-      ) : null}
-      <Card className="xl:col-span-2">
-        <h2 className="mb-2 font-medium">{t.recent}</h2>
-        {data.recent.length ? (
-          data.recent.map((item) => (
-            <TransactionRow
-              key={item.id}
-              item={item}
-              locale={locale}
-              timezone={timezone}
-            />
-          ))
-        ) : (
-          <EmptyState
-            text={t.noTransactionsYet}
-            context="transactions"
-            compact
-          />
-        )}
-      </Card>
-    </div>
-  );
-}
-function CategoryProgress({
-  name,
-  amount,
-  currency,
-  maximum,
-}: {
-  name: string;
-  amount: string;
-  currency: string;
-  maximum: number;
-}) {
-  const percent = Math.round(Math.min(100, (Number(amount) / maximum) * 100));
-  return (
-    <div className="mb-3">
-      <div className="flex justify-between text-xs">
-        <span>{name}</span>
-        <span>{formatMoney(amount, currency, "symbol")}</span>
-      </div>
-      <div className="mt-1 h-2 rounded bg-neutral-800" aria-hidden="true">
-        <div
-          className="h-2 rounded bg-rose-400"
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-export function TransactionRow({
-  item,
-  locale,
-  timezone,
-}: {
-  item: ConsumerFinanceTransaction;
-  locale: FinanceLocale;
-  timezone: string;
-}) {
-  const t = financeDashboardCopy(locale);
-  const investments = financeInvestmentsCopy(locale);
-  const income = item.type === "INCOME" || item.purpose === "INVESTMENT_RETURN";
-  const fallbackLabel =
-    item.purpose === "INVESTMENT_CONTRIBUTION"
-      ? investments.contribution
-      : item.purpose === "INVESTMENT_RETURN"
-        ? investments.investmentReturn
-        : income
-          ? t.income
-          : t.expense;
-  const sourceLabel =
-    item.source === "RECEIPT"
-      ? t.receipt
-      : item.source === "AI"
-        ? t.aiEntry
-        : t.manualEntry;
-  return (
-    <div className="flex items-center justify-between border-b border-neutral-800 py-3 last:border-0">
-      <div className="min-w-0">
-        <p className="truncate text-sm">
-          {item.merchantDisplay ||
-            item.description ||
-            (item.category
-              ? localizeFinanceCategory(
-                  item.category.name,
-                  item.category.key,
-                  locale,
-                )
-              : undefined) ||
-            fallbackLabel}
-        </p>
-        <p className="text-xs text-neutral-500">
-          {item.account?.name ?? t.accountFallback} ·{" "}
-          {new Intl.DateTimeFormat(financeIntlLocale(locale), {
-            timeZone: timezone,
-          }).format(new Date(item.occurredAt))}
-          {item.source ? ` · ${sourceLabel}` : ""}
-          {item.itemCount
-            ? ` · ${item.itemCount} ${item.itemCount === 1 ? t.item : t.items}`
-            : ""}
-        </p>
-      </div>
-      <strong
-        className={`ml-3 shrink-0 whitespace-nowrap text-sm tabular-nums ${income ? "text-emerald-300" : "text-rose-300"}`}
-      >
-        {income ? "+" : "−"}
-        {formatMoney(item.amount, item.currency, "symbol")}
-      </strong>
     </div>
   );
 }

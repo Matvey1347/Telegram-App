@@ -24,7 +24,6 @@ describe('clearFinanceDataForReplacement', () => {
       financeAccount: model(),
       financePendingProposal: model(),
       financeChatFlow: model(),
-      financeDataImportReceipt: model(),
     };
 
     await clearFinanceDataForReplacement(tx as never, 'profile-1');
@@ -46,5 +45,6 @@ describe('clearFinanceDataForReplacement', () => {
     expect(tx.financeInvestmentValuation.deleteMany).toHaveBeenCalledWith({
       where: { profileId: 'profile-1' },
     });
+    expect(tx).not.toHaveProperty('financeDataImportReceipt');
   });
 });

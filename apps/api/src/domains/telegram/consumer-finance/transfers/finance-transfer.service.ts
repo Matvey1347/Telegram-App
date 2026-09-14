@@ -14,6 +14,10 @@ import type {
 } from '../http/finance.dto';
 import { financeTransferSavingsLinkLockKey } from '../assets/finance-asset-locks';
 import {
+  financeAccountEmoji,
+  financeIconPresentation,
+} from '../catalog/finance-entity-emoji';
+import {
   financeHistoryDateRange,
   financeOccurredAtFilter,
 } from '../ledger/finance-history-date-range';
@@ -30,8 +34,12 @@ const transferSelect = {
   occurredAt: true,
   description: true,
   deletedAt: true,
-  fromAccount: { select: { id: true, name: true, currency: true } },
-  toAccount: { select: { id: true, name: true, currency: true } },
+  fromAccount: {
+    select: { id: true, name: true, currency: true, emoji: true, type: true },
+  },
+  toAccount: {
+    select: { id: true, name: true, currency: true, emoji: true, type: true },
+  },
 } satisfies Prisma.FinanceTransferSelect;
 
 @Injectable()
@@ -241,10 +249,43 @@ export class FinanceTransferService {
       fromAmount: Prisma.Decimal;
       toAmount: Prisma.Decimal;
       exchangeRate: Prisma.Decimal | null;
+      fromAccount: {
+        id: string;
+        name: string;
+        currency: string;
+        emoji: string | null;
+        type: string;
+      };
+      toAccount: {
+        id: string;
+        name: string;
+        currency: string;
+        emoji: string | null;
+        type: string;
+      };
     },
   >(row: T) {
+    const { fromAccount, toAccount, ...fields } = row;
     return {
-      ...row,
+      ...fields,
+      fromAccount: {
+        id: fromAccount.id,
+        name: fromAccount.name,
+        currency: fromAccount.currency,
+        iconPresentation: financeIconPresentation(
+          fromAccount.emoji,
+          financeAccountEmoji(fromAccount.type),
+        ),
+      },
+      toAccount: {
+        id: toAccount.id,
+        name: toAccount.name,
+        currency: toAccount.currency,
+        iconPresentation: financeIconPresentation(
+          toAccount.emoji,
+          financeAccountEmoji(toAccount.type),
+        ),
+      },
       fromAmount: row.fromAmount.toString(),
       toAmount: row.toAmount.toString(),
       exchangeRate:

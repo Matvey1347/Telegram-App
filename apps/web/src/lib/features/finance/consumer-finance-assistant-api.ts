@@ -4,22 +4,67 @@ import type {
   ConsumerFinanceAssistantMessageInput,
   ConsumerFinanceAssistantMessageResult,
   ConsumerFinanceAssistantProposal,
+  ConsumerFinanceAssistantStreamEvent,
 } from "@telegram-system/shared";
+import { createRequestCorrelationId } from "@/lib/http/transport";
 import {
   consumerFinanceHttp,
   consumerFinanceRoot,
   consumerRequest,
+  resolveConsumerFinanceApiBase,
 } from "./consumer-finance-http";
 
 export const consumerFinanceAssistantApi = {
-  message: async (botId: string, input: ConsumerFinanceAssistantMessageInput) =>
-    (
-      await consumerFinanceHttp.post<ConsumerFinanceAssistantMessageResult>(
-        `${consumerFinanceRoot(botId)}/ultimate/message`,
-        input,
-        consumerRequest(),
-      )
-    ).data,
+  message: async (
+    botId: string,
+    input: ConsumerFinanceAssistantMessageInput,
+    options: {
+      onDelta?: (delta: string) => void;
+      signal?: AbortSignal;
+    } = {},
+  ) => {
+    const response = await fetch(
+      `${resolveConsumerFinanceApiBase()}${consumerFinanceRoot(botId)}/ultimate/message`,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Correlation-Id": createRequestCorrelationId(),
+          "X-Finance-Consumer-Request": "1",
+        },
+        body: JSON.stringify(input),
+        signal: options.signal,
+      },
+    );
+    if (!response.ok)
+      throw new Error(`Finance assistant HTTP ${response.status}`);
+    if (!response.body) throw new Error("Finance assistant stream is empty");
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let pending = "";
+    let result: ConsumerFinanceAssistantMessageResult | undefined;
+    const consumeLine = (line: string) => {
+      if (!line.trim()) return;
+      const event = JSON.parse(line) as ConsumerFinanceAssistantStreamEvent;
+      if (event.type === "delta") options.onDelta?.(event.delta);
+      else if (event.type === "done") result = event.result;
+      else if (event.type === "error") throw new Error(event.message);
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      pending += decoder.decode(value, { stream: !done });
+      const lines = pending.split(/\r?\n/u);
+      pending = lines.pop() || "";
+      for (const line of lines) consumeLine(line);
+      if (done) break;
+    }
+    if (pending.trim()) consumeLine(pending);
+    if (!result) throw new Error("Finance assistant stream ended early");
+    return result;
+  },
   ask: async (botId: string, question: string) =>
     (
       await consumerFinanceHttp.post<ConsumerFinanceAiInsight>(
@@ -37,8 +82,11 @@ export const consumerFinanceAssistantApi = {
       )
     ).data,
   proposeFile: async (botId: string, file: File) => {
+    return consumerFinanceAssistantApi.proposeFiles(botId, [file]);
+  },
+  proposeFiles: async (botId: string, files: File[]) => {
     const form = new FormData();
-    form.set("file", file);
+    files.forEach((file) => form.append("files", file, file.name));
     return (
       await consumerFinanceHttp.post<ConsumerFinanceAssistantProposal>(
         `${consumerFinanceRoot(botId)}/ultimate/entry/media`,

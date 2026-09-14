@@ -1,5 +1,6 @@
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
 import Image from "next/image";
+import { resolveConsumerFinanceApiBase } from "@/lib/features/finance/consumer-finance-http";
 
 export function FinanceProfileAvatar({
   profile,
@@ -9,6 +10,10 @@ export function FinanceProfileAvatar({
   showName?: boolean;
 }) {
   const { telegramUser } = profile;
+  const financeAvatarUrl = profile.avatarUrl
+    ? `${resolveConsumerFinanceApiBase()}${profile.avatarUrl}`
+    : null;
+  const avatarUrl = financeAvatarUrl ?? telegramUser.avatarUrl;
   const initials =
     telegramUser.displayName
       .split(/\s+/u)
@@ -24,9 +29,9 @@ export function FinanceProfileAvatar({
     >
       <span className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-neutral-700 bg-sky-500/15 text-[11px] font-semibold text-sky-200">
         <span aria-hidden="true">{initials}</span>
-        {telegramUser.avatarUrl ? (
+        {avatarUrl ? (
           <Image
-            src={telegramUser.avatarUrl}
+            src={avatarUrl}
             alt=""
             width={36}
             height={36}

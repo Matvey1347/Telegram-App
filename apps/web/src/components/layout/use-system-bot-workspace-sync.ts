@@ -10,10 +10,15 @@ export function useSystemBotWorkspaceSync(
 ) {
   const lastSyncedWorkspaceId = useRef("");
   const websiteSyncInFlight = useRef<Promise<void> | null>(null);
+  const botReconcileInFlight = useRef<Promise<void> | null>(null);
+  const botReconcileQueued = useRef(false);
   const workspaceIdRef = useRef(workspaceId);
   const selectWebsiteWorkspaceRef = useRef(selectWebsiteWorkspace);
-  workspaceIdRef.current = workspaceId;
-  selectWebsiteWorkspaceRef.current = selectWebsiteWorkspace;
+
+  useEffect(() => {
+    workspaceIdRef.current = workspaceId;
+    selectWebsiteWorkspaceRef.current = selectWebsiteWorkspace;
+  }, [selectWebsiteWorkspace, workspaceId]);
 
   useEffect(() => {
     if (!workspaceId || lastSyncedWorkspaceId.current === workspaceId) return;
@@ -33,10 +38,18 @@ export function useSystemBotWorkspaceSync(
   }, [workspaceId]);
 
   useEffect(() => {
+    let stopped = false;
     const reconcileFromBot = () => {
-      void (websiteSyncInFlight.current ?? Promise.resolve())
+      if (stopped) return;
+      if (botReconcileInFlight.current) {
+        botReconcileQueued.current = true;
+        return;
+      }
+      botReconcileQueued.current = false;
+      const request = (websiteSyncInFlight.current ?? Promise.resolve())
         .then(() => telegramSystemBotApi.connection())
         .then((connection) => {
+          if (stopped) return;
           const botWorkspaceId = connection.currentWorkspaceId;
           if (
             connection.connected &&
@@ -46,9 +59,19 @@ export function useSystemBotWorkspaceSync(
             selectWebsiteWorkspaceRef.current(botWorkspaceId);
           }
         })
-        .catch(() => undefined);
+        .catch(() => undefined)
+        .finally(() => {
+          if (botReconcileInFlight.current !== request) return;
+          botReconcileInFlight.current = null;
+          if (botReconcileQueued.current) reconcileFromBot();
+        });
+      botReconcileInFlight.current = request;
     };
     window.addEventListener("focus", reconcileFromBot);
-    return () => window.removeEventListener("focus", reconcileFromBot);
+    return () => {
+      stopped = true;
+      botReconcileQueued.current = false;
+      window.removeEventListener("focus", reconcileFromBot);
+    };
   }, []);
 }

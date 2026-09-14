@@ -79,7 +79,7 @@ export function FinanceDebtEditor({
   if (accounts.isLoading) return <LoadingState text={t.loadingAccounts} />;
   if (accounts.isError)
     return (
-      <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <ErrorState text={t.accountLoadError} />
         <Button onClick={() => accounts.refetch()}>{t.retry}</Button>
       </div>
@@ -152,20 +152,24 @@ export function FinanceDebtEditor({
             onChange={(event) => setDueDate(event.target.value)}
           />
         </FormField>
-        <FormField label={t.note}>
+        <FormField label={t.note} className="sm:col-span-2">
           <Textarea
             value={note}
             onChange={(event) => setNote(event.target.value)}
           />
         </FormField>
         <Button
-          className="w-full"
+          className="w-full sm:col-span-2"
           disabled={!valid || save.isPending}
           onClick={() => save.mutate()}
         >
           {save.isPending ? t.saving : t.save}
         </Button>
-        {save.isError ? <ErrorState text={t.debtSaveError} /> : null}
+        {save.isError ? (
+          <div className="sm:col-span-2">
+            <ErrorState text={t.debtSaveError} />
+          </div>
+        ) : null}
       </div>
     </Modal>
   );

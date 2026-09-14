@@ -11,6 +11,7 @@ import {
   Button,
   DateInput,
   ErrorState,
+  FinanceNecessityToggle,
   FormField,
   Input,
   LoadingState,
@@ -25,6 +26,7 @@ import { financeCalendarDate } from "@/lib/features/finance/consumer-finance-dat
 import { localizeFinanceCategory } from "./finance-category-i18n";
 import type { FinanceLocale } from "./i18n/core";
 import { financeRegularPaymentsCopy } from "./i18n/regular-payments";
+import { IconPicker } from "./ui/finance-icon-picker";
 
 export function FinanceRegularPaymentEditor({
   botId,
@@ -51,6 +53,11 @@ export function FinanceRegularPaymentEditor({
     queryFn: () => consumerFinanceLedgerApi.categories(botId),
   });
   const [name, setName] = useState(editing?.name ?? "");
+  const [iconSource, setIconSource] = useState<string | null>(
+    editing?.iconPresentation?.type === "image"
+      ? `image:${editing.iconPresentation.url}`
+      : (editing?.iconPresentation?.value ?? "🔁"),
+  );
   const [amount, setAmount] = useState(editing?.amount ?? "");
   const [accountId, setAccountId] = useState(editing?.accountId ?? "");
   const [categoryId, setCategoryId] = useState(editing?.categoryId ?? "");
@@ -58,6 +65,9 @@ export function FinanceRegularPaymentEditor({
     useState<ConsumerFinanceRegularPaymentRecurrence>(
       editing?.recurrence ?? "MONTHLY",
     );
+  const [intervalCount, setIntervalCount] = useState(
+    String(editing?.intervalCount ?? 1),
+  );
   const [nextPaymentDate, setNextPaymentDate] = useState(
     editing
       ? financeCalendarDate(editing.nextOccurrenceAt, editing.scheduleTimezone)
@@ -65,7 +75,7 @@ export function FinanceRegularPaymentEditor({
   );
   const [note, setNote] = useState(editing?.note ?? "");
   const [necessity, setNecessity] = useState<ConsumerFinanceExpenseNecessity>(
-    editing?.necessity ?? "UNSPECIFIED",
+    editing?.necessity ?? "DISCRETIONARY",
   );
   const accountRows = (accounts.data ?? []).filter(
     (account) => !account.archivedAt || account.id === editing?.accountId,
@@ -83,10 +93,12 @@ export function FinanceRegularPaymentEditor({
     mutationFn: () => {
       const input = {
         name: name.trim(),
+        emoji: iconSource,
         amount,
         accountId: selectedAccountId,
         categoryId: categoryId || null,
         recurrence,
+        intervalCount: Number(intervalCount),
         nextPaymentDate,
         note: note.trim() || null,
         ...(necessity !== "UNSPECIFIED" ? { necessity } : {}),
@@ -119,6 +131,9 @@ export function FinanceRegularPaymentEditor({
   const valid =
     !!name.trim() &&
     Number(amount) > 0 &&
+    Number.isInteger(Number(intervalCount)) &&
+    Number(intervalCount) >= 1 &&
+    Number(intervalCount) <= 3650 &&
     !!selectedAccountId &&
     /^\d{4}-\d{2}-\d{2}$/.test(nextPaymentDate);
   return (
@@ -128,7 +143,16 @@ export function FinanceRegularPaymentEditor({
       closeLabel={t.close}
       title={editing ? t.editRegularPayment : t.addRegularPayment}
     >
-      <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <IconPicker
+            botId={botId}
+            uiLocale={locale}
+            source={iconSource}
+            onChange={setIconSource}
+            buttonLabel={name.trim() || t.paymentName}
+          />
+        </div>
         <FormField label={t.paymentName}>
           <Input
             autoFocus
@@ -187,35 +211,37 @@ export function FinanceRegularPaymentEditor({
             ))}
           </Select>
         </FormField>
-        <FormField label={t.necessity}>
-          <Select
-            uiLocale={locale}
-            value={necessity}
-            onChange={(event) =>
-              setNecessity(
-                event.target.value as ConsumerFinanceExpenseNecessity,
-              )
-            }
-          >
-            <option value="UNSPECIFIED">{t.necessityUnspecified}</option>
-            <option value="REQUIRED">{t.necessityRequired}</option>
-            <option value="DISCRETIONARY">{t.necessityDiscretionary}</option>
-          </Select>
-        </FormField>
-        <FormField label={t.recurrence}>
-          <Select
-            uiLocale={locale}
-            value={recurrence}
-            onChange={(event) =>
-              setRecurrence(
-                event.target.value as ConsumerFinanceRegularPaymentRecurrence,
-              )
-            }
-          >
-            <option value="WEEKLY">{t.weekly}</option>
-            <option value="MONTHLY">{t.monthly}</option>
-            <option value="YEARLY">{t.yearly}</option>
-          </Select>
+        <FinanceNecessityToggle
+          value={necessity}
+          locale={locale}
+          onChange={setNecessity}
+          className="sm:col-span-2"
+        />
+        <FormField label={t.intervalCount}>
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-2">
+            <Input
+              type="number"
+              min={1}
+              max={3650}
+              inputMode="numeric"
+              value={intervalCount}
+              onChange={(event) => setIntervalCount(event.target.value)}
+            />
+            <Select
+              uiLocale={locale}
+              value={recurrence}
+              onChange={(event) =>
+                setRecurrence(
+                  event.target.value as ConsumerFinanceRegularPaymentRecurrence,
+                )
+              }
+            >
+              <option value="DAILY">{t.unitDay}</option>
+              <option value="WEEKLY">{t.unitWeek}</option>
+              <option value="MONTHLY">{t.unitMonth}</option>
+              <option value="YEARLY">{t.unitYear}</option>
+            </Select>
+          </div>
         </FormField>
         <FormField label={t.nextPaymentDate}>
           <DateInput
@@ -224,20 +250,24 @@ export function FinanceRegularPaymentEditor({
             onChange={(event) => setNextPaymentDate(event.target.value)}
           />
         </FormField>
-        <FormField label={t.note}>
+        <FormField label={t.note} className="sm:col-span-2">
           <Textarea
             value={note}
             onChange={(event) => setNote(event.target.value)}
           />
         </FormField>
         <Button
-          className="w-full"
+          className="w-full sm:col-span-2"
           disabled={!valid || save.isPending}
           onClick={() => save.mutate()}
         >
           {save.isPending ? t.saving : t.save}
         </Button>
-        {save.isError ? <ErrorState text={t.paymentSaveError} /> : null}
+        {save.isError ? (
+          <div className="sm:col-span-2">
+            <ErrorState text={t.paymentSaveError} />
+          </div>
+        ) : null}
       </div>
     </Modal>
   );

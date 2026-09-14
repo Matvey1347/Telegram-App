@@ -141,7 +141,7 @@ export function FinanceInvestmentEditor({
           />
         </FormField>
         <div className="flex items-end justify-end gap-2 sm:col-span-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button type="button" variant="cancel" onClick={onClose}>
             {t.cancel}
           </Button>
           <Button type="submit" disabled={pending || !name.trim()}>

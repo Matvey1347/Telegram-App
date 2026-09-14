@@ -31,6 +31,7 @@ import {
 import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
 import { FinanceInvestmentCard } from "./finance-investment-card";
 import { FinanceInvestmentEditor } from "./finance-investment-editor";
+import { FinanceInvestmentCreateModal } from "./finance-investment-create-modal";
 
 type StatusFilter = ConsumerFinanceInvestmentStatus | "ALL";
 
@@ -48,9 +49,8 @@ export function FinanceInvestments({
   const t = financeInvestmentsCopy(locale);
   const client = useQueryClient();
   const [status, setStatus] = useState<StatusFilter>("ACTIVE");
-  const [editing, setEditing] = useState<
-    ConsumerFinanceInvestment | "new" | null
-  >(null);
+  const [editing, setEditing] = useState<ConsumerFinanceInvestment | null>(null);
+  const [creating, setCreating] = useState(false);
   const filters = status === "ALL" ? {} : { status };
   const list = useInfiniteQuery({
     queryKey: consumerFinanceKeys.investments(botId, filters),
@@ -71,8 +71,6 @@ export function FinanceInvestments({
   });
   const save = useMutation({
     mutationFn: (payload: ConsumerFinanceInvestmentInput) => {
-      if (editing === "new")
-        return consumerFinanceInvestmentsApi.create(botId, payload);
       const update = {
         name: payload.name,
         description: payload.description,
@@ -115,7 +113,7 @@ export function FinanceInvestments({
           </p>
           <p className="mt-2 text-xs text-sky-300">{t.manualOnly}</p>
         </div>
-        <Button onClick={() => setEditing("new")}>{t.add}</Button>
+        <Button onClick={() => setCreating(true)}>{t.add}</Button>
       </Card>
       <Card>
         <h2 className="mb-3 font-medium">{t.summary}</h2>
@@ -123,18 +121,22 @@ export function FinanceInvestments({
           <Metric
             label={t.totalInvested}
             value={formatMoney(s.totalInvested, s.currency, "symbol")}
+            tone="sky"
           />
           <Metric
             label={t.totalReturned}
             value={formatMoney(s.totalReturned, s.currency, "symbol")}
+            tone="emerald"
           />
           <Metric
             label={t.currentValue}
             value={formatMoney(s.currentValue, s.currency, "symbol")}
+            tone="violet"
           />
           <Metric
             label={t.profitLoss}
             value={formatMoney(s.profitLoss, s.currency, "symbol")}
+            tone={Number(s.profitLoss) < 0 ? "rose" : "emerald"}
           />
           <Metric
             label={t.returnPercentage}
@@ -143,11 +145,9 @@ export function FinanceInvestments({
                 ? "—"
                 : `${s.returnPercentage.toFixed(2)}%`
             }
+            tone={Number(s.returnPercentage) < 0 ? "rose" : "emerald"}
           />
         </div>
-        {s.excludedInvestments.length ? (
-          <p className="mt-3 text-xs text-amber-300">{t.excluded}</p>
-        ) : null}
       </Card>
       <div className="max-w-xs">
         <label className="mb-1 block text-sm text-neutral-300">
@@ -158,10 +158,18 @@ export function FinanceInvestments({
           value={status}
           onChange={(e) => setStatus(e.target.value as StatusFilter)}
         >
-          <option value="ACTIVE">{t.active}</option>
-          <option value="CLOSED">{t.closed}</option>
-          <option value="ARCHIVED">{t.archived}</option>
-          <option value="ALL">{t.all}</option>
+          <option value="ACTIVE" className="text-emerald-300">
+            {t.active}
+          </option>
+          <option value="CLOSED" className="text-sky-300">
+            {t.closed}
+          </option>
+          <option value="ARCHIVED" className="text-neutral-400">
+            {t.archived}
+          </option>
+          <option value="ALL" className="text-violet-300">
+            {t.all}
+          </option>
         </Select>
       </div>
       {visible.length ? (
@@ -191,7 +199,7 @@ export function FinanceInvestments({
       {editing ? (
         <FinanceInvestmentEditor
           open={editing !== null}
-          investment={editing === "new" ? null : editing}
+          investment={editing}
           locale={locale}
           defaultCurrency={defaultCurrency}
           pending={save.isPending}
@@ -200,14 +208,38 @@ export function FinanceInvestments({
           onSubmit={(payload) => save.mutate(payload)}
         />
       ) : null}
+      {creating ? (
+        <FinanceInvestmentCreateModal
+          botId={botId}
+          locale={locale}
+          defaultCurrency={defaultCurrency}
+          onClose={() => setCreating(false)}
+        />
+      ) : null}
     </div>
   );
 }
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "sky" | "emerald" | "violet" | "rose";
+}) {
+  const colors = {
+    sky: "border-sky-900/70 bg-neutral-950/40 [&>p:last-child]:text-sky-200",
+    emerald:
+      "border-emerald-900/70 bg-neutral-950/40 [&>p:last-child]:text-emerald-200",
+    violet:
+      "border-violet-900/70 bg-neutral-950/40 [&>p:last-child]:text-violet-200",
+    rose: "border-rose-900/70 bg-neutral-950/40 [&>p:last-child]:text-rose-200",
+  };
   return (
-    <div>
-      <p className="text-xs text-neutral-500">{label}</p>
-      <p className="mt-1 font-medium tabular-nums">{value}</p>
+    <div className={`rounded-xl border p-3 ${colors[tone]}`}>
+      <p className="text-xs text-neutral-400">{label}</p>
+      <p className="mt-1 text-lg font-bold tabular-nums">{value}</p>
     </div>
   );
 }

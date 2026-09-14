@@ -65,6 +65,8 @@ function setup() {
     deleteMessage: jest.fn().mockResolvedValue(true),
   };
   const workflows = {
+    requireNoActiveBatchImport: jest.fn(),
+    activeWithoutBatchImport: jest.fn(),
     active: jest.fn(),
     create: jest.fn(),
     get: jest.fn(),
@@ -84,6 +86,9 @@ function setup() {
     retry: jest.fn(),
     complete: jest.fn(),
   };
+  workflows.activeWithoutBatchImport.mockImplementation((...args) =>
+    workflows.active(...args),
+  );
   const domain = {
     channels: jest.fn().mockResolvedValue([
       { id: 'inactive', title: 'Inactive', isActive: false },

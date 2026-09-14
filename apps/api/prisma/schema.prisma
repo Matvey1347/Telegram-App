@@ -164,6 +164,31 @@ enum TelegramManagedPostLinkSource {
   MANUAL
 }
 
+enum TelegramPostBatchStatus {
+  DRAFT
+  DISPATCHING
+  ACTIVE
+  COMPLETED
+  PARTIAL_FAILURE
+  CANCELLED
+}
+
+enum TelegramPostBatchAction {
+  PUBLISH_NOW
+  SCHEDULE
+}
+
+enum TelegramPostBatchDeliveryStatus {
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  DELETING
+  DELETED
+  FAILED
+  DELETE_FAILED
+  CANCELLED
+}
+
 enum TelegramAdPricingMode {
   CPM
   FIXED
@@ -576,6 +601,7 @@ enum TelegramSystemBotFinanceDraftKind {
 
 enum TelegramSystemBotWorkflowKind {
   POST_IMPORT
+  POST_BATCH_IMPORT
   AD_SALE
   MUTUAL_PROMOTION_POST
   WORKSPACE_SETTINGS
@@ -793,6 +819,7 @@ enum FinanceDebtStatus {
 }
 
 enum FinanceRecurringPaymentRecurrence {
+  DAILY
   WEEKLY
   MONTHLY
   YEARLY
@@ -1014,6 +1041,11 @@ model Workspace {
   telegramCrmAccountSyncStates           TelegramCrmAccountSyncState[]
   telegramAdPlacementAdvertiserResults   TelegramAdPlacementAdvertiserResult[]
   postGroups                             PostGroup[]
+  telegramPostBatches                    TelegramPostBatch[]
+  telegramPostBatchPosts                 TelegramPostBatchPost[]
+  telegramPostBatchDeliveries            TelegramPostBatchDelivery[]
+  telegramPostBatchAdSaleLinks           TelegramPostBatchAdSaleLink[]
+  telegramPostBatchMutualPromotionLinks  TelegramPostBatchMutualPromotionLink[]
   promos                                 Promo[]
   advertisingSources                     AdvertisingSource[]
   adCampaigns                            AdCampaign[]
@@ -1206,6 +1238,7 @@ model WorkspaceMember {
   assignedTelegramManagedPosts              TelegramManagedPost[]              @relation("TelegramManagedPostAssignedMember")
   assignedTelegramManagedPostRevisions      TelegramManagedPostRevision[]      @relation("TelegramManagedPostRevisionAssignedMember")
   actedTelegramManagedPostRevisions         TelegramManagedPostRevision[]      @relation("TelegramManagedPostRevisionActorMember")
+  createdTelegramPostBatches                TelegramPostBatch[]                @relation("TelegramPostBatchCreatedByMember")
   assignedTelegramAdSales                   TelegramAdSale[]                   @relation("TelegramAdSaleAssignedMember")
   ownedTelegramAdvertisers                  TelegramAdvertiser[]               @relation("TelegramAdvertiserOwner")
   telegramAdvertiserActivities              TelegramAdvertiserActivity[]       @relation("TelegramAdvertiserActivityActorMember")
@@ -1612,6 +1645,7 @@ model TelegramChannel {
   adCampaigns                 AdCampaign[]
   mutualPromotionParticipants MutualPromotionFolderParticipant[]
   mutualPromotionDeliveries   MutualPromotionPostDelivery[]
+  telegramPostBatchDeliveries TelegramPostBatchDelivery[]
   adHypotheses                AdHypothesis[]                       @relation("AdHypothesisTelegramChannel")
   adPlacements                AdCampaignTelegramChannelPlacement[]
   inviteLinks                 TelegramInviteLink[]
@@ -2091,6 +2125,7 @@ model TelegramAdSale {
   activities               TelegramAdvertiserActivity[]
   tasks                    TelegramAdvertiserTask[]
   automationExecutions     TelegramAdvertiserAutomationExecution[]
+  telegramPostBatchLinks   TelegramPostBatchAdSaleLink[]
 
   @@unique([id, workspaceId])
   @@unique([workspaceId, idempotencyKey])
@@ -3215,13 +3250,14 @@ model MutualPromotionFolder {
   completedAt      DateTime?
   nextDueAt        DateTime?
 
-  workspace          Workspace                          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  assignedMember     WorkspaceMember?                   @relation("MutualPromotionFolderAssignedMember", fields: [assignedMemberId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "MutualPromotionFolder_assignedMember_fkey")
-  createdByUser      User                               @relation("MutualPromotionFolderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  participants       MutualPromotionFolderParticipant[]
-  posts              MutualPromotionFolderPost[]
-  workItems          MutualPromotionWorkItem[]
-  systemBotWorkflows TelegramSystemBotWorkflow[]
+  workspace              Workspace                              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignedMember         WorkspaceMember?                       @relation("MutualPromotionFolderAssignedMember", fields: [assignedMemberId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "MutualPromotionFolder_assignedMember_fkey")
+  createdByUser          User                                   @relation("MutualPromotionFolderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  participants           MutualPromotionFolderParticipant[]
+  posts                  MutualPromotionFolderPost[]
+  workItems              MutualPromotionWorkItem[]
+  systemBotWorkflows     TelegramSystemBotWorkflow[]
+  telegramPostBatchLinks TelegramPostBatchMutualPromotionLink[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3958,6 +3994,8 @@ model GreeterUserEnvironmentState {
 model FinanceProfile {
   id                     String                              @id @default(cuid())
   displayName            String?                             @db.VarChar(120)
+  avatarImage            Bytes?
+  avatarMimeType         String?                             @db.Text
   botIntegrationId       String
   telegramBotUserId      String
   defaultCurrency        String                              @default("UAH") @db.VarChar(3)
@@ -3984,12 +4022,14 @@ model FinanceProfile {
   investmentCashFlows    FinanceInvestmentCashFlow[]
   investmentValuations   FinanceInvestmentValuation[]
   dataImportReceipts     FinanceDataImportReceipt[]
+  dataExportReceipts     FinanceDataExportReceipt[]
   proposals              FinancePendingProposal[]
   assistantProfile       FinanceAssistantProfile?
   aiUsage                AiUsageEvent[]
   chatFlows              FinanceChatFlow[]
   consumerTransfers      FinanceConsumerTransfer[]
   browserLoginChallenges FinanceBrowserLoginChallenge[]
+  customIcons            FinanceCustomIcon[]
 
   @@unique([botIntegrationId, telegramBotUserId])
 }
@@ -4027,6 +4067,22 @@ model FinanceBrowserLoginChallenge {
 
   @@index([botIntegrationId, expiresAt])
   @@index([approvedProfileId])
+}
+
+// Reusable image icons belong to the Finance profile, rather than to the
+// internal workspace. Finance entities retain an immutable image source, so
+// deleting a saved icon never breaks an account, category, or payment history.
+model FinanceCustomIcon {
+  id        String         @id @default(cuid())
+  profileId String
+  name      String         @db.VarChar(80)
+  imageUrl  String         @db.Text
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  profile   FinanceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, name])
+  @@index([profileId, updatedAt])
 }
 
 // A nullable bot means a workspace default. A bot-specific row overrides it.
@@ -4084,6 +4140,7 @@ model FinanceCategory {
   /// Unicode, canonical Telegram Custom Emoji markup, or an immutable image source.
   emoji             String?                   @db.Text
   type              FinanceTransactionType
+  necessity         FinanceExpenseNecessity    @default(UNSPECIFIED)
   key               String?
   archivedAt        DateTime?
   createdAt         DateTime                  @default(now())
@@ -4292,10 +4349,12 @@ model FinanceRecurringPayment {
   accountId        String
   categoryId       String?
   name             String
+  emoji            String?
   amount           Decimal
   /// Immutable for an occurrence and derived from the selected account.
   currency         String                              @db.VarChar(3)
   recurrence       FinanceRecurringPaymentRecurrence
+  intervalCount    Int                                 @default(1)
   anchorDay        Int
   anchorMonth      Int?
   nextOccurrenceAt DateTime
@@ -4335,6 +4394,7 @@ model FinanceRecurringPaymentRevision {
   categoryName       String?
   categoryKey        String?
   recurrence         FinanceRecurringPaymentRecurrence
+  intervalCount      Int                                 @default(1)
   anchorDay          Int
   anchorMonth        Int?
   nextOccurrenceAt   DateTime
@@ -4529,21 +4589,42 @@ model FinancePendingProposal {
   @@index([botIntegrationId, telegramBotUserId, status, expiresAt], map: "FinancePendingProposal_botIntegrationId_telegramBotUserId_statu")
 }
 
-// One compact idempotency receipt per successful user-triggered import.
-// Source files are never persisted; portable data still belongs to the profile.
+// One audit/idempotency receipt per successful user-triggered import or rollback.
+// Source files are never persisted; only bounded recovery snapshots are retained.
 model FinanceDataImportReceipt {
   id                 String         @id @default(cuid())
   profileId          String
   requestFingerprint String
+  operation          String         @default("IMPORT") @db.VarChar(16)
+  mode               String         @default("ADD") @db.VarChar(16)
+  sourceFileName     String?        @db.VarChar(255)
   formatVersion      Int
   importedCount      Int
   counts             Json
   warnings           Json
+  rollbackSnapshot   Bytes?
+  rollbackOfId       String?
+  rolledBackAt       DateTime?
   createdAt          DateTime       @default(now())
   profile            FinanceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@unique([profileId, requestFingerprint], map: "FinanceDataImportReceipt_profile_fingerprint_key")
   @@index([profileId, createdAt], map: "FinanceDataImportReceipt_profile_created_idx")
+  @@index([profileId, operation, createdAt], map: "FinanceDataImportReceipt_profile_operation_created_idx")
+}
+
+// Metadata-only export audit. Export files are returned to the user and are
+// never persisted a second time.
+model FinanceDataExportReceipt {
+  id            String         @id @default(cuid())
+  profileId     String
+  formatVersion Int
+  exportedCount Int
+  counts        Json
+  createdAt     DateTime       @default(now())
+  profile       FinanceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, createdAt], map: "FinanceDataExportReceipt_profile_created_idx")
 }
 
 model FinanceAssistantProfile {
@@ -4941,6 +5022,7 @@ model TelegramSystemBotWorkflow {
   workspace                 Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   mutualPromotionFolder     MutualPromotionFolder?      @relation(fields: [mutualPromotionFolderId], references: [id], onDelete: SetNull)
   resultMutualPromotionPost MutualPromotionFolderPost?  @relation(fields: [resultMutualPromotionPostId], references: [id], onDelete: SetNull)
+  postBatch                 TelegramPostBatch?
 
   @@index([connectionId, workspaceId, status, expiresAt], map: "TelegramSystemBotWorkflow_active_idx")
   @@index([status, expiresAt], map: "TelegramSystemBotWorkflow_expiry_idx")
@@ -5050,6 +5132,7 @@ model TelegramManagedPost {
   revisions               TelegramManagedPostRevision[]
   adSalePlacements        TelegramAdSalePlacement[]     @relation("TelegramAdPlacementManagedPost")
   mutualPromotionDelivery MutualPromotionPostDelivery?
+  postBatchDelivery       TelegramPostBatchDelivery?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -5206,6 +5289,133 @@ model PostGroup {
   @@index([telegramChannelId])
   @@index([createdByMemberId])
   @@index([telegramChannelId, sidebarPosition])
+}
+
+model TelegramPostBatch {
+  id                      String                  @id @default(cuid())
+  workspaceId             String
+  createdByMemberId       String
+  sourceWorkflowId        String                  @unique
+  title                   String
+  status                  TelegramPostBatchStatus @default(DRAFT)
+  version                 Int                     @default(0)
+  channelIds              String[]                @default([])
+  defaultDeleteAfterHours Int?                    @default(24)
+  dispatchedAt            DateTime?
+  cancelledAt             DateTime?
+
+  workspace            Workspace                              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdByMember      WorkspaceMember                        @relation("TelegramPostBatchCreatedByMember", fields: [createdByMemberId, workspaceId], references: [id, workspaceId], onDelete: Restrict)
+  sourceWorkflow       TelegramSystemBotWorkflow               @relation(fields: [sourceWorkflowId], references: [id], onDelete: Restrict)
+  posts                TelegramPostBatchPost[]
+  deliveries           TelegramPostBatchDelivery[]
+  adSaleLinks          TelegramPostBatchAdSaleLink[]
+  mutualPromotionLinks TelegramPostBatchMutualPromotionLink[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, updatedAt, id], map: "TelegramPostBatch_workspace_updated_idx")
+  @@index([workspaceId, status, updatedAt], map: "TelegramPostBatch_workspace_status_idx")
+  @@index([status, updatedAt, id], map: "TelegramPostBatch_status_updated_idx")
+}
+
+model TelegramPostBatchPost {
+  id               String                  @id @default(cuid())
+  workspaceId      String
+  batchId          String
+  position         Int
+  title            String
+  text             String?
+  imageUrls        String[]                @default([])
+  mediaItems       Json                    @default("[]")
+  buttonRows       Json                    @default("[]")
+  action           TelegramPostBatchAction @default(PUBLISH_NOW)
+  scheduledAt      DateTime?
+  deleteAfterHours Int?                    @default(24)
+  longTextMode     String                  @default("IMAGES_THEN_TEXT")
+  channelOverrides Json                    @default("[]")
+
+  workspace  Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  batch      TelegramPostBatch           @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  deliveries TelegramPostBatchDelivery[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([batchId, position], map: "TelegramPostBatchPost_batch_position_key")
+  @@index([workspaceId, batchId], map: "TelegramPostBatchPost_workspace_batch_idx")
+}
+
+model TelegramPostBatchDelivery {
+  id                String                          @id @default(cuid())
+  workspaceId       String
+  batchId           String
+  batchPostId       String
+  telegramChannelId String
+  managedPostId     String                          @unique
+  action            TelegramPostBatchAction
+  scheduledAt       DateTime
+  deleteAfterHours  Int?
+  longTextMode      String                          @default("IMAGES_THEN_TEXT")
+  status            TelegramPostBatchDeliveryStatus @default(SCHEDULED)
+  publishedAt       DateTime?
+  deleteAt          DateTime?
+  deletedAt         DateTime?
+  attemptCount      Int                             @default(0)
+  nextAttemptAt     DateTime?
+  claimOwner        String?
+  claimExpiresAt    DateTime?
+  lastAttemptAt     DateTime?
+  lastError         String?
+
+  workspace       Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  batch           TelegramPostBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  batchPost       TelegramPostBatchPost @relation(fields: [batchPostId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel       @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  managedPost     TelegramManagedPost   @relation(fields: [managedPostId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([batchPostId, telegramChannelId], map: "TelegramPostBatchDelivery_post_channel_key")
+  @@index([workspaceId, batchId], map: "TelegramPostBatchDelivery_workspace_batch_idx")
+  @@index([batchId, status], map: "TelegramPostBatchDelivery_batch_status_idx")
+  @@index([status, nextAttemptAt, id], map: "TelegramPostBatchDelivery_due_publish_idx")
+  @@index([status, deleteAt, id], map: "TelegramPostBatchDelivery_due_delete_idx")
+  @@index([claimExpiresAt], map: "TelegramPostBatchDelivery_claim_expiry_idx")
+}
+
+model TelegramPostBatchAdSaleLink {
+  id          String @id @default(cuid())
+  workspaceId String
+  batchId     String
+  adSaleId    String
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  batch     TelegramPostBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  adSale    TelegramAdSale    @relation(fields: [adSaleId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([batchId, adSaleId], map: "TelegramPostBatchAdSaleLink_batch_sale_key")
+  @@index([workspaceId, adSaleId], map: "TelegramPostBatchAdSaleLink_workspace_sale_idx")
+}
+
+model TelegramPostBatchMutualPromotionLink {
+  id                      String @id @default(cuid())
+  workspaceId             String
+  batchId                 String
+  mutualPromotionFolderId String
+
+  workspace             Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  batch                 TelegramPostBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  mutualPromotionFolder MutualPromotionFolder @relation(fields: [mutualPromotionFolderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([batchId, mutualPromotionFolderId], map: "TelegramPostBatchMutualPromotionLink_batch_folder_key")
+  @@index([workspaceId, mutualPromotionFolderId], map: "TelegramPostBatchMutualPromotionLink_workspace_folder_idx")
 }
 
 model TelegramPostMetricSnapshot {

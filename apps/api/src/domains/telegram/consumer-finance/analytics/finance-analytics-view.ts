@@ -1,5 +1,9 @@
 import { Prisma } from '@prisma/client';
 import type { ConsumerFinanceAnalyticsQuery } from '@telegram-system/shared';
+import {
+  financeAccountEmoji,
+  financeIconPresentation,
+} from '../catalog/finance-entity-emoji';
 
 export type FinanceAnalyticsMoneyRow = {
   nativeAmount: Prisma.Decimal | null;
@@ -28,6 +32,8 @@ export type FinanceAnalyticsAccountRow = FinanceAnalyticsMoneyRow & {
   purpose: FinanceAnalyticsSummaryRow['purpose'];
   accountId: string;
   accountName: string;
+  accountEmoji: string | null;
+  accountType: string;
 };
 export type FinanceAnalyticsTimelineRow = FinanceAnalyticsMoneyRow & {
   type: 'INCOME' | 'EXPENSE';
@@ -48,6 +54,10 @@ export type FinanceAnalyticsNecessityRow = FinanceAnalyticsMoneyRow & {
   segment: 'CURRENT' | 'PREVIOUS';
   necessity: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
 };
+export type FinanceAnalyticsRecurrenceRow = FinanceAnalyticsMoneyRow & {
+  segment: 'CURRENT' | 'PREVIOUS';
+  recurring: boolean;
+};
 
 type Totals = {
   income: Prisma.Decimal;
@@ -58,6 +68,9 @@ type Totals = {
   requiredExpenses: Prisma.Decimal;
   discretionaryExpenses: Prisma.Decimal;
   unspecifiedExpenses: Prisma.Decimal;
+  recurringExpenses: Prisma.Decimal;
+  oneOffExpenses: Prisma.Decimal;
+  debtRepayments: Prisma.Decimal;
 };
 
 export function financeAnalyticsView(input: {
@@ -68,6 +81,7 @@ export function financeAnalyticsView(input: {
   savingsRows: FinanceSavingsAnalyticsRow[];
   legacy: FinanceAnalyticsLegacyRow[];
   necessityRows?: FinanceAnalyticsNecessityRow[];
+  recurrenceRows?: FinanceAnalyticsRecurrenceRow[];
   rate: Prisma.Decimal;
   currency: string;
   period: ConsumerFinanceAnalyticsQuery & { from: string; to: string };
@@ -89,6 +103,12 @@ export function financeAnalyticsView(input: {
     else if (row.necessity === 'DISCRETIONARY')
       totals.discretionaryExpenses = totals.discretionaryExpenses.plus(value);
     else totals.unspecifiedExpenses = totals.unspecifiedExpenses.plus(value);
+  }
+  for (const row of input.recurrenceRows ?? []) {
+    const totals = row.segment === 'CURRENT' ? current : previous;
+    if (row.recurring)
+      totals.recurringExpenses = totals.recurringExpenses.plus(money(row));
+    else totals.oneOffExpenses = totals.oneOffExpenses.plus(money(row));
   }
   for (const row of input.savingsRows) {
     const totals = row.segment === 'CURRENT' ? current : previous;
@@ -113,6 +133,7 @@ export function financeAnalyticsView(input: {
     {
       accountId: string;
       name: string;
+      iconPresentation: ReturnType<typeof financeIconPresentation>;
       income: Prisma.Decimal;
       expenses: Prisma.Decimal;
       invested: Prisma.Decimal;
@@ -123,6 +144,10 @@ export function financeAnalyticsView(input: {
     const entry = accounts.get(row.accountId) || {
       accountId: row.accountId,
       name: row.accountName,
+      iconPresentation: financeIconPresentation(
+        row.accountEmoji,
+        financeAccountEmoji(row.accountType),
+      ),
       income: new Prisma.Decimal(0),
       expenses: new Prisma.Decimal(0),
       invested: new Prisma.Decimal(0),
@@ -140,7 +165,9 @@ export function financeAnalyticsView(input: {
   const days = new Map<string, Totals>();
   for (const row of input.timeline) {
     const entry = days.get(row.day) || zeroTotals();
-    if (row.purpose === 'INVESTMENT_CONTRIBUTION')
+    if (row.purpose === 'DEBT_REPAYMENT')
+      entry.debtRepayments = entry.debtRepayments.plus(money(row));
+    else if (row.purpose === 'INVESTMENT_CONTRIBUTION')
       entry.invested = entry.invested.plus(money(row));
     else if (row.purpose === 'INVESTMENT_RETURN')
       entry.investmentReturns = entry.investmentReturns.plus(money(row));
@@ -177,6 +204,7 @@ export function financeAnalyticsView(input: {
       .map((row) => ({
         accountId: row.accountId,
         name: row.name,
+        iconPresentation: row.iconPresentation,
         income: row.income.toString(),
         expenses: row.expenses.toString(),
         invested: row.invested.toString(),
@@ -195,6 +223,7 @@ export function financeAnalyticsView(input: {
         expenses: row.expenses.toString(),
         saved: row.saved.toString(),
         invested: row.invested.toString(),
+        debtRepayments: row.debtRepayments.toString(),
         investmentReturns: row.investmentReturns.toString(),
         netCashflow: row.income
           .plus(row.investmentReturns)
@@ -258,6 +287,9 @@ function zeroTotals(): Totals {
     requiredExpenses: new Prisma.Decimal(0),
     discretionaryExpenses: new Prisma.Decimal(0),
     unspecifiedExpenses: new Prisma.Decimal(0),
+    recurringExpenses: new Prisma.Decimal(0),
+    oneOffExpenses: new Prisma.Decimal(0),
+    debtRepayments: new Prisma.Decimal(0),
   };
 }
 
@@ -290,6 +322,8 @@ function contractTotals(totals: Totals) {
     requiredExpenses: totals.requiredExpenses.toString(),
     discretionaryExpenses: totals.discretionaryExpenses.toString(),
     unspecifiedExpenses: totals.unspecifiedExpenses.toString(),
+    recurringExpenses: totals.recurringExpenses.toString(),
+    oneOffExpenses: totals.oneOffExpenses.toString(),
     netCashflow: totals.income
       .plus(totals.investmentReturns)
       .minus(totals.expenses)

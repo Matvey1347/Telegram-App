@@ -5,6 +5,7 @@ import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.
 import { TelegramSystemBotConfigService } from './telegram-system-bot-config.service';
 import { TelegramSystemBotFinanceService } from './telegram-system-bot-finance.service';
 import type { TelegramSystemBotFinanceResult } from './telegram-system-bot-finance-flow';
+import { TelegramSystemBotWorkflowStore } from './telegram-system-bot-workflow.store';
 
 @Injectable()
 export class TelegramSystemBotFinanceHandlerService {
@@ -12,6 +13,7 @@ export class TelegramSystemBotFinanceHandlerService {
     private readonly config: TelegramSystemBotConfigService,
     private readonly api: TelegramBotApiClient,
     private readonly finance: TelegramSystemBotFinanceService,
+    private readonly workflows: TelegramSystemBotWorkflowStore,
   ) {}
 
   menu(chatId: string, messageId?: number) {
@@ -46,6 +48,10 @@ export class TelegramSystemBotFinanceHandlerService {
   }) {
     const { chatId, connectionId, userId, workspaceId, callback, messageId } =
       input;
+    await this.workflows.requireNoActiveBatchImport({
+      connectionId,
+      workspaceId,
+    });
     if (callback === 'finance' || callback === 'finance:menu')
       return this.menu(chatId, messageId);
     if (callback === 'finance:accounts') {
@@ -144,6 +150,7 @@ export class TelegramSystemBotFinanceHandlerService {
     text: string;
     inputMessageId?: number;
   }) {
+    await this.workflows.requireNoActiveBatchImport(input);
     const result = await this.finance.submitInput(input);
     if (!result) return null;
     if (input.inputMessageId) {

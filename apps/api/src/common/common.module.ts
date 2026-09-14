@@ -9,6 +9,7 @@ import { MemoryMonitorService } from './observability/memory-monitor.service';
 import { B2ObjectStorageService } from './object-storage/b2-object-storage.service';
 import { WorkspaceAuthorizationService } from '../domains/workspace/workspace-authorization/workspace-authorization.service';
 import { TelegramAccountRuntimeNotifier } from './telegram-account-runtime-notifier.service';
+import { HistoricalExchangeRateService } from './historical-exchange-rate.service';
 
 @Global()
 @Module({
@@ -23,6 +24,7 @@ import { TelegramAccountRuntimeNotifier } from './telegram-account-runtime-notif
     B2ObjectStorageService,
     WorkspaceAuthorizationService,
     TelegramAccountRuntimeNotifier,
+    HistoricalExchangeRateService,
   ],
   exports: [
     WorkspaceService,
@@ -33,6 +35,7 @@ import { TelegramAccountRuntimeNotifier } from './telegram-account-runtime-notif
     B2ObjectStorageService,
     WorkspaceAuthorizationService,
     TelegramAccountRuntimeNotifier,
+    HistoricalExchangeRateService,
   ],
 })
 export class CommonModule {}

@@ -2,6 +2,8 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Get,
+  Param,
   Post,
   Req,
   Res,
@@ -90,8 +92,29 @@ export class FinanceImportController {
           document,
           onProgress,
           signal,
+          file.originalname,
         );
       },
     });
+  }
+
+  @Get('portability-history')
+  history(@Req() request: FinanceImportRequest) {
+    return this.imports.history(request.financeConsumerSession.profileId);
+  }
+
+  @Post('imports/:importId/rollback')
+  rollback(
+    @Req() request: FinanceImportRequest,
+    @Param('importId') importId: string,
+    @Body('confirmation') confirmation?: string,
+  ) {
+    if (confirmation !== 'ROLLBACK FINANCE IMPORT') {
+      throw new BadRequestException('Invalid rollback confirmation');
+    }
+    return this.imports.rollback(
+      request.financeConsumerSession.profileId,
+      importId,
+    );
   }
 }

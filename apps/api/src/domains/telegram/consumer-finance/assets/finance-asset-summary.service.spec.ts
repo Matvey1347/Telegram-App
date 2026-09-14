@@ -57,7 +57,7 @@ describe('FinanceAssetSummaryService', () => {
     });
   });
 
-  it('marks an active investment without a valuation as excluded and incomplete', async () => {
+  it('uses active investment book value until its first manual valuation', async () => {
     const prisma = {
       financeProfile: {
         findUnique: jest.fn().mockResolvedValue({
@@ -96,14 +96,75 @@ describe('FinanceAssetSummaryService', () => {
     });
 
     expect(result.investments).toMatchObject({
-      totalInvested: '0',
-      currentValue: '0',
+      totalInvested: '100',
+      currentValue: '100',
       profitLoss: '0',
-      returnPercentage: null,
-      excludedInvestments: [
-        expect.objectContaining({ reason: 'VALUATION_MISSING' }),
-      ],
+      returnPercentage: 0,
+      excludedInvestments: [],
     });
-    expect(result.netWorth).toMatchObject({ amount: '100', complete: false });
+    expect(result.netWorth).toMatchObject({ amount: '200', complete: true });
+  });
+
+  it('converts a non-USD investment valuation into the profile currency', async () => {
+    const prisma = {
+      financeProfile: {
+        findUnique: jest.fn().mockResolvedValue({
+          defaultCurrency: 'PLN',
+          botIntegration: { workspaceId: 'workspace-1' },
+        }),
+      },
+      financeInvestment: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'investment-1',
+            name: 'Ukrainian business',
+            currency: 'UAH',
+            status: 'ACTIVE',
+            valuationCurrency: 'UAH',
+            totalInvestedInValuationCurrency: new Prisma.Decimal(1000),
+            totalReturnedInValuationCurrency: new Prisma.Decimal(100),
+            currentValueInValuationCurrency: new Prisma.Decimal(1200),
+            currentValuationAt: new Date('2026-09-01T00:00:00.000Z'),
+          },
+        ]),
+      },
+    };
+    const rateSource = {
+      getRateMetadata: jest.fn().mockResolvedValue({
+        available: true,
+        rate: 0.1,
+        rateAt: new Date('2026-09-14T00:00:00.000Z'),
+      }),
+    };
+    const conversion = {
+      prepareRateSource: jest.fn().mockResolvedValue(rateSource),
+    };
+    const service = new FinanceAssetSummaryService(
+      prisma as never,
+      {
+        summary: jest.fn().mockResolvedValue({ excludedGoals: [] }),
+      } as never,
+      conversion as never,
+    );
+
+    const result = await service.overview('profile-1', {
+      amount: '50',
+      currency: 'PLN',
+      includedAccountCount: 1,
+      excludedAccounts: [],
+    });
+
+    expect(conversion.prepareRateSource).toHaveBeenCalledWith('workspace-1');
+    expect(rateSource.getRateMetadata).toHaveBeenCalledWith('UAH', 'PLN');
+    expect(result.investments).toMatchObject({
+      totalInvested: '100',
+      totalReturned: '10',
+      currentValue: '120',
+      excludedInvestments: [],
+    });
+    expect(result.netWorth).toMatchObject({
+      amount: '170',
+      complete: true,
+    });
   });
 });

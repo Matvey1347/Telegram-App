@@ -96,6 +96,10 @@ export function validateFinanceImportDocument(
   const transferRefs = refs(data, 'transfers');
   const goalRefs = refs(data, 'savingsGoals');
   const investmentRefs = refs(data, 'investments');
+  const regularPaymentRefs = refs(data, 'regularPayments');
+  const regularPaymentByRef = new Map(
+    data.regularPayments.map((row) => [row.ref, row]),
+  );
   const valuationRefs = refs(data, 'investmentValuations');
   const transferByRef = new Map(data.transfers.map((row) => [row.ref, row]));
   const goalByRef = new Map(data.savingsGoals.map((row) => [row.ref, row]));
@@ -213,10 +217,21 @@ export function validateFinanceImportDocument(
     text(row.name, `${path}.name`, { max: 120 });
     decimal(row.amount, `${path}.amount`);
     oneOf(row.recurrence, `${path}.recurrence`, [
+      'DAILY',
       'WEEKLY',
       'MONTHLY',
       'YEARLY',
     ]);
+    if (
+      row.intervalCount != null &&
+      (!Number.isInteger(row.intervalCount) ||
+        Number(row.intervalCount) < 1 ||
+        Number(row.intervalCount) > 3650)
+    )
+      fail(
+        `${path}.intervalCount`,
+        'Interval count must be an integer from 1 to 3650',
+      );
     if (row.status != null)
       oneOf(row.status, `${path}.status`, ['ACTIVE', 'PAUSED', 'CANCELED']);
     if (row.necessity != null)
@@ -236,6 +251,35 @@ export function validateFinanceImportDocument(
         `${path}.categoryRef`,
         'Regular payments require an EXPENSE category',
       );
+  });
+  const historicOccurrenceKeys = new Set<string>();
+  data.transactions.forEach((row, index) => {
+    const path = `data.transactions[${index}]`;
+    requireRef(
+      row.recurringPaymentRef,
+      `${path}.recurringPaymentRef`,
+      regularPaymentRefs,
+      true,
+    );
+    if (typeof row.recurringPaymentRef !== 'string') return;
+    const payment = regularPaymentByRef.get(row.recurringPaymentRef)!;
+    if (row.type !== 'EXPENSE' || (row.purpose ?? 'ORDINARY') !== 'ORDINARY')
+      fail(
+        `${path}.recurringPaymentRef`,
+        'A recurring payment history row must be an ordinary EXPENSE transaction',
+      );
+    if (row.accountRef !== payment.accountRef)
+      fail(
+        `${path}.recurringPaymentRef`,
+        'A recurring payment history row must use the payment account',
+      );
+    const key = `${row.recurringPaymentRef}:${row.occurredAt}`;
+    if (historicOccurrenceKeys.has(key))
+      fail(
+        `${path}.occurredAt`,
+        'A recurring payment can have only one imported payment at the same timestamp',
+      );
+    historicOccurrenceKeys.add(key);
   });
   data.savingsGoals.forEach((row, index) => {
     const path = `data.savingsGoals[${index}]`;

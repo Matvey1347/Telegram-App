@@ -28,6 +28,7 @@ describe('TelegramSystemBotWorkspaceFlowService', () => {
     ),
   };
   const workflows = {
+    requireNoActiveBatchImport: jest.fn(),
     active: jest.fn(),
     create: jest.fn(),
     transition: jest.fn(),

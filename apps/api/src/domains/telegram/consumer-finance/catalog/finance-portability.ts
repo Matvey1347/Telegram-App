@@ -1,12 +1,17 @@
 import { Prisma } from '@prisma/client';
 import type { ConsumerFinanceImportDocumentV1 } from '@telegram-system/shared';
 import type { PrismaService } from '../../../../prisma/prisma.service';
+import {
+  financeDocumentCounts,
+  financeDocumentRecordCount,
+  pruneFinanceExportHistory,
+} from '../portability/finance-portability-history';
 
 const iso = (value: Date | null) => value?.toISOString() ?? null;
 const decimal = (value: Prisma.Decimal) => value.toString();
 
 /** A bounded, user-triggered snapshot that is directly accepted by import v1. */
-async function financeDataSnapshot(
+export async function financeDataSnapshot(
   prisma: Prisma.TransactionClient,
   profileId: string,
 ): Promise<ConsumerFinanceImportDocumentV1> {
@@ -43,7 +48,10 @@ async function financeDataSnapshot(
         deletedAt: null,
         purpose: { notIn: ['INVESTMENT_CONTRIBUTION', 'INVESTMENT_RETURN'] },
       },
-      include: { items: true },
+      include: {
+        items: true,
+        recurringPaymentOccurrence: { select: { recurringPaymentId: true } },
+      },
     }),
     prisma.financeTransfer.findMany({
       where: { profileId, deletedAt: null },
@@ -92,6 +100,7 @@ async function financeDataSnapshot(
         name: row.name,
         emoji: row.emoji,
         type: row.type,
+        necessity: row.necessity,
         key: row.key,
         archivedAt: iso(row.archivedAt),
       })),
@@ -99,6 +108,7 @@ async function financeDataSnapshot(
         ref: row.id,
         accountRef: row.accountId,
         categoryRef: row.categoryId,
+        recurringPaymentRef: row.recurringPaymentOccurrence?.recurringPaymentId,
         type: row.type,
         amount: decimal(row.amount),
         economicAmount: decimal(row.economicAmount ?? row.amount),
@@ -165,6 +175,7 @@ async function financeDataSnapshot(
         name: row.name,
         amount: decimal(row.amount),
         recurrence: row.recurrence,
+        intervalCount: row.intervalCount,
         nextOccurrenceAt: row.nextOccurrenceAt.toISOString(),
         scheduleTimezone: row.scheduleTimezone,
         note: row.note,
@@ -228,9 +239,25 @@ export function exportFinanceData(
   prisma: PrismaService,
   profileId: string,
 ): Promise<ConsumerFinanceImportDocumentV1> {
-  return prisma.$transaction((tx) => financeDataSnapshot(tx, profileId), {
-    isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
-    maxWait: 5_000,
-    timeout: 30_000,
-  });
+  return prisma.$transaction(
+    async (tx) => {
+      const document = await financeDataSnapshot(tx, profileId);
+      const counts = financeDocumentCounts(document);
+      await tx.financeDataExportReceipt.create({
+        data: {
+          profileId,
+          formatVersion: document.version,
+          exportedCount: financeDocumentRecordCount(counts),
+          counts,
+        },
+      });
+      await pruneFinanceExportHistory(tx, profileId);
+      return document;
+    },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+      maxWait: 5_000,
+      timeout: 30_000,
+    },
+  );
 }

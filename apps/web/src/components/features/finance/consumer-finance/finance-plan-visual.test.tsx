@@ -4,9 +4,9 @@ import { FinancePlanVisual } from "./finance-plan-visual";
 
 describe("FinancePlanVisual", () => {
   it.each([
-    ["FREE", "cash-flow"],
-    ["PRO", "live-analytics"],
-    ["ULTIMATE", "protected-intelligence"],
+    ["FREE", "daily-ledger"],
+    ["PRO", "automated-ledger"],
+    ["ULTIMATE", "finance-statement"],
   ] as const)("renders a dedicated detailed %s scene", (tier, scene) => {
     const { container } = render(<FinancePlanVisual tier={tier} />);
 
@@ -16,6 +16,7 @@ describe("FinancePlanVisual", () => {
     expect(
       container.querySelector(`[data-finance-plan-scene='${scene}']`),
     ).toBeInTheDocument();
-    expect(container.querySelectorAll("svg defs, svg path, svg rect").length).toBeGreaterThan(6);
+    expect(container.querySelector("svg")).toBeNull();
+    expect(container).toHaveTextContent("₴");
   });
 });

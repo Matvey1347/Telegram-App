@@ -24,6 +24,7 @@ import {
 import { structuredErrorPayload } from '../../../common/http/structured-http-error';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
+import { requireNonBatchManagedPosts } from './telegram-managed-post-ownership';
 
 @Injectable()
 export class TelegramManagedPostBulkService {
@@ -67,6 +68,11 @@ export class TelegramManagedPostBulkService {
         'Duplicate postId in batch',
       );
     }
+    await requireNonBatchManagedPosts(this.prisma, {
+      workspaceId,
+      channelId,
+      postIds: [...uniquePostIds],
+    });
     const uniqueScheduledAt = new Set(items.map((item) => item.scheduledAt));
     if (uniqueScheduledAt.size !== items.length) {
       throw telegramPostsBadRequest(

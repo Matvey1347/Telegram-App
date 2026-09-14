@@ -46,10 +46,7 @@ export function AssistantProposalCard({
         >
           <div className="flex justify-between gap-3">
             <span>{operation.description}</span>
-            <span
-              className="shrink-0 tabular-nums"
-              aria-label={t.cashMovement}
-            >
+            <span className="shrink-0 tabular-nums" aria-label={t.cashMovement}>
               {formatMoney(operation.amount, operation.currency, "symbol")}
             </span>
           </div>
@@ -88,7 +85,7 @@ export function AssistantProposalCard({
         <Button disabled={confirming} onClick={onConfirm}>
           {t.confirm}
         </Button>
-        <Button variant="secondary" disabled={cancelling} onClick={onCancel}>
+        <Button variant="cancel" disabled={cancelling} onClick={onCancel}>
           {t.cancel}
         </Button>
       </div>

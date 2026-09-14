@@ -18,8 +18,10 @@ import {
 import {
   assertFinanceAiOperation,
   financeAiOperationItemSchema,
-  type AiFinanceOperation,
+  normalizeFinanceAiOperation,
+  type AiFinanceOperationOutput,
 } from './finance-ai.provider';
+import { partialJsonStringField } from './finance-ai-json-stream';
 
 const analyticsInsightSchema = {
   type: 'object',
@@ -189,11 +191,15 @@ export class FinanceAiAnalyticsService {
       workspaceId: string;
       telegramBotUserId: string;
     };
+    onMessageDelta?: (delta: string) => void;
+    signal?: AbortSignal;
   }) {
     const startedAt = Date.now();
     const model = AI_MODEL_POLICY.FINANCE_ANALYSIS;
     let status = 'FAILED';
     let usage: FinanceAiResponseUsage | undefined;
+    let structuredText = '';
+    let streamedMessage = '';
     try {
       const key = await this.credentials.key(
         input.profileId,
@@ -220,6 +226,18 @@ export class FinanceAiAnalyticsService {
           'Choose ANSWER for analysis or reconciliation questions. Use only supplied facts. When a stated real balance differs from expected account balance, calculate the difference if possible, inspect recent transactions for plausible candidates, clearly label uncertainty, and explain which entry meaning would fix the ledger. Never invent a missing transaction. ' +
           'Cash movement and economic meaning differ: reimbursement and pass-through receipts are not income; debt principal repayment is not expense; shared payments count only the user share as expense; investment flows are separate. Never write data or claim that data was written.',
         providerFailureMessage: 'Finance assistant request failed',
+        signal: input.signal,
+        onOutputTextDelta: input.onMessageDelta
+          ? (delta) => {
+              structuredText += delta;
+              const message = partialJsonStringField(structuredText, 'message');
+              if (message === null || message.length <= streamedMessage.length)
+                return;
+              const messageDelta = message.slice(streamedMessage.length);
+              streamedMessage = message;
+              input.onMessageDelta?.(messageDelta);
+            }
+          : undefined,
       });
       usage = response.usage;
       const parsed = response.text
@@ -227,7 +245,7 @@ export class FinanceAiAnalyticsService {
             kind?: 'ANSWER' | 'CLARIFICATION' | 'GUIDANCE' | 'RECORD';
             message?: string;
             recommendedScreen?: string | null;
-            operations?: AiFinanceOperation[];
+            operations?: AiFinanceOperationOutput[];
           })
         : null;
       if (
@@ -247,15 +265,15 @@ export class FinanceAiAnalyticsService {
         throw new BadGatewayException(
           'Finance AI returned an invalid assistant response',
         );
-      for (const operation of parsed.operations)
-        assertFinanceAiOperation(operation);
+      const operations = parsed.operations.map(normalizeFinanceAiOperation);
+      for (const operation of operations) assertFinanceAiOperation(operation);
       status = 'SUCCEEDED';
       return {
         kind: parsed.kind,
         message: parsed.message.trim(),
         recommendedScreen:
           (parsed.recommendedScreen as ConsumerFinanceAssistantScreen) || null,
-        operations: parsed.operations,
+        operations,
       };
     } catch (error) {
       if (

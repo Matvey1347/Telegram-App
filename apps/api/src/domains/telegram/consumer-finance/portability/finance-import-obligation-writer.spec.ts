@@ -1,4 +1,5 @@
 import type { ConsumerFinanceImportDocumentV1 } from '@telegram-system/shared';
+import { Prisma } from '@prisma/client';
 import { writeFinanceObligationImport } from './finance-import-obligation-writer';
 
 function document(statuses?: {
@@ -12,7 +13,15 @@ function document(statuses?: {
     mode: 'ADD',
     data: {
       accounts: [{ ref: 'cash', name: 'Cash', type: 'CASH', currency: 'UAH' }],
-      categories: [{ ref: 'rent', name: 'Rent', type: 'EXPENSE', key: null }],
+      categories: [
+        {
+          ref: 'rent',
+          name: 'Rent',
+          type: 'EXPENSE',
+          key: null,
+          necessity: 'REQUIRED',
+        },
+      ],
       transactions:
         statuses?.debt === 'SETTLED'
           ? [
@@ -97,6 +106,9 @@ function setup() {
     financeRecurringPaymentRevision: {
       createMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
+    financeRecurringPaymentOccurrence: {
+      createMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
   };
   const delivery = {
     enqueueManyInTransaction: jest
@@ -113,6 +125,44 @@ function setup() {
 }
 
 describe('writeFinanceObligationImport', () => {
+  it('links imported subscription history to its recurring payment', async () => {
+    const test = setup();
+    const source = document() as ConsumerFinanceImportDocumentV1;
+    source.data.transactions = [
+      {
+        ref: 'subscription-history',
+        accountRef: 'cash',
+        type: 'EXPENSE',
+        amount: '95',
+        occurredAt: '2026-09-03T09:00:00.000Z',
+        recurringPaymentRef: 'regular',
+      },
+    ] as NonNullable<ConsumerFinanceImportDocumentV1['data']['transactions']>;
+
+    await writeFinanceObligationImport({
+      tx: test.tx as never,
+      profileId: 'profile-1',
+      document: source,
+      accountIds: new Map([['cash', 'account-1']]),
+      categoryIds: new Map([['rent', 'category-1']]),
+      transactionIds: new Map([['subscription-history', 'transaction-1']]),
+      delivery: test.delivery as never,
+      presentation: test.presentation,
+      onProgress: jest.fn(),
+      signal: new AbortController().signal,
+    });
+
+    expect(test.tx.financeRecurringPaymentOccurrence.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          transactionId: 'transaction-1',
+          scheduledAmount: expect.any(Prisma.Decimal),
+          paidAmount: expect.any(Prisma.Decimal),
+          configVersion: 1,
+        }),
+      ],
+    });
+  });
   it('creates durable deliveries for imported active obligations', async () => {
     const test = setup();
 
@@ -133,6 +183,9 @@ describe('writeFinanceObligationImport', () => {
       reminders: 1,
       debts: 1,
       regularPayments: 1,
+    });
+    expect(test.tx.financeRecurringPayment.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ necessity: 'REQUIRED' })],
     });
     expect(test.delivery.enqueueManyInTransaction).toHaveBeenCalledTimes(3);
     const calls = test.delivery.enqueueManyInTransaction.mock

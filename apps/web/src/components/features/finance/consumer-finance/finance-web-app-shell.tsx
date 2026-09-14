@@ -25,6 +25,7 @@ import { FinanceMobileNavigation } from "./finance-mobile-navigation";
 import styles from "./finance-navigation-groups.module.css";
 
 export function FinanceWebAppShell({
+  botId,
   logoUrl,
   screen,
   copy,
@@ -40,6 +41,7 @@ export function FinanceWebAppShell({
   onSignOut,
   signingOut = false,
 }: {
+  botId: string;
   logoUrl?: string;
   screen: ConsumerFinanceScreen;
   copy: FinanceCoreCopy;
@@ -96,7 +98,8 @@ export function FinanceWebAppShell({
               <button
                 type="button"
                 onClick={onOpenAssistant}
-                className="mb-3 flex min-h-11 w-full items-center gap-2 rounded-xl border border-cyan-800/60 bg-cyan-500/10 px-2.5 text-sm text-cyan-100 outline-none transition hover:border-cyan-700 hover:bg-cyan-500/15 focus-visible:ring-2 focus-visible:ring-cyan-300"
+                aria-current={screen === "assistant" ? "page" : undefined}
+                className={`mb-3 flex min-h-11 w-full items-center gap-2 rounded-xl border px-2.5 text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-cyan-300 ${screen === "assistant" ? "border-cyan-600 bg-cyan-500/20 text-cyan-100" : "border-cyan-800/60 bg-cyan-500/10 text-cyan-100 hover:border-cyan-700 hover:bg-cyan-500/15"}`}
               >
                 <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-800/60 bg-cyan-950/70">
                   <Bot size={17} aria-hidden="true" />
@@ -162,6 +165,7 @@ export function FinanceWebAppShell({
                 />
                 {profile ? (
                   <FinanceAccountMenu
+                    botId={botId}
                     profile={profile}
                     copy={copy}
                     screen={screen}

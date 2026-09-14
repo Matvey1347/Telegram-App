@@ -5,12 +5,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import type {
   ConsumerFinanceCategory,
+  ConsumerFinanceExpenseNecessity,
   ConsumerFinanceTransactionType,
 } from "@telegram-system/shared";
 import {
   Button,
   Card,
   ErrorState,
+  FinanceNecessityToggle,
   FormField,
   Input,
   LoadingState,
@@ -174,25 +176,30 @@ function CategoryEditor({
     editing?.type ?? "EXPENSE",
   );
   const [parentId, setParentId] = useState(editing?.parentId ?? "");
-  const [emoji, setEmoji] = useState(
-    editing?.iconPresentation.type === "unicode"
-      ? editing.iconPresentation.value
-      : "🏷️",
+  const [necessity, setNecessity] = useState<ConsumerFinanceExpenseNecessity>(
+    editing?.necessity ?? "DISCRETIONARY",
+  );
+  const [iconSource, setIconSource] = useState<string | null>(
+    editing?.iconPresentation.type === "image"
+      ? `image:${editing.iconPresentation.url}`
+      : (editing?.iconPresentation.value ?? "🏷️"),
   );
   const mutation = useMutation({
     mutationFn: () =>
       editing
         ? consumerFinanceApi.updateCategory(botId, editing.id, {
             name: name.trim(),
-            emoji,
+            emoji: iconSource,
             type,
             parentId: parentId || null,
+            necessity,
           })
         : consumerFinanceApi.createCategory(botId, {
             name: name.trim(),
-            emoji,
+            emoji: iconSource,
             type,
             parentId: parentId || undefined,
+            necessity,
           }),
     onSuccess: (item) => {
       onSaved(item);
@@ -222,16 +229,16 @@ function CategoryEditor({
         }}
         title={editing ? t.editCategory : t.addCategory}
       >
-        <div className="space-y-3">
-          <IconPicker
-            uiLocale={locale}
-            icon={{ type: "unicode", value: emoji }}
-            iconId={null}
-            onChange={() => undefined}
-            onEmojiChange={(value) => value && setEmoji(value)}
-            allowImages={false}
-            buttonLabel={name.trim() || t.categoryName}
-          />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <IconPicker
+              botId={botId}
+              uiLocale={locale}
+              source={iconSource}
+              onChange={setIconSource}
+              buttonLabel={name.trim() || t.categoryName}
+            />
+          </div>
           <FormField label={t.categoryName}>
             <Input
               autoFocus
@@ -252,6 +259,16 @@ function CategoryEditor({
               <option value="INCOME">{t.income}</option>
             </Select>
           </FormField>
+          {type === "EXPENSE" ? (
+            <FinanceNecessityToggle
+              value={necessity}
+              locale={locale}
+              onChange={setNecessity}
+              label={t.categoryRequired}
+              help={t.categoryRequiredHelp}
+              className="sm:col-span-2"
+            />
+          ) : null}
           <FormField label={t.parentCategory}>
             <Select
               uiLocale={locale}
@@ -268,21 +285,31 @@ function CategoryEditor({
                     (!item.archivedAt || item.id === editing?.parentId),
                 )
                 .map((item) => (
-                  <option key={item.id} value={item.id}>
+                  <option
+                    key={item.id}
+                    value={item.id}
+                    data-icon-emoji={
+                      item.iconPresentation.type === "unicode"
+                        ? item.iconPresentation.value
+                        : undefined
+                    }
+                  >
                     {localizeFinanceCategory(item.name, item.key, locale)}
                   </option>
                 ))}
             </Select>
           </FormField>
           <Button
-            className="w-full"
+            className="w-full sm:col-span-2"
             disabled={!name.trim() || mutation.isPending}
             onClick={() => mutation.mutate()}
           >
             {mutation.isPending ? t.saving : t.save}
           </Button>
           {mutation.isError ? (
-            <p className="text-sm text-rose-300">{t.categorySaveError}</p>
+            <p className="text-sm text-rose-300 sm:col-span-2">
+              {t.categorySaveError}
+            </p>
           ) : null}
         </div>
       </Modal>

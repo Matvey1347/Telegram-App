@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  InternalServerErrorException,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { TelegramManagedPostStatus, TelegramSourceType } from '@prisma/client';
 import type { BulkActionResultItem } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -18,6 +13,7 @@ import { TelegramChannelAccessService } from './telegram-channel-access.service'
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 import { BulkProgressCallback } from './telegram-channels.internal';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
+import { nonBatchPost } from './telegram-managed-post-ownership';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 import {
@@ -26,7 +22,6 @@ import {
   telegramPostsBadRequest,
   telegramPostsNotFound,
 } from './telegram-posts.errors';
-
 @Injectable()
 export class TelegramManagedPostMoveService {
   constructor(
@@ -81,7 +76,7 @@ export class TelegramManagedPostMoveService {
     actorUserId?: string,
   ) {
     const post = await this.prisma.telegramManagedPost.findFirst({
-      where: { id: postId, workspaceId },
+      where: nonBatchPost(workspaceId, postId),
       include: { telegramChannel: true },
     });
     if (!post) throw managedPostNotFound();
@@ -443,7 +438,7 @@ export class TelegramManagedPostMoveService {
     const workspaceId =
       await this.telegramChannelsSupportService.workspace(userId);
     const post = await this.prisma.telegramManagedPost.findFirst({
-      where: { id: postId, workspaceId, telegramChannelId: channelId },
+      where: nonBatchPost(workspaceId, postId, channelId),
       include: { telegramChannel: true },
     });
     if (!post) throw managedPostNotFound();

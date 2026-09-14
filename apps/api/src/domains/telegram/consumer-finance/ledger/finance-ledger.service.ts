@@ -249,10 +249,6 @@ export class FinanceLedgerService {
       purpose,
     );
     this.assertPurposeDirection(purpose, dto.type, dto.categoryId);
-    const necessity =
-      dto.type === 'EXPENSE' && purpose === 'ORDINARY'
-        ? (dto.necessity ?? FinanceExpenseNecessity.UNSPECIFIED)
-        : FinanceExpenseNecessity.UNSPECIFIED;
     const account = writeContext
       ? writeContext.accounts.get(dto.accountId)
       : await tx.financeAccount.findFirst({
@@ -281,6 +277,12 @@ export class FinanceLedgerService {
       throw new BadRequestException(
         'Category type does not match transaction type',
       );
+    const necessity =
+      dto.type === 'EXPENSE' && purpose === 'ORDINARY'
+        ? (dto.necessity ??
+          category?.necessity ??
+          FinanceExpenseNecessity.UNSPECIFIED)
+        : FinanceExpenseNecessity.UNSPECIFIED;
     const occurredAt = new Date(dto.occurredAt);
     const [valuation, defaultSnapshot] = await Promise.all([
       financeValuationSnapshot(
@@ -396,10 +398,6 @@ export class FinanceLedgerService {
       purpose,
     );
     this.assertPurposeDirection(purpose, dto.type, dto.categoryId);
-    const necessity =
-      dto.type === 'EXPENSE' && purpose === 'ORDINARY'
-        ? (dto.necessity ?? FinanceExpenseNecessity.UNSPECIFIED)
-        : FinanceExpenseNecessity.UNSPECIFIED;
     const account = await tx.financeAccount.findFirst({
       where: {
         id: dto.accountId,
@@ -426,6 +424,12 @@ export class FinanceLedgerService {
       throw new BadRequestException(
         'Category type does not match transaction type',
       );
+    const necessity =
+      dto.type === 'EXPENSE' && purpose === 'ORDINARY'
+        ? (dto.necessity ??
+          category?.necessity ??
+          FinanceExpenseNecessity.UNSPECIFIED)
+        : FinanceExpenseNecessity.UNSPECIFIED;
     const occurredAt = new Date(dto.occurredAt);
     const [valuation, defaultSnapshot] = await Promise.all([
       financeValuationSnapshot(

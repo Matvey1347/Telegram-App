@@ -39,7 +39,20 @@ export function DesktopTransactionTable({
         {items.map((item) => {
           const income =
             item.type === "INCOME" || item.purpose === "INVESTMENT_RETURN";
-          const generated = item.purpose.startsWith("INVESTMENT_");
+          const investment = item.purpose.startsWith("INVESTMENT_");
+          const generated = investment;
+          const debt = item.purpose === "DEBT_REPAYMENT";
+          const hasItemizedDetails = (item.itemCount ?? 0) > 0;
+          const purposeTone = investment
+            ? "text-violet-300"
+            : debt
+              ? "text-amber-300"
+              : "text-sky-200";
+          const rowTone = investment
+            ? "bg-violet-950/20 hover:bg-violet-950/30"
+            : debt
+              ? "bg-amber-950/15 hover:bg-amber-950/25"
+              : "hover:bg-neutral-800/40";
           const purposeTitle =
             item.purpose === "INVESTMENT_CONTRIBUTION"
               ? t.investmentContribution
@@ -53,18 +66,27 @@ export function DesktopTransactionTable({
                       ? t.debtRepayment
                       : undefined;
           return (
-            <tr key={item.id} className="hover:bg-neutral-800/40">
+            <tr key={item.id} className={rowTone}>
               <td className="max-w-80 px-3 py-2.5">
-                <button
-                  type="button"
-                  className="block max-w-full truncate text-left text-sky-200 hover:underline"
-                  onClick={() => onDetail(item)}
-                >
-                  {purposeTitle ||
-                    item.merchantDisplay ||
-                    item.description ||
-                    (income ? t.income : t.expense)}
-                </button>
+                {hasItemizedDetails ? (
+                  <button
+                    type="button"
+                    className={`block max-w-full truncate text-left hover:underline ${purposeTone}`}
+                    onClick={() => onDetail(item)}
+                  >
+                    {purposeTitle ||
+                      item.merchantDisplay ||
+                      item.description ||
+                      (income ? t.income : t.expense)}
+                  </button>
+                ) : (
+                  <span className={`block max-w-full truncate ${purposeTone}`}>
+                    {purposeTitle ||
+                      item.merchantDisplay ||
+                      item.description ||
+                      (income ? t.income : t.expense)}
+                  </span>
+                )}
               </td>
               <td className="whitespace-nowrap px-3 py-2.5 text-neutral-400">
                 {new Intl.DateTimeFormat(financeIntlLocale(locale), {
@@ -81,7 +103,9 @@ export function DesktopTransactionTable({
                   <span>{item.account?.name ?? t.accountFallback}</span>
                 </span>
               </td>
-              <td className="px-3 py-2.5 text-neutral-400">
+              <td
+                className={`px-3 py-2.5 ${investment ? "text-violet-300" : debt ? "text-amber-300" : "text-neutral-400"}`}
+              >
                 {generated ? (
                   purposeTitle
                 ) : item.category ? (
@@ -111,13 +135,15 @@ export function DesktopTransactionTable({
               </td>
               <td className="px-2 py-1.5">
                 <div className="flex justify-end gap-1">
-                  <RowAction
-                    label={t.transactionDetails}
-                    tone="text-sky-300"
-                    onClick={() => onDetail(item)}
-                  >
-                    <List size={16} />
-                  </RowAction>
+                  {hasItemizedDetails ? (
+                    <RowAction
+                      label={t.transactionDetails}
+                      tone="text-sky-300"
+                      onClick={() => onDetail(item)}
+                    >
+                      <List size={16} />
+                    </RowAction>
+                  ) : null}
                   {!generated ? (
                     <>
                       <RowAction

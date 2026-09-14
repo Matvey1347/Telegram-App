@@ -1,12 +1,34 @@
 import type {
   ConsumerFinanceImportProgress,
   ConsumerFinanceImportResult,
+  ConsumerFinancePortabilityHistory,
+  ConsumerFinanceRollbackResult,
 } from "@telegram-system/shared";
 import { createRequestCorrelationId } from "@/lib/http/transport";
 import {
+  consumerFinanceHttp,
   consumerFinanceRoot,
+  consumerRequest,
   resolveConsumerFinanceApiBase,
 } from "./consumer-finance-http";
+
+export const consumerFinancePortabilityApi = {
+  portabilityHistory: async (botId: string) =>
+    (
+      await consumerFinanceHttp.get<ConsumerFinancePortabilityHistory>(
+        `${consumerFinanceRoot(botId)}/portability-history`,
+        consumerRequest(),
+      )
+    ).data,
+  rollbackImport: async (botId: string, importId: string) =>
+    (
+      await consumerFinanceHttp.post<ConsumerFinanceRollbackResult>(
+        `${consumerFinanceRoot(botId)}/imports/${encodeURIComponent(importId)}/rollback`,
+        { confirmation: "ROLLBACK FINANCE IMPORT" },
+        consumerRequest(),
+      )
+    ).data,
+};
 
 type ImportStreamEvent =
   | {

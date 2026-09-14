@@ -16,6 +16,7 @@ export function useTelegramSystemBotPostFlow<T>({
   sendErrorMessage,
   resolveImportError,
   openBotOnStart = true,
+  storageKey,
 }: {
   prepareImport?: () => Promise<string>;
   readImport?: (workflowId: string) => Promise<ImportResult<T>>;
@@ -27,6 +28,7 @@ export function useTelegramSystemBotPostFlow<T>({
   sendErrorMessage?: string;
   resolveImportError?: (error: unknown) => string;
   openBotOnStart?: boolean;
+  storageKey?: string;
 }) {
   const latest = useRef({ readImport, onImported });
   useEffect(() => {
@@ -35,11 +37,41 @@ export function useTelegramSystemBotPostFlow<T>({
   const checkingRef = useRef(false);
   const pollDeadlineRef = useRef(0);
   const pollStartedAtRef = useRef(0);
+  const workflowIdRef = useRef("");
+  const storageKeyRef = useRef(storageKey);
+  const restoredStorageKeyRef = useRef<string | undefined>(undefined);
   const [workflowId, setWorkflowId] = useState("");
   const [importStatus, setImportStatus] = useState<ActionStatus>("idle");
   const [sendStatus, setSendStatus] = useState<ActionStatus>("idle");
   const [error, setError] = useState("");
   const [dots, setDots] = useState(1);
+
+  useEffect(() => {
+    storageKeyRef.current = storageKey;
+    if (!storageKey || restoredStorageKeyRef.current === storageKey) return;
+    restoredStorageKeyRef.current = storageKey;
+    pollDeadlineRef.current = 0;
+    const workflowAtRestoreStart = workflowIdRef.current;
+    const timeout = window.setTimeout(() => {
+      if (
+        storageKeyRef.current !== storageKey ||
+        workflowIdRef.current !== workflowAtRestoreStart
+      )
+        return;
+      checkingRef.current = false;
+      const restoredWorkflowId =
+        window.localStorage.getItem(storageKey) || "";
+      workflowIdRef.current = restoredWorkflowId;
+      pollStartedAtRef.current = Date.now();
+      pollDeadlineRef.current = restoredWorkflowId
+        ? Date.now() + 120_000
+        : 0;
+      setWorkflowId(restoredWorkflowId);
+      setImportStatus(restoredWorkflowId ? "waiting" : "idle");
+      setError("");
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [storageKey]);
 
   useEffect(() => {
     if (importStatus !== "working" && sendStatus !== "working") return;
@@ -53,19 +85,36 @@ export function useTelegramSystemBotPostFlow<T>({
   const checkImport = useCallback(async () => {
     if (!workflowId || checkingRef.current || !latest.current.readImport)
       return false;
+    const checkedWorkflowId = workflowId;
+    const checkedStorageKey = storageKeyRef.current;
+    const checkedReadImport = latest.current.readImport;
+    const checkedOnImported = latest.current.onImported;
+    const isCurrentCheck = () =>
+      storageKeyRef.current === checkedStorageKey &&
+      workflowIdRef.current === checkedWorkflowId;
     checkingRef.current = true;
     try {
-      const result = await latest.current.readImport(workflowId);
+      const result = await checkedReadImport(checkedWorkflowId);
+      if (!isCurrentCheck()) return false;
       if (!result.ready) {
         setImportStatus("waiting");
         return false;
       }
-      await latest.current.onImported?.(result.value);
+      await checkedOnImported?.(result.value);
+      if (!isCurrentCheck()) return false;
+      if (
+        checkedStorageKey &&
+        window.localStorage.getItem(checkedStorageKey) === checkedWorkflowId
+      ) {
+        window.localStorage.removeItem(checkedStorageKey);
+      }
+      workflowIdRef.current = "";
       setWorkflowId("");
       setImportStatus("done");
       setError("");
       return true;
     } catch {
+      if (!isCurrentCheck()) return false;
       setImportStatus("waiting");
       setError(
         importErrorMessage ?? "Could not load the post from the system bot.",
@@ -80,9 +129,24 @@ export function useTelegramSystemBotPostFlow<T>({
     if (!workflowId || importStatus === "done") return;
     let cancelled = false;
     let timeout: number | undefined;
+    let hiddenAt =
+      document.visibilityState === "hidden" ? Date.now() : undefined;
+    const clearScheduledCheck = () => {
+      if (timeout === undefined) return;
+      window.clearTimeout(timeout);
+      timeout = undefined;
+    };
     const schedule = (delay: number) => {
-      if (cancelled || Date.now() >= pollDeadlineRef.current) return;
+      clearScheduledCheck();
+      if (
+        cancelled ||
+        document.visibilityState === "hidden" ||
+        Date.now() >= pollDeadlineRef.current
+      )
+        return;
       timeout = window.setTimeout(async () => {
+        timeout = undefined;
+        if (Date.now() >= pollDeadlineRef.current) return;
         const ready = await checkImport();
         if (!ready) {
           const elapsed = Date.now() - pollStartedAtRef.current;
@@ -90,13 +154,24 @@ export function useTelegramSystemBotPostFlow<T>({
         }
       }, delay);
     };
-    const checkOnReturn = () => void checkImport();
+    const checkOnReturn = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAt ??= Date.now();
+        clearScheduledCheck();
+        return;
+      }
+      if (hiddenAt !== undefined) {
+        pollDeadlineRef.current += Date.now() - hiddenAt;
+        hiddenAt = undefined;
+      }
+      schedule(0);
+    };
     schedule(250);
     window.addEventListener("focus", checkOnReturn);
     document.addEventListener("visibilitychange", checkOnReturn);
     return () => {
       cancelled = true;
-      if (timeout) window.clearTimeout(timeout);
+      clearScheduledCheck();
       window.removeEventListener("focus", checkOnReturn);
       document.removeEventListener("visibilitychange", checkOnReturn);
     };
@@ -118,6 +193,10 @@ export function useTelegramSystemBotPostFlow<T>({
       if (!nextWorkflowId) throw new Error("Import workflow was not prepared");
       pollDeadlineRef.current = Date.now() + 120_000;
       pollStartedAtRef.current = Date.now();
+      workflowIdRef.current = nextWorkflowId;
+      if (storageKeyRef.current) {
+        window.localStorage.setItem(storageKeyRef.current, nextWorkflowId);
+      }
       setWorkflowId(nextWorkflowId);
       setImportStatus("waiting");
       const username = botUsername?.trim().replace(/^@+/, "");
@@ -165,6 +244,10 @@ export function useTelegramSystemBotPostFlow<T>({
     checkingRef.current = false;
     pollDeadlineRef.current = 0;
     pollStartedAtRef.current = 0;
+    workflowIdRef.current = "";
+    if (storageKeyRef.current) {
+      window.localStorage.removeItem(storageKeyRef.current);
+    }
     setWorkflowId("");
     setImportStatus("idle");
     setSendStatus("idle");

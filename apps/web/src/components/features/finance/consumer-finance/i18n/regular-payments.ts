@@ -1,10 +1,11 @@
-import { financeCoreCopy, type FinanceLocale } from "./core";
+import { financeCoreCopy, financeIntlLocale, type FinanceLocale } from "./core";
 
 const en = {
   active: "Active",
   paused: "Paused",
   canceled: "Canceled",
   addRegularPayment: "Add regular payment",
+  actions: "Payment actions",
   editRegularPayment: "Edit regular payment",
   paymentName: "Payment name",
   amount: "Amount",
@@ -12,6 +13,13 @@ const en = {
   category: "Expense category (optional)",
   noCategory: "No category",
   recurrence: "Frequency",
+  intervalCount: "Repeat every",
+  daily: "Daily",
+  every: "Every",
+  unitDay: "day(s)",
+  unitWeek: "week(s)",
+  unitMonth: "month(s)",
+  unitYear: "year(s)",
   weekly: "Weekly",
   monthly: "Monthly",
   yearly: "Yearly",
@@ -65,6 +73,7 @@ const uk: RegularCopy = {
   paused: "Призупинені",
   canceled: "Скасовані",
   addRegularPayment: "Додати регулярний платіж",
+  actions: "Дії з платежем",
   editRegularPayment: "Редагувати регулярний платіж",
   paymentName: "Назва платежу",
   amount: "Сума",
@@ -72,6 +81,13 @@ const uk: RegularCopy = {
   category: "Категорія витрат (необов’язково)",
   noCategory: "Без категорії",
   recurrence: "Періодичність",
+  intervalCount: "Повторювати кожні",
+  daily: "Щодня",
+  every: "Кожні",
+  unitDay: "день/дні",
+  unitWeek: "тиждень/тижні",
+  unitMonth: "місяць/місяці",
+  unitYear: "рік/роки",
   weekly: "Щотижня",
   monthly: "Щомісяця",
   yearly: "Щороку",
@@ -124,6 +140,7 @@ const ru: RegularCopy = {
   paused: "Приостановленные",
   canceled: "Отменённые",
   addRegularPayment: "Добавить регулярный платёж",
+  actions: "Действия с платежом",
   editRegularPayment: "Редактировать регулярный платёж",
   paymentName: "Название платежа",
   amount: "Сумма",
@@ -131,6 +148,13 @@ const ru: RegularCopy = {
   category: "Категория расходов (необязательно)",
   noCategory: "Без категории",
   recurrence: "Периодичность",
+  intervalCount: "Повторять каждые",
+  daily: "Ежедневно",
+  every: "Каждые",
+  unitDay: "день/дни",
+  unitWeek: "неделю/недели",
+  unitMonth: "месяц/месяцы",
+  unitYear: "год/годы",
   weekly: "Еженедельно",
   monthly: "Ежемесячно",
   yearly: "Ежегодно",
@@ -183,3 +207,30 @@ export const financeRegularPaymentsCopy = (locale: FinanceLocale) => ({
   ...financeCoreCopy(locale),
   ...copy[locale],
 });
+
+export function financeRegularPaymentRecurrenceLabel(
+  recurrence: "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY",
+  intervalCount: number,
+  locale: FinanceLocale,
+) {
+  const t = financeRegularPaymentsCopy(locale);
+  if (intervalCount === 1) {
+    return {
+      DAILY: t.daily,
+      WEEKLY: t.weekly,
+      MONTHLY: t.monthly,
+      YEARLY: t.yearly,
+    }[recurrence];
+  }
+  const unit = {
+    DAILY: "day",
+    WEEKLY: "week",
+    MONTHLY: "month",
+    YEARLY: "year",
+  }[recurrence] as Intl.NumberFormatOptions["unit"];
+  return `${t.every} ${new Intl.NumberFormat(financeIntlLocale(locale), {
+    style: "unit",
+    unit,
+    unitDisplay: "long",
+  }).format(intervalCount)}`;
+}

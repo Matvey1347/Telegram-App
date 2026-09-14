@@ -1,19 +1,22 @@
 "use client";
 
-
 import { useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
-import type { TelegramChannelSelectOption as TelegramChannel } from "@/lib/api";
+import type { TelegramChannelSelectOption as TelegramChannel } from "@/lib/api-types/telegram/telegram-channels";
 import { useI18n } from "@/providers/i18n-provider";
 import { useDismissiblePopover } from "@/hooks/use-dismissible-popover";
 
 export function ChannelMultiSelect({
   channels,
   selectedIds,
+  disabled = false,
+  emptySelectionLabel,
   onChange,
 }: {
   channels: TelegramChannel[];
   selectedIds: string[];
+  disabled?: boolean;
+  emptySelectionLabel?: string;
   onChange: (ids: string[]) => void;
 }) {
   const { t } = useI18n();
@@ -28,6 +31,7 @@ export function ChannelMultiSelect({
   });
 
   const toggle = (channelId: string) => {
+    if (disabled) return;
     onChange(
       selected.has(channelId)
         ? selectedIds.filter((id) => id !== channelId)
@@ -36,14 +40,15 @@ export function ChannelMultiSelect({
   };
   const label = selectedIds.length
     ? t("telegram.posts.channels.selected", { count: selectedIds.length })
-    : t("telegram.posts.channels.all");
+    : (emptySelectionLabel ?? t("telegram.posts.channels.all"));
 
   return (
     <div ref={rootRef} className="relative">
       <button
         type="button"
+        disabled={disabled}
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white outline-none ring-blue-500 focus:ring"
+        className="flex w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white outline-none ring-blue-500 focus:ring disabled:cursor-not-allowed disabled:opacity-50"
       >
         <span className="min-w-0 truncate">{label}</span>
         <ChevronDown
@@ -62,6 +67,7 @@ export function ChannelMultiSelect({
             <div className="flex shrink-0 gap-1 text-xs">
               <button
                 type="button"
+                disabled={disabled}
                 onClick={() => onChange(channels.map((channel) => channel.id))}
                 className="rounded-md px-2 py-1 text-blue-300 hover:bg-blue-950/50"
               >
@@ -69,6 +75,7 @@ export function ChannelMultiSelect({
               </button>
               <button
                 type="button"
+                disabled={disabled}
                 onClick={() => onChange([])}
                 className="rounded-md px-2 py-1 text-neutral-400 hover:bg-neutral-800 hover:text-white"
               >
@@ -81,6 +88,7 @@ export function ChannelMultiSelect({
               <button
                 key={channel.id}
                 type="button"
+                disabled={disabled}
                 onClick={() => toggle(channel.id)}
                 className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-neutral-800"
               >

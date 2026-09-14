@@ -20,9 +20,6 @@ const copy = {
     cancelAutoRenew: "Cancel auto-renewal",
     resumeAutoRenew: "Resume auto-renewal",
     available: "Available plans",
-    heroTitle: "Your finances, with more room to grow",
-    heroDescription:
-      "Start with clear everyday tracking, then unlock automation and deeper financial intelligence when you need it.",
     mostPopular: "Most popular",
     freePositioning: "Full everyday finance plus a limited Jarvis trial.",
     proPositioning: "Unlimited Jarvis chat and voice for daily routines.",
@@ -83,13 +80,11 @@ const copy = {
     cancelAutoRenew: "Скасувати автопоновлення",
     resumeAutoRenew: "Відновити автопоновлення",
     available: "Доступні тарифи",
-    heroTitle: "Ваші фінанси — з більшим простором для зростання",
-    heroDescription:
-      "Почніть із зрозумілого щоденного обліку, а коли знадобиться — відкрийте автоматизацію та глибшу фінансову аналітику.",
     mostPopular: "Найпопулярніший",
     freePositioning: "Усі базові фінанси та обмежене знайомство з Джаврисом.",
     proPositioning: "Необмежений чат і голос Джавриса для щоденних справ.",
-    ultimatePositioning: "Глибокі запитання до історії, інсайти й AI-планування.",
+    ultimatePositioning:
+      "Глибокі запитання до історії, інсайти й AI-планування.",
     empty: "Для цього бота поки немає доступних тарифів.",
     paidUnavailable:
       "Платні тарифні пропозиції для цього бота поки недоступні.",
@@ -147,13 +142,12 @@ const copy = {
     cancelAutoRenew: "Отменить автопродление",
     resumeAutoRenew: "Возобновить автопродление",
     available: "Доступные тарифы",
-    heroTitle: "Ваши финансы — с большим пространством для роста",
-    heroDescription:
-      "Начните с понятного ежедневного учёта, а когда понадобится — откройте автоматизацию и более глубокую финансовую аналитику.",
     mostPopular: "Самый популярный",
-    freePositioning: "Все базовые финансы и ограниченное знакомство с Джаврисом.",
+    freePositioning:
+      "Все базовые финансы и ограниченное знакомство с Джаврисом.",
     proPositioning: "Безлимитный чат и голос Джавриса для повседневных задач.",
-    ultimatePositioning: "Глубокие вопросы к истории, инсайты и AI-планирование.",
+    ultimatePositioning:
+      "Глубокие вопросы к истории, инсайты и AI-планирование.",
     empty: "Для этого бота пока нет доступных тарифов.",
     paidUnavailable:
       "Платные тарифные предложения для этого бота пока недоступны.",

@@ -2,6 +2,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FinanceImportModal } from "./finance-import-modal";
+import {
+  financeImportInstructions,
+  financeImportTemplate,
+} from "./finance-import-instructions";
 
 const portability = vi.hoisted(() => ({ importData: vi.fn() }));
 vi.mock("@/lib/features/finance/consumer-finance-portability-api", () => ({
@@ -67,6 +71,58 @@ describe("FinanceImportModal", () => {
     expect(instruction).toContain("regularPayments");
     expect(instruction).toContain("investmentValuations");
     expect(instruction).toContain('"mode": "ADD"');
+    expect(instruction).toContain(
+      "REIMBURSEMENT и PASS_THROUGH требуют type INCOME",
+    );
+    expect(instruction).toContain("никогда не создавай EXPENSE + PASS_THROUGH");
+    expect(instruction).toContain("EXPENSE-категории");
+    expect(instruction).toContain("regularPayments");
+  });
+
+  it.each(["en", "uk", "ru"] as const)(
+    "documents valid purpose/type pairs in the %s instruction",
+    (locale) => {
+      const instruction = financeImportInstructions(locale);
+
+      expect(instruction).toContain("REIMBURSEMENT");
+      expect(instruction).toContain("PASS_THROUGH");
+      expect(instruction).toContain("INCOME");
+      expect(instruction).toContain("DEBT_REPAYMENT");
+      expect(instruction).toContain("EXPENSE + PASS_THROUGH");
+      expect(instruction).toContain('economicAmount "0"');
+      expect(instruction).toContain("closedAt");
+      expect(instruction).toContain("intervalCount");
+      expect(instruction).toContain("90");
+      expect(instruction).toContain("necessity");
+    },
+  );
+
+  it("shows a populated example for every supported Finance section", () => {
+    const example = JSON.parse(financeImportTemplate) as {
+      data: Record<string, unknown[]>;
+    };
+
+    expect(Object.keys(example.data)).toEqual([
+      "accounts",
+      "categories",
+      "transactions",
+      "transfers",
+      "limits",
+      "reminders",
+      "debts",
+      "regularPayments",
+      "savingsGoals",
+      "savingsMovements",
+      "investments",
+      "investmentCashFlows",
+      "investmentValuations",
+    ]);
+    expect(
+      Object.values(example.data).every((section) => section.length > 0),
+    ).toBe(true);
+    expect(financeImportTemplate).toContain('"settlementTransactionRef"');
+    expect(financeImportTemplate).toContain('"linkedTransferRef"');
+    expect(financeImportTemplate).toContain('"correctsRef"');
   });
 
   it("streams localized progress, completes and invalidates Finance reads", async () => {
@@ -109,10 +165,13 @@ describe("FinanceImportModal", () => {
         mode: "ADD",
       }),
     );
-    expect(
-      await screen.findByText("Добавляем данные · Операции"),
-    ).toBeVisible();
     expect(await screen.findByText("Импортировано записей: 2")).toBeVisible();
+    expect(screen.queryByText("Прогресс импорта")).not.toBeInTheDocument();
+    expect(screen.queryByText("finance.json")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Начать импорт" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Закрыть импорт")).toBeVisible();
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: ["consumer-finance", "bot-1"],
     });
@@ -136,7 +195,9 @@ describe("FinanceImportModal", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Replace all" }));
     expect(screen.getByRole("button", { name: "Start import" })).toBeDisabled();
     expect(
-      screen.getByText(/current Finance records will be permanently deleted/i),
+      screen.getByText(
+        /current Finance records will be replaced by this file/i,
+      ),
     ).toBeVisible();
     fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: "Start import" }));

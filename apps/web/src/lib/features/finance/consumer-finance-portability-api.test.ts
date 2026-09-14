@@ -1,5 +1,12 @@
+import type { InternalAxiosRequestConfig } from "axios";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { importConsumerFinanceData } from "./consumer-finance-portability-api";
+import {
+  consumerFinancePortabilityApi,
+  importConsumerFinanceData,
+} from "./consumer-finance-portability-api";
+import { consumerFinanceHttp } from "./consumer-finance-http";
+
+const originalAdapter = consumerFinanceHttp.defaults.adapter;
 
 function ndjsonResponse(chunks: string[]) {
   const encoder = new TextEncoder();
@@ -14,7 +21,54 @@ function ndjsonResponse(chunks: string[]) {
   );
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  consumerFinanceHttp.defaults.adapter = originalAdapter;
+  vi.unstubAllGlobals();
+});
+
+describe("consumerFinancePortabilityApi", () => {
+  it("loads the portability history from the consumer-scoped endpoint", async () => {
+    let request: InternalAxiosRequestConfig | undefined;
+    consumerFinanceHttp.defaults.adapter = async (config) => {
+      request = config;
+      return {
+        data: { items: [] },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await expect(
+      consumerFinancePortabilityApi.portabilityHistory("bot id"),
+    ).resolves.toEqual({ items: [] });
+    expect(request?.method).toBe("get");
+    expect(request?.url).toBe("/finance-bots/bot id/portability-history");
+  });
+
+  it("sends the fixed server confirmation when rolling an import back", async () => {
+    let request: InternalAxiosRequestConfig | undefined;
+    consumerFinanceHttp.defaults.adapter = async (config) => {
+      request = config;
+      return {
+        data: { importId: "rollback-1", restoredFromImportId: "import/1" },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config,
+      };
+    };
+
+    await consumerFinancePortabilityApi.rollbackImport("bot", "import/1");
+
+    expect(request?.method).toBe("post");
+    expect(request?.url).toBe("/finance-bots/bot/imports/import%2F1/rollback");
+    expect(JSON.parse(String(request?.data))).toEqual({
+      confirmation: "ROLLBACK FINANCE IMPORT",
+    });
+  });
+});
 
 describe("importConsumerFinanceData", () => {
   it("consumes split NDJSON progress and returns the final result", async () => {
@@ -31,10 +85,10 @@ describe("importConsumerFinanceData", () => {
       counts: { transactions: 2 },
       warnings: [],
     };
-    const text = `${JSON.stringify({ type: "progress", item: progress, current: 4, total: 15 })}\n${JSON.stringify({ type: "complete", result })}\n`;
+    const body = `${JSON.stringify({ type: "progress", item: progress, current: 4, total: 15 })}\n${JSON.stringify({ type: "complete", result })}\n`;
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(ndjsonResponse([text.slice(0, 27), text.slice(27)]));
+      .mockResolvedValue(ndjsonResponse([body.slice(0, 27), body.slice(27)]));
     vi.stubGlobal("fetch", fetchMock);
     const onProgress = vi.fn();
 

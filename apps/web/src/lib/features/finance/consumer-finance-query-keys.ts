@@ -1,8 +1,10 @@
 export const consumerFinanceKeys = {
   root: (botId: string) => ["consumer-finance", botId] as const,
   session: (botId: string) => ["consumer-finance", botId, "session"] as const,
-  dashboard: (botId: string) =>
-    ["consumer-finance", botId, "dashboard"] as const,
+  dashboard: (botId: string, filters?: Record<string, unknown>) =>
+    filters
+      ? (["consumer-finance", botId, "dashboard", filters] as const)
+      : (["consumer-finance", botId, "dashboard"] as const),
   analyticsRoot: (botId: string) =>
     ["consumer-finance", botId, "analytics"] as const,
   analytics: (botId: string, filters: Record<string, unknown>) =>
@@ -10,6 +12,8 @@ export const consumerFinanceKeys = {
   accounts: (botId: string) => ["consumer-finance", botId, "accounts"] as const,
   categories: (botId: string) =>
     ["consumer-finance", botId, "categories"] as const,
+  customIcons: (botId: string) =>
+    ["consumer-finance", botId, "custom-icons"] as const,
   transactions: (botId: string, filters: Record<string, unknown>) =>
     ["consumer-finance", botId, "transactions", filters] as const,
   transactionLists: (botId: string) =>
@@ -73,6 +77,8 @@ export const consumerFinanceKeys = {
   reminders: (botId: string) =>
     ["consumer-finance", botId, "reminders"] as const,
   settings: (botId: string) => ["consumer-finance", botId, "settings"] as const,
+  portabilityHistory: (botId: string) =>
+    ["consumer-finance", botId, "portability-history"] as const,
   browserLoginConfig: (botId: string) =>
     ["consumer-finance", botId, "browser-login-config"] as const,
   browserLoginChallenge: (botId: string) =>

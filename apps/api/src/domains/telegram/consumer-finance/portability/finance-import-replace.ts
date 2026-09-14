@@ -31,5 +31,4 @@ export async function clearFinanceDataForReplacement(
   await tx.financeAccount.deleteMany({ where });
   await tx.financePendingProposal.deleteMany({ where });
   await tx.financeChatFlow.deleteMany({ where });
-  await tx.financeDataImportReceipt.deleteMany({ where });
 }

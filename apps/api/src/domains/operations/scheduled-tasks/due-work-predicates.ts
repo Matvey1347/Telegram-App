@@ -28,6 +28,11 @@ export function managedPostIdentityCandidateWhere(
       {
         status: TelegramManagedPostStatus.SCHEDULED,
         scheduledAt: { lte: now },
+        AND: [
+          {
+            OR: [{ scheduleMode: null }, { scheduleMode: { not: 'BATCH' } }],
+          },
+        ],
       },
       {
         status: TelegramManagedPostStatus.PUBLISHED,

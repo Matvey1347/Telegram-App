@@ -15,6 +15,9 @@ type AssistantIdentity = {
   workspaceId: string;
 };
 
+const MAX_ASSISTANT_FILES = 5;
+const MAX_ASSISTANT_TOTAL_BYTES = 16 * 1024 * 1024;
+
 /** Shared, confirm-before-write AI entry flow for Web App and Mini App. */
 @Injectable()
 export class FinanceAssistantEntryService {
@@ -38,21 +41,41 @@ export class FinanceAssistantEntryService {
   }
 
   async fromFile(identity: AssistantIdentity, file?: Express.Multer.File) {
-    if (!file?.buffer?.length)
-      throw new BadRequestException('File is required');
-    const profile = await this.profile(identity.profileId);
-    const mime = file.mimetype.toLowerCase();
+    return this.fromFiles(identity, file ? [file] : []);
+  }
+
+  async fromFiles(identity: AssistantIdentity, files: Express.Multer.File[]) {
+    if (!files.length || files.some((file) => !file.buffer?.length))
+      throw new BadRequestException('At least one file is required');
+    if (files.length > MAX_ASSISTANT_FILES)
+      throw new BadRequestException('No more than 5 files are supported');
     if (
-      !mime.startsWith('image/') &&
+      files.reduce((total, file) => total + file.buffer.length, 0) >
+      MAX_ASSISTANT_TOTAL_BYTES
+    )
+      throw new BadRequestException('Files exceed the 16 MB total limit');
+    const profile = await this.profile(identity.profileId);
+    const mime = files[0].mimetype.toLowerCase();
+    const allImages = files.every((file) =>
+      file.mimetype.toLowerCase().startsWith('image/'),
+    );
+    if (!allImages && files.length !== 1)
+      throw new BadRequestException(
+        'Upload up to 5 images or one audio file, without mixing them',
+      );
+    if (
+      !allImages &&
       !(await this.entitlements.hasCapability(identity, 'VOICE_INPUT'))
     )
       throw new ForbiddenException('Voice input requires Pro or Ultimate');
-    const operations = mime.startsWith('image/')
-      ? await this.ai.extractReceipt({
+    const operations = allImages
+      ? await this.ai.extractReceipts({
           profileId: identity.profileId,
           botIntegrationId: identity.botIntegrationId,
-          bytes: file.buffer,
-          mime,
+          files: files.map((file) => ({
+            bytes: file.buffer,
+            mime: file.mimetype.toLowerCase(),
+          })),
           timezone: profile.timezone,
           defaultCurrency: profile.defaultCurrency,
         })
@@ -60,7 +83,7 @@ export class FinanceAssistantEntryService {
           .transcribeVoice({
             profileId: identity.profileId,
             botIntegrationId: identity.botIntegrationId,
-            bytes: file.buffer,
+            bytes: files[0].buffer,
             mime,
           })
           .then((text) =>
@@ -76,7 +99,7 @@ export class FinanceAssistantEntryService {
       identity,
       profile,
       operations,
-      mime.startsWith('image/') ? 'RECEIPT' : 'AI',
+      allImages ? 'RECEIPT' : 'AI',
     );
   }
 

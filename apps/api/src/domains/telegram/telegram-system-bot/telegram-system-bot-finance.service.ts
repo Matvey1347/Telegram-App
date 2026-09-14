@@ -20,6 +20,7 @@ import {
   type TelegramSystemBotFinanceResult,
 } from './telegram-system-bot-finance-flow';
 import { systemBotEmoji } from './telegram-system-bot-presentation';
+import { createSystemBotFinanceDraft } from './telegram-system-bot-finance-draft.store';
 
 @Injectable()
 export class TelegramSystemBotFinanceService {
@@ -58,17 +59,13 @@ export class TelegramSystemBotFinanceService {
       this.categories(input.workspaceId, input.type),
     ]);
     if (!accounts.length || !categories.length) return { kind: 'UNAVAILABLE' };
-    await this.expirePending(input.connectionId);
-    const draft = await this.prisma.telegramSystemBotFinanceDraft.create({
-      data: {
-        connectionId: input.connectionId,
-        workspaceId: input.workspaceId,
-        kind: TelegramSystemBotFinanceDraftKind.TRANSACTION,
-        type: input.type,
-        controlMessageId: input.controlMessageId,
-        expiresAt: this.expiresAt(),
-      },
-    });
+    const draft = await createSystemBotFinanceDraft(
+      this.prisma,
+      input,
+      TelegramSystemBotFinanceDraftKind.TRANSACTION,
+      this.expiresAt(),
+      input.type,
+    );
     return this.withControl(
       financeAccountChoice(draft.id, accounts),
       draft.controlMessageId,
@@ -84,16 +81,12 @@ export class TelegramSystemBotFinanceService {
     await this.requireMembership(input.userId, input.workspaceId);
     const accounts = await this.accounts(input.workspaceId);
     if (accounts.length < 2) return { kind: 'UNAVAILABLE' };
-    await this.expirePending(input.connectionId);
-    const draft = await this.prisma.telegramSystemBotFinanceDraft.create({
-      data: {
-        connectionId: input.connectionId,
-        workspaceId: input.workspaceId,
-        kind: TelegramSystemBotFinanceDraftKind.TRANSFER,
-        controlMessageId: input.controlMessageId,
-        expiresAt: this.expiresAt(),
-      },
-    });
+    const draft = await createSystemBotFinanceDraft(
+      this.prisma,
+      input,
+      TelegramSystemBotFinanceDraftKind.TRANSFER,
+      this.expiresAt(),
+    );
     return this.withControl(
       financeTransferAccountChoice(draft.id, accounts, 'from'),
       draft.controlMessageId,
@@ -486,16 +479,6 @@ export class TelegramSystemBotFinanceService {
         completedAt: new Date(),
         lastError: null,
       },
-    });
-  }
-
-  private expirePending(connectionId: string) {
-    return this.prisma.telegramSystemBotFinanceDraft.updateMany({
-      where: {
-        connectionId,
-        status: TelegramSystemBotFinanceDraftStatus.PENDING,
-      },
-      data: { status: TelegramSystemBotFinanceDraftStatus.EXPIRED },
     });
   }
 

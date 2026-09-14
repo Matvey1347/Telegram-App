@@ -77,7 +77,7 @@ describe("PromoFormModal", () => {
     });
   });
 
-  it("uses the standard post editor with integrated Telegram buttons", () => {
+  it("shows every promo field immediately while keeping the post editor collapsed", async () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
@@ -85,20 +85,24 @@ describe("PromoFormModal", () => {
       <QueryClientProvider client={client}>
         <PromoFormModal
           open
-          title="Edit Promo"
-          initial={
-            {
-              id: "promo-1",
-              title: "Promo",
-              telegramChannelId: "channel-1",
-              text: "Promo text",
-            } as never
-          }
+          title="Create Promo"
           channels={[{ id: "channel-1", title: "Channel" } as never]}
           onClose={vi.fn()}
           onSubmit={vi.fn()}
         />
       </QueryClientProvider>,
+    );
+
+    expect(screen.getByText("Internal title")).toBeVisible();
+    expect(screen.getByText("Channel")).toBeVisible();
+    expect(screen.getByText("Member")).toBeVisible();
+    expect(screen.getByText("Invite link")).toBeVisible();
+    expect(
+      screen.queryByTestId("telegram-text-editor"),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /Edit manually/ }),
     );
 
     expect(screen.getByTestId("telegram-text-editor")).toBeInTheDocument();
@@ -143,10 +147,6 @@ describe("PromoFormModal", () => {
     expect(
       screen.queryByTestId("telegram-text-editor"),
     ).not.toBeInTheDocument();
-    await userEvent.click(
-      screen.getByRole("button", { name: /Create manually/ }),
-    );
-    expect(screen.getByTestId("telegram-text-editor")).toBeInTheDocument();
     expect(screen.getByText("Invite link")).toBeVisible();
     expect(screen.queryByText("Default invite link")).not.toBeInTheDocument();
     await userEvent.click(
@@ -243,6 +243,7 @@ describe("PromoFormModal", () => {
     expect(await screen.findByTestId("promo-emoji-picker")).toHaveTextContent(
       "emoji-icon",
     );
+    expect(screen.getByTestId("telegram-text-editor")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Imported promo")).toBeInTheDocument();
     expect(
       screen.queryByDisplayValue("🔷 Imported promo"),

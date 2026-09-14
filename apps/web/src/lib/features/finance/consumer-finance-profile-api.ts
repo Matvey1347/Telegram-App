@@ -18,4 +18,22 @@ export const consumerFinanceProfileApi = {
         consumerRequest(),
       )
     ).data,
+  uploadAvatar: async (botId: string, file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return (
+      await consumerFinanceHttp.post(
+        `${consumerFinanceRoot(botId)}/avatar`,
+        body,
+        consumerRequest(),
+      )
+    ).data;
+  },
+  clearAvatar: async (botId: string) =>
+    (
+      await consumerFinanceHttp.delete(
+        `${consumerFinanceRoot(botId)}/avatar`,
+        consumerRequest(),
+      )
+    ).data,
 };

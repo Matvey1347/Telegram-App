@@ -276,6 +276,35 @@ describe('FinanceController consumer auth', () => {
     }
   });
 
+  it('uses the selected shared period for dashboard totals', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-14T10:00:00.000Z'));
+    const { controller, sessions, ledger } = setup();
+    const token = (
+      await sessions.issue({
+        profileId: 'profile-1',
+        botIntegrationId: 'bot-1',
+        telegramBotUserId: 'telegram-user-1',
+        workspaceId: 'workspace-1',
+        defaultCurrency: 'UAH',
+      })
+    ).token;
+
+    try {
+      await controller.dashboard(
+        'bot-1',
+        request(`finance_consumer_session=${token}`),
+        'PREVIOUS_MONTH',
+      );
+      expect(ledger.stats).toHaveBeenCalledWith(
+        'profile-1',
+        new Date('2026-07-31T21:00:00.000Z'),
+        new Date('2026-08-31T21:00:00.000Z'),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('refreshes the Telegram keyboard in the selected language and exact runtime', async () => {
     const { controller, sessions, core, delivery } = setup();
     const token = (

@@ -6,12 +6,19 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Pencil } from "lucide-react";
+import { History, Pause, Pencil, Play, Trash2 } from "lucide-react";
 import type {
   ConsumerFinanceRegularPayment,
   ConsumerFinanceRegularPaymentConfirmation,
 } from "@telegram-system/shared";
-import { Button, Card, EmptyState, ErrorState, LoadingState } from "./ui";
+import {
+  Button,
+  Card,
+  EmptyState,
+  ErrorState,
+  FinanceCardActionsMenu,
+  LoadingState,
+} from "./ui";
 import { FinanceConfirmModal } from "./finance-confirm-modal";
 import { FinanceRegularPaymentConfirm } from "./finance-regular-payment-confirm";
 import { FinanceRegularPaymentEditor } from "./finance-regular-payment-editor";
@@ -28,7 +35,10 @@ import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
 import type { ConsumerFinanceRegularPaymentTarget } from "./consumer-finance-navigation";
 import { localizeFinanceCategory } from "./finance-category-i18n";
 import { financeIntlLocale, type FinanceLocale } from "./i18n/core";
-import { financeRegularPaymentsCopy } from "./i18n/regular-payments";
+import {
+  financeRegularPaymentRecurrenceLabel,
+  financeRegularPaymentsCopy,
+} from "./i18n/regular-payments";
 
 type Payment = ConsumerFinanceRegularPayment;
 type ConfirmationRequest = {
@@ -307,19 +317,18 @@ function RegularPaymentCard({
   onConfirm: (customAmount: boolean) => void;
 }) {
   const t = financeRegularPaymentsCopy(locale);
-  const recurrence =
-    payment.recurrence === "WEEKLY"
-      ? t.weekly
-      : payment.recurrence === "MONTHLY"
-        ? t.monthly
-        : t.yearly;
+  const recurrence = financeRegularPaymentRecurrenceLabel(
+    payment.recurrence,
+    payment.intervalCount ?? 1,
+    locale,
+  );
   return (
     <Card className={payment.isDue ? "border-amber-700" : ""}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 gap-3">
           <IconAvatar
-            icon={payment.account.iconPresentation}
-            label={payment.account.name}
+            icon={payment.iconPresentation ?? payment.account.iconPresentation}
+            label={payment.name}
             size="sm"
             bordered={false}
           />
@@ -330,9 +339,60 @@ function RegularPaymentCard({
             </p>
           </div>
         </div>
-        <strong className="shrink-0 tabular-nums">
-          {formatMoney(payment.amount, payment.currency, "symbol")}
-        </strong>
+        <div className="flex items-center gap-2">
+          <strong className="shrink-0 tabular-nums">
+            {formatMoney(payment.amount, payment.currency, "symbol")}
+          </strong>
+          <FinanceCardActionsMenu
+            label={t.actions}
+            actions={[
+              ...(payment.status !== "CANCELED"
+                ? [
+                    {
+                      label: t.edit,
+                      icon: <Pencil size={16} />,
+                      onSelect: onEdit,
+                    },
+                  ]
+                : []),
+              ...(payment.status === "ACTIVE"
+                ? [
+                    {
+                      label: t.pause,
+                      icon: <Pause size={16} />,
+                      onSelect: onPause,
+                      disabled: busy,
+                    },
+                  ]
+                : payment.status === "PAUSED"
+                  ? [
+                      {
+                        label: t.resume,
+                        icon: <Play size={16} />,
+                        onSelect: onResume,
+                        disabled: busy,
+                      },
+                    ]
+                  : []),
+              {
+                label: t.history,
+                icon: <History size={16} />,
+                onSelect: onHistory,
+              },
+              ...(payment.status !== "CANCELED"
+                ? [
+                    {
+                      label: t.cancelPayment,
+                      icon: <Trash2 size={16} />,
+                      onSelect: onCancel,
+                      disabled: busy,
+                      danger: true,
+                    },
+                  ]
+                : []),
+            ]}
+          />
+        </div>
       </div>
       <p
         className={`mt-3 text-sm ${payment.isDue ? "font-medium text-amber-300" : "text-neutral-400"}`}
@@ -369,28 +429,6 @@ function RegularPaymentCard({
             </Button>
           </>
         ) : null}
-        {payment.status !== "CANCELED" ? (
-          <Button variant="secondary" disabled={busy} onClick={onEdit}>
-            <Pencil size={16} aria-hidden="true" /> {t.edit}
-          </Button>
-        ) : null}
-        {payment.status === "ACTIVE" ? (
-          <Button variant="secondary" disabled={busy} onClick={onPause}>
-            {t.pause}
-          </Button>
-        ) : payment.status === "PAUSED" ? (
-          <Button variant="secondary" disabled={busy} onClick={onResume}>
-            {t.resume}
-          </Button>
-        ) : null}
-        {payment.status !== "CANCELED" ? (
-          <Button variant="danger" disabled={busy} onClick={onCancel}>
-            {t.cancelPayment}
-          </Button>
-        ) : null}
-        <Button variant="secondary" onClick={onHistory}>
-          {t.history}
-        </Button>
       </div>
     </Card>
   );

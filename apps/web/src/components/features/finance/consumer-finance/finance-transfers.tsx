@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-query";
 import { ArrowLeftRight, Pencil, Plus, Trash2 } from "lucide-react";
 import type {
+  ConsumerFinanceAnalyticsQuery,
   ConsumerFinanceDashboard,
   ConsumerFinanceTransfer,
   ConsumerFinanceTransferQuery,
@@ -36,6 +37,8 @@ import { FinanceTransferEditor } from "./finance-transfer-editor";
 import { useDebouncedValue } from "./use-debounced-value";
 import { financeIntlLocale, type FinanceLocale } from "./i18n/core";
 import { financeTransfersCopy } from "./i18n/transfers";
+import { financePeriodDateRange } from "./finance-period-selector";
+import { IconAvatar } from "./ui/finance-icon-avatar";
 
 export function FinanceTransfers({
   botId,
@@ -43,17 +46,24 @@ export function FinanceTransfers({
   timezone,
   initiallyOpen = false,
   onCreateAccount,
+  period = { period: "CURRENT_MONTH" },
+  editorOnly = false,
+  onLauncherClose,
 }: {
   botId: string;
   locale: FinanceLocale;
   timezone: string;
   initiallyOpen?: boolean;
   onCreateAccount: () => void;
+  period?: ConsumerFinanceAnalyticsQuery;
+  editorOnly?: boolean;
+  onLauncherClose?: () => void;
 }) {
   const client = useQueryClient();
   const t = financeTransfersCopy(locale);
   const [filters, setFilters] = useState<ConsumerFinanceTransferQuery>({
     limit: 30,
+    ...financePeriodDateRange(period),
   });
   const [editing, setEditing] = useState<ConsumerFinanceTransfer | null>(null);
   const [deleting, setDeleting] = useState<ConsumerFinanceTransfer | null>(
@@ -86,7 +96,7 @@ export function FinanceTransfers({
         cursor: pageParam,
       }),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
-    enabled: accounts.isSuccess && activeAccounts.length >= 2,
+    enabled: !editorOnly && accounts.isSuccess && activeAccounts.length >= 2,
   });
   const items = history.data?.pages.flatMap((page) => page.items) ?? [];
   const invalidateDerived = () => {
@@ -142,6 +152,24 @@ export function FinanceTransfers({
         </Button>
       </Card>
     );
+  if (editorOnly)
+    return (
+      <FinanceTransferEditor
+        key="launcher-transfer"
+        botId={botId}
+        accounts={activeAccounts}
+        locale={locale}
+        timezone={timezone}
+        editing={null}
+        initiallyOpen
+        onClose={() => onLauncherClose?.()}
+        onSaved={(item) => {
+          reconcileConsumerTransferCaches(client, botId, item, timezone);
+          onLauncherClose?.();
+          invalidateDerived();
+        }}
+      />
+    );
   return (
     <div className="space-y-4">
       <FinanceTransferEditor
@@ -152,10 +180,14 @@ export function FinanceTransfers({
         timezone={timezone}
         editing={editing}
         initiallyOpen={initiallyOpen}
-        onClose={() => setEditing(null)}
+        onClose={() => {
+          setEditing(null);
+          onLauncherClose?.();
+        }}
         onSaved={(item) => {
           reconcileConsumerTransferCaches(client, botId, item, timezone);
           setEditing(null);
+          onLauncherClose?.();
           invalidateDerived();
         }}
       />
@@ -181,7 +213,16 @@ export function FinanceTransfers({
           >
             <option value="">{t.allAccounts}</option>
             {activeAccounts.map((item) => (
-              <option key={item.id} value={item.id}>
+              <option
+                key={item.id}
+                value={item.id}
+                data-icon-emoji={
+                  item.iconPresentation.type === "unicode"
+                    ? item.iconPresentation.value
+                    : undefined
+                }
+                data-option-meta={item.currency}
+              >
                 {item.name}
               </option>
             ))}
@@ -270,13 +311,28 @@ function TransferRow({
   const t = financeTransfersCopy(locale);
   return (
     <div className="flex items-center gap-1 border-b border-neutral-800 py-3 last:border-0">
+      <IconAvatar
+        icon={item.fromAccount.iconPresentation}
+        label={item.fromAccount.name}
+        size="sm"
+      />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm">
           {item.description ||
             `${item.fromAccount.name} → ${item.toAccount.name}`}
         </p>
         <p className="text-xs text-neutral-500">
-          {item.fromAccount.name} → {item.toAccount.name} ·{" "}
+          <span className="inline-flex items-center gap-1">
+            {item.fromAccount.name}
+            <span aria-hidden="true">→</span>
+            <IconAvatar
+              icon={item.toAccount.iconPresentation}
+              label={item.toAccount.name}
+              size="xs"
+            />
+            {item.toAccount.name}
+          </span>{" "}
+          ·{" "}
           {new Intl.DateTimeFormat(financeIntlLocale(locale), {
             timeZone: timezone,
           }).format(new Date(item.occurredAt))}

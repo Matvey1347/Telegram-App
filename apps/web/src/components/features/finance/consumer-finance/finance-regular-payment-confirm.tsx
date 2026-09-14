@@ -111,11 +111,7 @@ export function FinanceRegularPaymentConfirm({
         </div>
       ) : null}
       <div className="mt-4 flex justify-end gap-2">
-        <Button
-          variant="secondary"
-          disabled={confirm.isPending}
-          onClick={onClose}
-        >
+        <Button variant="cancel" disabled={confirm.isPending} onClick={onClose}>
           {t.cancel}
         </Button>
         <Button

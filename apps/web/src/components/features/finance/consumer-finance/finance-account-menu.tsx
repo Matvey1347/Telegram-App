@@ -6,8 +6,11 @@ import type { ConsumerFinanceProfile } from "@telegram-system/shared";
 import type { FinanceCoreCopy } from "./i18n/core";
 import type { ConsumerFinanceScreen } from "./consumer-finance-navigation";
 import { FinanceProfileAvatar } from "./finance-profile-avatar";
+import { FinanceTierBadge } from "./finance-plan-promotion";
+import { useFinanceEntitlements } from "./use-finance-entitlements";
 
 export function FinanceAccountMenu({
+  botId,
   profile,
   copy,
   screen,
@@ -15,6 +18,7 @@ export function FinanceAccountMenu({
   onNavigate,
   onSignOut,
 }: {
+  botId: string;
   profile: ConsumerFinanceProfile;
   copy: FinanceCoreCopy;
   screen: ConsumerFinanceScreen;
@@ -22,6 +26,7 @@ export function FinanceAccountMenu({
   onNavigate: (screen: ConsumerFinanceScreen) => void;
   onSignOut: () => void;
 }) {
+  const entitlements = useFinanceEntitlements(botId);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -93,7 +98,13 @@ export function FinanceAccountMenu({
           className="absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded-xl border border-neutral-700 bg-neutral-900 p-1.5 shadow-2xl"
         >
           <div className="border-b border-neutral-800 px-2 py-2.5">
-            <FinanceProfileAvatar profile={profile} showName />
+            <div className="flex items-center justify-between gap-3">
+              <FinanceProfileAvatar profile={profile} showName />
+              <FinanceTierBadge
+                tier={entitlements.data?.tier}
+                loading={entitlements.isLoading}
+              />
+            </div>
           </div>
           <AccountMenuItem
             active={screen === "profile"}
@@ -106,6 +117,7 @@ export function FinanceAccountMenu({
             label={copy.plan}
             Icon={CreditCard}
             onClick={() => navigate("billing")}
+            trailing={<FinanceTierBadge tier={entitlements.data?.tier} />}
           />
           <div className="mt-1 border-t border-neutral-800 pt-1">
             <AccountMenuItem
@@ -127,17 +139,20 @@ function AccountMenuItem({
   active = false,
   disabled = false,
   onClick,
+  trailing,
 }: {
   label: string;
   Icon: typeof UserRound;
   active?: boolean;
   disabled?: boolean;
   onClick: () => void;
+  trailing?: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       role="menuitem"
+      aria-label={label}
       aria-current={active ? "page" : undefined}
       disabled={disabled}
       onClick={onClick}
@@ -145,6 +160,7 @@ function AccountMenuItem({
     >
       <Icon size={17} aria-hidden="true" />
       <span className="truncate">{label}</span>
+      {trailing ? <span className="ml-auto">{trailing}</span> : null}
     </button>
   );
 }

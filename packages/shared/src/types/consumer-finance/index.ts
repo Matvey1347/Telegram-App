@@ -6,6 +6,7 @@ export type * from "./identity";
 export type * from "./investments";
 export type * from "./ledger";
 export type * from "./planning";
+export { consumerFinanceImportExampleV1 } from "./portability";
 export type * from "./portability";
 export type * from "./regular-payments";
 export type * from "./savings-goals";

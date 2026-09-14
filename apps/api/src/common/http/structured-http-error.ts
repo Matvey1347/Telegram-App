@@ -9,6 +9,8 @@ import type { TranslationParams } from '@telegram-system/shared';
 export type StructuredErrorPayload = {
   code: string;
   params?: TranslationParams;
+  /** Optional machine-readable field path for document/form validation errors. */
+  path?: string;
   /** English compatibility fallback. Clients should translate `code`. */
   message?: string;
   details?: Record<string, unknown> | string | null;
@@ -73,6 +75,7 @@ export function structuredErrorPayload(
               ? payload.message
               : fallbackMessage,
           ...(payload.params ? { params: payload.params } : {}),
+          ...(typeof payload.path === 'string' ? { path: payload.path } : {}),
           ...(payload.details !== undefined
             ? { details: payload.details }
             : {}),

@@ -25,6 +25,7 @@ import { TelegramManagedPostPresentationService } from './telegram-managed-post-
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
 import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-media-storage.service';
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
+import { requireNonBatchManagedPosts } from './telegram-managed-post-ownership';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 import {
   managedPostNotFound,
@@ -120,6 +121,11 @@ export class TelegramManagedPostHistoryService {
   ) {
     const workspaceId =
       await this.telegramChannelsSupportService.workspace(userId);
+    await requireNonBatchManagedPosts(this.prisma, {
+      workspaceId,
+      channelId,
+      postIds: [postId],
+    });
     await this.telegramChannelCatalogService.findOne(userId, channelId);
     const [post, revision] = (await Promise.all([
       this.prisma.telegramManagedPost.findFirst({
@@ -221,6 +227,11 @@ export class TelegramManagedPostHistoryService {
   ) {
     const workspaceId =
       await this.telegramChannelsSupportService.workspace(userId);
+    await requireNonBatchManagedPosts(this.prisma, {
+      workspaceId,
+      channelId,
+      postIds: [postId],
+    });
     const post = await this.prisma.telegramManagedPost.findFirst({
       where: { id: postId, workspaceId, telegramChannelId: channelId },
     });

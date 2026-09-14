@@ -60,13 +60,21 @@ export class FinanceSharedExpenseInputDto {
 
 export class FinanceRegularPaymentInputDto {
   @IsString() @MinLength(1) @MaxLength(120) @Matches(/\S/u) name!: string;
+  @IsOptional() @IsString() @MaxLength(120) emoji?: string | null;
   @IsNumberString() amount!: string;
   @IsString() accountId!: string;
   @IsOptional() @IsString() categoryId?: string | null;
-  @IsIn(['WEEKLY', 'MONTHLY', 'YEARLY']) recurrence!:
+  @IsIn(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']) recurrence!:
+    | 'DAILY'
     | 'WEEKLY'
     | 'MONTHLY'
     | 'YEARLY';
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(3650)
+  intervalCount?: number = 1;
   @IsString() @Matches(DATE_ONLY) nextPaymentDate!: string;
   @IsOptional() @IsString() @MaxLength(500) note?: string | null;
   @IsOptional()

@@ -66,6 +66,7 @@ function analyticsFixture(): ConsumerFinanceAnalytics {
     accounts: Array.from({ length: 8 }, (_, index) => ({
       accountId: `account-${index}`,
       name: `Account ${index}`,
+      iconPresentation: { type: 'unicode' as const, value: '💰' },
       income: '100',
       expenses: '40',
       invested: '0',

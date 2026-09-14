@@ -77,6 +77,8 @@ describe('FinanceAnalyticsService', () => {
           type: 'INCOME',
           accountId: 'cash',
           accountName: 'Cash',
+          accountEmoji: '💵',
+          accountType: 'CASH',
           nativeAmount: decimal(100),
           valuedAmount: null,
         },
@@ -84,6 +86,8 @@ describe('FinanceAnalyticsService', () => {
           type: 'EXPENSE',
           accountId: 'cash',
           accountName: 'Cash',
+          accountEmoji: '💵',
+          accountType: 'CASH',
           nativeAmount: decimal(40),
           valuedAmount: null,
         },
@@ -137,6 +141,20 @@ describe('FinanceAnalyticsService', () => {
           nativeAmount: decimal(10),
           valuedAmount: null,
         },
+      ])
+      .mockResolvedValueOnce([
+        {
+          segment: 'CURRENT',
+          recurring: true,
+          nativeAmount: decimal(25),
+          valuedAmount: null,
+        },
+        {
+          segment: 'CURRENT',
+          recurring: false,
+          nativeAmount: decimal(15),
+          valuedAmount: null,
+        },
       ]);
     const service = new FinanceAnalyticsService({
       $queryRaw: queryRaw,
@@ -157,6 +175,8 @@ describe('FinanceAnalyticsService', () => {
       requiredExpenses: '30',
       discretionaryExpenses: '10',
       unspecifiedExpenses: '0',
+      recurringExpenses: '25',
+      oneOffExpenses: '15',
       netCashflow: '55',
     });
     expect(result.comparison.summary).toEqual({
@@ -168,6 +188,8 @@ describe('FinanceAnalyticsService', () => {
       requiredExpenses: '0',
       discretionaryExpenses: '0',
       unspecifiedExpenses: '0',
+      recurringExpenses: '0',
+      oneOffExpenses: '0',
       netCashflow: '30',
     });
     expect(result.expensesByCategory[0]).toEqual(
@@ -184,6 +206,7 @@ describe('FinanceAnalyticsService', () => {
       {
         accountId: 'cash',
         name: 'Cash',
+        iconPresentation: { type: 'unicode', value: '💵' },
         income: '100',
         expenses: '40',
         invested: '0',
@@ -205,7 +228,7 @@ describe('FinanceAnalyticsService', () => {
     expect(result.comparison.legacyFallback).toEqual(
       expect.objectContaining({ transactionCount: 1 }),
     );
-    expect(queryRaw).toHaveBeenCalledTimes(7);
+    expect(queryRaw).toHaveBeenCalledTimes(8);
   });
 
   it('keeps query count constant for a 100-account profile and caps breakdown result sets', async () => {
@@ -213,6 +236,8 @@ describe('FinanceAnalyticsService', () => {
       type: 'EXPENSE' as const,
       accountId: `account-${index}`,
       accountName: `Account ${index}`,
+      accountEmoji: null,
+      accountType: 'OTHER',
       nativeAmount: decimal(index + 1),
       valuedAmount: null,
     }));
@@ -236,7 +261,7 @@ describe('FinanceAnalyticsService', () => {
     });
 
     expect(result.accounts).toHaveLength(100);
-    expect(queryRaw).toHaveBeenCalledTimes(7);
+    expect(queryRaw).toHaveBeenCalledTimes(8);
     const calls = queryRaw.mock.calls as unknown as Array<
       [{ strings: string[] }]
     >;
@@ -271,6 +296,8 @@ describe('FinanceAnalyticsService', () => {
         requiredExpenses: '0',
         discretionaryExpenses: '0',
         unspecifiedExpenses: '0',
+        recurringExpenses: '0',
+        oneOffExpenses: '0',
         netCashflow: '0',
       },
       expensesByCategory: [],

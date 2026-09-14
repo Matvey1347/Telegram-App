@@ -18,8 +18,18 @@ export type ConsumerFinanceTransfer = {
   occurredAt: string;
   description?: string | null;
   deletedAt?: string | null;
-  fromAccount: { id: string; name: string; currency: string };
-  toAccount: { id: string; name: string; currency: string };
+  fromAccount: {
+    id: string;
+    name: string;
+    currency: string;
+    iconPresentation: ResolvedEmoji;
+  };
+  toAccount: {
+    id: string;
+    name: string;
+    currency: string;
+    iconPresentation: ResolvedEmoji;
+  };
 };
 
 export type ConsumerFinanceTransferQuery = {
@@ -35,3 +45,4 @@ export type ConsumerFinanceTransferPage = {
   items: ConsumerFinanceTransfer[];
   nextCursor: string | null;
 };
+import type { ResolvedEmoji } from "../resolved-emoji";

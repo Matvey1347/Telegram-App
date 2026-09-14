@@ -27,6 +27,8 @@ import { TelegramSystemBotPostFlowOptions } from './telegram-system-bot-post-flo
 import { TelegramBotIconCaptureService } from '../../../telegram/shared/telegram-bot-icon-capture.service';
 import { TelegramSystemBotWorkspaceFlowService } from './telegram-system-bot-workspace-flow.service';
 import { TelegramSystemBotMutualPromotionPostFlowService } from './telegram-system-bot-mutual-promotion-post-flow.service';
+import { TelegramSystemBotPostBatchController } from './telegram-system-bot-post-batch.controller';
+import { TelegramSystemBotPostBatchFlowService } from './telegram-system-bot-post-batch-flow.service';
 
 @Module({
   imports: [
@@ -39,7 +41,10 @@ import { TelegramSystemBotMutualPromotionPostFlowService } from './telegram-syst
     TelegramChannelsModule,
     TelegramAdSalesModule,
   ],
-  controllers: [TelegramSystemBotController],
+  controllers: [
+    TelegramSystemBotController,
+    TelegramSystemBotPostBatchController,
+  ],
   providers: [
     TelegramBotApiClient,
     TelegramSystemBotConfigService,
@@ -60,6 +65,7 @@ import { TelegramSystemBotMutualPromotionPostFlowService } from './telegram-syst
     TelegramBotIconCaptureService,
     TelegramSystemBotWorkspaceFlowService,
     TelegramSystemBotMutualPromotionPostFlowService,
+    TelegramSystemBotPostBatchFlowService,
   ],
   exports: [TelegramSystemBotNotificationsService],
 })

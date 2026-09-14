@@ -46,5 +46,6 @@ export function financeVisualContextForScreen(
   if (screen === "investment") return "investments";
   if (screen === "billing") return "plan";
   if (screen === "profile") return "settings";
+  if (screen === "assistant") return "overview";
   return screen;
 }

@@ -3,6 +3,7 @@ import { consumerFinanceInsightsApi } from "./consumer-finance-insights-api";
 import { consumerFinanceLedgerApi } from "./consumer-finance-ledger-api";
 import { consumerFinanceInvestmentsApi } from "./consumer-finance-investments-api";
 import { consumerFinancePlanningApi } from "./consumer-finance-planning-api";
+import { consumerFinancePortabilityApi } from "./consumer-finance-portability-api";
 import { consumerFinanceProfileApi } from "./consumer-finance-profile-api";
 import { consumerFinanceSavingsGoalsApi } from "./consumer-finance-savings-goals-api";
 
@@ -13,6 +14,7 @@ export const consumerFinanceApi = {
   ...consumerFinanceLedgerApi,
   ...consumerFinanceProfileApi,
   ...consumerFinancePlanningApi,
+  ...consumerFinancePortabilityApi,
   savingsGoals: consumerFinanceSavingsGoalsApi,
   investments: consumerFinanceInvestmentsApi,
 };

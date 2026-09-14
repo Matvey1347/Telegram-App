@@ -104,7 +104,7 @@ export function FinanceMobileNavigation({
         ))}
         {onOpenAssistant ? (
           <MobileItem
-            active={false}
+            active={screen === "assistant"}
             label={copy.assistant}
             Icon={Bot}
             onClick={() => {

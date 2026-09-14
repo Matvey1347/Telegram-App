@@ -99,7 +99,8 @@ export class DueTaskSchedule {
     this.progress.set(taskKey, state);
     state.unchangedRuns += 1;
     const maxBackoff =
-      taskKey === 'mutual_promotion.lifecycle'
+      taskKey === 'mutual_promotion.lifecycle' ||
+      taskKey === 'telegram.post_batches.lifecycle'
         ? NO_PROGRESS_MIN_BACKOFF_MS
         : NO_PROGRESS_MAX_BACKOFF_MS;
     const delay = Math.min(
@@ -167,6 +168,11 @@ export class DueTaskSchedule {
           status: 'SCHEDULED',
           telegramIdVerificationStatus: 'UNVERIFIED',
           scheduledAt: { gt: now },
+          AND: [
+            {
+              OR: [{ scheduleMode: null }, { scheduleMode: { not: 'BATCH' } }],
+            },
+          ],
         },
         orderBy: { scheduledAt: 'asc' },
         select: { scheduledAt: true },

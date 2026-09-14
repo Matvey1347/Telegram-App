@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { BadRequestException } from '@nestjs/common';
 import type { Response } from 'express';
 import { StreamResponseService } from './stream-response.service';
 import { telegramPostsBadRequest } from '../../domains/telegram/telegram-channels/telegram-posts.errors';
@@ -95,6 +96,24 @@ describe('StreamResponseService', () => {
     expect(applicationLogger.writeStructured).not.toHaveBeenCalledWith(
       expect.objectContaining({ level: 'error' }),
     );
+  });
+
+  it('preserves the field path from a structured validation error', async () => {
+    const { response, writes } = responseHarness();
+
+    await createService().stream(response, {
+      eventPrefix: 'test.validation',
+      action: () =>
+        Promise.reject(
+          new BadRequestException({
+            code: 'FINANCE_IMPORT_INVALID',
+            message: 'Invalid closing date',
+            path: 'data.investments[0].closedAt',
+          }),
+        ),
+    });
+
+    expect(writes.join('')).toContain('"path":"data.investments[0].closedAt"');
   });
 
   it('can disable persisted lifecycle logs for credential-bearing streams', async () => {

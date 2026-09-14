@@ -5,6 +5,7 @@ import type {
   PreparedCurrencyRateSource,
 } from '../../../../common/currency-conversion.service';
 import { financeRateDateForWrite } from '../ledger/finance-transaction-valuation';
+import type { HistoricalExchangeRateService } from '../../../../common/historical-exchange-rate.service';
 
 type RateValue = { rate: string; rateAt: Date };
 
@@ -31,6 +32,7 @@ export async function prepareFinanceImportRates(input: {
   workspaceId: string;
   defaultCurrency: string;
   conversion: CurrencyConversionService;
+  historicalRates: HistoricalExchangeRateService;
   signal: AbortSignal;
 }): Promise<FinanceImportRates> {
   const accounts = new Map(
@@ -45,14 +47,18 @@ export async function prepareFinanceImportRates(input: {
   const sources = new Map<string, Promise<PreparedCurrencyRateSource>>();
   const rates = new Map<string, Promise<RateValue>>();
   const historicalDates: Date[] = [];
+  const currentRateDate = new Date();
+  const requiredCurrencies = new Set<string>();
   const collectHistorical = (
     currency: string,
     targets: string[],
     at: string,
   ) => {
     if (targets.every((target) => target === currency)) return;
+    requiredCurrencies.add(currency);
+    targets.forEach((target) => requiredCurrencies.add(target));
     const asOf = financeRateDateForWrite(new Date(at));
-    if (asOf) historicalDates.push(asOf);
+    historicalDates.push(asOf ?? currentRateDate);
   };
   for (const row of input.document.data.transactions ?? [])
     collectHistorical(
@@ -79,7 +85,20 @@ export async function prepareFinanceImportRates(input: {
     error.name = 'AbortError';
     throw error;
   }
-  const historicalSources = await input.conversion.prepareHistoricalRateSources(
+  if (requiredCurrencies.size) {
+    try {
+      await input.historicalRates.ensureCurrentRates({
+        workspaceId: input.workspaceId,
+        currencies: [...requiredCurrencies],
+        signal: input.signal,
+      });
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') throw error;
+      // Historical rows may still be imported. Current reads keep their
+      // explicit RATE_STALE error if every live provider is unavailable.
+    }
+  }
+  let historicalSources = await input.conversion.prepareHistoricalRateSources(
     input.workspaceId,
     historicalDates,
   );
@@ -87,6 +106,45 @@ export async function prepareFinanceImportRates(input: {
     const error = new Error('Import cancelled');
     error.name = 'AbortError';
     throw error;
+  }
+  const distinctHistoricalDates = [
+    ...new Map(
+      historicalDates.map((date) => [date.toISOString(), date]),
+    ).values(),
+  ];
+  const requirementsMissing = await Promise.all(
+    distinctHistoricalDates.map(async (date) => {
+      const source = historicalSources.get(date.toISOString());
+      if (!source) return true;
+      for (const from of requiredCurrencies) {
+        for (const to of requiredCurrencies) {
+          if (
+            from !== to &&
+            !(await source.getRateMetadata(from, to)).available
+          )
+            return true;
+        }
+      }
+      return false;
+    }),
+  );
+  if (requirementsMissing.some(Boolean)) {
+    try {
+      await input.historicalRates.ensureRates({
+        workspaceId: input.workspaceId,
+        dates: distinctHistoricalDates,
+        currencies: [...requiredCurrencies],
+        signal: input.signal,
+      });
+      historicalSources = await input.conversion.prepareHistoricalRateSources(
+        input.workspaceId,
+        distinctHistoricalDates,
+      );
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') throw error;
+      // Resolution below keeps the public error stable when the provider is
+      // temporarily unavailable or does not cover an imported currency/date.
+    }
   }
   for (const [key, source] of historicalSources)
     sources.set(key, Promise.resolve(source));

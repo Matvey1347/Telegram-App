@@ -59,6 +59,9 @@ export class FinanceCoreService {
         locale: true,
         onboardingCompletedAt: true,
         displayName: true,
+        avatarMimeType: true,
+        botIntegrationId: true,
+        updatedAt: true,
         telegramUser: {
           select: {
             languageCode: true,
@@ -87,6 +90,9 @@ export class FinanceCoreService {
     return {
       id: profile.id,
       displayNameOverride: profile.displayName,
+      avatarUrl: profile.avatarMimeType
+        ? `/finance-bots/${profile.botIntegrationId}/avatar?v=${encodeURIComponent(profile.updatedAt.toISOString())}`
+        : null,
       defaultCurrency: profile.defaultCurrency,
       timezone: profile.timezone,
       locale: financeChatLocale(
@@ -131,6 +137,7 @@ export class FinanceCoreService {
         emoji: true,
         key: true,
         type: true,
+        necessity: true,
         archivedAt: true,
       },
       orderBy: [{ archivedAt: 'asc' }, { type: 'asc' }, { name: 'asc' }],
@@ -170,6 +177,44 @@ export class FinanceCoreService {
       },
     });
     return this.profile(profileId);
+  }
+
+  async updateAvatar(profileId: string, file?: Express.Multer.File) {
+    if (!file?.buffer?.length)
+      throw new BadRequestException('Avatar image is required');
+    if (file.buffer.length > 2 * 1024 * 1024)
+      throw new BadRequestException('Avatar image exceeds the 2 MB limit');
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype))
+      throw new BadRequestException('Avatar must be a JPEG, PNG or WebP image');
+    await this.prisma.financeProfile.update({
+      where: { id: profileId },
+      data: {
+        avatarImage: new Uint8Array(file.buffer),
+        avatarMimeType: file.mimetype,
+      },
+    });
+    return this.profile(profileId);
+  }
+
+  async clearAvatar(profileId: string) {
+    await this.prisma.financeProfile.update({
+      where: { id: profileId },
+      data: { avatarImage: null, avatarMimeType: null },
+    });
+    return this.profile(profileId);
+  }
+
+  async avatar(profileId: string) {
+    const avatar = await this.prisma.financeProfile.findUnique({
+      where: { id: profileId },
+      select: { avatarImage: true, avatarMimeType: true },
+    });
+    if (!avatar?.avatarImage || !avatar.avatarMimeType)
+      throw new NotFoundException('Finance profile avatar not found');
+    return {
+      bytes: Buffer.from(avatar.avatarImage),
+      mimeType: avatar.avatarMimeType,
+    };
   }
 
   async createAccount(
@@ -270,6 +315,7 @@ export class FinanceCoreService {
           type: dto.type,
           parentId: dto.parentId || null,
           key: null,
+          necessity: dto.necessity ?? 'UNSPECIFIED',
         },
         select: {
           id: true,
@@ -278,6 +324,7 @@ export class FinanceCoreService {
           emoji: true,
           key: true,
           type: true,
+          necessity: true,
           archivedAt: true,
         },
       })
@@ -340,33 +387,53 @@ export class FinanceCoreService {
         ancestorId = byId.get(ancestorId)?.parentId || null;
       }
     }
-    return this.prisma.financeCategory
-      .update({
-        where: { id },
-        data: {
-          name: dto.name.trim(),
-          type: dto.type,
-          ...(Object.prototype.hasOwnProperty.call(dto, 'emoji')
-            ? { emoji: dto.emoji || null }
-            : {}),
-          ...(existing.key && dto.name.trim() !== existing.name
-            ? { key: null }
-            : {}),
-          ...(Object.prototype.hasOwnProperty.call(dto, 'parentId')
-            ? { parentId: dto.parentId ?? null }
-            : {}),
-        },
-        select: {
-          id: true,
-          parentId: true,
-          name: true,
-          emoji: true,
-          key: true,
-          type: true,
-          archivedAt: true,
-        },
-      })
-      .then(categoryView);
+    const categoryUpdate = {
+      where: { id },
+      data: {
+        name: dto.name.trim(),
+        type: dto.type,
+        ...(Object.prototype.hasOwnProperty.call(dto, 'emoji')
+          ? { emoji: dto.emoji || null }
+          : {}),
+        ...(existing.key && dto.name.trim() !== existing.name
+          ? { key: null }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(dto, 'parentId')
+          ? { parentId: dto.parentId ?? null }
+          : {}),
+        ...(dto.necessity ? { necessity: dto.necessity } : {}),
+      },
+      select: {
+        id: true,
+        parentId: true,
+        name: true,
+        emoji: true,
+        key: true,
+        type: true,
+        necessity: true,
+        archivedAt: true,
+      },
+    } as const;
+    const updateCategory = (tx: Pick<PrismaService, 'financeCategory'>) =>
+      tx.financeCategory.update(categoryUpdate);
+    const updated = dto.necessity
+      ? await this.prisma.$transaction(async (tx) => {
+          const category = await updateCategory(tx);
+          if (dto.necessity && dto.necessity !== 'UNSPECIFIED')
+            await tx.financeTransaction.updateMany({
+              where: {
+                profileId,
+                categoryId: id,
+                type: 'EXPENSE',
+                purpose: 'ORDINARY',
+                deletedAt: null,
+              },
+              data: { necessity: dto.necessity },
+            });
+          return category;
+        })
+      : await updateCategory(this.prisma);
+    return categoryView(updated);
   }
   async archiveCategory(profileId: string, id: string) {
     const category = await this.prisma.financeCategory.findFirst({
@@ -386,6 +453,7 @@ export class FinanceCoreService {
           emoji: true,
           key: true,
           type: true,
+          necessity: true,
           archivedAt: true,
         },
       })
@@ -426,6 +494,13 @@ export class FinanceCoreService {
     const [limit] = await this.limits(profileId, category.id);
     if (!limit) throw new NotFoundException('Finance limit not found');
     return limit;
+  }
+
+  deleteLimit(profileId: string, id: string) {
+    return new FinanceLimitService(this.prisma, this.conversion).delete(
+      profileId,
+      id,
+    );
   }
 
   async createReminder(profileId: string, dto: CreateFinanceReminderDto) {

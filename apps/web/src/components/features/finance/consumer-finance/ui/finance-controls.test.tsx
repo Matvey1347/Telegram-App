@@ -3,16 +3,48 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { Select } from "./finance-controls";
 
-const choices = [
-  "Cash",
-  "Card",
-  "Savings",
-  "Brokerage",
-  "Travel",
-  "Business",
-];
+const choices = ["Cash", "Card", "Savings", "Brokerage", "Travel", "Business"];
 
 describe("Finance Select keyboard lifecycle", () => {
+  it("uses the semantic color for every financial operation type", async () => {
+    const user = userEvent.setup();
+    render(
+      <Select triggerAriaLabel="Operation type" defaultValue="EXPENSE">
+        <option value="EXPENSE">Expense</option>
+        <option value="INCOME">Income</option>
+        <option value="TRANSFER">Transfer</option>
+        <option value="DEBT">Debt</option>
+        <option value="INVESTMENT">Investment</option>
+      </Select>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Operation type" }));
+
+    expect(
+      within(screen.getByRole("option", { name: "Expense" })).getByText(
+        "Expense",
+      ),
+    ).toHaveClass("text-rose-300");
+    expect(
+      within(screen.getByRole("option", { name: "Income" })).getByText(
+        "Income",
+      ),
+    ).toHaveClass("text-emerald-300");
+    expect(
+      within(screen.getByRole("option", { name: "Transfer" })).getByText(
+        "Transfer",
+      ),
+    ).toHaveClass("text-sky-300");
+    expect(
+      within(screen.getByRole("option", { name: "Debt" })).getByText("Debt"),
+    ).toHaveClass("text-amber-300");
+    expect(
+      within(screen.getByRole("option", { name: "Investment" })).getByText(
+        "Investment",
+      ),
+    ).toHaveClass("text-violet-300");
+  });
+
   it("opens once from Enter and Space without immediately toggling closed", async () => {
     const user = userEvent.setup();
     render(
@@ -26,12 +58,35 @@ describe("Finance Select keyboard lifecycle", () => {
 
     trigger.focus();
     await user.keyboard("{Enter}");
-    expect(screen.getByRole("listbox", { name: "Account" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("listbox", { name: "Account" }),
+    ).toBeInTheDocument();
 
     await user.keyboard("{Escape}");
     trigger.focus();
     await user.keyboard(" ");
-    expect(screen.getByRole("listbox", { name: "Account" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("listbox", { name: "Account" }),
+    ).toBeInTheDocument();
+  });
+
+  it("positions its menu above modal overflow boundaries", async () => {
+    const user = userEvent.setup();
+    render(
+      <div className="overflow-hidden">
+        <Select triggerAriaLabel="Account" defaultValue="Cash">
+          {choices.slice(0, 2).map((choice) => (
+            <option key={choice}>{choice}</option>
+          ))}
+        </Select>
+      </div>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Account" }));
+
+    expect(
+      screen.getByRole("listbox", { name: "Account" }).parentElement,
+    ).toHaveClass("fixed");
   });
 
   it("returns focus to the trigger after committing an option", async () => {

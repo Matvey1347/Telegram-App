@@ -5,6 +5,7 @@ import {
   TelegramSourceType,
 } from '@prisma/client';
 import { TelegramBotApiError } from '../../../telegram/shared/telegram-bot-api.client';
+import { TelegramManagedPostRemoteDeleteExecutor } from './telegram-managed-post-remote-delete-executor.service';
 import { TelegramManagedPostRemoteDeletionService } from './telegram-managed-post-remote-deletion.service';
 
 describe('TelegramManagedPostRemoteDeletionService', () => {
@@ -36,13 +37,18 @@ describe('TelegramManagedPostRemoteDeletionService', () => {
     getManagedPostMessages: jest.fn(),
   };
   const identity = { findPublishedIdentity: jest.fn() };
+  const executor = new TelegramManagedPostRemoteDeleteExecutor(
+    access as never,
+    botApi as never,
+    mtproto as never,
+  );
   const service = new TelegramManagedPostRemoteDeletionService(
     prisma as never,
     sourceAccess as never,
     access as never,
-    botApi as never,
     mtproto as never,
     identity as never,
+    executor,
   );
 
   beforeEach(() => {
@@ -115,6 +121,93 @@ describe('TelegramManagedPostRemoteDeletionService', () => {
       messageIds: ['11'],
     });
     expect(result.failed).toBe(0);
+  });
+
+  it('isolates an invalid MTProto id so valid posts in the same batch are deleted', async () => {
+    prisma.telegramManagedPost.findMany.mockResolvedValue([
+      {
+        ...post('missing-post', ['11']),
+        sourceId: 'account-1',
+        sourceType: TelegramSourceType.MTPROTO,
+      },
+      {
+        ...post('present-post', ['12']),
+        sourceId: 'account-1',
+        sourceType: TelegramSourceType.MTPROTO,
+      },
+    ]);
+    sourceAccess.sourcesForChannel.mockResolvedValue([
+      source('account-1', TelegramSourceType.MTPROTO),
+    ]);
+    mtproto.deletePublishedMessages
+      .mockRejectedValueOnce(new Error('MSG_ID_INVALID'))
+      .mockRejectedValueOnce(new Error('MSG_ID_INVALID'))
+      .mockResolvedValueOnce(undefined);
+
+    const result = await service.deletePublishedManagedPosts({
+      workspaceId: 'workspace-1',
+      managedPostIds: ['missing-post', 'present-post'],
+    });
+
+    expect(mtproto.deletePublishedMessages).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ messageIds: ['11', '12'] }),
+    );
+    expect(mtproto.deletePublishedMessages).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ messageIds: ['11'] }),
+    );
+    expect(mtproto.deletePublishedMessages).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ messageIds: ['12'] }),
+    );
+    expect(result).toMatchObject({ deleted: 2, failed: 0 });
+    expect(result.results).toEqual(
+      expect.arrayContaining([
+        { postId: 'missing-post', success: true },
+        { postId: 'present-post', success: true },
+      ]),
+    );
+  });
+
+  it('records an isolated MTProto failure only against its owning post', async () => {
+    prisma.telegramManagedPost.findMany.mockResolvedValue([
+      {
+        ...post('failed-post', ['21']),
+        sourceId: 'account-1',
+        sourceType: TelegramSourceType.MTPROTO,
+      },
+      {
+        ...post('deleted-post', ['22']),
+        sourceId: 'account-1',
+        sourceType: TelegramSourceType.MTPROTO,
+      },
+    ]);
+    sourceAccess.sourcesForChannel.mockResolvedValue([
+      source('account-1', TelegramSourceType.MTPROTO),
+    ]);
+    mtproto.deletePublishedMessages
+      .mockRejectedValueOnce(new Error('MSG_ID_INVALID'))
+      .mockRejectedValueOnce(new Error('MESSAGE_DELETE_FORBIDDEN'))
+      .mockResolvedValueOnce(undefined);
+
+    const result = await service.deletePublishedManagedPosts({
+      workspaceId: 'workspace-1',
+      managedPostIds: ['failed-post', 'deleted-post'],
+    });
+
+    expect(result).toMatchObject({ deleted: 1, failed: 1 });
+    expect(result.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ postId: 'failed-post', success: false }),
+        expect.objectContaining({ postId: 'deleted-post', success: true }),
+      ]),
+    );
+    expect(prisma.telegramManagedPost.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { in: ['deleted-post'] } }),
+      }),
+    );
   });
 
   it('treats already-absent Telegram messages as a successful deletion', async () => {

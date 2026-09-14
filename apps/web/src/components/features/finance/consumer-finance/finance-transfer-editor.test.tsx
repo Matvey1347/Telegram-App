@@ -69,8 +69,18 @@ describe("FinanceTransferEditor", () => {
       exchangeRate: "1",
       occurredAt: "2026-01-01T22:00:00.000Z",
       description: "Move",
-      fromAccount: { id: "a", name: "Cash", currency: "USD" },
-      toAccount: { id: "b", name: "Card", currency: "USD" },
+      fromAccount: {
+        id: "a",
+        name: "Cash",
+        currency: "USD",
+        iconPresentation: { type: "unicode", value: "💵" },
+      },
+      toAccount: {
+        id: "b",
+        name: "Card",
+        currency: "USD",
+        iconPresentation: { type: "unicode", value: "💳" },
+      },
     };
     const props = {
       botId: "bot",
@@ -106,7 +116,7 @@ describe("FinanceTransferEditor", () => {
     renderEditor();
     fireEvent.click(screen.getByRole("button", { name: /add transfer/i }));
     fireEvent.click(screen.getByRole("button", { name: "Select account" }));
-    expect(screen.getAllByRole("button", { name: /Cash · USD/ })).toHaveLength(
+    expect(screen.getAllByRole("button", { name: /Cash.*USD/ })).toHaveLength(
       1,
     );
     expect(screen.queryByText(/received amount/i)).not.toBeInTheDocument();
@@ -134,8 +144,18 @@ describe("FinanceTransferEditor", () => {
       toCurrency: "USD",
       exchangeRate: "1",
       occurredAt: "2026-01-01T22:00:00.000Z",
-      fromAccount: { id: "a", name: "Archived source", currency: "USD" },
-      toAccount: { id: "b", name: "Active target", currency: "USD" },
+      fromAccount: {
+        id: "a",
+        name: "Archived source",
+        currency: "USD",
+        iconPresentation: { type: "unicode", value: "💵" },
+      },
+      toAccount: {
+        id: "b",
+        name: "Active target",
+        currency: "USD",
+        iconPresentation: { type: "unicode", value: "💳" },
+      },
     };
     renderEditor({ accounts: rows, editing });
     fireEvent.click(screen.getByRole("button", { name: /Archived source/ }));
@@ -167,8 +187,18 @@ describe("FinanceTransferEditor", () => {
       toCurrency: "USD",
       exchangeRate: "1",
       occurredAt: "2026-01-01T22:00:00.000Z",
-      fromAccount: { id: "a", name: "Cash", currency: "USD" },
-      toAccount: { id: "a", name: "Cash", currency: "USD" },
+      fromAccount: {
+        id: "a",
+        name: "Cash",
+        currency: "USD",
+        iconPresentation: { type: "unicode", value: "💵" },
+      },
+      toAccount: {
+        id: "a",
+        name: "Cash",
+        currency: "USD",
+        iconPresentation: { type: "unicode", value: "💵" },
+      },
     };
     renderEditor({ editing });
     expect(
@@ -190,15 +220,25 @@ describe("FinanceTransferEditor", () => {
       toCurrency: "USD",
       exchangeRate: "1",
       occurredAt: "2026-08-21T12:00:00.000Z",
-      fromAccount: { id: "a", name: "Cash", currency: "USD" },
-      toAccount: { id: "b", name: "Card", currency: "USD" },
+      fromAccount: {
+        id: "a",
+        name: "Cash",
+        currency: "USD",
+        iconPresentation: { type: "unicode", value: "💵" },
+      },
+      toAccount: {
+        id: "b",
+        name: "Card",
+        currency: "USD",
+        iconPresentation: { type: "unicode", value: "💳" },
+      },
     };
     apiMocks.createTransfer.mockResolvedValue(saved);
     const onSaved = vi.fn();
     renderEditor({ initiallyOpen: true, onSaved });
 
     fireEvent.click(screen.getByRole("button", { name: "Select account" }));
-    fireEvent.click(screen.getByRole("option", { name: /Card · USD/ }));
+    fireEvent.click(screen.getByRole("option", { name: /Card.*USD/ }));
     const amount = screen.getAllByRole("textbox")[0];
     fireEvent.change(amount, { target: { value: "4" } });
     fireEvent.click(screen.getByRole("button", { name: "Save transfer" }));

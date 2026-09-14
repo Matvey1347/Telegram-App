@@ -14,6 +14,7 @@ import type {
   ConsumerFinanceRegularPayment,
 } from "@telegram-system/shared";
 import { FinanceDebtEditor } from "./finance-debt-editor";
+import { FinanceDebtCreateModal } from "./finance-debt-create-modal";
 import { FinanceRegularPaymentEditor } from "./finance-regular-payment-editor";
 
 const api = vi.hoisted(() => ({
@@ -103,6 +104,38 @@ beforeEach(() => {
 });
 
 describe("consumer finance obligation editors", () => {
+  it("lets the add-debt modal settle an existing open debt", async () => {
+    const onSettle = vi.fn();
+    wrapper(
+      <FinanceDebtCreateModal
+        debts={[debt]}
+        locale="en"
+        onClose={vi.fn()}
+        onCreateNew={vi.fn()}
+        onSettle={onSettle}
+      />,
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "Add debt" });
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "New debt" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("option", {
+        name: "Settlement of an existing debt",
+      }),
+    );
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Choose a debt" }),
+    );
+    fireEvent.click(await screen.findByRole("option", { name: /Alex/ }));
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Create transaction" }),
+    );
+
+    expect(onSettle).toHaveBeenCalledWith(debt);
+  });
+
   it("creates a debt with the exact calendar-date contract", async () => {
     api.createDebt.mockResolvedValue(debt);
     const onSaved = vi.fn();
@@ -123,7 +156,7 @@ describe("consumer finance obligation editors", () => {
     fireEvent.click(
       within(dialog).getByRole("button", { name: "Select date" }),
     );
-    fireEvent.click(within(dialog).getByRole("button", { name: "Today" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Today" }));
     fireEvent.change(dialog.querySelector("textarea")!, {
       target: { value: "Dinner" },
     });
@@ -210,10 +243,13 @@ describe("consumer finance obligation editors", () => {
     const inputs = dialog.querySelectorAll("input:not([type='hidden'])");
     fireEvent.change(inputs[0]!, { target: { value: "Rent" } });
     fireEvent.change(inputs[1]!, { target: { value: "100" } });
+    fireEvent.change(inputs[2]!, { target: { value: "2" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "month(s)" }));
+    fireEvent.click(await screen.findByRole("option", { name: "week(s)" }));
     fireEvent.click(
       within(dialog).getByRole("button", { name: "Select date" }),
     );
-    fireEvent.click(within(dialog).getByRole("button", { name: "Today" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Today" }));
     fireEvent.change(dialog.querySelector("textarea")!, {
       target: { value: "Flat" },
     });
@@ -224,12 +260,15 @@ describe("consumer finance obligation editors", () => {
     );
     expect(api.createRegularPayment).toHaveBeenCalledWith("bot", {
       name: "Rent",
+      emoji: "🔁",
       amount: "100",
       accountId: "cash",
       categoryId: null,
-      recurrence: "MONTHLY",
+      recurrence: "WEEKLY",
+      intervalCount: 2,
       nextPaymentDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
       note: "Flat",
+      necessity: "DISCRETIONARY",
     });
     expect(onSaved).toHaveBeenCalledWith(payment);
   });
@@ -261,12 +300,15 @@ describe("consumer finance obligation editors", () => {
     await waitFor(() =>
       expect(api.updateRegularPayment).toHaveBeenCalledWith("bot", "rent", {
         name: "New rent",
+        emoji: "🔁",
         amount: "100",
         accountId: "cash",
         categoryId: "home",
         recurrence: "MONTHLY",
+        intervalCount: 1,
         nextPaymentDate: "2026-10-01",
         note: "Flat",
+        necessity: "DISCRETIONARY",
       }),
     );
   });

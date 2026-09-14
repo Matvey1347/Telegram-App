@@ -10,12 +10,6 @@
   animation: finance-state-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* Fast cache/network hits finish before this becomes visible. The occupied
-   geometry prevents the eventual content from jumping when a request is slower. */
-.deferredLoading {
-  animation: finance-loading-reveal 1ms linear 180ms both;
-}
-
 .illustration::before {
   position: absolute;
   inset: 0;
@@ -155,16 +149,6 @@
     transform: none;
   }
 }
-@keyframes finance-loading-reveal {
-  from {
-    visibility: hidden;
-    opacity: 0;
-  }
-  to {
-    visibility: visible;
-    opacity: 1;
-  }
-}
 @keyframes finance-check {
   from {
     stroke-dashoffset: 40;
@@ -240,7 +224,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .illustration,
-  .deferredLoading,
   .contextCanvas,
   .successMark,
   .stateMark,

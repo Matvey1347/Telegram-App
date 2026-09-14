@@ -22,6 +22,7 @@ import {
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 import { BulkProgressCallback } from './telegram-channels.internal';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
+import { requireNonBatchManagedPosts } from './telegram-managed-post-ownership';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 import {
   postGroupNotFound,
@@ -55,6 +56,11 @@ export class TelegramManagedPostGroupBulkService {
       },
     });
     if (!group) throw postGroupNotFound();
+    await requireNonBatchManagedPosts(this.prisma, {
+      workspaceId,
+      channelId: group.telegramChannelId,
+      postIds: group.posts.map((post) => post.id),
+    });
     if (!group.posts.length)
       throw telegramPostsBadRequest(
         'TELEGRAM_POST_INVALID_SCHEDULE',
@@ -189,6 +195,11 @@ export class TelegramManagedPostGroupBulkService {
       },
     });
     if (!group) throw postGroupNotFound();
+    await requireNonBatchManagedPosts(this.prisma, {
+      workspaceId,
+      channelId: group.telegramChannelId,
+      postIds: group.posts.map((post) => post.id),
+    });
     if (!group.posts.length)
       throw telegramPostsBadRequest(
         'TELEGRAM_POST_INVALID_SCHEDULE',
@@ -298,6 +309,11 @@ export class TelegramManagedPostGroupBulkService {
       },
     });
     if (!group) throw postGroupNotFound();
+    await requireNonBatchManagedPosts(this.prisma, {
+      workspaceId,
+      channelId: group.telegramChannelId,
+      postIds: group.posts.map((post) => post.id),
+    });
     if (!group.posts.length)
       throw telegramPostsBadRequest(
         'TELEGRAM_POST_INVALID_SCHEDULE',

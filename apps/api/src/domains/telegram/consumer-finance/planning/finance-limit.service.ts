@@ -45,7 +45,15 @@ export class FinanceLimitService {
           categoryId: true,
           amount: true,
           currency: true,
-          category: { select: { id: true, name: true, key: true } },
+          category: {
+            select: {
+              id: true,
+              name: true,
+              key: true,
+              type: true,
+              emoji: true,
+            },
+          },
         },
       }),
       this.prisma.$queryRaw<LimitSpendRow[]>`
@@ -114,5 +122,13 @@ export class FinanceLimitService {
           : null,
       };
     });
+  }
+
+  async delete(profileId: string, id: string) {
+    const result = await this.prisma.financeSpendingLimit.deleteMany({
+      where: { id, profileId },
+    });
+    if (!result.count) throw new NotFoundException('Finance limit not found');
+    return { deleted: true as const };
   }
 }

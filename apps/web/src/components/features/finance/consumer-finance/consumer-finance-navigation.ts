@@ -1,7 +1,12 @@
 import type { FinanceCoreCopy } from "./i18n/core";
 
 export type ConsumerFinanceSurface = "browser" | "telegram";
-export type ConsumerFinanceAction = "expense" | "income" | "transfer";
+export type ConsumerFinanceAction =
+  | "expense"
+  | "income"
+  | "transfer"
+  | "debt"
+  | "investment";
 export type ConsumerFinanceScreen =
   | "home"
   | "transactions"
@@ -12,6 +17,7 @@ export type ConsumerFinanceScreen =
   | "investments"
   | "investment"
   | "analytics"
+  | "assistant"
   | "accounts"
   | "account"
   | "settings"
@@ -31,6 +37,7 @@ const SCREEN_COPY_KEYS: Record<ConsumerFinanceScreen, keyof FinanceCoreCopy> = {
   investments: "investments",
   investment: "investment",
   analytics: "analytics",
+  assistant: "assistant",
   accounts: "accounts",
   account: "editAccount",
   settings: "settings",
@@ -64,6 +71,7 @@ const SCREEN_VALUES = new Set<ConsumerFinanceScreen>([
   "investments",
   "investment",
   "analytics",
+  "assistant",
   "accounts",
   "account",
   "settings",

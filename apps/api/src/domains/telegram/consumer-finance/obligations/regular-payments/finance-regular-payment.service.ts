@@ -37,11 +37,13 @@ import {
 
 type RegularValues = {
   name: string;
+  emoji: string | null;
   amount: Prisma.Decimal;
   currency: string;
   accountId: string;
   categoryId: string | null;
   recurrence: FinanceRegularPaymentInputDto['recurrence'];
+  intervalCount: number;
   anchorDay: number;
   anchorMonth: number | null;
   nextOccurrenceAt: Date;
@@ -286,11 +288,13 @@ export class FinanceRegularPaymentService {
     );
     return {
       name,
+      emoji: input.emoji?.trim() || null,
       amount,
       currency: account.currency,
       accountId: account.id,
       categoryId: category?.id ?? null,
       recurrence: input.recurrence,
+      intervalCount: input.intervalCount ?? 1,
       ...financeRecurrenceAnchor(input.nextPaymentDate, input.recurrence),
       nextOccurrenceAt,
       scheduleTimezone: profile.timezone,
@@ -325,11 +329,13 @@ export class FinanceRegularPaymentService {
   private same(existing: FinanceRegularPaymentRow, values: RegularValues) {
     return (
       existing.name === values.name &&
+      existing.emoji === values.emoji &&
       existing.amount.equals(values.amount) &&
       existing.currency === values.currency &&
       existing.accountId === values.accountId &&
       existing.categoryId === values.categoryId &&
       existing.recurrence === values.recurrence &&
+      (existing.intervalCount ?? 1) === values.intervalCount &&
       existing.anchorDay === values.anchorDay &&
       existing.anchorMonth === values.anchorMonth &&
       existing.nextOccurrenceAt.getTime() ===

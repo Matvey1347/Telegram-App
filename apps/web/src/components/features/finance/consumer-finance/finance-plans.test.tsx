@@ -148,7 +148,7 @@ beforeEach(() => {
 });
 
 describe("FinancePlans", () => {
-  it("uses the lightweight plan SVG after the fast-load delay", () => {
+  it("uses the universal money loader immediately", () => {
     api.billing.mockReturnValue(new Promise(() => undefined));
     renderPlans();
 
@@ -156,8 +156,12 @@ describe("FinancePlans", () => {
     expect(loading).toHaveAttribute("data-finance-feedback", "loading");
     expect(loading).toHaveTextContent("Loading plan…");
     expect(
-      loading.querySelector("[data-finance-scene='plan']"),
+      loading.querySelector("[data-finance-money-loader]"),
     ).toBeInTheDocument();
+    expect(
+      loading.querySelector("[data-finance-amount-reel]"),
+    ).toBeInTheDocument();
+    expect(loading.querySelector("[data-finance-scene='plan']")).toBeNull();
     expect(document.querySelector(".animate-pulse")).toBeNull();
   });
 
@@ -176,11 +180,9 @@ describe("FinancePlans", () => {
 
     expect(await screen.findAllByText("Finance Free")).toHaveLength(1);
     expect(
-      screen.getByText("Your finances, with more room to grow"),
-    ).toBeVisible();
-    expect(
-      document.querySelector("img[src*='plans-hero-v2']"),
-    ).toBeInTheDocument();
+      screen.queryByText("Your finances, with more room to grow"),
+    ).not.toBeInTheDocument();
+    expect(document.querySelector("img[src*='plans-hero-v2']")).toBeNull();
     expect(screen.getByText("Current plan")).toBeInTheDocument();
     expect(screen.queryByText("Usage")).not.toBeInTheDocument();
     expect(screen.getByText("Most popular")).toBeInTheDocument();
@@ -201,19 +203,32 @@ describe("FinancePlans", () => {
       screen.getByText("AI explanations of financial signals: 100 / month"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        (_, element) =>
-          element?.tagName === "P" &&
-          element.textContent === "UAH 149.00 / month",
-      ),
-    ).toBeInTheDocument();
+      document.querySelector("[data-finance-plan='PRO']"),
+    ).toHaveTextContent(/UAH 149\.00\s*\/ month/);
     expect(
-      screen.getByText(
-        (_, element) =>
-          element?.tagName === "P" && element.textContent === "250 XTR / month",
-      ),
-    ).toBeInTheDocument();
+      document.querySelector("[data-finance-plan='PRO']"),
+    ).toHaveTextContent(/250 XTR\s*\/ month/);
     expect(screen.queryByText("7/10")).not.toBeInTheDocument();
+  });
+
+  it("switches plan cards through compact mobile tabs", async () => {
+    renderPlans();
+
+    const freeTab = await screen.findByRole("tab", { name: /Free/ });
+    const ultimateTab = screen.getByRole("tab", { name: "Ultimate" });
+    expect(freeTab).toHaveAttribute("aria-selected", "true");
+    expect(ultimateTab).toHaveAttribute("aria-selected", "false");
+    expect(
+      document.querySelector("[data-finance-plan='FREE']"),
+    ).toHaveAttribute("data-mobile-active", "true");
+
+    fireEvent.click(ultimateTab);
+
+    expect(freeTab).toHaveAttribute("aria-selected", "false");
+    expect(ultimateTab).toHaveAttribute("aria-selected", "true");
+    expect(
+      document.querySelector("[data-finance-plan='ULTIMATE']"),
+    ).toHaveAttribute("data-mobile-active", "true");
   });
 
   it("shows the account payment history", async () => {
@@ -244,7 +259,7 @@ describe("FinancePlans", () => {
     api.checkout.mockReturnValue(new Promise(() => undefined));
     renderPlans();
 
-    await screen.findAllByRole("button", { name: "Choose" });
+    fireEvent.click(await screen.findByRole("tab", { name: "Pro" }));
     const pro = document.querySelector("[data-finance-plan='PRO']");
     expect(pro).not.toBeNull();
     const choose = within(pro as HTMLElement).getByRole("button", {
@@ -289,7 +304,7 @@ describe("FinancePlans", () => {
     api.checkout.mockReturnValue(new Promise(() => undefined));
     renderPlans();
 
-    await screen.findAllByRole("button", { name: "Choose" });
+    fireEvent.click(await screen.findByRole("tab", { name: "Ultimate" }));
     const ultimate = document.querySelector("[data-finance-plan='ULTIMATE']");
     expect(ultimate).not.toBeNull();
     fireEvent.click(
@@ -315,7 +330,7 @@ describe("FinancePlans", () => {
     api.checkout.mockRejectedValue(new Error("offline"));
     renderPlans();
 
-    await screen.findAllByRole("button", { name: "Choose" });
+    fireEvent.click(await screen.findByRole("tab", { name: "Pro" }));
     const pro = document.querySelector("[data-finance-plan='PRO']");
     expect(pro).not.toBeNull();
     fireEvent.click(

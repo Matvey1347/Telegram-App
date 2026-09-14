@@ -1,4 +1,5 @@
 import type { ConsumerFinanceLegacyFallback } from "./ledger";
+import type { ConsumerFinanceCategorySummary } from "./ledger";
 
 export type ConsumerFinanceLimit = {
   id: string;
@@ -8,7 +9,7 @@ export type ConsumerFinanceLimit = {
   spent: string;
   remaining: string;
   percentage: number;
-  category: { id: string; name: string; key?: string | null };
+  category: ConsumerFinanceCategorySummary;
   legacyFallback?: ConsumerFinanceLegacyFallback | null;
 };
 

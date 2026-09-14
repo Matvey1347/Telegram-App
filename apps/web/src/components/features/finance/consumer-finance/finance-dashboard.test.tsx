@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { ConsumerFinanceDashboard } from "@telegram-system/shared";
 import { FinanceDashboard } from "./finance-dashboard";
 
@@ -62,15 +62,18 @@ const dashboard: ConsumerFinanceDashboard = {
 };
 
 describe("FinanceDashboard actions", () => {
+  it("keeps the overview limited to the requested compact sections", () => {
+    render(<FinanceDashboard data={dashboard} locale="ru" surface="browser" />);
+
+    expect(screen.getByText("Балансы по счетам")).toBeInTheDocument();
+    expect(screen.queryByText("Последние операции")).toBeNull();
+    expect(screen.queryByText("Расходы за месяц")).toBeNull();
+    expect(screen.queryByText("Бюджет")).toBeNull();
+  });
+
   it("does not decorate the expense summary with a minus icon", () => {
     const { container } = render(
-      <FinanceDashboard
-        data={dashboard}
-        locale="en"
-        timezone="UTC"
-        onNavigate={vi.fn()}
-        surface="telegram"
-      />,
+      <FinanceDashboard data={dashboard} locale="en" surface="telegram" />,
     );
 
     expect(container.querySelector(".lucide-circle-minus")).toBeNull();
@@ -102,12 +105,49 @@ describe("FinanceDashboard actions", () => {
           },
         }}
         locale="en"
-        timezone="UTC"
-        onNavigate={vi.fn()}
         surface="telegram"
       />,
     );
     expect(screen.getByText("💳")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add expense" })).toBeNull();
+  });
+
+  it("keeps missing investment valuations out of the dashboard warning", () => {
+    render(
+      <FinanceDashboard
+        data={{
+          ...dashboard,
+          stats: {
+            ...dashboard.stats,
+            netWorth: {
+              ...dashboard.stats.netWorth,
+              complete: false,
+              excludedInvestmentCount: 1,
+            },
+          },
+          investments: {
+            ...dashboard.investments,
+            excludedInvestments: [
+              {
+                investmentId: "investment",
+                name: "Business",
+                currency: "USD",
+                invested: "100",
+                returned: "0",
+                currentValue: "0",
+                reason: "VALUATION_MISSING",
+              },
+            ],
+          },
+        }}
+        locale="en"
+        surface="telegram"
+      />,
+    );
+
+    expect(
+      screen.queryByText(/current exchange rates are unavailable/u),
+    ).toBeNull();
+    expect(screen.queryByText(/current valuation/u)).toBeNull();
   });
 });

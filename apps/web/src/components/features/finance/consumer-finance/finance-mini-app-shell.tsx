@@ -15,6 +15,7 @@ import { FinanceMobileNavigation } from "./finance-mobile-navigation";
 import { FinanceAccountMenu } from "./finance-account-menu";
 
 export function FinanceMiniAppShell({
+  botId,
   logoUrl,
   screen,
   copy,
@@ -33,6 +34,7 @@ export function FinanceMiniAppShell({
   openingBrowser = false,
   browserOpenError,
 }: {
+  botId: string;
   logoUrl?: string;
   screen: ConsumerFinanceScreen;
   copy: FinanceCoreCopy;
@@ -98,6 +100,7 @@ export function FinanceMiniAppShell({
               ) : null}
               {profile ? (
                 <FinanceAccountMenu
+                  botId={botId}
                   profile={profile}
                   copy={copy}
                   screen={screen}

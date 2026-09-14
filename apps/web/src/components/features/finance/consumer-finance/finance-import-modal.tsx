@@ -112,6 +112,9 @@ export function FinanceImportModal({
           setStep({ current, total });
         },
       });
+      setFile(null);
+      setConfirmed(false);
+      setProgress(null);
       setResult(imported);
       await queryClient.invalidateQueries({
         queryKey: consumerFinanceKeys.root(botId),
@@ -164,7 +167,7 @@ export function FinanceImportModal({
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800 px-3 py-2">
               <h4 className="text-sm font-medium">{copy.importInstruction}</h4>
               <Button
-                variant="secondary"
+                variant="cancel"
                 className="!px-3 !py-1.5"
                 onClick={async () => {
                   await navigator.clipboard.writeText(instructions);
@@ -188,115 +191,123 @@ export function FinanceImportModal({
         </section>
 
         <section className="flex min-w-0 flex-col gap-3">
-          <label
-            className={`flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-4 py-6 text-center transition ${dragging ? "border-sky-400 bg-sky-500/10" : "border-neutral-600 bg-neutral-950/50 hover:border-neutral-500 hover:bg-neutral-800/50"}`}
-            onDragEnter={(event) => {
-              event.preventDefault();
-              setDragging(true);
-            }}
-            onDragOver={(event) => event.preventDefault()}
-            onDragLeave={() => setDragging(false)}
-            onDrop={(event) => {
-              event.preventDefault();
-              setDragging(false);
-              void selectFile(event.dataTransfer.files[0] ?? null);
-            }}
-          >
-            <input
-              type="file"
-              accept="application/json,.json"
-              className="sr-only"
-              disabled={importing}
-              onChange={(event) =>
-                void selectFile(event.currentTarget.files?.[0] ?? null)
-              }
-            />
-            {file ? (
-              <>
-                <FileJson size={32} className="text-emerald-300" />
-                <span className="mt-3 max-w-full truncate text-sm font-medium text-white">
-                  {file.name}
-                </span>
-                <span className="mt-1 text-xs text-neutral-500">
-                  {(file.size / 1024).toFixed(1)} KB
-                </span>
-              </>
-            ) : (
-              <>
-                <Upload size={30} className="text-sky-300" />
-                <span className="mt-3 text-sm font-medium text-neutral-100">
-                  {copy.dropImportFile}
-                </span>
-                <span className="mt-1 text-xs text-neutral-500">
-                  {copy.importFileHelp}
-                </span>
-              </>
-            )}
-          </label>
+          {!result ? (
+            <label
+              className={`flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-4 py-6 text-center transition ${dragging ? "border-sky-400 bg-sky-500/10" : "border-neutral-600 bg-neutral-950/50 hover:border-neutral-500 hover:bg-neutral-800/50"}`}
+              onDragEnter={(event) => {
+                event.preventDefault();
+                setDragging(true);
+              }}
+              onDragOver={(event) => event.preventDefault()}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDragging(false);
+                void selectFile(event.dataTransfer.files[0] ?? null);
+              }}
+            >
+              <input
+                type="file"
+                accept="application/json,.json"
+                className="sr-only"
+                disabled={importing}
+                onChange={(event) =>
+                  void selectFile(event.currentTarget.files?.[0] ?? null)
+                }
+              />
+              {file ? (
+                <>
+                  <FileJson size={32} className="text-emerald-300" />
+                  <span className="mt-3 max-w-full truncate text-sm font-medium text-white">
+                    {file.name}
+                  </span>
+                  <span className="mt-1 text-xs text-neutral-500">
+                    {(file.size / 1024).toFixed(1)} KB
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Upload size={30} className="text-sky-300" />
+                  <span className="mt-3 text-sm font-medium text-neutral-100">
+                    {copy.dropImportFile}
+                  </span>
+                  <span className="mt-1 text-xs text-neutral-500">
+                    {copy.importFileHelp}
+                  </span>
+                </>
+              )}
+            </label>
+          ) : null}
           {fileError ? (
             <p role="alert" className="text-sm text-rose-300">
               {fileError}
             </p>
           ) : null}
 
-          <fieldset className="rounded-xl border border-neutral-800 bg-neutral-950/45 p-3">
-            <legend className="px-1 text-sm font-medium text-neutral-200">
-              {copy.importMode}
-            </legend>
-            <div
-              role="radiogroup"
-              className="mt-1 grid grid-cols-2 gap-1 rounded-xl bg-neutral-900 p-1"
-            >
-              {(["ADD", "REPLACE"] as const).map((value) => {
-                const active = mode === value;
-                const destructive = value === "REPLACE";
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    role="radio"
-                    aria-checked={active}
-                    disabled={importing}
-                    onClick={() => {
-                      setMode(value);
-                      setConfirmed(false);
-                      setResult(null);
-                      setError(null);
-                    }}
-                    className={`min-h-10 rounded-lg px-3 text-sm font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-sky-300 ${active ? (destructive ? "bg-rose-950 text-rose-200 shadow-[inset_0_0_0_1px_rgb(244_63_94/0.5)]" : "bg-sky-600 text-white") : "text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"}`}
-                  >
-                    {destructive ? copy.importModeReplace : copy.importModeAdd}
-                  </button>
-                );
-              })}
-            </div>
-            <p
-              className={`mt-2 text-xs leading-5 ${mode === "REPLACE" ? "text-rose-300" : "text-neutral-500"}`}
-            >
-              {mode === "REPLACE"
-                ? copy.importModeReplaceHelp
-                : copy.importModeAddHelp}
-            </p>
-          </fieldset>
+          {!result ? (
+            <fieldset className="rounded-xl border border-neutral-800 bg-neutral-950/45 p-3">
+              <legend className="px-1 text-sm font-medium text-neutral-200">
+                {copy.importMode}
+              </legend>
+              <div
+                role="radiogroup"
+                className="mt-1 grid grid-cols-2 gap-1 rounded-xl bg-neutral-900 p-1"
+              >
+                {(["ADD", "REPLACE"] as const).map((value) => {
+                  const active = mode === value;
+                  const destructive = value === "REPLACE";
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      disabled={importing}
+                      onClick={() => {
+                        setMode(value);
+                        setConfirmed(false);
+                        setResult(null);
+                        setError(null);
+                      }}
+                      className={`min-h-10 rounded-lg px-3 text-sm font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-sky-300 ${active ? (destructive ? "bg-rose-950 text-rose-200 shadow-[inset_0_0_0_1px_rgb(244_63_94/0.5)]" : "bg-sky-600 text-white") : "text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"}`}
+                    >
+                      {destructive
+                        ? copy.importModeReplace
+                        : copy.importModeAdd}
+                    </button>
+                  );
+                })}
+              </div>
+              <p
+                className={`mt-2 text-xs leading-5 ${mode === "REPLACE" ? "text-rose-300" : "text-neutral-500"}`}
+              >
+                {mode === "REPLACE"
+                  ? copy.importModeReplaceHelp
+                  : copy.importModeAddHelp}
+              </p>
+            </fieldset>
+          ) : null}
 
-          <label
-            className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm leading-5 ${mode === "REPLACE" ? "border-rose-900/80 bg-rose-950/20 text-rose-100" : "border-neutral-800 bg-neutral-950/45 text-neutral-300"}`}
-          >
-            <input
-              type="checkbox"
-              checked={confirmed}
-              disabled={importing}
-              onChange={(event) => setConfirmed(event.target.checked)}
-              className="mt-0.5 h-4 w-4 accent-blue-500"
-            />
-            <span>
-              {mode === "REPLACE"
-                ? copy.importReplacesData
-                : copy.importAddsData}
-            </span>
-          </label>
+          {!result ? (
+            <label
+              className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm leading-5 ${mode === "REPLACE" ? "border-rose-900/80 bg-rose-950/20 text-rose-100" : "border-neutral-800 bg-neutral-950/45 text-neutral-300"}`}
+            >
+              <input
+                type="checkbox"
+                checked={confirmed}
+                disabled={importing}
+                onChange={(event) => setConfirmed(event.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-blue-500"
+              />
+              <span>
+                {mode === "REPLACE"
+                  ? copy.importReplacesData
+                  : copy.importAddsData}
+              </span>
+            </label>
+          ) : null}
 
-          {progress || importing ? (
+          {!result && (progress || importing) ? (
             <div
               role="status"
               aria-live="polite"
@@ -346,7 +357,9 @@ export function FinanceImportModal({
           ) : null}
 
           <div className="mt-auto flex flex-wrap justify-end gap-2 pt-2">
-            {importing ? (
+            {result ? (
+              <Button onClick={close}>{copy.closeImport}</Button>
+            ) : importing ? (
               <Button
                 variant="secondary"
                 onClick={() => abortRef.current?.abort()}
@@ -354,17 +367,19 @@ export function FinanceImportModal({
                 {copy.cancelImport}
               </Button>
             ) : (
-              <Button variant="secondary" onClick={close}>
+              <Button variant="cancel" onClick={close}>
                 {copy.cancel}
               </Button>
             )}
-            <Button
-              disabled={!file || !confirmed || importing}
-              onClick={() => void runImport()}
-            >
-              <Upload size={16} />
-              {importing ? copy.importingData : copy.startImport}
-            </Button>
+            {!result ? (
+              <Button
+                disabled={!file || !confirmed || importing}
+                onClick={() => void runImport()}
+              >
+                <Upload size={16} />
+                {importing ? copy.importingData : copy.startImport}
+              </Button>
+            ) : null}
           </div>
         </section>
       </div>

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await -- stateful workflow doubles */
+/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/require-await -- stateful workflow doubles */
 import {
   TelegramSystemBotWorkflowKind,
   TelegramSystemBotWorkflowStatus,
@@ -36,6 +36,8 @@ function setup(input?: { step?: string; payload?: Record<string, unknown> }) {
     return workflow;
   };
   const workflows = {
+    requireNoActiveBatchImport: jest.fn(),
+    activeWithoutBatchImport: jest.fn(async () => workflow),
     active: jest.fn(async () => workflow),
     get: jest.fn(async () => workflow),
     create: jest.fn(async (value) => update(value)),
@@ -129,9 +131,11 @@ function setup(input?: { step?: string; payload?: Record<string, unknown> }) {
     resolve: jest.fn().mockResolvedValue({
       formats: [{ name: '1/24' }, { name: 'No auto-delete' }],
     }),
-    existingManagedPosts: jest.fn().mockResolvedValue([
-      { id: 'managed-1', title: 'Prepared ad', status: 'DRAFT' },
-    ]),
+    existingManagedPosts: jest
+      .fn()
+      .mockResolvedValue([
+        { id: 'managed-1', title: 'Prepared ad', status: 'DRAFT' },
+      ]),
   };
   const placement = {
     placementId: 'existing-placement',
@@ -178,6 +182,16 @@ function callback(current: { id: string; version: number }, action: string) {
 }
 
 describe('TelegramSystemBotAdSaleFlowService', () => {
+  it('does not start Ad Sale while a post batch capture is active', async () => {
+    const state = setup();
+    state.workflows.activeWithoutBatchImport.mockRejectedValue(
+      new Error('active batch'),
+    );
+
+    await expect(state.service.begin(scope)).rejects.toThrow('active batch');
+    expect(state.workflows.create).not.toHaveBeenCalled();
+  });
+
   it('starts with sale mode and auto-selects the current member for a new sale', async () => {
     const state = setup();
     await state.service.begin(scope);
@@ -198,7 +212,11 @@ describe('TelegramSystemBotAdSaleFlowService', () => {
   it('allows changing member and skipping Finance', async () => {
     const state = setup({
       step: 'CHOOSE_ACCOUNT',
-      payload: { mode: 'NEW', assignedMemberId: 'member-1', memberLabel: 'Ada' },
+      payload: {
+        mode: 'NEW',
+        assignedMemberId: 'member-1',
+        memberLabel: 'Ada',
+      },
     });
     await state.service.callback(
       scope,
@@ -234,7 +252,11 @@ describe('TelegramSystemBotAdSaleFlowService', () => {
   it('toggles multiple own channels and continues with the union target', async () => {
     const state = setup({
       step: 'CHOOSE_TARGET',
-      payload: { mode: 'NEW', assignedMemberId: 'member-1', financeSkipped: true },
+      payload: {
+        mode: 'NEW',
+        assignedMemberId: 'member-1',
+        financeSkipped: true,
+      },
     });
     await state.service.callback(
       scope,
@@ -268,7 +290,11 @@ describe('TelegramSystemBotAdSaleFlowService', () => {
   it('selects one network target and proceeds without an amount when Finance is skipped', async () => {
     const state = setup({
       step: 'CHOOSE_TARGET',
-      payload: { mode: 'NEW', assignedMemberId: 'member-1', financeSkipped: true },
+      payload: {
+        mode: 'NEW',
+        assignedMemberId: 'member-1',
+        financeSkipped: true,
+      },
     });
 
     await state.service.callback(
@@ -291,7 +317,11 @@ describe('TelegramSystemBotAdSaleFlowService', () => {
         mode: 'NEW',
         assignedMemberId: 'member-1',
         financeSkipped: true,
-        target: { kind: 'CHANNELS', channelIds: ['channel-1'], labels: ['News'] },
+        target: {
+          kind: 'CHANNELS',
+          channelIds: ['channel-1'],
+          labels: ['News'],
+        },
       },
     });
     await state.service.callback(
@@ -317,8 +347,14 @@ describe('TelegramSystemBotAdSaleFlowService', () => {
   });
 
   it('re-resolves an existing placement on selection and immediately before commit', async () => {
-    const state = setup({ step: 'CHOOSE_EXISTING_PLACEMENT', payload: { mode: 'EXISTING' } });
-    await state.service.callback(scope, callback(state.current(), 'placement.0'));
+    const state = setup({
+      step: 'CHOOSE_EXISTING_PLACEMENT',
+      payload: { mode: 'EXISTING' },
+    });
+    await state.service.callback(
+      scope,
+      callback(state.current(), 'placement.0'),
+    );
     expect(state.current()).toMatchObject({
       step: 'CHOOSE_CONTENT',
       payload: {
@@ -395,14 +431,18 @@ describe('TelegramSystemBotAdSaleFlowService', () => {
         mode: 'NEW',
         assignedMemberId: 'member-1',
         financeSkipped: true,
-        target: { kind: 'CHANNELS', channelIds: ['channel-1'], labels: ['News'] },
+        target: {
+          kind: 'CHANNELS',
+          channelIds: ['channel-1'],
+          labels: ['News'],
+        },
       },
     });
     await state.service.input(scope, { message_id: 11, text: 'Ad' });
     expect(state.current().step).toBe('CHOOSE_FORMAT');
-    expect(JSON.stringify(state.api.editMessageText.mock.calls.at(-1)?.[1])).toContain(
-      'https://example.com',
-    );
+    expect(
+      JSON.stringify(state.api.editMessageText.mock.calls.at(-1)?.[1]),
+    ).toContain('https://example.com');
     expect(state.api.sendMessage).not.toHaveBeenCalled();
   });
 });

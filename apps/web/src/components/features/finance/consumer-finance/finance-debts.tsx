@@ -11,10 +11,18 @@ import type {
   ConsumerFinanceDebt,
   ConsumerFinanceDebtStatus,
 } from "@telegram-system/shared";
-import { Button, Card, EmptyState, ErrorState, LoadingState } from "./ui";
+import {
+  Button,
+  Card,
+  EmptyState,
+  ErrorState,
+  FinanceCardActionsMenu,
+  LoadingState,
+} from "./ui";
 import { IconAvatar } from "./ui/finance-icon-avatar";
-import { FinanceConfirmModal } from "./finance-confirm-modal";
+import { FinanceDebtCreateModal } from "./finance-debt-create-modal";
 import { FinanceDebtEditor } from "./finance-debt-editor";
+import { FinanceDebtSettlementModal } from "./finance-debt-settlement-modal";
 import { consumerFinanceObligationsApi } from "@/lib/features/finance/consumer-finance-obligations-api";
 import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
 import {
@@ -41,6 +49,7 @@ export function FinanceDebts({
   const [editing, setEditing] = useState<ConsumerFinanceDebt | "create" | null>(
     null,
   );
+  const [creating, setCreating] = useState(false);
   const [settling, setSettling] = useState<ConsumerFinanceDebt | null>(null);
   const debts = useInfiniteQuery({
     queryKey: consumerFinanceKeys.debts(botId, { status, limit: 30 }),
@@ -89,7 +98,7 @@ export function FinanceDebts({
             </Button>
           ))}
         </div>
-        <Button onClick={() => setEditing("create")}>{t.addDebt}</Button>
+        <Button onClick={() => setCreating(true)}>{t.addDebt}</Button>
       </div>
       {debts.isLoading ? (
         <LoadingState text={t.loadingDebts} />
@@ -136,16 +145,30 @@ export function FinanceDebts({
           onSaved={saveDebt}
         />
       ) : null}
-      <FinanceConfirmModal
-        key={settling?.id ?? "settle-debt"}
-        open={!!settling}
-        locale={locale}
-        entityName={settling?.name ?? ""}
-        actionLabel={t.settle}
-        description={t.settleDescription}
-        onClose={() => setSettling(null)}
-        onConfirm={() => (settling ? settle.mutateAsync(settling) : undefined)}
-      />
+      {creating ? (
+        <FinanceDebtCreateModal
+          debts={items.filter((debt) => debt.status === "OPEN")}
+          locale={locale}
+          onClose={() => setCreating(false)}
+          onCreateNew={() => {
+            setCreating(false);
+            setEditing("create");
+          }}
+          onSettle={(debt) => {
+            setCreating(false);
+            setSettling(debt);
+          }}
+        />
+      ) : null}
+      {settling ? (
+        <FinanceDebtSettlementModal
+          key={settling.id}
+          debt={settling}
+          locale={locale}
+          onClose={() => setSettling(null)}
+          onCreate={() => settle.mutateAsync(settling)}
+        />
+      ) : null}
       {settle.isError ? <ErrorState text={t.debtSettleError} /> : null}
     </div>
   );
@@ -181,9 +204,23 @@ function DebtCard({
             </p>
           </div>
         </div>
-        <strong className="shrink-0 tabular-nums">
-          {formatMoney(debt.amount, debt.currency, "symbol")}
-        </strong>
+        <div className="flex items-center gap-2">
+          <strong className="shrink-0 tabular-nums">
+            {formatMoney(debt.amount, debt.currency, "symbol")}
+          </strong>
+          {debt.status === "OPEN" ? (
+            <FinanceCardActionsMenu
+              label={t.actions}
+              actions={[
+                {
+                  label: t.edit,
+                  icon: <Pencil size={16} />,
+                  onSelect: onEdit,
+                },
+              ]}
+            />
+          ) : null}
+        </div>
       </div>
       <p
         className={`mt-3 text-sm ${debt.isOverdue ? "font-medium text-rose-300" : "text-neutral-400"}`}
@@ -199,9 +236,6 @@ function DebtCard({
       ) : null}
       {debt.status === "OPEN" ? (
         <div className="mt-4 flex gap-2">
-          <Button variant="secondary" onClick={onEdit}>
-            <Pencil size={16} aria-hidden="true" /> {t.edit}
-          </Button>
           <Button onClick={onSettle}>{t.settle}</Button>
         </div>
       ) : null}

@@ -23,6 +23,13 @@ describe('due-work predicate parity', () => {
     );
   });
 
+  it('leaves batch-scheduled managed posts to the dedicated batch worker', () => {
+    const serialized = JSON.stringify(managedPostIdentityReadyWhere(now));
+
+    expect(serialized).toContain('"scheduleMode":null');
+    expect(serialized).toContain('"scheduleMode":{"not":"BATCH"}');
+  });
+
   it('dispatches processing broadcasts only for materialization or retryable pending recipients', () => {
     expect(greeterBroadcastDispatchableWhere(now)).toEqual(
       expect.objectContaining({

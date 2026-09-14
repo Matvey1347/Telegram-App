@@ -2,6 +2,7 @@
 
 import {
   Children,
+  type CSSProperties,
   type PropsWithChildren,
   forwardRef,
   isValidElement,
@@ -20,15 +21,29 @@ const selectCopy = {
   ru: { select: "Выберите", search: "Поиск…", empty: "Ничего не найдено" },
 } as const;
 
+const optionToneByValue: Record<string, string> = {
+  expense: "text-rose-300",
+  income: "text-emerald-300",
+  transfer: "text-sky-300",
+  debt: "text-amber-300",
+  debt_repayment: "text-amber-300",
+  investment: "text-violet-300",
+  investment_contribution: "text-violet-300",
+  investment_return: "text-violet-300",
+};
+
 export function Button({
   variant = "primary",
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "danger";
+  variant?: "primary" | "secondary" | "outline" | "cancel" | "danger";
 }) {
   const styles = {
     primary: "bg-blue-600 hover:bg-blue-500 text-white",
-    secondary: "bg-neutral-700 hover:bg-neutral-600 text-white",
+    secondary: "bg-blue-600 hover:bg-blue-500 text-white",
+    outline:
+      "border border-sky-700 bg-sky-950/30 text-sky-100 hover:bg-sky-900/50",
+    cancel: "bg-neutral-700 hover:bg-neutral-600 text-white",
     danger: "bg-red-600 hover:bg-red-500 text-white",
   }[variant];
   return (
@@ -71,16 +86,18 @@ export const Input = forwardRef<
   );
 });
 
-export function Textarea(
-  props: React.TextareaHTMLAttributes<HTMLTextAreaElement>,
-) {
+export const Textarea = forwardRef<
+  HTMLTextAreaElement,
+  React.TextareaHTMLAttributes<HTMLTextAreaElement>
+>(function Textarea({ className, ...props }, ref) {
   return (
     <textarea
       {...props}
-      className={`w-full px-3 py-2 text-sm ${financeUiTokens.control} ${props.className ?? ""}`}
+      ref={ref}
+      className={`w-full px-3 py-2 text-sm ${financeUiTokens.control} ${className ?? ""}`}
     />
   );
-}
+});
 
 function OptionIcon({
   emoji,
@@ -143,12 +160,7 @@ export function Select(
           | string
           | undefined,
         className:
-          optionProps.className ||
-          (value.toLowerCase() === "income"
-            ? "text-emerald-300"
-            : value.toLowerCase().startsWith("expense")
-              ? "text-rose-300"
-              : ""),
+          optionProps.className || optionToneByValue[value.toLowerCase()] || "",
       };
     });
   const [internalValue, setInternalValue] = useState(
@@ -156,6 +168,7 @@ export function Select(
   );
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [menuPosition, setMenuPosition] = useState<CSSProperties>();
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listboxId = useId();
@@ -176,6 +189,33 @@ export function Select(
       )
     : menuOptions;
 
+  const updateMenuPosition = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const viewportPadding = 8;
+    const preferredHeight = 264;
+    const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
+    const spaceAbove = rect.top - viewportPadding;
+    const openUp =
+      spaceBelow < Math.min(preferredHeight, spaceAbove) && spaceAbove > 120;
+    setMenuPosition({
+      left: rect.left,
+      width: rect.width,
+      ...(openUp
+        ? { bottom: window.innerHeight - rect.top + 4 }
+        : { top: rect.bottom + 4 }),
+      maxHeight: Math.max(
+        120,
+        Math.min(preferredHeight, openUp ? spaceAbove : spaceBelow),
+      ),
+    });
+  };
+
+  const toggleMenu = () => {
+    if (!open) updateMenuPosition();
+    setOpen((value) => !value);
+  };
+
   useEffect(() => {
     const close = (event: PointerEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) {
@@ -186,6 +226,17 @@ export function Select(
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    document.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      document.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [open]);
 
   const commit = (value: string) => {
     if (!controlled) setInternalValue(value);
@@ -219,10 +270,11 @@ export function Select(
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listboxId}
-        onClick={() => setOpen((value) => !value)}
+        onClick={toggleMenu}
         onKeyDown={(event) => {
           if (event.key === "ArrowDown" && !open) {
             event.preventDefault();
+            updateMenuPosition();
             setOpen(true);
             focusOption("first");
           } else if (event.key === "Escape") {
@@ -262,7 +314,10 @@ export function Select(
         />
       </button>
       {open ? (
-        <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-xl">
+        <div
+          className="fixed z-[210] overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-xl"
+          style={menuPosition}
+        >
           {showSearch ? (
             <div className="border-b border-neutral-800 p-2">
               <input
@@ -371,14 +426,16 @@ export function FormField({
   label,
   required,
   error,
+  className = "",
   children,
 }: PropsWithChildren<{
   label: React.ReactNode;
   required?: boolean;
   error?: string;
+  className?: string;
 }>) {
   return (
-    <div className="block text-sm">
+    <div className={`block min-w-0 text-sm ${className}`}>
       <span className="mb-1 block text-neutral-300">
         {label}
         {required ? <span className="ml-1 text-red-400">*</span> : null}

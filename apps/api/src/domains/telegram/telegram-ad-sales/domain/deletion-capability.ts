@@ -1,4 +1,9 @@
-export const TELEGRAM_BOT_DELETE_LIMIT_HOURS = 48;
+import {
+  preflightTelegramDeletionCapability,
+  TELEGRAM_BOT_DELETE_LIMIT_HOURS,
+} from '../../../../telegram/shared/telegram-deletion-policy';
+
+export { TELEGRAM_BOT_DELETE_LIMIT_HOURS };
 
 type TelegramDeletionSourceCapability = {
   sourceType: string;
@@ -19,28 +24,6 @@ export function preflightTelegramAdDeletionCapability(input: {
   isPermanent: boolean;
   sources: TelegramDeletionSourceCapability[];
 }): TelegramAdDeletionPreflightResult {
-  if (
-    input.isPermanent ||
-    input.deleteAfterHours === null ||
-    input.publishingSourceType === 'MTPROTO' ||
-    input.deleteAfterHours < TELEGRAM_BOT_DELETE_LIMIT_HOURS
-  ) {
-    return { ok: true };
-  }
-
-  const publishesViaBot =
-    input.publishingSourceType === 'BOT' ||
-    input.publishingSourceType === 'BOT_API';
-  const hasMtprotoDeleteSource = input.sources.some(
-    (source) =>
-      source.sourceType === 'MTPROTO' && source.permissions.canDeleteMessages,
-  );
-  if (!publishesViaBot || hasMtprotoDeleteSource) return { ok: true };
-
-  return {
-    ok: false,
-    code: 'MTPROTO_DELETE_SOURCE_REQUIRED',
-    message:
-      'A connected MTProto admin with delete permission is required for deletion after 48 hours.',
-  };
+  if (input.isPermanent) return { ok: true };
+  return preflightTelegramDeletionCapability(input);
 }

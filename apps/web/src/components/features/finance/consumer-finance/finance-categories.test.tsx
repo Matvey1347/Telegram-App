@@ -65,6 +65,7 @@ describe("FinanceCategories CRUD", () => {
       emoji: "🏷️",
       type: "EXPENSE",
       parentId: undefined,
+      necessity: "DISCRETIONARY",
     });
   });
 
@@ -86,6 +87,7 @@ describe("FinanceCategories CRUD", () => {
       emoji: "☕",
       type: "EXPENSE",
       parentId: null,
+      necessity: "DISCRETIONARY",
     });
   });
 
@@ -106,7 +108,7 @@ describe("FinanceCategories CRUD", () => {
     expect(screen.queryByText("People")).not.toBeInTheDocument();
   });
 
-  it("archives only after typed confirmation", async () => {
+  it("archives after explicit confirmation", async () => {
     apiMocks.archiveCategory.mockResolvedValue({
       ...category,
       archivedAt: "2026-08-21T00:00:00.000Z",
@@ -116,9 +118,6 @@ describe("FinanceCategories CRUD", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Archive category: Coffee" }),
     );
-    fireEvent.change(screen.getByPlaceholderText("Coffee"), {
-      target: { value: "Coffee" },
-    });
     fireEvent.click(screen.getByRole("button", { name: "Archive" }));
 
     await waitFor(() =>
@@ -223,7 +222,7 @@ describe("FinanceCategories CRUD", () => {
       within(dialog).queryByRole("option", { name: "Latte" }),
     ).not.toBeInTheDocument();
     expect(
-      within(dialog).getByRole("option", { name: "Groceries" }),
+      within(dialog).getByRole("option", { name: /Groceries/ }),
     ).toBeInTheDocument();
     expect(apiMocks.categories).toHaveBeenCalledOnce();
   });

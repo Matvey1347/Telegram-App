@@ -10,13 +10,22 @@ import {
 } from "react";
 
 const MAX_ASSISTANT_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_ASSISTANT_FILES = 5;
+const MAX_ASSISTANT_TOTAL_BYTES = 16 * 1024 * 1024;
 const ACCEPTED_ASSISTANT_FILE =
   /^(image\/(jpeg|png|webp)|audio\/(ogg|mpeg|mp4|wav|x-wav|webm)|application\/ogg)/u;
 
 export type FinanceAssistantMediaError =
   | "unsupported"
   | "tooLarge"
-  | "microphoneUnavailable";
+  | "tooMany"
+  | "microphoneUnavailable"
+  | "voiceRequiresPro";
+
+type FinanceAssistantAttachment = {
+  file: File;
+  previewUrl: string | null;
+};
 
 function recordingMime() {
   if (typeof MediaRecorder === "undefined") return undefined;
@@ -37,7 +46,10 @@ export function useFinanceAssistantMedia() {
   const stream = useRef<MediaStream | null>(null);
   const chunks = useRef<Blob[]>([]);
   const ticker = useRef<number | null>(null);
-  const [file, setFile] = useState<File | null>(null);
+  const previewUrls = useRef(new Set<string>());
+  const [attachments, setAttachments] = useState<FinanceAssistantAttachment[]>(
+    [],
+  );
   const [dragActive, setDragActive] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -54,25 +66,101 @@ export function useFinanceAssistantMedia() {
     () => () => {
       if (recorder.current?.state === "recording") recorder.current.stop();
       stopStream();
+      previewUrls.current.forEach((url) => URL.revokeObjectURL(url));
+      previewUrls.current.clear();
     },
     [stopStream],
   );
 
-  const selectFile = useCallback((next: File | null) => {
+  const createAttachment = useCallback((file: File) => {
+    const previewUrl =
+      typeof URL.createObjectURL === "function"
+        ? URL.createObjectURL(file)
+        : null;
+    if (previewUrl) previewUrls.current.add(previewUrl);
+    return { file, previewUrl };
+  }, []);
+
+  const clearAttachments = useCallback(() => {
+    setAttachments((current) => {
+      current.forEach(({ previewUrl }) => {
+        if (!previewUrl) return;
+        URL.revokeObjectURL(previewUrl);
+        previewUrls.current.delete(previewUrl);
+      });
+      return [];
+    });
     setError(null);
-    if (!next) {
-      setFile(null);
-      return false;
-    }
-    if (!ACCEPTED_ASSISTANT_FILE.test(next.type)) {
+  }, []);
+
+  const selectFiles = useCallback(
+    (next: File[], append = true) => {
+      setError(null);
+      if (!next.length) return false;
+      if (next.some((file) => !ACCEPTED_ASSISTANT_FILE.test(file.type))) {
+        setError("unsupported");
+        return false;
+      }
+      if (next.some((file) => file.size > MAX_ASSISTANT_FILE_BYTES)) {
+        setError("tooLarge");
+        return false;
+      }
+      const existing = append ? attachments : [];
+      const combinedFiles = [...existing.map(({ file }) => file), ...next];
+      const audioFiles = combinedFiles.filter(
+        (file) =>
+          file.type.startsWith("audio/") || file.type === "application/ogg",
+      );
+      if (audioFiles.length && combinedFiles.length > 1) {
+        setError("unsupported");
+        return false;
+      }
+      if (combinedFiles.length > MAX_ASSISTANT_FILES) {
+        setError("tooMany");
+        return false;
+      }
+      if (
+        combinedFiles.reduce((total, file) => total + file.size, 0) >
+        MAX_ASSISTANT_TOTAL_BYTES
+      ) {
+        setError("tooLarge");
+        return false;
+      }
+      if (!append) clearAttachments();
+      setAttachments((current) => [
+        ...(append ? current : []),
+        ...next.map(createAttachment),
+      ]);
+      return true;
+    },
+    [attachments, clearAttachments, createAttachment],
+  );
+
+  const removeAttachment = useCallback((index: number) => {
+    setError(null);
+    setAttachments((current) => {
+      const removed = current[index];
+      if (removed?.previewUrl) {
+        URL.revokeObjectURL(removed.previewUrl);
+        previewUrls.current.delete(removed.previewUrl);
+      }
+      return current.filter((_, itemIndex) => itemIndex !== index);
+    });
+  }, []);
+
+  const showError = useCallback((next: FinanceAssistantMediaError) => {
+    setError(next);
+  }, []);
+
+  const validateRecording = useCallback((recorded: File) => {
+    if (!ACCEPTED_ASSISTANT_FILE.test(recorded.type)) {
       setError("unsupported");
       return false;
     }
-    if (next.size > MAX_ASSISTANT_FILE_BYTES) {
+    if (recorded.size > MAX_ASSISTANT_FILE_BYTES) {
       setError("tooLarge");
       return false;
     }
-    setFile(next);
     return true;
   }, []);
 
@@ -104,7 +192,10 @@ export function useFinanceAssistantMedia() {
           `jarvis-voice-${Date.now()}.${extensionForMime(type)}`,
           { type },
         );
-        if (recorded.size) selectFile(recorded);
+        if (recorded.size && validateRecording(recorded)) {
+          clearAttachments();
+          setAttachments([createAttachment(recorded)]);
+        }
         setRecording(false);
         stopStream();
       };
@@ -119,7 +210,7 @@ export function useFinanceAssistantMedia() {
       stopStream();
       setError("microphoneUnavailable");
     }
-  }, [selectFile, stopStream]);
+  }, [clearAttachments, createAttachment, stopStream, validateRecording]);
 
   const stopRecording = useCallback(() => {
     if (recorder.current?.state === "recording") recorder.current.stop();
@@ -129,29 +220,33 @@ export function useFinanceAssistantMedia() {
     (event: DragEvent<HTMLElement>) => {
       event.preventDefault();
       setDragActive(false);
-      selectFile(event.dataTransfer.files[0] ?? null);
+      selectFiles(Array.from(event.dataTransfer.files));
     },
-    [selectFile],
+    [selectFiles],
   );
 
   const onPaste = useCallback(
     (event: ClipboardEvent<HTMLElement>) => {
-      const pasted = Array.from(event.clipboardData.files).find((item) =>
+      const pasted = Array.from(event.clipboardData.files).filter((item) =>
         ACCEPTED_ASSISTANT_FILE.test(item.type),
       );
-      if (pasted) selectFile(pasted);
+      if (pasted.length) selectFiles(pasted);
     },
-    [selectFile],
+    [selectFiles],
   );
 
   return {
-    file,
+    attachments,
+    files: attachments.map(({ file }) => file),
     error,
     dragActive,
     recording,
     recordingSeconds,
     setDragActive,
-    selectFile,
+    selectFiles,
+    clearAttachments,
+    removeAttachment,
+    showError,
     startRecording,
     stopRecording,
     onDrop,

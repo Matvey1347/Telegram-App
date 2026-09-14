@@ -49,6 +49,7 @@ vi.mock("./consumer-finance-screens", () => ({
     screen: activeScreen,
     openTransfer,
     openTransaction,
+    openEntityAction,
     actionRequestId,
     surface,
     accountId,
@@ -61,6 +62,7 @@ vi.mock("./consumer-finance-screens", () => ({
     screen: string;
     openTransfer: boolean;
     openTransaction: "EXPENSE" | "INCOME" | null;
+    openEntityAction: "debt" | "investment" | null;
     actionRequestId: number;
     surface: "browser" | "telegram";
     accountId: string | null;
@@ -77,6 +79,7 @@ vi.mock("./consumer-finance-screens", () => ({
       Finance profile {profile.id} · screen {activeScreen} · transfer{" "}
       {String(openTransfer)} · transaction {String(openTransaction)} · surface{" "}
       {surface} · account {String(accountId)} · request {actionRequestId}
+      {openEntityAction ? ` · entity ${openEntityAction}` : ""}
       {regularPaymentTarget
         ? ` · target ${regularPaymentTarget.regularPaymentId}`
         : ""}
@@ -245,7 +248,7 @@ describe("ConsumerFinanceApp bootstrap", () => {
     expect(mocks.auth).not.toHaveBeenCalled();
     expect(
       document.querySelector(
-        "[data-finance-feedback='loading'] [data-finance-context='overview'] svg",
+        "[data-finance-feedback='loading'] [data-finance-money-loader][data-finance-context='overview']",
       ),
     ).toBeInTheDocument();
     expect(document.querySelector(".animate-pulse")).toBeNull();
@@ -535,7 +538,7 @@ describe("ConsumerFinanceApp bootstrap", () => {
     ).toBeInTheDocument();
     expect(
       document.querySelector(
-        "[data-finance-feedback='loading'] [data-finance-context='overview'] svg",
+        "[data-finance-feedback='loading'] [data-finance-money-loader][data-finance-context='overview']",
       ),
     ).toBeInTheDocument();
     expect(
@@ -578,6 +581,24 @@ describe("ConsumerFinanceApp bootstrap", () => {
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
     expect(await screen.findByText(/screen budget/)).toBeInTheDocument();
+  });
+
+  it("opens Jarvis as a dedicated browser screen with a direct URL", async () => {
+    mocks.session.mockResolvedValue({ authenticated: true, profile });
+    renderApp();
+    await screen.findByText(/screen home/);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Jarvis" })[0]);
+
+    expect(await screen.findByText(/screen assistant/)).toBeInTheDocument();
+    expect(window.location.search).toBe("?screen=assistant");
+    expect(screen.getByRole("region", { name: "Jarvis" })).toHaveAttribute(
+      "data-finance-assistant-presentation",
+      "page",
+    );
+    expect(
+      screen.queryByRole("complementary", { name: "Jarvis" }),
+    ).not.toBeInTheDocument();
   });
 
   it("preserves account editor deep links and follows account popstate", async () => {
@@ -627,7 +648,7 @@ describe("ConsumerFinanceApp bootstrap", () => {
     expect(await screen.findByText(/screen accounts/)).toBeInTheDocument();
   });
 
-  it("keeps secondary routes reachable and launches transfers directly", async () => {
+  it("opens quick actions as modals without leaving the current screen", async () => {
     mocks.session.mockResolvedValue({ authenticated: true, profile });
     renderApp();
     await screen.findByText(/screen home/);
@@ -635,15 +656,16 @@ describe("ConsumerFinanceApp bootstrap", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Expense" })[0]);
     expect(
       await screen.findByText(
-        /screen transactions · transfer false · transaction EXPENSE/,
+        /screen home · transfer false · transaction EXPENSE/,
       ),
     ).toBeInTheDocument();
+    expect(window.location.search).toBe("");
 
     fireEvent.click(screen.getAllByRole("button", { name: "Transfers" })[1]);
     expect(
-      await screen.findByText(/screen transfers · transfer true/),
+      await screen.findByText(/screen home · transfer true/),
     ).toBeInTheDocument();
-    expect(window.location.search).toContain("transfer=1");
+    expect(window.location.search).toBe("");
   });
 
   it("navigates to Debts and Regular payments in the Web shell", async () => {

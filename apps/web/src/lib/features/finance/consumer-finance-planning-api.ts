@@ -45,6 +45,13 @@ export const consumerFinancePlanningApi = {
         consumerRequest(),
       )
     ).data,
+  deleteLimit: async (botId: string, id: string) =>
+    (
+      await consumerFinanceHttp.delete<{ deleted: true }>(
+        `${consumerFinanceRoot(botId)}/limits/${id}`,
+        consumerRequest(),
+      )
+    ).data,
   reminders: async (botId: string) =>
     (
       await consumerFinanceHttp.get<ConsumerFinanceReminder[]>(

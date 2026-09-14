@@ -159,7 +159,7 @@ export function FinanceSavingsActionModal({
           </p>
         ) : null}
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button type="button" variant="cancel" onClick={onClose}>
             {t.cancel}
           </Button>
           <Button

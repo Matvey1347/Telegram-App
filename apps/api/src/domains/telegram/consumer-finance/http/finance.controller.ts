@@ -14,7 +14,10 @@ import {
   Query,
   Req,
   Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { IsIn, IsString, Matches } from 'class-validator';
 import { randomBytes, timingSafeEqual } from 'crypto';
 import type { CookieOptions, Request, Response } from 'express';
@@ -343,16 +346,30 @@ export class FinanceController {
   @Get('dashboard') async dashboard(
     @Param('botId') b: string,
     @Req() r: Request,
+    @Query('period')
+    period:
+      | 'CURRENT_MONTH'
+      | 'PREVIOUS_MONTH'
+      | 'LAST_3_MONTHS'
+      | 'CUSTOM' = 'CURRENT_MONTH',
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
+    if (
+      !['CURRENT_MONTH', 'PREVIOUS_MONTH', 'LAST_3_MONTHS', 'CUSTOM'].includes(
+        period,
+      )
+    )
+      throw new BadRequestException('Invalid dashboard period');
     const p = this.profile(this.auth(b, r));
     const profile = await this.core.profile(p.id);
     if (!profile) throw new NotFoundException('Finance profile not found');
-    const { from, to } = financeAnalyticsDateRange(
-      { period: 'CURRENT_MONTH' },
+    const range = financeAnalyticsDateRange(
+      { period, from, to },
       profile.timezone,
     );
     const [stats, limits, recent] = await Promise.all([
-      this.ledger.stats(p.id, from, to),
+      this.ledger.stats(p.id, range.from, range.to),
       this.core.limits(p.id),
       this.ledger.history(
         p.id,
@@ -402,6 +419,46 @@ export class FinanceController {
       }
     }
     return updated;
+  }
+  @Post('avatar')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 2 * 1024 * 1024, files: 1 },
+      fileFilter: (_request, file, callback) => {
+        const accepted = ['image/jpeg', 'image/png', 'image/webp'].includes(
+          file.mimetype,
+        );
+        callback(
+          accepted
+            ? null
+            : new BadRequestException('Avatar must be a JPEG, PNG or WebP image'),
+          accepted,
+        );
+      },
+    }),
+  )
+  uploadAvatar(
+    @Param('botId') botId: string,
+    @Req() request: Request,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ) {
+    return this.core.updateAvatar(this.auth(botId, request).profileId, file);
+  }
+  @Delete('avatar') clearAvatar(
+    @Param('botId') botId: string,
+    @Req() request: Request,
+  ) {
+    return this.core.clearAvatar(this.auth(botId, request).profileId);
+  }
+  @Get('avatar') async avatar(
+    @Param('botId') botId: string,
+    @Req() request: Request,
+    @Res() response: Response,
+  ) {
+    const avatar = await this.core.avatar(this.auth(botId, request).profileId);
+    response.setHeader('Content-Type', avatar.mimeType);
+    response.setHeader('Cache-Control', 'private, max-age=300');
+    response.send(avatar.bytes);
   }
   @Get('accounts') accounts(@Param('botId') b: string, @Req() r: Request) {
     const c = this.auth(b, r);
@@ -597,6 +654,13 @@ export class FinanceController {
     @Body() d: UpsertFinanceLimitDto,
   ) {
     return this.core.upsertLimit(this.auth(b, r).profileId, d);
+  }
+  @Delete('limits/:id') deleteLimit(
+    @Param('botId') b: string,
+    @Param('id') id: string,
+    @Req() r: Request,
+  ) {
+    return this.core.deleteLimit(this.auth(b, r).profileId, id);
   }
   @Get('smart-limits') async smartLimits(
     @Param('botId') b: string,

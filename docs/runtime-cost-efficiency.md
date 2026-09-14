@@ -106,12 +106,38 @@ first replace those reads with daily aggregates, then retain raw snapshots for
 the verified maximum attribution window plus a safety margin; it must run from
 the daily maintenance task in bounded batches, never from a frequent poll.
 
+### Telegram post batch dispatch
+
+System Bot post batches are admitted at no more than 50 imported posts, 100
+channels, and 5,000 expanded deliveries. Import consumption and dispatch are
+database-only HTTP operations; Telegram publication and expiry deletion run as
+bounded, leased, due-driven work. Dispatch must not open one request, stream,
+timer, or transaction per delivery, and it must never hold a database
+transaction across a Telegram call.
+
+The batch lifetime is an immutable delivery snapshot of 24, 48, 72 hours, or
+permanent. Its deletion deadline starts at the confirmed publication time, not
+the requested schedule time. Permanent deliveries create no deletion wake.
+Frontend countdowns derive from that persisted deadline using one
+visibility-aware clock and never refetch per delivery.
+
+At the maximum 50-by-100 fan-out, expect at least 5,000 managed posts, 5,000
+delivery rows, 10,000 managed-post revisions, and 5,000 Telegram publication
+calls before media or long-text fan-out. Materialization therefore uses bulk
+writes, worker pages are bounded, and remote deletion is grouped by workspace
+and channel. Media egress scales with channel count; aggregate media/fan-out
+limits must be reviewed before increasing any batch ceiling.
+
 ## Frontend rules
 
 Do not add `refetchInterval`, duplicate polling, per-row detail requests,
 N+1 HTTP, broad domain invalidation, or heavy collection models without need.
 Use shared narrow query keys and server-provided compact read models. Frontend
 polling is backend cost and must pass the same review.
+
+Long-lived browser streams must stop while their document is hidden and resume
+with a narrow reconciliation read when it becomes visible. Hidden tabs must not
+consume HTTP connection slots or hold duplicate realtime subscriptions.
 
 ## Required handoff
 

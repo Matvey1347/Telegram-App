@@ -12,7 +12,14 @@ export type FinanceProfileContext = {
 export type FinanceTransactionWriteContext = {
   rates: FinanceTransactionRateSource;
   accounts: ReadonlyMap<string, { id: string; currency: string }>;
-  categories: ReadonlyMap<string, { id: string; type: 'INCOME' | 'EXPENSE' }>;
+  categories: ReadonlyMap<
+    string,
+    {
+      id: string;
+      type: 'INCOME' | 'EXPENSE';
+      necessity: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY';
+    }
+  >;
 };
 
 type FinanceRateSnapshot = { rate: Prisma.Decimal; rateAt: Date };
@@ -208,7 +215,7 @@ export async function prepareFinanceTransactionWriteContext(input: {
           profileId: input.profileId,
           archivedAt: null,
         },
-        select: { id: true, type: true },
+        select: { id: true, type: true, necessity: true },
       })
     : [];
   return {

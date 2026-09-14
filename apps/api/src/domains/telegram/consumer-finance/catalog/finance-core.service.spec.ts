@@ -14,6 +14,9 @@ describe('FinanceCoreService consumer read models', () => {
           .fn()
           .mockResolvedValueOnce({
             id: 'p',
+            botIntegrationId: 'bot-1',
+            avatarMimeType: null,
+            updatedAt: new Date('2026-09-14T00:00:00.000Z'),
             defaultCurrency: 'USD',
             timezone: 'UTC',
             locale: null,
@@ -27,6 +30,9 @@ describe('FinanceCoreService consumer read models', () => {
           })
           .mockResolvedValueOnce({
             id: 'p',
+            botIntegrationId: 'bot-1',
+            avatarMimeType: null,
+            updatedAt: new Date('2026-09-14T00:00:00.000Z'),
             defaultCurrency: 'USD',
             timezone: 'UTC',
             locale: 'ru',
@@ -59,6 +65,9 @@ describe('FinanceCoreService consumer read models', () => {
   it('preserves an omitted locale on settings PATCH and returns the mapped profile', async () => {
     const profile = {
       id: 'p',
+      botIntegrationId: 'bot-1',
+      avatarMimeType: null,
+      updatedAt: new Date('2026-09-14T00:00:00.000Z'),
       defaultCurrency: 'USD',
       timezone: 'UTC',
       locale: 'en',
@@ -93,6 +102,9 @@ describe('FinanceCoreService consumer read models', () => {
         update,
         findUnique: jest.fn().mockResolvedValue({
           id: 'p',
+          botIntegrationId: 'bot-1',
+          avatarMimeType: null,
+          updatedAt: new Date('2026-09-14T00:00:00.000Z'),
           displayName: 'Ada Finance',
           defaultCurrency: 'USD',
           timezone: 'UTC',
@@ -108,13 +120,14 @@ describe('FinanceCoreService consumer read models', () => {
       },
     };
 
-    const result = await new FinanceCoreService(
-      prisma as never,
-    ).updateSettings('p', {
-      defaultCurrency: 'USD',
-      timezone: 'UTC',
-      displayName: '  Ada Finance  ',
-    });
+    const result = await new FinanceCoreService(prisma as never).updateSettings(
+      'p',
+      {
+        defaultCurrency: 'USD',
+        timezone: 'UTC',
+        displayName: '  Ada Finance  ',
+      },
+    );
 
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -124,6 +137,61 @@ describe('FinanceCoreService consumer read models', () => {
     expect(result).toMatchObject({
       displayNameOverride: 'Ada Finance',
       telegramUser: { displayName: 'Ada Finance', username: 'ada' },
+    });
+  });
+
+  it('stores and serves a Finance-only uploaded avatar without mutating Telegram identity', async () => {
+    const update = jest.fn();
+    const image = Buffer.from([1, 2, 3]);
+    const prisma = {
+      financeProfile: {
+        update,
+        findUnique: jest
+          .fn()
+          .mockResolvedValueOnce({
+            id: 'p',
+            botIntegrationId: 'bot-1',
+            avatarMimeType: 'image/png',
+            updatedAt: new Date('2026-09-14T00:00:00.000Z'),
+            defaultCurrency: 'USD',
+            timezone: 'UTC',
+            locale: null,
+            onboardingCompletedAt: null,
+            telegramUser: {
+              languageCode: 'en',
+              username: 'ada',
+              firstName: 'Ada',
+              lastName: 'Lovelace',
+            },
+          })
+          .mockResolvedValueOnce({
+            avatarImage: image,
+            avatarMimeType: 'image/png',
+          }),
+      },
+    };
+
+    const service = new FinanceCoreService(prisma as never);
+    const result = await service.updateAvatar('p', {
+      buffer: image,
+      mimetype: 'image/png',
+    } as Express.Multer.File);
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          avatarImage: image,
+          avatarMimeType: 'image/png',
+        }),
+      }),
+    );
+    expect(result).toMatchObject({
+      avatarUrl: '/finance-bots/bot-1/avatar?v=2026-09-14T00%3A00%3A00.000Z',
+      telegramUser: { username: 'ada' },
+    });
+    await expect(service.avatar('p')).resolves.toEqual({
+      bytes: image,
+      mimeType: 'image/png',
     });
   });
 
@@ -247,6 +315,54 @@ describe('FinanceCoreService consumer read models', () => {
     );
   });
 
+  it('applies an expense category necessity to its existing ordinary expenses', async () => {
+    const tx = {
+      financeCategory: {
+        update: jest.fn().mockResolvedValue({
+          id: 'category',
+          name: 'Dining',
+          key: null,
+          type: 'EXPENSE',
+          necessity: 'DISCRETIONARY',
+          parentId: null,
+          archivedAt: null,
+        }),
+      },
+      financeTransaction: {
+        updateMany: jest.fn().mockResolvedValue({ count: 3 }),
+      },
+    };
+    const prisma: any = {
+      financeCategory: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'category',
+          name: 'Dining',
+          key: null,
+          type: 'EXPENSE',
+          parentId: null,
+        }),
+      },
+      $transaction: jest.fn((work) => work(tx)),
+    };
+
+    await new FinanceCoreService(prisma).updateCategory('profile', 'category', {
+      name: 'Dining',
+      type: 'EXPENSE',
+      necessity: 'DISCRETIONARY',
+    });
+
+    expect(tx.financeTransaction.updateMany).toHaveBeenCalledWith({
+      where: {
+        profileId: 'profile',
+        categoryId: 'category',
+        type: 'EXPENSE',
+        purpose: 'ORDINARY',
+        deletedAt: null,
+      },
+      data: { necessity: 'DISCRETIONARY' },
+    });
+  });
+
   it('returns a hydrated saved limit and calculates spend in the profile calendar month', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-01-31T10:30:00.000Z'));
     const stored = {
@@ -299,6 +415,10 @@ describe('FinanceCoreService consumer read models', () => {
         ),
       ).resolves.toEqual({
         ...stored,
+        category: {
+          ...stored.category,
+          iconPresentation: { type: 'unicode', value: '🍽️' },
+        },
         amount: '500',
         spent: '125',
         remaining: '375',

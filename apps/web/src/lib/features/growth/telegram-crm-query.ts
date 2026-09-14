@@ -32,13 +32,16 @@ export const telegramCrmKeys = {
   inboxLists: () => ["telegram-crm", "inbox", "list"] as const,
   inboxList: (params: CrmInboxParams) =>
     ["telegram-crm", "inbox", "list", params] as const,
-  conversationLists: () => ["telegram-crm", "conversations", "list"] as const,
+  conversations: () => ["telegram-crm", "conversations"] as const,
+  conversationLists: () =>
+    [...telegramCrmKeys.conversations(), "list"] as const,
   conversationList: (params: CrmConversationsParams) =>
     ["telegram-crm", "conversations", "list", params] as const,
   conversationDetail: (conversationId: string) =>
-    ["telegram-crm", "conversations", "detail", conversationId] as const,
+    [...telegramCrmKeys.conversations(), "detail", conversationId] as const,
+  messages: () => ["telegram-crm", "messages"] as const,
   messagesInfinite: (conversationId: string) =>
-    ["telegram-crm", "messages", "infinite", conversationId] as const,
+    [...telegramCrmKeys.messages(), "infinite", conversationId] as const,
   unread: () => ["telegram-crm", "unread"] as const,
   settings: () => ["telegram-crm", "settings"] as const,
   automationStatuses: () => ["telegram-crm", "automations", "status"] as const,

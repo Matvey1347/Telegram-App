@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-query";
 import { RotateCcw } from "lucide-react";
 import type {
+  ConsumerFinanceAnalyticsQuery,
   ConsumerFinanceHistoryQuery,
   ConsumerFinanceTransaction,
 } from "@telegram-system/shared";
@@ -32,6 +33,7 @@ import { FinanceConfirmModal } from "./finance-confirm-modal";
 import { FinanceTransactionDetailModal } from "./finance-transaction-detail-modal";
 import { FinanceMobileTransactionRow } from "./finance-mobile-transaction-row";
 import { DesktopTransactionTable } from "./finance-desktop-transaction-table";
+import { financePeriodDateRange } from "./finance-period-selector";
 
 export function FinanceTransactions({
   botId,
@@ -39,19 +41,28 @@ export function FinanceTransactions({
   timezone,
   initiallyOpenType = null,
   surface,
+  period = { period: "CURRENT_MONTH" },
+  editorOnly = false,
+  onLauncherClose,
+  onSpecialAction,
 }: {
   botId: string;
   locale: FinanceLocale;
   timezone: string;
   initiallyOpenType?: "EXPENSE" | "INCOME" | null;
   surface: ConsumerFinanceSurface;
+  period?: ConsumerFinanceAnalyticsQuery;
+  editorOnly?: boolean;
+  onLauncherClose?: () => void;
+  onSpecialAction?: (action: "transfer" | "debt" | "investment") => void;
 }) {
   const client = useQueryClient();
   const t = financeTransactionsCopy(locale);
   const { pushToast } = useFinanceFeedback();
-  const [filters, setFilters] = useState<ConsumerFinanceHistoryQuery>({
+  const [filters, setFilters] = useState<ConsumerFinanceHistoryQuery>(() => ({
     limit: 30,
-  });
+    ...financePeriodDateRange(period),
+  }));
   const [editing, setEditing] = useState<ConsumerFinanceTransaction | null>(
     null,
   );
@@ -83,6 +94,7 @@ export function FinanceTransactions({
         cursor: pageParam,
       }),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
+    enabled: !editorOnly,
   });
   const items = history.data?.pages.flatMap((page) => page.items) ?? [];
   const invalidateDerived = () => {
@@ -144,6 +156,26 @@ export function FinanceTransactions({
     );
   const accountRows = accounts.data ?? [];
   const categoryRows = categories.data ?? [];
+  if (editorOnly)
+    return (
+      <FinanceTransactionEditor
+        key={`launcher-${initiallyOpenType}`}
+        botId={botId}
+        accounts={accountRows}
+        categories={categoryRows}
+        editing={null}
+        locale={locale}
+        timezone={timezone}
+        initiallyOpenType={initiallyOpenType}
+        onClose={() => onLauncherClose?.()}
+        onSaved={(item) => {
+          reconcileConsumerTransactionCaches(client, botId, item, timezone);
+          onLauncherClose?.();
+          invalidateDerived();
+        }}
+        onSpecialAction={onSpecialAction}
+      />
+    );
   return (
     <div className="space-y-4">
       <FinanceTransactionEditor
@@ -155,12 +187,17 @@ export function FinanceTransactions({
         locale={locale}
         timezone={timezone}
         initiallyOpenType={initiallyOpenType}
-        onClose={() => setEditing(null)}
+        onClose={() => {
+          setEditing(null);
+          onLauncherClose?.();
+        }}
         onSaved={(item) => {
           reconcileConsumerTransactionCaches(client, botId, item, timezone);
           setEditing(null);
+          onLauncherClose?.();
           invalidateDerived();
         }}
+        onSpecialAction={onSpecialAction}
       />
       <FinanceTransactionFilters
         filters={filters}

@@ -7,6 +7,7 @@ import {
   TelegramSystemBotWorkflowKind,
   TelegramSystemBotWorkflowStatus,
 } from '@prisma/client';
+import { TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE_ERROR_CODE } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import type {
   CreateTelegramSystemBotWorkflowInput,
@@ -14,6 +15,7 @@ import type {
   TelegramSystemBotWorkflowScope,
   TransitionTelegramSystemBotWorkflowInput,
 } from './telegram-system-bot-workflow.types';
+import { withSystemBotInteractionLock } from './telegram-system-bot-interaction-lock';
 
 type VersionedWorkflowInput = TelegramSystemBotWorkflowScope & {
   id: string;
@@ -25,17 +27,53 @@ export class TelegramSystemBotWorkflowStore {
   constructor(private readonly prisma: PrismaService) {}
 
   create(input: CreateTelegramSystemBotWorkflowInput) {
-    return this.prisma.telegramSystemBotWorkflow.create({
-      data: {
-        connectionId: input.connectionId,
-        workspaceId: input.workspaceId,
-        kind: input.kind,
-        step: input.step,
-        payload: input.payload,
-        controlMessageId: input.controlMessageId ?? null,
-        mutualPromotionFolderId: input.mutualPromotionFolderId ?? null,
-        expiresAt: input.expiresAt,
-      },
+    return withSystemBotInteractionLock(this.prisma, input, async (tx) => {
+      await tx.telegramSystemBotWorkflow.updateMany({
+        where: {
+          connectionId: input.connectionId,
+          workspaceId: input.workspaceId,
+          status: TelegramSystemBotWorkflowStatus.ACTIVE,
+          expiresAt: { lte: new Date() },
+        },
+        data: {
+          status: TelegramSystemBotWorkflowStatus.EXPIRED,
+          version: { increment: 1 },
+        },
+      });
+      const active = await tx.telegramSystemBotWorkflow.findFirst({
+        where: {
+          connectionId: input.connectionId,
+          workspaceId: input.workspaceId,
+          status: TelegramSystemBotWorkflowStatus.ACTIVE,
+          expiresAt: { gt: new Date() },
+        },
+        select: { id: true },
+      });
+      if (active) this.throwActiveImportConflict();
+      if (input.kind === TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT) {
+        const finance = await tx.telegramSystemBotFinanceDraft.findFirst({
+          where: {
+            connectionId: input.connectionId,
+            workspaceId: input.workspaceId,
+            status: 'PENDING',
+            expiresAt: { gt: new Date() },
+          },
+          select: { id: true },
+        });
+        if (finance) this.throwActiveImportConflict();
+      }
+      return tx.telegramSystemBotWorkflow.create({
+        data: {
+          connectionId: input.connectionId,
+          workspaceId: input.workspaceId,
+          kind: input.kind,
+          step: input.step,
+          payload: input.payload,
+          controlMessageId: input.controlMessageId ?? null,
+          mutualPromotionFolderId: input.mutualPromotionFolderId ?? null,
+          expiresAt: input.expiresAt,
+        },
+      });
     });
   }
 
@@ -53,6 +91,90 @@ export class TelegramSystemBotWorkflowStore {
       },
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
     });
+  }
+
+  activeBatchImport(scope: TelegramSystemBotWorkflowScope) {
+    return this.active(scope, TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT);
+  }
+
+  activeOutsideBatchImport(scope: TelegramSystemBotWorkflowScope) {
+    return this.prisma.telegramSystemBotWorkflow.findFirst({
+      where: {
+        connectionId: scope.connectionId,
+        workspaceId: scope.workspaceId,
+        status: TelegramSystemBotWorkflowStatus.ACTIVE,
+        expiresAt: { gt: new Date() },
+        kind: {
+          in: [
+            TelegramSystemBotWorkflowKind.POST_IMPORT,
+            TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
+            TelegramSystemBotWorkflowKind.AD_SALE,
+            TelegramSystemBotWorkflowKind.WORKSPACE_SETTINGS,
+          ],
+        },
+      },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+    });
+  }
+
+  async requireNoActiveBatchImport(scope: TelegramSystemBotWorkflowScope) {
+    if (!(await this.activeBatchImport(scope))) return;
+    this.throwActiveImportConflict();
+  }
+
+  async activeWithoutBatchImport(
+    scope: TelegramSystemBotWorkflowScope,
+    kind: TelegramSystemBotWorkflowKind,
+  ) {
+    await this.requireNoActiveBatchImport(scope);
+    return this.active(scope, kind);
+  }
+
+  async requireNoActiveOutsideBatchImport(
+    scope: TelegramSystemBotWorkflowScope,
+  ) {
+    const [workflow, financeDraft] = await Promise.all([
+      this.activeOutsideBatchImport(scope),
+      this.prisma.telegramSystemBotFinanceDraft.findFirst({
+        where: {
+          connectionId: scope.connectionId,
+          workspaceId: scope.workspaceId,
+          status: 'PENDING',
+          expiresAt: { gt: new Date() },
+        },
+        select: { id: true },
+      }),
+    ]);
+    if (!workflow && !financeDraft) return;
+    this.throwActiveImportConflict();
+  }
+
+  async recoverableBatchImport(scope: TelegramSystemBotWorkflowScope) {
+    const active = await this.activeBatchImport(scope);
+    if (active) return active;
+    const recoverable = await this.prisma.telegramSystemBotWorkflow.findFirst({
+      where: {
+        connectionId: scope.connectionId,
+        workspaceId: scope.workspaceId,
+        kind: TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT,
+        status: {
+          in: [
+            TelegramSystemBotWorkflowStatus.COMMITTING,
+            TelegramSystemBotWorkflowStatus.COMPLETED,
+          ],
+        },
+        postBatch: { is: null },
+      },
+      orderBy: [{ completedAt: 'desc' }, { id: 'desc' }],
+    });
+    if (recoverable?.status === TelegramSystemBotWorkflowStatus.COMMITTING) {
+      return this.complete({
+        ...scope,
+        id: recoverable.id,
+        expectedVersion: recoverable.version,
+      });
+    }
+    return recoverable;
   }
 
   async get(scope: TelegramSystemBotWorkflowScope, id: string) {
@@ -128,6 +250,16 @@ export class TelegramSystemBotWorkflowStore {
       from: [TelegramSystemBotWorkflowStatus.ACTIVE],
       to: TelegramSystemBotWorkflowStatus.COMMITTING,
       requireNotExpired: true,
+      clearError: true,
+    });
+  }
+
+  completeBatchImport(input: VersionedWorkflowInput) {
+    return this.changeStatus(input, {
+      from: [TelegramSystemBotWorkflowStatus.ACTIVE],
+      to: TelegramSystemBotWorkflowStatus.COMPLETED,
+      requireNotExpired: true,
+      completedAt: new Date(),
       clearError: true,
     });
   }
@@ -222,5 +354,12 @@ export class TelegramSystemBotWorkflowStore {
         'System Bot workflow changed, expired, or is no longer active',
       );
     }
+  }
+
+  private throwActiveImportConflict(): never {
+    throw new ConflictException({
+      code: TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE_ERROR_CODE,
+      message: 'Finish the current post import before starting another one.',
+    });
   }
 }

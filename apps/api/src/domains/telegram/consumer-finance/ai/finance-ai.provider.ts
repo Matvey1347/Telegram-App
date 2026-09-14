@@ -41,6 +41,63 @@ export type AiFinanceOperation = {
   }>;
 };
 
+export type AiFinanceOperationOutput = {
+  type: 'INCOME' | 'EXPENSE';
+  amount: string;
+  economicAmount?: string | null;
+  purpose?:
+    | 'ORDINARY'
+    | 'REIMBURSEMENT'
+    | 'PASS_THROUGH'
+    | 'DEBT_REPAYMENT'
+    | null;
+  necessity?: 'UNSPECIFIED' | 'REQUIRED' | 'DISCRETIONARY' | null;
+  currency: string;
+  description: string;
+  occurredAt: string;
+  accountHint?: string | null;
+  merchantDisplay?: string | null;
+  items?: Array<{
+    displayName: string;
+    quantity?: string | null;
+    unitPrice?: string | null;
+    totalAmount: string;
+    currency: string;
+  }> | null;
+};
+
+export function normalizeFinanceAiOperation(
+  value: AiFinanceOperationOutput,
+): AiFinanceOperation {
+  return {
+    type: value.type,
+    amount: value.amount,
+    currency: value.currency,
+    description: value.description,
+    occurredAt: value.occurredAt,
+    ...(value.economicAmount == null
+      ? {}
+      : { economicAmount: value.economicAmount }),
+    ...(value.purpose == null ? {} : { purpose: value.purpose }),
+    ...(value.necessity == null ? {} : { necessity: value.necessity }),
+    ...(value.accountHint == null ? {} : { accountHint: value.accountHint }),
+    ...(value.merchantDisplay == null
+      ? {}
+      : { merchantDisplay: value.merchantDisplay }),
+    ...(value.items == null
+      ? {}
+      : {
+          items: value.items.map((item) => ({
+            displayName: item.displayName,
+            totalAmount: item.totalAmount,
+            currency: item.currency,
+            ...(item.quantity == null ? {} : { quantity: item.quantity }),
+            ...(item.unitPrice == null ? {} : { unitPrice: item.unitPrice }),
+          })),
+        }),
+  };
+}
+
 export function assertFinanceAiOperation(value: AiFinanceOperation) {
   if (
     !value ||
@@ -66,38 +123,68 @@ export function assertFinanceAiOperation(value: AiFinanceOperation) {
 export const financeAiOperationItemSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['type', 'amount', 'currency', 'description', 'occurredAt'],
+  required: [
+    'type',
+    'amount',
+    'economicAmount',
+    'purpose',
+    'necessity',
+    'currency',
+    'description',
+    'occurredAt',
+    'accountHint',
+    'merchantDisplay',
+    'items',
+  ],
   properties: {
     type: { type: 'string', enum: ['INCOME', 'EXPENSE'] },
     amount: { type: 'string', pattern: '^\\d+(?:\\.\\d{1,2})?$' },
     economicAmount: {
-      type: 'string',
+      type: ['string', 'null'],
       pattern: '^\\d+(?:\\.\\d{1,2})?$',
     },
     purpose: {
-      type: 'string',
-      enum: ['ORDINARY', 'REIMBURSEMENT', 'PASS_THROUGH', 'DEBT_REPAYMENT'],
+      type: ['string', 'null'],
+      enum: [
+        'ORDINARY',
+        'REIMBURSEMENT',
+        'PASS_THROUGH',
+        'DEBT_REPAYMENT',
+        null,
+      ],
     },
     necessity: {
-      type: 'string',
-      enum: ['UNSPECIFIED', 'REQUIRED', 'DISCRETIONARY'],
+      type: ['string', 'null'],
+      enum: ['UNSPECIFIED', 'REQUIRED', 'DISCRETIONARY', null],
     },
     currency: { type: 'string', pattern: '^[A-Z]{3}$' },
     description: { type: 'string', maxLength: 240 },
     occurredAt: { type: 'string', format: 'date-time' },
-    accountHint: { type: 'string', maxLength: 80 },
-    merchantDisplay: { type: 'string', maxLength: 240 },
+    accountHint: { type: ['string', 'null'], maxLength: 80 },
+    merchantDisplay: { type: ['string', 'null'], maxLength: 240 },
     items: {
-      type: 'array',
+      type: ['array', 'null'],
       maxItems: 100,
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['displayName', 'totalAmount', 'currency'],
+        required: [
+          'displayName',
+          'quantity',
+          'unitPrice',
+          'totalAmount',
+          'currency',
+        ],
         properties: {
           displayName: { type: 'string', maxLength: 240 },
-          quantity: { type: 'string', pattern: '^\\d+(?:\\.\\d{1,3})?$' },
-          unitPrice: { type: 'string', pattern: '^\\d+(?:\\.\\d{1,2})?$' },
+          quantity: {
+            type: ['string', 'null'],
+            pattern: '^\\d+(?:\\.\\d{1,3})?$',
+          },
+          unitPrice: {
+            type: ['string', 'null'],
+            pattern: '^\\d+(?:\\.\\d{1,2})?$',
+          },
           totalAmount: {
             type: 'string',
             pattern: '^\\d+(?:\\.\\d{1,2})?$',
@@ -173,23 +260,46 @@ export class FinanceAiProviderService {
     timezone: string;
     defaultCurrency: string;
   }) {
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(input.mime))
-      throw new BadRequestException('Receipt must be JPEG, PNG, or WEBP');
-    if (input.bytes.length > 8 * 1024 * 1024)
-      throw new BadRequestException('Receipt exceeds the 8 MB limit');
+    return this.extractReceipts({
+      profileId: input.profileId,
+      botIntegrationId: input.botIntegrationId,
+      files: [{ bytes: input.bytes, mime: input.mime }],
+      timezone: input.timezone,
+      defaultCurrency: input.defaultCurrency,
+    });
+  }
+
+  async extractReceipts(input: {
+    profileId: string;
+    botIntegrationId: string;
+    files: Array<{ bytes: Buffer; mime: string }>;
+    timezone: string;
+    defaultCurrency: string;
+  }) {
+    if (!input.files.length || input.files.length > 5)
+      throw new BadRequestException('Upload between 1 and 5 receipts');
+    if (
+      input.files.some(
+        (file) =>
+          !['image/jpeg', 'image/png', 'image/webp'].includes(file.mime),
+      )
+    )
+      throw new BadRequestException('Receipts must be JPEG, PNG, or WEBP');
+    if (input.files.some((file) => file.bytes.length > 8 * 1024 * 1024))
+      throw new BadRequestException('Each receipt must be no larger than 8 MB');
     return this.extract({
       ...input,
       feature: 'RECEIPT_SCAN',
       content: [
         {
           type: 'input_text',
-          text: `Extract the receipt as exactly one expense operation. Current time: ${new Date().toISOString()}. User timezone: ${input.timezone}. Default currency: ${input.defaultCurrency}. Use receipt total and merchant; never invent missing values.`,
+          text: `Extract each receipt image as exactly one expense operation, in the same order as the images. Current time: ${new Date().toISOString()}. User timezone: ${input.timezone}. Default currency: ${input.defaultCurrency}. Use each receipt total and merchant; never invent missing values.`,
         },
-        {
+        ...input.files.map((file) => ({
           type: 'input_image',
-          image_url: `data:${input.mime};base64,${input.bytes.toString('base64')}`,
-          detail: 'original',
-        },
+          image_url: `data:${file.mime};base64,${file.bytes.toString('base64')}`,
+          detail: 'original' as const,
+        })),
       ],
     });
   }
@@ -399,20 +509,22 @@ export class FinanceAiProviderService {
       });
       usage = response.usage;
       const parsed = response.text
-        ? (JSON.parse(response.text) as { operations?: AiFinanceOperation[] })
+        ? (JSON.parse(response.text) as {
+            operations?: AiFinanceOperationOutput[];
+          })
         : null;
+      const operations = parsed?.operations?.map(normalizeFinanceAiOperation);
       if (
-        !parsed?.operations?.length ||
-        parsed.operations.length > 10 ||
-        (input.feature === 'RECEIPT_SCAN' && parsed.operations.length !== 1)
+        !operations?.length ||
+        operations.length > 10 ||
+        (input.feature === 'RECEIPT_SCAN' && operations.length !== 1)
       )
         throw new BadGatewayException(
           'Finance AI returned an invalid proposal',
         );
-      for (const operation of parsed.operations)
-        assertFinanceAiOperation(operation);
+      for (const operation of operations) assertFinanceAiOperation(operation);
       status = 'SUCCEEDED';
-      return parsed.operations;
+      return operations;
     } catch (error) {
       if (
         error instanceof BadRequestException ||

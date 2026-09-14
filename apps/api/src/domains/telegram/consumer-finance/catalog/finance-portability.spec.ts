@@ -36,6 +36,7 @@ describe('exportFinanceData', () => {
             name: 'Food',
             emoji: '🍽️',
             type: 'EXPENSE',
+            necessity: 'DISCRETIONARY',
             key: null,
             archivedAt: null,
           },
@@ -95,6 +96,11 @@ describe('exportFinanceData', () => {
         ]),
       },
       financeRecurringPayment: empty(),
+      financeDataExportReceipt: {
+        create: jest.fn().mockResolvedValue({ id: 'export-1' }),
+        findMany: jest.fn().mockResolvedValue([]),
+        deleteMany: jest.fn(),
+      },
     };
     const prisma = {
       ...models,
@@ -113,6 +119,7 @@ describe('exportFinanceData', () => {
       settings: { displayName: 'Personal finance' },
       data: {
         accounts: [{ ref: 'account-1', openingBalance: '10' }],
+        categories: [{ ref: 'category-1', necessity: 'DISCRETIONARY' }],
         transactions: [{ ref: 'transaction-1', amount: '2.5' }],
         savingsGoals: [{ ref: 'goal-1', initialAmount: '25' }],
         debts: [
@@ -131,12 +138,29 @@ describe('exportFinanceData', () => {
           notIn: ['INVESTMENT_CONTRIBUTION', 'INVESTMENT_RETURN'],
         },
       },
-      include: { items: true },
+      include: {
+        items: true,
+        recurringPaymentOccurrence: { select: { recurringPaymentId: true } },
+      },
     });
     expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
       isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
       maxWait: 5_000,
       timeout: 30_000,
+    });
+    expect(models.financeDataExportReceipt.create).toHaveBeenCalledWith({
+      data: {
+        profileId: 'profile-1',
+        formatVersion: 1,
+        exportedCount: 5,
+        counts: {
+          accounts: 1,
+          categories: 1,
+          transactions: 1,
+          savingsGoals: 1,
+          debts: 1,
+        },
+      },
     });
   });
 });

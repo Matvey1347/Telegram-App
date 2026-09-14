@@ -174,6 +174,7 @@ export class TelegramSystemBotWorkspaceFlowService {
     payload: Payload,
     controlMessageId?: number,
   ) {
+    await this.workflows.requireNoActiveBatchImport(scope);
     const active = await this.workflows.active(
       scope,
       TelegramSystemBotWorkflowKind.WORKSPACE_SETTINGS,

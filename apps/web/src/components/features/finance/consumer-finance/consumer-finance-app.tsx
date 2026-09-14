@@ -86,6 +86,9 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
   const [openTransaction, setOpenTransaction] = useState<
     "EXPENSE" | "INCOME" | null
   >(null);
+  const [openEntityAction, setOpenEntityAction] = useState<
+    "debt" | "investment" | null
+  >(null);
   const [actionRequestId, setActionRequestId] = useState(0);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [regularPaymentTarget, setRegularPaymentTarget] =
@@ -124,6 +127,7 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
     (next: ConsumerFinanceScreen) => {
       setOpenTransfer(false);
       setOpenTransaction(null);
+      setOpenEntityAction(null);
       setAccountId(null);
       setInvestmentId(null);
       setRegularPaymentTarget(null);
@@ -214,21 +218,17 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
   }, [surface]);
   const launchAction = (action: ConsumerFinanceAction) => {
     setActionRequestId((current) => current + 1);
-    if (action === "transfer") {
-      navigate("transfers");
-      setOpenTransfer(true);
-      if (surface === "browser") {
-        const url = new URL(window.location.href);
-        url.searchParams.set("transfer", "1");
-        window.history.replaceState(
-          { consumerFinanceScreen: "transfers" },
-          "",
-          `${url.pathname}${url.search}${url.hash}`,
-        );
-      }
+    setOpenEntityAction(null);
+    setOpenTransfer(false);
+    setOpenTransaction(null);
+    if (action === "debt" || action === "investment") {
+      setOpenEntityAction(action);
       return;
     }
-    navigate("transactions");
+    if (action === "transfer") {
+      setOpenTransfer(true);
+      return;
+    }
     setOpenTransaction(action === "expense" ? "EXPENSE" : "INCOME");
   };
 
@@ -238,10 +238,15 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
 
   useEffect(() => {
     const syncLocation = () => {
+      const nextScreen = readConsumerFinanceScreen(window.location);
       setOpenTransfer(
         new URLSearchParams(window.location.search).get("transfer") === "1",
       );
-      setScreen(readConsumerFinanceScreen(window.location));
+      setScreen(
+        surface === "telegram" && nextScreen === "assistant"
+          ? "home"
+          : nextScreen,
+      );
       setAccountId(readConsumerFinanceAccountId(window.location));
       setInvestmentId(readConsumerFinanceInvestmentId(window.location));
       const target = readConsumerFinanceRegularPaymentTarget(window.location);
@@ -274,15 +279,21 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
           <FinanceAssistantDrawer
             botId={botId}
             locale={locale}
-            open={assistantOpen}
-            onOpenChange={setAssistantOpen}
+            open={
+              surface === "browser" ? screen === "assistant" : assistantOpen
+            }
+            onOpenChange={
+              surface === "browser" ? () => undefined : setAssistantOpen
+            }
             onNavigate={navigate}
+            presentation={surface === "browser" ? "page" : "drawer"}
           />
         ) : null}
       </FinanceVisualContextProvider>
     );
     return surface === "browser" ? (
       <FinanceWebAppShell
+        botId={botId}
         logoUrl={branding.logoUrl}
         screen={screen}
         copy={t}
@@ -294,7 +305,7 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
         onNavigate={navigate}
         onOpenAssistant={
           profile?.onboardingCompletedAt
-            ? () => setAssistantOpen(true)
+            ? () => navigate("assistant")
             : undefined
         }
         onAction={launchAction}
@@ -305,6 +316,7 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
       </FinanceWebAppShell>
     ) : (
       <FinanceMiniAppShell
+        botId={botId}
         logoUrl={branding.logoUrl}
         screen={screen}
         copy={t}
@@ -368,6 +380,13 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
       openTransfer={openTransfer}
       openTransaction={openTransaction}
       actionRequestId={actionRequestId}
+      openEntityAction={openEntityAction}
+      onSpecialAction={launchAction}
+      onActionClose={() => {
+        setOpenTransaction(null);
+        setOpenTransfer(false);
+        setOpenEntityAction(null);
+      }}
       regularPaymentTarget={regularPaymentTarget}
       regularPaymentTargetMalformed={regularPaymentTargetMalformed}
       accountId={accountId}

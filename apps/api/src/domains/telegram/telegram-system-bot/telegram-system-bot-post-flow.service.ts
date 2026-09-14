@@ -56,7 +56,7 @@ export class TelegramSystemBotPostFlowService {
   }
 
   async begin(scope: TelegramSystemBotPostFlowScope) {
-    const existing = await this.workflows.active(
+    const existing = await this.workflows.activeWithoutBatchImport(
       scope,
       TelegramSystemBotWorkflowKind.POST_IMPORT,
     );
@@ -75,7 +75,7 @@ export class TelegramSystemBotPostFlowService {
     scope: TelegramSystemBotPostFlowScope,
     destination: TelegramSystemBotModalDestination = 'AD_SALE_MODAL',
   ) {
-    const conflictingAdSale = await this.workflows.active(
+    const conflictingAdSale = await this.workflows.activeWithoutBatchImport(
       scope,
       TelegramSystemBotWorkflowKind.AD_SALE,
     );

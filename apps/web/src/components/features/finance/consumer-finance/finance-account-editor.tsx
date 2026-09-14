@@ -109,7 +109,9 @@ export function FinanceAccountEditor({
   const [type, setType] = useState<ConsumerFinanceAccountType>(
     account?.type ?? "CARD",
   );
-  const [emoji, setEmoji] = useState<string | undefined>(
+  // Keep an existing image untouched until the user explicitly picks a new icon.
+  // This avoids needless writes and keeps historic image sources immutable.
+  const [iconSource, setIconSource] = useState<string | null | undefined>(
     account?.iconPresentation.type === "unicode"
       ? account.iconPresentation.value
       : creating
@@ -121,7 +123,7 @@ export function FinanceAccountEditor({
       creating
         ? consumerFinanceLedgerApi.createAccount(botId, {
             name: name.trim(),
-            emoji,
+            emoji: iconSource,
             type,
             currency,
             openingBalance,
@@ -129,7 +131,7 @@ export function FinanceAccountEditor({
         : consumerFinanceLedgerApi.updateAccount(botId, account!.id, {
             name: name.trim(),
             type,
-            ...(emoji === undefined ? {} : { emoji }),
+            ...(iconSource === undefined ? {} : { emoji: iconSource }),
           }),
     onSuccess: (saved) => {
       patchConsumerFinanceAccountCache(client, botId, saved);
@@ -166,23 +168,21 @@ export function FinanceAccountEditor({
         <h2 className="text-lg font-semibold">
           {creating ? t.addAccount : t.editAccount}
         </h2>
-        <div className="mt-4 space-y-3">
-          <IconPicker
-            uiLocale={locale}
-            icon={
-              emoji
-                ? { type: "unicode", value: emoji }
-                : (account?.iconPresentation ?? {
-                    type: "unicode",
-                    value: "💳",
-                  })
-            }
-            iconId={null}
-            onChange={() => undefined}
-            onEmojiChange={(value) => value && setEmoji(value)}
-            allowImages={false}
-            buttonLabel={name.trim() || t.accountName}
-          />
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <IconPicker
+              botId={botId}
+              uiLocale={locale}
+              source={
+                iconSource ??
+                (account?.iconPresentation.type === "image"
+                  ? `image:${account.iconPresentation.url}`
+                  : null)
+              }
+              onChange={setIconSource}
+              buttonLabel={name.trim() || t.accountName}
+            />
+          </div>
           <FormField label={t.accountName}>
             <Input
               autoFocus
@@ -236,7 +236,7 @@ export function FinanceAccountEditor({
             </>
           ) : null}
           <Button
-            className="w-full"
+            className="w-full sm:col-span-2"
             disabled={
               !name.trim() ||
               !currency.trim() ||
@@ -248,7 +248,9 @@ export function FinanceAccountEditor({
             {mutation.isPending ? t.saving : t.save}
           </Button>
           {mutation.isError ? (
-            <p className="text-sm text-rose-300">{t.accountSaveError}</p>
+            <p className="text-sm text-rose-300 sm:col-span-2">
+              {t.accountSaveError}
+            </p>
           ) : null}
         </div>
       </Card>

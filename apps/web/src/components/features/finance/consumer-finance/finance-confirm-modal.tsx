@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Input, Modal } from "./ui";
+import { Button, Modal } from "./ui";
 import { type FinanceLocale } from "./i18n/core";
 import { financeConfirmCopy } from "./i18n/confirm";
 
@@ -23,11 +23,9 @@ export function FinanceConfirmModal({
   onConfirm: () => void | Promise<unknown>;
 }) {
   const t = financeConfirmCopy(locale);
-  const [value, setValue] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
   const close = () => {
-    setValue("");
     setError(false);
     onClose();
   };
@@ -51,25 +49,16 @@ export function FinanceConfirmModal({
       closeLabel={t.close}
     >
       <p className="mb-2 text-sm text-neutral-300">
-        {t.confirmInstruction}{" "}
         <span className="font-semibold text-white">{entityName}</span>
       </p>
       <p className="mb-3 text-sm text-amber-300">{description}</p>
-      <Input
-        value={value}
-        onChange={(event) => {
-          setValue(event.target.value);
-          setError(false);
-        }}
-        placeholder={entityName}
-      />
       <div className="mt-4 flex justify-end gap-2">
-        <Button variant="secondary" disabled={pending} onClick={close}>
+        <Button variant="cancel" disabled={pending} onClick={close}>
           {t.cancel}
         </Button>
         <Button
           variant="danger"
-          disabled={value !== entityName || pending}
+          disabled={pending}
           onClick={() => void submit()}
         >
           {pending ? t.confirming : actionLabel}

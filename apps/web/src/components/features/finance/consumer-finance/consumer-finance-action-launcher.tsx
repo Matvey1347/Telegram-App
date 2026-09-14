@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowDown, ArrowLeftRight, ArrowUp, Plus, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowLeftRight,
+  ArrowUp,
+  HandCoins,
+  Plus,
+  TrendingUp,
+  X,
+} from "lucide-react";
 import type { FinanceCoreCopy } from "./i18n/core";
 import type { ConsumerFinanceAction } from "./consumer-finance-navigation";
 
@@ -21,6 +29,8 @@ export function ConsumerFinanceActionLauncher({
     { id: "expense", label: copy.expense, Icon: ArrowDown },
     { id: "income", label: copy.income, Icon: ArrowUp },
     { id: "transfer", label: copy.transfers, Icon: ArrowLeftRight },
+    { id: "debt", label: copy.debts, Icon: HandCoins },
+    { id: "investment", label: copy.investments, Icon: TrendingUp },
   ] as const;
 
   if (!compact) {

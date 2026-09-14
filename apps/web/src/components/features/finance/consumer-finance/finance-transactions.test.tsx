@@ -104,7 +104,7 @@ describe("FinanceTransactions receipt detail", () => {
       screen.queryByPlaceholderText("Search description or category"),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
 
     expect(
       screen.getByPlaceholderText("Search description or category"),
@@ -119,8 +119,8 @@ describe("FinanceTransactions receipt detail", () => {
     });
     const { container } = renderTransactions("telegram", "ru");
 
-    fireEvent.click(await screen.findByRole("button", { name: "Фильтры" }));
-    const period = screen.getByRole("button", { name: "Выберите период" });
+    fireEvent.click(await screen.findByRole("button", { name: /^Фильтры/ }));
+    const period = screen.getByRole("button", { name: /01\.09\.2026/ });
     fireEvent.click(period);
 
     const calendar = screen.getByRole("dialog", {
@@ -315,13 +315,47 @@ describe("FinanceTransactions receipt detail", () => {
       2,
     );
     expect(
-      screen.getByRole("button", { name: "Purchase details" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Purchase details" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Edit transaction" }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Delete transaction" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("does not offer receipt details for a transaction without itemized receipt data", async () => {
+    vi.mocked(consumerFinanceApi.transactions).mockResolvedValue({
+      items: [
+        {
+          id: "manual-row",
+          accountId: "account-1",
+          type: "EXPENSE",
+          purpose: "ORDINARY",
+          amount: "8",
+          currency: "USD",
+          occurredAt: "2026-08-21T10:00:00.000Z",
+          description: "Coffee",
+          source: "MINI_APP",
+          itemCount: 0,
+          account: {
+            id: "account-1",
+            name: "Cash",
+            currency: "USD",
+            iconPresentation: { type: "unicode", value: "💵" },
+          },
+        },
+      ],
+      nextCursor: null,
+    });
+
+    renderTransactions("browser");
+
+    expect(await screen.findByText("Coffee")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Purchase details" }),
+    ).not.toBeInTheDocument();
+    expect(consumerFinanceApi.transaction).not.toHaveBeenCalled();
   });
 });

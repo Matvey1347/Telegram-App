@@ -3,6 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 import { financeCoreCopy } from "./i18n/core";
 import { FinanceAccountMenu } from "./finance-account-menu";
 
+vi.mock("./use-finance-entitlements", () => ({
+  useFinanceEntitlements: () => ({
+    data: { tier: "FREE" },
+    isLoading: false,
+  }),
+}));
+
 const profile = {
   id: "profile-1",
   defaultCurrency: "USD",
@@ -20,6 +27,7 @@ describe("FinanceAccountMenu", () => {
     const onNavigate = vi.fn();
     render(
       <FinanceAccountMenu
+        botId="bot"
         profile={profile}
         copy={financeCoreCopy("en")}
         screen="home"
@@ -42,6 +50,7 @@ describe("FinanceAccountMenu", () => {
     const onSignOut = vi.fn();
     render(
       <FinanceAccountMenu
+        botId="bot"
         profile={profile}
         copy={financeCoreCopy("en")}
         screen="profile"
@@ -62,6 +71,7 @@ describe("FinanceAccountMenu", () => {
   it("moves focus through menu items with the keyboard and restores it on Escape", () => {
     render(
       <FinanceAccountMenu
+        botId="bot"
         profile={profile}
         copy={financeCoreCopy("en")}
         screen="home"

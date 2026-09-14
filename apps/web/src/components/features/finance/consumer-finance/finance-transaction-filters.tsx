@@ -104,11 +104,11 @@ function FilterFields({
       className={
         compact
           ? "grid grid-cols-2 gap-2"
-          : "grid gap-2 lg:grid-cols-4 xl:grid-cols-6"
+          : "grid grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))] gap-2"
       }
     >
       <Input
-        className={compact ? "col-span-2" : "lg:col-span-2"}
+        className={compact ? "col-span-2" : ""}
         aria-label={t.searchTransactions}
         placeholder={t.searchPlaceholder}
         value={filters.search ?? ""}
@@ -141,7 +141,16 @@ function FilterFields({
       >
         <option value="">{t.allAccounts}</option>
         {accounts.map((item) => (
-          <option key={item.id} value={item.id}>
+          <option
+            key={item.id}
+            value={item.id}
+            data-icon-emoji={
+              item.iconPresentation.type === "unicode"
+                ? item.iconPresentation.value
+                : undefined
+            }
+            data-option-meta={item.currency}
+          >
             {item.name}
           </option>
         ))}
@@ -156,7 +165,15 @@ function FilterFields({
       >
         <option value="">{t.allCategories}</option>
         {categories.map((item) => (
-          <option key={item.id} value={item.id}>
+          <option
+            key={item.id}
+            value={item.id}
+            data-icon-emoji={
+              item.iconPresentation.type === "unicode"
+                ? item.iconPresentation.value
+                : undefined
+            }
+          >
             {localizeFinanceCategory(item.name, item.key, locale)}
           </option>
         ))}

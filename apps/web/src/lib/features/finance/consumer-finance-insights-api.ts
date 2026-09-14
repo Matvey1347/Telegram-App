@@ -12,11 +12,14 @@ import {
 } from "./consumer-finance-http";
 
 export const consumerFinanceInsightsApi = {
-  dashboard: async (botId: string) =>
+  dashboard: async (
+    botId: string,
+    query: ConsumerFinanceAnalyticsQuery = { period: "CURRENT_MONTH" },
+  ) =>
     (
       await consumerFinanceHttp.get<ConsumerFinanceDashboard>(
         `${consumerFinanceRoot(botId)}/dashboard`,
-        consumerRequest(),
+        consumerRequest({ params: query }),
       )
     ).data,
   analytics: async (botId: string, query: ConsumerFinanceAnalyticsQuery) =>

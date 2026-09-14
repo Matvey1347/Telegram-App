@@ -7,7 +7,10 @@ import { consumerFinanceObligationsApi } from "@/lib/features/finance/consumer-f
 import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
 import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
 import { financeIntlLocale, type FinanceLocale } from "./i18n/core";
-import { financeRegularPaymentsCopy } from "./i18n/regular-payments";
+import {
+  financeRegularPaymentRecurrenceLabel,
+  financeRegularPaymentsCopy,
+} from "./i18n/regular-payments";
 import { localizeFinanceCategory } from "./finance-category-i18n";
 
 export function FinanceRegularPaymentHistory({
@@ -48,11 +51,6 @@ export function FinanceRegularPaymentHistory({
     PAUSED: t.paused,
     CANCELED: t.canceled,
   } as const;
-  const recurrenceLabel = {
-    WEEKLY: t.weekly,
-    MONTHLY: t.monthly,
-    YEARLY: t.yearly,
-  } as const;
   return (
     <Modal
       open
@@ -83,7 +81,11 @@ export function FinanceRegularPaymentHistory({
                 {revision.accountName}
               </p>
               <p className="mt-1 text-neutral-400">
-                {recurrenceLabel[revision.recurrence]} · {t.scheduledFor}{" "}
+                {financeRegularPaymentRecurrenceLabel(
+                  revision.recurrence,
+                  revision.intervalCount ?? 1,
+                  locale,
+                )} · {t.scheduledFor}{" "}
                 {new Intl.DateTimeFormat(financeIntlLocale(locale), {
                   timeZone: revision.scheduleTimezone,
                 }).format(new Date(revision.nextOccurrenceAt))}

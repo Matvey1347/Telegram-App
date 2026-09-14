@@ -56,6 +56,53 @@ describe("FinanceTransactionEditor", () => {
     ).not.toBeInTheDocument();
   });
 
+  it.each([
+    ["Transfers", "transfer"],
+    ["Debts", "debt"],
+    ["Investments", "investment"],
+  ] as const)(
+    "routes the %s operation to its dedicated editor without creating a basic transaction",
+    (label, action) => {
+      const client = new QueryClient();
+      const onClose = vi.fn();
+      const onSpecialAction = vi.fn();
+      render(
+        <QueryClientProvider client={client}>
+          <FinanceTransactionEditor
+            botId="bot"
+            accounts={[
+              {
+                id: "a",
+                name: "Cash",
+                iconPresentation: { type: "unicode", value: "💵" },
+                type: "CASH",
+                currency: "USD",
+                openingBalance: "0",
+                balance: "0",
+                defaultCurrency: "USD",
+              },
+            ]}
+            categories={[]}
+            editing={null}
+            locale="en"
+            timezone="UTC"
+            initiallyOpenType="EXPENSE"
+            onClose={onClose}
+            onSaved={vi.fn()}
+            onSpecialAction={onSpecialAction}
+          />
+        </QueryClientProvider>,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Expense" }));
+      fireEvent.click(screen.getByRole("option", { name: label }));
+
+      expect(onClose).toHaveBeenCalledOnce();
+      expect(onSpecialAction).toHaveBeenCalledWith(action);
+      expect(consumerFinanceApi.createTransaction).not.toHaveBeenCalled();
+    },
+  );
+
   it("loads edit values when the parent switches the keyed editor from create to edit", () => {
     const client = new QueryClient();
     const accounts: ConsumerFinanceAccount[] = [
@@ -220,8 +267,9 @@ describe("FinanceTransactionEditor", () => {
     );
     fireEvent.change(moneyInputs[0]!, { target: { value: "100" } });
     fireEvent.change(moneyInputs[1]!, { target: { value: "25" } });
-    fireEvent.click(screen.getByRole("button", { name: "Not specified" }));
-    fireEvent.click(screen.getByRole("option", { name: "Optional" }));
+    expect(
+      screen.getByRole("switch", { name: "Required expense" }),
+    ).toHaveAttribute("aria-checked", "false");
     fireEvent.click(screen.getByRole("button", { name: "Save transaction" }));
 
     await waitFor(() =>

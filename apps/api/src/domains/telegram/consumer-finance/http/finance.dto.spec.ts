@@ -42,4 +42,5 @@ describe('Finance consumer DTO validation', () => {
     const errors = await validate(oversized);
     expect(errors.some((error) => error.property === 'displayName')).toBe(true);
   });
+
 });

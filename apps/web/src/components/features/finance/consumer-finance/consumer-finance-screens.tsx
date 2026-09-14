@@ -1,18 +1,24 @@
 "use client";
 
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { ConsumerFinanceProfile } from "@telegram-system/shared";
+import type {
+  ConsumerFinanceAnalyticsQuery,
+  ConsumerFinanceProfile,
+} from "@telegram-system/shared";
 import { Button, ErrorState, LoadingState } from "./ui";
 import { consumerFinanceInsightsApi } from "@/lib/features/finance/consumer-finance-insights-api";
 import { consumerFinanceKeys } from "@/lib/features/finance/consumer-finance-query-keys";
 import { FinanceDashboard } from "./finance-dashboard";
 import { financeCoreCopy, normalizeFinanceLocale } from "./i18n/core";
 import type {
+  ConsumerFinanceAction,
   ConsumerFinanceRegularPaymentTarget,
   ConsumerFinanceScreen,
   ConsumerFinanceSurface,
 } from "./consumer-finance-navigation";
+import { FinanceDebtEditor } from "./finance-debt-editor";
+import { FinanceInvestmentCreateModal } from "./finance-investment-create-modal";
 export type { ConsumerFinanceScreen } from "./consumer-finance-navigation";
 
 const FinanceAccounts = lazy(() =>
@@ -109,6 +115,9 @@ export function ConsumerFinanceScreens({
   openTransfer = false,
   openTransaction = null,
   actionRequestId = 0,
+  onActionClose = () => undefined,
+  openEntityAction = null,
+  onSpecialAction = () => undefined,
   regularPaymentTarget = null,
   regularPaymentTargetMalformed = false,
   accountId = null,
@@ -126,6 +135,11 @@ export function ConsumerFinanceScreens({
   openTransfer?: boolean;
   openTransaction?: "EXPENSE" | "INCOME" | null;
   actionRequestId?: number;
+  onActionClose?: () => void;
+  openEntityAction?: "debt" | "investment" | null;
+  onSpecialAction?: (
+    action: Extract<ConsumerFinanceAction, "transfer" | "debt" | "investment">,
+  ) => void;
   regularPaymentTarget?: ConsumerFinanceRegularPaymentTarget | null;
   regularPaymentTargetMalformed?: boolean;
   accountId?: string | null;
@@ -135,11 +149,20 @@ export function ConsumerFinanceScreens({
   onInvestmentOpen?: (investmentId: string) => void;
   onInvestmentBack?: () => void;
 }) {
+  const [period, setPeriod] = useState<ConsumerFinanceAnalyticsQuery>({
+    period: "CURRENT_MONTH",
+  });
   const dashboard = useQuery({
-    queryKey: consumerFinanceKeys.dashboard(botId),
-    queryFn: () => consumerFinanceInsightsApi.dashboard(botId),
+    queryKey: consumerFinanceKeys.dashboard(
+      botId,
+      period.period === "CURRENT_MONTH" ? undefined : period,
+    ),
+    queryFn: () => consumerFinanceInsightsApi.dashboard(botId, period),
     retry: false,
-    enabled: !!profile.onboardingCompletedAt && screen === "home",
+    enabled:
+      !!profile.onboardingCompletedAt &&
+      screen === "home" &&
+      (period.period !== "CUSTOM" || Boolean(period.from && period.to)),
   });
   const financeProfile = profile;
   const locale = normalizeFinanceLocale(financeProfile.locale);
@@ -167,9 +190,9 @@ export function ConsumerFinanceScreens({
             <FinanceDashboard
               data={dashboard.data}
               locale={locale}
-              timezone={financeProfile.timezone}
-              onNavigate={onScreenChange}
               surface={surface}
+              period={period}
+              onPeriodChange={setPeriod}
             />
           ) : null}
         </>
@@ -179,6 +202,8 @@ export function ConsumerFinanceScreens({
           botId={botId}
           locale={locale}
           onUpgrade={() => onScreenChange("billing")}
+          period={period}
+          onPeriodChange={setPeriod}
         />
       )}
       {screen === "transactions" && (
@@ -189,8 +214,25 @@ export function ConsumerFinanceScreens({
           timezone={financeProfile.timezone}
           initiallyOpenType={openTransaction}
           surface={surface}
+          period={period}
+          onLauncherClose={onActionClose}
+          onSpecialAction={onSpecialAction}
         />
       )}
+      {screen !== "transactions" && openTransaction ? (
+        <FinanceTransactions
+          key={`global-${openTransaction}:${actionRequestId}`}
+          botId={botId}
+          locale={locale}
+          timezone={financeProfile.timezone}
+          initiallyOpenType={openTransaction}
+          surface={surface}
+          period={period}
+          editorOnly
+          onLauncherClose={onActionClose}
+          onSpecialAction={onSpecialAction}
+        />
+      ) : null}
       {screen === "transfers" && (
         <FinanceTransfers
           key={`${openTransfer ? "create-transfer" : "transfer-history"}:${actionRequestId}`}
@@ -199,8 +241,43 @@ export function ConsumerFinanceScreens({
           timezone={financeProfile.timezone}
           initiallyOpen={openTransfer}
           onCreateAccount={() => onAccountEdit("create")}
+          period={period}
+          onLauncherClose={onActionClose}
         />
       )}
+      {screen !== "transfers" && openTransfer ? (
+        <FinanceTransfers
+          key={`global-transfer:${actionRequestId}`}
+          botId={botId}
+          locale={locale}
+          timezone={financeProfile.timezone}
+          initiallyOpen
+          onCreateAccount={() => onAccountEdit("create")}
+          period={period}
+          editorOnly
+          onLauncherClose={onActionClose}
+        />
+      ) : null}
+      {openEntityAction === "debt" ? (
+        <FinanceDebtEditor
+          key={`global-debt:${actionRequestId}`}
+          botId={botId}
+          editing={null}
+          locale={locale}
+          timezone={financeProfile.timezone}
+          onClose={onActionClose}
+          onSaved={onActionClose}
+        />
+      ) : null}
+      {openEntityAction === "investment" ? (
+        <FinanceInvestmentCreateModal
+          key={`global-investment:${actionRequestId}`}
+          botId={botId}
+          locale={locale}
+          defaultCurrency={financeProfile.defaultCurrency}
+          onClose={onActionClose}
+        />
+      ) : null}
       {screen === "debts" && (
         <FinanceDebts
           botId={botId}

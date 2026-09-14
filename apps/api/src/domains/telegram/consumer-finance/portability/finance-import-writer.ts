@@ -7,7 +7,9 @@ import type {
 } from '@telegram-system/shared';
 import type { TelegramBotDeliveryWriterPort } from '../../telegram-bots/core/telegram-bot-delivery-writer';
 import type { FinanceObligationPresentationPort } from '../obligations/finance-obligation-presentation.port';
+import { financeRequestFingerprint } from '../assets/finance-asset-idempotency';
 import type { FinanceImportRates } from './finance-import-rates';
+import { pruneFinanceRollbackSnapshots } from './finance-portability-history';
 import { writeFinanceAssetImport } from './finance-import-asset-writer';
 import { writeFinanceObligationImport } from './finance-import-obligation-writer';
 import { clearFinanceDataForReplacement } from './finance-import-replace';
@@ -58,6 +60,11 @@ export async function writeFinanceImport(input: {
   document: ConsumerFinanceImportDocumentV1;
   rates: FinanceImportRates;
   fingerprint: string;
+  rollbackSnapshot: Uint8Array<ArrayBuffer>;
+  operation?: 'IMPORT' | 'ROLLBACK';
+  sourceFileName?: string | null;
+  rollbackOfId?: string | null;
+  initialWarnings?: string[];
   onProgress: Progress;
   signal: AbortSignal;
   delivery: TelegramBotDeliveryWriterPort;
@@ -72,6 +79,11 @@ export async function writeFinanceImport(input: {
     document,
     rates,
     fingerprint,
+    rollbackSnapshot,
+    operation = 'IMPORT',
+    sourceFileName = null,
+    rollbackOfId = null,
+    initialWarnings = [],
     onProgress,
     signal,
     delivery,
@@ -84,7 +96,7 @@ export async function writeFinanceImport(input: {
   const transfers = data.transfers ?? [];
   const limits = data.limits ?? [];
   const counts: ConsumerFinanceImportResult['counts'] = {};
-  const warnings: string[] = [];
+  const warnings: string[] = [...initialWarnings];
 
   await tx.$executeRaw(
     Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`finance-import:${profileId}`}, 0))`,
@@ -192,6 +204,7 @@ export async function writeFinanceImport(input: {
         name: row.name.trim(),
         emoji: row.emoji?.trim() || null,
         type: row.type,
+        necessity: row.necessity ?? 'UNSPECIFIED',
         key: row.key?.trim() || null,
         archivedAt: optionalDate(row.archivedAt),
       })),
@@ -206,9 +219,13 @@ export async function writeFinanceImport(input: {
 
   const transactionIds = idMap(transactions);
   const accountByRef = new Map(accounts.map((row) => [row.ref, row]));
+  const categoryByRef = new Map(categories.map((row) => [row.ref, row]));
   await tx.financeTransaction.createMany({
     data: transactions.map((row) => {
       const account = accountByRef.get(row.accountRef)!;
+      const category = row.categoryRef
+        ? categoryByRef.get(row.categoryRef)
+        : null;
       const snapshot = rates.transactions.get(row.ref)!;
       const amount = decimal(row.amount);
       const purpose = row.purpose ?? ('ORDINARY' as const);
@@ -245,7 +262,7 @@ export async function writeFinanceImport(input: {
         source: 'MINI_APP' as const,
         necessity:
           row.type === 'EXPENSE' && purpose === 'ORDINARY'
-            ? (row.necessity ?? 'UNSPECIFIED')
+            ? (row.necessity ?? category?.necessity ?? 'UNSPECIFIED')
             : 'UNSPECIFIED',
       };
     }),
@@ -345,16 +362,30 @@ export async function writeFinanceImport(input: {
     (sum, count) => sum + (count ?? 0),
     0,
   );
+  const receiptFingerprint =
+    operation === 'IMPORT' && document.mode === 'ADD'
+      ? fingerprint
+      : financeRequestFingerprint({
+          fingerprint,
+          operation,
+          runId: randomUUID(),
+        });
   const receipt = await tx.financeDataImportReceipt.create({
     data: {
       profileId,
-      requestFingerprint: fingerprint,
+      requestFingerprint: receiptFingerprint,
+      operation,
+      mode: document.mode,
+      sourceFileName,
       formatVersion: 1,
       importedCount: imported,
       counts,
       warnings,
+      rollbackSnapshot,
+      rollbackOfId,
     },
   });
+  await pruneFinanceRollbackSnapshots(tx, profileId);
   onProgress(
     {
       phase: 'FINALIZING',

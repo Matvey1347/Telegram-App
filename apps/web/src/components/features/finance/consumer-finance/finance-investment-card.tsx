@@ -30,13 +30,18 @@ export function FinanceInvestmentCard({
     pnl > 0 ? TrendingUp : pnl < 0 ? TrendingDown : CircleDollarSign;
   const resultLabel =
     pnl > 0 ? t.positiveResult : pnl < 0 ? t.negativeResult : t.neutralResult;
+  const statusTone = {
+    ACTIVE: "border border-emerald-700/60 bg-emerald-950/50 text-emerald-300",
+    CLOSED: "border border-sky-700/60 bg-sky-950/50 text-sky-300",
+    ARCHIVED: "border border-neutral-700 bg-neutral-900 text-neutral-400",
+  }[investment.status];
   return (
     <Card className="space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="truncate font-semibold">{investment.name}</h2>
-            <span className="rounded-md bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300">
+            <span className={`rounded-md px-2 py-0.5 text-xs ${statusTone}`}>
               {investment.status === "ACTIVE"
                 ? t.active
                 : investment.status === "CLOSED"

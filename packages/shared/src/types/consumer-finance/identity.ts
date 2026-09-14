@@ -10,6 +10,8 @@ export type ConsumerFinanceProfile = {
   id: string;
   /** Finance-only display name override. Telegram identity remains immutable. */
   displayNameOverride?: string | null;
+  /** Finance-only uploaded avatar. Falls back to the Telegram avatar when absent. */
+  avatarUrl?: string | null;
   defaultCurrency: string;
   timezone: string;
   /** Effective locale after applying the Telegram fallback. */

@@ -1,4 +1,5 @@
 import type { ConsumerFinanceProfile } from "./identity";
+import type { ResolvedEmoji } from "../resolved-emoji";
 import type {
   ConsumerFinanceAccount,
   ConsumerFinanceBalanceSummary,
@@ -71,6 +72,8 @@ export type ConsumerFinanceAnalytics = {
     requiredExpenses?: string;
     discretionaryExpenses?: string;
     unspecifiedExpenses?: string;
+    recurringExpenses?: string;
+    oneOffExpenses?: string;
   };
   comparison: {
     period: { from: string; to: string };
@@ -84,6 +87,8 @@ export type ConsumerFinanceAnalytics = {
       requiredExpenses?: string;
       discretionaryExpenses?: string;
       unspecifiedExpenses?: string;
+      recurringExpenses?: string;
+      oneOffExpenses?: string;
     };
     legacyFallback?: ConsumerFinanceLegacyFallback | null;
   };
@@ -104,6 +109,7 @@ export type ConsumerFinanceAnalytics = {
   accounts: Array<{
     accountId: string;
     name: string;
+    iconPresentation: ResolvedEmoji;
     income: string;
     expenses: string;
     invested: string;
@@ -116,6 +122,8 @@ export type ConsumerFinanceAnalytics = {
     expenses: string;
     saved: string;
     invested: string;
+    /** Confirmed repayments of debts during this date. */
+    debtRepayments?: string;
     investmentReturns: string;
     netCashflow: string;
   }>;

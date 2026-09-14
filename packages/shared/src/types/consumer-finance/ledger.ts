@@ -54,6 +54,7 @@ export type ConsumerFinanceCategory = {
   iconPresentation: ResolvedEmoji;
   key?: string | null;
   type: ConsumerFinanceTransactionType;
+  necessity?: ConsumerFinanceExpenseNecessity;
   archivedAt?: string | null;
 };
 
@@ -61,6 +62,13 @@ export type ConsumerFinanceCategorySummary = Pick<
   ConsumerFinanceCategory,
   "id" | "name" | "key" | "type" | "iconPresentation"
 >;
+
+/** A named image available for reuse only inside the current Finance profile. */
+export type ConsumerFinanceCustomIcon = {
+  id: string;
+  name: string;
+  imageUrl: string;
+};
 
 /** Immutable valuation captured at transaction write time. */
 export type ConsumerFinanceValuationSnapshot = {
@@ -172,6 +180,7 @@ export type ConsumerFinanceCategoryInput = {
   emoji?: string | null;
   type: ConsumerFinanceTransactionType;
   parentId?: string;
+  necessity?: ConsumerFinanceExpenseNecessity;
 };
 
 export type ConsumerFinanceCategoryUpdate = {
@@ -179,6 +188,7 @@ export type ConsumerFinanceCategoryUpdate = {
   emoji?: string | null;
   type: ConsumerFinanceTransactionType;
   parentId?: string | null;
+  necessity?: ConsumerFinanceExpenseNecessity;
 };
 
 export type ConsumerFinanceArchiveResult = { archived: true };

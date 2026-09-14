@@ -90,6 +90,7 @@ const workspaceScopedQueryKeys = new Set<string>([
   "telegram-channel-custom-emoji-packs",
   "telegram-managed-posts-calendar",
   "telegram-managed-post-history",
+  "telegram-post-batches",
   "telegram-ad-sales",
   "telegram-ad-sale",
   "telegram-ad-availability",

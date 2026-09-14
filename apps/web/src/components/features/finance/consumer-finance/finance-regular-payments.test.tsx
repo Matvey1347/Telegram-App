@@ -148,6 +148,7 @@ describe("FinanceRegularPayments", () => {
     await screen.findByText("Rent");
 
     expect(api.regularPaymentRevisions).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Payment actions" }));
     fireEvent.click(screen.getByRole("button", { name: "Revision history" }));
     await waitFor(() =>
       expect(api.regularPaymentRevisions).toHaveBeenCalledWith("bot", "rent", {
@@ -185,6 +186,9 @@ describe("FinanceRegularPayments", () => {
     });
     renderPayments();
     fireEvent.click(
+      await screen.findByRole("button", { name: "Payment actions" }),
+    );
+    fireEvent.click(
       await screen.findByRole("button", { name: "Revision history" }),
     );
 
@@ -220,24 +224,30 @@ describe("FinanceRegularPayments", () => {
     });
     renderPayments();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Pause" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Payment actions" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
     await waitFor(() =>
       expect(api.pauseRegularPayment).toHaveBeenCalledWith("bot", "rent"),
     );
     fireEvent.click(screen.getByRole("tab", { name: "Paused" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Resume" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Payment actions" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Resume" }));
     await waitFor(() =>
       expect(api.resumeRegularPayment).toHaveBeenCalledWith("bot", "rent"),
     );
 
     fireEvent.click(screen.getByRole("tab", { name: "Active" }));
     fireEvent.click(
+      await screen.findByRole("button", { name: "Payment actions" }),
+    );
+    fireEvent.click(
       await screen.findByRole("button", { name: "Cancel payment" }),
     );
     const dialog = screen.getByRole("dialog");
-    fireEvent.change(within(dialog).getByPlaceholderText("Rent"), {
-      target: { value: "Rent" },
-    });
     fireEvent.click(
       within(dialog).getByRole("button", { name: "Cancel payment" }),
     );

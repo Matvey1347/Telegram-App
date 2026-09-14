@@ -51,17 +51,12 @@ export class FinanceAssetSummaryService {
             profile.botIntegration.workspaceId,
           ),
     ]);
-    let rate: Prisma.Decimal | null = new Prisma.Decimal(1);
-    if (profile.defaultCurrency !== 'USD') {
-      const result = this.conversion
-        ? await this.conversion.getRateMetadata(
-            'USD',
-            profile.defaultCurrency,
-            profile.botIntegration.workspaceId,
-          )
-        : null;
-      rate = result?.available ? new Prisma.Decimal(result.rate) : null;
-    }
+    const investmentRates = await prepareFinanceAccountRates({
+      conversion: this.conversion,
+      workspaceId: profile.botIntegration.workspaceId,
+      currencies: investmentRows.map((row) => row.valuationCurrency),
+      defaultCurrency: profile.defaultCurrency,
+    });
     let invested = new Prisma.Decimal(0);
     let returned = new Prisma.Decimal(0);
     let currentValue = new Prisma.Decimal(0);
@@ -75,19 +70,14 @@ export class FinanceAssetSummaryService {
       reason: 'RATE_UNAVAILABLE' | 'VALUATION_MISSING';
     }> = [];
     for (const row of investmentRows) {
-      if (row.status === 'ACTIVE' && !row.currentValuationAt) {
-        excludedInvestments.push({
-          investmentId: row.id,
-          name: row.name,
-          currency: row.currency,
-          invested: row.totalInvestedInValuationCurrency.toString(),
-          returned: row.totalReturnedInValuationCurrency.toString(),
-          currentValue: row.currentValueInValuationCurrency.toString(),
-          reason: 'VALUATION_MISSING',
-        });
-        continue;
-      }
-      if (row.valuationCurrency !== 'USD' || !rate) {
+      const rateResult = investmentRates.get(row.valuationCurrency);
+      const rate =
+        row.valuationCurrency === profile.defaultCurrency
+          ? new Prisma.Decimal(1)
+          : rateResult?.available
+            ? new Prisma.Decimal(rateResult.rate)
+            : null;
+      if (!rate) {
         excludedInvestments.push({
           investmentId: row.id,
           name: row.name,
@@ -101,9 +91,16 @@ export class FinanceAssetSummaryService {
       }
       invested = invested.plus(row.totalInvestedInValuationCurrency.mul(rate));
       returned = returned.plus(row.totalReturnedInValuationCurrency.mul(rate));
-      currentValue = currentValue.plus(
-        row.currentValueInValuationCurrency.mul(rate),
-      );
+      const estimatedCurrentValue =
+        row.status === 'ACTIVE' && !row.currentValuationAt
+          ? Prisma.Decimal.max(
+              row.totalInvestedInValuationCurrency.minus(
+                row.totalReturnedInValuationCurrency,
+              ),
+              0,
+            )
+          : row.currentValueInValuationCurrency;
+      currentValue = currentValue.plus(estimatedCurrentValue.mul(rate));
     }
     invested = invested.toDecimalPlaces(2);
     returned = returned.toDecimalPlaces(2);

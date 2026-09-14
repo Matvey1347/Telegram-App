@@ -1,5 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
-import type { ConsumerFinanceImportDocumentV1 } from '@telegram-system/shared';
+import {
+  consumerFinanceImportExampleV1,
+  type ConsumerFinanceImportDocumentV1,
+} from '@telegram-system/shared';
 import { validateFinanceImportDocument } from './finance-import-validator';
 
 function completeDocument(): ConsumerFinanceImportDocumentV1 {
@@ -163,6 +166,28 @@ describe('validateFinanceImportDocument', () => {
     expect(validateFinanceImportDocument(document)).toBe(document);
   });
 
+  it('keeps the canonical full-service import example validator-compatible', () => {
+    const document = structuredClone(consumerFinanceImportExampleV1);
+
+    expect(validateFinanceImportDocument(document)).toBe(document);
+    expect(
+      Object.values(document.data).every(
+        (section) => Array.isArray(section) && section.length > 0,
+      ),
+    ).toBe(true);
+  });
+
+  it('accepts necessity defaults for expense categories and regular payments, and rejects it for debts', () => {
+    const document = completeDocument();
+    document.data.categories![0].necessity = 'DISCRETIONARY';
+    document.data.regularPayments![0].necessity = 'REQUIRED';
+    expect(validateFinanceImportDocument(document)).toBe(document);
+
+    const invalidDebt = completeDocument();
+    Object.assign(invalidDebt.data.debts![0], { necessity: 'REQUIRED' });
+    expect(errorPath(invalidDebt).path).toBe('data.debts[0].necessity');
+  });
+
   it('accepts REPLACE as an explicit destructive import mode', () => {
     const document = completeDocument();
     document.mode = 'REPLACE';
@@ -309,6 +334,46 @@ describe('validateFinanceImportDocument', () => {
       '2026-09-02T00:00:00.000Z';
     expect(errorPath(valuationAfterClose).path).toBe(
       'data.investmentValuations[0].valuedAt',
+    );
+  });
+
+  it('accepts custom regular-payment intervals and rejects invalid counts', () => {
+    const custom = completeDocument();
+    custom.data.regularPayments![0].recurrence = 'DAILY';
+    custom.data.regularPayments![0].intervalCount = 90;
+    expect(validateFinanceImportDocument(custom)).toEqual(custom);
+
+    const invalid = completeDocument();
+    invalid.data.regularPayments![0].intervalCount = 0;
+    expect(errorPath(invalid).path).toBe(
+      'data.regularPayments[0].intervalCount',
+    );
+  });
+
+  it('accepts subscription history links and rejects a non-expense history row', () => {
+    const valid = completeDocument();
+    valid.data.transactions!.push({
+      ref: 'subscription-history',
+      accountRef: 'card',
+      categoryRef: 'food',
+      recurringPaymentRef: 'subscription',
+      type: 'EXPENSE',
+      amount: '190',
+      occurredAt: '2026-09-05T09:00:00.000Z',
+    });
+    expect(validateFinanceImportDocument(valid)).toEqual(valid);
+
+    const invalid = completeDocument();
+    invalid.data.transactions!.push({
+      ref: 'subscription-history',
+      accountRef: 'card',
+      recurringPaymentRef: 'subscription',
+      type: 'INCOME',
+      amount: '190',
+      occurredAt: '2026-09-05T09:00:00.000Z',
+    });
+    expect(errorPath(invalid).path).toBe(
+      'data.transactions[1].recurringPaymentRef',
     );
   });
 

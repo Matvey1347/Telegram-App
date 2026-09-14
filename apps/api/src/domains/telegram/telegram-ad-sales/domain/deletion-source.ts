@@ -1,4 +1,7 @@
-const BOT_API_DELETE_LIMIT_MS = 48 * 60 * 60 * 1000;
+import {
+  isTelegramMessageAlreadyAbsent,
+  selectTelegramDeletionSource,
+} from '../../../../telegram/shared/telegram-deletion-policy';
 
 type DeletionSource = {
   sourceType: string;
@@ -33,39 +36,11 @@ export function selectAdPlacementDeletionSource(
   },
   now = new Date(),
 ) {
-  const available = sources.filter(
-    (source) => source.permissions.canDeleteMessages,
-  );
-  const original = available.find(
-    (source) =>
-      source.sourceType === managedPost.sourceType &&
-      source.sourceId === managedPost.sourceId,
-  );
-  const mtproto = available.find((source) => source.sourceType === 'MTPROTO');
-  const botApiLimitReached =
-    (original?.sourceType === 'BOT' || original?.sourceType === 'BOT_API') &&
-    managedPost.publishedAt !== null &&
-    now.getTime() - managedPost.publishedAt.getTime() >=
-      BOT_API_DELETE_LIMIT_MS;
-  // Prefer MTProto after Bot API's deletion window. If it is unavailable,
-  // still call the original bot: Telegram can then confirm that a post which
-  // was removed manually is already absent, making cleanup idempotent.
-  if (botApiLimitReached) return mtproto ?? original;
-  return original ?? mtproto;
+  return selectTelegramDeletionSource(sources, managedPost, now, {
+    // A delete call that reports an already-absent message is still a valid
+    // terminal acknowledgement for legacy Ad Sale placements.
+    allowExpiredOriginalProbe: true,
+  });
 }
 
-export function isTelegramMessageAlreadyAbsent(error: unknown) {
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : '';
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes('message to delete not found') ||
-    normalized.includes("message doesn't exist") ||
-    normalized.includes('message does not exist') ||
-    normalized.includes('message_id_invalid')
-  );
-}
+export { isTelegramMessageAlreadyAbsent };

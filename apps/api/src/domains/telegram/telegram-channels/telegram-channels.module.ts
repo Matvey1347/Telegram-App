@@ -78,9 +78,20 @@ import { TelegramChannelBoundedReadsController } from './telegram-channel-bounde
 import { TelegramManagedPostLookupService } from './telegram-managed-post-lookup.service';
 import { TelegramPostGroupSummaryReadService } from './telegram-post-group-summary-read.service';
 import { TelegramManagedPostRemoteDeletionService } from './telegram-managed-post-remote-deletion.service';
+import { TelegramManagedPostRemoteDeleteExecutor } from './telegram-managed-post-remote-delete-executor.service';
 import { TelegramManagedPostMediaController } from './telegram-managed-post-media.controller';
 import { TelegramChannelInviteLinkRegistrationController } from './telegram-channel-invite-link-registration.controller';
 import { TelegramChannelImportController } from './telegram-channel-import.controller';
+import { TelegramPostBatchesController } from './telegram-post-batches.controller';
+import { TelegramPostBatchReadService } from './telegram-post-batch-read.service';
+import { TelegramPostBatchSummaryService } from './telegram-post-batch-summary.service';
+import { TelegramPostBatchStatusService } from './telegram-post-batch-status.service';
+import { TelegramPostBatchClaimLeaseService } from './telegram-post-batch-claim-lease.service';
+import { TelegramPostBatchCommandService } from './telegram-post-batch-command.service';
+import { TelegramPostBatchDispatchService } from './telegram-post-batch-dispatch.service';
+import { TelegramPostBatchLifecycleService } from './telegram-post-batch-lifecycle.service';
+import { TelegramPostBatchDueReadService } from './telegram-post-batch-due-read.service';
+import { TelegramPostBatchPublicationRunnerService } from './telegram-post-batch-publication-runner.service';
 
 @Module({
   imports: [AdCampaignsModule],
@@ -92,6 +103,7 @@ import { TelegramChannelImportController } from './telegram-channel-import.contr
     TelegramManagedPostMediaController,
     TelegramChannelInviteLinkRegistrationController,
     TelegramChannelImportController,
+    TelegramPostBatchesController,
   ],
   providers: [
     TelegramChannelsService,
@@ -168,6 +180,16 @@ import { TelegramChannelImportController } from './telegram-channel-import.contr
     TelegramManagedPostLookupService,
     TelegramPostGroupSummaryReadService,
     TelegramManagedPostRemoteDeletionService,
+    TelegramManagedPostRemoteDeleteExecutor,
+    TelegramPostBatchReadService,
+    TelegramPostBatchSummaryService,
+    TelegramPostBatchStatusService,
+    TelegramPostBatchClaimLeaseService,
+    TelegramPostBatchCommandService,
+    TelegramPostBatchDispatchService,
+    TelegramPostBatchLifecycleService,
+    TelegramPostBatchDueReadService,
+    TelegramPostBatchPublicationRunnerService,
   ],
   exports: [
     TelegramChannelsService,
@@ -195,6 +217,7 @@ import { TelegramChannelImportController } from './telegram-channel-import.contr
     TelegramManagedPostRemoteDeletionService,
     TelegramBroadcastStatsService,
     TelegramInviteLinkRegistrationService,
+    TelegramPostBatchLifecycleService,
   ],
 })
 export class TelegramChannelsModule {}

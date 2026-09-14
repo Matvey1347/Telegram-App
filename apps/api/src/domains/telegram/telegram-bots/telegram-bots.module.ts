@@ -107,6 +107,8 @@ import { FinanceSavingsGoalService } from '../consumer-finance/savings/finance-s
 import { FinanceImportController } from '../consumer-finance/portability/finance-import.controller';
 import { FinanceImportService } from '../consumer-finance/portability/finance-import.service';
 import { FinanceConsumerAuthGuard } from '../consumer-finance/portability/finance-consumer-auth.guard';
+import { FinanceCustomIconController } from '../consumer-finance/catalog/finance-custom-icon.controller';
+import { FinanceCustomIconService } from '../consumer-finance/catalog/finance-custom-icon.service';
 
 @Module({
   imports: [BotBillingModule],
@@ -127,6 +129,7 @@ import { FinanceConsumerAuthGuard } from '../consumer-finance/portability/financ
     FinanceBotBrandingAdminController,
     FinanceBotBrandingAssetController,
     FinanceImportController,
+    FinanceCustomIconController,
   ],
   providers: [
     TelegramBotsService,
@@ -177,6 +180,7 @@ import { FinanceConsumerAuthGuard } from '../consumer-finance/portability/financ
     FinanceSavingsAllocationService,
     FinanceSavingsGoalService,
     FinanceImportService,
+    FinanceCustomIconService,
     FinanceConsumerAuthGuard,
     FinanceInvestmentService,
     FinanceInvestmentReadService,

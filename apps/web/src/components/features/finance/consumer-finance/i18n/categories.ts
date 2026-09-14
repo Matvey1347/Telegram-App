@@ -9,6 +9,9 @@ const copy = {
     editCategory: "Edit category",
     categoryName: "Category name",
     parentCategory: "Parent category",
+    categoryRequired: "Required expense category",
+    categoryRequiredHelp:
+      "This choice is applied to every existing and new expense in this category.",
     noParent: "No parent category",
     noCategories: "No categories yet.",
     archivedCategories: "Archived categories",
@@ -34,6 +37,9 @@ const copy = {
     editCategory: "Редагувати категорію",
     categoryName: "Назва категорії",
     parentCategory: "Батьківська категорія",
+    categoryRequired: "Категорія обов’язкових витрат",
+    categoryRequiredHelp:
+      "Вибір застосовується до всіх наявних і нових витрат цієї категорії.",
     noParent: "Без батьківської категорії",
     noCategories: "Категорій ще немає.",
     archivedCategories: "Архівні категорії",
@@ -57,6 +63,9 @@ const copy = {
     editCategory: "Редактировать категорию",
     categoryName: "Название категории",
     parentCategory: "Родительская категория",
+    categoryRequired: "Категория обязательных расходов",
+    categoryRequiredHelp:
+      "Выбор применяется ко всем существующим и новым расходам этой категории.",
     noParent: "Без родительской категории",
     noCategories: "Категорий пока нет.",
     archivedCategories: "Архивные категории",

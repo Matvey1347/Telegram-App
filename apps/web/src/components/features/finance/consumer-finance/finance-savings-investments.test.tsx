@@ -15,6 +15,7 @@ const api = vi.hoisted(() => ({
   investments: vi.fn(),
   summary: vi.fn(),
   accounts: vi.fn(),
+  addCashFlow: vi.fn(),
   allocate: vi.fn(),
 }));
 vi.mock("@/lib/features/finance/consumer-finance-savings-goals-api", () => ({
@@ -27,6 +28,7 @@ vi.mock("@/lib/features/finance/consumer-finance-investments-api", () => ({
   consumerFinanceInvestmentsApi: {
     list: api.investments,
     summary: api.summary,
+    addCashFlow: api.addCashFlow,
   },
 }));
 vi.mock("@/lib/features/finance/consumer-finance-ledger-api", () => ({
@@ -63,6 +65,7 @@ beforeEach(() => {
     excludedInvestments: [],
   });
   api.allocate.mockReset();
+  api.addCashFlow.mockReset();
 });
 
 describe("Consumer Finance savings and investments screens", () => {
@@ -218,5 +221,81 @@ describe("Consumer Finance savings and investments screens", () => {
       cursor: "asset-next",
       limit: 30,
     });
+  });
+
+  it("records a return through the add-investment flow as an investment cash flow", async () => {
+    const investment = {
+      id: "studio",
+      name: "Photo studio",
+      type: "BUSINESS",
+      currency: "USD",
+      status: "ACTIVE" as const,
+      startedAt: "2026-01-01",
+      totalInvested: "100",
+      totalReturned: "0",
+      currentValue: "100",
+      profitLoss: "0",
+      returnPercentage: 0,
+      createdAt: "2026-01-01",
+      updatedAt: "2026-01-01",
+    };
+    api.investments.mockResolvedValue({ items: [investment], nextCursor: null });
+    api.accounts.mockResolvedValue([
+      {
+        id: "cash",
+        name: "Cash",
+        type: "CASH",
+        currency: "USD",
+        openingBalance: "0",
+        balance: "0",
+        defaultCurrency: "USD",
+        iconPresentation: { type: "unicode", value: "💵" },
+      },
+    ]);
+    api.addCashFlow.mockResolvedValue({ investment, cashFlow: null });
+    host(
+      <FinanceInvestments
+        botId="bot"
+        locale="en"
+        defaultCurrency="USD"
+        onOpen={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add investment" }));
+    const picker = await screen.findByRole("dialog", {
+      name: "Add investment",
+    });
+    fireEvent.click(
+      within(picker).getByRole("button", { name: "New investment" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("option", {
+        name: "Return from an existing investment",
+      }),
+    );
+    fireEvent.click(
+      within(picker).getByRole("button", { name: "Choose an investment" }),
+    );
+    fireEvent.click(await screen.findByRole("option", { name: /Photo studio/ }));
+    fireEvent.click(within(picker).getByRole("button", { name: "Continue" }));
+
+    const action = await screen.findByRole("dialog", { name: /Return: Photo studio/ });
+    fireEvent.change(action.querySelector('input[inputmode="decimal"]')!, {
+      target: { value: "25" },
+    });
+    fireEvent.click(within(action).getByRole("button", { name: "Return" }));
+
+    await waitFor(() =>
+      expect(api.addCashFlow).toHaveBeenCalledWith(
+        "bot",
+        "studio",
+        expect.objectContaining({
+          kind: "RETURN",
+          accountId: "cash",
+          amount: "25",
+        }),
+      ),
+    );
   });
 });

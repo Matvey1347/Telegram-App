@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { HistoricalExchangeRateService } from './historical-exchange-rate.service';
 
 const MAX_CURRENT_RATE_AGE_MS = 48 * 60 * 60 * 1000;
 type CurrencyRateRow = {
@@ -82,30 +83,35 @@ function resolveRateMetadata(
   const queue: Array<{ currency: string; rate: number; oldest: Date }> = [
     { currency: from, rate: 1, oldest: new Date(8640000000000000) },
   ];
-  const seen = new Set<string>([from]);
+  const freshestPath = new Map<string, number>([[from, Infinity]]);
   while (queue.length) {
+    queue.sort((left, right) => right.oldest.getTime() - left.oldest.getTime());
     const current = queue.shift()!;
-    for (const edge of graph.get(current.currency) || []) {
-      if (seen.has(edge.to)) continue;
-      const oldest = edge.date < current.oldest ? edge.date : current.oldest;
-      if (edge.to === to) {
-        if (!date && Date.now() - oldest.getTime() > MAX_CURRENT_RATE_AGE_MS) {
-          return {
-            available: false,
-            code: 'RATE_STALE',
-            message:
-              'The available exchange rate is too old. Please try again later.',
-            rateAt: oldest,
-          };
-        }
+    if (current.currency === to) {
+      if (
+        !date &&
+        Date.now() - current.oldest.getTime() > MAX_CURRENT_RATE_AGE_MS
+      ) {
         return {
-          available: true,
-          rate: current.rate * edge.rate,
-          rateAt: oldest,
-          stale: false,
+          available: false,
+          code: 'RATE_STALE',
+          message:
+            'The available exchange rate is too old. Please try again later.',
+          rateAt: current.oldest,
         };
       }
-      seen.add(edge.to);
+      return {
+        available: true,
+        rate: current.rate,
+        rateAt: current.oldest,
+        stale: false,
+      };
+    }
+    for (const edge of graph.get(current.currency) || []) {
+      const oldest = edge.date < current.oldest ? edge.date : current.oldest;
+      const freshness = oldest.getTime();
+      if (freshness <= (freshestPath.get(edge.to) ?? -Infinity)) continue;
+      freshestPath.set(edge.to, freshness);
       queue.push({
         currency: edge.to,
         rate: current.rate * edge.rate,
@@ -144,7 +150,12 @@ function preparedRateSource(
 /** Resolves one bounded, in-memory graph from persisted workspace rates. */
 @Injectable()
 export class CurrencyConversionService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly currentRefreshes = new Map<string, Promise<void>>();
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly externalRates?: HistoricalExchangeRateService,
+  ) {}
 
   /** Loads one workspace graph for repeated conversions in a single use case. */
   async prepareRateSource(
@@ -153,7 +164,8 @@ export class CurrencyConversionService {
   ): Promise<PreparedCurrencyRateSource> {
     // One latest row per directed pair bounds memory by the configured
     // currency graph rather than by the workspace's full rate history.
-    const rows = await this.prisma.$queryRaw<CurrencyRateRow[]>(Prisma.sql`
+    const loadRows = () =>
+      this.prisma.$queryRaw<CurrencyRateRow[]>(Prisma.sql`
       SELECT DISTINCT ON ("baseCurrency", "targetCurrency")
         "baseCurrency", "targetCurrency", "rate", "date"
       FROM "ExchangeRate"
@@ -161,7 +173,58 @@ export class CurrencyConversionService {
         ${date ? Prisma.sql`AND "date" <= ${date}` : Prisma.empty}
       ORDER BY "baseCurrency", "targetCurrency", "date" DESC
     `);
-    return preparedRateSource(rows, date);
+    let source = preparedRateSource(await loadRows(), date);
+    if (date || !this.externalRates) return source;
+
+    const attemptedPairs = new Set<string>();
+    const getRateMetadata = async (
+      fromCurrency: string,
+      toCurrency: string,
+    ) => {
+      let result = await source.getRateMetadata(fromCurrency, toCurrency);
+      if (result.available) return result;
+      const pair = [fromCurrency.toUpperCase(), toCurrency.toUpperCase()]
+        .sort()
+        .join(':');
+      if (attemptedPairs.has(pair)) return result;
+      attemptedPairs.add(pair);
+      try {
+        await this.refreshCurrentPair(workspaceId, pair.split(':'));
+        source = preparedRateSource(await loadRows());
+        result = await source.getRateMetadata(fromCurrency, toCurrency);
+      } catch {
+        // Preserve the original structured RATE_STALE/RATE_UNAVAILABLE result
+        // when every live provider is temporarily unavailable.
+      }
+      return result;
+    };
+    const getRate = async (fromCurrency: string, toCurrency: string) => {
+      const result = await getRateMetadata(fromCurrency, toCurrency);
+      return result.available ? result.rate : null;
+    };
+    return {
+      getRateMetadata,
+      getRate,
+      convertCurrency: async (amount, fromCurrency, toCurrency) => {
+        const rate = await getRate(fromCurrency, toCurrency);
+        return rate == null ? null : amount * rate;
+      },
+    };
+  }
+
+  private async refreshCurrentPair(workspaceId: string, currencies: string[]) {
+    const key = `${workspaceId}:${currencies.join(':')}`;
+    const existing = this.currentRefreshes.get(key);
+    if (existing) return existing;
+    const refresh = this.externalRates!.ensureCurrentRates({
+      workspaceId,
+      currencies,
+      signal: AbortSignal.timeout(8_000),
+    })
+      .then(() => undefined)
+      .finally(() => this.currentRefreshes.delete(key));
+    this.currentRefreshes.set(key, refresh);
+    return refresh;
   }
 
   /** Loads all requested historical graphs in one bounded database round-trip. */

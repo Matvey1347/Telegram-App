@@ -144,6 +144,7 @@ export class FinanceRegularPaymentConfirmationService {
         const nextOccurrenceAt = nextFinanceOccurrence({
           current: expectedOccurrenceAt,
           recurrence: regularPayment.recurrence,
+          intervalCount: regularPayment.intervalCount,
           anchorDay: regularPayment.anchorDay,
           anchorMonth: regularPayment.anchorMonth,
           timezone: regularPayment.scheduleTimezone,

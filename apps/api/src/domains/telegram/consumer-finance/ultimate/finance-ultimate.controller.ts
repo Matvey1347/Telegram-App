@@ -4,11 +4,13 @@ import {
   Param,
   Post,
   Req,
-  UploadedFile,
+  Res,
+  UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import type { Request } from 'express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import type { Request, Response } from 'express';
+import type { ConsumerFinanceAssistantStreamEvent } from '@telegram-system/shared';
 import { FinanceConsumerRequestService } from '../http/finance-consumer-request.service';
 import {
   FinanceAssistantEntryDto,
@@ -56,26 +58,76 @@ export class FinanceUltimateController {
   }
 
   @Post('message')
-  message(
+  async message(
     @Param('botId') botId: string,
     @Req() request: Request,
     @Body() body: FinanceAssistantMessageDto,
+    @Res() response: Response,
   ) {
     const session = this.requests.authenticate(botId, request);
-    return this.ultimate.message(this.identity(session, botId), body);
+    const abortController = new AbortController();
+    request.once('aborted', () => abortController.abort());
+    response.once('close', () => {
+      if (!response.writableEnded) abortController.abort();
+    });
+    response.status(200);
+    response.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+    response.setHeader('Cache-Control', 'no-cache, no-transform');
+    response.setHeader('X-Accel-Buffering', 'no');
+    response.flushHeaders();
+
+    const write = (event: ConsumerFinanceAssistantStreamEvent) => {
+      if (!response.destroyed && !response.writableEnded) {
+        response.write(`${JSON.stringify(event)}\n`);
+      }
+    };
+    write({ type: 'start' });
+    try {
+      const result = await this.ultimate.message(
+        this.identity(session, botId),
+        body,
+        {
+          signal: abortController.signal,
+          onMessageDelta: (delta) => write({ type: 'delta', delta }),
+        },
+      );
+      write({ type: 'done', result });
+    } catch (error) {
+      if (!abortController.signal.aborted) {
+        write({
+          type: 'error',
+          message: 'Finance assistant request failed',
+          code: error instanceof Error ? error.name : 'UNKNOWN_ERROR',
+        });
+      }
+    } finally {
+      if (!response.destroyed && !response.writableEnded) response.end();
+    }
   }
 
   @Post('entry/media')
   @UseInterceptors(
-    FileInterceptor('file', { limits: { fileSize: 8 * 1024 * 1024 } }),
+    FileFieldsInterceptor(
+      [
+        { name: 'file', maxCount: 1 },
+        { name: 'files', maxCount: 5 },
+      ],
+      { limits: { fileSize: 8 * 1024 * 1024, files: 5 } },
+    ),
   )
   mediaEntry(
     @Param('botId') botId: string,
     @Req() request: Request,
-    @UploadedFile() file: Express.Multer.File | undefined,
+    @UploadedFiles()
+    uploaded:
+      | { file?: Express.Multer.File[]; files?: Express.Multer.File[] }
+      | undefined,
   ) {
     const session = this.requests.authenticate(botId, request);
-    return this.entries.fromFile(this.identity(session, botId), file);
+    return this.entries.fromFiles(this.identity(session, botId), [
+      ...(uploaded?.file ?? []),
+      ...(uploaded?.files ?? []),
+    ]);
   }
 
   @Post('entry/:token/confirm')

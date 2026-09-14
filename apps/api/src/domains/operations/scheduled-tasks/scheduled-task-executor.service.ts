@@ -19,6 +19,7 @@ import type {
 import { OperationsNotificationDueService } from '../notifications/operations-notification-due.service';
 import { TelegramCrmInitialSyncService } from '../../telegram/telegram-crm/telegram-crm-initial-sync.service';
 import { MutualPromotionLifecycleService } from '../../growth/mutual-promotion-folders/mutual-promotion-lifecycle.service';
+import { TelegramPostBatchLifecycleService } from '../../telegram/telegram-channels/telegram-post-batch-lifecycle.service';
 
 @Injectable()
 export class ScheduledTaskExecutorService {
@@ -81,6 +82,15 @@ export class ScheduledTaskExecutorService {
       ).processDueActions();
       return {
         summary: `Considered ${result.considered} mutual-promotion actions; processed ${result.processed}, completed ${result.completed}, retried ${result.retried}, failed ${result.failed}.`,
+        details: result,
+      };
+    },
+    'telegram.post_batches.lifecycle': async () => {
+      const result = await (
+        await this.telegramPostBatchLifecycleService()
+      ).processDueActions();
+      return {
+        summary: `Considered ${result.considered} post batch deliveries; published ${result.published}, deleted ${result.deleted}.`,
         details: result,
       };
     },
@@ -255,5 +265,15 @@ export class ScheduledTaskExecutorService {
     return this.moduleRef.resolve(MutualPromotionLifecycleService, undefined, {
       strict: false,
     });
+  }
+
+  private telegramPostBatchLifecycleService() {
+    return this.moduleRef.resolve(
+      TelegramPostBatchLifecycleService,
+      undefined,
+      {
+        strict: false,
+      },
+    );
   }
 }

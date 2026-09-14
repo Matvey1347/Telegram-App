@@ -6,9 +6,21 @@ const copy = {
     open: "Open Jarvis",
     close: "Close Jarvis",
     subtitle: "Your finance assistant",
+    currentPlan: "Current plan",
+    planEyebrow: "Unlock more with Finance",
+    voiceUpgradeTitle: "Talk to Jarvis instead of typing",
+    voiceUpgradeDescription:
+      "Add voice messages and turn spoken expenses into ready-to-review entries with Pro.",
+    voiceUpgradeCta: "Upgrade plan",
+    dismissUpgrade: "Dismiss plan offer",
+    limitUpgradeTitle: "Keep Jarvis working for you",
+    limitUpgradeDescription:
+      "Move to Pro for more Jarvis requests and faster everyday finance capture.",
+    limitUpgradeCta: "Get more Jarvis requests",
     intro:
       "Hi, I’m Jarvis. I can answer questions about your finances, help choose the right section, understand a receipt or voice note, and prepare transactions for review. I never record money without your confirmation.",
-    ready: "Ask a question, describe a payment, or attach a receipt or voice note.",
+    ready:
+      "Ask a question, describe a payment, or attach a receipt or voice note.",
     placeholder: "Message Jarvis…",
     send: "Send",
     attach: "Attach receipt or voice",
@@ -16,10 +28,12 @@ const copy = {
     stopRecording: "Stop recording",
     voiceRequiresPro: "Voice messages require Pro or Ultra",
     recording: "Recording",
-    dropHere: "Drop an image or audio file here",
+    dropHere: "Drop receipt images or one audio file here",
     removeAttachment: "Remove attachment",
-    unsupported: "Choose a JPEG, PNG, WEBP, or supported audio file.",
-    tooLarge: "The file must be no larger than 8 MB.",
+    unsupported:
+      "Choose up to five JPEG, PNG or WEBP images, or one supported audio file.",
+    tooLarge: "Each file must be up to 8 MB and the selection up to 16 MB.",
+    tooMany: "You can attach up to five receipt images.",
     microphoneUnavailable:
       "Microphone access is unavailable. Check browser permission or attach an audio file.",
     requestsLeft: "{count} Jarvis requests left",
@@ -45,16 +59,27 @@ const copy = {
     saved: "Recorded successfully.",
     cancelled: "Proposal cancelled.",
     openRecommended: "Open recommended section",
-    openPlans: "View plans and limits",
     retry: "Try again",
     attachment: "Attached file",
-    safety: "Jarvis prepares suggestions only. Financial changes always require confirmation.",
+    safety:
+      "Jarvis prepares suggestions only. Financial changes always require confirmation.",
   },
   uk: {
     title: "Джаврис",
     open: "Відкрити Джавриса",
     close: "Закрити Джавриса",
     subtitle: "Ваш фінансовий асистент",
+    currentPlan: "Поточний тариф",
+    planEyebrow: "Більше можливостей із Finance",
+    voiceUpgradeTitle: "Говоріть із Джарвисом замість набору тексту",
+    voiceUpgradeDescription:
+      "Додайте голосові повідомлення та перетворюйте озвучені витрати на готові до перевірки записи з Pro.",
+    voiceUpgradeCta: "Оновити тариф",
+    dismissUpgrade: "Закрити пропозицію тарифу",
+    limitUpgradeTitle: "Нехай Джарвис і далі працює для вас",
+    limitUpgradeDescription:
+      "Перейдіть на Pro, щоб отримати більше запитів Джарвису та швидше вести щоденні фінанси.",
+    limitUpgradeCta: "Отримати більше запитів",
     intro:
       "Привіт, я Джаврис. Можу відповісти про ваші фінанси, підказати потрібний розділ, розібрати чек або голосове та підготувати операції для перевірки. Без вашого підтвердження я нічого не записую.",
     ready: "Поставте запитання, опишіть платіж або додайте чек чи голосове.",
@@ -65,10 +90,12 @@ const copy = {
     stopRecording: "Зупинити запис",
     voiceRequiresPro: "Голосові повідомлення доступні в Pro та Ultra",
     recording: "Запис",
-    dropHere: "Перетягніть сюди зображення або аудіо",
+    dropHere: "Перетягніть сюди зображення чеків або один аудіофайл",
     removeAttachment: "Видалити вкладення",
-    unsupported: "Оберіть JPEG, PNG, WEBP або підтримуваний аудіофайл.",
-    tooLarge: "Файл має бути не більшим за 8 МБ.",
+    unsupported:
+      "Оберіть до п’яти зображень JPEG, PNG чи WEBP або один підтримуваний аудіофайл.",
+    tooLarge: "Кожен файл — до 8 МБ, усі вкладення разом — до 16 МБ.",
+    tooMany: "Можна додати до п’яти зображень чеків.",
     microphoneUnavailable:
       "Мікрофон недоступний. Перевірте дозвіл браузера або додайте аудіофайл.",
     requestsLeft: "Залишилося запитів Джаврису: {count}",
@@ -94,16 +121,27 @@ const copy = {
     saved: "Успішно записано.",
     cancelled: "Пропозицію скасовано.",
     openRecommended: "Відкрити рекомендований розділ",
-    openPlans: "Переглянути тарифи та ліміти",
     retry: "Спробувати ще раз",
     attachment: "Прикріплений файл",
-    safety: "Джаврис лише готує пропозиції. Фінансові зміни завжди потребують підтвердження.",
+    safety:
+      "Джаврис лише готує пропозиції. Фінансові зміни завжди потребують підтвердження.",
   },
   ru: {
     title: "Джаврис",
     open: "Открыть Джавриса",
     close: "Закрыть Джавриса",
     subtitle: "Ваш финансовый ассистент",
+    currentPlan: "Текущий тариф",
+    planEyebrow: "Больше возможностей с Finance",
+    voiceUpgradeTitle: "Говорите с Джарвисом вместо набора текста",
+    voiceUpgradeDescription:
+      "Добавьте голосовые сообщения и превращайте озвученные расходы в готовые к проверке записи с Pro.",
+    voiceUpgradeCta: "Обновить тариф",
+    dismissUpgrade: "Закрыть предложение тарифа",
+    limitUpgradeTitle: "Пусть Джарвис продолжает работать для вас",
+    limitUpgradeDescription:
+      "Перейдите на Pro, чтобы получить больше запросов Джарвису и быстрее вести ежедневные финансы.",
+    limitUpgradeCta: "Получить больше запросов",
     intro:
       "Привет, я Джаврис. Могу ответить о ваших финансах, подсказать нужный раздел, разобрать чек или голосовое и подготовить операции для проверки. Без вашего подтверждения я ничего не записываю.",
     ready: "Задайте вопрос, опишите платёж или добавьте чек либо голосовое.",
@@ -114,10 +152,12 @@ const copy = {
     stopRecording: "Остановить запись",
     voiceRequiresPro: "Голосовые сообщения доступны в Pro и Ultra",
     recording: "Запись",
-    dropHere: "Перетащите сюда изображение или аудио",
+    dropHere: "Перетащите сюда изображения чеков или один аудиофайл",
     removeAttachment: "Удалить вложение",
-    unsupported: "Выберите JPEG, PNG, WEBP или поддерживаемый аудиофайл.",
-    tooLarge: "Файл должен быть не больше 8 МБ.",
+    unsupported:
+      "Выберите до пяти изображений JPEG, PNG или WEBP либо один поддерживаемый аудиофайл.",
+    tooLarge: "Каждый файл — до 8 МБ, все вложения вместе — до 16 МБ.",
+    tooMany: "Можно прикрепить до пяти изображений чеков.",
     microphoneUnavailable:
       "Микрофон недоступен. Проверьте разрешение браузера или прикрепите аудиофайл.",
     requestsLeft: "Осталось запросов Джаврису: {count}",
@@ -144,10 +184,10 @@ const copy = {
     saved: "Успешно записано.",
     cancelled: "Предложение отменено.",
     openRecommended: "Открыть рекомендованный раздел",
-    openPlans: "Посмотреть тарифы и лимиты",
     retry: "Попробовать снова",
     attachment: "Прикреплённый файл",
-    safety: "Джаврис только готовит предложения. Финансовые изменения всегда требуют подтверждения.",
+    safety:
+      "Джаврис только готовит предложения. Финансовые изменения всегда требуют подтверждения.",
   },
 } as const;
 

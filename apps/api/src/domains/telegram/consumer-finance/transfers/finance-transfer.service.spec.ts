@@ -12,6 +12,8 @@ const account = (
   id,
   name: id,
   currency,
+  emoji: id === 'from' ? '💳' : null,
+  type: 'CARD',
   archivedAt,
 });
 const row = {
@@ -64,6 +66,8 @@ describe('FinanceTransferService', () => {
       fromAmount: '10',
       toAmount: '11',
       exchangeRate: '1.1',
+      fromAccount: { iconPresentation: { type: 'unicode', value: '💳' } },
+      toAccount: { iconPresentation: { type: 'unicode', value: '💳' } },
     });
     expect(conversion.getRateMetadata).toHaveBeenCalledWith(
       'EUR',

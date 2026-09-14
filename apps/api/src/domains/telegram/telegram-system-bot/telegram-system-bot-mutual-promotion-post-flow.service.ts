@@ -63,7 +63,7 @@ export class TelegramSystemBotMutualPromotionPostFlowService {
   async prepare(scope: TelegramSystemBotPostFlowScope, folderId: string) {
     const normalizedFolderId = folderId.trim();
     await this.requireFolder(scope.workspaceId, normalizedFolderId);
-    const existing = await this.workflows.active(
+    const existing = await this.workflows.activeWithoutBatchImport(
       scope,
       TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
     );

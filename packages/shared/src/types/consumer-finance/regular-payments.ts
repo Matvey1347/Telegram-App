@@ -4,8 +4,10 @@ import type {
   ConsumerFinanceExpenseNecessity,
   ConsumerFinanceTransaction,
 } from "./ledger";
+import type { ResolvedEmoji } from "../resolved-emoji";
 
 export type ConsumerFinanceRegularPaymentRecurrence =
+  | "DAILY"
   | "WEEKLY"
   | "MONTHLY"
   | "YEARLY";
@@ -24,6 +26,8 @@ export type ConsumerFinanceRegularPaymentRevisionKind =
 export type ConsumerFinanceRegularPayment = {
   id: string;
   name: string;
+  /** Resolved payment icon. Older cached responses may omit it. */
+  iconPresentation?: ResolvedEmoji;
   amount: string;
   /** Derived from the selected account and never supplied by the client. */
   currency: string;
@@ -32,6 +36,8 @@ export type ConsumerFinanceRegularPayment = {
   categoryId?: string | null;
   category?: ConsumerFinanceCategorySummary | null;
   recurrence: ConsumerFinanceRegularPaymentRecurrence;
+  /** Number of recurrence units between payments. Older responses imply 1. */
+  intervalCount?: number;
   nextOccurrenceAt: string;
   /** Timezone used for recurrence calendar anchors. */
   scheduleTimezone: string;
@@ -46,10 +52,13 @@ export type ConsumerFinanceRegularPayment = {
 
 export type ConsumerFinanceRegularPaymentInput = {
   name: string;
+  emoji?: string | null;
   amount: string;
   accountId: string;
   categoryId?: string | null;
   recurrence: ConsumerFinanceRegularPaymentRecurrence;
+  /** Number of recurrence units between payments. Defaults to 1. */
+  intervalCount?: number;
   /** Profile-local calendar date in YYYY-MM-DD format. */
   nextPaymentDate: string;
   note?: string | null;
@@ -81,6 +90,8 @@ export type ConsumerFinanceRegularPaymentRevision = {
   categoryName?: string | null;
   categoryKey?: string | null;
   recurrence: ConsumerFinanceRegularPaymentRecurrence;
+  /** Number of recurrence units between payments. Older revisions imply 1. */
+  intervalCount?: number;
   nextOccurrenceAt: string;
   scheduleTimezone: string;
   note?: string | null;
