@@ -1808,13 +1808,13 @@ model TelegramChannelPublicationScheduleAssignment {
   selectedSlots TelegramChannelPublicationScheduleSelectedSlot[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  @@index([workspaceId, scheduleId])
+  @@index([workspaceId, scheduleId], map: "TelegramChannelPublicationScheduleAssignment_workspaceId_schedu")
 }
 
 model TelegramChannelPublicationScheduleSelectedSlot {
   assignmentId String
   slotId String
-  assignment TelegramChannelPublicationScheduleAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignment TelegramChannelPublicationScheduleAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade, map: "TelegramChannelPublicationScheduleSelectedSlot_assignmentId_fke")
   slot TelegramPublicationScheduleSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
   @@id([assignmentId, slotId])
   @@index([slotId])
@@ -1837,7 +1837,7 @@ model TelegramContentHypothesis {
   posts TelegramManagedPostContentHypothesis[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  @@index([workspaceId, telegramChannelId, status])
+  @@index([workspaceId, telegramChannelId, status], map: "TelegramContentHypothesis_workspaceId_telegramChannelId_status_")
   @@index([iconId])
 }
 
@@ -5267,7 +5267,7 @@ model TelegramManagedPost {
   @@index([workspaceId, telegramChannelId, plannerRunId], map: "TelegramManagedPost_workspaceId_telegramChannelId_plannerRunId_")
   @@index([workspaceId, telegramChannelId, plannerSlotId], map: "TelegramManagedPost_workspaceId_telegramChannelId_plannerSlotId")
   @@index([status, scheduledAt])
-  @@index([workspaceId, telegramChannelId, publicationSlotId])
+  @@index([workspaceId, telegramChannelId, publicationSlotId], map: "TelegramManagedPost_workspaceId_telegramChannelId_publicationSl")
   @@index([telegramIdVerificationStatus, status, telegramIdLastCheckedAt], map: "TelegramManagedPost_due_identity_idx")
   @@index([workspaceId, telegramChannelId, origin, status, scheduledAt], map: "TelegramManagedPost_workspaceId_telegramChannelId_origin_status")
 }
