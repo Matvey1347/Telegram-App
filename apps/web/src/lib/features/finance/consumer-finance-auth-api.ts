@@ -25,6 +25,17 @@ export type ConsumerFinanceBrowserLoginStatus =
       >["profile"];
     };
 
+export function buildConsumerFinanceBrowserTransferUrl(
+  botId: string,
+  token: string,
+  apiBase: string,
+  location?: Pick<Location, "origin">,
+) {
+  const path = `${apiBase}${consumerFinanceRoot(botId)}/auth/transfer?token=${encodeURIComponent(token)}`;
+  if (/^https?:\/\//u.test(path) || !location?.origin) return path;
+  return new URL(path, location.origin).toString();
+}
+
 export const consumerFinanceAuthApi = {
   auth: async (
     botId: string,
@@ -86,6 +97,16 @@ export const consumerFinanceAuthApi = {
         consumerRequest(),
       )
     ).data,
-  browserTransferUrl: (botId: string, token: string) =>
-    `${resolveConsumerFinanceApiBase()}${consumerFinanceRoot(botId)}/auth/transfer?token=${encodeURIComponent(token)}`,
+  browserTransferUrl: (
+    botId: string,
+    token: string,
+    location = typeof window === "undefined" ? undefined : window.location,
+  ) => {
+    return buildConsumerFinanceBrowserTransferUrl(
+      botId,
+      token,
+      resolveConsumerFinanceApiBase(location),
+      location,
+    );
+  },
 };

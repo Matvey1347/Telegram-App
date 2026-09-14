@@ -4,7 +4,7 @@
 import { CalendarDays, FileText, FolderOpen, Trash2 } from "lucide-react";
 import { useI18n } from "@/providers/i18n-provider";
 
-export type ChannelImportMode = "posts" | "groups" | "calendar" | "reimport";
+export type ChannelImportMode = "unified" | "posts" | "groups" | "calendar" | "reimport";
 
 export function ChannelImportNavigation({
   value,

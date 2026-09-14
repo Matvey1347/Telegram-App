@@ -1,5 +1,11 @@
 import { Module } from '@nestjs/common';
 import { TelegramChannelsController } from './telegram-channels.controller';
+import { TelegramPublicationSchedulesController, TelegramChannelPublicationScheduleController } from './telegram-publication-schedules.controller';
+import { TelegramPublicationSchedulesService } from './telegram-publication-schedules.service';
+import { TelegramContentHypothesesController } from './telegram-content-hypotheses.controller';
+import { TelegramContentHypothesesService } from './telegram-content-hypotheses.service';
+import { TelegramUnifiedImportController } from './telegram-unified-import.controller';
+import { TelegramUnifiedImportService } from './telegram-unified-import.service';
 import { TelegramChannelsService } from './telegram-channels.service';
 import { TelegramMtprotoClient } from '../../../telegram/shared/telegram-mtproto.client';
 import { TelegramSourceAccessService } from '../../../telegram/shared/telegram-source-access.service';
@@ -9,6 +15,7 @@ import { AdCampaignsModule } from '../../growth/ad-campaigns/ad-campaigns.module
 import { TelegramManagedPostIdentityService } from './telegram-managed-post-identity.service';
 import { TelegramBotApiClient } from '../../../telegram/shared/telegram-bot-api.client';
 import { TelegramChannelGptContextExporter } from './telegram-channel-gpt-context-exporter.service';
+import { TelegramChannelAiPlanningContextService } from './telegram-channel-ai-planning-context.service';
 import { TelegramSystemBotConfigService } from '../telegram-system-bot/telegram-system-bot-config.service';
 import { TelegramBroadcastStatsService } from './telegram-broadcast-stats.service';
 import { TelegramChannelAdmissionSyncService } from './telegram-channel-admission-sync.service';
@@ -97,6 +104,10 @@ import { TelegramPostBatchPublicationRunnerService } from './telegram-post-batch
   imports: [AdCampaignsModule],
   controllers: [
     TelegramChannelsController,
+    TelegramPublicationSchedulesController,
+    TelegramChannelPublicationScheduleController,
+    TelegramContentHypothesesController,
+    TelegramUnifiedImportController,
     TelegramManagedPostRecoveryController,
     TelegramPostCalendarPlannerController,
     TelegramChannelBoundedReadsController,
@@ -107,6 +118,9 @@ import { TelegramPostBatchPublicationRunnerService } from './telegram-post-batch
   ],
   providers: [
     TelegramChannelsService,
+    TelegramPublicationSchedulesService,
+    TelegramContentHypothesesService,
+    TelegramUnifiedImportService,
     TelegramChannelAnalyticsService,
     TelegramPostCalendarPlannerService,
     TelegramManagedPostIdentityService,
@@ -114,6 +128,7 @@ import { TelegramPostBatchPublicationRunnerService } from './telegram-post-batch
     TelegramSourceAccessService,
     TelegramBotApiClient,
     TelegramChannelGptContextExporter,
+    TelegramChannelAiPlanningContextService,
     TelegramSystemBotConfigService,
     TelegramChannelsSupportService,
     TelegramChannelAdmissionSyncService,

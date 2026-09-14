@@ -102,5 +102,18 @@ const messages = {
   "telegram.posts.import.importing": "Импортируем…",
   "telegram.posts.import.importButton": "Импортировать публикации",
   "telegram.posts.import.batchHint": "За один запрос обрабатывается до {count} публикаций. Более крупный импорт выполняется последовательными пакетами.",
+  "telegram.posts.import.unifiedTitle": "Единый импорт",
+  "telegram.posts.import.unifiedUpload": "Загрузить JSON",
+  "telegram.posts.import.unifiedCopyPrompt": "Скопировать общую инструкцию",
+  "telegram.posts.import.unifiedManifest": "JSON-манифест",
+  "telegram.posts.import.unifiedPreviewError": "Не удалось проверить импорт",
+  "telegram.posts.import.unifiedApplyError": "Не удалось применить импорт",
+  "telegram.posts.import.unifiedApplied": "Импорт применён ({hash})",
+  "telegram.posts.import.unifiedPartial": "Импорт завершён с ошибками: {count}. Проверьте детали перед повтором.",
+  "telegram.posts.import.unifiedValid": "Корректно: {valid} · Ошибок: {invalid}",
+  "telegram.posts.import.cancel": "Отмена",
+  "telegram.posts.import.previewAction": "Проверить",
+  "telegram.posts.import.applyAction": "Применить",
+  "telegram.posts.import.invalidFile": "Некорректный файл",
 } as const satisfies Record<keyof typeof en, string>;
 export default messages;

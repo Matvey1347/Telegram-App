@@ -1013,6 +1013,9 @@ model Workspace {
   telegramPosts                          TelegramPost[]
   telegramManagedPosts                   TelegramManagedPost[]
   telegramManagedPostRevisions           TelegramManagedPostRevision[]
+  telegramPublicationSchedules           TelegramPublicationSchedule[]
+  telegramPublicationScheduleAssignments TelegramChannelPublicationScheduleAssignment[]
+  telegramContentHypotheses               TelegramContentHypothesis[]
   telegramPostPlannerFormats             TelegramPostPlannerFormat[]
   telegramPostPlannerSlots               TelegramPostPlannerSlot[]
   telegramAdProducts                     TelegramAdProduct[]
@@ -1666,6 +1669,8 @@ model TelegramChannel {
   statsPoints                 TelegramChannelStatsPoint[]
   adAnalyses                  TelegramChannelAdAnalysis[]
   timePosts                   TelegramChannelTimePost[]
+  publicationScheduleAssignment TelegramChannelPublicationScheduleAssignment?
+  contentHypotheses           TelegramContentHypothesis[]
   adProducts                  TelegramAdProduct[]
   admissionBatches            AdCampaignAdmissionBatch[]
   admissionBackfillStates     AdCampaignAdmissionBackfillState[]
@@ -1734,6 +1739,116 @@ model TelegramCustomEmoji {
   @@unique([packId, documentId])
   @@index([packId, position])
   @@index([documentId])
+}
+
+enum TelegramPublicationSlotKind {
+  CONTENT
+  AD
+  MUTUAL_PROMOTION
+}
+
+enum TelegramPublicationScheduleSelectionMode {
+  FULL
+  SUBSET
+}
+
+enum TelegramContentHypothesisStatus {
+  DRAFT
+  ACTIVE
+  SUCCESSFUL
+  FAILED
+  ARCHIVED
+}
+
+model TelegramPublicationSchedule {
+  id String @id @default(cuid())
+  workspaceId String
+  name String
+  timezone String
+  isDefault Boolean @default(false)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  slots TelegramPublicationScheduleSlot[]
+  channelAssignments TelegramChannelPublicationScheduleAssignment[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, isDefault])
+}
+
+model TelegramPublicationScheduleSlot {
+  id String @id @default(cuid())
+  scheduleId String
+  title String
+  kind TelegramPublicationSlotKind
+  weekday Int
+  time String @db.VarChar(5)
+  timezone String
+  position Int @default(0)
+  isActive Boolean @default(true)
+  iconId String?
+  schedule TelegramPublicationSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  icon Icon? @relation("TelegramPublicationScheduleSlotIcon", fields: [iconId], references: [id], onDelete: SetNull)
+  selectedBy TelegramChannelPublicationScheduleSelectedSlot[]
+  managedPosts TelegramManagedPost[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([scheduleId, weekday, position])
+  @@index([iconId])
+}
+
+model TelegramChannelPublicationScheduleAssignment {
+  id String @id @default(cuid())
+  workspaceId String
+  channelId String @unique
+  scheduleId String
+  selectionMode TelegramPublicationScheduleSelectionMode @default(FULL)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  channel TelegramChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  schedule TelegramPublicationSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  selectedSlots TelegramChannelPublicationScheduleSelectedSlot[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([workspaceId, scheduleId])
+}
+
+model TelegramChannelPublicationScheduleSelectedSlot {
+  assignmentId String
+  slotId String
+  assignment TelegramChannelPublicationScheduleAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  slot TelegramPublicationScheduleSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  @@id([assignmentId, slotId])
+  @@index([slotId])
+}
+
+model TelegramContentHypothesis {
+  id String @id @default(cuid())
+  workspaceId String
+  telegramChannelId String
+  name String
+  description String?
+  status TelegramContentHypothesisStatus @default(DRAFT)
+  iconId String?
+  startedAt DateTime?
+  completedAt DateTime?
+  conclusion String?
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  telegramChannel TelegramChannel @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
+  icon Icon? @relation("TelegramContentHypothesisIcon", fields: [iconId], references: [id], onDelete: SetNull)
+  posts TelegramManagedPostContentHypothesis[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([workspaceId, telegramChannelId, status])
+  @@index([iconId])
+}
+
+model TelegramManagedPostContentHypothesis {
+  managedPostId String
+  hypothesisId String
+  managedPost TelegramManagedPost @relation(fields: [managedPostId], references: [id], onDelete: Cascade)
+  hypothesis TelegramContentHypothesis @relation(fields: [hypothesisId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@id([managedPostId, hypothesisId])
+  @@index([hypothesisId])
 }
 
 model TelegramChannelTimePost {
@@ -5122,6 +5237,7 @@ model TelegramManagedPost {
   groupPosition                Int?
   statusPosition               Int?
   sidebarPosition              Int?
+  publicationSlotId            String?
 
   workspace               Workspace                     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   telegramChannel         TelegramChannel               @relation(fields: [telegramChannelId], references: [id], onDelete: Cascade)
@@ -5133,6 +5249,8 @@ model TelegramManagedPost {
   adSalePlacements        TelegramAdSalePlacement[]     @relation("TelegramAdPlacementManagedPost")
   mutualPromotionDelivery MutualPromotionPostDelivery?
   postBatchDelivery       TelegramPostBatchDelivery?
+  publicationSlot        TelegramPublicationScheduleSlot? @relation(fields: [publicationSlotId], references: [id], onDelete: SetNull)
+  contentHypotheses      TelegramManagedPostContentHypothesis[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -5149,6 +5267,7 @@ model TelegramManagedPost {
   @@index([workspaceId, telegramChannelId, plannerRunId], map: "TelegramManagedPost_workspaceId_telegramChannelId_plannerRunId_")
   @@index([workspaceId, telegramChannelId, plannerSlotId], map: "TelegramManagedPost_workspaceId_telegramChannelId_plannerSlotId")
   @@index([status, scheduledAt])
+  @@index([workspaceId, telegramChannelId, publicationSlotId])
   @@index([telegramIdVerificationStatus, status, telegramIdLastCheckedAt], map: "TelegramManagedPost_due_identity_idx")
   @@index([workspaceId, telegramChannelId, origin, status, scheduledAt], map: "TelegramManagedPost_workspaceId_telegramChannelId_origin_status")
 }
@@ -5473,6 +5592,8 @@ model Icon {
   telegramChannelNetworks          TelegramChannelNetwork[]
   telegramChannelPresentationIcons TelegramChannel[]                @relation("TelegramChannelPresentationIcon")
   telegramChannelMessageTemplates  TelegramChannelMessageTemplate[]
+  telegramPublicationScheduleSlots TelegramPublicationScheduleSlot[] @relation("TelegramPublicationScheduleSlotIcon")
+  telegramContentHypotheses         TelegramContentHypothesis[] @relation("TelegramContentHypothesisIcon")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

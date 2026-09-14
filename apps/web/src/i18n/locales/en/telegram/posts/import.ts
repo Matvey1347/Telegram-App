@@ -102,5 +102,18 @@ const messages = {
   "telegram.posts.import.importing": "Importing…",
   "telegram.posts.import.importButton": "Import posts",
   "telegram.posts.import.batchHint": "Up to {count} posts are processed per request. Larger imports are processed sequentially in batches.",
+  "telegram.posts.import.unifiedTitle": "Unified import",
+  "telegram.posts.import.unifiedUpload": "Upload JSON",
+  "telegram.posts.import.unifiedCopyPrompt": "Copy unified instructions",
+  "telegram.posts.import.unifiedManifest": "JSON manifest",
+  "telegram.posts.import.unifiedPreviewError": "Could not preview the import",
+  "telegram.posts.import.unifiedApplyError": "Could not apply the import",
+  "telegram.posts.import.unifiedApplied": "Import applied ({hash})",
+  "telegram.posts.import.unifiedPartial": "Import completed with {count} failed operations. Review the details before retrying.",
+  "telegram.posts.import.unifiedValid": "Valid: {valid} · Errors: {invalid}",
+  "telegram.posts.import.cancel": "Cancel",
+  "telegram.posts.import.previewAction": "Preview",
+  "telegram.posts.import.applyAction": "Apply",
+  "telegram.posts.import.invalidFile": "Invalid file",
 } as const satisfies TranslationCatalog;
 export default messages;

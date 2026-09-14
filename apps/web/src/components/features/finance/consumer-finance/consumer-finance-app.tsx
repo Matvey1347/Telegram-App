@@ -64,8 +64,11 @@ export function ConsumerFinanceApp({ botId }: { botId: string }) {
     onSuccess: ({ token }) => {
       const url = consumerFinanceAuthApi.browserTransferUrl(botId, token);
       const webApp = window.Telegram?.WebApp;
-      if (webApp?.openLink) webApp.openLink(url);
-      else window.open(url, "_blank", "noopener,noreferrer");
+      if (webApp?.openLink) {
+        webApp.openLink(url);
+        return;
+      }
+      window.open(url, "_blank", "noopener,noreferrer");
     },
   });
   const logout = useMutation({

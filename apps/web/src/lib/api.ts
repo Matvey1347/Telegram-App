@@ -27,6 +27,7 @@ import { createTrashApi } from "./features/operations/trash-api";
 import { createFinanceApi } from "./features/finance/finance-api";
 import { createTelegramChannelHelpers } from "./features/telegram/telegram-channel-helpers-api";
 import { createTelegramChannelsApi } from "./features/telegram/telegram-channels-api";
+import { createTelegramPublicationSchedulesApi } from "./features/telegram/telegram-publication-schedules-api"; import { createTelegramContentHypothesesApi } from "./features/telegram/telegram-content-hypotheses-api";
 import { createMarketingApi } from "./features/growth/marketing-api";
 import { createTelegramSourcesApi } from "./features/telegram/telegram-sources-api";
 import { createTelegramAdSalesApi } from "./features/growth/telegram-ad-sales-api";
@@ -52,7 +53,6 @@ export type {
 
 const apiBaseUrl = resolveBrowserApiBase(publicWebEnvironment.apiUrl);
 export const api = createHttpTransport({ baseURL: apiBaseUrl });
-
 let lastCorrelationId: string | null = null;
 let freshReadRequestsInFlight = 0;
 
@@ -70,7 +70,6 @@ export async function withFreshApiReads<T>(run: () => Promise<T>): Promise<T> {
 }
 
 export const API_MUTATION_EVENT = "telegram-system:api-mutation";
-
 export type ApiFeedbackMode = "automatic" | "managed" | "silent";
 
 export type ApiFeedbackConfig = {
@@ -679,7 +678,8 @@ export const telegramChannelsApi = createTelegramChannelsApi({
   silentFeedbackConfig,
   quietMutationConfig,
 });
-
+export const telegramPublicationSchedulesApi = createTelegramPublicationSchedulesApi(api);
+export const telegramContentHypothesesApi = createTelegramContentHypothesesApi(api);
 const telegramSourcesApi = createTelegramSourcesApi({
   api,
   crud,

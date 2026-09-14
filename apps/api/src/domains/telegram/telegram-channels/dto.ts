@@ -429,6 +429,7 @@ export class SchedulePostGroupSequenceDto {
 
 export class ScheduleTelegramManagedPostDto {
   @IsDateString() scheduledAt!: string;
+  @IsOptional() @IsString() publicationSlotId?: string;
   @IsOptional()
   @IsIn(['IMAGES_THEN_TEXT', 'CAPTION_THEN_TEXT'])
   longTextMode?: string;

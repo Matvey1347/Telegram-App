@@ -11,6 +11,7 @@ import {
   CircleDotDashed,
   Palette,
   Sprout,
+  CalendarClock,
 } from "lucide-react";
 import type { CurrencySettings, TelegramChannel } from "@/lib/api";
 import { telegramChannelsApi } from "@/lib/api";
@@ -38,8 +39,9 @@ import {
 import { ChannelSystemBotAccessModal } from "./channel-system-bot-access-modal";
 import { useAppToast } from "@/providers/toast-provider";
 import { ChannelSourcesSettings } from "./channel-sources-settings";
+import { ChannelPublicationScheduleSettings } from "./channel-publication-schedule-settings";
 
-type SettingsTab = "appearance" | "economics" | "seed" | "bot" | "sources";
+type SettingsTab = "appearance" | "economics" | "seed" | "bot" | "sources" | "schedule";
 
 const tabs = [
   { id: "appearance", label: "Appearance", icon: Palette },
@@ -47,6 +49,7 @@ const tabs = [
   { id: "seed", label: "Seed", icon: Sprout },
   { id: "bot", label: "Bot", icon: Bot },
   { id: "sources", label: "Sources", icon: Cable },
+  { id: "schedule", label: "Schedule", icon: CalendarClock },
 ] as const;
 
 function CompletionIcon({
@@ -89,18 +92,21 @@ export function ChannelSettingsModal({
   const { pushToast } = useAppToast();
   const visibleTabs = tabs.filter((tab) => tab.id !== "bot" || canManageBot);
   const completion = getChannelSettingsCompletion(channel, draft);
-  const completionScore = visibleTabs.reduce(
+  const completionFor = (tab: (typeof tabs)[number]) =>
+    tab.id === "schedule" ? "empty" : completion[tab.id];
+  const setupTabs = visibleTabs.filter((tab) => tab.id !== "schedule");
+  const completionScore = setupTabs.reduce(
     (total, tab) =>
       total +
-      (completion[tab.id] === "complete"
+      (completionFor(tab) === "complete"
         ? 1
-        : completion[tab.id] === "partial"
+        : completionFor(tab) === "partial"
           ? 0.5
           : 0),
     0,
   );
   const completionPercent = Math.round(
-    (completionScore / visibleTabs.length) * 100,
+    (completionScore / setupTabs.length) * 100,
   );
   const updateDraft = (patch: Partial<ChannelSettingsDraft>) =>
     setDraft((current) => ({ ...current, ...patch }));
@@ -164,7 +170,7 @@ export function ChannelSettingsModal({
       >
         {visibleTabs.map((tab) => {
           const Icon = tab.icon;
-          const status = completion[tab.id];
+          const status = completionFor(tab);
           return (
             <button
               key={tab.id}
@@ -181,7 +187,7 @@ export function ChannelSettingsModal({
             >
               <Icon size={16} aria-hidden="true" />
               {tab.label}
-              <span
+              {tab.id !== "schedule" ? <span
                 className="ml-0.5"
                 title={
                   status === "complete"
@@ -192,7 +198,7 @@ export function ChannelSettingsModal({
                 }
               >
                 <CompletionIcon status={status} />
-              </span>
+              </span> : null}
             </button>
           );
         })}
@@ -239,6 +245,9 @@ export function ChannelSettingsModal({
             updateDraft({ postSyncLimit })
           }
         />
+      ) : null}
+      {activeTab === "schedule" ? (
+        <ChannelPublicationScheduleSettings channelId={channel.id} />
       ) : null}
       <div className="mt-5 flex justify-end gap-2 border-t border-neutral-800 pt-4">
         <Button type="button" variant="secondary" onClick={onClose}>

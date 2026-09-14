@@ -25,6 +25,9 @@ import type {
   TelegramWorkspaceSyncProgressItem,
   ImportTelegramCustomEmojiPackInput,
   SyncOperationResult,
+  TelegramUnifiedImportManifest,
+  TelegramUnifiedImportPreview,
+  TelegramUnifiedImportResult,
 } from "@telegram-system/shared";
 import type {
   ImportedTelegramSource,
@@ -116,6 +119,29 @@ export function createTelegramChannelsApi({
   quietMutationConfig: AxiosRequestConfig;
 }) {
   const telegramChannelsApi = {
+    previewUnifiedImport: async (
+      channelId: string,
+      manifest: TelegramUnifiedImportManifest,
+    ) =>
+      (
+        await api.post<TelegramUnifiedImportPreview>(
+          `/telegram-channels/${channelId}/unified-import/preview`,
+          manifest,
+          silentFeedbackConfig,
+        )
+      ).data,
+    applyUnifiedImport: async (
+      channelId: string,
+      manifest: TelegramUnifiedImportManifest,
+      manifestHash: string,
+    ) =>
+      (
+        await api.post<TelegramUnifiedImportResult>(
+          `/telegram-channels/${channelId}/unified-import/apply`,
+          manifest,
+          { ...silentFeedbackConfig, headers: { "X-Manifest-Hash": manifestHash } },
+        )
+      ).data,
     ...crud<TelegramChannel>("/telegram-channels"),
     select: async (params?: {
       canPostMessagesOnly?: boolean;
@@ -526,11 +552,12 @@ export function createTelegramChannelsApi({
       scheduledAt: string,
       longTextMode?: "IMAGES_THEN_TEXT" | "CAPTION_THEN_TEXT",
       background = false,
+      publicationSlotId?: string,
     ) =>
       (
         await api.post<TelegramManagedPost>(
           `/telegram-channels/${channelId}/managed-posts/${postId}/schedule`,
-          { scheduledAt, longTextMode },
+          { scheduledAt, longTextMode, publicationSlotId },
           background ? silentFeedbackConfig : undefined,
         )
       ).data,

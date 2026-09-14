@@ -80,6 +80,7 @@ export type TelegramManagedPost = {
   buttonRows?: TelegramPostButtonRows;
   status: TelegramManagedPostStatus;
   scheduledAt?: string | null;
+  publicationSlotId?: string | null;
   scheduleMode?: TelegramManagedPostScheduleMode | null;
   publishedAt?: string | null;
   telegramScheduledMessageIds: string[];

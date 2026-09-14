@@ -6,6 +6,7 @@ import type {
   TelegramAccountFilter,
   TelegramChannelsTab,
 } from "./telegram-channels-route-state";
+import { PublicationSchedulesAction } from "./publication-schedules-action";
 
 export function TelegramChannelsHeaderActions({
   tab,
@@ -37,6 +38,7 @@ export function TelegramChannelsHeaderActions({
   if (tab !== "channels") return <Button onClick={onImport}>Import</Button>;
   return (
     <div className="flex flex-wrap justify-end gap-2">
+      <PublicationSchedulesAction />
       <Button
         type="button"
         variant="secondary"

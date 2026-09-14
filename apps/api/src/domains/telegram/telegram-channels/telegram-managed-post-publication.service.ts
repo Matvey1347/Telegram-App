@@ -221,7 +221,35 @@ export class TelegramManagedPostPublicationService {
       );
     const workspaceId =
       await this.telegramChannelsSupportService.workspace(userId);
-    return this.publishManagedPost(
+    if (dto.publicationSlotId) {
+      const assignedSlot = await this.prisma.telegramPublicationScheduleSlot.findFirst({
+        where: {
+          id: dto.publicationSlotId,
+          isActive: true,
+          schedule: {
+            workspaceId,
+            channelAssignments: {
+              some: {
+                channelId,
+                OR: [
+                  { selectionMode: 'FULL' },
+                  { selectionMode: 'SUBSET', selectedSlots: { some: { slotId: dto.publicationSlotId } } },
+                ],
+              },
+            },
+          },
+        },
+        select: { id: true, weekday: true, time: true, timezone: true },
+      });
+      if (!assignedSlot || !this.matchesPublicationSlot(scheduledAt, assignedSlot)) {
+        throw telegramPostsBadRequest('TELEGRAM_PUBLICATION_SLOT_INVALID', 'Publication slot is not assigned to this channel or does not match the scheduled time');
+      }
+      await this.prisma.telegramManagedPost.updateMany({
+        where: { id: postId, workspaceId, telegramChannelId: channelId },
+        data: { publicationSlotId: dto.publicationSlotId },
+      });
+    }
+    const result = await this.publishManagedPost(
       workspaceId,
       channelId,
       postId,
@@ -230,6 +258,14 @@ export class TelegramManagedPostPublicationService {
         'IMAGES_THEN_TEXT',
       userId,
     );
+    return result;
+  }
+
+  private matchesPublicationSlot(scheduledAt: Date, slot: { weekday: number; time: string; timezone: string }) {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: slot.timezone, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(scheduledAt);
+    const weekdays: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
+    const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+    return weekdays[value('weekday')] === slot.weekday && `${value('hour')}:${value('minute')}` === slot.time;
   }
 
   public async cancelScheduledManagedPost(
@@ -316,6 +352,7 @@ export class TelegramManagedPostPublicationService {
           status: TelegramManagedPostStatus.DRAFT,
           telegramRemoteStatus: TelegramManagedPostRemoteStatus.NONE,
           scheduledAt: null,
+          publicationSlotId: null,
           publishedAt: null,
           telegramScheduledMessageIds: [],
           telegramMessageIds: [],

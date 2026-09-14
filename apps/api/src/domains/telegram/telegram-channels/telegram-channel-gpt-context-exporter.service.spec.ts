@@ -58,6 +58,11 @@ function setup(
     {
       resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
     } as never,
+    {
+      read: jest.fn().mockResolvedValue({ schedule: null, hypotheses: [] }),
+      formatSlots: jest.fn().mockReturnValue(['[]']),
+      formatHypotheses: jest.fn().mockReturnValue(['[]']),
+    } as never,
   );
   return { exporter, prisma };
 }
@@ -167,9 +172,11 @@ describe('TelegramChannelGptContextExporter', () => {
     expect(result.filename).toMatch(
       /^CH_\d{2}-\d{2}_calendar-plan-instruction\.txt$/,
     );
-    expect(text).toContain('FORMAT VERSION: 3');
+    expect(text).toContain('FORMAT VERSION: 4');
     expect(text).toContain('TIMEZONE: Europe/Warsaw');
-    expect(text).toContain('- 09:00 — Morning — slot_id: morning');
+    expect(text).toContain('PUBLICATION SLOTS');
+    expect(text).toContain('CONTENT HYPOTHESES');
+    expect(text).toContain('"slotId":"exact slot ID"');
     expect(text).toContain('postId: available\navailability: AVAILABLE');
     expect(text).toContain(
       'postId: reserved\navailability: AVAILABLE\nreasons: none\nstatus: SCHEDULED\ntitle: Reserved post\ncurrent_scheduled_at: 2026-08-25T07:00:00.000Z',
@@ -196,7 +203,7 @@ describe('TelegramChannelGptContextExporter', () => {
     expect(text).toContain('local_time: 2026-08-20 09:00');
     expect(text).toContain('text:\nA successful morning topic');
     expect(text).toContain(
-      'Schema: {"items":[{"postId":"exact available post ID","scheduledAt":"ISO 8601 timestamp with the correct explicit UTC offset"}]}',
+      'Schema: {"version":1,"groups":[],"hypotheses":[],"posts":[],"schedule":[{"postRef":"exact post ref","slotId":"exact slot ID","scheduledAt":"ISO 8601 timestamp with the correct explicit UTC offset"}]}',
     );
     const historyCalls = prisma.telegramPost.findMany.mock.calls as unknown as
       | Array<
@@ -238,7 +245,8 @@ describe('TelegramChannelGptContextExporter', () => {
     const text = result.buffer.toString('utf8');
 
     expect(result.filename).toMatch(/^CH_\d{2}-\d{2}\.txt$/);
-    expect(text).toContain('FORMAT VERSION: 5');
+    expect(text).toContain('FORMAT VERSION: 6');
+    expect(text).toContain('UNIFIED IMPORT JSON');
     expect(text).toContain('id: telegram-post:telegram-post-1');
     expect(text).toContain('reference: telegram-source-post:telegram-post-1');
     expect(text).not.toContain(

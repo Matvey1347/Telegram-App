@@ -170,6 +170,18 @@ export const telegramPostKeys = {
   postGroups: (channelId: string) => ["post-groups", channelId] as const,
 };
 
+export const telegramPublicationScheduleKeys = {
+  lists: () => ["telegram-publication-schedules", "list"] as const,
+  assignment: (channelId: string) =>
+    ["telegram-publication-schedules", "assignment", channelId] as const,
+  occurrences: (channelId: string, range: { from: string; to: string }) =>
+    ["telegram-publication-schedules", "occurrences", channelId, range] as const,
+};
+
+export const telegramContentHypothesisKeys = {
+  list: (channelId: string) => ["telegram-content-hypotheses", channelId, "list"] as const,
+};
+
 export const telegramAccountKeys = {
   accounts: () => ["telegram-user-accounts"] as const,
   bots: () => ["telegram-bots"] as const,

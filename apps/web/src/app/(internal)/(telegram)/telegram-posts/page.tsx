@@ -49,7 +49,6 @@ import {
   managedPostScheduleUnchanged,
   type LongTextMode,
 } from "@/components/features/telegram/telegram/managed-post-presentation";
-import { AddTimePostButton } from "@/components/features/telegram/telegram/telegram-time-posts-control";
 import {
   ManagedPostTelegramIdentityIndicator,
   ManagedPostTelegramLink,
@@ -83,6 +82,8 @@ import {
   type ManagedPostStatusTab,
 } from "@/components/features/telegram/telegram/managed-post-deep-link";
 import { TelegramPostsHeaderWorkflows } from "@/components/features/telegram/telegram/telegram-posts-header-workflows";
+import { PublicationSlotOccurrenceSelect } from "@/components/features/telegram/telegram/publication-slot-occurrence-select";
+import { ManagedPostHypothesisSelector } from "@/components/features/telegram/telegram/managed-post-hypothesis-selector";
 import { MemberBadge } from "@/components/features/workspace/member-badge";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 import {
@@ -309,6 +310,7 @@ type PostSidebarSection = {
 type EffectivePostGroup = PostGroup | NonNullable<TelegramManagedPost["group"]>;
 const TELEGRAM_TEXT_MESSAGE_LIMIT = 4096;
 const POST_OPEN_CLICK_DELAY_MS = 180;
+const EMPTY_HYPOTHESIS_IDS: string[] = [];
 const lastSelectedTelegramPostsChannelKey = "telegram-posts:last-selected-channel";
 const postGroupPreferenceKey = (channelId: string) => `telegram-posts-new-post-group:${channelId}`;
 const workspaceViewPreferenceKey = (channelId: string) => `telegram-posts-workspace-view:${channelId}`;
@@ -739,6 +741,7 @@ function TelegramPostWorkspace({
   const [mode, setMode] = useState<PublishingMode>("draft");
   const [scheduleDate, setScheduleDate] = useState(() => localNowParts().date);
   const [scheduleTime, setScheduleTime] = useState(() => localNowParts().time);
+  const [publicationSlotId, setPublicationSlotId] = useState<string | null>(null);
   const [longTextMode, setLongTextMode] = useState<LongTextMode>("IMAGES_THEN_TEXT");
   const [statusTab, setStatusTab] = useState<PostStatusTab>("DRAFT");
   const [busy, setBusy] = useState(false);
@@ -2177,6 +2180,7 @@ function TelegramPostWorkspace({
     setMode("draft");
     setScheduleDate(now.date);
     setScheduleTime(now.time);
+    setPublicationSlotId(null);
     setLongTextMode("IMAGES_THEN_TEXT");
     setUploadingImages(false);
     setSelectedPostIds([]);
@@ -2229,6 +2233,7 @@ function TelegramPostWorkspace({
     setScheduleDate(scheduledLocalParts?.date || localNowParts().date);
     const postScheduleTime = scheduledLocalParts?.time || localNowParts().time;
     setScheduleTime(postScheduleTime);
+    setPublicationSlotId(post.publicationSlotId ?? null);
     setUploadingImages(false);
     if (post.publishMode === "IMAGES_THEN_TEXT" || post.publishMode === "CAPTION_THEN_TEXT") {
       setLongTextMode(post.publishMode);
@@ -2503,6 +2508,10 @@ function TelegramPostWorkspace({
       setError(t("telegram.posts.editor.invalidPublishTime"));
       return;
     }
+    if (saveMode === "schedule" && !publicationSlotId) {
+      setError(t("telegram.posts.schedules.slotRequired"));
+      return;
+    }
     const saveScheduledAt = saveMode === "schedule" ? localDateTimeInputToIso(scheduleDate, scheduleTime) : null;
     const payload: {
       title: string;
@@ -2595,7 +2604,7 @@ function TelegramPostWorkspace({
         } else if (saveMode === "publish") {
           post = await telegramChannelsApi.publishManagedPost(channelId, post.id, saveLongTextMode, true);
         } else if (saveMode === "schedule" && saveScheduledAt && !managedPostScheduleUnchanged(editingPost, saveScheduledAt)) {
-          post = await telegramChannelsApi.scheduleManagedPost(channelId, post.id, saveScheduledAt, saveLongTextMode, true);
+          post = await telegramChannelsApi.scheduleManagedPost(channelId, post.id, saveScheduledAt, saveLongTextMode, true, publicationSlotId ?? undefined);
         }
         reconcileManagedPost(queryClient, channelId, post);
         if (!editingPost) {
@@ -4141,6 +4150,9 @@ function TelegramPostWorkspace({
               onHighlightTarget={highlightInternalLinkTarget}
               onOpenPostInNewTab={openPostInNewTab}
             />
+            {editing ? (
+              <ManagedPostHypothesisSelector channelId={channelId} postId={editing.id} value={EMPTY_HYPOTHESIS_IDS} />
+            ) : null}
             {!isPublished || mediaItems.length ? (
               <div className="space-y-2">
                 <TelegramPostMediaUpload
@@ -4201,46 +4213,16 @@ function TelegramPostWorkspace({
             ) : null}
             {!isPublished && mode === "schedule" ? (
               <div className="space-y-3">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <FormField label={t("telegram.posts.editor.publishDate")} required>
-                    <DateInput
-                      value={scheduleDate}
-                      onChange={(event) => setScheduleDate(event.target.value)}
-                      placeholder={t("telegram.posts.editor.selectDate")}
-                    />
-                  </FormField>
-                  <FormField label={t("telegram.posts.editor.publishTime")} required>
-                    <TimeInput value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} />
-                  </FormField>
-                </div>
-                {channelTimePosts.length ? (
-                  <div>
-                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">{t("telegram.posts.time.menu")}</p>
-                    <div className="flex flex-wrap gap-2">
-                      {channelTimePosts.map((timePost) => (
-                        <button
-                          key={timePost.id}
-                          type="button"
-                          onClick={() => applyChannelTimePost(timePost)}
-                          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm text-white transition ${
-                            selectedTimePostId === timePost.id
-                              ? "border-blue-500 bg-blue-950/25 ring-1 ring-blue-400"
-                              : "border-neutral-700 bg-neutral-950 hover:border-blue-600 hover:bg-blue-950/20"
-                          }`}
-                        >
-                          <IconAvatar icon={timePost.iconPresentation} label={timePost.title} size="xs" bordered />
-                          <span className="min-w-0">
-                            {timePost.title ? <span className="block truncate text-xs text-neutral-300">{timePost.title}</span> : null}
-                            <span className="block text-sm font-medium text-white">{timePost.time}</span>
-                          </span>
-                        </button>
-                      ))}
-                      <AddTimePostButton channelId={channelId} timePosts={channelTimePosts} presentation="editor" />
-                    </div>
-                  </div>
-                ) : (
-                  <AddTimePostButton channelId={channelId} timePosts={channelTimePosts} presentation="editor" />
-                )}
+                <PublicationSlotOccurrenceSelect
+                  channelId={channelId}
+                  value={publicationSlotId && internalLinkScheduledAt ? `${publicationSlotId}:${internalLinkScheduledAt}` : null}
+                  onChange={({ slotId, scheduledAt }) => {
+                    const local = localDateTimeParts(scheduledAt);
+                    setPublicationSlotId(slotId);
+                    setScheduleDate(local.date);
+                    setScheduleTime(local.time);
+                  }}
+                />
               </div>
             ) : null}
             {pendingPostSaves.length + savingPostIds.length > 0 ? (
@@ -5810,7 +5792,6 @@ function CalendarPostTimePicker({
             },
           ]}
         />
-        <AddTimePostButton channelId={channelId} timePosts={channelTimePosts} presentation="calendar" />
         {selectedChoice === "custom" ? (
           <TimeInput
             className="col-span-2"

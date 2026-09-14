@@ -23,12 +23,14 @@ import {
   telegramPostUrl,
   type TelegramPostEngagementRow,
 } from './telegram-post-engagement';
+import { TelegramChannelAiPlanningContextService } from './telegram-channel-ai-planning-context.service';
 
 @Injectable()
 export class TelegramChannelGptContextExporter {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspaceService,
+    private readonly planningContext: TelegramChannelAiPlanningContextService,
   ) {}
 
   private linkedTelegramMessageIds(post: {
@@ -147,7 +149,7 @@ export class TelegramChannelGptContextExporter {
     const workspaceId = await this.workspaces.resolveWorkspaceIdForUser(userId);
     const historyFrom = new Date(exportedAt.getTime() - 30 * 24 * 60 * 60_000);
     const horizonEnd = new Date(exportedAt.getTime() + 30 * 24 * 60 * 60_000);
-    const [channel, workspace, managedPosts, publishedHistory] =
+    const [channel, workspace, managedPosts, publishedHistory, planningContext] =
       await Promise.all([
         this.prisma.telegramChannel.findFirst({
           where: { id: channelId, workspaceId },
@@ -155,10 +157,6 @@ export class TelegramChannelGptContextExporter {
             id: true,
             title: true,
             telegramChatId: true,
-            timePosts: {
-              select: { id: true, title: true, time: true, position: true },
-              orderBy: [{ position: 'asc' }, { time: 'asc' }],
-            },
           },
         }),
         this.prisma.workspace.findUnique({
@@ -200,6 +198,7 @@ export class TelegramChannelGptContextExporter {
           orderBy: [{ postDate: 'desc' }, { id: 'desc' }],
           take: 60,
         }),
+        this.planningContext.read(userId, workspaceId, channelId),
       ]);
     if (!channel) throw new NotFoundException('Telegram channel not found.');
     const timezone = workspace?.timezone || 'Europe/Warsaw';
@@ -285,7 +284,7 @@ export class TelegramChannelGptContextExporter {
     const planningTo = this.localDateTime(horizonEnd, timezone).slice(0, 10);
     const content = [
       'TELEGRAM CALENDAR PLAN — GPT INSTRUCTION',
-      'FORMAT VERSION: 3',
+      'FORMAT VERSION: 4',
       `CHANNEL: ${channel.title}`,
       `CHANNEL_ID: ${channel.id}`,
       `TIMEZONE: ${timezone}`,
@@ -293,19 +292,18 @@ export class TelegramChannelGptContextExporter {
       `PLANNING_WINDOW: ${planningFrom} through ${planningTo}`,
       '',
       'TASK',
-      'Build a Telegram publication plan using only AVAILABLE POSTS and only the stable publication times listed below. AVAILABLE POSTS include both drafts and posts that are already scheduled. A scheduled post may be returned with another scheduledAt to reschedule it; if it is omitted, its current booking stays unchanged. Choose post order and time by learning from RECENT PUBLISHED HISTORY. Avoid repeating similar topics consecutively. Never invent a post ID or publication time.',
+      'Build a Telegram publication plan using only AVAILABLE POSTS and the assigned typed PUBLICATION SLOTS below. AVAILABLE POSTS include both drafts and posts that are already scheduled. A scheduled post may be returned with another scheduledAt to reschedule it; if it is omitted, its current booking stays unchanged. Choose post order and slot by learning from RECENT PUBLISHED HISTORY and the active CONTENT HYPOTHESES. Avoid repeating similar topics consecutively. Never invent a post, slot, group, or hypothesis ID.',
       '',
       'MANDATORY OUTPUT',
       'Return only valid JSON without markdown fences or commentary.',
-      'Schema: {"items":[{"postId":"exact available post ID","scheduledAt":"ISO 8601 timestamp with the correct explicit UTC offset"}]}',
-      'Use every post at most once. Use every timestamp at most once. Keep every timestamp inside PLANNING_WINDOW, in TIMEZONE, and at an exact STABLE PUBLICATION TIME. CURRENT SCHEDULED RESERVATIONS describe the existing calendar, not immutable slots: you may keep a scheduled post at its current time or move it. A timestamp occupied by another post may be used only when that owning post is also included in the same output and moved to a different timestamp. Never create a collision. If no valid assignment exists, return {"items":[]}.',
+      'Schema: {"version":1,"groups":[],"hypotheses":[],"posts":[],"schedule":[{"postRef":"exact post ref","slotId":"exact slot ID","scheduledAt":"ISO 8601 timestamp with the correct explicit UTC offset"}]}',
+      'Use every post at most once. Use every timestamp at most once. Keep every timestamp inside PLANNING_WINDOW and make it match the selected slot weekday, time, and timezone exactly. CURRENT SCHEDULED RESERVATIONS describe the existing calendar, not immutable slots: you may keep a scheduled post at its current time or move it. A timestamp occupied by another post may be used only when that owning post is also included in the same output and moved to a different timestamp. Never create a collision. If no valid assignment exists, return a version 1 manifest with empty sections.',
       '',
-      'STABLE PUBLICATION TIMES',
-      ...(channel.timePosts.length
-        ? channel.timePosts.map(
-            (slot) => `- ${slot.time} — ${slot.title} — slot_id: ${slot.id}`,
-          )
-        : ['[] — no publication times are configured; return {"items":[]}']),
+      'PUBLICATION SLOTS',
+      ...this.planningContext.formatSlots(planningContext),
+      '',
+      'CONTENT HYPOTHESES',
+      ...this.planningContext.formatHypotheses(planningContext),
       '',
       'CURRENT SCHEDULED RESERVATIONS',
       ...(occupied.length ? occupied : ['[]']),
@@ -371,6 +369,7 @@ export class TelegramChannelGptContextExporter {
       links,
       groups,
       subscriberCountByTelegramPostId,
+      planningContext,
     ] = await Promise.all([
       this.prisma.telegramChannel.findFirst({
         where: { id: channelId, workspaceId },
@@ -425,6 +424,7 @@ export class TelegramChannelGptContextExporter {
         orderBy: { title: 'asc' },
       }),
       this.subscriberCountsAtPublication(workspaceId, channelId),
+      this.planningContext.read(userId, workspaceId, channelId),
     ]);
     if (!channel) throw new NotFoundException('Telegram channel not found.');
 
@@ -519,7 +519,7 @@ export class TelegramChannelGptContextExporter {
     const exportedAt = new Date();
     const content = [
       'TELEGRAM GPT CONTEXT',
-      'FORMAT VERSION: 5',
+      'FORMAT VERSION: 6',
       `CHANNEL: ${channel.title}`,
       `CHANNEL_ID: ${channel.id}`,
       `EXPORTED_AT: ${exportedAt.toISOString()}`,
@@ -542,9 +542,15 @@ export class TelegramChannelGptContextExporter {
       'POST GROUPS',
       ...(groupSummaryLines.length ? groupSummaryLines : ['[]']),
       '',
-      'MANAGED POST IMPORT JSON',
-      'Return a JSON array with title, text, icon, urls, groupId, scheduledAt, imported, approved, imageSearch. For new generated posts use imported: false and approved: false. Use an exact groupId from POST GROUPS; use groupId: null when no group is needed. Never invent an ID.',
-      '[{"title":"Post title","text":"Telegram-ready post text","icon":"🔥","urls":[],"groupId":null,"scheduledAt":null,"imported":false,"approved":false,"imageSearch":[]}]',
+      'PUBLICATION SLOTS',
+      ...this.planningContext.formatSlots(planningContext),
+      '',
+      'CONTENT HYPOTHESES',
+      ...this.planningContext.formatHypotheses(planningContext),
+      '',
+      'UNIFIED IMPORT JSON',
+      'Return one version 1 JSON manifest with separate groups, hypotheses, posts, and schedule sections. CREATE rows use stable refs so posts can reference groups/hypotheses created in the same manifest. Scheduling must use an exact assigned slotId and ISO scheduledAt matching that slot. Never invent an existing database ID.',
+      '{"version":1,"groups":[],"hypotheses":[],"posts":[],"schedule":[]}',
       '',
       'ALL POSTS',
       ...managedPostBlocks,

@@ -1,6 +1,47 @@
 # Project Refactor ExecPlan
 
-Updated: 2026-09-08
+Updated: 2026-09-14
+
+## 2026-09-14 Telegram publication schedules, unified import, and content hypotheses
+
+Telegram Channels now owns reusable workspace publication schedules with typed
+CONTENT, AD, and MUTUAL_PROMOTION weekly slots. Channels adopt the complete
+schedule or an explicit subset. A scheduled managed post persists both the
+chosen slot and the concrete UTC occurrence; the API validates the channel
+assignment and the slot's weekday/time/timezone before using the existing
+publication path. Legacy daily time posts are migrated into seven explicit
+weekly content slots per configured time and retained only for rollback during
+the compatibility window.
+
+Content hypotheses are a Telegram-owned aggregate, deliberately separate from
+Growth advertising hypotheses. A hypothesis has lifecycle state, optional icon,
+theory/conclusion, many-to-many managed-post links, and bounded aggregates over
+current Telegram post counters. Subscriber change is labelled as the observed
+channel delta during the hypothesis window rather than causal per-post churn.
+The feature reuses existing audience/post snapshots and adds no metric collector.
+
+The former posts/groups/calendar/delete entry points now lead through one
+versioned import manifest. Preview returns separate group, hypothesis, post, and
+schedule sections after one workspace-scoped preflight. Apply requires the exact
+preview hash, executes dependency order, returns per-section outcomes, and
+passes typed slot identity through the existing publication service. Database
+commands remain bounded and Telegram side effects are never held inside a
+database transaction.
+
+Unified apply intentionally has explicit partial-result semantics because
+native Telegram scheduling cannot participate in the same database transaction
+as group/post mutations. Every section returns its failures, the UI stays open
+when any operation fails, and a retry uses a newly generated preview/hash.
+Destructive automation must name exact IDs; omission never means delete. This
+favors observable recovery over claiming false cross-system atomicity.
+
+GPT context format 6 and calendar instruction format 4 expose assigned typed
+slots, content hypotheses, and the unified version-1 manifest. All new runtime
+behavior is request/event-driven: no cron, polling, timer, heartbeat, worker, or
+unchanged-state write was added. At 100 channels, stored assignments add rows
+but no idle work; reads are scoped to the opened channel/workspace, occurrence
+generation is bounded to 62 days, and hypothesis metrics are fetched in batched
+channel reads rather than per-card requests.
 
 ## 2026-09-08 Consumer Finance debts and regular payments
 
