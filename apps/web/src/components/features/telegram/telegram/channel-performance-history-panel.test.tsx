@@ -172,6 +172,18 @@ describe("ChannelPerformanceHistoryPanel", () => {
     expect(screen.getByText("-100 · -10.0%")).toBeInTheDocument();
   });
 
+  it("keeps ads left on the current 1/24 estimate instead of the range point", () => {
+    render(
+      <ChannelPerformanceHistoryPanel
+        channelId="channel-1"
+        fallbackAdsLeft={120}
+      />,
+    );
+
+    expect(screen.getByText("120")).toBeInTheDocument();
+    expect(screen.queryByText("5")).not.toBeInTheDocument();
+  });
+
   it("offers today and week periods for the entire dynamics view", async () => {
     render(<ChannelPerformanceHistoryPanel channelId="channel-1" />);
 

@@ -23,6 +23,19 @@ const uniqueIds = (values: string[]) => [
   ...new Set(values.map((value) => value.trim()).filter(Boolean)),
 ];
 
+const stringRecord = (value: unknown) =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.fromEntries(
+        Object.entries(value)
+          .filter(
+            (entry): entry is [string, string] =>
+              typeof entry[1] === 'string' && Boolean(entry[1].trim()),
+          )
+          .slice(0, 30)
+          .map(([key, item]) => [key.trim(), item.trim()]),
+      )
+    : {};
+
 const templateInclude = {
   icon: true,
 } satisfies Prisma.TelegramChannelMessageTemplateInclude;
@@ -64,6 +77,12 @@ export class TelegramChannelMessageTemplatesService {
       bodyTemplate: row.bodyTemplate,
       overrideInviteLinks: row.overrideInviteLinks,
       inviteLinkOverrides: overrides,
+      excludedProductNames: row.excludedProductNames,
+      priceRounding: row.priceRounding,
+      productNameOverrides: stringRecord(row.productNameOverrides),
+      bundleOfferEnabled: row.bundleOfferEnabled,
+      bundleDiscountPercent: row.bundleDiscountPercent,
+      bundleBasePriceOverrides: stringRecord(row.bundleBasePriceOverrides),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -134,6 +153,12 @@ export class TelegramChannelMessageTemplatesService {
       bodyTemplate: dto.bodyTemplate,
       overrideInviteLinks: dto.overrideInviteLinks,
       inviteLinkOverrides: Object.fromEntries(links),
+      excludedProductNames: uniqueIds(dto.excludedProductNames || []),
+      priceRounding: dto.priceRounding || 'NONE',
+      productNameOverrides: stringRecord(dto.productNameOverrides),
+      bundleOfferEnabled: dto.bundleOfferEnabled ?? false,
+      bundleDiscountPercent: dto.bundleDiscountPercent ?? 10,
+      bundleBasePriceOverrides: stringRecord(dto.bundleBasePriceOverrides),
     };
   }
 
@@ -207,12 +232,40 @@ export class TelegramChannelMessageTemplatesService {
     dto: TelegramMessageTemplateSourceDto,
   ): Promise<TelegramMessageTemplateSourceResponse> {
     const workspaceId = await this.workspace(userId);
-    const channelIds = uniqueIds(dto.channelIds);
+    let channelIds = uniqueIds(dto.channelIds ?? []);
+    if (dto.templateId?.trim()) {
+      const template =
+        await this.prisma.telegramChannelMessageTemplate.findFirst({
+          where: { id: dto.templateId.trim(), workspaceId },
+          select: { scopeMode: true, networkId: true, channelIds: true },
+        });
+      if (!template) throw new NotFoundException('Message template not found');
+      if (template.scopeMode === 'NETWORK') {
+        const scopedChannels = await this.prisma.telegramChannel.findMany({
+          where: {
+            workspaceId,
+            isActive: true,
+            ...(template.networkId
+              ? { networkMembers: { some: { networkId: template.networkId } } }
+              : {}),
+          },
+          orderBy: [{ title: 'asc' }, { id: 'asc' }],
+          select: { id: true },
+        });
+        channelIds = scopedChannels.map((channel) => channel.id);
+      } else {
+        channelIds = uniqueIds(template.channelIds);
+      }
+    }
+    if (!channelIds.length) {
+      throw new BadRequestException('Select at least one Telegram channel');
+    }
     const channels = await this.prisma.telegramChannel.findMany({
       where: { workspaceId, id: { in: channelIds }, isActive: true },
       select: {
         id: true,
         title: true,
+        shortDescription: true,
         username: true,
         photoUrl: true,
         tgStatUrl: true,
@@ -259,6 +312,7 @@ export class TelegramChannelMessageTemplatesService {
         return {
           id: channel.id,
           title: channel.title,
+          description: channel.shortDescription || null,
           username: channel.username || null,
           photoUrl: channel.photoUrl || null,
           tgStatUrl: channel.tgStatUrl || null,

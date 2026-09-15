@@ -72,9 +72,6 @@ describe("ResetChannelScheduledPostsButton", () => {
       }),
     );
     expect(resetScheduled).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByPlaceholderText("Mentor"), {
-      target: { value: "Mentor" },
-    });
     fireEvent.click(
       within(screen.getByRole("dialog")).getByRole("button", {
         name: "Return all scheduled posts to drafts",
@@ -114,9 +111,6 @@ describe("ResetChannelScheduledPostsButton", () => {
         name: "Return all scheduled posts to drafts",
       }),
     );
-    fireEvent.change(screen.getByPlaceholderText("Mentor"), {
-      target: { value: "Mentor" },
-    });
     fireEvent.click(
       within(screen.getByRole("dialog")).getByRole("button", {
         name: "Return all scheduled posts to drafts",

@@ -61,3 +61,60 @@ describe('TelegramChannelCatalogService.selectOptions', () => {
     expect(result).toHaveLength(1);
   });
 });
+
+describe('TelegramChannelCatalogService.findAll', () => {
+  it('returns schedule completion in the existing channel-card read model', async () => {
+    const prisma = {
+      telegramChannel: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'channel-1',
+            title: 'Scheduled channel',
+            currentSubscribersCount: 100,
+            activeSubscribersWindow: 10,
+            pendingJoinRequestsCount: 0,
+            adminLinks: [],
+            sourceAccesses: [],
+            audienceSnapshots: [],
+            adAnalyses: [],
+            _count: { adAnalyses: 0 },
+            presentationIcon: null,
+            publicationScheduleAssignment: { id: 'assignment-1' },
+          },
+        ]),
+        count: jest.fn().mockResolvedValue(1),
+      },
+    };
+    const service = new TelegramChannelCatalogService(
+      prisma as never,
+      {} as never,
+      { workspace: jest.fn().mockResolvedValue('workspace-1') } as never,
+      {
+        timePostsByChannelIds: jest.fn().mockResolvedValue(new Map()),
+        isMissingTelegramChannelSyncScopeColumn: jest
+          .fn()
+          .mockReturnValue(false),
+      } as never,
+      {
+        buildChannelFinancialSummaryPreview: jest
+          .fn()
+          .mockResolvedValue(new Map()),
+      } as never,
+      { summariesForChannels: jest.fn().mockResolvedValue(new Map()) } as never,
+      { summariesForChannels: jest.fn().mockResolvedValue(new Map()) } as never,
+      { productionUsername: null } as never,
+    );
+
+    const result = await service.findAll('user-1');
+
+    expect(prisma.telegramChannel.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          publicationScheduleAssignment: { select: { id: true } },
+        }),
+      }),
+    );
+    expect(result.items[0]?.preview.hasPublicationSchedule).toBe(true);
+    expect(result.items[0]).not.toHaveProperty('publicationScheduleAssignment');
+  });
+});

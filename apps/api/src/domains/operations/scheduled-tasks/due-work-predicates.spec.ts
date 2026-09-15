@@ -10,16 +10,10 @@ const now = new Date('2026-08-18T08:00:00.000Z');
 
 describe('due-work predicate parity', () => {
   it('does not treat every published unverified managed post as repair work', () => {
-    expect(managedPostIdentityReadyWhere(now)).toEqual(
-      expect.objectContaining({
-        OR: expect.arrayContaining([
-          expect.objectContaining({
-            status: 'PUBLISHED',
-            lastTelegramSyncNote:
-              'Published Telegram identity verified; dependent scheduled-link repair pending.',
-          }),
-        ]),
-      }),
+    const serialized = JSON.stringify(managedPostIdentityReadyWhere(now));
+
+    expect(serialized).toContain(
+      '"status":"PUBLISHED","lastTelegramSyncNote":"Published Telegram identity verified; dependent scheduled-link repair pending."',
     );
   });
 
@@ -28,6 +22,14 @@ describe('due-work predicate parity', () => {
 
     expect(serialized).toContain('"scheduleMode":null');
     expect(serialized).toContain('"scheduleMode":{"not":"BATCH"}');
+  });
+
+  it('rechecks missing scheduled posts with a bounded slow retry', () => {
+    const serialized = JSON.stringify(managedPostIdentityReadyWhere(now));
+
+    expect(serialized).toContain('"telegramIdVerificationStatus":"MISSING"');
+    expect(serialized).toContain('2026-08-18T07:30:00.000Z');
+    expect(serialized).not.toContain('2026-08-16T08:00:00.000Z');
   });
 
   it('dispatches processing broadcasts only for materialization or retryable pending recipients', () => {

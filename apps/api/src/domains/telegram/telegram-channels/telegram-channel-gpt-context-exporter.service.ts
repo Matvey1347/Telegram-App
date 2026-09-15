@@ -9,6 +9,7 @@ import {
 import {
   buildTelegramCalendarPlanInstructionFilename,
   buildTelegramGptContextFilename,
+  TELEGRAM_UNIFIED_IMPORT_INSTRUCTION,
   type TelegramPostEngagementMetrics,
 } from '@telegram-system/shared';
 import { WorkspaceService } from '../../../common/workspace.service';
@@ -72,6 +73,20 @@ export class TelegramChannelGptContextExporter {
       `comment_rate: ${percent(metric.commentRate)}`,
       `reactions: ${metric.reactions ? JSON.stringify(metric.reactions) : '[]'}`,
     ].join('\n');
+  }
+
+  async exportUnifiedImportContext(userId: string, channelId: string) {
+    const context = await this.export(userId, channelId);
+    return {
+      buffer: Buffer.concat([
+        Buffer.from(
+          `${TELEGRAM_UNIFIED_IMPORT_INSTRUCTION}\n\nПОЛНЫЙ КОНТЕКСТ КАНАЛА\n\n`,
+          'utf8',
+        ),
+        context.buffer,
+      ]),
+      filename: context.filename,
+    };
   }
 
   private localDateTime(value: Date, timezone: string) {
@@ -149,57 +164,62 @@ export class TelegramChannelGptContextExporter {
     const workspaceId = await this.workspaces.resolveWorkspaceIdForUser(userId);
     const historyFrom = new Date(exportedAt.getTime() - 30 * 24 * 60 * 60_000);
     const horizonEnd = new Date(exportedAt.getTime() + 30 * 24 * 60 * 60_000);
-    const [channel, workspace, managedPosts, publishedHistory, planningContext] =
-      await Promise.all([
-        this.prisma.telegramChannel.findFirst({
-          where: { id: channelId, workspaceId },
-          select: {
-            id: true,
-            title: true,
-            telegramChatId: true,
-          },
-        }),
-        this.prisma.workspace.findUnique({
-          where: { id: workspaceId },
-          select: { timezone: true },
-        }),
-        this.prisma.telegramManagedPost.findMany({
-          where: { workspaceId, telegramChannelId: channelId },
-          select: {
-            id: true,
-            title: true,
-            text: true,
-            imageUrls: true,
-            origin: true,
-            status: true,
-            scheduledAt: true,
-            createdAt: true,
-            telegramRemoteStatus: true,
-            telegramIdVerificationStatus: true,
-            telegramMessageIds: true,
-            lastError: true,
-            group: { select: { title: true } },
-          },
-          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-        }),
-        this.prisma.telegramPost.findMany({
-          where: {
-            workspaceId,
-            telegramChannelId: channelId,
-            postDate: { gte: historyFrom, lte: exportedAt },
-          },
-          select: {
-            id: true,
-            postDate: true,
-            text: true,
-            formattedText: true,
-            hasMedia: true,
-          },
-          orderBy: [{ postDate: 'desc' }, { id: 'desc' }],
-          take: 60,
-        }),
-        this.planningContext.read(userId, workspaceId, channelId),
-      ]);
+    const [
+      channel,
+      workspace,
+      managedPosts,
+      publishedHistory,
+      planningContext,
+    ] = await Promise.all([
+      this.prisma.telegramChannel.findFirst({
+        where: { id: channelId, workspaceId },
+        select: {
+          id: true,
+          title: true,
+          telegramChatId: true,
+        },
+      }),
+      this.prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { timezone: true },
+      }),
+      this.prisma.telegramManagedPost.findMany({
+        where: { workspaceId, telegramChannelId: channelId },
+        select: {
+          id: true,
+          title: true,
+          text: true,
+          imageUrls: true,
+          origin: true,
+          status: true,
+          scheduledAt: true,
+          createdAt: true,
+          telegramRemoteStatus: true,
+          telegramIdVerificationStatus: true,
+          telegramMessageIds: true,
+          lastError: true,
+          group: { select: { title: true } },
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      }),
+      this.prisma.telegramPost.findMany({
+        where: {
+          workspaceId,
+          telegramChannelId: channelId,
+          postDate: { gte: historyFrom, lte: exportedAt },
+        },
+        select: {
+          id: true,
+          postDate: true,
+          text: true,
+          formattedText: true,
+          hasMedia: true,
+        },
+        orderBy: [{ postDate: 'desc' }, { id: 'desc' }],
+        take: 60,
+      }),
+      this.planningContext.read(userId, workspaceId, channelId),
+    ]);
     if (!channel) throw new NotFoundException('Telegram channel not found.');
     const timezone = workspace?.timezone || 'Europe/Warsaw';
     const managedPostById = new Map(
@@ -296,7 +316,7 @@ export class TelegramChannelGptContextExporter {
       '',
       'MANDATORY OUTPUT',
       'Return only valid JSON without markdown fences or commentary.',
-      'Schema: {"version":1,"groups":[],"hypotheses":[],"posts":[],"schedule":[{"postRef":"exact post ref","slotId":"exact slot ID","scheduledAt":"ISO 8601 timestamp with the correct explicit UTC offset"}]}',
+      'Schema: {"version":1,"groups":[],"hypotheses":[],"posts":[],"schedule":[{"action":"SCHEDULE","postRef":"exact new post ref","slotId":"exact slot ID","scheduledAt":"ISO 8601 timestamp with the correct explicit UTC offset"},{"action":"SCHEDULE","postId":"exact existing post ID","slotId":"exact slot ID","scheduledAt":"ISO 8601 timestamp with the correct explicit UTC offset"},{"action":"UNSCHEDULE","postId":"exact existing scheduled post ID"}]}',
       'Use every post at most once. Use every timestamp at most once. Keep every timestamp inside PLANNING_WINDOW and make it match the selected slot weekday, time, and timezone exactly. CURRENT SCHEDULED RESERVATIONS describe the existing calendar, not immutable slots: you may keep a scheduled post at its current time or move it. A timestamp occupied by another post may be used only when that owning post is also included in the same output and moved to a different timestamp. Never create a collision. If no valid assignment exists, return a version 1 manifest with empty sections.',
       '',
       'PUBLICATION SLOTS',
@@ -527,6 +547,9 @@ export class TelegramChannelGptContextExporter {
       'GPT RULES',
       'This is the canonical source of truth for this channel. Return canonical post text exactly; do not change tg-post IDs; do not invent Premium Emoji document IDs. published_at is the actual Telegram publication time when known; scheduled_at is the reserved publication time when present. Engagement metrics show which published posts resonated with the audience. Subscribers and ERR use the last recorded audience snapshot at or before each post publication; unknown means no audience history existed yet. Only managed posts with a tg-post:<id> reference may be used as internal tg-post links; telegram-source-post references are read-only analytics context.',
       '',
+      'PUBLICATION SLOTS',
+      ...this.planningContext.formatSlots(planningContext),
+      '',
       'ALL FORMATTING',
       TELEGRAM_RICH_FORMATTING_GUIDE,
       '',
@@ -542,15 +565,12 @@ export class TelegramChannelGptContextExporter {
       'POST GROUPS',
       ...(groupSummaryLines.length ? groupSummaryLines : ['[]']),
       '',
-      'PUBLICATION SLOTS',
-      ...this.planningContext.formatSlots(planningContext),
-      '',
       'CONTENT HYPOTHESES',
       ...this.planningContext.formatHypotheses(planningContext),
       '',
       'UNIFIED IMPORT JSON',
-      'Return one version 1 JSON manifest with separate groups, hypotheses, posts, and schedule sections. CREATE rows use stable refs so posts can reference groups/hypotheses created in the same manifest. Scheduling must use an exact assigned slotId and ISO scheduledAt matching that slot. Never invent an existing database ID.',
-      '{"version":1,"groups":[],"hypotheses":[],"posts":[],"schedule":[]}',
+      'Return one version 1 JSON manifest with groups, hypotheses, posts, schedule, and the root delete object. CREATE rows use stable refs so posts can reference groups/hypotheses created in the same manifest. Post and hypothesis emoji are passed as icon, never iconId. SCHEDULE must use postRef for a post in this manifest or postId for an existing post, plus an exact assigned slotId and ISO scheduledAt matching that slot. UNSCHEDULE must use the exact ID of an existing SCHEDULED post and returns it to DRAFT. Never invent an existing database ID.',
+      '{"version":1,"groups":[],"hypotheses":[],"posts":[],"schedule":[],"delete":{"groups":[],"hypotheses":[],"posts":[]}}',
       '',
       'ALL POSTS',
       ...managedPostBlocks,

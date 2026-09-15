@@ -1,5 +1,6 @@
 import type { TelegramPostButtonRows } from "./telegram-post-buttons";
 import type { TelegramPostMediaItem } from "./telegram-post-media";
+import type { ResolvedEmoji } from "./resolved-emoji";
 
 export const TELEGRAM_POST_BATCH_MAX_POSTS = 50;
 export const TELEGRAM_POST_BATCH_MAX_CHANNELS = 100;
@@ -37,6 +38,8 @@ export type TelegramPostBatchPost = {
   id: string;
   position: number;
   title: string;
+  iconId: string | null;
+  iconPresentation: ResolvedEmoji | null;
   text: string | null;
   imageUrls: string[];
   mediaItems: TelegramPostMediaItem[];
@@ -78,20 +81,6 @@ export type TelegramPostBatchDelivery = {
   lastError: string | null;
 };
 
-export type TelegramPostBatchAssociation = {
-  id: string;
-  type: "AD_SALE" | "MUTUAL_PROMOTION_FOLDER";
-  entityId: string;
-  title: string;
-};
-
-export type TelegramPostBatchAssociationTarget = {
-  type: TelegramPostBatchAssociation["type"];
-  entityId: string;
-  title: string;
-  subtitle: string | null;
-};
-
 export type TelegramPostBatchSummary = {
   id: string;
   title: string;
@@ -113,7 +102,6 @@ export type TelegramPostBatch = TelegramPostBatchSummary & {
   channelIds: string[];
   defaultDeleteAfterHours: TelegramPostBatchLifetimeHours;
   posts: TelegramPostBatchPost[];
-  associations: TelegramPostBatchAssociation[];
 };
 
 export type TelegramPostBatchListResponse = {
@@ -133,7 +121,12 @@ export type TelegramPostBatchDeliveryPage = {
 
 export type UpdateTelegramPostBatchPostInput = Omit<
   TelegramPostBatchPost,
-  "position"
+  "position" | "iconPresentation"
+>;
+
+export type CreateTelegramPostBatchPostInput = Omit<
+  UpdateTelegramPostBatchPostInput,
+  "id"
 >;
 
 export type UpdateTelegramPostBatchPayload = {
@@ -144,13 +137,20 @@ export type UpdateTelegramPostBatchPayload = {
   posts: UpdateTelegramPostBatchPostInput[];
 };
 
-export type LinkTelegramPostBatchPayload = {
-  type: TelegramPostBatchAssociation["type"];
-  entityId: string;
-};
-
 export type TelegramPostBatchDispatchResult = {
   batch: TelegramPostBatch;
   queuedDeliveries: number;
   alreadyQueued: boolean;
+};
+
+export type CreateTelegramPostBatchPayload = {
+  title?: string;
+  channelIds: string[];
+};
+
+export type CreateAndDispatchTelegramPostBatchPayload = {
+  title: string;
+  channelIds: string[];
+  defaultDeleteAfterHours: TelegramPostBatchLifetimeHours;
+  posts: CreateTelegramPostBatchPostInput[];
 };

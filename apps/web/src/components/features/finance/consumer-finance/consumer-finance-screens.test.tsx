@@ -26,7 +26,22 @@ vi.mock("@/lib/features/finance/consumer-finance-ledger-api", () => ({
   },
 }));
 vi.mock("./finance-dashboard", () => ({
-  FinanceDashboard: () => <div>Dashboard screen</div>,
+  FinanceDashboard: ({
+    period,
+    onPeriodChange,
+    loading,
+  }: {
+    period: { period: string };
+    onPeriodChange: (period: { period: string }) => void;
+    loading: boolean;
+  }) => (
+    <div data-testid="dashboard-screen" data-loading={String(loading)}>
+      <button onClick={() => onPeriodChange({ period: "PREVIOUS_MONTH" })}>
+        Dashboard screen
+      </button>
+      <span>{period.period}</span>
+    </div>
+  ),
 }));
 vi.mock("./finance-budget", () => ({
   FinanceBudget: () => <div>Budget screen</div>,
@@ -165,6 +180,14 @@ const dashboard: ConsumerFinanceDashboard = {
   recent: [],
 };
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 function renderScreens(
   activeProfile: ConsumerFinanceProfile,
   activeScreen:
@@ -221,6 +244,36 @@ describe("ConsumerFinanceScreens request budget", () => {
     expect(mocks.dashboard).toHaveBeenCalledOnce();
     expect(mocks.accounts).not.toHaveBeenCalled();
     expect(mocks.categories).not.toHaveBeenCalled();
+  });
+
+  it("keeps the Dashboard shell mounted while a new period loads", async () => {
+    const nextPeriod = deferred<ConsumerFinanceDashboard>();
+    mocks.dashboard
+      .mockResolvedValueOnce(dashboard)
+      .mockReturnValueOnce(nextPeriod.promise);
+    renderScreens(profile, "home");
+
+    await screen.findByText("Dashboard screen");
+    fireEvent.click(screen.getByText("Dashboard screen"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("dashboard-screen")).toHaveAttribute(
+        "data-loading",
+        "true",
+      ),
+    );
+    expect(screen.getByText("PREVIOUS_MONTH")).toBeInTheDocument();
+    expect(
+      document.querySelector("[data-finance-feedback='loading']"),
+    ).not.toBeInTheDocument();
+
+    nextPeriod.resolve(dashboard);
+    await waitFor(() =>
+      expect(screen.getByTestId("dashboard-screen")).toHaveAttribute(
+        "data-loading",
+        "false",
+      ),
+    );
   });
 
   it("does not load Dashboard before onboarding is complete", async () => {

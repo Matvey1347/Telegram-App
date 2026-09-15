@@ -49,6 +49,107 @@ describe('TelegramManagedPostIdentityService', () => {
     ).toBeNull();
   });
 
+  it('does not treat a surrounding empty service message as a second publication', () => {
+    expect(
+      service.findPublishedIdentity(
+        {
+          text: 'A real post',
+          imageCount: 1,
+          publishMode: 'IMAGE_WITH_CAPTION',
+          scheduledAt,
+        },
+        [
+          {
+            id: '4427',
+            text: 'A real post',
+            date: '2026-08-09T08:15:02.000Z',
+            hasMedia: true,
+            groupedId: null,
+          },
+          {
+            id: '4428',
+            text: '',
+            date: '2026-08-09T08:15:02.000Z',
+            hasMedia: false,
+            groupedId: null,
+          },
+        ],
+      ),
+    ).toMatchObject({ messageIds: ['4427'] });
+  });
+
+  it('matches a text-only post when Telegram exposes its link preview as media', () => {
+    expect(
+      service.findPublishedIdentity(
+        {
+          text: '[Read the full guide](https://example.com/guide)',
+          imageCount: 0,
+          publishMode: 'TEXT_ONLY',
+          scheduledAt,
+        },
+        [
+          {
+            id: '4427',
+            text: 'Read the full guide',
+            date: '2026-08-09T08:15:02.000Z',
+            hasMedia: true,
+            groupedId: null,
+          },
+        ],
+      ),
+    ).toMatchObject({ messageIds: ['4427'] });
+  });
+
+  it('matches an imported Telegram post published later on the same day', () => {
+    expect(
+      service.findPublishedIdentity(
+        {
+          text: 'Delayed imported post',
+          imageCount: 1,
+          publishMode: null,
+          scheduledAt,
+          origin: 'TELEGRAM',
+        },
+        [
+          {
+            id: '10633',
+            text: 'Delayed imported post',
+            date: new Date(
+              scheduledAt.getTime() + 7 * 60 * 60_000,
+            ).toISOString(),
+            hasMedia: true,
+            groupedId: null,
+          },
+        ],
+      ),
+    ).toMatchObject({ messageIds: ['10633'] });
+  });
+
+  it('keeps the narrower match window for system-created posts', () => {
+    expect(
+      service.findPublishedIdentity(
+        {
+          text: 'Delayed system post',
+          imageCount: 0,
+          publishMode: null,
+          scheduledAt,
+          origin: 'SYSTEM',
+        },
+        [
+          {
+            id: '10633',
+            text: 'Delayed system post',
+            date: new Date(
+              scheduledAt.getTime() + 7 * 60 * 60_000,
+            ).toISOString(),
+            hasMedia: false,
+            groupedId: null,
+          },
+        ],
+      ),
+    ).toBeNull();
+  });
+
   it('keeps the album primary id semantics', () => {
     expect(service.primaryMessageId(['40', '41', '42'], 2)).toBe('41');
     expect(service.primaryMessageId(['42'], 0)).toBe('42');
@@ -424,6 +525,151 @@ describe('TelegramManagedPostIdentityService', () => {
     });
   });
 
+  it('rechecks a missing scheduled post and promotes it after Telegram publishes it', async () => {
+    const due = new Date(Date.now() - 20 * 60_000);
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const identity = new TelegramManagedPostIdentityService({
+      telegramManagedPost: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'post-missing',
+            workspaceId: 'workspace',
+            telegramChannelId: 'channel',
+            status: 'SCHEDULED',
+            text: 'Published after the first check',
+            imageUrls: [],
+            mediaItems: [],
+            publishMode: null,
+            scheduledAt: due,
+            publishedAt: null,
+            telegramScheduledMessageIds: ['scheduled-1'],
+            telegramMessageIds: [],
+            telegramMessageUrls: [],
+            telegramLinkSource: 'AUTO',
+            telegramIdVerificationStatus: 'MISSING',
+            telegramIdLastCheckedAt: new Date(Date.now() - 31 * 60_000),
+            telegramChannel: { telegramChatId: '-1001590085922' },
+          },
+        ]),
+        updateMany,
+      },
+    } as never);
+
+    const result = await identity.reconcile({
+      workspaceId: 'workspace',
+      loadRemote: jest.fn().mockResolvedValue({
+        published: [],
+        recentPublished: [
+          {
+            id: '4427',
+            text: 'Published after the first check',
+            date: due.toISOString(),
+            hasMedia: false,
+            groupedId: null,
+          },
+        ],
+      }),
+      repairDependants: jest.fn().mockResolvedValue(undefined),
+    });
+
+    expect(updateMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'post-missing',
+          telegramIdVerificationStatus: 'MISSING',
+        }),
+      }),
+    );
+    expect(updateMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'PUBLISHED',
+          telegramIdVerificationStatus: 'VERIFIED',
+          telegramMessageIds: ['4427'],
+        }),
+      }),
+    );
+    expect(result).toMatchObject({ checked: 1, verified: 1, missing: 0 });
+  });
+
+  it('removes an imported scheduled post after a second confirmed missing check', async () => {
+    const due = new Date(Date.now() - 2 * 60 * 60_000);
+    const claim = jest.fn().mockResolvedValue({ count: 1 });
+    const deleteMany = jest.fn().mockResolvedValue({ count: 1 });
+    const remainingGroupPosts = jest.fn().mockResolvedValue([
+      {
+        id: 'remaining-post',
+        groupId: 'imported-group',
+        status: 'PUBLISHED',
+      },
+    ]);
+    const executeRaw = jest.fn().mockResolvedValue(0);
+    const prisma = {
+      telegramManagedPost: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'imported-missing',
+            workspaceId: 'workspace',
+            telegramChannelId: 'channel',
+            origin: 'TELEGRAM',
+            remoteImportKey: 'message:1147',
+            status: 'SCHEDULED',
+            text: 'Deleted in Telegram',
+            imageUrls: [],
+            mediaItems: [],
+            publishMode: null,
+            scheduledAt: due,
+            publishedAt: null,
+            groupId: 'imported-group',
+            telegramScheduledMessageIds: ['1147'],
+            telegramMessageIds: [],
+            telegramMessageUrls: [],
+            telegramLinkSource: 'AUTO',
+            telegramIdVerificationStatus: 'MISSING',
+            telegramIdLastCheckedAt: new Date(Date.now() - 31 * 60_000),
+            telegramChannel: { telegramChatId: '-1001590085922' },
+          },
+        ]),
+        updateMany: claim,
+      },
+      $transaction: jest.fn().mockImplementation(async (callback) =>
+        callback({
+          telegramManagedPost: {
+            deleteMany,
+            findMany: remainingGroupPosts,
+          },
+          $executeRaw: executeRaw,
+        }),
+      ),
+    };
+    const identity = new TelegramManagedPostIdentityService(prisma as never);
+
+    const result = await identity.reconcile({
+      workspaceId: 'workspace',
+      loadRemote: jest.fn().mockResolvedValue({
+        published: [],
+        recentPublished: [],
+      }),
+      repairDependants: jest.fn(),
+    });
+
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        id: 'imported-missing',
+        workspaceId: 'workspace',
+        telegramChannelId: 'channel',
+        origin: 'TELEGRAM',
+        remoteImportKey: 'message:1147',
+        status: 'SCHEDULED',
+        telegramIdVerificationStatus: 'MISSING',
+      }),
+    });
+    expect(executeRaw).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ checked: 1, missing: 1, skipped: 0 });
+  });
+
   it('keeps verified published identity retryable when dependent repair fails', async () => {
     const published = {
       id: 'post-a',
@@ -498,14 +744,8 @@ describe('TelegramManagedPostIdentityService', () => {
     });
     expect(second.verified).toBe(1);
     expect(repair).toHaveBeenCalledTimes(2);
-    expect(findMany.mock.calls[0][0].where.OR).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          status: 'PUBLISHED',
-          lastTelegramSyncNote:
-            'Published Telegram identity verified; dependent scheduled-link repair pending.',
-        }),
-      ]),
+    expect(JSON.stringify(findMany.mock.calls[0][0].where)).toContain(
+      '"status":"PUBLISHED","lastTelegramSyncNote":"Published Telegram identity verified; dependent scheduled-link repair pending."',
     );
   });
 });

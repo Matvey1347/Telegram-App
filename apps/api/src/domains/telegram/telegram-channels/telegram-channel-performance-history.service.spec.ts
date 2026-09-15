@@ -11,6 +11,7 @@ describe('TelegramChannelPerformanceHistoryService', () => {
           id: 'channel-1',
           purchaseTransactionId: 'purchase-1',
           createdAt: new Date('2026-08-01T10:00:00.000Z'),
+          currentSubscribersCount: 1_900,
           ownViewsPerPost: 0,
           ownReactionsPerPost: 0,
           adBaseCpm: 300,
@@ -57,6 +58,8 @@ describe('TelegramChannelPerformanceHistoryService', () => {
             id: 'purchase-1',
             type: 'expense',
             date: new Date('2026-08-01T10:00:00.000Z'),
+            amount: 1_000,
+            currency: 'UAH',
             amountInPrimaryCurrency: 1_000,
             categoryRef: null,
             telegramAdSalePayment: null,
@@ -65,6 +68,8 @@ describe('TelegramChannelPerformanceHistoryService', () => {
             id: 'ad-spend-1',
             type: 'expense',
             date: new Date('2026-09-02T10:00:00.000Z'),
+            amount: 100,
+            currency: 'UAH',
             amountInPrimaryCurrency: 100,
             categoryRef: { key: 'advertising', name: 'Advertising' },
             telegramAdSalePayment: null,
@@ -73,6 +78,8 @@ describe('TelegramChannelPerformanceHistoryService', () => {
             id: 'manual-revenue-1',
             type: 'income',
             date: new Date('2026-09-03T10:00:00.000Z'),
+            amount: 100,
+            currency: 'UAH',
             amountInPrimaryCurrency: 100,
             categoryRef: {
               key: 'channel_advertising_revenue',
@@ -84,6 +91,8 @@ describe('TelegramChannelPerformanceHistoryService', () => {
             id: 'payment-transaction-1',
             type: 'income',
             date: new Date('2026-09-04T10:00:00.000Z'),
+            amount: 200,
+            currency: 'UAH',
             amountInPrimaryCurrency: 200,
             categoryRef: {
               key: 'channel_advertising_revenue',
@@ -96,6 +105,8 @@ describe('TelegramChannelPerformanceHistoryService', () => {
       telegramAdSalePaymentAllocation: {
         findMany: jest.fn().mockResolvedValue([
           {
+            amount: 200,
+            currency: 'UAH',
             amountInPrimaryCurrency: 200,
             payment: { paidAt: new Date('2026-09-05T10:00:00.000Z') },
           },
@@ -109,14 +120,50 @@ describe('TelegramChannelPerformanceHistoryService', () => {
     const support = { workspace: jest.fn().mockResolvedValue('workspace-1') };
     const currencyConversion = {
       convertCurrency: jest.fn().mockResolvedValue(150),
+      prepareRateSource: jest.fn().mockResolvedValue({
+        convertCurrency: jest.fn().mockResolvedValue(null),
+      }),
+    };
+    const adPricingRead = {
+      windowsForChannels: jest.fn().mockResolvedValue(
+        new Map([
+          [
+            'channel-1',
+            {
+              h24: {
+                expectedViews: 500,
+                postsSampleCount: 3,
+                dataQuality: 'READY',
+              },
+              h48: {
+                expectedViews: 600,
+                postsSampleCount: 3,
+                dataQuality: 'READY',
+              },
+              h72: {
+                expectedViews: 700,
+                postsSampleCount: 3,
+                dataQuality: 'READY',
+              },
+              permanent: {
+                expectedViews: 1_000,
+                postsSampleCount: 3,
+                dataQuality: 'READY',
+              },
+            },
+          ],
+        ]),
+      ),
     };
     return {
       prisma,
       currencyConversion,
+      adPricingRead,
       service: new TelegramChannelPerformanceHistoryService(
         prisma as never,
         support as never,
         currencyConversion as never,
+        adPricingRead as never,
       ),
     };
   }
@@ -145,16 +192,16 @@ describe('TelegramChannelPerformanceHistoryService', () => {
         invested: 1_000,
         revenue: 0,
         paybackPercent: 0,
-        adsLeft: 7,
+        adsLeft: 6.7,
       }),
     );
     expect(result.points).toContainEqual(
       expect.objectContaining({
-        date: '2026-09-05T00:00:00.000Z',
+        date: '2026-09-05T10:00:00.000Z',
         invested: 1_100,
         revenue: 300,
         paybackPercent: 27.3,
-        adsLeft: 6,
+        adsLeft: 5.3,
       }),
     );
     expect(result.points).toContainEqual(
@@ -162,7 +209,7 @@ describe('TelegramChannelPerformanceHistoryService', () => {
         date: '2026-09-07T00:00:00.000Z',
         averageViews: 450,
         postsPublished: 3,
-        adsLeft: 6,
+        adsLeft: 5.9,
       }),
     );
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
@@ -172,7 +219,7 @@ describe('TelegramChannelPerformanceHistoryService', () => {
     const postHistorySql = rawQuery.mock.calls[1][0].strings.join(' ');
     expect(postHistorySql).toContain('"TelegramPostMetricSnapshot"');
     expect(postHistorySql).toContain("INTERVAL '24 hours'");
-    expect(result.points[0].date).toBe('2026-09-01T00:00:00.000Z');
+    expect(result.points[0].date).toBe('2026-08-09T00:00:00.000Z');
     expect(prisma.transaction.findMany).toHaveBeenCalledTimes(1);
     expect(
       prisma.telegramAdSalePaymentAllocation.findMany,
@@ -198,6 +245,7 @@ describe('TelegramChannelPerformanceHistoryService', () => {
           id: 'channel-1',
           purchaseTransactionId: 'purchase-1',
           createdAt: new Date('2026-08-01T10:00:00.000Z'),
+          currentSubscribersCount: 1_900,
           ownViewsPerPost: 0,
           ownReactionsPerPost: 0,
           adBaseCpm: 4,
@@ -217,6 +265,126 @@ describe('TelegramChannelPerformanceHistoryService', () => {
     expect(result.points.some((point) => point.adsLeft != null)).toBe(true);
   });
 
+  it('uses the same 1/24 price for ads left in a weekly history', async () => {
+    const { service, adPricingRead } = createService();
+    adPricingRead.windowsForChannels.mockResolvedValue(
+      new Map([
+        [
+          'channel-1',
+          {
+            h24: {
+              expectedViews: 878,
+              postsSampleCount: 3,
+              dataQuality: 'READY',
+            },
+            h48: {
+              expectedViews: 1_031,
+              postsSampleCount: 3,
+              dataQuality: 'READY',
+            },
+            h72: {
+              expectedViews: 1_200,
+              postsSampleCount: 3,
+              dataQuality: 'READY',
+            },
+            permanent: {
+              expectedViews: 1_706,
+              postsSampleCount: 3,
+              dataQuality: 'READY',
+            },
+          },
+        ],
+      ]),
+    );
+
+    const result = await service.history('user-1', 'channel-1', '7d', now);
+
+    expect(result.points.at(-1)?.adsLeft).toBe(4);
+    expect(adPricingRead.windowsForChannels).toHaveBeenCalledWith(
+      'workspace-1',
+      [expect.objectContaining({ id: 'channel-1' })],
+      now,
+    );
+  });
+
+  it('uses native primary-currency amounts and preserves real financial event movement', async () => {
+    const { service, prisma, adPricingRead } = createService();
+    adPricingRead.windowsForChannels.mockResolvedValue(
+      new Map([
+        [
+          'channel-1',
+          {
+            h24: {
+              expectedViews: 878,
+              postsSampleCount: 3,
+              dataQuality: 'READY',
+            },
+            h48: {
+              expectedViews: 1_031,
+              postsSampleCount: 3,
+              dataQuality: 'READY',
+            },
+            h72: {
+              expectedViews: 1_200,
+              postsSampleCount: 3,
+              dataQuality: 'READY',
+            },
+            permanent: {
+              expectedViews: 1_706,
+              postsSampleCount: 3,
+              dataQuality: 'READY',
+            },
+          },
+        ],
+      ]),
+    );
+    prisma.transaction.findMany.mockResolvedValue([
+      {
+        id: 'purchase-1',
+        type: 'expense',
+        date: new Date('2026-09-01T10:00:00.000Z'),
+        amount: 32_241,
+        currency: 'UAH',
+        amountInPrimaryCurrency: 722.41,
+        categoryRef: { key: 'buy_channels', name: 'Buy channels' },
+        telegramAdSalePayment: null,
+      },
+    ]);
+    prisma.telegramAdSalePaymentAllocation.findMany.mockResolvedValue([
+      {
+        amount: 361,
+        currency: 'UAH',
+        amountInPrimaryCurrency: 8.09,
+        payment: { paidAt: new Date('2026-09-03T08:00:00.000Z') },
+      },
+      {
+        amount: 451,
+        currency: 'UAH',
+        amountInPrimaryCurrency: 10.11,
+        payment: { paidAt: new Date('2026-09-05T12:00:00.000Z') },
+      },
+    ]);
+
+    const result = await service.history('user-1', 'channel-1', '7d', now);
+
+    expect(result.points.at(-1)).toEqual(
+      expect.objectContaining({
+        invested: 32_241,
+        revenue: 812,
+        paybackPercent: 2.5,
+        adsLeft: 120,
+      }),
+    );
+    expect(
+      result.points
+        .map((point) => point.paybackPercent)
+        .filter((value) => value != null),
+    ).toEqual(expect.arrayContaining([0, 1.1, 2.5]));
+    expect(result.points).toContainEqual(
+      expect.objectContaining({ date: '2026-09-03T08:00:00.000Z' }),
+    );
+  });
+
   it.each([
     ['1d', 1],
     ['7d', 7],
@@ -232,12 +400,7 @@ describe('TelegramChannelPerformanceHistoryService', () => {
   it('uses seven days when the client omits the range', async () => {
     const { service } = createService();
 
-    const result = await service.history(
-      'user-1',
-      'channel-1',
-      undefined,
-      now,
-    );
+    const result = await service.history('user-1', 'channel-1', undefined, now);
 
     expect(result.range).toBe('7d');
     expect(result.periodDays).toBe(7);
@@ -304,6 +467,7 @@ describe('TelegramChannelPerformanceHistoryService', () => {
         id: true,
         purchaseTransactionId: true,
         createdAt: true,
+        currentSubscribersCount: true,
         ownViewsPerPost: true,
         ownReactionsPerPost: true,
         adBaseCpm: true,

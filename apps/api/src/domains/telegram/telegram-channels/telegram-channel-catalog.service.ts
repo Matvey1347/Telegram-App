@@ -147,6 +147,9 @@ export class TelegramChannelCatalogService {
           where,
           include: {
             presentationIcon: true,
+            publicationScheduleAssignment: {
+              select: { id: true },
+            },
             assignedMember: WorkspaceService.assignedMemberInclude,
             createdByUser: WorkspaceService.createdByUserInclude,
             adAnalyses: {
@@ -267,6 +270,7 @@ export class TelegramChannelCatalogService {
         adAnalyses,
         _count,
         presentationIcon,
+        publicationScheduleAssignment,
         ...channelData
       } = channel;
       const audienceTrendPreview = audienceTrendByChannel.get(channel.id);
@@ -328,6 +332,7 @@ export class TelegramChannelCatalogService {
         preview: {
           audience,
           audienceTrend: audienceTrendPreview?.trend ?? null,
+          hasPublicationSchedule: Boolean(publicationScheduleAssignment),
           sourcesCount: sourceAccesses.length || channel.adminLinks.length,
           canPostMessages: sourceAccesses.some(
             (source) => source.canPostMessages,

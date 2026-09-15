@@ -4,7 +4,8 @@ const messages = {
   "telegram.posts.import.posts": "Импорт публикаций",
   "telegram.posts.import.groups": "Импорт групп",
   "telegram.posts.import.preview": "Предпросмотр и редактирование",
-  "telegram.posts.import.groupHint": "Скопируйте ожидаемый формат перед подготовкой данных групп с помощью GPT.",
+  "telegram.posts.import.groupHint":
+    "Скопируйте ожидаемый формат перед подготовкой данных групп с помощью GPT.",
   "telegram.posts.import.prompt": "Инструкция",
   "telegram.posts.import.parseGroupsError": "Не удалось разобрать группы.",
   "telegram.posts.import.parsePlanError": "Не удалось разобрать план.",
@@ -15,17 +16,21 @@ const messages = {
   "telegram.posts.import.emptyTab": "В этой вкладке нет публикаций.",
   "telegram.posts.import.defaultGroup": "Использовать группу по умолчанию",
   "telegram.posts.import.previewChannel": "Предпросмотр",
-  "telegram.posts.import.memberMissing": "Участника {id} нет в этом рабочем пространстве.",
+  "telegram.posts.import.memberMissing":
+    "Участника {id} нет в этом рабочем пространстве.",
   "telegram.posts.import.currentMember": "Текущий участник",
-  "telegram.posts.import.groupJsonHint": "JSON поддерживает title, description, icon, memberId, statusNumberingEnabled и postIds.",
+  "telegram.posts.import.groupJsonHint":
+    "JSON поддерживает title, description, icon, memberId, statusNumberingEnabled и postIds.",
   "telegram.posts.import.groupOperation": "Импортировать группы публикаций",
   "telegram.posts.import.starting": "Начинаем импорт…",
   "telegram.posts.import.importingGroups": "Импортируем группы…",
-  "telegram.posts.import.result": "Импорт завершён: успешно — {successful}, с ошибкой — {failed}.",
+  "telegram.posts.import.result":
+    "Импорт завершён: успешно — {successful}, с ошибкой — {failed}.",
   "telegram.posts.import.groupsError": "Не удалось импортировать группы.",
   "telegram.posts.import.groupsButton": "Импортировать группы: {count}",
   "telegram.posts.import.deleteTitle": "Удалить по файлу повторного импорта",
-  "telegram.posts.import.deleteHint": "Можно удалить только ID, найденные в этом канале. Сначала удаляются публикации; удаление группы не затронет публикации вне файла.",
+  "telegram.posts.import.deleteHint":
+    "Можно удалить только ID, найденные в этом канале. Сначала удаляются публикации; удаление группы не затронет публикации вне файла.",
   "telegram.posts.import.deleteOperation": "Удалить содержимое канала",
   "telegram.posts.import.deleting": "Удаляем выбранные публикации и группы…",
   "telegram.posts.import.postsDeleted": "Публикации удалены. Удаляем группы…",
@@ -39,19 +44,23 @@ const messages = {
   "telegram.posts.import.postsCount": "Публикаций: {count}",
   "telegram.posts.import.deleteSelected": "Удалить выбранное содержимое",
   "telegram.posts.import.invalidDeletionFile": "Некорректный файл удаления.",
-  "telegram.posts.import.emptyDeletionFile": "Добавьте хотя бы одну публикацию или группу.",
+  "telegram.posts.import.emptyDeletionFile":
+    "Добавьте хотя бы одну публикацию или группу.",
   "telegram.posts.import.approved": "Проверено",
   "telegram.posts.import.imported": "Импортировано",
   "telegram.posts.import.image": "изображение",
   "telegram.posts.import.imageSearchBadge": "поиск",
   "telegram.posts.import.promptCopied": "Формат инструкции для GPT скопирован.",
-  "telegram.posts.import.promptCopyError": "Не удалось скопировать формат инструкции для GPT.",
+  "telegram.posts.import.promptCopyError":
+    "Не удалось скопировать формат инструкции для GPT.",
   "telegram.posts.import.dataCopied": "Данные импорта скопированы.",
-  "telegram.posts.import.dataCopyError": "Не удалось скопировать данные импорта.",
+  "telegram.posts.import.dataCopyError":
+    "Не удалось скопировать данные импорта.",
   "telegram.posts.import.copyPrompt": "Копировать инструкцию",
   "telegram.posts.import.data": "Данные для импорта",
   "telegram.posts.import.copyData": "Копировать данные импорта",
-  "telegram.posts.import.dropArea": "Область для перетаскивания и вставки файла",
+  "telegram.posts.import.dropArea":
+    "Область для перетаскивания и вставки файла",
   "telegram.posts.import.applyGroupAll": "Применить группу ко всем публикациям",
   "telegram.posts.import.groupAll": "Группа для всех публикаций",
   "telegram.posts.import.deletePost": "Удалить публикацию из импорта",
@@ -75,7 +84,8 @@ const messages = {
   "telegram.posts.import.clearSchedule": "Очистить расписание",
   "telegram.posts.import.errorTitle": "Ошибки импорта ({count})",
   "telegram.posts.import.errorRow": "Строка {row}: {error}",
-  "telegram.posts.import.unknownRowError": "Не удалось импортировать эту строку.",
+  "telegram.posts.import.unknownRowError":
+    "Не удалось импортировать эту строку.",
   "telegram.posts.import.pastedText": "Вставленный текст",
   "telegram.posts.import.copy": "Копировать",
   "telegram.posts.import.replace": "Заменить",
@@ -83,37 +93,75 @@ const messages = {
   "telegram.posts.import.dropFile": "Перетащите или вставьте файл сюда",
   "telegram.posts.import.chooseFile": "Выбрать файл",
   "telegram.posts.import.fileTypes": "JSON, CSV, TSV, TXT или обычный текст",
-  "telegram.posts.import.pasteHint": "Вставленный сюда текст автоматически откроется в редакторе",
+  "telegram.posts.import.pasteHint":
+    "Вставленный сюда текст автоматически откроется в редакторе",
   "telegram.posts.import.applyGroup": "Применить группу",
-  "telegram.posts.import.applyGroupDescription": "Для всех импортируемых публикаций ({count}) будет выбрана группа «{group}», а каждый groupId в JSON обновится.",
+  "telegram.posts.import.applyGroupDescription":
+    "Для всех импортируемых публикаций ({count}) будет выбрана группа «{group}», а каждый groupId в JSON обновится.",
   "telegram.posts.import.loadingGroups": "Загружаем группы…",
   "telegram.posts.import.chooseGroup": "Выберите группу",
-  "telegram.posts.import.groupsLoadError": "Не удалось загрузить группы. Публикации всё ещё можно импортировать без группы.",
-  "telegram.posts.import.groupChangeHint": "Изменение значения обновит groupId во всех импортируемых строках.",
+  "telegram.posts.import.groupsLoadError":
+    "Не удалось загрузить группы. Публикации всё ещё можно импортировать без группы.",
+  "telegram.posts.import.groupChangeHint":
+    "Изменение значения обновит groupId во всех импортируемых строках.",
   "telegram.posts.import.noGroup": "Без группы",
   "telegram.posts.import.batchMessage": "Пакет {batch}: {message}",
-  "telegram.posts.import.complete": "Импорт завершён: успешно — {successful}, с ошибкой — {failed}.",
-  "telegram.posts.import.failedRowsHint": "Строки с ошибкой не попадают в импортированные, их можно повторить.",
-  "telegram.posts.import.stopped": "Импорт остановлен. До отмены успешно — {successful}, с ошибкой — {failed}.",
+  "telegram.posts.import.complete":
+    "Импорт завершён: успешно — {successful}, с ошибкой — {failed}.",
+  "telegram.posts.import.failedRowsHint":
+    "Строки с ошибкой не попадают в импортированные, их можно повторить.",
+  "telegram.posts.import.stopped":
+    "Импорт остановлен. До отмены успешно — {successful}, с ошибкой — {failed}.",
   "telegram.posts.import.postsError": "Не удалось импортировать публикации",
-  "telegram.posts.import.dataRequired": "Вставьте строки или загрузите файл JSON, CSV, TSV либо TXT.",
-  "telegram.posts.import.importHint": "Скопируйте ожидаемый формат перед подготовкой данных импорта с помощью GPT.",
-  "telegram.posts.import.allImported": "Все публикации уже отмечены как импортированные.",
+  "telegram.posts.import.dataRequired":
+    "Вставьте строки или загрузите файл JSON, CSV, TSV либо TXT.",
+  "telegram.posts.import.importHint":
+    "Скопируйте ожидаемый формат перед подготовкой данных импорта с помощью GPT.",
+  "telegram.posts.import.allImported":
+    "Все публикации уже отмечены как импортированные.",
   "telegram.posts.import.importing": "Импортируем…",
   "telegram.posts.import.importButton": "Импортировать публикации",
-  "telegram.posts.import.batchHint": "За один запрос обрабатывается до {count} публикаций. Более крупный импорт выполняется последовательными пакетами.",
-  "telegram.posts.import.unifiedTitle": "Единый импорт",
+  "telegram.posts.import.batchHint":
+    "За один запрос обрабатывается до {count} публикаций. Более крупный импорт выполняется последовательными пакетами.",
+  "telegram.posts.import.unifiedTitle": "Импорт",
   "telegram.posts.import.unifiedUpload": "Загрузить JSON",
   "telegram.posts.import.unifiedCopyPrompt": "Скопировать общую инструкцию",
+  "telegram.posts.import.unifiedCopyAndDownload":
+    "Скопировать инструкцию и скачать полный контекст",
+  "telegram.posts.import.unifiedContextReady":
+    "Инструкция скопирована, полный контекст импорта скачан.",
+  "telegram.posts.import.unifiedContextError":
+    "Не удалось подготовить полный контекст импорта.",
+  "telegram.posts.import.unifiedDropTitle":
+    "Перетащите JSON/TXT или выберите файл",
+  "telegram.posts.import.unifiedDropHint":
+    "Готовый манифест также можно вставить прямо в редактор ниже.",
+  "telegram.posts.import.unifiedPasteHint":
+    "Вставьте текст или отредактируйте JSON вручную",
   "telegram.posts.import.unifiedManifest": "JSON-манифест",
   "telegram.posts.import.unifiedPreviewError": "Не удалось проверить импорт",
+  "telegram.posts.import.unifiedPreviewing": "Готовим предпросмотр…",
   "telegram.posts.import.unifiedApplyError": "Не удалось применить импорт",
   "telegram.posts.import.unifiedApplied": "Импорт применён ({hash})",
-  "telegram.posts.import.unifiedPartial": "Импорт завершён с ошибками: {count}. Проверьте детали перед повтором.",
-  "telegram.posts.import.unifiedValid": "Корректно: {valid} · Ошибок: {invalid}",
+  "telegram.posts.import.unifiedPartial":
+    "Импорт завершён с ошибками: {count}. Проверьте детали перед повтором.",
+  "telegram.posts.import.unifiedValid":
+    "Корректно: {valid} · Ошибок: {invalid}",
   "telegram.posts.import.cancel": "Отмена",
   "telegram.posts.import.previewAction": "Проверить",
   "telegram.posts.import.applyAction": "Применить",
+  "telegram.posts.import.conclusion": "Вывод",
+  "telegram.posts.import.selectPublication": "Выберите публикацию",
+  "telegram.posts.import.addSlot": "Добавить слот",
+  "telegram.posts.import.operationTabs": "Операции импорта",
+  "telegram.posts.import.createTab": "Создать ({count})",
+  "telegram.posts.import.deleteTab": "Удалить ({count})",
+  "telegram.posts.import.emptyDeleteTab": "В этом разделе ничего не будет удалено.",
+  "telegram.posts.import.openInSystem": "Открыть",
+  "telegram.posts.import.openAfterImport": "Публикацию можно будет открыть после её создания.",
+  "telegram.posts.import.scheduleOperations": "Операции календаря",
+  "telegram.posts.import.scheduleTab": "Запланировать ({count})",
+  "telegram.posts.import.unscheduleTab": "Снять с планирования ({count})",
   "telegram.posts.import.invalidFile": "Некорректный файл",
 } as const satisfies Record<keyof typeof en, string>;
 export default messages;

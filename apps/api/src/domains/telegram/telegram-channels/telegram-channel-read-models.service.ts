@@ -38,7 +38,12 @@ export class TelegramChannelReadModelsService {
     const channel = (await this.telegramChannelCatalogService.findOne(
       userId,
       channelId,
-    )) as { defaultInviteLinkId?: string | null };
+    )) as {
+      defaultInviteLinkId?: string | null;
+      botInviteLinkId?: string | null;
+      folderDefaultInviteLinkIds?: string[];
+      mutualPromotionInviteLinkIds?: string[];
+    };
     const where = this.inviteLinksWhere(workspaceId, channelId, query.search);
     const pagination = normalizePagination(query);
     const [links, totalItems] = await Promise.all([
@@ -68,6 +73,11 @@ export class TelegramChannelReadModelsService {
       items.map((link) => ({
         ...link,
         isDefaultForChannel: link.id === channel.defaultInviteLinkId,
+        isDefaultForBot: link.id === channel.botInviteLinkId,
+        isDefaultForFolders:
+          channel.folderDefaultInviteLinkIds?.includes(link.id) ?? false,
+        isDefaultForMutualPromotion:
+          channel.mutualPromotionInviteLinkIds?.includes(link.id) ?? false,
       })),
       totalItems,
       pagination,
@@ -79,7 +89,12 @@ export class TelegramChannelReadModelsService {
     channelId: string,
     query: Pick<
       TelegramChannelInviteLinksQueryDto,
-      'search' | 'availableForCampaignId' | 'selectedId' | 'initial' | 'all'
+      | 'search'
+      | 'availableForCampaignId'
+      | 'selectedId'
+      | 'selectedIds'
+      | 'initial'
+      | 'all'
     > = {},
   ) {
     const workspaceId =
@@ -87,7 +102,12 @@ export class TelegramChannelReadModelsService {
     const channel = (await this.telegramChannelCatalogService.findOne(
       userId,
       channelId,
-    )) as { defaultInviteLinkId?: string | null };
+    )) as {
+      defaultInviteLinkId?: string | null;
+      botInviteLinkId?: string | null;
+      folderDefaultInviteLinkIds?: string[];
+      mutualPromotionInviteLinkIds?: string[];
+    };
     const baseWhere = this.inviteLinksWhere(
       workspaceId,
       channelId,
@@ -96,12 +116,20 @@ export class TelegramChannelReadModelsService {
     const availableForCampaignId = String(
       query.availableForCampaignId || '',
     ).trim();
-    const initialLinkId = String(
-      query.selectedId || channel.defaultInviteLinkId || '',
-    ).trim();
-    if (query.initial && !initialLinkId) return [];
+    const initialLinkIds = [
+      ...new Set(
+        [
+          ...(query.selectedIds ?? []),
+          query.selectedId,
+          channel.defaultInviteLinkId,
+        ]
+          .map((value) => String(value || '').trim())
+          .filter(Boolean),
+      ),
+    ];
+    if (query.initial && !initialLinkIds.length) return [];
     const where: Prisma.TelegramInviteLinkWhereInput = query.initial
-      ? { AND: [baseWhere, { id: initialLinkId }] }
+      ? { AND: [baseWhere, { id: { in: initialLinkIds } }] }
       : query.all
         ? baseWhere
         : availableForCampaignId
@@ -143,6 +171,11 @@ export class TelegramChannelReadModelsService {
     return hydratedLinks.map((link) => ({
       ...link,
       isDefaultForChannel: link.id === channel.defaultInviteLinkId,
+      isDefaultForBot: link.id === channel.botInviteLinkId,
+      isDefaultForFolders:
+        channel.folderDefaultInviteLinkIds?.includes(link.id) ?? false,
+      isDefaultForMutualPromotion:
+        channel.mutualPromotionInviteLinkIds?.includes(link.id) ?? false,
     }));
   }
 

@@ -43,6 +43,7 @@ const common = {
   "common.closeDialog": "Закрыть диалог",
   "common.confirmDeletion": "Подтвердите удаление",
   "common.typeToConfirm": "Введите {name}, чтобы подтвердить удаление.",
+  "common.deleteConfirmationQuestion": "Вы уверены, что хотите удалить {name}?",
   "common.error.short": "Что-то пошло не так.",
   "common.empty": "Данных пока нет.",
   "common.success": "Успешно",

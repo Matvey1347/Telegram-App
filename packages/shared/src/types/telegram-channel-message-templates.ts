@@ -1,6 +1,10 @@
 import type { ResolvedEmoji } from "./resolved-emoji";
 
 export type TelegramMessageTemplateScopeMode = "CHANNELS" | "NETWORK";
+export type TelegramMessageTemplatePriceRounding =
+  | "NONE"
+  | "NEAREST_5"
+  | "NEAREST_10";
 
 export type TelegramChannelMessageTemplatePayload = {
   title?: string | null;
@@ -11,6 +15,12 @@ export type TelegramChannelMessageTemplatePayload = {
   bodyTemplate: string;
   overrideInviteLinks: boolean;
   inviteLinkOverrides: Record<string, string>;
+  excludedProductNames?: string[];
+  priceRounding?: TelegramMessageTemplatePriceRounding;
+  productNameOverrides?: Record<string, string>;
+  bundleOfferEnabled?: boolean;
+  bundleDiscountPercent?: number;
+  bundleBasePriceOverrides?: Record<string, string>;
 };
 
 export type TelegramChannelMessageTemplate =
@@ -20,6 +30,10 @@ export type TelegramChannelMessageTemplate =
     createdAt: string;
     updatedAt: string;
   };
+
+export type TelegramMessageTemplateSourcePayload =
+  | { channelIds: string[]; templateId?: never }
+  | { templateId: string; channelIds?: never };
 
 export type TelegramMessageTemplateInviteLink = {
   id: string;
@@ -38,6 +52,7 @@ export type TelegramMessageTemplateProduct = {
 export type TelegramMessageTemplateChannelSource = {
   id: string;
   title: string;
+  description: string | null;
   username: string | null;
   photoUrl: string | null;
   tgStatUrl: string | null;

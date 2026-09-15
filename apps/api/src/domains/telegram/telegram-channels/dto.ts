@@ -37,6 +37,7 @@ export class CreateTelegramChannelDto {
   @IsOptional() @IsString() username?: string;
   @IsOptional() @IsString() telegramChatId?: string;
   @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsString() shortDescription?: string | null;
   @IsOptional() @Type(() => Number) @IsInt() currentSubscribersCount?: number;
 }
 
@@ -52,9 +53,21 @@ export class UpdateTelegramChannelDto {
   @IsOptional() @IsString() username?: string;
   @IsOptional() @IsString() telegramChatId?: string;
   @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsString() shortDescription?: string | null;
   @IsOptional() @IsUrl({ require_protocol: true }) tgStatUrl?: string | null;
   @IsOptional() @IsString() presentationIconId?: string | null;
   @IsOptional() @IsString() defaultInviteLinkId?: string | null;
+  @IsOptional() @IsString() botInviteLinkId?: string | null;
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  folderDefaultInviteLinkIds?: string[];
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  mutualPromotionInviteLinkIds?: string[];
   @IsOptional() @Type(() => Number) @IsInt() currentSubscribersCount?: number;
   @IsOptional()
   @Type(() => Number)
@@ -368,6 +381,15 @@ export class TelegramChannelInviteLinksQueryDto extends PaginationQueryDto {
   @IsOptional() @IsString() search?: string;
   @IsOptional() @IsString() availableForCampaignId?: string;
   @IsOptional() @IsString() selectedId?: string;
+  @IsOptional()
+  @Transform(({ value }) => {
+    const values = Array.isArray(value) ? value : [value];
+    return values.flatMap((item) => String(item).split(',')).filter(Boolean);
+  })
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  selectedIds?: string[];
   @IsOptional()
   @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()

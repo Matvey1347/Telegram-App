@@ -130,6 +130,24 @@ describe("ChannelEconomicsSummary", () => {
     });
   });
 
+  it("shows today as occupied-through instead of labeling tomorrow as free", () => {
+    expect(
+      getChannelBookingIndicator(
+        {
+          futureScheduledTotal: 1,
+          lastScheduledAt: "2026-09-14T18:00:00.000Z",
+          nextAvailableDate: "2026-09-15",
+          bookedThroughDate: null,
+        },
+        new Date("2026-09-14T10:00:00"),
+      ),
+    ).toMatchObject({
+      label: "Booked to Sep 14 · write for Sep 15",
+      compactLabel: "Sep 14",
+      tone: "text-rose-300",
+    });
+  });
+
   it("sorts channel cards by audience scale", () => {
     const channels = [
       { id: "test", title: "Test", currentSubscribersCount: 3 },

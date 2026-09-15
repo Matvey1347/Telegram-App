@@ -1,9 +1,22 @@
 import type { TelegramInviteLink } from "@/lib/api-types";
 
 export function telegramInviteLinkOptionLabel(
-  link: Pick<TelegramInviteLink, "name">,
+  link: Pick<
+    TelegramInviteLink,
+    | "name"
+    | "isDefaultForChannel"
+    | "isDefaultForBot"
+    | "isDefaultForFolders"
+    | "isDefaultForMutualPromotion"
+  >,
 ) {
-  return link.name;
+  const uses = [
+    link.isDefaultForChannel ? "Default" : null,
+    link.isDefaultForBot ? "Bot" : null,
+    link.isDefaultForFolders ? "Folders" : null,
+    link.isDefaultForMutualPromotion ? "VP" : null,
+  ].filter(Boolean);
+  return uses.length ? `${link.name} · ${uses.join(" · ")}` : link.name;
 }
 
 export function telegramInviteLinkDefaultBadgeClassName(

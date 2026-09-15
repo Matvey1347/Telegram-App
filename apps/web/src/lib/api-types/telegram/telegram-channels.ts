@@ -86,10 +86,14 @@ export type TelegramChannel = EntityAssignment & {
   lastEntityResolvedAt?: string | null;
   inviteLink?: string;
   description?: string;
+  shortDescription?: string | null;
   tgStatUrl?: string | null;
   presentationIconId?: string | null;
   presentationIconPresentation?: ResolvedEmoji | null;
   defaultInviteLinkId?: string | null;
+  botInviteLinkId?: string | null;
+  folderDefaultInviteLinkIds?: string[];
+  mutualPromotionInviteLinkIds?: string[];
   language?: string;
   niche?: string;
   currentSubscribersCount?: number;
@@ -161,6 +165,7 @@ export type TelegramChannel = EntityAssignment & {
       | "postsWindow"
     >;
     audienceTrend?: TelegramChannelAudienceTrend | null;
+    hasPublicationSchedule?: boolean;
     financialSummary: TelegramChannelFinancialSummary;
     bookingSchedule?: {
       futureScheduledTotal: number;

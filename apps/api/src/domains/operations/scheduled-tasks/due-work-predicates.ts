@@ -9,6 +9,7 @@ import {
 } from '@prisma/client';
 
 export const MANAGED_POST_IDENTITY_RETRY_MS = 45_000;
+export const MANAGED_POST_MISSING_IDENTITY_RETRY_MS = 30 * 60_000;
 export const MANAGED_POST_LOCAL_PUBLISHING_STALE_MS = 10 * 60_000;
 export const GREETER_BROADCAST_RETRY_MS = 5 * 60_000;
 export const GREETER_EXPIRY_RETRY_MS = 5 * 60_000;
@@ -22,10 +23,32 @@ export function managedPostIdentityCandidateWhere(
   now: Date,
 ): Prisma.TelegramManagedPostWhereInput {
   return {
-    telegramIdVerificationStatus:
-      TelegramManagedPostIdVerificationStatus.UNVERIFIED,
     OR: [
       {
+        telegramIdVerificationStatus:
+          TelegramManagedPostIdVerificationStatus.UNVERIFIED,
+        OR: [
+          {
+            status: TelegramManagedPostStatus.SCHEDULED,
+            scheduledAt: { lte: now },
+            AND: [
+              {
+                OR: [
+                  { scheduleMode: null },
+                  { scheduleMode: { not: 'BATCH' } },
+                ],
+              },
+            ],
+          },
+          {
+            status: TelegramManagedPostStatus.PUBLISHED,
+            lastTelegramSyncNote: MANAGED_POST_DEPENDENT_REPAIR_PENDING_NOTE,
+          },
+        ],
+      },
+      {
+        telegramIdVerificationStatus:
+          TelegramManagedPostIdVerificationStatus.MISSING,
         status: TelegramManagedPostStatus.SCHEDULED,
         scheduledAt: { lte: now },
         AND: [
@@ -33,10 +56,6 @@ export function managedPostIdentityCandidateWhere(
             OR: [{ scheduleMode: null }, { scheduleMode: { not: 'BATCH' } }],
           },
         ],
-      },
-      {
-        status: TelegramManagedPostStatus.PUBLISHED,
-        lastTelegramSyncNote: MANAGED_POST_DEPENDENT_REPAIR_PENDING_NOTE,
       },
     ],
   };
@@ -50,11 +69,31 @@ export function managedPostIdentityReadyWhere(
     AND: [
       {
         OR: [
-          { telegramIdLastCheckedAt: null },
           {
-            telegramIdLastCheckedAt: {
-              lte: new Date(now.getTime() - MANAGED_POST_IDENTITY_RETRY_MS),
-            },
+            telegramIdVerificationStatus:
+              TelegramManagedPostIdVerificationStatus.UNVERIFIED,
+            OR: [
+              { telegramIdLastCheckedAt: null },
+              {
+                telegramIdLastCheckedAt: {
+                  lte: new Date(now.getTime() - MANAGED_POST_IDENTITY_RETRY_MS),
+                },
+              },
+            ],
+          },
+          {
+            telegramIdVerificationStatus:
+              TelegramManagedPostIdVerificationStatus.MISSING,
+            OR: [
+              { telegramIdLastCheckedAt: null },
+              {
+                telegramIdLastCheckedAt: {
+                  lte: new Date(
+                    now.getTime() - MANAGED_POST_MISSING_IDENTITY_RETRY_MS,
+                  ),
+                },
+              },
+            ],
           },
         ],
       },

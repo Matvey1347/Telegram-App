@@ -4,7 +4,8 @@ const messages = {
   "telegram.posts.import.posts": "Import posts",
   "telegram.posts.import.groups": "Import groups",
   "telegram.posts.import.preview": "Preview & edit",
-  "telegram.posts.import.groupHint": "Copy the expected format before preparing group data with GPT.",
+  "telegram.posts.import.groupHint":
+    "Copy the expected format before preparing group data with GPT.",
   "telegram.posts.import.prompt": "Prompt",
   "telegram.posts.import.parseGroupsError": "Could not parse groups.",
   "telegram.posts.import.parsePlanError": "Could not parse plan.",
@@ -15,17 +16,21 @@ const messages = {
   "telegram.posts.import.emptyTab": "No posts in this tab.",
   "telegram.posts.import.defaultGroup": "Use default group",
   "telegram.posts.import.previewChannel": "Preview",
-  "telegram.posts.import.memberMissing": "Member {id} is not in this workspace.",
+  "telegram.posts.import.memberMissing":
+    "Member {id} is not in this workspace.",
   "telegram.posts.import.currentMember": "Current member",
-  "telegram.posts.import.groupJsonHint": "JSON supports title, description, icon, memberId, statusNumberingEnabled and postIds.",
+  "telegram.posts.import.groupJsonHint":
+    "JSON supports title, description, icon, memberId, statusNumberingEnabled and postIds.",
   "telegram.posts.import.groupOperation": "Import post groups",
   "telegram.posts.import.starting": "Starting import…",
   "telegram.posts.import.importingGroups": "Importing groups…",
-  "telegram.posts.import.result": "Import finished: {successful} successful, {failed} failed.",
+  "telegram.posts.import.result":
+    "Import finished: {successful} successful, {failed} failed.",
   "telegram.posts.import.groupsError": "Could not import groups.",
   "telegram.posts.import.groupsButton": "Import {count} groups",
   "telegram.posts.import.deleteTitle": "Delete by reimport file",
-  "telegram.posts.import.deleteHint": "Only IDs found in this channel can be deleted. Posts are deleted first; deleting a group does not delete posts outside the file.",
+  "telegram.posts.import.deleteHint":
+    "Only IDs found in this channel can be deleted. Posts are deleted first; deleting a group does not delete posts outside the file.",
   "telegram.posts.import.deleteOperation": "Delete channel content",
   "telegram.posts.import.deleting": "Deleting selected posts and groups…",
   "telegram.posts.import.postsDeleted": "Posts deleted. Removing groups…",
@@ -83,37 +88,73 @@ const messages = {
   "telegram.posts.import.dropFile": "Drop or paste a file here",
   "telegram.posts.import.chooseFile": "Choose file",
   "telegram.posts.import.fileTypes": "JSON, CSV, TSV, TXT, or plain text",
-  "telegram.posts.import.pasteHint": "Text pasted here opens the editor automatically",
+  "telegram.posts.import.pasteHint":
+    "Text pasted here opens the editor automatically",
   "telegram.posts.import.applyGroup": "Apply group",
-  "telegram.posts.import.applyGroupDescription": "This will set {group} for all {count} imported posts and update every groupId in the JSON.",
+  "telegram.posts.import.applyGroupDescription":
+    "This will set {group} for all {count} imported posts and update every groupId in the JSON.",
   "telegram.posts.import.loadingGroups": "Loading groups…",
   "telegram.posts.import.chooseGroup": "Choose a group override",
-  "telegram.posts.import.groupsLoadError": "Could not load post groups. Posts can still be imported ungrouped.",
-  "telegram.posts.import.groupChangeHint": "Changing this value updates groupId in every imported row.",
+  "telegram.posts.import.groupsLoadError":
+    "Could not load post groups. Posts can still be imported ungrouped.",
+  "telegram.posts.import.groupChangeHint":
+    "Changing this value updates groupId in every imported row.",
   "telegram.posts.import.noGroup": "No group",
   "telegram.posts.import.batchMessage": "Batch {batch}: {message}",
-  "telegram.posts.import.complete": "Import finished: {successful} successful, {failed} failed.",
-  "telegram.posts.import.failedRowsHint": "Failed rows stay outside Imported and can be retried.",
-  "telegram.posts.import.stopped": "Import stopped. {successful} successful, {failed} failed before cancellation.",
+  "telegram.posts.import.complete":
+    "Import finished: {successful} successful, {failed} failed.",
+  "telegram.posts.import.failedRowsHint":
+    "Failed rows stay outside Imported and can be retried.",
+  "telegram.posts.import.stopped":
+    "Import stopped. {successful} successful, {failed} failed before cancellation.",
   "telegram.posts.import.postsError": "Could not import managed posts",
-  "telegram.posts.import.dataRequired": "Paste rows or upload a JSON, CSV, TSV, or TXT file first.",
-  "telegram.posts.import.importHint": "Copy the expected format before preparing import data with GPT.",
-  "telegram.posts.import.allImported": "All posts are already marked as imported.",
+  "telegram.posts.import.dataRequired":
+    "Paste rows or upload a JSON, CSV, TSV, or TXT file first.",
+  "telegram.posts.import.importHint":
+    "Copy the expected format before preparing import data with GPT.",
+  "telegram.posts.import.allImported":
+    "All posts are already marked as imported.",
   "telegram.posts.import.importing": "Importing…",
   "telegram.posts.import.importButton": "Import posts",
-  "telegram.posts.import.batchHint": "Up to {count} posts are processed per request. Larger imports are processed sequentially in batches.",
-  "telegram.posts.import.unifiedTitle": "Unified import",
+  "telegram.posts.import.batchHint":
+    "Up to {count} posts are processed per request. Larger imports are processed sequentially in batches.",
+  "telegram.posts.import.unifiedTitle": "Import",
   "telegram.posts.import.unifiedUpload": "Upload JSON",
   "telegram.posts.import.unifiedCopyPrompt": "Copy unified instructions",
+  "telegram.posts.import.unifiedCopyAndDownload":
+    "Copy instruction + download full context",
+  "telegram.posts.import.unifiedContextReady":
+    "Instructions copied and complete import context downloaded.",
+  "telegram.posts.import.unifiedContextError":
+    "Could not prepare the complete import context.",
+  "telegram.posts.import.unifiedDropTitle":
+    "Drop JSON/TXT here or choose a file",
+  "telegram.posts.import.unifiedDropHint":
+    "You can also paste the generated manifest directly into the editor below.",
+  "telegram.posts.import.unifiedPasteHint": "Paste text or edit JSON manually",
   "telegram.posts.import.unifiedManifest": "JSON manifest",
   "telegram.posts.import.unifiedPreviewError": "Could not preview the import",
+  "telegram.posts.import.unifiedPreviewing": "Building preview…",
   "telegram.posts.import.unifiedApplyError": "Could not apply the import",
   "telegram.posts.import.unifiedApplied": "Import applied ({hash})",
-  "telegram.posts.import.unifiedPartial": "Import completed with {count} failed operations. Review the details before retrying.",
+  "telegram.posts.import.unifiedPartial":
+    "Import completed with {count} failed operations. Review the details before retrying.",
   "telegram.posts.import.unifiedValid": "Valid: {valid} · Errors: {invalid}",
   "telegram.posts.import.cancel": "Cancel",
   "telegram.posts.import.previewAction": "Preview",
   "telegram.posts.import.applyAction": "Apply",
+  "telegram.posts.import.conclusion": "Conclusion",
+  "telegram.posts.import.selectPublication": "Select publication",
+  "telegram.posts.import.addSlot": "Add slot",
+  "telegram.posts.import.operationTabs": "Import operations",
+  "telegram.posts.import.createTab": "Create ({count})",
+  "telegram.posts.import.deleteTab": "Delete ({count})",
+  "telegram.posts.import.emptyDeleteTab": "Nothing will be deleted in this section.",
+  "telegram.posts.import.openInSystem": "Open",
+  "telegram.posts.import.openAfterImport": "The publication can be opened after it is created.",
+  "telegram.posts.import.scheduleOperations": "Calendar operations",
+  "telegram.posts.import.scheduleTab": "Schedule ({count})",
+  "telegram.posts.import.unscheduleTab": "Unschedule ({count})",
   "telegram.posts.import.invalidFile": "Invalid file",
 } as const satisfies TranslationCatalog;
 export default messages;

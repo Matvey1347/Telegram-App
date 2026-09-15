@@ -150,16 +150,81 @@ export class TelegramManagedPostReconciliationService {
           this.telegramChannelAccessService.mtprotoChannelReference(
             posts[0].telegramChannel,
           );
-        return this.mtprotoClient.getManagedPostMessages({
+        const scheduledMessageIds = posts.flatMap(
+          (post) => post.telegramScheduledMessageIds,
+        );
+        const scheduledDates = posts
+          .map((post) => post.scheduledAt)
+          .filter((value): value is Date => value instanceof Date);
+        const publicationMatchMarginMs = posts.some(
+          (post) => post.origin === 'TELEGRAM',
+        )
+          ? 24 * 60 * 60_000
+          : 6 * 60 * 60_000;
+        const earliestScheduledAt = scheduledDates.length
+          ? new Date(
+              Math.min(...scheduledDates.map((value) => value.getTime())) -
+                publicationMatchMarginMs,
+            )
+          : undefined;
+        const latestScheduledAt = scheduledDates.length
+          ? new Date(
+              Math.max(...scheduledDates.map((value) => value.getTime())) +
+                publicationMatchMarginMs,
+            )
+          : undefined;
+        const remote = await this.mtprotoClient.getManagedPostMessages({
           ...this.telegramChannelAccessService.accountCredentials(account),
           channel: channelReference,
           publishedMessageIds: posts.flatMap((post) =>
-            post.status === 'PUBLISHED' ? post.telegramMessageIds : [],
+            post.status === 'PUBLISHED'
+              ? post.telegramMessageIds
+              : post.telegramScheduledMessageIds,
           ),
-          scheduledMessageIds: posts.flatMap(
-            (post) => post.telegramScheduledMessageIds,
-          ),
+          scheduledMessageIds,
+          recentPublishedFrom: earliestScheduledAt,
+          recentPublishedUntil: latestScheduledAt,
         });
+        if (!earliestScheduledAt || !latestScheduledAt) return remote;
+        const synchronized = await this.prisma.telegramPost.findMany({
+          where: {
+            workspaceId: params.workspaceId,
+            telegramChannelId: channelId,
+            postDate: {
+              gte: earliestScheduledAt,
+              lte: latestScheduledAt,
+            },
+          },
+          orderBy: [{ postDate: 'asc' }, { telegramMessageId: 'asc' }],
+          take: 500,
+          select: {
+            telegramMessageId: true,
+            text: true,
+            formattedText: true,
+            postDate: true,
+            hasMedia: true,
+            rawMessage: true,
+          },
+        });
+        const synchronizedMessages = synchronized.map((message) => ({
+          id: message.telegramMessageId,
+          text: message.text ?? '',
+          html: message.formattedText ?? undefined,
+          date: message.postDate.toISOString(),
+          hasMedia: message.hasMedia,
+          groupedId:
+            message.rawMessage &&
+            typeof message.rawMessage === 'object' &&
+            'groupedId' in message.rawMessage
+              ? String(message.rawMessage.groupedId ?? '') || null
+              : null,
+        }));
+        const recentPublished = new Map(
+          [...remote.recentPublished, ...synchronizedMessages].map(
+            (message) => [message.id, message] as const,
+          ),
+        );
+        return { ...remote, recentPublished: [...recentPublished.values()] };
       },
       repairDependants: (workspaceId, channelId, postId, publishedAt) =>
         this.repairScheduledPostDependants(

@@ -12,6 +12,10 @@ import {
   isChannelAdvertisingRevenueTransaction,
   isChannelPurchaseTransaction,
 } from './telegram-channel-financial-row-classification';
+import {
+  resolveChannelCardExpectedViews,
+  TelegramChannelAdPricingReadService,
+} from './telegram-channel-ad-pricing-read.service';
 import { TelegramChannelsSupportService } from './telegram-channels-support.service';
 
 const DEFAULT_HISTORY_RANGE: TelegramChannelPerformanceHistoryRange = '7d';
@@ -34,12 +38,19 @@ type FinancialEvent = {
   revenue: number;
 };
 
+type FinancialAmountRow = {
+  amount: unknown;
+  currency: string;
+  amountInPrimaryCurrency: unknown;
+};
+
 @Injectable()
 export class TelegramChannelPerformanceHistoryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly support: TelegramChannelsSupportService,
     private readonly currencyConversionService: CurrencyConversionService,
+    private readonly adPricingReadService: TelegramChannelAdPricingReadService,
   ) {}
 
   async history(
@@ -66,6 +77,7 @@ export class TelegramChannelPerformanceHistoryService {
         id: true,
         purchaseTransactionId: true,
         createdAt: true,
+        currentSubscribersCount: true,
         ownViewsPerPost: true,
         ownReactionsPerPost: true,
         adBaseCpm: true,
@@ -80,14 +92,15 @@ export class TelegramChannelPerformanceHistoryService {
     );
     const queryFrom =
       range === '1d' ? subtractUtcDays(visibleFrom, 1) : visibleFrom;
-    // A short lookback supplies the last known normalized reach for the
-    // ads-left projection without extending the visible chart range.
-    const postHistoryFrom =
-      periodDays == null ? queryFrom : subtractUtcDays(queryFrom, 30);
-
-    const [audienceRows, dailyPostRows, transactions, allocations, workspace] =
-      await Promise.all([
-        this.prisma.$queryRaw<AudienceHistoryRow[]>(Prisma.sql`
+    const [
+      audienceRows,
+      dailyPostRows,
+      transactions,
+      allocations,
+      workspace,
+      pricingWindowsByChannel,
+    ] = await Promise.all([
+      this.prisma.$queryRaw<AudienceHistoryRow[]>(Prisma.sql`
           WITH ranked AS (
             SELECT
               snapshot."id",
@@ -124,7 +137,7 @@ export class TelegramChannelPerformanceHistoryService {
             OR "maxRank" = 1
           ORDER BY "collectedAt"
         `),
-        this.prisma.$queryRaw<DailyPostHistoryRow[]>(Prisma.sql`
+      this.prisma.$queryRaw<DailyPostHistoryRow[]>(Prisma.sql`
           SELECT
             DATE_TRUNC('day', post."postDate") AS "date",
             AVG(
@@ -157,57 +170,89 @@ export class TelegramChannelPerformanceHistoryService {
           WHERE post."workspaceId" = ${workspaceId}
             AND post."telegramChannelId" = ${channelId}
             AND post."excludeFromAnalytics" = FALSE
-            AND post."postDate" >= ${postHistoryFrom}
+            AND post."postDate" >= ${queryFrom}
             AND post."postDate" <= ${now}
           GROUP BY DATE_TRUNC('day', post."postDate")
           ORDER BY "date"
         `),
-        this.prisma.transaction.findMany({
-          where: {
-            workspaceId,
-            OR: [
-              { telegramChannelId: channelId },
-              ...(channel.purchaseTransactionId
-                ? [{ id: channel.purchaseTransactionId }]
-                : []),
-              {
-                adCampaign: {
-                  telegramChannelId: channelId,
-                  excludeFromAnalytics: false,
-                },
+      this.prisma.transaction.findMany({
+        where: {
+          workspaceId,
+          OR: [
+            { telegramChannelId: channelId },
+            ...(channel.purchaseTransactionId
+              ? [{ id: channel.purchaseTransactionId }]
+              : []),
+            {
+              adCampaign: {
+                telegramChannelId: channelId,
+                excludeFromAnalytics: false,
               },
-            ],
-          },
-          select: {
-            id: true,
-            type: true,
-            date: true,
-            amountInPrimaryCurrency: true,
-            categoryRef: { select: { key: true, name: true } },
-            telegramAdSalePayment: { select: { id: true } },
-          },
-        }),
-        this.prisma.telegramAdSalePaymentAllocation.findMany({
-          where: {
-            workspaceId,
-            placement: { telegramChannelId: channelId },
-            payment: { status: 'ACTIVE' },
-          },
-          select: {
-            amountInPrimaryCurrency: true,
-            payment: { select: { paidAt: true } },
-          },
-        }),
-        this.prisma.workspace.findUnique({
-          where: { id: workspaceId },
-          select: { primaryCurrency: true },
-        }),
-      ]);
+            },
+          ],
+        },
+        select: {
+          id: true,
+          type: true,
+          date: true,
+          amount: true,
+          currency: true,
+          amountInPrimaryCurrency: true,
+          categoryRef: { select: { key: true, name: true } },
+          telegramAdSalePayment: { select: { id: true } },
+        },
+      }),
+      this.prisma.telegramAdSalePaymentAllocation.findMany({
+        where: {
+          workspaceId,
+          placement: { telegramChannelId: channelId },
+          payment: { status: 'ACTIVE' },
+        },
+        select: {
+          amount: true,
+          currency: true,
+          amountInPrimaryCurrency: true,
+          payment: { select: { paidAt: true } },
+        },
+      }),
+      this.prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { primaryCurrency: true },
+      }),
+      this.adPricingReadService.windowsForChannels(workspaceId, [channel], now),
+    ]);
+
+    const primaryCurrency = workspace?.primaryCurrency ?? 'USD';
+    const financialRows: FinancialAmountRow[] = [
+      ...transactions,
+      ...allocations,
+    ];
+    const needsCurrencyConversion = financialRows.some(
+      (row) => row.currency.toUpperCase() !== primaryCurrency.toUpperCase(),
+    );
+    const rateSource = needsCurrencyConversion
+      ? await this.currencyConversionService.prepareRateSource(workspaceId)
+      : null;
+    const amountInHistoryCurrency = async (row: FinancialAmountRow) => {
+      const amount = Number(row.amount);
+      const sourceCurrency = row.currency.toUpperCase();
+      if (Number.isFinite(amount)) {
+        if (sourceCurrency === primaryCurrency.toUpperCase()) return amount;
+        const converted = await rateSource?.convertCurrency(
+          amount,
+          sourceCurrency,
+          primaryCurrency,
+        );
+        if (converted != null && Number.isFinite(converted)) return converted;
+      }
+      const normalized = Number(row.amountInPrimaryCurrency);
+      return Number.isFinite(normalized) ? normalized : null;
+    };
 
     const events: FinancialEvent[] = [];
     for (const transaction of transactions) {
-      const amount = Number(transaction.amountInPrimaryCurrency);
-      if (!Number.isFinite(amount)) continue;
+      const amount = await amountInHistoryCurrency(transaction);
+      if (amount == null) continue;
       if (
         isChannelPurchaseTransaction(
           transaction,
@@ -221,8 +266,8 @@ export class TelegramChannelPerformanceHistoryService {
       }
     }
     for (const allocation of allocations) {
-      const amount = Number(allocation.amountInPrimaryCurrency);
-      if (!Number.isFinite(amount)) continue;
+      const amount = await amountInHistoryCurrency(allocation);
+      if (amount == null) continue;
       events.push({
         at: allocation.payment.paidAt,
         invested: 0,
@@ -230,7 +275,6 @@ export class TelegramChannelPerformanceHistoryService {
       });
     }
     events.sort((left, right) => left.at.getTime() - right.at.getTime());
-    const primaryCurrency = workspace?.primaryCurrency ?? 'USD';
     const sourceCpm =
       channel.adBaseCpm == null ? null : Number(channel.adBaseCpm);
     const sourceCurrency = (
@@ -247,6 +291,10 @@ export class TelegramChannelPerformanceHistoryService {
               primaryCurrency,
               workspaceId,
             );
+    const currentH24ExpectedViews = resolveChannelCardExpectedViews(
+      pricingWindowsByChannel.get(channel.id),
+      channel,
+    );
 
     const historyPoints = buildHistoryPoints(
       audienceRows,
@@ -255,6 +303,7 @@ export class TelegramChannelPerformanceHistoryService {
       queryFrom,
       now,
       currentCpm,
+      currentH24ExpectedViews,
     );
     return {
       range,
@@ -314,6 +363,7 @@ function buildHistoryPoints(
   from: Date,
   now: Date,
   currentCpm: number | null,
+  currentH24ExpectedViews: number | null,
 ): TelegramChannelPerformanceHistoryPoint[] {
   const audienceByInstant = new Map(
     audienceRows.map((row) => [row.collectedAt.toISOString(), row]),
@@ -329,26 +379,23 @@ function buildHistoryPoints(
   }
   for (const event of events) {
     if (event.at >= from && event.at <= now)
-      instants.add(startOfUtcDay(event.at).toISOString());
+      instants.add(event.at.toISOString());
   }
+  // Anchor financial charts at both edges of the selected range. This keeps
+  // the carried balance visible before the first in-range transaction and
+  // guarantees that the final point matches today's card calculation.
+  instants.add(from.toISOString());
+  instants.add(now.toISOString());
 
   let eventIndex = 0;
   let invested = 0;
   let revenue = 0;
-  let latestAverageViews =
-    dailyPostRows
-      .filter((row) => row.date < from && row.averageViews != null)
-      .sort((left, right) => left.date.getTime() - right.date.getTime())
-      .at(-1)?.averageViews ?? null;
-  if (latestAverageViews != null)
-    latestAverageViews = Number(latestAverageViews);
+  let carriedExpectedViews: number | null = null;
   return [...instants].sort().map((instant) => {
     const timestamp = new Date(instant);
     const date = dayKey(timestamp);
     const isDayPoint = instant.endsWith('T00:00:00.000Z');
-    const cutoff = isDayPoint
-      ? new Date(`${date}T23:59:59.999Z`).getTime()
-      : timestamp.getTime();
+    const cutoff = timestamp.getTime();
     while (
       eventIndex < events.length &&
       events[eventIndex].at.getTime() <= cutoff
@@ -359,15 +406,24 @@ function buildHistoryPoints(
     }
     const audience = audienceByInstant.get(instant);
     const dailyPosts = isDayPoint ? postsByDay.get(date) : undefined;
-    if (dailyPosts?.averageViews != null)
-      latestAverageViews = Number(dailyPosts.averageViews);
+    if (
+      dailyPosts?.averageViews != null &&
+      Number.isFinite(Number(dailyPosts.averageViews)) &&
+      Number(dailyPosts.averageViews) > 0
+    ) {
+      carriedExpectedViews = Number(dailyPosts.averageViews);
+    }
+    const isCurrentPoint = timestamp.getTime() === now.getTime();
+    const expectedViews = isCurrentPoint
+      ? currentH24ExpectedViews
+      : (carriedExpectedViews ?? currentH24ExpectedViews);
     const estimatedAdPrice =
       currentCpm != null &&
       Number.isFinite(currentCpm) &&
       currentCpm > 0 &&
-      latestAverageViews != null &&
-      latestAverageViews > 0
-        ? (latestAverageViews / 1000) * currentCpm
+      expectedViews != null &&
+      expectedViews > 0
+        ? (expectedViews / 1000) * currentCpm
         : null;
     const remaining = Math.max(invested - revenue, 0);
     return {
@@ -389,7 +445,9 @@ function buildHistoryPoints(
       adsLeft:
         estimatedAdPrice == null
           ? null
-          : Math.ceil(remaining / estimatedAdPrice),
+          : isCurrentPoint
+            ? Math.ceil(remaining / estimatedAdPrice)
+            : round(remaining / estimatedAdPrice, 1),
     };
   });
 }

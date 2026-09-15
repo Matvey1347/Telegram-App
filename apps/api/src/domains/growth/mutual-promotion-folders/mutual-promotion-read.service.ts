@@ -361,10 +361,17 @@ export class MutualPromotionReadService {
       ? (
           await this.prisma.telegramChannel.findMany({
             where: { workspaceId, id: { in: channelIds } },
-            select: { defaultInviteLinkId: true },
+            select: {
+              defaultInviteLinkId: true,
+              folderDefaultInviteLinkIds: true,
+            },
           })
         ).flatMap((channel) =>
-          channel.defaultInviteLinkId ? [channel.defaultInviteLinkId] : [],
+          channel.folderDefaultInviteLinkIds?.length
+            ? channel.folderDefaultInviteLinkIds
+            : channel.defaultInviteLinkId
+              ? [channel.defaultInviteLinkId]
+              : [],
         )
       : [];
     if (query.initial && !defaultInviteLinkIds.length) return [];
@@ -378,7 +385,13 @@ export class MutualPromotionReadService {
       select: {
         id: true,
         telegramChannelId: true,
-        telegramChannel: { select: { defaultInviteLinkId: true } },
+        telegramChannel: {
+          select: {
+            defaultInviteLinkId: true,
+            folderDefaultInviteLinkIds: true,
+            mutualPromotionInviteLinkIds: true,
+          },
+        },
         name: true,
         url: true,
         joinedCount: true,
@@ -455,6 +468,13 @@ export class MutualPromotionReadService {
         isRevoked: link.isRevoked,
         isDefaultForChannel:
           link.telegramChannel.defaultInviteLinkId === link.id,
+        isDefaultForFolders:
+          link.telegramChannel.folderDefaultInviteLinkIds?.includes(link.id) ??
+          false,
+        isDefaultForMutualPromotion:
+          link.telegramChannel.mutualPromotionInviteLinkIds?.includes(
+            link.id,
+          ) ?? false,
         available: !link.isRevoked && unavailableReason === null,
         unavailableReason,
         creatorUsername: link.creatorUsername,

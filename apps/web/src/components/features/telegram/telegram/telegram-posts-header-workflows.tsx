@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Bot, Brain, FolderPlus, Plus, Upload } from "lucide-react";
+import { Bot, Upload } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { TelegramChannelSelectOption } from "@/lib/api-types/telegram/telegram-channels";
 import { Button, CustomSelect, PageHeader } from "@/components/ui/primitives";
@@ -10,44 +10,32 @@ import { telegramPostKeys } from "@/lib/query-keys";
 import { ManagedPostsImportModal } from "./managed-posts-import-modal";
 import { PostGroupsImportModal } from "./post-groups-import-modal";
 import { ChannelReimportDeleteModal } from "./channel-reimport-delete-modal";
-import {
-  TelegramCardActionsMenu,
-  TelegramCardMenuAction,
-} from "./telegram-card-actions-menu";
 import { GptContextDownloadButton } from "./gpt-context-download-button";
 import { ResetChannelScheduledPostsButton } from "./reset-channel-scheduled-posts-button";
 import type { ChannelImportMode } from "./channel-import-navigation";
 import { PostFromBotModal } from "./post-from-bot/post-from-bot-modal";
 import { UnifiedImportModal } from "./unified-import-modal";
-import { ContentHypothesesModal } from "./content-hypotheses-modal";
 
 export function TelegramPostsHeaderWorkflows({
   channel,
   channels,
-  workspaceView,
   importMode,
   importTranslationsReady,
   onChannelChange,
   onImportModeChange,
-  onNewPost,
-  onNewGroup,
   onResetCompleted,
 }: {
   channel?: TelegramChannelSelectOption;
   channels: TelegramChannelSelectOption[];
-  workspaceView: "posts" | "groups";
   importMode: ChannelImportMode | null;
   importTranslationsReady: boolean;
   onChannelChange: (channelId: string) => void;
   onImportModeChange: (mode: ChannelImportMode | null) => void;
-  onNewPost: () => void;
-  onNewGroup: () => void;
   onResetCompleted: () => void;
 }) {
   const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const [postFromBotOpen, setPostFromBotOpen] = useState(false);
-  const [hypothesesOpen, setHypothesesOpen] = useState(false);
   const activeChannel = channel ?? channels[0];
 
   return (
@@ -57,8 +45,8 @@ export function TelegramPostsHeaderWorkflows({
         subtitle={t("telegram.posts.subtitle")}
         action={
           activeChannel ? (
-            <div className="flex w-full flex-col gap-2 sm:min-w-[720px] sm:flex-row">
-              <div className="min-w-0 flex-1 [&>div>button]:h-[42px] [&>div>button]:min-h-0">
+            <div className="flex w-full flex-wrap justify-end gap-2 sm:min-w-[720px]">
+              <div className="min-w-[260px] flex-1 [&>div>button]:h-[42px] [&>div>button]:min-h-0">
                 <CustomSelect
                   uiLocale={locale}
                   value={activeChannel.id}
@@ -73,51 +61,28 @@ export function TelegramPostsHeaderWorkflows({
               </div>
               <Button
                 type="button"
+                variant="secondary"
+                className="h-[42px] shrink-0"
+                onClick={() => onImportModeChange("unified")}
+              >
+                <Upload size={17} /> {t("common.import")}
+              </Button>
+              <Button
+                type="button"
                 className="h-[42px] shrink-0"
                 onClick={() => setPostFromBotOpen(true)}
               >
-                <Bot size={17} />
-                {t("telegram.posts.batch.addViaBot")}
+                <Bot size={17} /> {t("telegram.posts.batch.addViaBot")}
               </Button>
-              <TelegramCardActionsMenu
-                label={t("telegram.posts.channelActions")}
-                keepMounted
-                triggerClassName="!h-[42px] !w-[42px] shrink-0 rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800"
-              >
-                <TelegramCardMenuAction
-                  label={t("common.import")}
-                  icon={<Upload size={17} />}
-                  onClick={() =>
-                    onImportModeChange("unified")
-                  }
-                />
-                <TelegramCardMenuAction
-                  label={t("telegram.posts.newPost")}
-                  icon={<Plus size={17} />}
-                  onClick={onNewPost}
-                />
-                <TelegramCardMenuAction
-                  label={t("telegram.posts.hypotheses")}
-                  icon={<Brain size={17} />}
-                  onClick={() => setHypothesesOpen(true)}
-                />
-                <TelegramCardMenuAction
-                  label={t("telegram.posts.newGroup")}
-                  icon={<FolderPlus size={17} />}
-                  onClick={onNewGroup}
-                />
-                <GptContextDownloadButton
-                  channelId={activeChannel.id}
-                  channelTitle={activeChannel.title}
-                  presentation="menu"
-                />
-                <ResetChannelScheduledPostsButton
-                  channelId={activeChannel.id}
-                  channelTitle={activeChannel.title}
-                  presentation="menu"
-                  onCompleted={onResetCompleted}
-                />
-              </TelegramCardActionsMenu>
+              <GptContextDownloadButton
+                channelId={activeChannel.id}
+                channelTitle={activeChannel.title}
+              />
+              <ResetChannelScheduledPostsButton
+                channelId={activeChannel.id}
+                channelTitle={activeChannel.title}
+                onCompleted={onResetCompleted}
+              />
             </div>
           ) : undefined
         }
@@ -127,6 +92,11 @@ export function TelegramPostsHeaderWorkflows({
         <UnifiedImportModal
           open={importMode === "unified"}
           channelId={activeChannel.id}
+          channelTitle={activeChannel.title}
+          channelPhotoUrl={activeChannel.photoUrl}
+          channelTelegramChatId={activeChannel.telegramChatId}
+          captionLengthMax={activeChannel.publishingCapabilities.captionLengthMax}
+          messageLengthMax={activeChannel.publishingCapabilities.messageLengthMax}
           onClose={() => onImportModeChange(null)}
           onApplied={async () => {
             await Promise.all([
@@ -182,13 +152,12 @@ export function TelegramPostsHeaderWorkflows({
         />
       ) : null}
       <PostFromBotModal
+        key={activeChannel?.id ?? "mass-publications"}
         open={postFromBotOpen}
         channels={channels}
+        defaultChannelId={activeChannel?.id}
         onClose={() => setPostFromBotOpen(false)}
       />
-      {activeChannel && hypothesesOpen ? (
-        <ContentHypothesesModal channelId={activeChannel.id} onClose={() => setHypothesesOpen(false)} />
-      ) : null}
     </>
   );
 }

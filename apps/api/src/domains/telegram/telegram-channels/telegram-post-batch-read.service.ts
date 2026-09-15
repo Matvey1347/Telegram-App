@@ -2,12 +2,12 @@ import { Injectable } from '@nestjs/common';
 import type {
   TelegramPostBatch,
   TelegramPostBatchChannelOverride,
-  TelegramPostBatchAssociationTarget,
   TelegramPostBatchDelivery,
   TelegramPostBatchListResponse,
 } from '@telegram-system/shared';
 import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { normalizeTelegramPostButtonRows } from '../../../telegram/shared/telegram-inline-keyboard';
 import { postBatchNotFound } from './telegram-post-batch.errors';
 import { TelegramPostBatchSummaryService } from './telegram-post-batch-summary.service';
@@ -28,6 +28,16 @@ const batchSelect = {
       id: true,
       position: true,
       title: true,
+      iconId: true,
+      icon: {
+        select: {
+          id: true,
+          type: true,
+          name: true,
+          emoji: true,
+          imageUrl: true,
+        },
+      },
       text: true,
       imageUrls: true,
       mediaItems: true,
@@ -37,20 +47,6 @@ const batchSelect = {
       deleteAfterHours: true,
       longTextMode: true,
       channelOverrides: true,
-    },
-  },
-  adSaleLinks: {
-    select: {
-      id: true,
-      adSaleId: true,
-      adSale: { select: { title: true, advertiserName: true } },
-    },
-  },
-  mutualPromotionLinks: {
-    select: {
-      id: true,
-      mutualPromotionFolderId: true,
-      mutualPromotionFolder: { select: { title: true } },
     },
   },
 } as const;
@@ -75,7 +71,7 @@ export class TelegramPostBatchReadService {
     const skip = (page - 1) * pageSize;
     const [rows, totalItems] = await Promise.all([
       this.prisma.telegramPostBatch.findMany({
-        where: { workspaceId },
+        where: { workspaceId, status: { not: 'DRAFT' } },
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
         skip,
         take: pageSize,
@@ -90,7 +86,9 @@ export class TelegramPostBatchReadService {
           _count: { select: { posts: true } },
         },
       }),
-      this.prisma.telegramPostBatch.count({ where: { workspaceId } }),
+      this.prisma.telegramPostBatch.count({
+        where: { workspaceId, status: { not: 'DRAFT' } },
+      }),
     ]);
     const aggregates = await this.summaries.aggregate(
       workspaceId,
@@ -191,43 +189,6 @@ export class TelegramPostBatchReadService {
     };
   }
 
-  async linkTargets(
-    workspaceId: string,
-    type: 'AD_SALE' | 'MUTUAL_PROMOTION_FOLDER',
-  ): Promise<TelegramPostBatchAssociationTarget[]> {
-    if (type === 'AD_SALE') {
-      const rows = await this.prisma.telegramAdSale.findMany({
-        where: { workspaceId },
-        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-        take: 100,
-        select: {
-          id: true,
-          title: true,
-          advertiserName: true,
-          status: true,
-        },
-      });
-      return rows.map((row) => ({
-        type,
-        entityId: row.id,
-        title: row.title?.trim() || row.advertiserName,
-        subtitle: row.status,
-      }));
-    }
-    const rows = await this.prisma.mutualPromotionFolder.findMany({
-      where: { workspaceId },
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-      take: 100,
-      select: { id: true, title: true, status: true },
-    });
-    return rows.map((row) => ({
-      type,
-      entityId: row.id,
-      title: row.title,
-      subtitle: row.status,
-    }));
-  }
-
   async requireBatch(workspaceId: string, id: string) {
     const row = await this.prisma.telegramPostBatch.findFirst({
       where: { id, workspaceId },
@@ -259,6 +220,8 @@ export class TelegramPostBatchReadService {
         id: post.id,
         position: post.position,
         title: post.title,
+        iconId: post.iconId,
+        iconPresentation: iconToResolvedEmoji(post.icon),
         text: post.text,
         imageUrls: post.imageUrls,
         mediaItems: normalizeTelegramPostMediaItems(
@@ -275,20 +238,6 @@ export class TelegramPostBatchReadService {
             : 'IMAGES_THEN_TEXT',
         channelOverrides: parseOverrides(post.channelOverrides),
       })),
-      associations: [
-        ...row.adSaleLinks.map((link) => ({
-          id: link.id,
-          type: 'AD_SALE' as const,
-          entityId: link.adSaleId,
-          title: link.adSale.title?.trim() || link.adSale.advertiserName,
-        })),
-        ...row.mutualPromotionLinks.map((link) => ({
-          id: link.id,
-          type: 'MUTUAL_PROMOTION_FOLDER' as const,
-          entityId: link.mutualPromotionFolderId,
-          title: link.mutualPromotionFolder.title,
-        })),
-      ],
     };
   }
 }

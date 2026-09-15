@@ -6,8 +6,12 @@ import {
 
 export type ChannelSettingsDraft = {
   presentationIconId: string;
+  description: string;
   tgStatUrl: string;
   defaultInviteLinkId: string;
+  botInviteLinkId: string;
+  folderDefaultInviteLinkIds: string[];
+  mutualPromotionInviteLinkIds: string[];
   adBaseCpm: string;
   adBaseCurrency: string;
   targetCpa: string;
@@ -26,8 +30,12 @@ export function createChannelSettingsDraft(
 ): ChannelSettingsDraft {
   return {
     presentationIconId: channel.presentationIconId || "",
+    description: channel.shortDescription || "",
     tgStatUrl: channel.tgStatUrl || "",
     defaultInviteLinkId: channel.defaultInviteLinkId || "",
+    botInviteLinkId: channel.botInviteLinkId || "",
+    folderDefaultInviteLinkIds: channel.folderDefaultInviteLinkIds ?? [],
+    mutualPromotionInviteLinkIds: channel.mutualPromotionInviteLinkIds ?? [],
     adBaseCpm: channel.adBaseCpm == null ? "" : String(channel.adBaseCpm),
     adBaseCurrency: channel.adBaseCurrency || channel.kpiCurrency || "USD",
     targetCpa: channel.targetCpa == null ? "" : String(channel.targetCpa),
@@ -56,8 +64,12 @@ export function buildChannelSettingsPayload(draft: ChannelSettingsDraft) {
     draft.seedDisabled ? 0 : nonNegative(value);
   return {
     presentationIconId: draft.presentationIconId || null,
+    shortDescription: draft.description.trim() || null,
     tgStatUrl: draft.tgStatUrl.trim() || null,
     defaultInviteLinkId: draft.defaultInviteLinkId || null,
+    botInviteLinkId: draft.botInviteLinkId || null,
+    folderDefaultInviteLinkIds: draft.folderDefaultInviteLinkIds,
+    mutualPromotionInviteLinkIds: draft.mutualPromotionInviteLinkIds,
     adBaseCpm: optionalNumber(draft.adBaseCpm),
     adBaseCurrency: draft.adBaseCurrency,
     kpiCurrency: draft.adBaseCurrency,

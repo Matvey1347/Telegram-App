@@ -103,35 +103,58 @@ export class TelegramChannelLifecycleService {
               dto.assignedMemberId,
             )
           ).assignedMemberId;
-    const [presentationIcon, defaultInviteLink] = await Promise.all([
-      dto.presentationIconId
-        ? this.prisma.icon.findFirst({
-            where: {
-              id: dto.presentationIconId,
-              type: 'emoji',
-              OR: [{ workspaceId }, { workspaceId: null }],
-            },
-            select: { id: true },
-          })
-        : Promise.resolve(null),
-      dto.defaultInviteLinkId
-        ? this.prisma.telegramInviteLink.findFirst({
-            where: {
-              id: dto.defaultInviteLinkId,
-              workspaceId,
-              telegramChannelId: id,
-              isRevoked: false,
-            },
-            select: { id: true },
-          })
-        : Promise.resolve(null),
-    ]);
+    const purposeInviteLinkIds = [
+      ...new Set([
+        ...(dto.folderDefaultInviteLinkIds ?? []),
+        ...(dto.mutualPromotionInviteLinkIds ?? []),
+        ...(dto.botInviteLinkId ? [dto.botInviteLinkId] : []),
+      ]),
+    ];
+    const [presentationIcon, defaultInviteLink, purposeInviteLinksCount] =
+      await Promise.all([
+        dto.presentationIconId
+          ? this.prisma.icon.findFirst({
+              where: {
+                id: dto.presentationIconId,
+                type: 'emoji',
+                OR: [{ workspaceId }, { workspaceId: null }],
+              },
+              select: { id: true },
+            })
+          : Promise.resolve(null),
+        dto.defaultInviteLinkId
+          ? this.prisma.telegramInviteLink.findFirst({
+              where: {
+                id: dto.defaultInviteLinkId,
+                workspaceId,
+                telegramChannelId: id,
+                isRevoked: false,
+              },
+              select: { id: true },
+            })
+          : Promise.resolve(null),
+        purposeInviteLinkIds.length
+          ? this.prisma.telegramInviteLink.count({
+              where: {
+                id: { in: purposeInviteLinkIds },
+                workspaceId,
+                telegramChannelId: id,
+                isRevoked: false,
+              },
+            })
+          : Promise.resolve(0),
+      ]);
     if (dto.presentationIconId && !presentationIcon) {
       throw new BadRequestException('Channel emoji is unavailable');
     }
     if (dto.defaultInviteLinkId && !defaultInviteLink) {
       throw new BadRequestException(
         'Default invite link must belong to this channel',
+      );
+    }
+    if (purposeInviteLinksCount !== purposeInviteLinkIds.length) {
+      throw new BadRequestException(
+        'Purpose-specific invite links must belong to this channel',
       );
     }
     const { timePosts: _timePosts, ...channelUpdateData } = dto;

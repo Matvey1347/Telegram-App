@@ -7,10 +7,24 @@ function client() {
     get: vi.fn().mockResolvedValue({ data: {} }),
     post: vi.fn().mockResolvedValue({ data: {} }),
     patch: vi.fn().mockResolvedValue({ data: {} }),
+    delete: vi.fn().mockResolvedValue({ data: {} }),
   };
 }
 
 describe("telegramPostBatchesApi", () => {
+  it("creates a manual publication batch", async () => {
+    const http = client();
+    const api = createTelegramPostBatchesApi(http as unknown as AxiosInstance);
+
+    await api.create({ channelIds: ["channel-1"] });
+
+    expect(http.post).toHaveBeenCalledWith(
+      "/telegram-post-batches",
+      { channelIds: ["channel-1"] },
+      { feedback: { mode: "silent" } },
+    );
+  });
+
   it("persists a ready System Bot workflow as a draft batch", async () => {
     const http = client();
     const api = createTelegramPostBatchesApi(http as unknown as AxiosInstance);
@@ -51,15 +65,14 @@ describe("telegramPostBatchesApi", () => {
     );
   });
 
-  it("loads link targets by association type in one request", async () => {
+  it("deletes a saved draft silently", async () => {
     const http = client();
     const api = createTelegramPostBatchesApi(http as unknown as AxiosInstance);
 
-    await api.linkTargets("MUTUAL_PROMOTION_FOLDER");
+    await api.removeDraft("batch-1");
 
-    expect(http.get).toHaveBeenCalledWith(
-      "/telegram-post-batches/link-targets",
-      { params: { type: "MUTUAL_PROMOTION_FOLDER" } },
-    );
+    expect(http.delete).toHaveBeenCalledWith("/telegram-post-batches/batch-1", {
+      feedback: { mode: "silent" },
+    });
   });
 });

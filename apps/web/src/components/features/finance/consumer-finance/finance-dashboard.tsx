@@ -9,6 +9,7 @@ import { IconAvatar } from "./ui/finance-icon-avatar";
 import { type FinanceLocale } from "./i18n/core";
 import { financeDashboardCopy } from "./i18n/dashboard";
 import { FinancePeriodSelector } from "./finance-period-selector";
+import { FinanceDashboardSkeleton } from "./finance-dashboard-skeleton";
 
 export function FinanceDashboard({
   data,
@@ -16,16 +17,17 @@ export function FinanceDashboard({
   surface,
   period = { period: "CURRENT_MONTH" },
   onPeriodChange = () => undefined,
+  loading = false,
+  loadingLabel = "Loading finances...",
 }: {
-  data: ConsumerFinanceDashboard;
+  data?: ConsumerFinanceDashboard | null;
   locale: FinanceLocale;
   surface: ConsumerFinanceSurface;
   period?: ConsumerFinanceAnalyticsQuery;
   onPeriodChange?: (period: ConsumerFinanceAnalyticsQuery) => void;
+  loading?: boolean;
+  loadingLabel?: string;
 }) {
-  const t = financeDashboardCopy(locale);
-  const { stats } = data;
-  const accounts = stats.accounts.filter((account) => !account.archivedAt);
   return (
     <div data-finance-dashboard={surface} className="space-y-2">
       <FinancePeriodSelector
@@ -33,6 +35,27 @@ export function FinanceDashboard({
         locale={locale}
         onChange={onPeriodChange}
       />
+      {loading ? (
+        <FinanceDashboardSkeleton label={loadingLabel} />
+      ) : data ? (
+        <FinanceDashboardContent data={data} locale={locale} />
+      ) : null}
+    </div>
+  );
+}
+
+function FinanceDashboardContent({
+  data,
+  locale,
+}: {
+  data: ConsumerFinanceDashboard;
+  locale: FinanceLocale;
+}) {
+  const t = financeDashboardCopy(locale);
+  const { stats } = data;
+  const accounts = stats.accounts.filter((account) => !account.archivedAt);
+  return (
+    <>
       <Card className="!p-3">
         <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
           {[
@@ -141,6 +164,6 @@ export function FinanceDashboard({
           <EmptyState text={t.addAccountHint} context="accounts" compact />
         )}
       </Card>
-    </div>
+    </>
   );
 }

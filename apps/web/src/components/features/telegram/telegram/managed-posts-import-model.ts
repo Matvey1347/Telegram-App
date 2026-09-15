@@ -35,6 +35,7 @@ export type EditableImportRow = {
   scheduledAt: string | null;
   imported: boolean;
   approved: boolean;
+  hypothesisRefs?: string[];
 };
 
 type ParsedImportRow = Record<string, unknown>;

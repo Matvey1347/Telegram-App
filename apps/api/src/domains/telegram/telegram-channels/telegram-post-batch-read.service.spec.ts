@@ -71,6 +71,10 @@ describe('TelegramPostBatchReadService', () => {
     expect(prisma.telegramPostBatch.findMany.mock.calls[0][0].select).toEqual(
       expect.not.objectContaining({ deliveries: expect.anything() }),
     );
+    expect(prisma.telegramPostBatch.findMany.mock.calls[0][0].where).toEqual({
+      workspaceId: 'workspace-1',
+      status: { not: 'DRAFT' },
+    });
     expect(prisma.telegramPostBatchDelivery.groupBy).toHaveBeenCalledWith(
       expect.objectContaining({
         by: ['batchId', 'status'],

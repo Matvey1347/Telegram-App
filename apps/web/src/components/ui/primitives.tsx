@@ -532,6 +532,7 @@ type MultiSelectOption = {
   iconEmoji?: string;
   iconPremium?: boolean;
   iconFallback?: string;
+  badgeClassName?: string;
 };
 
 export function MultiSelect({
@@ -548,6 +549,9 @@ export function MultiSelect({
   createOptionLabel,
   onCreateOption,
   creatingOption = false,
+  loading = false,
+  loadingLabel = "Loading options…",
+  onOpen,
 }: {
   value: string[];
   onChange: (value: string[]) => void;
@@ -562,6 +566,9 @@ export function MultiSelect({
   createOptionLabel?: (search: string) => React.ReactNode;
   onCreateOption?: (search: string) => void | Promise<void>;
   creatingOption?: boolean;
+  loading?: boolean;
+  loadingLabel?: string;
+  onOpen?: () => void;
 }) {
   const i18n = useOptionalI18n();
   const resolvedPlaceholder =
@@ -665,6 +672,7 @@ export function MultiSelect({
         type="button"
         disabled={disabled}
         onClick={() => {
+          if (!open) onOpen?.();
           setOpen((current) => {
             if (current) setSearch("");
             return !current;
@@ -673,7 +681,12 @@ export function MultiSelect({
         className="flex min-h-9 w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white outline-none ring-blue-500 focus:ring disabled:opacity-50"
       >
         <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-          {selectedOptions.length ? (
+          {loading && !selectedOptions.length ? (
+            <span className="inline-flex items-center gap-2 text-neutral-400">
+              <LoaderCircle size={15} className="animate-spin" />
+              {loadingLabel}
+            </span>
+          ) : selectedOptions.length ? (
             compactSelectedAfter != null &&
             selectedOptions.length > compactSelectedAfter ? (
               <span
@@ -706,7 +719,7 @@ export function MultiSelect({
               selectedOptions.map((option) => (
                 <span
                   key={option.value}
-                  className="inline-flex max-w-full items-center gap-1 rounded-full border border-neutral-700 bg-neutral-800 px-2 py-0.5 text-xs text-neutral-100"
+                  className={`inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${option.badgeClassName ?? "border-neutral-700 bg-neutral-800 text-neutral-100"}`}
                 >
                   <OptionIcon
                     iconNode={option.icon}
@@ -749,31 +762,45 @@ export function MultiSelect({
                 />
               </div>
               <div className="min-h-0 overflow-auto">
-                {filteredOptions.map((option) => {
-                  const checked = selectedSet.has(option.value);
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => toggleValue(option.value)}
-                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-800"
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
-                        <OptionIcon
-                          iconNode={option.icon}
-                          iconUrl={option.iconUrl}
-                          iconEmoji={option.iconEmoji}
-                          fallback={option.iconFallback}
-                        />
-                        <span className="truncate">{option.label}</span>
-                      </span>
-                      {checked ? (
-                        <Check size={14} className="text-blue-300" />
-                      ) : null}
-                    </button>
-                  );
-                })}
-                {showCreateOption ? (
+                {loading ? (
+                  <div
+                    role="status"
+                    className="flex items-center justify-center gap-2 px-3 py-4 text-sm text-neutral-400"
+                  >
+                    <LoaderCircle size={15} className="animate-spin" />
+                    {loadingLabel}
+                  </div>
+                ) : null}
+                {!loading &&
+                  filteredOptions.map((option) => {
+                    const checked = selectedSet.has(option.value);
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => toggleValue(option.value)}
+                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-800"
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <OptionIcon
+                            iconNode={option.icon}
+                            iconUrl={option.iconUrl}
+                            iconEmoji={option.iconEmoji}
+                            fallback={option.iconFallback}
+                          />
+                          <span
+                            className={`truncate ${option.badgeClassName ?? ""}`}
+                          >
+                            {option.label}
+                          </span>
+                        </span>
+                        {checked ? (
+                          <Check size={14} className="text-blue-300" />
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                {!loading && showCreateOption ? (
                   <button
                     type="button"
                     disabled={creatingOption}
@@ -800,7 +827,7 @@ export function MultiSelect({
                       : resolvedCreateOptionLabel}
                   </button>
                 ) : null}
-                {!filteredOptions.length && !showCreateOption ? (
+                {!loading && !filteredOptions.length && !showCreateOption ? (
                   <p className="px-3 py-3 text-center text-sm text-neutral-500">
                     No options found
                   </p>
@@ -1472,49 +1499,55 @@ export function ConfirmDeleteModal({
   label?: string;
   description?: string;
 }) {
-  const t = useOptionalI18n()?.t;
-  const resolvedLabel = label ?? t?.("common.delete") ?? "Delete";
-  const [value, setValue] = useState("");
-  const valid = useMemo(() => value === entityName, [value, entityName]);
-  useEffect(() => {
-    if (!open) {
-      setValue("");
-    }
-  }, [open]);
   if (!open) return null;
   return (
+    <ConfirmDeleteModalContent
+      onClose={onClose}
+      onConfirm={onConfirm}
+      entityName={entityName}
+      label={label}
+      description={description}
+    />
+  );
+}
+
+function ConfirmDeleteModalContent({
+  onClose,
+  onConfirm,
+  entityName,
+  label,
+  description,
+}: {
+  onClose: () => void;
+  onConfirm: () => void | Promise<unknown>;
+  entityName: string;
+  label?: string;
+  description?: string;
+}) {
+  const t = useOptionalI18n()?.t;
+  const resolvedLabel =
+    label ?? t?.("common.confirmDeletion") ?? "Confirm deletion";
+  return (
     <Modal
-      open={open}
+      open
       onClose={onClose}
       title={t?.("common.confirmDeletion") ?? "Confirm deletion"}
+      titleIcon={<Trash2 size={18} aria-hidden="true" />}
     >
-      <p className="mb-2 text-sm text-neutral-300">
-        {t?.("common.typeToConfirm", { name: entityName }) ??
-          `Type ${entityName} to confirm deletion.`}
+      <p className="mb-3 text-sm text-neutral-300">
+        {t?.("common.deleteConfirmationQuestion", { name: entityName }) ??
+          `Are you sure you want to delete ${entityName}?`}
       </p>
       {description ? (
         <p className="mb-3 text-sm text-amber-300">{description}</p>
       ) : null}
-      <Input
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder={entityName}
-      />
       <div className="mt-4 flex justify-end gap-2">
-        <Button
-          variant="secondary"
-          onClick={() => {
-            setValue("");
-            onClose();
-          }}
-        >
+        <Button variant="secondary" onClick={onClose}>
           {t?.("common.cancel") ?? "Cancel"}
         </Button>
         <Button
           variant="danger"
-          disabled={!valid}
           onClick={() => {
-            setValue("");
             onClose();
             void Promise.resolve(onConfirm()).catch(() => undefined);
           }}

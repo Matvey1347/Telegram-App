@@ -1,6 +1,10 @@
 "use client";
 
-export type TelegramPostsRouteView = "editor" | "calendar" | "groups";
+export type TelegramPostsRouteView =
+  | "editor"
+  | "calendar"
+  | "groups"
+  | "hypotheses";
 
 type TelegramPostsUrlInput = {
   channelId?: string | null;
@@ -10,12 +14,7 @@ type TelegramPostsUrlInput = {
   extraParams?: URLSearchParams | string | null;
 };
 
-const ownedTelegramPostsParams = [
-  "channelId",
-  "postId",
-  "groupId",
-  "postView",
-];
+const ownedTelegramPostsParams = ["channelId", "postId", "groupId", "postView"];
 
 function trimValue(value?: string | null) {
   return value?.trim() || "";

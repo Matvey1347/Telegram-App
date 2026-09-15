@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+  TelegramManagedPostOrigin,
   TelegramManagedPostRemoteStatus,
   TelegramManagedPostStatus,
   TelegramSourceType,
@@ -20,6 +21,7 @@ const CHANNEL_DELETE_CONCURRENCY = 5;
 
 type ManagedPostDeletionCandidate = {
   id: string;
+  origin: TelegramManagedPostOrigin;
   text: string | null;
   imageUrls: string[];
   mediaItems: unknown;
@@ -73,6 +75,7 @@ export class TelegramManagedPostRemoteDeletionService {
       where: { id: { in: ids }, workspaceId: input.workspaceId },
       select: {
         id: true,
+        origin: true,
         text: true,
         imageUrls: true,
         mediaItems: true,
@@ -300,6 +303,7 @@ export class TelegramManagedPostRemoteDeletionService {
                 ).length,
                 publishMode: post.publishMode,
                 scheduledAt: post.scheduledAt,
+                origin: post.origin,
               },
               remote.recentPublished,
             );

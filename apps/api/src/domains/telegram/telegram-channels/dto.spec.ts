@@ -6,6 +6,7 @@ import {
   ImportTelegramChannelsBatchDto,
   SyncNowDto,
   TelegramChannelListQueryDto,
+  TelegramChannelInviteLinksQueryDto,
   TelegramManagedPostsQueryDto,
   UpdateTelegramChannelDto,
   UpdateTelegramManagedPostDto,
@@ -108,6 +109,27 @@ describe('UpdateTelegramChannelDto', () => {
     });
 
     expect(dto.postSyncLimit).toBe(750);
+    expect(validateSync(dto)).toEqual([]);
+  });
+
+  it('accepts one invite link selected for bot publications', () => {
+    const dto = plainToInstance(UpdateTelegramChannelDto, {
+      botInviteLinkId: 'invite-bot',
+    });
+
+    expect(dto.botInviteLinkId).toBe('invite-bot');
+    expect(validateSync(dto)).toEqual([]);
+  });
+});
+
+describe('TelegramChannelInviteLinksQueryDto', () => {
+  it('accepts the saved link ids required to hydrate closed selectors', () => {
+    const dto = plainToInstance(TelegramChannelInviteLinksQueryDto, {
+      initial: 'true',
+      selectedIds: 'main,vp,folder,bot',
+    });
+
+    expect(dto.selectedIds).toEqual(['main', 'vp', 'folder', 'bot']);
     expect(validateSync(dto)).toEqual([]);
   });
 });

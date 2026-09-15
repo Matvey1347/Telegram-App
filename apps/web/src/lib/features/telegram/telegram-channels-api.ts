@@ -290,6 +290,13 @@ export function createTelegramChannelsApi({
           responseType: "blob",
         })
       ).data,
+    unifiedImportContext: async (id: string) =>
+      (
+        await api.get<Blob>(`/telegram-channels/${id}/gpt-context`, {
+          params: { purpose: "unified-import" },
+          responseType: "blob",
+        })
+      ).data,
     sources: async (id: string) =>
       (
         await api.get<TelegramChannelSourceAccess[]>(

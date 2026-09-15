@@ -14,7 +14,10 @@ import {
   CalendarClock,
 } from "lucide-react";
 import type { CurrencySettings, TelegramChannel } from "@/lib/api";
-import { telegramChannelsApi, telegramPublicationSchedulesApi } from "@/lib/api";
+import {
+  telegramChannelsApi,
+  telegramPublicationSchedulesApi,
+} from "@/lib/api";
 import {
   telegramChannelKeys,
   telegramPublicationScheduleKeys,
@@ -31,6 +34,7 @@ import { ChannelEconomicsEditor } from "./channel-economics-editor";
 import { ChannelPresentationSettingsModal } from "./channel-presentation-settings-modal";
 import {
   getChannelSettingsCompletion,
+  getOverallChannelSettingsCompletion,
   type ChannelSettingsCompletionStatus,
 } from "./channel-settings-completion";
 import {
@@ -42,9 +46,18 @@ import {
 import { ChannelSystemBotAccessModal } from "./channel-system-bot-access-modal";
 import { useAppToast } from "@/providers/toast-provider";
 import { ChannelSourcesSettings } from "./channel-sources-settings";
-import { ChannelPublicationScheduleSettings } from "./channel-publication-schedule-settings";
+import {
+  ChannelPublicationScheduleSettings,
+  type ChannelPublicationScheduleDraft,
+} from "./channel-publication-schedule-settings";
 
-type SettingsTab = "appearance" | "economics" | "seed" | "bot" | "sources" | "schedule";
+type SettingsTab =
+  | "appearance"
+  | "economics"
+  | "seed"
+  | "bot"
+  | "sources"
+  | "schedule";
 
 const tabs = [
   { id: "appearance", label: "Appearance", icon: Palette },
@@ -91,6 +104,8 @@ export function ChannelSettingsModal({
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [draft, setDraft] = useState(() => createChannelSettingsDraft(channel));
   const [registerPending, setRegisterPending] = useState(false);
+  const [publicationScheduleDraft, setPublicationScheduleDraft] =
+    useState<ChannelPublicationScheduleDraft | null>(null);
   const queryClient = useQueryClient();
   const { pushToast } = useAppToast();
   const scheduleAssignment = useQuery({
@@ -109,27 +124,32 @@ export function ChannelSettingsModal({
           ? "partial"
           : "empty"
       : completion[tab.id];
-  const completionScore = visibleTabs.reduce(
-    (total, tab) =>
-      total +
-      (completionFor(tab) === "complete"
-        ? 1
-        : completionFor(tab) === "partial"
-          ? 0.5
-          : 0),
-    0,
-  );
-  const completionPercent = Math.round(
-    (completionScore / visibleTabs.length) * 100,
-  );
+  const completionPercent = getOverallChannelSettingsCompletion(channel, {
+    draft,
+    includeBot: canManageBot,
+    scheduleStatus: completionFor(tabs[2]),
+  }).percent;
   const updateDraft = (patch: Partial<ChannelSettingsDraft>) =>
     setDraft((current) => ({ ...current, ...patch }));
   const save = useMutation({
-    mutationFn: () =>
-      telegramChannelsApi.updateQuiet(
+    mutationFn: async () => {
+      const channelUpdate = telegramChannelsApi.updateQuiet(
         channel.id,
         buildChannelSettingsPayload(draft),
-      ),
+      );
+      const scheduleUpdate = publicationScheduleDraft?.scheduleId
+        ? telegramPublicationSchedulesApi.assign(channel.id, {
+            scheduleId: publicationScheduleDraft.scheduleId,
+            selectionMode: "SUBSET",
+            selectedSlotIds: publicationScheduleDraft.selectedSlotIds,
+          })
+        : Promise.resolve(null);
+      const [updatedChannel] = await Promise.all([
+        channelUpdate,
+        scheduleUpdate,
+      ]);
+      return updatedChannel;
+    },
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({
@@ -137,6 +157,9 @@ export function ChannelSettingsModal({
         }),
         queryClient.invalidateQueries({
           queryKey: telegramChannelKeys.detail(channel.id),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: telegramPublicationScheduleKeys.assignment(channel.id),
         }),
       ]);
       pushToast("Channel settings saved", "success");
@@ -261,7 +284,11 @@ export function ChannelSettingsModal({
         />
       ) : null}
       {activeTab === "schedule" ? (
-        <ChannelPublicationScheduleSettings channelId={channel.id} />
+        <ChannelPublicationScheduleSettings
+          channelId={channel.id}
+          value={publicationScheduleDraft}
+          onChange={setPublicationScheduleDraft}
+        />
       ) : null}
       <div className="mt-5 flex justify-end gap-2 border-t border-neutral-800 pt-4">
         <Button type="button" variant="secondary" onClick={onClose}>
@@ -272,6 +299,10 @@ export function ChannelSettingsModal({
           disabled={
             save.isPending ||
             registerPending ||
+            (activeTab === "schedule" &&
+              publicationScheduleDraft !== null &&
+              (!publicationScheduleDraft.scheduleId ||
+                publicationScheduleDraft.selectedSlotIds.length === 0)) ||
             channelSettingsDraftIsInvalid(draft)
           }
           onClick={() => save.mutate()}

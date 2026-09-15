@@ -87,12 +87,17 @@ export const telegramChannelKeys = {
     ["telegram-channel-financial-summary", channelId] as const,
   inviteLinks: (channelId: string) =>
     ["telegram-channel-invite-links", channelId] as const,
-  inviteLinkInitial: (channelId: string, selectedId?: string | null) =>
+  inviteLinkInitial: (
+    channelId: string,
+    selectedId?: string | null,
+    selectedIds: string[] = [],
+  ) =>
     [
       "telegram-channel-invite-links",
       channelId,
       "initial",
       selectedId ?? null,
+      [...selectedIds].sort(),
     ] as const,
   inviteLinkOptions: (
     channelId: string,
@@ -171,15 +176,28 @@ export const telegramPostKeys = {
 };
 
 export const telegramPublicationScheduleKeys = {
-  lists: () => ["telegram-publication-schedules", "list"] as const,
+  all: () => ["telegram-publication-schedules"] as const,
+  lists: () => [...telegramPublicationScheduleKeys.all(), "list"] as const,
   assignment: (channelId: string) =>
-    ["telegram-publication-schedules", "assignment", channelId] as const,
+    [
+      ...telegramPublicationScheduleKeys.all(),
+      "assignment",
+      channelId,
+    ] as const,
   occurrences: (channelId: string, range: { from: string; to: string }) =>
-    ["telegram-publication-schedules", "occurrences", channelId, range] as const,
+    [
+      ...telegramPublicationScheduleKeys.all(),
+      "occurrences",
+      channelId,
+      range,
+    ] as const,
 };
 
 export const telegramContentHypothesisKeys = {
-  list: (channelId: string) => ["telegram-content-hypotheses", channelId, "list"] as const,
+  list: (channelId: string) =>
+    ["telegram-content-hypotheses", channelId, "list"] as const,
+  postOptions: (channelId: string) =>
+    ["telegram-content-hypotheses", channelId, "post-options"] as const,
 };
 
 export const telegramAccountKeys = {
@@ -290,8 +308,6 @@ export const telegramPostBatchKeys = {
     ["telegram-post-batches", "detail", batchId, "deliveries"] as const,
   deliveries: (batchId: string, params: { page: number; pageSize: number }) =>
     ["telegram-post-batches", "detail", batchId, "deliveries", params] as const,
-  linkTargets: (type: "AD_SALE" | "MUTUAL_PROMOTION_FOLDER") =>
-    ["telegram-post-batches", "link-targets", type] as const,
 };
 
 export const memberKeys = workspaceKeys;

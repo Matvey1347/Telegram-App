@@ -2,6 +2,7 @@ import type {
   TelegramChannelMessageTemplate,
   TelegramChannelMessageTemplatePayload,
   TelegramMessageTemplateSourceResponse,
+  TelegramMessageTemplateSourcePayload,
 } from "@telegram-system/shared";
 import { api } from "@/lib/api";
 
@@ -28,11 +29,11 @@ export const telegramChannelMessageTemplatesApi = {
     ).data,
   remove: async (id: string) =>
     (await api.delete<{ success: boolean }>(`${basePath}/${id}`)).data,
-  source: async (channelIds: string[]) =>
+  source: async (input: string[] | TelegramMessageTemplateSourcePayload) =>
     (
       await api.post<TelegramMessageTemplateSourceResponse>(
         `${basePath}/source`,
-        { channelIds },
+        Array.isArray(input) ? { channelIds: input } : input,
       )
     ).data,
 };

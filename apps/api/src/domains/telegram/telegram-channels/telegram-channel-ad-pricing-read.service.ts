@@ -249,7 +249,9 @@ export function resolveChannelCardExpectedViews(
 ) {
   const ownViews = Number(channel.ownViewsPerPost);
   return (
-    windows?.permanent.expectedViews ??
+    // Break-even is expressed as the number of standard 1/24 placements
+    // still required, so its denominator must be the 24-hour format price.
+    windows?.h24.expectedViews ??
     (Number.isFinite(ownViews) && ownViews > 0 ? ownViews : null) ??
     audience?.activeSubscribersEstimate ??
     (audience?.viewRate != null && channel.currentSubscribersCount

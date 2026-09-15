@@ -250,14 +250,15 @@ export function PromoFormModal({
     enabled: open,
     staleTime: 30_000,
   });
+  const selectedChannel = channels.find((channel) => channel.id === channelId);
   const inviteLinkOptions = useTelegramInviteLinkOptions({
     channelId,
-    selectedId: inviteLinkId,
+    selectedId:
+      inviteLinkId || selectedChannel?.mutualPromotionInviteLinkIds?.[0],
     enabled: open,
     seedLinks: initial?.defaultInviteLink ? [initial.defaultInviteLink] : [],
   });
   const inviteLinks = inviteLinkOptions.links;
-  const selectedChannel = channels.find((channel) => channel.id === channelId);
   const selectedInvite =
     inviteLinks.find((link) => link.id === inviteLinkId) ??
     initial?.defaultInviteLink;

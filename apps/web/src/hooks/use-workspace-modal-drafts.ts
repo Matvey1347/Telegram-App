@@ -181,11 +181,36 @@ export function useWorkspaceModalDrafts<T>({
     persistedJsonRef.current = "";
   }, [currentDraftId, enabled, namespace, normalize]);
 
+  const showDraftPicker = useCallback(() => {
+    if (!enabled || !currentDraftId) return;
+    if (isMeaningful(value)) {
+      writeWorkspaceModalDraft(
+        window.localStorage,
+        namespace,
+        currentDraft,
+        normalize,
+      );
+    }
+    readyRef.current = false;
+    setPendingDrafts(
+      readWorkspaceModalDrafts(window.localStorage, namespace, normalize),
+    );
+  }, [
+    currentDraft,
+    currentDraftId,
+    enabled,
+    isMeaningful,
+    namespace,
+    normalize,
+    value,
+  ]);
+
   return {
     pendingDrafts,
     continueDraft,
     deleteDraft,
     createNewDraft,
     clearCurrentDraft,
+    showDraftPicker,
   };
 }

@@ -500,7 +500,14 @@ export class TelegramChannelAccessService {
     const linkedAdmin = requestedAccountId
       ? null
       : await this.prisma.telegramChannelAdminLink.findFirst({
-          where: { workspaceId, telegramChannelId: channelId },
+          where: {
+            workspaceId,
+            telegramChannelId: channelId,
+            telegramUserAccountIntegration: {
+              isActive: true,
+              status: TelegramUserAccountStatus.connected,
+            },
+          },
           orderBy: { createdAt: 'asc' },
         });
     const accountId =

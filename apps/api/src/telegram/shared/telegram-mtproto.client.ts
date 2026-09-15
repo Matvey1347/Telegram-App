@@ -2347,7 +2347,7 @@ export class TelegramMtprotoClient {
     }
   }
 
-  async getManagedPostMessages(params: { apiId: string; apiHash: string; session: string; channelRef?: string; channel?: StoredTelegramChannelReference; publishedMessageIds: string[]; scheduledMessageIds: string[] }) {
+  async getManagedPostMessages(params: { apiId: string; apiHash: string; session: string; channelRef?: string; channel?: StoredTelegramChannelReference; publishedMessageIds: string[]; scheduledMessageIds: string[]; recentPublishedFrom?: Date; recentPublishedUntil?: Date }) {
     const client = await this.createClient(params);
     try {
       const resolved = params.channel ? await this.resolveStoredChannel(client, params.channel) : null;
@@ -2355,16 +2355,9 @@ export class TelegramMtprotoClient {
       const peer = resolved?.peer || (await client.getInputEntity(params.channelRef as string));
       const publishedIds = params.publishedMessageIds.map(Number).filter(Number.isFinite);
       const scheduledIds = params.scheduledMessageIds.map(Number).filter(Number.isFinite);
-      const published = publishedIds.length ? await client.getMessages(entity, { ids: publishedIds }) : [];
-      const recentPublished = await client.getMessages(entity, { limit: 200 });
-      const scheduledResult = scheduledIds.length
-        ? await client.invoke(
-            new Api.messages.GetScheduledMessages({
-              peer,
-              id: scheduledIds,
-            }),
-          )
-        : null;
+      const published = publishedIds.length ? await this.withTimeout(client.getMessages(entity, { ids: publishedIds }), this.telegramMetadataTimeoutMs, 'Telegram managed-post identity lookup') : [];
+      const recentPublished = params.recentPublishedFrom ? await this.getChannelMessagesFromCutoff(client, entity, { postLimit: 500, postsFrom: params.recentPublishedFrom, beforeDate: params.recentPublishedUntil }) : await this.withTimeout(client.getMessages(entity, { limit: 200 }), this.telegramMetadataTimeoutMs, 'Telegram recent-post identity lookup');
+      const scheduledResult = scheduledIds.length ? await this.withTimeout(client.invoke(new Api.messages.GetScheduledMessages({ peer, id: scheduledIds })), this.telegramMetadataTimeoutMs, 'Telegram scheduled-message identity lookup') : null;
       const scheduled = Array.isArray((scheduledResult as any)?.messages) ? (scheduledResult as any).messages : [];
       const serialize = (message: any, isScheduled: boolean) => this.serializeManagedPostMessage(message, isScheduled);
       return {
@@ -2467,7 +2460,7 @@ export class TelegramMtprotoClient {
     params: {
       postLimit?: number;
       beforeMessageId?: string | number | null;
-      postsFrom: Date;
+      postsFrom: Date; beforeDate?: Date;
     },
   ) {
     const hardCap = Math.max(1, Math.min(this.maxPostBackfillLimit, params.postLimit || 100));
@@ -2479,10 +2472,11 @@ export class TelegramMtprotoClient {
 
     while (processed < hardCap) {
       const remaining = hardCap - processed;
-      const page = (await client.getMessages(entity as any, {
+      const page = (await this.withTimeout(client.getMessages(entity as any, {
         limit: Math.min(pageSize, remaining),
         offsetId,
-      })) as any[];
+        ...(processed === 0 && params.beforeDate ? { offsetDate: Math.floor(params.beforeDate.getTime() / 1_000) } : {}),
+      }), this.telegramMetadataTimeoutMs, 'Telegram post-history page')) as any[];
       if (!page.length) break;
       processed += page.length;
       let reachedCutoff = false;

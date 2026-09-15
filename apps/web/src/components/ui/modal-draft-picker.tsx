@@ -72,7 +72,7 @@ export function ModalDraftPicker<T>({
           />
         )}
       </div>
-      <Button type="button" variant="secondary" onClick={onCreateNew}>
+      <Button type="button" onClick={onCreateNew}>
         <Plus size={15} /> Create new
       </Button>
     </Card>

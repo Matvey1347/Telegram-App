@@ -34,7 +34,7 @@ function setup() {
     telegramChannelMessageTemplate: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
-      create: jest.fn(),
+      create: jest.fn<Promise<unknown>, [{ data: Record<string, unknown> }]>(),
       update: jest.fn(),
       deleteMany: jest.fn(),
     },
@@ -53,12 +53,70 @@ function setup() {
 }
 
 describe('TelegramChannelMessageTemplatesService', () => {
+  it('persists excluded formats and price rounding with the template', async () => {
+    const { prisma, service } = setup();
+    let createdData: Record<string, unknown> | undefined;
+    prisma.telegramChannel.count.mockResolvedValue(1);
+    prisma.telegramChannelMessageTemplate.create.mockImplementation(
+      ({ data }: { data: Record<string, unknown> }) => {
+        createdData = data;
+        return Promise.resolve({
+          id: 'template-1',
+          ...data,
+          icon: null,
+          createdAt: new Date('2026-09-14T00:00:00.000Z'),
+          updatedAt: new Date('2026-09-14T00:00:00.000Z'),
+        });
+      },
+    );
+
+    const result = await service.create('user-1', {
+      title: 'Prices',
+      iconId: null,
+      scopeMode: 'CHANNELS',
+      networkId: null,
+      channelIds: ['channel-1'],
+      bodyTemplate: '{{#products}}{{product_price}}{{/products}}',
+      overrideInviteLinks: false,
+      inviteLinkOverrides: {},
+      excludedProductNames: ['3/72'],
+      priceRounding: 'NEAREST_10',
+      productNameOverrides: { 'No auto-delete': 'Без видалення' },
+      bundleOfferEnabled: true,
+      bundleDiscountPercent: 10,
+      bundleBasePriceOverrides: { '1/24': '495' },
+    });
+
+    expect(createdData).toEqual(
+      expect.objectContaining({
+        excludedProductNames: ['3/72'],
+        priceRounding: 'NEAREST_10',
+        productNameOverrides: { 'No auto-delete': 'Без видалення' },
+        bundleOfferEnabled: true,
+        bundleDiscountPercent: 10,
+        bundleBasePriceOverrides: { '1/24': '495' },
+        workspaceId: 'workspace-1',
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        excludedProductNames: ['3/72'],
+        priceRounding: 'NEAREST_10',
+        productNameOverrides: { 'No auto-delete': 'Без видалення' },
+        bundleOfferEnabled: true,
+        bundleDiscountPercent: 10,
+        bundleBasePriceOverrides: { '1/24': '495' },
+      }),
+    );
+  });
+
   it('builds ordered channel sources with main links and active prices', async () => {
     const { prisma, service } = setup();
     prisma.telegramChannel.findMany.mockResolvedValue([
       {
         id: 'channel-2',
         title: 'Second',
+        shortDescription: null,
         username: null,
         photoUrl: null,
         tgStatUrl: null,
@@ -74,6 +132,7 @@ describe('TelegramChannelMessageTemplatesService', () => {
       {
         id: 'channel-1',
         title: 'First',
+        shortDescription: 'Short business description',
         username: 'first',
         photoUrl: null,
         tgStatUrl: 'https://tgstat.com/first',
@@ -141,6 +200,7 @@ describe('TelegramChannelMessageTemplatesService', () => {
     expect(result.channels[0]).toEqual(
       expect.objectContaining({
         emojiSource: '💼',
+        description: 'Short business description',
         products: [
           expect.objectContaining({
             name: '1/24',
@@ -166,5 +226,37 @@ describe('TelegramChannelMessageTemplatesService', () => {
     await expect(
       service.source('user-1', { channelIds: ['foreign-channel'] }),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('resolves the current network membership when a saved template is sent', async () => {
+    const { prisma, service } = setup();
+    prisma.telegramChannelMessageTemplate.findFirst.mockResolvedValue({
+      scopeMode: 'NETWORK',
+      networkId: 'network-1',
+      channelIds: ['old-channel'],
+    });
+    prisma.telegramChannel.findMany
+      .mockResolvedValueOnce([{ id: 'new-channel' }])
+      .mockResolvedValueOnce([]);
+
+    await expect(
+      service.source('user-1', { templateId: 'template-1' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(prisma.telegramChannel.findMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          workspaceId: 'workspace-1',
+          networkMembers: { some: { networkId: 'network-1' } },
+        }),
+      }),
+    );
+    expect(prisma.telegramChannel.findMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { in: ['new-channel'] } }),
+      }),
+    );
   });
 });

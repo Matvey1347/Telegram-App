@@ -1,5 +1,6 @@
 import {
   priceChannelAdFormatWindows,
+  resolveChannelCardExpectedViews,
   TelegramChannelAdPricingReadService,
 } from './telegram-channel-ad-pricing-read.service';
 
@@ -117,5 +118,35 @@ describe('TelegramChannelAdPricingReadService', () => {
     await expect(
       service.windowsForChannels('workspace-1', [{ id: 'channel-1' }], now),
     ).rejects.toThrow('database unavailable');
+  });
+
+  it('uses the 1/24 reach when estimating ads left to break even', () => {
+    expect(
+      resolveChannelCardExpectedViews(
+        {
+          h24: {
+            expectedViews: 878,
+            postsSampleCount: 3,
+            dataQuality: 'READY',
+          },
+          h48: {
+            expectedViews: 1_031,
+            postsSampleCount: 3,
+            dataQuality: 'READY',
+          },
+          h72: {
+            expectedViews: 1_200,
+            postsSampleCount: 3,
+            dataQuality: 'READY',
+          },
+          permanent: {
+            expectedViews: 1_706,
+            postsSampleCount: 3,
+            dataQuality: 'READY',
+          },
+        },
+        { ownViewsPerPost: 2_000, currentSubscribersCount: 12_255 },
+      ),
+    ).toBe(878);
   });
 });

@@ -53,6 +53,7 @@ export function ChannelPerformanceHistoryCharts({
         metric="paybackPercent"
         color="#fbbf24"
         points={points}
+        focusedScale
         percentAxis
       />
     </div>
@@ -144,7 +145,13 @@ function HistoryChart({
                   fill={color}
                   fillOpacity={0.14}
                   strokeWidth={2.5}
-                  dot={chartPoints.length < 3 ? { r: 3 } : false}
+                  dot={
+                    metric === "adsLeft" || metric === "paybackPercent"
+                      ? { r: 2.5, strokeWidth: 1 }
+                      : chartPoints.length < 3
+                        ? { r: 3 }
+                        : false
+                  }
                   activeDot={{ r: 4 }}
                 />
               </AreaChart>

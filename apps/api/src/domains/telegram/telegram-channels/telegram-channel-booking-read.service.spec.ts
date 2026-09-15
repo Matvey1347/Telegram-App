@@ -11,6 +11,8 @@ const scheduledPost = (
 ) => ({
   telegramChannelId,
   scheduledAt: new Date(scheduledAt),
+  status: TelegramManagedPostStatus.SCHEDULED,
+  publishedAt: null,
   origin: TelegramManagedPostOrigin.SYSTEM,
   remoteImportKey: null,
   title: 'Real post',
@@ -51,17 +53,28 @@ describe('TelegramChannelBookingReadService', () => {
       new Map([['channel-1', 302]]),
     );
     const horizon = new Date(now.getTime() + 370 * 24 * 60 * 60 * 1000);
+    const recentWindowStart = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
 
     expect(findMany).toHaveBeenCalledWith({
       where: {
         workspaceId: 'workspace-1',
         telegramChannelId: { in: ['channel-1'] },
-        status: TelegramManagedPostStatus.SCHEDULED,
-        scheduledAt: { gt: now, lte: horizon },
+        OR: [
+          {
+            status: TelegramManagedPostStatus.SCHEDULED,
+            scheduledAt: { gt: recentWindowStart, lte: horizon },
+          },
+          {
+            status: TelegramManagedPostStatus.PUBLISHED,
+            publishedAt: { gt: recentWindowStart, lte: horizon },
+          },
+        ],
       },
       select: {
         telegramChannelId: true,
+        status: true,
         scheduledAt: true,
+        publishedAt: true,
         origin: true,
         remoteImportKey: true,
         title: true,
@@ -70,7 +83,7 @@ describe('TelegramChannelBookingReadService', () => {
         mediaItems: true,
         buttonRows: true,
       },
-      orderBy: { scheduledAt: 'asc' },
+      orderBy: [{ scheduledAt: 'asc' }, { publishedAt: 'asc' }],
     });
     expect(result.get('channel-1')).toEqual({
       futureScheduledTotal: 3,
@@ -80,6 +93,46 @@ describe('TelegramChannelBookingReadService', () => {
       nextAvailableDate: '2026-08-26',
       bookedThroughDate: '2026-08-25',
     });
+  });
+
+  it('reports today as booked-through when tomorrow is the first free day', async () => {
+    const service = new TelegramChannelBookingReadService({
+      workspace: {
+        findUnique: jest.fn().mockResolvedValue({ timezone: 'UTC' }),
+      },
+      telegramManagedPost: {
+        findMany: jest.fn().mockResolvedValue([
+          scheduledPost('channel-1', '2026-09-14T08:00:00.000Z', {
+            status: TelegramManagedPostStatus.PUBLISHED,
+            scheduledAt: null,
+            publishedAt: new Date('2026-09-14T08:00:00.000Z'),
+          }),
+        ]),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+    } as never);
+
+    await expect(
+      service.summariesForChannels(
+        'workspace-1',
+        ['channel-1'],
+        new Date('2026-09-14T10:00:00.000Z'),
+      ),
+    ).resolves.toEqual(
+      new Map([
+        [
+          'channel-1',
+          {
+            futureScheduledTotal: 0,
+            draftTotal: 0,
+            pendingJoinRequests: 0,
+            lastScheduledAt: '2026-09-14T08:00:00.000Z',
+            nextAvailableDate: '2026-09-15',
+            bookedThroughDate: '2026-09-14',
+          },
+        ],
+      ]),
+    );
   });
 
   it('ignores an imported standalone subscription ending', async () => {

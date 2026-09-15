@@ -15,6 +15,14 @@ describe('TelegramPostBatchCommandService', () => {
       telegramPostBatch: {
         findFirst: jest.fn().mockResolvedValueOnce(overrides.existing ?? null),
         create: jest.fn().mockResolvedValue({ id: 'batch-1' }),
+        update: jest.fn().mockResolvedValue({ id: 'batch-1' }),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      telegramPostBatchPost: {
+        create: jest.fn().mockResolvedValue({ id: 'post-2' }),
+      },
+      telegramChannel: {
+        count: jest.fn().mockResolvedValue(1),
       },
       telegramSystemBotWorkflow: {
         findFirst: jest.fn().mockResolvedValue(
@@ -36,6 +44,11 @@ describe('TelegramPostBatchCommandService', () => {
               },
         ),
       },
+      $transaction: jest
+        .fn()
+        .mockImplementation((operations: Array<Promise<unknown>>) =>
+          Promise.all(operations),
+        ),
     };
     const workspace = {
       resolveWorkspaceMembershipForUser: jest
@@ -43,14 +56,160 @@ describe('TelegramPostBatchCommandService', () => {
         .mockResolvedValue(membership),
     };
     const read = { get: jest.fn().mockResolvedValue({ id: 'batch-1' }) };
+    const dispatcher = { dispatch: jest.fn() };
     const service = new TelegramPostBatchCommandService(
       prisma as never,
       workspace as never,
       read as never,
-      { dispatch: jest.fn() } as never,
+      dispatcher as never,
     );
-    return { service, prisma, read };
+    return { service, prisma, read, dispatcher };
   }
+
+  it('creates a manual draft for the selected channels without a bot workflow', async () => {
+    const { service, prisma, read } = setup();
+
+    await expect(
+      service.createDraft('user-1', { channelIds: ['channel-1'] }),
+    ).resolves.toEqual({ id: 'batch-1' });
+
+    expect(prisma.telegramPostBatch.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sourceWorkflowId: null,
+          channelIds: ['channel-1'],
+          posts: {
+            create: expect.objectContaining({
+              title: 'Post 1',
+              action: 'PUBLISH_NOW',
+            }),
+          },
+        }),
+      }),
+    );
+    expect(read.get).toHaveBeenCalledWith('workspace-1', 'batch-1');
+  });
+
+  it('persists the complete local draft only when it is dispatched', async () => {
+    const { service, prisma, dispatcher } = setup();
+    dispatcher.dispatch.mockResolvedValue({ batch: { id: 'batch-1' } });
+
+    await service.createAndDispatch('user-1', {
+      title: 'Local campaign',
+      channelIds: ['channel-1'],
+      defaultDeleteAfterHours: 24,
+      posts: [
+        {
+          title: 'First post',
+          iconId: null,
+          text: 'Content',
+          imageUrls: [],
+          mediaItems: [],
+          buttonRows: [],
+          action: 'PUBLISH_NOW',
+          scheduledAt: null,
+          deleteAfterHours: 24,
+          longTextMode: 'IMAGES_THEN_TEXT',
+          channelOverrides: [],
+        },
+      ],
+    });
+
+    expect(prisma.telegramPostBatch.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          title: 'Local campaign',
+          posts: {
+            create: [expect.objectContaining({ title: 'First post' })],
+          },
+        }),
+      }),
+    );
+    expect(dispatcher.dispatch).toHaveBeenCalledWith({
+      workspaceId: 'workspace-1',
+      memberId: 'member-1',
+      batchId: 'batch-1',
+      expectedVersion: 0,
+    });
+  });
+
+  it('removes a newly persisted draft when dispatch preflight fails', async () => {
+    const { service, prisma, dispatcher } = setup();
+    dispatcher.dispatch.mockRejectedValue(new BadRequestException('failed'));
+
+    await expect(
+      service.createAndDispatch('user-1', {
+        title: 'Local campaign',
+        channelIds: ['channel-1'],
+        defaultDeleteAfterHours: 24,
+        posts: [
+          {
+            title: 'First post',
+            iconId: null,
+            text: 'Content',
+            imageUrls: [],
+            mediaItems: [],
+            buttonRows: [],
+            action: 'PUBLISH_NOW',
+            scheduledAt: null,
+            deleteAfterHours: 24,
+            longTextMode: 'IMAGES_THEN_TEXT',
+            channelOverrides: [],
+          },
+        ],
+      }),
+    ).rejects.toThrow('failed');
+    expect(prisma.telegramPostBatch.deleteMany).toHaveBeenCalledWith({
+      where: {
+        id: 'batch-1',
+        workspaceId: 'workspace-1',
+        status: 'DRAFT',
+      },
+    });
+  });
+
+  it('adds another editable post to a manual draft', async () => {
+    const { service, prisma, read } = setup();
+    prisma.telegramPostBatch.findFirst.mockReset().mockResolvedValue({
+      id: 'batch-1',
+      version: 0,
+      defaultDeleteAfterHours: 24,
+      posts: [{ position: 0 }],
+      _count: { posts: 1 },
+    });
+
+    await expect(service.addPost('user-1', 'batch-1')).resolves.toEqual({
+      id: 'batch-1',
+    });
+
+    expect(prisma.telegramPostBatchPost.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        batchId: 'batch-1',
+        position: 1,
+        title: 'Post 2',
+      }),
+    });
+    expect(read.get).toHaveBeenCalledWith('workspace-1', 'batch-1');
+  });
+
+  it('deletes only a draft from the current workspace', async () => {
+    const { service, prisma } = setup();
+
+    await expect(service.removeDraft('user-1', 'batch-1')).resolves.toEqual({
+      success: true,
+    });
+
+    expect(prisma.telegramPostBatch.deleteMany).toHaveBeenCalledWith({
+      where: { id: 'batch-1', workspaceId: 'workspace-1', status: 'DRAFT' },
+    });
+  });
+
+  it('does not delete a dispatched or foreign-workspace batch', async () => {
+    const { service, prisma } = setup();
+    prisma.telegramPostBatch.deleteMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(service.removeDraft('user-1', 'batch-1')).rejects.toThrow();
+  });
 
   it('consumes a completed multi-post workflow into one durable draft', async () => {
     const { service, prisma, read } = setup();
@@ -155,6 +314,7 @@ describe('TelegramPostBatchCommandService', () => {
         posts: Array.from({ length: 51 }, (_, index) => ({
           id: `post-${index}`,
           title: `Post ${index}`,
+          iconId: null,
           text: 'content',
           imageUrls: [],
           mediaItems: [],

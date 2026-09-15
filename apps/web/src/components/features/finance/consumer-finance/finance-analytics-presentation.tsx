@@ -322,27 +322,18 @@ function DonutBreakdown({
   const showTooltip = (index: number) => {
     setHovered(index);
     if (!donutRef.current) return;
-    const share = (visible[index].value / total) * 100;
-    const start = visible
-      .slice(0, index)
-      .reduce((sum, item) => sum + (item.value / total) * 100, 0);
-    // SVG segments start at 12 o'clock, so the tooltip anchor must use the
-    // same -90° rotation instead of the default 3 o'clock polar origin.
-    const angle = ((start + share / 2) / 100) * Math.PI * 2 - Math.PI / 2;
     const rect = donutRef.current.getBoundingClientRect();
-    const x = rect.left + rect.width / 2 + Math.cos(angle) * rect.width * 0.48;
-    const y = rect.top + rect.height / 2 + Math.sin(angle) * rect.height * 0.48;
-    const opensLeft = x > window.innerWidth / 2;
-    const availableWidth = opensLeft ? x - 24 : window.innerWidth - x - 24;
+    const opensAbove = rect.bottom + 56 > window.innerHeight;
     setTooltipPosition({
       position: "fixed" as const,
       zIndex: 100,
-      left: opensLeft
-        ? Math.min(window.innerWidth - 12, x - 12)
-        : Math.max(12, x + 12),
-      top: Math.min(Math.max(12, y), window.innerHeight - 12),
-      maxWidth: `${Math.max(120, availableWidth)}px`,
-      transform: opensLeft ? "translate(-100%, -50%)" : "translate(0, -50%)",
+      left: Math.min(
+        Math.max(12, rect.left + rect.width / 2),
+        window.innerWidth - 12,
+      ),
+      top: opensAbove ? rect.top - 8 : rect.bottom + 8,
+      maxWidth: "calc(100vw - 24px)",
+      transform: opensAbove ? "translate(-50%, -100%)" : "translate(-50%, 0)",
     });
   };
   const hideTooltip = () => {

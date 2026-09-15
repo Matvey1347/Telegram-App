@@ -37,4 +37,33 @@ describe("telegram channel invite-link options", () => {
       { params: { initial: true, selectedId: "link-1" } },
     );
   });
+
+  it("loads every saved purpose link for closed channel-settings selectors", async () => {
+    const get = vi.fn().mockResolvedValue({
+      data: [{ id: "link-main" }, { id: "link-vp" }],
+    });
+    const helpers = createTelegramChannelHelpers({
+      api: { get } as never,
+      getPaginated: vi.fn(),
+      streamProgressAction: vi.fn(),
+      silentFeedbackConfig: {},
+    });
+
+    await helpers.getTelegramChannelInitialInviteLink(
+      "channel-1",
+      "link-main",
+      ["link-main", "link-vp"],
+    );
+
+    expect(get).toHaveBeenCalledWith(
+      "/telegram-channels/channel-1/invite-links/select",
+      {
+        params: {
+          initial: true,
+          selectedId: "link-main",
+          selectedIds: ["link-main", "link-vp"],
+        },
+      },
+    );
+  });
 });

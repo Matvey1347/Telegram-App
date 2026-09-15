@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   CalendarDays,
   CalendarRange,
@@ -10,7 +11,7 @@ import type {
   ConsumerFinanceAnalyticsPeriod,
   ConsumerFinanceAnalyticsQuery,
 } from "@telegram-system/shared";
-import { Button, Input } from "./ui";
+import { Button, DateRangeInput } from "./ui";
 import type { FinanceLocale } from "./i18n/core";
 import { financeAnalyticsCopy } from "./i18n/analytics";
 
@@ -63,24 +64,48 @@ export function FinancePeriodSelector({
         })}
       </div>
       {value.period === "CUSTOM" ? (
-        <div className="grid grid-cols-1 gap-2 sm:max-w-xl sm:grid-cols-2">
-          <Input
-            aria-label={t.analyticsStart}
-            type="date"
-            value={value.from ?? ""}
-            onChange={(event) =>
-              onChange({ ...value, from: event.target.value })
-            }
-          />
-          <Input
-            aria-label={t.analyticsEnd}
-            type="date"
-            value={value.to ?? ""}
-            onChange={(event) => onChange({ ...value, to: event.target.value })}
-          />
-        </div>
+        <FinanceCustomPeriodPicker
+          key={`${value.from ?? ""}:${value.to ?? ""}`}
+          from={value.from ?? ""}
+          to={value.to ?? ""}
+          locale={locale}
+          label={t.analyticsPeriod}
+          onCommit={(range) => onChange({ period: "CUSTOM", ...range })}
+        />
       ) : null}
     </div>
+  );
+}
+
+function FinanceCustomPeriodPicker({
+  from,
+  to,
+  locale,
+  label,
+  onCommit,
+}: {
+  from: string;
+  to: string;
+  locale: FinanceLocale;
+  label: string;
+  onCommit: (range: { from: string; to: string }) => void;
+}) {
+  const [draft, setDraft] = useState({ from, to });
+  return (
+    <DateRangeInput
+      className="sm:max-w-xl"
+      from={draft.from}
+      to={draft.to}
+      uiLocale={locale}
+      placeholder={label}
+      ariaLabel={label}
+      onChange={(range) => {
+        setDraft(range);
+        if ((!range.from && !range.to) || (range.from && range.to)) {
+          onCommit(range);
+        }
+      }}
+    />
   );
 }
 

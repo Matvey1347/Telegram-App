@@ -7,7 +7,6 @@ import type {
 import { PrismaService } from '../../../prisma/prisma.service';
 
 const DEFAULT_TREND_PERIOD_DAYS = 7;
-const BASELINE_GRACE_DAYS = 2;
 
 type AudienceTrendRow = {
   telegramChannelId: string;
@@ -17,8 +16,8 @@ type AudienceTrendRow = {
   currentViewRate: number | null;
   latestViews: number | null;
   latestReactions: number | null;
-  currentViews: number | null;
-  currentReactions: number | null;
+  viewValues: number[] | null;
+  reactionValues: number[] | null;
   dataQuality: string;
   dataQualityReason: string | null;
   hasExternalTrafficAnomaly: boolean;
@@ -26,8 +25,6 @@ type AudienceTrendRow = {
   postsWindow: number;
   baselineAt: Date | null;
   baselineSubscribers: number | null;
-  baselineViews: number | null;
-  baselineReactions: number | null;
 };
 
 export type TelegramChannelAudienceSnapshotPreview = {
@@ -56,12 +53,13 @@ export class TelegramChannelAudienceTrendReadService {
     workspaceId: string,
     channelIds: string[],
     periodDays = DEFAULT_TREND_PERIOD_DAYS,
+    now = new Date(),
   ) {
     if (!channelIds.length) {
       return new Map<string, TelegramChannelAudienceTrendPreview>();
     }
 
-    const maximumBaselineAgeDays = periodDays + BASELINE_GRACE_DAYS;
+    const periodStart = startOfUtcDay(subtractUtcDays(now, periodDays - 1));
     const requestedChannels = Prisma.join(
       channelIds.map((channelId) => Prisma.sql`(${channelId})`),
     );
@@ -77,17 +75,15 @@ export class TelegramChannelAudienceTrendReadService {
         latest."viewRate" AS "currentViewRate",
         latest."avgViewsAdjusted" AS "latestViews",
         latest."avgReactionsAdjusted" AS "latestReactions",
-        post_trend."currentViews",
-        post_trend."currentReactions",
+        post_trend."viewValues",
+        post_trend."reactionValues",
         latest."dataQuality",
         latest."dataQualityReason",
         latest."hasExternalTrafficAnomaly",
         latest."hasSubscriberBasePollution",
         latest."postsWindow",
         baseline."collectedAt" AS "baselineAt",
-        baseline."subscribersCount" AS "baselineSubscribers",
-        post_trend."baselineViews",
-        post_trend."baselineReactions"
+        baseline."subscribersCount" AS "baselineSubscribers"
       FROM requested
       JOIN "TelegramChannel" channel
         ON channel."id" = requested."telegramChannelId"
@@ -108,7 +104,9 @@ export class TelegramChannelAudienceTrendReadService {
         FROM "TelegramChannelAudienceSnapshot" snapshot
         WHERE snapshot."workspaceId" = ${workspaceId}
           AND snapshot."telegramChannelId" = requested."telegramChannelId"
-        ORDER BY snapshot."collectedAt" DESC
+          AND snapshot."collectedAt" >= ${periodStart}
+          AND snapshot."collectedAt" <= ${now}
+        ORDER BY snapshot."collectedAt" DESC, snapshot."id" DESC
         LIMIT 1
       ) latest ON TRUE
       LEFT JOIN LATERAL (
@@ -120,25 +118,17 @@ export class TelegramChannelAudienceTrendReadService {
         FROM "TelegramChannelAudienceSnapshot" snapshot
         WHERE snapshot."workspaceId" = ${workspaceId}
           AND snapshot."telegramChannelId" = requested."telegramChannelId"
-          AND snapshot."collectedAt" <= latest."collectedAt" - ${periodDays} * INTERVAL '1 day'
-          AND snapshot."collectedAt" >= latest."collectedAt" - ${maximumBaselineAgeDays} * INTERVAL '1 day'
-        ORDER BY snapshot."collectedAt" DESC
+          AND snapshot."collectedAt" >= ${periodStart}
+          AND snapshot."collectedAt" <= ${now}
+        ORDER BY snapshot."collectedAt", snapshot."id"
         LIMIT 1
       ) baseline ON TRUE
       LEFT JOIN LATERAL (
         SELECT
-          AVG(daily."averageViews") FILTER (
-            WHERE daily."date" > latest."collectedAt" - ${periodDays} * INTERVAL '1 day'
-          ) AS "currentViews",
-          AVG(daily."averageReactions") FILTER (
-            WHERE daily."date" > latest."collectedAt" - ${periodDays} * INTERVAL '1 day'
-          ) AS "currentReactions",
-          AVG(daily."averageViews") FILTER (
-            WHERE daily."date" <= latest."collectedAt" - ${periodDays} * INTERVAL '1 day'
-          ) AS "baselineViews",
-          AVG(daily."averageReactions") FILTER (
-            WHERE daily."date" <= latest."collectedAt" - ${periodDays} * INTERVAL '1 day'
-          ) AS "baselineReactions"
+          ARRAY_AGG(daily."averageViews" ORDER BY daily."date")
+            FILTER (WHERE daily."averageViews" IS NOT NULL) AS "viewValues",
+          ARRAY_AGG(daily."averageReactions" ORDER BY daily."date")
+            FILTER (WHERE daily."averageReactions" IS NOT NULL) AS "reactionValues"
         FROM (
           SELECT
             DATE_TRUNC('day', post."postDate") AS "date",
@@ -162,7 +152,7 @@ export class TelegramChannelAudienceTrendReadService {
               AND snapshot."viewsCount" IS NOT NULL
               AND snapshot."collectedAt" BETWEEN post."postDate" + INTERVAL '16 hours'
                 AND post."postDate" + INTERVAL '32 hours'
-              AND snapshot."collectedAt" <= latest."collectedAt"
+              AND snapshot."collectedAt" <= ${now}
             ORDER BY ABS(EXTRACT(EPOCH FROM (
               snapshot."collectedAt" - (post."postDate" + INTERVAL '24 hours')
             ))), snapshot."collectedAt" ASC
@@ -171,8 +161,8 @@ export class TelegramChannelAudienceTrendReadService {
           WHERE post."workspaceId" = ${workspaceId}
             AND post."telegramChannelId" = requested."telegramChannelId"
             AND post."excludeFromAnalytics" = FALSE
-            AND post."postDate" > latest."collectedAt" - ${periodDays * 2} * INTERVAL '1 day'
-            AND post."postDate" <= latest."collectedAt"
+            AND post."postDate" >= ${periodStart}
+            AND post."postDate" <= ${now}
           GROUP BY DATE_TRUNC('day', post."postDate")
         ) daily
       ) post_trend ON TRUE
@@ -204,24 +194,50 @@ export class TelegramChannelAudienceTrendReadService {
     row: AudienceTrendRow,
     periodDays: number,
   ): TelegramChannelAudienceTrend | null {
-    if (!row.baselineAt) return null;
-
-    const subscribers = metric(
-      row.currentSubscribers,
-      row.baselineSubscribers,
-      0,
-    );
-    const reach = metric(row.currentViews, row.baselineViews, 1);
-    const reactions = metric(row.currentReactions, row.baselineReactions, 1);
+    const subscribers =
+      row.baselineAt && row.baselineAt.getTime() !== row.currentAt.getTime()
+        ? metric(row.currentSubscribers, row.baselineSubscribers, 0)
+        : null;
+    const reach = halfPeriodMetric(row.viewValues, 1);
+    const reactions = halfPeriodMetric(row.reactionValues, 1);
     if (!subscribers && !reach && !reactions) return null;
 
     return {
       periodDays,
       currentAt: row.currentAt.toISOString(),
-      baselineAt: row.baselineAt.toISOString(),
+      baselineAt: (row.baselineAt ?? row.currentAt).toISOString(),
       metrics: { subscribers, reach, reactions },
     };
   }
+}
+
+function halfPeriodMetric(values: number[] | null, digits: number) {
+  const numericValues = (values ?? [])
+    .map(Number)
+    .filter((value) => Number.isFinite(value));
+  if (numericValues.length < 2) return null;
+  const split = Math.max(1, Math.floor(numericValues.length / 2));
+  return metric(
+    average(numericValues.slice(split)),
+    average(numericValues.slice(0, split)),
+    digits,
+  );
+}
+
+function average(values: number[]) {
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function subtractUtcDays(value: Date, days: number) {
+  const result = new Date(value);
+  result.setUTCDate(result.getUTCDate() - days);
+  return result;
+}
+
+function startOfUtcDay(value: Date) {
+  return new Date(
+    Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()),
+  );
 }
 
 function metric(

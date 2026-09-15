@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import {
   canonicalizeTimeInputValue,
+  ConfirmDeleteModal,
   CustomSelect,
   CurrencySelect,
   DateInput,
@@ -139,6 +140,27 @@ describe("Modal", () => {
   });
 });
 
+describe("ConfirmDeleteModal", () => {
+  it("uses one-click confirmation instead of requiring the entity name", async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    render(
+      <ConfirmDeleteModal
+        open
+        onClose={vi.fn()}
+        onConfirm={onConfirm}
+        entityName="Main plan"
+      />,
+    );
+
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    const remove = screen.getByRole("button", { name: "Confirm deletion" });
+    await user.click(remove);
+    expect(onConfirm).toHaveBeenCalledOnce();
+  });
+});
+
 describe("CustomSelect", () => {
   it("marks Telegram Premium emoji instead of presenting it as plain unicode", () => {
     render(
@@ -230,7 +252,9 @@ describe("CustomSelect", () => {
 
   it("allows onOpen to update its parent without updating during CustomSelect render", async () => {
     const user = userEvent.setup();
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
     function Harness() {
       const [opened, setOpened] = useState(false);
       return (

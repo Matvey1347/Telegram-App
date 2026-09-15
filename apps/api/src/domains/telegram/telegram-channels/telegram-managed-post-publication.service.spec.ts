@@ -97,4 +97,48 @@ describe('TelegramManagedPostPublicationService failure persistence', () => {
 
     expect(wake).toHaveBeenCalledWith('telegram_ad_sales.due_deletions');
   });
+
+  it('rejects a publication slot already reserved by another post', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-14T08:00:00.000Z'));
+    const publisher = { publishManagedPost: jest.fn() };
+    const service = new TelegramManagedPostPublicationService(
+      {
+        telegramPublicationScheduleSlot: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'slot-1',
+            time: '12:00',
+            schedule: { workspace: { timezone: 'UTC' } },
+          }),
+        },
+        telegramManagedPost: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'post-2',
+            title: 'Already planned',
+          }),
+          updateMany: jest.fn(),
+        },
+      } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { workspace: jest.fn().mockResolvedValue('workspace-1') } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      publisher as never,
+    );
+    try {
+      await expect(
+        service.scheduleManagedPost('user-1', 'channel-1', 'post-1', {
+          scheduledAt: '2026-09-20T12:00:00.000Z',
+          publicationSlotId: 'slot-1',
+        }),
+      ).rejects.toThrow('Publication slot is already used');
+      expect(publisher.publishManagedPost).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

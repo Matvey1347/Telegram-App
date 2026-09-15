@@ -2,6 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import {
   buildTelegramCalendarPlanInstructionFilename,
   buildTelegramGptContextFilename,
+  TELEGRAM_UNIFIED_IMPORT_INSTRUCTION,
 } from '@telegram-system/shared';
 import { TelegramChannelGptContextExporter } from './telegram-channel-gpt-context-exporter.service';
 
@@ -203,7 +204,7 @@ describe('TelegramChannelGptContextExporter', () => {
     expect(text).toContain('local_time: 2026-08-20 09:00');
     expect(text).toContain('text:\nA successful morning topic');
     expect(text).toContain(
-      'Schema: {"version":1,"groups":[],"hypotheses":[],"posts":[],"schedule":[{"postRef":"exact post ref","slotId":"exact slot ID","scheduledAt":"ISO 8601 timestamp with the correct explicit UTC offset"}]}',
+      'Schema: {"version":1,"groups":[],"hypotheses":[],"posts":[],"schedule":[{"action":"SCHEDULE","postRef":"exact new post ref","slotId":"exact slot ID","scheduledAt":"ISO 8601 timestamp with the correct explicit UTC offset"},{"action":"SCHEDULE","postId":"exact existing post ID","slotId":"exact slot ID","scheduledAt":"ISO 8601 timestamp with the correct explicit UTC offset"},{"action":"UNSCHEDULE","postId":"exact existing scheduled post ID"}]}',
     );
     const historyCalls = prisma.telegramPost.findMany.mock.calls as unknown as
       | Array<
@@ -454,5 +455,31 @@ describe('TelegramChannelGptContextExporter', () => {
     expect(text).toContain('subscribers: unknown');
     expect(text).toContain('err: unknown');
     expect(text).not.toContain('subscribers: 2000');
+  });
+
+  it('prepends complete unified-import rules to the full channel context', async () => {
+    const { exporter } = setup();
+
+    const result = await exporter.exportUnifiedImportContext(
+      'user-1',
+      'channel-1',
+    );
+    const text = result.buffer.toString('utf8');
+
+    expect(result.filename).toMatch(/^CH_\d{2}-\d{2}\.txt$/);
+    expect(text.startsWith(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION)).toBe(true);
+    expect(text).toContain('ТОЧНЫЙ ФОРМАТ ОТВЕТА');
+    expect(text).toContain('"groups": [');
+    expect(text).toContain('"icon": "✍️"');
+    expect(text).toContain('"delete":{"groups":[{"id":"точный id группы"}]');
+    expect(text).toContain('Не используй прошедшие и занятые даты/слоты');
+    expect(text).toContain('ПОЛНЫЙ КОНТЕКСТ КАНАЛА');
+    expect(text).toContain('CHANNEL');
+    expect(text).toContain(
+      '{"version":1,"groups":[],"hypotheses":[],"posts":[],"schedule":[],"delete":{"groups":[],"hypotheses":[],"posts":[]}}',
+    );
+    expect(text.indexOf('PUBLICATION SLOTS')).toBeLessThan(
+      text.indexOf('ALL FORMATTING'),
+    );
   });
 });

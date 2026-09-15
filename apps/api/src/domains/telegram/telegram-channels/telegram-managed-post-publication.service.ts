@@ -266,6 +266,23 @@ export class TelegramManagedPostPublicationService {
           'Publication slot is not assigned to this channel or does not match the scheduled time',
         );
       }
+      const occupied = await this.prisma.telegramManagedPost.findFirst({
+        where: {
+          workspaceId,
+          telegramChannelId: channelId,
+          id: { not: postId },
+          publicationSlotId: dto.publicationSlotId,
+          scheduledAt,
+          status: { in: ['SCHEDULED', 'PUBLISHING', 'PUBLISHED'] },
+        },
+        select: { id: true, title: true },
+      });
+      if (occupied) {
+        throw telegramPostsBadRequest(
+          'TELEGRAM_PUBLICATION_SLOT_OCCUPIED',
+          `Publication slot is already used by "${occupied.title}"`,
+        );
+      }
       await this.prisma.telegramManagedPost.updateMany({
         where: { id: postId, workspaceId, telegramChannelId: channelId },
         data: { publicationSlotId: dto.publicationSlotId },

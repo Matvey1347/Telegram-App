@@ -3,6 +3,12 @@ import type { ChannelSettingsDraft } from "./channel-settings-draft";
 
 export type ChannelSettingsCompletionStatus = "empty" | "partial" | "complete";
 
+type OverallCompletionOptions = {
+  draft?: ChannelSettingsDraft;
+  includeBot?: boolean;
+  scheduleStatus?: ChannelSettingsCompletionStatus;
+};
+
 function positive(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0;
@@ -23,15 +29,29 @@ export function getChannelSettingsCompletion(
   const botConnection = channel.preview?.systemBotConnection;
   const sourcesCount = channel.preview?.sourcesCount ?? 0;
   return {
-    appearance: completionFromValues([
+    appearance: [
       Boolean(
         draft?.presentationIconId ||
         channel.presentationIconId ||
         channel.presentationIconPresentation,
       ),
       Boolean((draft?.tgStatUrl ?? channel.tgStatUrl)?.trim()),
+      Boolean((draft?.description ?? channel.shortDescription)?.trim()),
       Boolean(draft?.defaultInviteLinkId ?? channel.defaultInviteLinkId),
-    ]),
+      Boolean(draft?.botInviteLinkId ?? channel.botInviteLinkId),
+      (
+        draft?.folderDefaultInviteLinkIds ??
+        channel.folderDefaultInviteLinkIds ??
+        []
+      ).length > 0,
+      (
+        draft?.mutualPromotionInviteLinkIds ??
+        channel.mutualPromotionInviteLinkIds ??
+        []
+      ).length > 0,
+    ].every(Boolean)
+      ? "complete"
+      : "empty",
     economics: completionFromValues([
       positive(draft?.adBaseCpm ?? channel.adBaseCpm),
       positive(draft?.targetCpa ?? channel.targetCpa),
@@ -64,4 +84,35 @@ export function getChannelSettingsCompletion(
           : "complete"
         : "empty",
   } as const;
+}
+
+export function getOverallChannelSettingsCompletion(
+  channel: TelegramChannel,
+  {
+    draft,
+    includeBot = true,
+    scheduleStatus = channel.preview?.hasPublicationSchedule
+      ? "complete"
+      : "empty",
+  }: OverallCompletionOptions = {},
+) {
+  const completion = getChannelSettingsCompletion(channel, draft);
+  const statuses: ChannelSettingsCompletionStatus[] = [
+    completion.appearance,
+    completion.economics,
+    scheduleStatus,
+    completion.seed,
+    ...(includeBot ? [completion.bot] : []),
+    completion.sources,
+  ];
+  const score = statuses.reduce(
+    (total, status) =>
+      total + (status === "complete" ? 1 : status === "partial" ? 0.5 : 0),
+    0,
+  );
+
+  return {
+    percent: Math.round((score / statuses.length) * 100),
+    statuses,
+  };
 }

@@ -164,6 +164,7 @@ export class TelegramSystemBotWorkflowStore {
           ],
         },
         postBatch: { is: null },
+        resultPostBatchPostId: null,
       },
       orderBy: [{ completedAt: 'desc' }, { id: 'desc' }],
     });

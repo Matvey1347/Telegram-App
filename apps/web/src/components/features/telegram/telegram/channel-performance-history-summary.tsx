@@ -46,7 +46,10 @@ export function ChannelPerformanceHistorySummary({
   const firstDate = points[0]?.date;
   const lastDate = points.at(-1)?.date;
   const payback = lastValue(points, "paybackPercent") ?? fallbackPaybackPercent;
-  const adsLeft = lastValue(points, "adsLeft") ?? fallbackAdsLeft;
+  // The card summary is the authoritative current break-even value. History
+  // points remain useful for the chart, but a selected date range must not
+  // replace the current 1/24-based total with a range-local projection.
+  const adsLeft = fallbackAdsLeft ?? lastValue(points, "adsLeft");
 
   return (
     <div className="space-y-3">

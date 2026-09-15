@@ -20,6 +20,20 @@ describe('Telegram post batch deletion lifecycle schema', () => {
     ),
     'utf8',
   );
+  const postEditorMigration = readFileSync(
+    resolve(
+      __dirname,
+      '../../../../prisma/migrations/20260915124500_add_post_batch_post_icons_and_bot_import/migration.sql',
+    ),
+    'utf8',
+  );
+  const workflowLinkRemovalMigration = readFileSync(
+    resolve(
+      __dirname,
+      '../../../../prisma/migrations/20260915130000_remove_post_batch_workflow_links/migration.sql',
+    ),
+    'utf8',
+  );
 
   it('cascades delivery rows when their managed post or channel is hard-deleted', () => {
     const deliveryModel = schema.match(
@@ -58,5 +72,22 @@ describe('Telegram post batch deletion lifecycle schema', () => {
     expect(foreignKeyRepairMigration).toContain(
       'TO "TelegramPostBatchMutualPromotionLink_mutualPromotionFolder_fkey"',
     );
+  });
+
+  it('installs the batch editor columns and removes workflow attachment tables', () => {
+    expect(postEditorMigration).toContain(
+      'ADD COLUMN "iconId" TEXT',
+    );
+    expect(postEditorMigration).toContain(
+      'ADD COLUMN "resultPostBatchPostId" TEXT',
+    );
+    expect(workflowLinkRemovalMigration).toContain(
+      'DROP TABLE IF EXISTS "TelegramPostBatchAdSaleLink"',
+    );
+    expect(workflowLinkRemovalMigration).toContain(
+      'DROP TABLE IF EXISTS "TelegramPostBatchMutualPromotionLink"',
+    );
+    expect(schema).not.toContain('model TelegramPostBatchAdSaleLink');
+    expect(schema).not.toContain('model TelegramPostBatchMutualPromotionLink');
   });
 });

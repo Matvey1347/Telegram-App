@@ -150,9 +150,7 @@ function InviteLinkHistoryMiniPreview({
                 borderRadius: 12,
                 color: "#e2e8f0",
               }}
-              labelFormatter={(value) =>
-                formatDateTime(String(value))
-              }
+              labelFormatter={(value) => formatDateTime(String(value))}
             />
             <Line
               type="monotone"
@@ -196,7 +194,6 @@ export function InviteLinkPreviewCard({
   const showRequested = requestedCount > 0;
   const showSingleZero = !showJoined && !showRequested;
   const resolvedHistory = history ?? link.history ?? null;
-  const unsubscribedPercent = resolvedHistory?.summary?.drawdownPercent ?? null;
   const campaignHref =
     link.adCampaign?.id && link.telegramChannelId
       ? `/telegram/channels/${link.telegramChannelId}#campaign-${link.adCampaign.id}`
@@ -208,7 +205,18 @@ export function InviteLinkPreviewCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="font-medium">{link.name || "Invite link"}</p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="font-medium">{link.name || "Invite link"}</p>
+            {link.isDefaultForChannel ? (
+              <InviteLinkUseBadge label="Default" tone="sky" />
+            ) : null}
+            {link.isDefaultForFolders ? (
+              <InviteLinkUseBadge label="Folders" tone="violet" />
+            ) : null}
+            {link.isDefaultForMutualPromotion ? (
+              <InviteLinkUseBadge label="VP" tone="amber" />
+            ) : null}
+          </div>
           <div className="mt-1.5 flex items-center gap-2.5">
             {link.creatorMember ? (
               <IconAvatar
@@ -301,7 +309,8 @@ export function InviteLinkPreviewCard({
 
       {showHistoryPreview && !resolvedHistory?.summary ? (
         <div className="mt-3 rounded-lg border border-slate-800 bg-slate-950/30 px-3 py-2 text-xs text-slate-500">
-          No history yet. Run sync to start tracking joined peaks and unsubscribed percent.
+          No history yet. Run sync to start tracking joined peaks and
+          unsubscribed percent.
         </div>
       ) : null}
 
@@ -312,5 +321,27 @@ export function InviteLinkPreviewCard({
         />
       ) : null}
     </div>
+  );
+}
+
+function InviteLinkUseBadge({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: "sky" | "violet" | "amber";
+}) {
+  const toneClass =
+    tone === "sky"
+      ? "border-sky-800 bg-sky-950/50 text-sky-300"
+      : tone === "violet"
+        ? "border-violet-800 bg-violet-950/50 text-violet-300"
+        : "border-amber-800 bg-amber-950/50 text-amber-300";
+  return (
+    <span
+      className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${toneClass}`}
+    >
+      {label}
+    </span>
   );
 }

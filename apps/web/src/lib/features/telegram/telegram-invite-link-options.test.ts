@@ -6,8 +6,14 @@ import {
 
 describe("Telegram invite-link option presentation", () => {
   it("renders a compact blue default icon without a text label", () => {
-    const link = { name: "Imported MTProto link", isDefaultForChannel: true };
-    expect(telegramInviteLinkOptionLabel(link)).toBe("Imported MTProto link");
+    const link = {
+      name: "Imported MTProto link",
+      isDefaultForChannel: true,
+      isDefaultForBot: true,
+    };
+    expect(telegramInviteLinkOptionLabel(link)).toBe(
+      "Imported MTProto link · Default · Bot",
+    );
     expect(telegramInviteLinkDefaultBadgeClassName(link)).toContain(
       "after:content-['★']",
     );

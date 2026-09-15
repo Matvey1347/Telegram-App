@@ -43,6 +43,8 @@ const common = {
   "common.closeDialog": "Close dialog",
   "common.confirmDeletion": "Confirm deletion",
   "common.typeToConfirm": "Type {name} to confirm deletion.",
+  "common.deleteConfirmationQuestion":
+    "Are you sure you want to delete {name}?",
   "common.error.short": "Something went wrong.",
   "common.empty": "No data yet.",
   "common.success": "Success",

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createChannelSettingsDraft } from "./channel-settings-draft";
@@ -36,12 +36,16 @@ vi.mock("@/components/ui/primitives", async (importOriginal) => {
     ...actual,
     CustomSelect: ({
       onCreateOption,
+      placeholder,
     }: {
-      onCreateOption: (value: string) => Promise<void>;
+      onCreateOption?: (value: string) => Promise<void>;
+      placeholder?: string;
     }) => (
       <button
         type="button"
+        aria-label={placeholder === "Select bot link" ? placeholder : undefined}
         onClick={async () => {
+          if (!onCreateOption) return;
           try {
             await onCreateOption("https://t.me/+new-link");
           } catch {
@@ -49,7 +53,9 @@ vi.mock("@/components/ui/primitives", async (importOriginal) => {
           }
         }}
       >
-        Register invite link
+        {placeholder === "Select bot link"
+          ? "Select bot link"
+          : "Register invite link"}
       </button>
     ),
   };
@@ -94,6 +100,58 @@ describe("ChannelPresentationSettingsModal", () => {
     mocks.succeed.mockReset();
     mocks.fail.mockReset();
   });
+
+  it("edits the short channel description in Appearance", () => {
+    const { onDraftChange } = renderModal();
+
+    fireEvent.change(
+      screen.getByPlaceholderText(
+        "A short description shown in generated channel lists",
+      ),
+      { target: { value: "A concise business channel" } },
+    );
+
+    expect(onDraftChange).toHaveBeenCalledWith({
+      description: "A concise business channel",
+    });
+    expect(
+      screen.getByPlaceholderText(
+        "A short description shown in generated channel lists",
+      ).tagName,
+    ).toBe("TEXTAREA");
+    expect(screen.getByText("Invite links for Folders")).toBeInTheDocument();
+    expect(screen.getByText("Invite link for bot")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["Select VP links", "mutualPromotionInviteLinkIds"],
+    ["Select folder links", "folderDefaultInviteLinkIds"],
+  ] as const)(
+    "registers a pasted invite link directly from %s",
+    async (placeholder, field) => {
+      mocks.registerInviteLink.mockResolvedValue({ id: "invite-new" });
+      const { onDraftChange } = renderModal();
+
+      await userEvent.click(
+        await screen.findByRole("button", { name: placeholder }),
+      );
+      await userEvent.type(
+        screen.getByPlaceholderText("Search invite links"),
+        "https://t.me/+new-link",
+      );
+      await userEvent.click(
+        screen.getByRole("button", {
+          name: "Verify and add this invite link",
+        }),
+      );
+
+      await waitFor(() =>
+        expect(onDraftChange).toHaveBeenCalledWith({
+          [field]: ["invite-new"],
+        }),
+      );
+    },
+  );
 
   it("keeps a loading alert until invite-link registration succeeds", async () => {
     let resolveRegistration!: (value: { id: string }) => void;

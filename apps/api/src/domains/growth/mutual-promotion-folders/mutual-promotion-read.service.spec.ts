@@ -108,22 +108,32 @@ describe('MutualPromotionReadService', () => {
     );
   });
 
-  it('loads only one default invite-link option per selected channel initially', async () => {
+  it('loads every preferred folder link and falls back to the main link', async () => {
     const prisma = {
       telegramChannel: {
         findMany: jest
           .fn()
           .mockResolvedValue([
-            { defaultInviteLinkId: 'default-1' },
-            { defaultInviteLinkId: 'default-2' },
+            {
+              defaultInviteLinkId: 'default-1',
+              folderDefaultInviteLinkIds: ['folder-1', 'folder-2'],
+            },
+            {
+              defaultInviteLinkId: 'default-2',
+              folderDefaultInviteLinkIds: [],
+            },
           ]),
       },
       telegramInviteLink: {
         findMany: jest.fn().mockResolvedValue([
           {
-            id: 'default-1',
+            id: 'folder-1',
             telegramChannelId: 'channel-1',
-            telegramChannel: { defaultInviteLinkId: 'default-1' },
+            telegramChannel: {
+              defaultInviteLinkId: 'default-1',
+              folderDefaultInviteLinkIds: ['folder-1', 'folder-2'],
+              mutualPromotionInviteLinkIds: [],
+            },
             name: 'Main link',
             url: 'https://t.me/+main',
             joinedCount: 0,
@@ -163,14 +173,14 @@ describe('MutualPromotionReadService', () => {
         where: {
           workspaceId: 'workspace-1',
           telegramChannelId: { in: ['channel-1', 'channel-2'] },
-          id: { in: ['default-1', 'default-2'] },
+          id: { in: ['folder-1', 'folder-2', 'default-2'] },
         },
       }),
     );
     expect(result).toEqual([
       expect.objectContaining({
-        id: 'default-1',
-        isDefaultForChannel: true,
+        id: 'folder-1',
+        isDefaultForFolders: true,
         available: true,
       }),
     ]);

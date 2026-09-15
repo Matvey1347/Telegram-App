@@ -15,8 +15,8 @@ describe('TelegramChannelAudienceTrendReadService', () => {
           currentViewRate: 60,
           latestViews: 525,
           latestReactions: 21,
-          currentViews: 550,
-          currentReactions: 22,
+          viewValues: [500, 500, 550, 550],
+          reactionValues: [20, 20, 22, 22],
           dataQuality: 'normal',
           dataQualityReason: null,
           hasExternalTrafficAnomaly: false,
@@ -24,8 +24,6 @@ describe('TelegramChannelAudienceTrendReadService', () => {
           postsWindow: 30,
           baselineAt,
           baselineSubscribers: 1_000,
-          baselineViews: 500,
-          baselineReactions: 20,
         },
       ]),
     };
@@ -45,6 +43,7 @@ describe('TelegramChannelAudienceTrendReadService', () => {
     const trendSql = rawQuery.mock.calls[0][0].strings.join(' ');
     expect(trendSql).toContain('"TelegramPostMetricSnapshot"');
     expect(trendSql).toContain("INTERVAL '24 hours'");
+    expect(trendSql).not.toContain("INTERVAL '14 days'");
     expect(result.get('channel-1')).toEqual({
       latest: {
         subscribersCount: 1_100,
@@ -97,8 +96,8 @@ describe('TelegramChannelAudienceTrendReadService', () => {
           currentViewRate: null,
           latestViews: null,
           latestReactions: null,
-          currentViews: null,
-          currentReactions: null,
+          viewValues: null,
+          reactionValues: null,
           dataQuality: 'normal',
           dataQualityReason: null,
           hasExternalTrafficAnomaly: false,
@@ -106,8 +105,6 @@ describe('TelegramChannelAudienceTrendReadService', () => {
           postsWindow: 10,
           baselineAt: null,
           baselineSubscribers: null,
-          baselineViews: null,
-          baselineReactions: null,
         },
       ]),
     };
@@ -121,6 +118,46 @@ describe('TelegramChannelAudienceTrendReadService', () => {
 
     expect(result.get('channel-new')?.latest.subscribersCount).toBe(50);
     expect(result.get('channel-new')?.trend).toBeNull();
+  });
+
+  it('matches the selected seven-day panel instead of comparing against the previous week', async () => {
+    const prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([
+        {
+          telegramChannelId: 'channel-1',
+          currentAt,
+          currentSubscribers: 12_255,
+          currentActiveSubscribers: 1_000,
+          currentViewRate: 10,
+          latestViews: 900,
+          latestReactions: 20,
+          viewValues: [1_050, 1_054, 1_052, 900, 850, 948.2],
+          reactionValues: [25, 25, 24, 20, 20, 20.3],
+          dataQuality: 'normal',
+          dataQualityReason: null,
+          hasExternalTrafficAnomaly: false,
+          hasSubscriberBasePollution: false,
+          postsWindow: 30,
+          baselineAt,
+          baselineSubscribers: 12_412,
+        },
+      ]),
+    };
+    const service = new TelegramChannelAudienceTrendReadService(
+      prisma as never,
+    );
+
+    const trend = (
+      await service.summariesForChannels(
+        'workspace-1',
+        ['channel-1'],
+        7,
+        new Date('2026-09-14T12:00:00.000Z'),
+      )
+    ).get('channel-1')?.trend;
+
+    expect(trend?.metrics.subscribers?.percentChange).toBe(-1.3);
+    expect(trend?.metrics.reach?.percentChange).toBe(-14.5);
   });
 
   it('does not query the database for an empty page', async () => {

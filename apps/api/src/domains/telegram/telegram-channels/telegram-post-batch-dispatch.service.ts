@@ -53,6 +53,7 @@ export class TelegramPostBatchDispatchService {
           select: {
             id: true,
             title: true,
+            iconId: true,
             text: true,
             imageUrls: true,
             mediaItems: true,
@@ -184,6 +185,7 @@ export class TelegramPostBatchDispatchService {
             workspaceId: input.workspaceId,
             telegramChannelId: delivery.channelId,
             title: delivery.post.title,
+            icon: delivery.post.iconId,
             text: delivery.post.text,
             imageUrls: delivery.post.imageUrls,
             mediaItems: delivery.post.mediaItems as Prisma.InputJsonValue,

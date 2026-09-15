@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { TelegramChannelLifecycleService } from './telegram-channel-lifecycle.service';
 
 describe('TelegramChannelLifecycleService system groups', () => {
@@ -115,5 +116,52 @@ describe('TelegramChannelLifecycleService system groups', () => {
       ownViewsPerPost: 0,
       ownReactionsPerPost: 0,
     });
+  });
+
+  it('rejects a bot invite link that is not active for this channel', async () => {
+    const prisma = {
+      icon: { findFirst: jest.fn() },
+      telegramInviteLink: {
+        findFirst: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
+      },
+    };
+    const support = {
+      workspace: jest.fn().mockResolvedValue('workspace-1'),
+    };
+    const importPolicy = {
+      resolveImportPolicy: jest.fn().mockResolvedValue({
+        acquisitionType: 'CREATED',
+        postsSyncFrom: null,
+        inviteLinksSyncFrom: null,
+        purchaseTransactionId: null,
+      }),
+    };
+    const catalog = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'channel-1',
+        targetCpa: null,
+        stopCpaFrom: null,
+      }),
+    };
+    const service = new TelegramChannelLifecycleService(
+      prisma as never,
+      {} as never,
+      support as never,
+      importPolicy as never,
+      {} as never,
+      catalog as never,
+      {} as never,
+    );
+
+    await expect(
+      service.update('user-1', 'channel-1', {
+        botInviteLinkId: 'another-channel-link',
+      }),
+    ).rejects.toThrow(
+      new BadRequestException(
+        'Purpose-specific invite links must belong to this channel',
+      ),
+    );
   });
 });

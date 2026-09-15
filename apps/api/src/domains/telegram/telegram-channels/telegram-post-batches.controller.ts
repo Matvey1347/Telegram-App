@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -17,10 +18,11 @@ import { WorkspaceService } from '../../../common/workspace.service';
 import { TelegramPostBatchCommandService } from './telegram-post-batch-command.service';
 import {
   ImportTelegramPostBatchDto,
+  ImportTelegramPostBatchPostDto,
+  CreateAndDispatchTelegramPostBatchDto,
+  CreateTelegramPostBatchDto,
   DispatchTelegramPostBatchDto,
-  LinkTelegramPostBatchDto,
   TelegramPostBatchDeliveriesQueryDto,
-  TelegramPostBatchLinkTargetsQueryDto,
   TelegramPostBatchListQueryDto,
   UpdateTelegramPostBatchDto,
 } from './telegram-post-batch.dto';
@@ -35,6 +37,14 @@ export class TelegramPostBatchesController {
     private readonly command: TelegramPostBatchCommandService,
   ) {}
 
+  @Post()
+  createDraft(
+    @CurrentUser() user: JwtUser,
+    @Body() dto: CreateTelegramPostBatchDto,
+  ) {
+    return this.command.createDraft(user.sub, dto);
+  }
+
   @Post('import')
   importWorkflow(
     @CurrentUser() user: JwtUser,
@@ -43,15 +53,12 @@ export class TelegramPostBatchesController {
     return this.command.importWorkflow(user.sub, dto.workflowId);
   }
 
-  @Get('link-targets')
-  async linkTargets(
+  @Post('dispatch')
+  createAndDispatch(
     @CurrentUser() user: JwtUser,
-    @Query() query: TelegramPostBatchLinkTargetsQueryDto,
+    @Body() dto: CreateAndDispatchTelegramPostBatchDto,
   ) {
-    const workspaceId = await this.workspace.resolveWorkspaceIdForUser(
-      user.sub,
-    );
-    return this.read.linkTargets(workspaceId, query.type);
+    return this.command.createAndDispatch(user.sub, dto);
   }
 
   @Get()
@@ -82,6 +89,26 @@ export class TelegramPostBatchesController {
     return this.command.update(user.sub, id, dto);
   }
 
+  @Delete(':id')
+  removeDraft(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.command.removeDraft(user.sub, id);
+  }
+
+  @Post(':id/posts')
+  addPost(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.command.addPost(user.sub, id);
+  }
+
+  @Post(':id/posts/:postId/import')
+  importPost(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Param('postId') postId: string,
+    @Body() dto: ImportTelegramPostBatchPostDto,
+  ) {
+    return this.command.importPost(user.sub, id, postId, dto);
+  }
+
   @Post(':id/dispatch')
   dispatch(
     @CurrentUser() user: JwtUser,
@@ -101,14 +128,5 @@ export class TelegramPostBatchesController {
       user.sub,
     );
     return this.read.deliveries(workspaceId, id, query.page, query.pageSize);
-  }
-
-  @Post(':id/links')
-  link(
-    @CurrentUser() user: JwtUser,
-    @Param('id') id: string,
-    @Body() dto: LinkTelegramPostBatchDto,
-  ) {
-    return this.command.link(user.sub, id, dto);
   }
 }

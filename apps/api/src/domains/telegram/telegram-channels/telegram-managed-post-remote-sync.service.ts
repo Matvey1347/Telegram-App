@@ -129,6 +129,7 @@ export class TelegramManagedPostRemoteSyncService {
             ).length,
             publishMode: post.publishMode,
             scheduledAt: post.scheduledAt ?? post.publishedAt,
+            origin: post.origin,
           },
           remote.recentPublished,
         );

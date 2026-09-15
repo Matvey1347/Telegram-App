@@ -1,8 +1,7 @@
 import type {
-  LinkTelegramPostBatchPayload,
+  CreateTelegramPostBatchPayload,
+  CreateAndDispatchTelegramPostBatchPayload,
   TelegramPostBatch,
-  TelegramPostBatchAssociation,
-  TelegramPostBatchAssociationTarget,
   TelegramPostBatchDeliveryPage,
   TelegramPostBatchDispatchResult,
   TelegramPostBatchListResponse,
@@ -22,6 +21,18 @@ export type TelegramPostBatchImportResult =
 
 export function createTelegramPostBatchesApi(client: AxiosInstance) {
   return {
+    createAndDispatch: async (
+      payload: CreateAndDispatchTelegramPostBatchPayload,
+    ) =>
+      (
+        await client.post<TelegramPostBatchDispatchResult>(
+          `${batchPath}/dispatch`,
+          payload,
+        )
+      ).data,
+    create: async (payload: CreateTelegramPostBatchPayload) =>
+      (await client.post<TelegramPostBatch>(batchPath, payload, silentFeedback))
+        .data,
     prepareImport: async () =>
       (
         await client.post<{ workflowId: string }>(
@@ -45,11 +56,32 @@ export function createTelegramPostBatchesApi(client: AxiosInstance) {
           silentFeedback,
         )
       ).data,
+    importPost: async (
+      batchId: string,
+      postId: string,
+      workflowId: string,
+      expectedVersion: number,
+    ) =>
+      (
+        await client.post<TelegramPostBatch>(
+          `${batchPath}/${batchId}/posts/${postId}/import`,
+          { workflowId, expectedVersion },
+          silentFeedback,
+        )
+      ).data,
     list: async (params: { page: number; pageSize: number }) =>
       (await client.get<TelegramPostBatchListResponse>(batchPath, { params }))
         .data,
     detail: async (batchId: string) =>
       (await client.get<TelegramPostBatch>(`${batchPath}/${batchId}`)).data,
+    addPost: async (batchId: string) =>
+      (
+        await client.post<TelegramPostBatch>(
+          `${batchPath}/${batchId}/posts`,
+          undefined,
+          silentFeedback,
+        )
+      ).data,
     deliveries: async (
       batchId: string,
       params: { page: number; pageSize: number },
@@ -60,13 +92,6 @@ export function createTelegramPostBatchesApi(client: AxiosInstance) {
           { params },
         )
       ).data,
-    linkTargets: async (type: TelegramPostBatchAssociation["type"]) =>
-      (
-        await client.get<TelegramPostBatchAssociationTarget[]>(
-          `${batchPath}/link-targets`,
-          { params: { type } },
-        )
-      ).data,
     update: async (batchId: string, payload: UpdateTelegramPostBatchPayload) =>
       (
         await client.patch<TelegramPostBatch>(
@@ -74,18 +99,18 @@ export function createTelegramPostBatchesApi(client: AxiosInstance) {
           payload,
         )
       ).data,
+    removeDraft: async (batchId: string) =>
+      (
+        await client.delete<{ success: true }>(
+          `${batchPath}/${batchId}`,
+          silentFeedback,
+        )
+      ).data,
     dispatch: async (batchId: string, expectedVersion: number) =>
       (
         await client.post<TelegramPostBatchDispatchResult>(
           `${batchPath}/${batchId}/dispatch`,
           { expectedVersion },
-        )
-      ).data,
-    link: async (batchId: string, payload: LinkTelegramPostBatchPayload) =>
-      (
-        await client.post<TelegramPostBatch>(
-          `${batchPath}/${batchId}/links`,
-          payload,
         )
       ).data,
   };

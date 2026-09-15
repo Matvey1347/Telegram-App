@@ -19,6 +19,7 @@ import {
   DateInput,
   FormField,
   Input,
+  MultiSelect,
   Textarea,
   TimeInput,
 } from "@/components/ui/primitives";
@@ -52,10 +53,12 @@ export function ManagedPostsImportWorkspace({
   messageLengthMax,
   referencedPosts,
   groupOptions,
+  hypothesisOptions = [],
   onUpdateRow,
   onDeleteRow,
   onSelectRow,
   onSelectTab,
+  onUpdateHypotheses,
 }: {
   rows: EditableImportRow[];
   visibleRowIndices: number[];
@@ -71,10 +74,16 @@ export function ManagedPostsImportWorkspace({
   messageLengthMax: number;
   referencedPosts: TelegramManagedPostLookupItem[];
   groupOptions: ManagedPostsGroupOption[];
+  hypothesisOptions?: Array<{
+    value: string;
+    label: string;
+    iconEmoji?: string;
+  }>;
   onUpdateRow: (index: number, patch: Partial<EditableImportRow>) => void;
   onDeleteRow: (index: number) => void;
   onSelectRow: (index: number) => void;
   onSelectTab: (tab: ImportRowTab) => void;
+  onUpdateHypotheses?: (index: number, refs: string[]) => void;
 }) {
   const { t } = useI18n();
   const textEditorRef = useRef<TelegramTextEditorHandle | null>(null);
@@ -296,7 +305,7 @@ export function ManagedPostsImportWorkspace({
               </FormField>
             </div>
 
-            <div className="grid gap-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.65fr)]">
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,0.65fr)]">
               <FormField label={t("telegram.posts.import.postGroup")}>
                 <CustomSelect
                   value={
@@ -321,6 +330,17 @@ export function ManagedPostsImportWorkspace({
                   ]}
                 />
               </FormField>
+              {onUpdateHypotheses ? (
+                <FormField label={t("telegram.posts.editor.hypothesis")}>
+                  <MultiSelect
+                    value={selectedRow.hypothesisRefs ?? []}
+                    onChange={(refs) => onUpdateHypotheses(selectedRowIndex, refs)}
+                    disabled={disabled}
+                    options={hypothesisOptions}
+                    placeholder={t("telegram.posts.hypotheses.selectPlaceholder")}
+                  />
+                </FormField>
+              ) : null}
               <FormField label={t("telegram.posts.import.date")}>
                 <DateInput
                   value={selectedRow.scheduledAt?.slice(0, 10) ?? ""}
@@ -356,7 +376,7 @@ export function ManagedPostsImportWorkspace({
               <Button
                 type="button"
                 variant="secondary"
-                className="md:col-span-2 md:col-start-2"
+                className="md:col-span-2 xl:col-span-2 xl:col-start-3"
                 disabled={disabled || !selectedRow.scheduledAt}
                 onClick={() =>
                   onUpdateRow(selectedRowIndex, { scheduledAt: null })

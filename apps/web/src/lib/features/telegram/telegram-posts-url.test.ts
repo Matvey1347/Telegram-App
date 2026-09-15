@@ -34,6 +34,15 @@ describe("buildTelegramPostsUrl", () => {
     ).toBe("/telegram-posts/channel-1/groups?groupId=group-1");
   });
 
+  it("builds a canonical hypotheses url", () => {
+    expect(
+      buildTelegramPostsUrl({
+        channelId: "channel-1",
+        postView: "hypotheses",
+      }),
+    ).toBe("/telegram-posts/channel-1/hypotheses");
+  });
+
   it("preserves unrelated query params on canonical urls", () => {
     expect(
       buildTelegramPostsUrl({

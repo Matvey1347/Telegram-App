@@ -609,7 +609,12 @@ export class TelegramChannelsController {
             user.sub,
             id,
           )
-        : await this.gptContextExporter.export(user.sub, id);
+        : purpose === 'unified-import'
+          ? await this.gptContextExporter.exportUnifiedImportContext(
+              user.sub,
+              id,
+            )
+          : await this.gptContextExporter.export(user.sub, id);
     response.setHeader('Content-Type', 'text/plain; charset=utf-8');
     response.setHeader(
       'Content-Disposition',

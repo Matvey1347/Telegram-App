@@ -1,11 +1,101 @@
 import type {
+  CreateAndDispatchTelegramPostBatchPayload,
   TelegramPostBatch,
   TelegramPostBatchAction,
   TelegramPostBatchChannelOverride,
   TelegramPostBatchLifetimeHours,
   TelegramPostBatchPost,
   UpdateTelegramPostBatchPayload,
+  TelegramSystemBotPostDraft,
 } from "@telegram-system/shared";
+
+function localId() {
+  return crypto.randomUUID();
+}
+
+export function createLocalPost(
+  position: number,
+  lifetime: TelegramPostBatchLifetimeHours = 24,
+): TelegramPostBatchPost {
+  return {
+    id: localId(),
+    position,
+    title: `Post ${position + 1}`,
+    iconId: null,
+    iconPresentation: null,
+    text: null,
+    imageUrls: [],
+    mediaItems: [],
+    buttonRows: [],
+    action: "PUBLISH_NOW",
+    scheduledAt: null,
+    deleteAfterHours: lifetime,
+    longTextMode: "IMAGES_THEN_TEXT",
+    channelOverrides: [],
+  };
+}
+
+export function createLocalBatch(
+  defaultChannelId?: string,
+  meaningful = true,
+): TelegramPostBatch {
+  const now = new Date().toISOString();
+  return {
+    id: localId(),
+    title: meaningful ? `Mass publication · ${now.slice(0, 10)}` : "",
+    status: "DRAFT",
+    version: 0,
+    postCount: 1,
+    channelCount: defaultChannelId ? 1 : 0,
+    deliveryCount: 0,
+    scheduledCount: 0,
+    publishedCount: 0,
+    failedCount: 0,
+    nextPublicationAt: null,
+    nextDeleteAt: null,
+    createdAt: now,
+    updatedAt: now,
+    channelIds: defaultChannelId ? [defaultChannelId] : [],
+    defaultDeleteAfterHours: 24,
+    posts: [createLocalPost(0)],
+  };
+}
+
+export function addLocalPost(batch: TelegramPostBatch) {
+  const post = createLocalPost(
+    batch.posts.length,
+    batch.defaultDeleteAfterHours,
+  );
+  return {
+    ...batch,
+    postCount: batch.posts.length + 1,
+    updatedAt: new Date().toISOString(),
+    posts: [...batch.posts, post],
+  };
+}
+
+export function importLocalPost(
+  batch: TelegramPostBatch,
+  postId: string,
+  imported: TelegramSystemBotPostDraft,
+) {
+  return {
+    ...batch,
+    updatedAt: new Date().toISOString(),
+    posts: batch.posts.map((post) =>
+      post.id === postId
+        ? {
+            ...post,
+            title: imported.title?.trim() || post.title,
+            text: imported.formattedHtml || imported.text || null,
+            imageUrls: imported.imageUrls ?? [],
+            mediaItems: imported.mediaItems ?? [],
+            buttonRows: imported.buttonRows ?? [],
+          }
+        : post,
+    ),
+  };
+}
 
 export function localScheduleParts(value: string | null) {
   const date = value ? new Date(value) : null;
@@ -77,6 +167,7 @@ export function selectBatchChannels(
   return {
     ...batch,
     channelIds,
+    channelCount: channelIds.length,
     posts: batch.posts.map((post) => ({
       ...post,
       channelOverrides: post.channelOverrides.filter((override) =>
@@ -97,6 +188,7 @@ export function updatePayload(
     posts: batch.posts.map((post) => ({
       id: post.id,
       title: post.title,
+      iconId: post.iconId,
       text: post.text,
       imageUrls: post.imageUrls,
       mediaItems: post.mediaItems,
@@ -107,6 +199,21 @@ export function updatePayload(
       longTextMode: post.longTextMode,
       channelOverrides: post.channelOverrides,
     })),
+  };
+}
+
+export function createAndDispatchPayload(
+  batch: TelegramPostBatch,
+): CreateAndDispatchTelegramPostBatchPayload {
+  const { expectedVersion: _expectedVersion, ...payload } =
+    updatePayload(batch);
+  void _expectedVersion;
+  return {
+    ...payload,
+    posts: payload.posts.map(({ id: _id, ...post }) => {
+      void _id;
+      return post;
+    }),
   };
 }
 

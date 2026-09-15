@@ -1,7 +1,7 @@
 "use client";
 
 import { lazy, Suspense, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ConsumerFinanceAnalyticsQuery,
   ConsumerFinanceProfile,
@@ -149,6 +149,7 @@ export function ConsumerFinanceScreens({
   onInvestmentOpen?: (investmentId: string) => void;
   onInvestmentBack?: () => void;
 }) {
+  const queryClient = useQueryClient();
   const [period, setPeriod] = useState<ConsumerFinanceAnalyticsQuery>({
     period: "CURRENT_MONTH",
   });
@@ -164,6 +165,11 @@ export function ConsumerFinanceScreens({
       screen === "home" &&
       (period.period !== "CUSTOM" || Boolean(period.from && period.to)),
   });
+  const hasResolvedDashboardCache = queryClient
+    .getQueriesData({ queryKey: consumerFinanceKeys.dashboardRoot(botId) })
+    .some(([, data]) => data !== undefined);
+  const switchingDashboardPeriod =
+    screen === "home" && dashboard.isLoading && hasResolvedDashboardCache;
   const financeProfile = profile;
   const locale = normalizeFinanceLocale(financeProfile.locale);
   const t = financeCoreCopy(locale);
@@ -173,9 +179,9 @@ export function ConsumerFinanceScreens({
         <FinanceOnboarding botId={botId} profile={financeProfile} />
       </Suspense>
     );
-  if (screen === "home" && dashboard.isLoading)
+  if (screen === "home" && dashboard.isLoading && !switchingDashboardPeriod)
     return <LoadingState text={t.loadingFinances} />;
-  if (screen === "home" && !dashboard.data)
+  if (screen === "home" && !dashboard.data && !switchingDashboardPeriod)
     return (
       <div className="space-y-3">
         <ErrorState text={t.financeUnavailable} />
@@ -185,17 +191,15 @@ export function ConsumerFinanceScreens({
   return (
     <Suspense fallback={<LoadingState text={t.loadingReferences} />}>
       {screen === "home" && (
-        <>
-          {dashboard.data ? (
-            <FinanceDashboard
-              data={dashboard.data}
-              locale={locale}
-              surface={surface}
-              period={period}
-              onPeriodChange={setPeriod}
-            />
-          ) : null}
-        </>
+        <FinanceDashboard
+          data={dashboard.data}
+          locale={locale}
+          surface={surface}
+          period={period}
+          onPeriodChange={setPeriod}
+          loading={switchingDashboardPeriod}
+          loadingLabel={t.loadingFinances}
+        />
       )}
       {screen === "analytics" && (
         <FinanceAnalytics

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   analyticsSources: vi.fn(),
   updateQuiet: vi.fn(),
   getScheduleAssignment: vi.fn(),
+  assignSchedule: vi.fn(),
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -22,6 +23,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     telegramPublicationSchedulesApi: {
       ...actual.telegramPublicationSchedulesApi,
       getAssignment: mocks.getScheduleAssignment,
+      assign: mocks.assignSchedule,
     },
   };
 });
@@ -62,11 +64,65 @@ vi.mock("./channel-economics-editor", () => ({
 vi.mock("./channel-system-bot-access-modal", () => ({
   ChannelSystemBotAccessModal: () => <div>Bot settings content</div>,
 }));
+vi.mock("./channel-publication-schedule-settings", () => ({
+  ChannelPublicationScheduleSettings: ({
+    onChange,
+  }: {
+    onChange: (value: {
+      scheduleId: string;
+      selectedSlotIds: string[];
+    }) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() =>
+        onChange({ scheduleId: "schedule-1", selectedSlotIds: ["slot-1"] })
+      }
+    >
+      Choose schedule slots
+    </button>
+  ),
+}));
 vi.mock("@/providers/toast-provider", () => ({
   useAppToast: () => ({ pushToast: vi.fn() }),
 }));
 
 describe("ChannelSettingsModal", () => {
+  it("saves schedule slots with the single modal Save button", async () => {
+    mocks.analyticsSources.mockResolvedValue({ sources: [] });
+    mocks.updateQuiet.mockResolvedValue({});
+    mocks.getScheduleAssignment.mockResolvedValue(null);
+    mocks.assignSchedule.mockReset().mockResolvedValue({});
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <ChannelSettingsModal
+          channel={{ id: "channel-1", title: "Business" } as never}
+          initialTab="schedule"
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Assign schedule" }),
+    ).toBeNull();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Choose schedule slots" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(mocks.assignSchedule).toHaveBeenCalledWith("channel-1", {
+        scheduleId: "schedule-1",
+        selectionMode: "SUBSET",
+        selectedSlotIds: ["slot-1"],
+      }),
+    );
+  });
+
   it("groups channel configuration into icon-labelled tabs and shows the channel avatar", async () => {
     mocks.analyticsSources.mockReset().mockResolvedValue({ sources: [] });
     mocks.updateQuiet.mockReset().mockResolvedValue({});
@@ -82,10 +138,14 @@ describe("ChannelSettingsModal", () => {
               id: "channel-1",
               title: "Business patterns",
               username: "business_patterns",
+              description: "Business media about practical growth",
               photoUrl: "https://cdn.test/channel.jpg",
               presentationIconId: "icon-1",
               tgStatUrl: "https://tgstat.com/channel/test",
               defaultInviteLinkId: "invite-1",
+              botInviteLinkId: "invite-bot",
+              folderDefaultInviteLinkIds: ["invite-folder"],
+              mutualPromotionInviteLinkIds: ["invite-vp"],
               adBaseCpm: 300,
               seedSubscribersCount: 100,
               autoSyncEnabled: true,

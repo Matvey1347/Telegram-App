@@ -3,6 +3,7 @@ import {
   AD_DELETION_RETRY_MS,
   MANAGED_POST_IDENTITY_RETRY_MS,
   MANAGED_POST_LOCAL_PUBLISHING_STALE_MS,
+  MANAGED_POST_MISSING_IDENTITY_RETRY_MS,
   adDeletionReadyWhere,
   adPlacementLifecycleReadyWhere,
   greeterBroadcastDispatchableWhere,
@@ -139,10 +140,8 @@ export class DueTaskSchedule {
   }
 
   private async nextManagedPostDueAt(now: Date) {
-    const retryCutoff = new Date(
-      now.getTime() - MANAGED_POST_IDENTITY_RETRY_MS,
-    );
-    const [local, ready, futureIdentity, backedOff] = await Promise.all([
+    const [local, ready, futureIdentity, unverifiedBackoff, missingBackoff] =
+      await Promise.all([
       this.prisma.telegramManagedPost.findFirst({
         where: {
           scheduleMode: 'LOCAL',
@@ -160,6 +159,7 @@ export class DueTaskSchedule {
         select: {
           scheduledAt: true,
           telegramIdLastCheckedAt: true,
+          telegramIdVerificationStatus: true,
           updatedAt: true,
         },
       }),
@@ -180,26 +180,61 @@ export class DueTaskSchedule {
       this.prisma.telegramManagedPost.findFirst({
         where: {
           ...managedPostIdentityCandidateWhere(now),
-          telegramIdLastCheckedAt: { gt: retryCutoff },
+          telegramIdVerificationStatus: 'UNVERIFIED',
+          telegramIdLastCheckedAt: {
+            gt: new Date(now.getTime() - MANAGED_POST_IDENTITY_RETRY_MS),
+          },
         },
         orderBy: { telegramIdLastCheckedAt: 'asc' },
-        select: { scheduledAt: true, telegramIdLastCheckedAt: true },
+        select: {
+          scheduledAt: true,
+          telegramIdLastCheckedAt: true,
+          telegramIdVerificationStatus: true,
+        },
+      }),
+      this.prisma.telegramManagedPost.findFirst({
+        where: {
+          ...managedPostIdentityCandidateWhere(now),
+          telegramIdVerificationStatus: 'MISSING',
+          telegramIdLastCheckedAt: {
+            gt: new Date(
+              now.getTime() - MANAGED_POST_MISSING_IDENTITY_RETRY_MS,
+            ),
+          },
+        },
+        orderBy: { telegramIdLastCheckedAt: 'asc' },
+        select: {
+          scheduledAt: true,
+          telegramIdLastCheckedAt: true,
+          telegramIdVerificationStatus: true,
+        },
       }),
     ]);
     const readyAt = ready
       ? ready.telegramIdLastCheckedAt
         ? new Date(
             ready.telegramIdLastCheckedAt.getTime() +
-              MANAGED_POST_IDENTITY_RETRY_MS,
+              (ready.telegramIdVerificationStatus === 'MISSING'
+                ? MANAGED_POST_MISSING_IDENTITY_RETRY_MS
+                : MANAGED_POST_IDENTITY_RETRY_MS),
           )
         : (ready.scheduledAt ?? ready.updatedAt)
       : null;
-    const backedOffAt = backedOff?.telegramIdLastCheckedAt
+    const unverifiedBackoffAt = unverifiedBackoff?.telegramIdLastCheckedAt
       ? new Date(
           Math.max(
-            backedOff.scheduledAt?.getTime() ?? 0,
-            backedOff.telegramIdLastCheckedAt.getTime() +
+            unverifiedBackoff.scheduledAt?.getTime() ?? 0,
+            unverifiedBackoff.telegramIdLastCheckedAt.getTime() +
               MANAGED_POST_IDENTITY_RETRY_MS,
+          ),
+        )
+      : null;
+    const missingBackoffAt = missingBackoff?.telegramIdLastCheckedAt
+      ? new Date(
+          Math.max(
+            missingBackoff.scheduledAt?.getTime() ?? 0,
+            missingBackoff.telegramIdLastCheckedAt.getTime() +
+              MANAGED_POST_MISSING_IDENTITY_RETRY_MS,
           ),
         )
       : null;
@@ -211,7 +246,8 @@ export class DueTaskSchedule {
         : local?.scheduledAt,
       readyAt,
       futureIdentity?.scheduledAt,
-      backedOffAt,
+      unverifiedBackoffAt,
+      missingBackoffAt,
     ]);
   }
 

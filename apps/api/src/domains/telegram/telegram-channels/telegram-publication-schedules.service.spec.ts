@@ -6,6 +6,7 @@ describe('TelegramPublicationSchedulesService', () => {
     workspace: { findUnique: jest.fn() },
     telegramChannel: { findFirst: jest.fn() },
     telegramPublicationSchedule: { findFirst: jest.fn() },
+    telegramManagedPost: { findMany: jest.fn().mockResolvedValue([]) },
   };
   const workspace: any = {
     resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
@@ -63,6 +64,16 @@ describe('TelegramPublicationSchedulesService', () => {
         ],
       },
     });
+    prisma.telegramManagedPost.findMany.mockResolvedValueOnce([
+      {
+        id: 'post-1',
+        title: 'Already planned',
+        status: 'SCHEDULED',
+        publicationSlotId: 'morning',
+        scheduledAt: new Date('2026-10-24T07:00:00.000Z'),
+        publishedAt: null,
+      },
+    ]);
     const rows = await service.occurrences('user-1', 'channel-1', {
       from: '2026-10-24T00:00:00.000Z',
       to: '2026-10-27T00:00:00.000Z',
@@ -71,6 +82,8 @@ describe('TelegramPublicationSchedulesService', () => {
       expect.objectContaining({
         slotId: 'morning',
         scheduledAt: '2026-10-24T07:00:00.000Z',
+        state: 'OCCUPIED',
+        postTitle: 'Already planned',
       }),
       expect.objectContaining({
         slotId: 'morning',

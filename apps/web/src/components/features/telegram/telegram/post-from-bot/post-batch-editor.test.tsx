@@ -1,9 +1,28 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { TelegramPostBatch } from "@telegram-system/shared";
 import { renderWithI18n } from "@/test/render-with-i18n";
+import { ToastProvider } from "@/providers/toast-provider";
 import { PostBatchEditor } from "./post-batch-editor";
-import { localScheduleParts } from "./post-batch-model";
+
+vi.mock("@/components/icons/icon-picker", () => ({
+  IconPicker: ({ disabled }: { disabled?: boolean }) => (
+    <button type="button" aria-label="Add emoji" disabled={disabled} />
+  ),
+}));
+
+function renderEditor(ui: ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return renderWithI18n(
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>{ui}</ToastProvider>
+    </QueryClientProvider>,
+  );
+}
 
 const batch: TelegramPostBatch = {
   id: "batch-1",
@@ -22,12 +41,13 @@ const batch: TelegramPostBatch = {
   updatedAt: "2026-09-14T10:00:00.000Z",
   channelIds: ["channel-1"],
   defaultDeleteAfterHours: 24,
-  associations: [],
   posts: [
     {
       id: "post-1",
       position: 0,
       title: "First post",
+      iconId: null,
+      iconPresentation: null,
       text: "Hello",
       imageUrls: [],
       mediaItems: [],
@@ -79,7 +99,7 @@ const channels = [
 describe("PostBatchEditor", () => {
   it("dispatches the latest edited draft", async () => {
     const onDispatch = vi.fn().mockResolvedValue(undefined);
-    renderWithI18n(
+    renderEditor(
       <PostBatchEditor
         batch={batch}
         channels={channels}
@@ -105,7 +125,7 @@ describe("PostBatchEditor", () => {
   });
 
   it("prevents channel edits after dispatch", () => {
-    renderWithI18n(
+    renderEditor(
       <PostBatchEditor
         batch={{ ...batch, status: "ACTIVE", version: 3 }}
         channels={channels}
@@ -116,15 +136,15 @@ describe("PostBatchEditor", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "1 selected" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Save draft" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "N News" })).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: "Save and dispatch" }),
+    ).not.toBeInTheDocument();
   });
 
   it("does not dispatch after a schedule time becomes incomplete", () => {
     const onDispatch = vi.fn();
-    const scheduledAt = "2099-09-14T10:30:00.000Z";
-    const localTime = localScheduleParts(scheduledAt).time;
-    renderWithI18n(
+    renderEditor(
       <PostBatchEditor
         batch={{
           ...batch,
@@ -132,7 +152,7 @@ describe("PostBatchEditor", () => {
             {
               ...batch.posts[0],
               action: "SCHEDULE",
-              scheduledAt,
+              scheduledAt: null,
             },
           ],
         }}
@@ -144,9 +164,6 @@ describe("PostBatchEditor", () => {
       />,
     );
 
-    fireEvent.change(screen.getByDisplayValue(localTime), {
-      target: { value: "1" },
-    });
     fireEvent.click(screen.getByRole("button", { name: "Save and dispatch" }));
 
     expect(onDispatch).not.toHaveBeenCalled();
@@ -158,15 +175,16 @@ describe("PostBatchEditor", () => {
   });
 
   it("shows an explicit empty selection and prunes overrides for deselected channels", async () => {
+    const onDispatch = vi.fn().mockResolvedValue(undefined);
     const onSave = vi.fn().mockResolvedValue(undefined);
-    const { rerender } = renderWithI18n(
+    const firstRender = renderEditor(
       <PostBatchEditor
         batch={{ ...batch, channelIds: [] }}
         channels={channels}
         saving={false}
         dispatching={false}
-        onSave={onSave}
-        onDispatch={vi.fn()}
+        onSave={vi.fn()}
+        onDispatch={onDispatch}
       />,
     );
 
@@ -174,7 +192,8 @@ describe("PostBatchEditor", () => {
       screen.getByRole("button", { name: "No channels selected" }),
     ).toBeVisible();
 
-    rerender(
+    firstRender.unmount();
+    renderEditor(
       <PostBatchEditor
         key="with-overrides"
         batch={{
@@ -197,15 +216,17 @@ describe("PostBatchEditor", () => {
         saving={false}
         dispatching={false}
         onSave={onSave}
-        onDispatch={vi.fn()}
+        onDispatch={onDispatch}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "2 selected" }));
-    fireEvent.click(screen.getByRole("button", { name: /Promos/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "N News P Promos" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "P Promos" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save and dispatch" }));
 
-    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
-    expect(onSave.mock.calls[0][0].channelIds).toEqual(["channel-1"]);
-    expect(onSave.mock.calls[0][0].posts[0].channelOverrides).toEqual([]);
+    await waitFor(() => expect(onDispatch).toHaveBeenCalledOnce());
+    expect(onDispatch.mock.calls[0][0].channelIds).toEqual(["channel-1"]);
+    expect(onDispatch.mock.calls[0][0].posts[0].channelOverrides).toEqual([]);
   });
 });

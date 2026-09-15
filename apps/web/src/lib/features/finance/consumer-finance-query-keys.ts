@@ -1,10 +1,12 @@
 export const consumerFinanceKeys = {
   root: (botId: string) => ["consumer-finance", botId] as const,
   session: (botId: string) => ["consumer-finance", botId, "session"] as const,
+  dashboardRoot: (botId: string) =>
+    ["consumer-finance", botId, "dashboard"] as const,
   dashboard: (botId: string, filters?: Record<string, unknown>) =>
     filters
-      ? (["consumer-finance", botId, "dashboard", filters] as const)
-      : (["consumer-finance", botId, "dashboard"] as const),
+      ? ([...consumerFinanceKeys.dashboardRoot(botId), filters] as const)
+      : consumerFinanceKeys.dashboardRoot(botId),
   analyticsRoot: (botId: string) =>
     ["consumer-finance", botId, "analytics"] as const,
   analytics: (botId: string, filters: Record<string, unknown>) =>

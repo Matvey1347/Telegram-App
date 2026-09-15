@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -10,6 +11,7 @@ import {
   MaxLength,
   Min,
   ValidateNested,
+  ValidateIf,
 } from 'class-validator';
 import type { TelegramUnifiedImportManifest } from '@telegram-system/shared';
 
@@ -24,18 +26,19 @@ class HypothesisValueDto {
   @IsString() @MaxLength(200) name!: string;
   @IsOptional() @IsString() @MaxLength(4000) description?: string | null;
   @IsOptional()
-  @IsIn(['DRAFT', 'ACTIVE', 'SUCCESSFUL', 'FAILED', 'ARCHIVED'])
-  status?: 'DRAFT' | 'ACTIVE' | 'SUCCESSFUL' | 'FAILED' | 'ARCHIVED';
-  @IsOptional() @IsString() iconId?: string | null;
+  @IsIn(['ACTIVE', 'SUCCESSFUL', 'FAILED', 'ARCHIVED'])
+  status?: 'ACTIVE' | 'SUCCESSFUL' | 'FAILED' | 'ARCHIVED';
   @IsOptional() @IsString() @MaxLength(4000) conclusion?: string | null;
 }
 class HypothesisRowDto {
   @IsString() @MaxLength(100) ref!: string;
-  @IsIn(['CREATE', 'UPDATE', 'ARCHIVE']) action!:
+  @IsIn(['CREATE', 'UPDATE', 'ARCHIVE', 'DELETE']) action!:
     | 'CREATE'
     | 'UPDATE'
-    | 'ARCHIVE';
+    | 'ARCHIVE'
+    | 'DELETE';
   @IsOptional() @IsString() id?: string;
+  @IsOptional() @IsString() @MaxLength(200) icon?: string | null;
   @IsOptional()
   @ValidateNested()
   @Type(() => HypothesisValueDto)
@@ -46,24 +49,72 @@ class PostRowDto {
   @IsIn(['CREATE', 'UPDATE', 'DELETE']) action!: 'CREATE' | 'UPDATE' | 'DELETE';
   @IsOptional() @IsString() id?: string;
   @IsOptional() @IsString() @MaxLength(500) title?: string;
+  @IsOptional() @IsString() @MaxLength(200) icon?: string | null;
   @IsOptional() @IsString() @MaxLength(20000) text?: string | null;
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(20)
   @IsUrl({}, { each: true })
   imageUrls?: string[];
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  imageSearch?: string[];
   @IsOptional() @IsString() groupRef?: string | null;
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(20)
   @IsString({ each: true })
   hypothesisRefs?: string[];
+  @IsOptional() @IsBoolean() imported?: boolean;
+  @IsOptional() @IsBoolean() approved?: boolean;
 }
 class ScheduleRowDto {
-  @IsString() postRef!: string;
-  @IsString() slotId!: string;
-  @IsString() scheduledAt!: string;
+  @IsOptional() @IsIn(['SCHEDULE', 'UNSCHEDULE']) action?:
+    | 'SCHEDULE'
+    | 'UNSCHEDULE';
+  @ValidateIf(
+    (row: ScheduleRowDto) => row.action !== 'UNSCHEDULE' && !row.postId?.trim(),
+  )
+  @IsString()
+  postRef?: string;
+  @ValidateIf(
+    (row: ScheduleRowDto) =>
+      row.action === 'UNSCHEDULE' || !row.postRef?.trim(),
+  )
+  @IsString()
+  postId?: string;
+  @ValidateIf((row: ScheduleRowDto) => row.action !== 'UNSCHEDULE')
+  @IsString()
+  slotId?: string;
+  @ValidateIf((row: ScheduleRowDto) => row.action !== 'UNSCHEDULE')
+  @IsString()
+  scheduledAt?: string;
   @IsOptional() @IsIn(['CONTENT', 'AD']) slotKind?: 'CONTENT' | 'AD';
+}
+class DeleteTargetDto {
+  @IsString() id!: string;
+}
+class DeleteSectionDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => DeleteTargetDto)
+  groups?: DeleteTargetDto[];
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => DeleteTargetDto)
+  hypotheses?: DeleteTargetDto[];
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => DeleteTargetDto)
+  posts?: DeleteTargetDto[];
 }
 
 export class TelegramUnifiedImportDto implements TelegramUnifiedImportManifest {
@@ -92,4 +143,8 @@ export class TelegramUnifiedImportDto implements TelegramUnifiedImportManifest {
   @ValidateNested({ each: true })
   @Type(() => ScheduleRowDto)
   schedule?: ScheduleRowDto[];
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DeleteSectionDto)
+  delete?: DeleteSectionDto;
 }

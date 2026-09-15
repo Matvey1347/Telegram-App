@@ -70,7 +70,7 @@ export class TelegramChannelAiPlanningContextService {
     if (!context.hypotheses.length) return ['[]'];
     return context.hypotheses.map(
       (item) =>
-        `- hypothesis_id: ${item.id} — ${item.name} — status: ${item.status} — post_ids: ${item.postIds.join(',') || 'none'} — average_views: ${item.metrics.averageViews ?? 'unknown'} — reaction_rate_percent: ${item.metrics.averageReactionRate ?? 'unknown'} — comment_rate_percent: ${item.metrics.averageCommentRate ?? 'unknown'} — forward_rate_percent: ${item.metrics.averageForwardRate ?? 'unknown'} — observed_subscriber_delta: ${item.metrics.observedSubscriberDelta ?? 'unknown'} — theory: ${item.description || 'none'} — conclusion: ${item.conclusion || 'none'}`,
+        `- hypothesis_id: ${item.id} — ${item.name} — status: ${item.status} — icon_id: ${item.iconId || 'none'} — post_ids: ${item.postIds.join(',') || 'none'} — average_views: ${item.metrics.averageViews ?? 'unknown'} — reaction_rate_percent: ${item.metrics.averageReactionRate ?? 'unknown'} — comment_rate_percent: ${item.metrics.averageCommentRate ?? 'unknown'} — forward_rate_percent: ${item.metrics.averageForwardRate ?? 'unknown'} — observed_subscriber_delta: ${item.metrics.observedSubscriberDelta ?? 'unknown'} — theory: ${item.description || 'none'} — conclusion: ${item.conclusion || 'none'}`,
     );
   }
 }

@@ -18,6 +18,7 @@ export function Modal({
   open,
   onClose,
   title,
+  titleIcon,
   headerAction,
   leadingHeaderAction,
   children,
@@ -28,6 +29,7 @@ export function Modal({
   open: boolean;
   onClose: () => void;
   title: ReactNode;
+  titleIcon?: ReactNode;
   headerAction?: ReactNode;
   leadingHeaderAction?: ReactNode;
   size?: "md" | "sm" | "xs" | "xl";
@@ -36,7 +38,8 @@ export function Modal({
   closeLabel?: string;
 }>) {
   const i18n = useOptionalI18n();
-  const resolvedCloseLabel = closeLabel ?? i18n?.t("common.closeDialog") ?? "Close dialog";
+  const resolvedCloseLabel =
+    closeLabel ?? i18n?.t("common.closeDialog") ?? "Close dialog";
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   const titleId = useId();
@@ -120,6 +123,11 @@ export function Modal({
         <div className="mb-1 flex items-center justify-between gap-3 p-4 pb-3 sm:p-5 sm:pb-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
             {leadingHeaderAction}
+            {titleIcon ? (
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-blue-800/70 bg-blue-950/40 text-blue-300">
+                {titleIcon}
+              </span>
+            ) : null}
             <h3 id={titleId} className="text-lg font-semibold sm:text-xl">
               {title}
             </h3>

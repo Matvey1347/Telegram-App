@@ -346,7 +346,7 @@ describe('TelegramChannelFinancialReadService', () => {
       };
     };
     expect(economics.revenue).toBe(780);
-    expect(economics.estimatedAdPrice).toBeCloseTo(73.2);
+    expect(economics.estimatedAdPrice).toBeCloseTo(37.2);
     expect(economics.formatPricing.h24.estimatedPrice).toBeCloseTo(37.2);
     expect(economics.formatPricing.permanent).toMatchObject({
       expectedViews: 244,

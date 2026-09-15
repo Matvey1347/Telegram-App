@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ConsumerFinanceAnalytics } from "@telegram-system/shared";
 import { AnalyticsPresentation } from "./finance-analytics-presentation";
 
@@ -158,6 +158,65 @@ describe("AnalyticsPresentation", () => {
     expect(segment).not.toHaveStyle({ filter: expect.any(String) });
     expect(screen.getByRole("tooltip")).toHaveTextContent("Food");
     expect(screen.getByRole("tooltip")).toHaveTextContent("$ 40.00");
+  });
+
+  it("keeps every donut tooltip at the same distance from its chart", () => {
+    render(
+      <AnalyticsPresentation
+        data={{
+          ...analytics,
+          expensesByCategory: [
+            ...analytics.expensesByCategory,
+            {
+              categoryId: "travel",
+              categoryKey: "travel",
+              name: "Travel",
+              amount: "10",
+              percentage: 20,
+            },
+          ],
+        }}
+        locale="en"
+      />,
+    );
+
+    const food = screen.getByLabelText("Food: $ 40.00");
+    const travel = screen.getByLabelText("Travel: $ 10.00");
+    const donut = food.closest("div");
+    expect(donut).not.toBeNull();
+    vi.spyOn(donut!, "getBoundingClientRect").mockReturnValue({
+      x: 100,
+      y: 100,
+      top: 100,
+      right: 292,
+      bottom: 292,
+      left: 100,
+      width: 192,
+      height: 192,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.mouseEnter(food);
+    const firstTooltip = screen.getByRole("tooltip");
+    const foodPosition = {
+      left: firstTooltip.style.left,
+      top: firstTooltip.style.top,
+      transform: firstTooltip.style.transform,
+    };
+    expect(foodPosition).toEqual({
+      left: "196px",
+      top: "300px",
+      transform: "translate(-50%, 0)",
+    });
+    fireEvent.mouseLeave(food);
+    fireEvent.mouseEnter(travel);
+
+    const secondTooltip = screen.getByRole("tooltip");
+    expect({
+      left: secondTooltip.style.left,
+      top: secondTooltip.style.top,
+      transform: secondTooltip.style.transform,
+    }).toEqual(foodPosition);
   });
 
   it("shows all daily money movements when the chart date is hovered", () => {

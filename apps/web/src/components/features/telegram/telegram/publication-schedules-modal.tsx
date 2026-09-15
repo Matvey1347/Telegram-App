@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { CalendarClock, Pencil, Plus, Trash2 } from "lucide-react";
 import type {
   ResolvedEmoji,
   TelegramPublicationSchedule,
@@ -15,6 +15,7 @@ import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
 import {
   Button,
   Card,
+  ConfirmDeleteModal,
   FormField,
   Input,
   Modal,
@@ -50,6 +51,8 @@ export function PublicationSchedulesModal({
   const [draft, setDraft] =
     useState<TelegramPublicationScheduleInput>(blankDraft);
   const [draftIcon, setDraftIcon] = useState<ResolvedEmoji | null>(null);
+  const [deleteTarget, setDeleteTarget] =
+    useState<TelegramPublicationSchedule | null>(null);
   const schedules = useQuery({
     queryKey: telegramPublicationScheduleKeys.lists(),
     queryFn: telegramPublicationSchedulesApi.list,
@@ -147,6 +150,10 @@ export function PublicationSchedulesModal({
         telegramPublicationScheduleKeys.lists(),
         (current = []) => current.filter((item) => item.id !== removedId),
       );
+      void queryClient.invalidateQueries({
+        queryKey: telegramPublicationScheduleKeys.all(),
+        refetchType: "none",
+      });
       closeEditor();
       pushToast("Schedule deleted", "success");
     },
@@ -160,71 +167,110 @@ export function PublicationSchedulesModal({
     );
 
   return (
-    <Modal open onClose={onClose} title="Publication schedules" size="xl">
-      {editorOpen && !editingId && modalDrafts.pendingDrafts.length ? (
-        <ModalDraftPicker
-          drafts={modalDrafts.pendingDrafts}
-          titleFor={(value) => value.name.trim() || "Unfinished schedule"}
-          iconIdFor={(value) => value.iconId}
-          onContinue={(savedDraft) => {
-            modalDrafts.continueDraft(savedDraft);
-            setDraftIcon(savedDraft.preview?.icon ?? null);
-          }}
-          onDelete={modalDrafts.deleteDraft}
-          onCreateNew={modalDrafts.createNewDraft}
-        />
-      ) : editorOpen ? (
-        <ScheduleEditor
-          draft={draft}
-          icon={draftIcon}
-          onIconChange={(iconId, presentation) => {
-            setDraft((current) => ({ ...current, iconId }));
-            setDraftIcon(presentation ?? null);
-          }}
-          onChange={setDraft}
-        />
-      ) : (
-        <ScheduleOverview
-          schedules={schedules.data ?? []}
-          loading={schedules.isLoading}
-          error={schedules.isError}
-          onCreate={() => {
-            setEditingId(null);
-            setDraft(blankDraft());
-            setDraftIcon(null);
-            setEditorOpen(true);
-          }}
-          onEdit={edit}
-        />
-      )}
-      {editorOpen ? (
-        <div className="mt-5 flex flex-wrap justify-between gap-2 border-t border-neutral-800 pt-4">
-          <div>
-            {editorOpen && editingId ? (
-              <Button
-                type="button"
-                variant="danger"
-                disabled={remove.isPending}
-                onClick={() => remove.mutate(editingId)}
-              >
-                <Trash2 size={16} /> Delete
-              </Button>
-            ) : null}
+    <>
+      <Modal
+        open
+        onClose={onClose}
+        title="Publication schedules"
+        titleIcon={<CalendarClock size={19} aria-hidden="true" />}
+        size="xl"
+      >
+        {editorOpen ? (
+          <Button
+            type="button"
+            variant="secondary"
+            className="mb-4 h-9 w-9 p-0"
+            aria-label="Back to schedules"
+            title="Back to schedules"
+            onClick={closeEditor}
+          >
+            <span aria-hidden className="text-xl leading-none">
+              ←
+            </span>
+          </Button>
+        ) : null}
+        {editorOpen && !editingId && modalDrafts.pendingDrafts.length ? (
+          <ModalDraftPicker
+            drafts={modalDrafts.pendingDrafts}
+            titleFor={(value) => value.name.trim() || "Unfinished schedule"}
+            iconIdFor={(value) => value.iconId}
+            onContinue={(savedDraft) => {
+              modalDrafts.continueDraft(savedDraft);
+              setDraftIcon(savedDraft.preview?.icon ?? null);
+            }}
+            onDelete={modalDrafts.deleteDraft}
+            onCreateNew={modalDrafts.createNewDraft}
+          />
+        ) : editorOpen ? (
+          <ScheduleEditor
+            draft={draft}
+            icon={draftIcon}
+            onIconChange={(iconId, presentation) => {
+              setDraft((current) => ({ ...current, iconId }));
+              setDraftIcon(presentation ?? null);
+            }}
+            onChange={setDraft}
+          />
+        ) : (
+          <ScheduleOverview
+            schedules={schedules.data ?? []}
+            loading={schedules.isLoading}
+            error={schedules.isError}
+            onCreate={() => {
+              setEditingId(null);
+              setDraft(blankDraft());
+              setDraftIcon(null);
+              setEditorOpen(true);
+            }}
+            onEdit={edit}
+            onDelete={setDeleteTarget}
+            deletingId={remove.isPending ? (remove.variables ?? null) : null}
+          />
+        )}
+        {editorOpen ? (
+          <div className="mt-5 flex flex-wrap justify-between gap-2 border-t border-neutral-800 pt-4">
+            <div>
+              {editorOpen && editingId ? (
+                <Button
+                  type="button"
+                  variant="danger"
+                  disabled={remove.isPending}
+                  onClick={() => {
+                    const schedule = schedules.data?.find(
+                      (item) => item.id === editingId,
+                    );
+                    if (schedule) setDeleteTarget(schedule);
+                  }}
+                >
+                  <Trash2 size={16} /> Delete
+                </Button>
+              ) : null}
+            </div>
+            <div className="flex gap-2">
+              {editorOpen &&
+              (!modalDrafts.pendingDrafts.length || editingId) ? (
+                <Button
+                  type="button"
+                  disabled={save.isPending || !valid}
+                  onClick={() => save.mutate()}
+                >
+                  {save.isPending ? "Saving…" : "Save schedule"}
+                </Button>
+              ) : null}
+            </div>
           </div>
-          <div className="flex gap-2">
-            {editorOpen && (!modalDrafts.pendingDrafts.length || editingId) ? (
-              <Button
-                type="button"
-                disabled={save.isPending || !valid}
-                onClick={() => save.mutate()}
-              >
-                {save.isPending ? "Saving…" : "Save schedule"}
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-    </Modal>
+        ) : null}
+      </Modal>
+      <ConfirmDeleteModal
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        entityName={deleteTarget?.name ?? "schedule"}
+        description="The schedule and its channel assignments will be permanently removed."
+        onConfirm={() =>
+          deleteTarget ? remove.mutateAsync(deleteTarget.id) : undefined
+        }
+      />
+    </>
   );
 }
 
@@ -234,12 +280,16 @@ function ScheduleOverview({
   error,
   onCreate,
   onEdit,
+  onDelete,
+  deletingId,
 }: {
   schedules: TelegramPublicationSchedule[];
   loading: boolean;
   error: boolean;
   onCreate: () => void;
   onEdit: (schedule: TelegramPublicationSchedule) => void;
+  onDelete: (schedule: TelegramPublicationSchedule) => void;
+  deletingId: string | null;
 }) {
   return (
     <section className="space-y-4">
@@ -247,8 +297,8 @@ function ScheduleOverview({
         <div>
           <h3 className="font-semibold text-neutral-100">Workspace plans</h3>
           <p className="text-sm text-neutral-400">
-            Create reusable daily slot plans, then assign a full plan or
-            selected slots to each channel.
+            Create reusable daily slot plans, then select the slots needed by
+            each channel.
           </p>
         </div>
         <Button type="button" onClick={onCreate}>
@@ -285,14 +335,25 @@ function ScheduleOverview({
                   {schedule.assignedChannelsCount} channels
                 </p>
               </div>
-              <Button
-                type="button"
-                variant="secondary"
-                aria-label={`Edit ${schedule.name}`}
-                onClick={() => onEdit(schedule)}
-              >
-                <Pencil size={15} />
-              </Button>
+              <div className="flex shrink-0 gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  aria-label={`Edit ${schedule.name}`}
+                  onClick={() => onEdit(schedule)}
+                >
+                  <Pencil size={15} />
+                </Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  aria-label={`Delete ${schedule.name}`}
+                  disabled={deletingId === schedule.id}
+                  onClick={() => onDelete(schedule)}
+                >
+                  <Trash2 size={15} />
+                </Button>
+              </div>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {schedule.slots.map((slot) => (

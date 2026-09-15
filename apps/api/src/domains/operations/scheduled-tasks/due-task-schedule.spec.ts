@@ -194,6 +194,47 @@ describe('DueTaskSchedule', () => {
       .mockResolvedValueOnce({
         scheduledAt: new Date(now.getTime() - 60_000),
         telegramIdLastCheckedAt: now,
+        telegramIdVerificationStatus: 'UNVERIFIED',
+      });
+
+    await expect(
+      schedule.nextDueAt('telegram.managed_posts.reconcile_due'),
+    ).resolves.toEqual(new Date(now.getTime() + 45_000));
+  });
+
+  it('uses a slower retry timestamp for a recently missing scheduled post', async () => {
+    const { schedule, prisma } = setup();
+    prisma.telegramManagedPost.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        scheduledAt: new Date(now.getTime() - 60_000),
+        telegramIdLastCheckedAt: now,
+        telegramIdVerificationStatus: 'MISSING',
+      });
+
+    await expect(
+      schedule.nextDueAt('telegram.managed_posts.reconcile_due'),
+    ).resolves.toEqual(new Date(now.getTime() + 30 * 60_000));
+  });
+
+  it('does not let an older missing check delay a faster unverified retry', async () => {
+    const { schedule, prisma } = setup();
+    prisma.telegramManagedPost.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        scheduledAt: new Date(now.getTime() - 60_000),
+        telegramIdLastCheckedAt: now,
+        telegramIdVerificationStatus: 'UNVERIFIED',
+      })
+      .mockResolvedValueOnce({
+        scheduledAt: new Date(now.getTime() - 60_000),
+        telegramIdLastCheckedAt: new Date(now.getTime() - 5 * 60_000),
+        telegramIdVerificationStatus: 'MISSING',
       });
 
     await expect(

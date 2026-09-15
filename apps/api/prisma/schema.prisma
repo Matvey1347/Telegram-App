@@ -626,6 +626,12 @@ enum TelegramMessageTemplateScopeMode {
   NETWORK
 }
 
+enum TelegramMessageTemplatePriceRounding {
+  NONE
+  NEAREST_5
+  NEAREST_10
+}
+
 enum CrossPromotionPlanStatus {
   DRAFT
   SCHEDULED
@@ -1047,8 +1053,6 @@ model Workspace {
   telegramPostBatches                    TelegramPostBatch[]
   telegramPostBatchPosts                 TelegramPostBatchPost[]
   telegramPostBatchDeliveries            TelegramPostBatchDelivery[]
-  telegramPostBatchAdSaleLinks           TelegramPostBatchAdSaleLink[]
-  telegramPostBatchMutualPromotionLinks  TelegramPostBatchMutualPromotionLink[]
   promos                                 Promo[]
   advertisingSources                     AdvertisingSource[]
   adCampaigns                            AdCampaign[]
@@ -1573,53 +1577,57 @@ model Transfer {
 }
 
 model TelegramChannel {
-  id                        String                         @id @default(cuid())
-  workspaceId               String
-  title                     String
-  username                  String?
-  telegramChatId            String?
-  telegramAccessHash        String?
-  accessMode                TelegramChannelAccessMode      @default(UNKNOWN)
-  requiresJoinRequest       Boolean                        @default(false)
-  lastEntityResolvedAt      DateTime?
-  inviteLink                String?
-  tgStatUrl                 String?
-  presentationIconId        String?
-  defaultInviteLinkId       String?
-  description               String?
-  language                  String?
-  niche                     String?
-  currentSubscribersCount   Int?
-  pendingJoinRequestsCount  Int                            @default(0)
-  seedSubscribersCount      Int                            @default(0)
-  seedDisabled              Boolean                        @default(false)
-  activeSubscribersWindow   Int                            @default(5)
-  knownFakeSubscribersCount Int                            @default(0)
-  ownViewsPerPost           Int                            @default(0)
-  ownReactionsPerPost       Int                            @default(0)
+  id                           String                         @id @default(cuid())
+  workspaceId                  String
+  title                        String
+  username                     String?
+  telegramChatId               String?
+  telegramAccessHash           String?
+  accessMode                   TelegramChannelAccessMode      @default(UNKNOWN)
+  requiresJoinRequest          Boolean                        @default(false)
+  lastEntityResolvedAt         DateTime?
+  inviteLink                   String?
+  tgStatUrl                    String?
+  presentationIconId           String?
+  defaultInviteLinkId          String?
+  botInviteLinkId              String?
+  folderDefaultInviteLinkIds   String[]                       @default([])
+  mutualPromotionInviteLinkIds String[]                       @default([])
+  description                  String?
+  shortDescription             String?
+  language                     String?
+  niche                        String?
+  currentSubscribersCount      Int?
+  pendingJoinRequestsCount     Int                            @default(0)
+  seedSubscribersCount         Int                            @default(0)
+  seedDisabled                 Boolean                        @default(false)
+  activeSubscribersWindow      Int                            @default(5)
+  knownFakeSubscribersCount    Int                            @default(0)
+  ownViewsPerPost              Int                            @default(0)
+  ownReactionsPerPost          Int                            @default(0)
   /// Canonical currency for monetary channel KPI thresholds and CPA comparisons.
-  kpiCurrency               String                         @default("USD") @db.VarChar(3)
-  adBaseCpm                 Decimal?
-  adBaseCurrency            String                         @default("USD") @db.VarChar(3)
-  subscriberBaseQuality     String                         @default("normal")
-  dataQualityNotes          String?
-  targetCpaFrom             Decimal?
-  targetCpa                 Decimal?
-  acceptableCpaFrom         Decimal?
-  acceptableCpa             Decimal?
-  stopCpaFrom               Decimal?
-  stopCpa                   Decimal?
-  acquisitionType           TelegramChannelAcquisitionType @default(CREATED)
-  postsSyncFrom             DateTime?
-  inviteLinksSyncFrom       DateTime?
-  purchaseTransactionId     String?                        @unique
-  isActive                  Boolean                        @default(true)
+  kpiCurrency                  String                         @default("USD") @db.VarChar(3)
+  adBaseCpm                    Decimal?
+  adBaseCurrency               String                         @default("USD") @db.VarChar(3)
+  subscriberBaseQuality        String                         @default("normal")
+  dataQualityNotes             String?
+  targetCpaFrom                Decimal?
+  targetCpa                    Decimal?
+  acceptableCpaFrom            Decimal?
+  acceptableCpa                Decimal?
+  stopCpaFrom                  Decimal?
+  stopCpa                      Decimal?
+  acquisitionType              TelegramChannelAcquisitionType @default(CREATED)
+  postsSyncFrom                DateTime?
+  inviteLinksSyncFrom          DateTime?
+  purchaseTransactionId        String?                        @unique
+  isActive                     Boolean                        @default(true)
   /// Lifecycle state for channels retained for historical reporting.
-  archivedAt                DateTime?
+  archivedAt                   DateTime?
   /// Controls automatic analytics/background synchronization only. Manual operations remain available.
-  autoSyncEnabled           Boolean                        @default(true)
-  assignedMemberId          String?
-  createdByUserId           String?
+  autoSyncEnabled              Boolean                        @default(true)
+  assignedMemberId             String?
+  createdByUserId              String?
 
   photoSmallFileId            String?
   photoBigFileId              String?
@@ -1642,6 +1650,7 @@ model TelegramChannel {
   purchaseTransaction Transaction?        @relation("TelegramChannelPurchaseTransaction", fields: [purchaseTransactionId], references: [id], onDelete: SetNull)
   presentationIcon    Icon?               @relation("TelegramChannelPresentationIcon", fields: [presentationIconId], references: [id], onDelete: SetNull)
   defaultInviteLink   TelegramInviteLink? @relation("TelegramChannelDefaultInviteLink", fields: [defaultInviteLinkId], references: [id], onDelete: SetNull)
+  botInviteLink       TelegramInviteLink? @relation("TelegramChannelBotInviteLink", fields: [botInviteLinkId], references: [id], onDelete: SetNull)
   revenueTransactions Transaction[]       @relation("TelegramChannelRevenueTransactions")
 
   promos                        Promo[]
@@ -1693,6 +1702,7 @@ model TelegramChannel {
   @@index([workspaceId, assignedMemberId])
   @@index([presentationIconId])
   @@index([defaultInviteLinkId])
+  @@index([botInviteLinkId])
   @@index([workspaceId, isActive, autoSyncEnabled])
   @@index([workspaceId, archivedAt, createdAt, id])
 }
@@ -1752,7 +1762,6 @@ enum TelegramPublicationScheduleSelectionMode {
 }
 
 enum TelegramContentHypothesisStatus {
-  DRAFT
   ACTIVE
   SUCCESSFUL
   FAILED
@@ -1829,7 +1838,7 @@ model TelegramContentHypothesis {
   telegramChannelId String
   name              String
   description       String?
-  status            TelegramContentHypothesisStatus        @default(DRAFT)
+  status            TelegramContentHypothesisStatus        @default(ACTIVE)
   iconId            String?
   startedAt         DateTime?
   completedAt       DateTime?
@@ -2245,7 +2254,6 @@ model TelegramAdSale {
   activities               TelegramAdvertiserActivity[]
   tasks                    TelegramAdvertiserTask[]
   automationExecutions     TelegramAdvertiserAutomationExecution[]
-  telegramPostBatchLinks   TelegramPostBatchAdSaleLink[]
 
   @@unique([id, workspaceId])
   @@unique([workspaceId, idempotencyKey])
@@ -2795,19 +2803,25 @@ model TelegramAdSalePaymentAllocation {
 }
 
 model TelegramChannelMessageTemplate {
-  id                  String                           @id @default(cuid())
-  workspaceId         String
-  title               String?
-  iconId              String?
-  scopeMode           TelegramMessageTemplateScopeMode @default(CHANNELS)
-  networkId           String?
-  channelIds          String[]                         @default([])
-  bodyTemplate        String
-  overrideInviteLinks Boolean                          @default(false)
-  inviteLinkOverrides Json                             @default("{}")
-  createdByUserId     String?
-  createdAt           DateTime                         @default(now())
-  updatedAt           DateTime                         @updatedAt
+  id                       String                               @id @default(cuid())
+  workspaceId              String
+  title                    String?
+  iconId                   String?
+  scopeMode                TelegramMessageTemplateScopeMode     @default(CHANNELS)
+  networkId                String?
+  channelIds               String[]                             @default([])
+  bodyTemplate             String
+  overrideInviteLinks      Boolean                              @default(false)
+  inviteLinkOverrides      Json                                 @default("{}")
+  excludedProductNames     String[]                             @default([])
+  priceRounding            TelegramMessageTemplatePriceRounding @default(NONE)
+  productNameOverrides     Json                                 @default("{}")
+  bundleOfferEnabled       Boolean                              @default(false)
+  bundleDiscountPercent    Int                                  @default(10)
+  bundleBasePriceOverrides Json                                 @default("{}")
+  createdByUserId          String?
+  createdAt                DateTime                             @default(now())
+  updatedAt                DateTime                             @updatedAt
 
   workspace Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   icon      Icon?                   @relation(fields: [iconId], references: [id], onDelete: SetNull)
@@ -3320,6 +3334,7 @@ model TelegramInviteLink {
   mutualPromotionParticipants MutualPromotionFolderParticipant[]
   defaultForPromos            Promo[]                            @relation("PromoDefaultInviteLink")
   defaultForChannels          TelegramChannel[]                  @relation("TelegramChannelDefaultInviteLink")
+  defaultForChannelBots       TelegramChannel[]                  @relation("TelegramChannelBotInviteLink")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3370,14 +3385,13 @@ model MutualPromotionFolder {
   completedAt      DateTime?
   nextDueAt        DateTime?
 
-  workspace              Workspace                              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  assignedMember         WorkspaceMember?                       @relation("MutualPromotionFolderAssignedMember", fields: [assignedMemberId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "MutualPromotionFolder_assignedMember_fkey")
-  createdByUser          User                                   @relation("MutualPromotionFolderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  participants           MutualPromotionFolderParticipant[]
-  posts                  MutualPromotionFolderPost[]
-  workItems              MutualPromotionWorkItem[]
-  systemBotWorkflows     TelegramSystemBotWorkflow[]
-  telegramPostBatchLinks TelegramPostBatchMutualPromotionLink[]
+  workspace          Workspace                          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignedMember     WorkspaceMember?                   @relation("MutualPromotionFolderAssignedMember", fields: [assignedMemberId, workspaceId], references: [id, workspaceId], onDelete: Restrict, map: "MutualPromotionFolder_assignedMember_fkey")
+  createdByUser      User                               @relation("MutualPromotionFolderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  participants       MutualPromotionFolderParticipant[]
+  posts              MutualPromotionFolderPost[]
+  workItems          MutualPromotionWorkItem[]
+  systemBotWorkflows TelegramSystemBotWorkflow[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -5128,6 +5142,7 @@ model TelegramSystemBotWorkflow {
   controlMessageId            Int?
   payload                     Json
   resultManagedPostId         String?
+  resultPostBatchPostId       String?
   resultAdSaleId              String?
   resultAdSalePlacementId     String?
   mutualPromotionFolderId     String?
@@ -5143,10 +5158,12 @@ model TelegramSystemBotWorkflow {
   mutualPromotionFolder     MutualPromotionFolder?      @relation(fields: [mutualPromotionFolderId], references: [id], onDelete: SetNull)
   resultMutualPromotionPost MutualPromotionFolderPost?  @relation(fields: [resultMutualPromotionPostId], references: [id], onDelete: SetNull)
   postBatch                 TelegramPostBatch?
+  resultPostBatchPost       TelegramPostBatchPost?      @relation("TelegramSystemBotWorkflowResultPostBatchPost", fields: [resultPostBatchPostId], references: [id], onDelete: SetNull)
 
   @@index([connectionId, workspaceId, status, expiresAt], map: "TelegramSystemBotWorkflow_active_idx")
   @@index([status, expiresAt], map: "TelegramSystemBotWorkflow_expiry_idx")
   @@index([workspaceId, kind, status, updatedAt], map: "TelegramSystemBotWorkflow_workspace_kind_idx")
+  @@index([resultPostBatchPostId], map: "TelegramSystemBotWorkflow_result_post_batch_post_idx")
   @@index([workspaceId, mutualPromotionFolderId, status], map: "TelegramSystemBotWorkflow_mutual_promotion_idx")
 }
 
@@ -5419,7 +5436,7 @@ model TelegramPostBatch {
   id                      String                  @id @default(cuid())
   workspaceId             String
   createdByMemberId       String
-  sourceWorkflowId        String                  @unique
+  sourceWorkflowId        String?                 @unique
   title                   String
   status                  TelegramPostBatchStatus @default(DRAFT)
   version                 Int                     @default(0)
@@ -5428,13 +5445,11 @@ model TelegramPostBatch {
   dispatchedAt            DateTime?
   cancelledAt             DateTime?
 
-  workspace            Workspace                              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  createdByMember      WorkspaceMember                        @relation("TelegramPostBatchCreatedByMember", fields: [createdByMemberId, workspaceId], references: [id, workspaceId], onDelete: Restrict)
-  sourceWorkflow       TelegramSystemBotWorkflow              @relation(fields: [sourceWorkflowId], references: [id], onDelete: Restrict)
-  posts                TelegramPostBatchPost[]
-  deliveries           TelegramPostBatchDelivery[]
-  adSaleLinks          TelegramPostBatchAdSaleLink[]
-  mutualPromotionLinks TelegramPostBatchMutualPromotionLink[]
+  workspace       Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdByMember WorkspaceMember             @relation("TelegramPostBatchCreatedByMember", fields: [createdByMemberId, workspaceId], references: [id, workspaceId], onDelete: Restrict)
+  sourceWorkflow  TelegramSystemBotWorkflow?  @relation(fields: [sourceWorkflowId], references: [id], onDelete: Restrict)
+  posts           TelegramPostBatchPost[]
+  deliveries      TelegramPostBatchDelivery[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -5450,6 +5465,7 @@ model TelegramPostBatchPost {
   batchId          String
   position         Int
   title            String
+  iconId           String?
   text             String?
   imageUrls        String[]                @default([])
   mediaItems       Json                    @default("[]")
@@ -5460,15 +5476,18 @@ model TelegramPostBatchPost {
   longTextMode     String                  @default("IMAGES_THEN_TEXT")
   channelOverrides Json                    @default("[]")
 
-  workspace  Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  batch      TelegramPostBatch           @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  deliveries TelegramPostBatchDelivery[]
+  workspace       Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  batch           TelegramPostBatch           @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  icon            Icon?                       @relation("TelegramPostBatchPostIcon", fields: [iconId], references: [id], onDelete: SetNull)
+  deliveries      TelegramPostBatchDelivery[]
+  sourceWorkflows TelegramSystemBotWorkflow[] @relation("TelegramSystemBotWorkflowResultPostBatchPost")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([batchId, position], map: "TelegramPostBatchPost_batch_position_key")
   @@index([workspaceId, batchId], map: "TelegramPostBatchPost_workspace_batch_idx")
+  @@index([iconId], map: "TelegramPostBatchPost_icon_idx")
 }
 
 model TelegramPostBatchDelivery {
@@ -5508,38 +5527,6 @@ model TelegramPostBatchDelivery {
   @@index([status, nextAttemptAt, id], map: "TelegramPostBatchDelivery_due_publish_idx")
   @@index([status, deleteAt, id], map: "TelegramPostBatchDelivery_due_delete_idx")
   @@index([claimExpiresAt], map: "TelegramPostBatchDelivery_claim_expiry_idx")
-}
-
-model TelegramPostBatchAdSaleLink {
-  id          String @id @default(cuid())
-  workspaceId String
-  batchId     String
-  adSaleId    String
-
-  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  batch     TelegramPostBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  adSale    TelegramAdSale    @relation(fields: [adSaleId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-
-  @@unique([batchId, adSaleId], map: "TelegramPostBatchAdSaleLink_batch_sale_key")
-  @@index([workspaceId, adSaleId], map: "TelegramPostBatchAdSaleLink_workspace_sale_idx")
-}
-
-model TelegramPostBatchMutualPromotionLink {
-  id                      String @id @default(cuid())
-  workspaceId             String
-  batchId                 String
-  mutualPromotionFolderId String
-
-  workspace             Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  batch                 TelegramPostBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  mutualPromotionFolder MutualPromotionFolder @relation(fields: [mutualPromotionFolderId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-
-  @@unique([batchId, mutualPromotionFolderId], map: "TelegramPostBatchMutualPromotionLink_batch_folder_key")
-  @@index([workspaceId, mutualPromotionFolderId], map: "TelegramPostBatchMutualPromotionLink_workspace_folder_idx")
 }
 
 model TelegramPostMetricSnapshot {
@@ -5600,6 +5587,7 @@ model Icon {
   telegramPublicationScheduleSlots TelegramPublicationScheduleSlot[] @relation("TelegramPublicationScheduleSlotIcon")
   telegramPublicationSchedules     TelegramPublicationSchedule[]     @relation("TelegramPublicationScheduleIcon")
   telegramContentHypotheses        TelegramContentHypothesis[]       @relation("TelegramContentHypothesisIcon")
+  telegramPostBatchPosts           TelegramPostBatchPost[]           @relation("TelegramPostBatchPostIcon")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

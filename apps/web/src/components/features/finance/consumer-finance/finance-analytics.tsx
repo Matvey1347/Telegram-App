@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ConsumerFinanceAnalyticsQuery } from "@telegram-system/shared";
 import { Button, Card, ErrorState, LoadingState } from "./ui";
 import { consumerFinanceApi } from "@/lib/features/finance/consumer-finance-api";
@@ -10,6 +10,7 @@ import { financeAnalyticsCopy } from "./i18n/analytics";
 import { FinanceAnalyticsAi } from "./finance-analytics-ai";
 import { AnalyticsPresentation } from "./finance-analytics-presentation";
 import { FinancePeriodSelector } from "./finance-period-selector";
+import { FinanceAnalyticsSkeleton } from "./finance-analytics-skeleton";
 
 export function FinanceAnalytics({
   botId,
@@ -24,6 +25,7 @@ export function FinanceAnalytics({
   period?: ConsumerFinanceAnalyticsQuery;
   onPeriodChange?: (period: ConsumerFinanceAnalyticsQuery) => void;
 }) {
+  const queryClient = useQueryClient();
   const t = financeAnalyticsCopy(locale);
   const query = period;
   const analytics = useQuery({
@@ -31,6 +33,10 @@ export function FinanceAnalytics({
     queryFn: () => consumerFinanceApi.analytics(botId, query),
     enabled: period.period !== "CUSTOM" || Boolean(period.from && period.to),
   });
+  const hasResolvedAnalyticsCache = queryClient
+    .getQueriesData({ queryKey: consumerFinanceKeys.analyticsRoot(botId) })
+    .some(([, data]) => data !== undefined);
+  const switchingPeriod = analytics.isLoading && hasResolvedAnalyticsCache;
   return (
     <div className="space-y-4">
       <Card>
@@ -42,7 +48,7 @@ export function FinanceAnalytics({
             onChange={onPeriodChange}
           />
         </div>
-        {analytics.isLoading ? (
+        {analytics.isLoading && !switchingPeriod ? (
           <LoadingState text={t.loadingAnalytics} />
         ) : null}
         {analytics.isError ? (
@@ -53,7 +59,10 @@ export function FinanceAnalytics({
             </Button>
           </div>
         ) : null}
-        {analytics.data ? (
+        {switchingPeriod ? (
+          <FinanceAnalyticsSkeleton label={t.loadingAnalytics} />
+        ) : null}
+        {analytics.data && !switchingPeriod ? (
           <AnalyticsPresentation data={analytics.data} locale={locale} />
         ) : null}
       </Card>

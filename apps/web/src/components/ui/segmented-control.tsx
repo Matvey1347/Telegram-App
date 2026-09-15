@@ -3,11 +3,13 @@ export function SegmentedControl<T extends string>({
   options,
   onChange,
   ariaLabel,
+  disabled = false,
 }: {
   value: T;
   options: readonly { value: T; label: string }[];
   onChange: (value: T) => void;
   ariaLabel?: string;
+  disabled?: boolean;
 }) {
   return (
     <div
@@ -21,9 +23,10 @@ export function SegmentedControl<T extends string>({
           <button
             key={option.value}
             type="button"
+            disabled={disabled}
             aria-pressed={selected}
             onClick={() => onChange(option.value)}
-            className={`h-6 rounded-[5px] px-2 text-[11px] font-medium leading-none transition ${
+            className={`h-6 rounded-[5px] px-2 text-[11px] font-medium leading-none transition disabled:cursor-not-allowed disabled:opacity-50 ${
               selected
                 ? "bg-blue-600 text-white shadow-sm"
                 : "text-neutral-400 hover:bg-neutral-800 hover:text-white"

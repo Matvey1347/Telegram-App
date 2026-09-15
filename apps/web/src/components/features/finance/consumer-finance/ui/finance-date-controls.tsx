@@ -261,6 +261,7 @@ export function DateRangeInput({
   disabled,
   className = "",
   placeholder,
+  ariaLabel,
   uiLocale = "en",
 }: {
   from?: string;
@@ -269,6 +270,7 @@ export function DateRangeInput({
   disabled?: boolean;
   className?: string;
   placeholder?: string;
+  ariaLabel?: string;
   uiLocale?: FinanceLocale;
 }) {
   const copy = dateCopy[uiLocale];
@@ -304,6 +306,7 @@ export function DateRangeInput({
     <div ref={rootRef} className={`relative ${className}`}>
       <button
         type="button"
+        aria-label={ariaLabel}
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
         className="flex w-full items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm outline-none ring-blue-500 focus:ring disabled:opacity-50"

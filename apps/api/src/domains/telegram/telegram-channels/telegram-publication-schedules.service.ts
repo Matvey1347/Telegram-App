@@ -286,6 +286,37 @@ export class TelegramPublicationSchedulesService {
         s.isActive &&
         (assignment.selectionMode === 'FULL' || selected.has(s.id)),
     );
+    const slotIds = slots.map((slot) => slot.id);
+    const reservations = slotIds.length
+      ? await this.prisma.telegramManagedPost.findMany({
+          where: {
+            workspaceId,
+            telegramChannelId: channelId,
+            publicationSlotId: { in: slotIds },
+            status: { in: ['SCHEDULED', 'PUBLISHING', 'PUBLISHED'] },
+            OR: [
+              { scheduledAt: { gte: from, lt: to } },
+              { publishedAt: { gte: from, lt: to } },
+            ],
+          },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            publicationSlotId: true,
+            scheduledAt: true,
+            publishedAt: true,
+          },
+        })
+      : [];
+    const reservationByOccurrence = new Map(
+      reservations.flatMap((post) => {
+        const date = post.scheduledAt ?? post.publishedAt;
+        return post.publicationSlotId && date
+          ? [[`${post.publicationSlotId}:${date.toISOString()}`, post] as const]
+          : [];
+      }),
+    );
     const results: TelegramPublicationSlotOccurrence[] = [];
     for (
       let cursor = new Date(
@@ -305,7 +336,10 @@ export class TelegramPublicationSchedulesService {
           minute,
           timezone,
         );
-        if (scheduledAt >= from && scheduledAt < to)
+        if (scheduledAt >= from && scheduledAt < to) {
+          const reservation = reservationByOccurrence.get(
+            `${slot.id}:${scheduledAt.toISOString()}`,
+          );
           results.push({
             slotId: slot.id,
             scheduledAt: scheduledAt.toISOString(),
@@ -313,7 +347,15 @@ export class TelegramPublicationSchedulesService {
             kind: slot.kind,
             time: slot.time,
             timezone,
+            state: reservation
+              ? 'OCCUPIED'
+              : scheduledAt.getTime() <= Date.now()
+                ? 'PAST'
+                : 'AVAILABLE',
+            postId: reservation?.id ?? null,
+            postTitle: reservation?.title ?? null,
           });
+        }
       }
     }
     return results.sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));

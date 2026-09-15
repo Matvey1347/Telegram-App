@@ -79,6 +79,34 @@ describe("FinanceDashboard actions", () => {
     expect(container.querySelector(".lucide-circle-minus")).toBeNull();
   });
 
+  it("keeps period controls and the custom range visible over the content skeleton", () => {
+    render(
+      <FinanceDashboard
+        data={null}
+        locale="ru"
+        surface="browser"
+        period={{
+          period: "CUSTOM",
+          from: "2026-09-01",
+          to: "2026-09-09",
+        }}
+        loading
+        loadingLabel="Загрузка финансов..."
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Этот месяц" })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Период аналитики" }),
+    ).toHaveTextContent("01.09.2026 - 09.09.2026");
+    expect(
+      document.querySelector("[data-finance-dashboard-skeleton]"),
+    ).toBeInTheDocument();
+    expect(
+      document.querySelector("[data-finance-feedback='loading']"),
+    ).not.toBeInTheDocument();
+  });
+
   it("uses the hydrated account presentation without an icon request", () => {
     render(
       <FinanceDashboard

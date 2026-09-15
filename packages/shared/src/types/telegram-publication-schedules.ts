@@ -65,4 +65,7 @@ export type TelegramPublicationSlotOccurrence = {
   kind: TelegramPublicationSlotKind;
   time: string;
   timezone: string;
+  state: "AVAILABLE" | "OCCUPIED" | "PAST";
+  postId?: string | null;
+  postTitle?: string | null;
 };

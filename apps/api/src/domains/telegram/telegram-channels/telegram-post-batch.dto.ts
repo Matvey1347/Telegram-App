@@ -24,6 +24,25 @@ export class ImportTelegramPostBatchDto {
   workflowId!: string;
 }
 
+export class ImportTelegramPostBatchPostDto extends ImportTelegramPostBatchDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  expectedVersion!: number;
+}
+
+export class CreateTelegramPostBatchDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  title?: string;
+
+  @IsArray()
+  @ArrayMaxSize(TELEGRAM_POST_BATCH_MAX_CHANNELS)
+  @IsString({ each: true })
+  channelIds!: string[];
+}
+
 export class TelegramPostBatchListQueryDto {
   @IsOptional()
   @Type(() => Number)
@@ -48,11 +67,6 @@ export class DispatchTelegramPostBatchDto {
   expectedVersion!: number;
 }
 
-export class TelegramPostBatchLinkTargetsQueryDto {
-  @IsIn(['AD_SALE', 'MUTUAL_PROMOTION_FOLDER'])
-  type!: 'AD_SALE' | 'MUTUAL_PROMOTION_FOLDER';
-}
-
 export class TelegramPostBatchChannelOverrideDto {
   @IsString()
   @MinLength(1)
@@ -67,15 +81,15 @@ export class TelegramPostBatchChannelOverrideDto {
   scheduledAt?: string | null;
 }
 
-export class UpdateTelegramPostBatchPostDto {
-  @IsString()
-  @MinLength(1)
-  id!: string;
-
+export class CreateTelegramPostBatchPostDto {
   @IsString()
   @MinLength(1)
   @MaxLength(200)
   title!: string;
+
+  @IsOptional()
+  @IsString()
+  iconId!: string | null;
 
   @IsOptional()
   @IsString()
@@ -115,6 +129,34 @@ export class UpdateTelegramPostBatchPostDto {
   channelOverrides!: TelegramPostBatchChannelOverrideDto[];
 }
 
+export class UpdateTelegramPostBatchPostDto extends CreateTelegramPostBatchPostDto {
+  @IsString()
+  @MinLength(1)
+  id!: string;
+}
+
+export class CreateAndDispatchTelegramPostBatchDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  title!: string;
+
+  @IsArray()
+  @ArrayMaxSize(TELEGRAM_POST_BATCH_MAX_CHANNELS)
+  @IsString({ each: true })
+  channelIds!: string[];
+
+  @IsOptional()
+  @IsIn([24, 48, 72])
+  defaultDeleteAfterHours!: 24 | 48 | 72 | null;
+
+  @IsArray()
+  @ArrayMaxSize(TELEGRAM_POST_BATCH_MAX_POSTS)
+  @ValidateNested({ each: true })
+  @Type(() => CreateTelegramPostBatchPostDto)
+  posts!: CreateTelegramPostBatchPostDto[];
+}
+
 export class UpdateTelegramPostBatchDto {
   @Type(() => Number)
   @IsInt()
@@ -140,13 +182,4 @@ export class UpdateTelegramPostBatchDto {
   @ValidateNested({ each: true })
   @Type(() => UpdateTelegramPostBatchPostDto)
   posts!: UpdateTelegramPostBatchPostDto[];
-}
-
-export class LinkTelegramPostBatchDto {
-  @IsIn(['AD_SALE', 'MUTUAL_PROMOTION_FOLDER'])
-  type!: 'AD_SALE' | 'MUTUAL_PROMOTION_FOLDER';
-
-  @IsString()
-  @MinLength(1)
-  entityId!: string;
 }

@@ -42,6 +42,7 @@ export * from "./title-template";
 export * from "./telegram-spoilers";
 export * from "./telegram-managed-markup";
 export * from "./telegram-table-markup";
+export * from "./telegram-unified-import-instruction";
 export * from "./pagination";
 export * from "./permissions";
 export * from "./i18n/locales";

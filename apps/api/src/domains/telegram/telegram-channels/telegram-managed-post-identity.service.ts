@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   TelegramManagedPostIdVerificationStatus,
   TelegramManagedPostLinkSource,
+  TelegramManagedPostOrigin,
   TelegramManagedPostRemoteStatus,
   TelegramManagedPostStatus,
 } from '@prisma/client';
@@ -21,9 +22,11 @@ import {
 import { buildStableTelegramPostUrl } from '../../../telegram/shared/telegram-post-url';
 import {
   MANAGED_POST_DEPENDENT_REPAIR_PENDING_NOTE,
-  managedPostIdentityCandidateWhere,
+  MANAGED_POST_IDENTITY_RETRY_MS,
+  MANAGED_POST_MISSING_IDENTITY_RETRY_MS,
   managedPostIdentityReadyWhere,
 } from '../../operations/scheduled-tasks/due-work-predicates';
+import { removeConfirmedMissingTelegramImport } from './confirmed-missing-telegram-import';
 import { telegramPostsBadRequest } from './telegram-posts.errors';
 
 export type ManagedPostIdentityMessage = {
@@ -40,6 +43,7 @@ type IdentityCandidate = {
   imageCount: number;
   publishMode: string | null;
   scheduledAt: Date | null;
+  origin?: TelegramManagedPostOrigin;
 };
 
 type ManagedPostIdentityReconcileSummary = {
@@ -108,10 +112,17 @@ export class TelegramManagedPostIdentityService {
           const distance = Math.abs(
             new Date(matched.date).getTime() - post.scheduledAt.getTime(),
           );
-          if (distance > this.publicationMatchWindowMs) continue;
+          const matchWindowMs =
+            post.origin === TelegramManagedPostOrigin.TELEGRAM
+              ? 24 * 60 * 60_000
+              : this.publicationMatchWindowMs;
+          if (distance > matchWindowMs) continue;
         }
         const media = sequence.filter((message) => message.hasMedia);
-        if (media.length !== post.imageCount) continue;
+        // Telegram reports generated link previews as media too. A text-only
+        // managed post can therefore have remote media without containing an
+        // uploaded image; exact text and publication time still identify it.
+        if (post.imageCount > 0 && media.length !== post.imageCount) continue;
         if (
           post.imageCount > 1 &&
           media.some((message) => message.groupedId) &&
@@ -132,11 +143,14 @@ export class TelegramManagedPostIdentityService {
         });
       }
     }
-    const unique = [
-      ...new Map(
-        matches.map((match) => [match.messageIds.join(','), match] as const),
-      ).values(),
-    ];
+    const byPublishedMessage = new Map<string, (typeof matches)[number]>();
+    for (const match of matches) {
+      const current = byPublishedMessage.get(match.matchedMessage.id);
+      if (!current || match.messageIds.length < current.messageIds.length) {
+        byPublishedMessage.set(match.matchedMessage.id, match);
+      }
+    }
+    const unique = [...byPublishedMessage.values()];
     return unique.length === 1 ? unique[0] : null;
   }
 
@@ -297,10 +311,8 @@ export class TelegramManagedPostIdentityService {
       }
       const primaryId = this.primaryMessageId(
         target.telegramMessageIds,
-        normalizeTelegramPostMediaItems(
-          target.mediaItems,
-          target.imageUrls,
-        ).length,
+        normalizeTelegramPostMediaItems(target.mediaItems, target.imageUrls)
+          .length,
       );
       return primaryId &&
         buildStableTelegramPostUrl({
@@ -330,10 +342,8 @@ export class TelegramManagedPostIdentityService {
       }
       const primaryId = this.primaryMessageId(
         target.telegramMessageIds,
-        normalizeTelegramPostMediaItems(
-          target.mediaItems,
-          target.imageUrls,
-        ).length,
+        normalizeTelegramPostMediaItems(target.mediaItems, target.imageUrls)
+          .length,
       );
       const url = primaryId
         ? buildStableTelegramPostUrl({
@@ -438,7 +448,7 @@ export class TelegramManagedPostIdentityService {
     if (!this.prisma) return [];
     const rows = await this.prisma.telegramManagedPost.findMany({
       where: {
-        ...managedPostIdentityCandidateWhere(new Date()),
+        ...managedPostIdentityReadyWhere(new Date()),
       },
       select: { workspaceId: true, telegramIdLastCheckedAt: true },
       orderBy: [{ telegramIdLastCheckedAt: 'asc' }, { workspaceId: 'asc' }],
@@ -532,16 +542,20 @@ export class TelegramManagedPostIdentityService {
     if (!params.explicit && this.prisma.telegramManagedPost.updateMany) {
       const claimed = [] as typeof posts;
       for (const post of posts) {
+        const retryMs =
+          post.telegramIdVerificationStatus ===
+          TelegramManagedPostIdVerificationStatus.MISSING
+            ? MANAGED_POST_MISSING_IDENTITY_RETRY_MS
+            : MANAGED_POST_IDENTITY_RETRY_MS;
         const claim = await this.prisma.telegramManagedPost.updateMany({
           where: {
             id: post.id,
-            telegramIdVerificationStatus:
-              TelegramManagedPostIdVerificationStatus.UNVERIFIED,
+            telegramIdVerificationStatus: post.telegramIdVerificationStatus,
             OR: [
               { telegramIdLastCheckedAt: null },
               {
                 telegramIdLastCheckedAt: {
-                  lte: new Date(now.getTime() - 45_000),
+                  lte: new Date(now.getTime() - retryMs),
                 },
               },
             ],
@@ -606,6 +620,7 @@ export class TelegramManagedPostIdentityService {
               ).length,
               publishMode: post.publishMode,
               scheduledAt: post.scheduledAt ?? post.publishedAt,
+              origin: post.origin,
             },
             remote.recentPublished,
           );
@@ -637,6 +652,25 @@ export class TelegramManagedPostIdentityService {
           continue;
         }
         if (!match) {
+          if (
+            post.origin === TelegramManagedPostOrigin.TELEGRAM &&
+            post.remoteImportKey &&
+            post.status === TelegramManagedPostStatus.SCHEDULED &&
+            post.telegramIdVerificationStatus ===
+              TelegramManagedPostIdVerificationStatus.MISSING
+          ) {
+            const removed = await removeConfirmedMissingTelegramImport(
+              this.prisma,
+              {
+                ...post,
+                workspaceId: params.workspaceId,
+                remoteImportKey: post.remoteImportKey,
+              },
+            );
+            if (removed) result.missing += 1;
+            else result.skipped += 1;
+            continue;
+          }
           const graceExpired =
             params.explicit ||
             Boolean(

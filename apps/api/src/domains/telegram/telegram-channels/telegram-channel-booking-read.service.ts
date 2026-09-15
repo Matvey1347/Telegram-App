@@ -52,6 +52,13 @@ function addCalendarDays(value: string, days: number) {
   return date.toISOString().slice(0, 10);
 }
 
+function effectivePostTime(post: {
+  scheduledAt: Date | null;
+  publishedAt: Date | null;
+}) {
+  return (post.publishedAt ?? post.scheduledAt)?.getTime() ?? 0;
+}
+
 function isStandaloneSubscriptionEnding(post: {
   origin: TelegramManagedPostOrigin;
   remoteImportKey: string | null;
@@ -64,7 +71,8 @@ function isStandaloneSubscriptionEnding(post: {
   if (
     post.origin !== TelegramManagedPostOrigin.TELEGRAM ||
     !post.remoteImportKey ||
-    normalizeTelegramPostMediaItems(post.mediaItems, post.imageUrls).length > 0 ||
+    normalizeTelegramPostMediaItems(post.mediaItems, post.imageUrls).length >
+      0 ||
     (Array.isArray(post.buttonRows)
       ? post.buttonRows.length > 0
       : post.buttonRows != null)
@@ -94,6 +102,9 @@ export class TelegramChannelBookingReadService {
     }
 
     const horizon = new Date(now.getTime() + BOOKING_LOOKAHEAD_DAYS * DAY_MS);
+    // Two days safely covers the current local calendar day across DST shifts;
+    // rows are narrowed to the workspace's actual "today" key below.
+    const recentWindowStart = new Date(now.getTime() - 2 * DAY_MS);
     const [workspace, posts, draftCounts] = await Promise.all([
       this.prisma.workspace.findUnique({
         where: { id: workspaceId },
@@ -103,12 +114,22 @@ export class TelegramChannelBookingReadService {
         where: {
           workspaceId,
           telegramChannelId: { in: channelIds },
-          status: TelegramManagedPostStatus.SCHEDULED,
-          scheduledAt: { gt: now, lte: horizon },
+          OR: [
+            {
+              status: TelegramManagedPostStatus.SCHEDULED,
+              scheduledAt: { gt: recentWindowStart, lte: horizon },
+            },
+            {
+              status: TelegramManagedPostStatus.PUBLISHED,
+              publishedAt: { gt: recentWindowStart, lte: horizon },
+            },
+          ],
         },
         select: {
           telegramChannelId: true,
+          status: true,
           scheduledAt: true,
+          publishedAt: true,
           origin: true,
           remoteImportKey: true,
           title: true,
@@ -117,7 +138,7 @@ export class TelegramChannelBookingReadService {
           mediaItems: true,
           buttonRows: true,
         },
-        orderBy: { scheduledAt: 'asc' },
+        orderBy: [{ scheduledAt: 'asc' }, { publishedAt: 'asc' }],
       }),
       this.prisma.telegramManagedPost.groupBy({
         by: ['telegramChannelId'],
@@ -145,7 +166,28 @@ export class TelegramChannelBookingReadService {
 
     return new Map(
       channelIds.map((channelId) => {
-        const channelPosts = postsByChannel.get(channelId) ?? [];
+        const relevantPosts = postsByChannel.get(channelId) ?? [];
+        const channelPosts = relevantPosts
+          .filter(
+            (post) =>
+              post.status === TelegramManagedPostStatus.SCHEDULED &&
+              post.scheduledAt &&
+              post.scheduledAt > now,
+          )
+          .sort(
+            (left, right) =>
+              (left.scheduledAt?.getTime() ?? 0) -
+              (right.scheduledAt?.getTime() ?? 0),
+          );
+        const today = toDateKey(now);
+        const postsToday = relevantPosts
+          .filter((post) => {
+            const effectiveDate = post.publishedAt ?? post.scheduledAt;
+            return effectiveDate && toDateKey(effectiveDate) === today;
+          })
+          .sort(
+            (left, right) => effectivePostTime(left) - effectivePostTime(right),
+          );
         const occupiedDates = new Set(
           channelPosts.flatMap((post) =>
             post.scheduledAt ? [toDateKey(post.scheduledAt)] : [],
@@ -161,9 +203,15 @@ export class TelegramChannelBookingReadService {
         }
         const bookedThroughDate =
           nextAvailableDate === firstPlanningDate
-            ? null
+            ? postsToday.length
+              ? today
+              : null
             : addCalendarDays(nextAvailableDate, -1);
-        const lastScheduledAt = channelPosts.at(-1)?.scheduledAt ?? null;
+        const lastScheduledAt =
+          channelPosts.at(-1)?.scheduledAt ??
+          postsToday.at(-1)?.publishedAt ??
+          postsToday.at(-1)?.scheduledAt ??
+          null;
         return [
           channelId,
           {

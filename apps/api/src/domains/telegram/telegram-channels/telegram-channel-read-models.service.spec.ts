@@ -37,7 +37,10 @@ describe('TelegramChannelReadModelsService', () => {
         ]),
       } as never,
       {
-        findOne: jest.fn().mockResolvedValue({ defaultInviteLinkId: 'link-1' }),
+        findOne: jest.fn().mockResolvedValue({
+          defaultInviteLinkId: 'link-1',
+          botInviteLinkId: 'link-1',
+        }),
       } as never,
     );
 
@@ -56,6 +59,7 @@ describe('TelegramChannelReadModelsService', () => {
       expect.objectContaining({
         creatorPhotoUrl: 'https://cdn.test/owner.jpg',
         isDefaultForChannel: true,
+        isDefaultForBot: true,
       }),
     );
   });
@@ -102,7 +106,7 @@ describe('TelegramChannelReadModelsService', () => {
               workspaceId: 'workspace-1',
               telegramChannelId: 'channel-1',
             }),
-            { id: 'default-link' },
+            { id: { in: ['default-link'] } },
           ],
         },
       }),
@@ -114,5 +118,50 @@ describe('TelegramChannelReadModelsService', () => {
         isDefaultForChannel: true,
       }),
     ]);
+  });
+
+  it('hydrates all saved purpose links in one initial select request', async () => {
+    const findLinks = jest.fn().mockResolvedValue([]);
+    const service = new TelegramChannelReadModelsService(
+      {
+        telegramUserAccountIntegration: {
+          findMany: jest.fn().mockResolvedValue([]),
+        },
+      } as never,
+      {} as never,
+      { workspace: jest.fn().mockResolvedValue('workspace-1') } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { findInviteLinksWithRequestedCountFallback: findLinks } as never,
+      {
+        findOne: jest.fn().mockResolvedValue({
+          defaultInviteLinkId: 'default-link',
+        }),
+      } as never,
+    );
+
+    await service.inviteLinksForSelect('user-1', 'channel-1', {
+      initial: true,
+      selectedIds: ['vp-link', 'folder-link', 'bot-link'],
+    });
+
+    expect(findLinks).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: [
+            expect.objectContaining({
+              workspaceId: 'workspace-1',
+              telegramChannelId: 'channel-1',
+            }),
+            {
+              id: {
+                in: ['vp-link', 'folder-link', 'bot-link', 'default-link'],
+              },
+            },
+          ],
+        },
+      }),
+    );
   });
 });

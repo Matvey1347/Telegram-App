@@ -12,10 +12,12 @@ vi.mock("./telegram-time-posts-control", () => ({
   TimePostsControl: () => null,
 }));
 vi.mock("./gpt-context-download-button", () => ({
-  GptContextDownloadButton: () => null,
+  GptContextDownloadButton: () => <button type="button">Context</button>,
 }));
 vi.mock("./reset-channel-scheduled-posts-button", () => ({
-  ResetChannelScheduledPostsButton: () => null,
+  ResetChannelScheduledPostsButton: () => (
+    <button type="button">Return all scheduled posts to drafts</button>
+  ),
 }));
 
 const channel = {
@@ -36,27 +38,31 @@ const channel = {
 };
 
 describe("TelegramPostsHeaderWorkflows", () => {
-  it("keeps Add via bot available while route channel selection is unresolved", () => {
+  it("keeps Mass Publications available while route channel selection is unresolved", () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <TestI18nProvider>
           <TelegramPostsHeaderWorkflows
             channel={undefined}
             channels={[channel]}
-            workspaceView="posts"
             importMode={null}
             importTranslationsReady={false}
             onChannelChange={vi.fn()}
             onImportModeChange={vi.fn()}
-            onNewPost={vi.fn()}
-            onNewGroup={vi.fn()}
             onResetCompleted={vi.fn()}
           />
         </TestI18nProvider>
       </QueryClientProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Add via bot" }));
+    expect(screen.getByRole("button", { name: "Import" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Context" })).toBeVisible();
+    expect(
+      screen.getByRole("button", {
+        name: "Return all scheduled posts to drafts",
+      }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Mass Publications" }));
     expect(screen.getByText("Post batch modal open")).toBeVisible();
   });
 });

@@ -1,7 +1,6 @@
 import type { ResolvedEmoji } from "./resolved-emoji";
 
 export type TelegramContentHypothesisStatus =
-  | "DRAFT"
   | "ACTIVE"
   | "SUCCESSFUL"
   | "FAILED"
@@ -23,6 +22,7 @@ export type TelegramContentHypothesis = {
   name: string;
   description: string | null;
   status: TelegramContentHypothesisStatus;
+  iconId: string | null;
   iconPresentation: ResolvedEmoji | null;
   startedAt: string | null;
   completedAt: string | null;
@@ -39,6 +39,16 @@ export type TelegramContentHypothesisInput = {
   status?: TelegramContentHypothesisStatus;
   iconId?: string | null;
   conclusion?: string | null;
+  postIds?: string[];
+};
+
+export type TelegramContentHypothesisPostOption = {
+  id: string;
+  title: string;
+  status: "DRAFT" | "SCHEDULED" | "PUBLISHING" | "PUBLISHED" | "FAILED";
+  groupTitle: string | null;
+  scheduledAt: string | null;
+  publishedAt: string | null;
 };
 
 export type TelegramManagedPostHypothesesInput = {

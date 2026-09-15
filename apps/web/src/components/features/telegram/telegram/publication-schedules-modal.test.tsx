@@ -57,6 +57,52 @@ beforeEach(() => {
 });
 
 describe("PublicationSchedulesModal", () => {
+  it("requires confirmation before deleting a schedule from its card", async () => {
+    const user = userEvent.setup();
+    mocks.list.mockResolvedValue([
+      {
+        id: "schedule-1",
+        name: "Main plan",
+        iconId: null,
+        iconPresentation: { type: "unicode", value: "🍃" },
+        isDefault: false,
+        assignedChannelsCount: 0,
+        slots: [
+          {
+            id: "slot-1",
+            scheduleId: "schedule-1",
+            title: "Morning post",
+            kind: "CONTENT",
+            time: "09:00",
+            position: 0,
+            isActive: true,
+            iconPresentation: null,
+          },
+        ],
+        createdAt: "2026-09-14T00:00:00.000Z",
+        updatedAt: "2026-09-14T00:00:00.000Z",
+      },
+    ]);
+    mocks.remove.mockResolvedValue({ success: true });
+    renderModal();
+
+    const removeButton = await screen.findByRole("button", {
+      name: "Delete Main plan",
+    });
+    expect(removeButton).toHaveClass("bg-red-600");
+    await user.click(removeButton);
+    expect(mocks.remove).not.toHaveBeenCalled();
+
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Confirm deletion" }));
+
+    await waitFor(() => expect(mocks.remove).toHaveBeenCalledOnce());
+    expect(mocks.remove.mock.calls[0]?.[0]).toBe("schedule-1");
+    await waitFor(() =>
+      expect(screen.queryByText("Main plan")).not.toBeInTheDocument(),
+    );
+  });
+
   it("creates a daily schedule with the shared time field and emoji", async () => {
     const user = userEvent.setup();
     mocks.create.mockResolvedValue({
@@ -76,6 +122,10 @@ describe("PublicationSchedulesModal", () => {
       await screen.findByRole("button", { name: "New schedule" }),
     );
 
+    expect(
+      screen.getByRole("button", { name: "Back to schedules" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Back to schedules")).not.toBeInTheDocument();
     expect(screen.queryByText("Timezone")).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/weekday/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText("Slot 1 time")).toHaveAttribute(

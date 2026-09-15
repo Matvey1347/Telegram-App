@@ -26,9 +26,22 @@ export function getChannelBookingIndicator(
 ) {
   const nextAvailableDate = calendarDate(schedule?.nextAvailableDate);
   const bookedThroughDate = calendarDate(schedule?.bookedThroughDate);
+  const lastScheduledAt = schedule?.lastScheduledAt
+    ? new Date(schedule.lastScheduledAt)
+    : null;
+  const validLastScheduledAt =
+    lastScheduledAt && !Number.isNaN(lastScheduledAt.getTime())
+      ? lastScheduledAt
+      : null;
   const date = (value: Date) =>
     value.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   if (nextAvailableDate) {
+    const occupiedThrough =
+      bookedThroughDate ??
+      (validLastScheduledAt &&
+      calendarDayNumber(validLastScheduledAt) <= calendarDayNumber(now)
+        ? validLastScheduledAt
+        : null);
     const daysAhead = Math.max(
       0,
       Math.round(
@@ -37,11 +50,11 @@ export function getChannelBookingIndicator(
       ),
     );
     return {
-      label: bookedThroughDate
-        ? `Booked to ${date(bookedThroughDate)} · write for ${date(nextAvailableDate)}`
+      label: occupiedThrough
+        ? `Booked to ${date(occupiedThrough)} · write for ${date(nextAvailableDate)}`
         : `⚠️ Free ${date(nextAvailableDate)} · write now`,
-      compactLabel: bookedThroughDate
-        ? date(bookedThroughDate)
+      compactLabel: occupiedThrough
+        ? date(occupiedThrough)
         : `Free ${date(nextAvailableDate)}`,
       tone:
         daysAhead <= 3
@@ -52,10 +65,7 @@ export function getChannelBookingIndicator(
       daysAhead,
     };
   }
-  const lastScheduledAt = schedule?.lastScheduledAt
-    ? new Date(schedule.lastScheduledAt)
-    : null;
-  if (!lastScheduledAt || Number.isNaN(lastScheduledAt.getTime())) {
+  if (!validLastScheduledAt) {
     return {
       label: "⚠️ Free today",
       compactLabel: "Free today",
@@ -67,14 +77,15 @@ export function getChannelBookingIndicator(
   const daysAhead = Math.max(
     0,
     Math.round(
-      (calendarDayNumber(lastScheduledAt) - calendarDayNumber(now)) / DAY_MS,
+      (calendarDayNumber(validLastScheduledAt) - calendarDayNumber(now)) /
+        DAY_MS,
     ),
   );
-  const writeFrom = new Date(lastScheduledAt);
+  const writeFrom = new Date(validLastScheduledAt);
   writeFrom.setDate(writeFrom.getDate() + 1);
   return {
-    label: `Booked to ${date(lastScheduledAt)} · write from ${date(writeFrom)}`,
-    compactLabel: date(lastScheduledAt),
+    label: `Booked to ${date(validLastScheduledAt)} · write from ${date(writeFrom)}`,
+    compactLabel: date(validLastScheduledAt),
     tone:
       daysAhead <= 3
         ? "text-rose-300"

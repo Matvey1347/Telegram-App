@@ -7,7 +7,8 @@ const messages = {
   "telegram.posts.groups.publishAll": "Publish all posts",
   "telegram.posts.groups.schedule": "Schedule sequence",
   "telegram.posts.groups.delete": "Delete group",
-  "telegram.posts.groups.deleteDescription": "Delete group? Posts will not be deleted. They will become ungrouped.",
+  "telegram.posts.groups.deleteDescription":
+    "Delete group? Posts will not be deleted. They will become ungrouped.",
   "telegram.posts.groups.postsInGroup": "Posts in group",
   "telegram.posts.groups.makeDraftsTitle": "Make all posts drafts?",
   "telegram.posts.groups.open": "Open group",
@@ -15,7 +16,8 @@ const messages = {
   "telegram.posts.groups.icon": "Icon",
   "telegram.posts.groups.description": "Description",
   "telegram.posts.groups.numberByStatus": "Number by status",
-  "telegram.posts.groups.numberByStatusDescription": "When enabled, draft, scheduled, and published posts each use their own counter.",
+  "telegram.posts.groups.numberByStatusDescription":
+    "When enabled, draft, scheduled, and published posts each use their own counter.",
   "telegram.posts.groups.createdBy": "Created by",
   "telegram.posts.groups.targetChannel": "Target channel",
   "telegram.posts.groups.chooseSlot": "Choose slot or custom time",
@@ -33,19 +35,22 @@ const messages = {
   "telegram.posts.groups.systemGroup": "System group",
   "telegram.posts.groups.telegramChannel": "Telegram channel",
   "telegram.posts.groups.dragToReorder": "Drag cards to reorder",
-  "telegram.posts.groups.namedSeries": "Named series scoped to this Telegram channel",
+  "telegram.posts.groups.namedSeries":
+    "Named series scoped to this Telegram channel",
   "telegram.posts.groups.save": "Save group",
-  "telegram.posts.groups.moveDescription": "Drafts remain drafts. Scheduled posts are recreated at the same time. Published posts become drafts; old Telegram messages remain.",
-  "telegram.posts.groups.scheduledDraftDescription": "Scheduled Telegram posts will be cancelled. Already published Telegram messages will remain in the channel.",
+  "telegram.posts.groups.moveDescription":
+    "Drafts remain drafts. Scheduled posts are recreated at the same time. Published posts become drafts; old Telegram messages remain.",
+  "telegram.posts.groups.scheduledDraftDescription":
+    "Scheduled Telegram posts will be cancelled. Already published Telegram messages will remain in the channel.",
   "telegram.posts.groups.makeAllDrafts": "Make all drafts",
-  "telegram.posts.groups.usedInPosts": "Used in posts",
-  "telegram.posts.groups.usedCount": "Used in {count} posts",
-  "telegram.posts.groups.notUsed": "This post is not used in other posts yet",
-  "telegram.posts.groups.notLinked": "This post is not linked from other posts in this channel.",
-  "telegram.posts.groups.publishDescription": "Drafts publish now. Scheduled posts can be cancelled and published now. Published posts are skipped unless explicitly enabled.",
+  "telegram.posts.groups.notLinked":
+    "This post is not linked from other posts in this channel.",
+  "telegram.posts.groups.publishDescription":
+    "Drafts publish now. Scheduled posts can be cancelled and published now. Published posts are skipped unless explicitly enabled.",
   "telegram.posts.groups.includeScheduled": "Include scheduled posts",
   "telegram.posts.groups.retryFailed": "Retry failed posts",
-  "telegram.posts.groups.republishPublished": "Republish already published posts",
+  "telegram.posts.groups.republishPublished":
+    "Republish already published posts",
   "telegram.posts.groups.overwriteScheduled": "Overwrite scheduled",
   "telegram.posts.groups.draftsOnly": "Drafts only",
   "telegram.posts.groups.includeFailed": "Include failed",
@@ -57,6 +62,7 @@ const messages = {
   "telegram.posts.groups.scheduleProgress": "Scheduling posts",
   "telegram.posts.groups.draftProgress": "Converting posts to drafts",
   "telegram.posts.groups.actionFailed": "{action} failed.",
-  "telegram.posts.groups.emptyAll": "No groups yet. Create the first named post series.",
+  "telegram.posts.groups.emptyAll":
+    "No groups yet. Create the first named post series.",
 } as const satisfies TranslationCatalog;
 export default messages;

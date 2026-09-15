@@ -11,6 +11,9 @@ export type TelegramInviteLink = {
   requestedCount: number;
   isRevoked: boolean;
   isDefaultForChannel?: boolean;
+  isDefaultForBot?: boolean;
+  isDefaultForFolders?: boolean;
+  isDefaultForMutualPromotion?: boolean;
   expireDate?: string;
   memberLimit?: number;
   createsJoinRequest?: boolean;

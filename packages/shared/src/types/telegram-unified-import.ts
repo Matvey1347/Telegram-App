@@ -3,6 +3,10 @@ import type { TelegramPublicationSlotKind } from "./telegram-publication-schedul
 
 export const TELEGRAM_UNIFIED_IMPORT_VERSION = 1 as const;
 
+export type TelegramUnifiedImportDeleteTarget = {
+  id: string;
+};
+
 export type TelegramUnifiedImportManifest = {
   version: typeof TELEGRAM_UNIFIED_IMPORT_VERSION;
   groups?: Array<{
@@ -14,35 +18,56 @@ export type TelegramUnifiedImportManifest = {
   }>;
   hypotheses?: Array<{
     ref: string;
-    action: "CREATE" | "UPDATE" | "ARCHIVE";
+    action: "CREATE" | "UPDATE" | "ARCHIVE" | "DELETE";
     id?: string;
-    value?: TelegramContentHypothesisInput;
+    icon?: string | null;
+    value?: Omit<TelegramContentHypothesisInput, "iconId">;
   }>;
   posts?: Array<{
     ref: string;
     action: "CREATE" | "UPDATE" | "DELETE";
     id?: string;
     title?: string;
+    icon?: string | null;
     text?: string | null;
     imageUrls?: string[];
+    imageSearch?: string[];
     groupRef?: string | null;
     hypothesisRefs?: string[];
+    imported?: boolean;
+    approved?: boolean;
   }>;
   schedule?: Array<{
-    postRef: string;
-    slotId: string;
-    scheduledAt: string;
+    action?: "SCHEDULE" | "UNSCHEDULE";
+    postRef?: string;
+    postId?: string;
+    slotId?: string;
+    scheduledAt?: string;
     slotKind?: TelegramPublicationSlotKind;
   }>;
+  delete?: {
+    groups?: TelegramUnifiedImportDeleteTarget[];
+    hypotheses?: TelegramUnifiedImportDeleteTarget[];
+    posts?: TelegramUnifiedImportDeleteTarget[];
+  };
 };
 
 export type TelegramUnifiedImportPreviewItem = {
   ref: string;
+  entityId?: string;
   action: string;
   label: string;
+  icon?: string | null;
+  description?: string | null;
+  text?: string | null;
+  imageUrls?: string[];
+  scheduledAt?: string | null;
   valid: boolean;
   warnings: string[];
   errors: string[];
+  status?: TelegramContentHypothesisInput["status"];
+  imported?: boolean;
+  approved?: boolean;
 };
 
 export type TelegramUnifiedImportPreviewSection = {
@@ -65,6 +90,7 @@ export type TelegramUnifiedImportSectionResult = {
   updated: number;
   deleted: number;
   scheduled: number;
+  unscheduled: number;
   failed: Array<{ ref: string; error: string }>;
 };
 

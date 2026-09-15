@@ -154,11 +154,18 @@ export function createTelegramChannelHelpers({
     getTelegramChannelInitialInviteLink: async (
       channelId: string,
       selectedId?: string,
+      selectedIds?: string[],
     ) =>
       (
         await api.get<TelegramInviteLink[]>(
           `/telegram-channels/${channelId}/invite-links/select`,
-          { params: { initial: true, ...(selectedId ? { selectedId } : {}) } },
+          {
+            params: {
+              initial: true,
+              ...(selectedId ? { selectedId } : {}),
+              ...(selectedIds?.length ? { selectedIds } : {}),
+            },
+          },
         )
       ).data,
     getAllTelegramChannelInviteLinks: async (
