@@ -10,24 +10,16 @@ import type {
   BulkActionResultItem,
   StreamEvent,
   StructuredApiError,
-  SyncOperationResult,
-  TelegramChannelSyncProgressItem,
-  ManagedPostsSyncResult,
-  TelegramManagedPostCalendarResult,
-  ScheduleManagedPostsBatchPayload,
-  TelegramPostPlannerApplyResult,
-  TelegramPostPlannerFormat,
-  TelegramPostPlannerPreviewResult,
-  TelegramPostPlannerSlot,
-  TelegramPublishingCapabilities,
 } from "@telegram-system/shared";
+export type { SyncOperationResult } from "@telegram-system/shared";
 import { createApplicationLogsApi } from "./features/operations/application-logs-api";
 import { createDashboardApi } from "./features/dashboard/dashboard-api";
 import { createTrashApi } from "./features/operations/trash-api";
 import { createFinanceApi } from "./features/finance/finance-api";
 import { createTelegramChannelHelpers } from "./features/telegram/telegram-channel-helpers-api";
 import { createTelegramChannelsApi } from "./features/telegram/telegram-channels-api";
-import { createTelegramPublicationSchedulesApi } from "./features/telegram/telegram-publication-schedules-api"; import { createTelegramContentHypothesesApi } from "./features/telegram/telegram-content-hypotheses-api";
+import { createTelegramPublicationSchedulesApi } from "./features/telegram/telegram-publication-schedules-api";
+import { createTelegramContentHypothesesApi } from "./features/telegram/telegram-content-hypotheses-api";
 import { createMarketingApi } from "./features/growth/marketing-api";
 import { createTelegramSourcesApi } from "./features/telegram/telegram-sources-api";
 import { createTelegramAdSalesApi } from "./features/growth/telegram-ad-sales-api";
@@ -214,7 +206,10 @@ export type StreamProgressHandler<TItem = BulkActionResultItem> = (
   total: number,
 ) => void;
 
-export type StreamRequestOptions = { signal?: AbortSignal };
+export type StreamRequestOptions = {
+  signal?: AbortSignal;
+  headers?: Record<string, string>;
+};
 
 async function streamAction<TResult, TItem = BulkActionResultItem>(
   path: string,
@@ -235,6 +230,7 @@ async function streamAction<TResult, TItem = BulkActionResultItem>(
     const workspaceId = localStorage.getItem("selected-workspace-id");
     if (workspaceId) headers["X-Workspace-Id"] = workspaceId;
   }
+  Object.assign(headers, options?.headers);
   const response = await fetch(`${apiBaseUrl}${path}`, {
     method: "POST",
     headers,
@@ -435,14 +431,9 @@ api.interceptors.response.use(
   },
 );
 
-import type {
-  DashboardSummary,
-  PaginatedResponse,
-  PaginationParams,
-} from "./api-types";
+import type { PaginatedResponse } from "./api-types";
 export type {
   TelegramChannelAccessMode,
-  SyncOperationResult,
   StructuredApiError,
   BulkActionResultItem,
   BulkActionResult,
@@ -678,8 +669,10 @@ export const telegramChannelsApi = createTelegramChannelsApi({
   silentFeedbackConfig,
   quietMutationConfig,
 });
-export const telegramPublicationSchedulesApi = createTelegramPublicationSchedulesApi(api);
-export const telegramContentHypothesesApi = createTelegramContentHypothesesApi(api);
+export const telegramPublicationSchedulesApi =
+  createTelegramPublicationSchedulesApi(api);
+export const telegramContentHypothesesApi =
+  createTelegramContentHypothesesApi(api);
 const telegramSourcesApi = createTelegramSourcesApi({
   api,
   crud,

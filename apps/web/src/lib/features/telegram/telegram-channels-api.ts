@@ -27,6 +27,7 @@ import type {
   SyncOperationResult,
   TelegramUnifiedImportManifest,
   TelegramUnifiedImportPreview,
+  TelegramUnifiedImportProgressItem,
   TelegramUnifiedImportResult,
 } from "@telegram-system/shared";
 import type {
@@ -113,7 +114,7 @@ export function createTelegramChannelsApi({
     path: string,
     payload: unknown,
     onProgress: StreamProgressHandler<TItem>,
-    options?: { signal?: AbortSignal },
+    options?: { signal?: AbortSignal; headers?: Record<string, string> },
   ) => Promise<TResult>;
   silentFeedbackConfig: AxiosRequestConfig;
   quietMutationConfig: AxiosRequestConfig;
@@ -130,18 +131,25 @@ export function createTelegramChannelsApi({
           silentFeedbackConfig,
         )
       ).data,
-    applyUnifiedImport: async (
+    applyUnifiedImportWithProgress: async (
       channelId: string,
       manifest: TelegramUnifiedImportManifest,
       manifestHash: string,
+      onProgress: StreamProgressHandler<TelegramUnifiedImportProgressItem>,
+      options?: { signal?: AbortSignal },
     ) =>
-      (
-        await api.post<TelegramUnifiedImportResult>(
-          `/telegram-channels/${channelId}/unified-import/apply`,
-          manifest,
-          { ...silentFeedbackConfig, headers: { "X-Manifest-Hash": manifestHash } },
-        )
-      ).data,
+      streamProgressAction<
+        TelegramUnifiedImportResult,
+        TelegramUnifiedImportProgressItem
+      >(
+        `/telegram-channels/${channelId}/unified-import/apply-stream`,
+        manifest,
+        onProgress,
+        {
+          ...options,
+          headers: { "X-Manifest-Hash": manifestHash },
+        },
+      ),
     ...crud<TelegramChannel>("/telegram-channels"),
     select: async (params?: {
       canPostMessagesOnly?: boolean;

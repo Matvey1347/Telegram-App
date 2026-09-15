@@ -139,6 +139,15 @@ const messages = {
   "telegram.posts.import.unifiedApplied": "Import applied ({hash})",
   "telegram.posts.import.unifiedPartial":
     "Import completed with {count} failed operations. Review the details before retrying.",
+  "telegram.posts.import.progressTitle": "Import progress",
+  "telegram.posts.import.progressStarting": "Starting the import stream…",
+  "telegram.posts.import.progressCounts":
+    "Created {created} · Updated {updated} · Deleted {deleted} · Scheduled {scheduled} · Unscheduled {unscheduled}",
+  "telegram.posts.import.progressCreated": "Created",
+  "telegram.posts.import.progressUpdated": "Updated",
+  "telegram.posts.import.progressDeleted": "Deleted",
+  "telegram.posts.import.progressScheduled": "Scheduled",
+  "telegram.posts.import.progressUnscheduled": "Unscheduled",
   "telegram.posts.import.unifiedValid": "Valid: {valid} · Errors: {invalid}",
   "telegram.posts.import.cancel": "Cancel",
   "telegram.posts.import.previewAction": "Preview",
@@ -148,10 +157,13 @@ const messages = {
   "telegram.posts.import.addSlot": "Add slot",
   "telegram.posts.import.operationTabs": "Import operations",
   "telegram.posts.import.createTab": "Create ({count})",
+  "telegram.posts.import.updateTab": "Update ({count})",
   "telegram.posts.import.deleteTab": "Delete ({count})",
-  "telegram.posts.import.emptyDeleteTab": "Nothing will be deleted in this section.",
+  "telegram.posts.import.emptyDeleteTab":
+    "Nothing will be deleted in this section.",
   "telegram.posts.import.openInSystem": "Open",
-  "telegram.posts.import.openAfterImport": "The publication can be opened after it is created.",
+  "telegram.posts.import.openAfterImport":
+    "The publication can be opened after it is created.",
   "telegram.posts.import.scheduleOperations": "Calendar operations",
   "telegram.posts.import.scheduleTab": "Schedule ({count})",
   "telegram.posts.import.unscheduleTab": "Unschedule ({count})",

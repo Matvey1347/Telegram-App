@@ -1,3 +1,17 @@
+export const apiCorsAllowedHeaders = [
+  'Content-Type',
+  'Authorization',
+  'X-Workspace-Id',
+  'X-Telegram-Init-Data',
+  'X-Finance-Consumer-Request',
+  'X-Correlation-Id',
+  'X-Bypass-Response-Cache',
+  'X-Manifest-Hash',
+  'Cache-Control',
+  'Pragma',
+  'ngrok-skip-browser-warning',
+] as const;
+
 function normalizedHttpOrigin(value: string | undefined) {
   if (!value) return null;
   try {

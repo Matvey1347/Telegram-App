@@ -121,6 +121,53 @@ describe('TelegramUnifiedImportService', () => {
     expect(preview.sections[2].items[0].errors).toContain('Unknown groupRef');
   });
 
+  it('returns an item-level preview error for an invalid image URL', async () => {
+    const preview = await service.preview('user-1', 'channel-1', {
+      version: 1,
+      posts: [
+        {
+          ref: 'post-with-search-query',
+          action: 'CREATE',
+          title: 'Publication',
+          imageUrls: ['mountain landscape for Telegram'],
+        },
+      ],
+    });
+
+    expect(preview.valid).toBe(false);
+    expect(preview.sections[2].items[0].errors).toContain(
+      'imageUrls.0 must use a valid HTTP or HTTPS URL',
+    );
+  });
+
+  it('normalizes a markdown-wrapped image URL before applying the post', async () => {
+    commands.createManagedPost.mockResolvedValue({ id: 'post-created' });
+    const manifest = {
+      version: 1 as const,
+      posts: [
+        {
+          ref: 'post-with-markdown-image',
+          action: 'CREATE' as const,
+          title: 'Publication',
+          imageUrls: ['[image](https://images.example.com/publication.png)'],
+        },
+      ],
+    };
+
+    const preview = await service.preview('user-1', 'channel-1', manifest);
+    await service.apply('user-1', 'channel-1', manifest, preview.manifestHash);
+
+    expect(preview.valid).toBe(true);
+    expect(commands.createManagedPost).toHaveBeenCalledWith(
+      'user-1',
+      'channel-1',
+      expect.objectContaining({
+        imageUrls: ['https://images.example.com/publication.png'],
+      }),
+      { groupId: null },
+    );
+  });
+
   it('produces a stable idempotency hash', () => {
     const manifest = { version: 1 as const, posts: [] };
     expect(unifiedImportHash(manifest)).toBe(unifiedImportHash(manifest));
@@ -183,11 +230,13 @@ describe('TelegramUnifiedImportService', () => {
       ],
     };
 
+    const onProgress = jest.fn();
     await service.apply(
       'user-1',
       'channel-1',
       manifest,
       unifiedImportHash(manifest),
+      onProgress,
     );
 
     expect(groups.createPostGroup.mock.invocationCallOrder[0]).toBeLessThan(
@@ -207,6 +256,56 @@ describe('TelegramUnifiedImportService', () => {
       'channel-1',
       'post-created',
       { hypothesisIds: ['hypothesis-created'] },
+    );
+    expect(
+      onProgress.mock.calls
+        .map(([item]) => item)
+        .filter((item) => item.kind === 'operation')
+        .map((item) => [item.section, item.action, item.status]),
+    ).toEqual([
+      ['groups', 'CREATE', 'success'],
+      ['hypotheses', 'CREATE', 'success'],
+      ['posts', 'CREATE', 'success'],
+    ]);
+    expect(onProgress).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        kind: 'phase',
+        section: 'deletions',
+        status: 'completed',
+      }),
+      3,
+      3,
+    );
+  });
+
+  it('does not create a post when its newly created group failed', async () => {
+    groups.createPostGroup.mockRejectedValue(new Error('Group create failed'));
+    const manifest = {
+      version: 1 as const,
+      groups: [{ ref: 'group-new', action: 'CREATE' as const, title: 'Group' }],
+      posts: [
+        {
+          ref: 'post-new',
+          action: 'CREATE' as const,
+          title: 'Publication',
+          groupRef: 'group-new',
+        },
+      ],
+    };
+
+    const result = await service.apply(
+      'user-1',
+      'channel-1',
+      manifest,
+      unifiedImportHash(manifest),
+    );
+
+    expect(commands.createManagedPost).not.toHaveBeenCalled();
+    expect(result.sections[2].failed[0]).toEqual(
+      expect.objectContaining({
+        ref: 'post-new',
+        error: expect.stringContaining('group-new did not produce an id'),
+      }),
     );
   });
 

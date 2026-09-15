@@ -7,7 +7,6 @@ import {
   IsInt,
   IsOptional,
   IsString,
-  IsUrl,
   MaxLength,
   Min,
   ValidateNested,
@@ -54,7 +53,7 @@ class PostRowDto {
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(20)
-  @IsUrl({}, { each: true })
+  @IsString({ each: true })
   imageUrls?: string[];
   @IsOptional()
   @IsArray()

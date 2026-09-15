@@ -7,19 +7,31 @@ import { renderWithI18n } from "@/test/render-with-i18n";
 import { UnifiedImportModal } from "./unified-import-modal";
 
 const pushToast = vi.fn();
+const operation = {
+  update: vi.fn(),
+  succeed: vi.fn(),
+  fail: vi.fn(),
+  dismiss: vi.fn(),
+};
+const startOperation = vi.fn(() => operation);
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
-  return { ...actual, telegramChannelsApi: {
-    unifiedImportContext: vi.fn(),
-    previewUnifiedImport: vi.fn(),
-    applyUnifiedImport: vi.fn(),
-    postGroupSummaries: vi.fn().mockResolvedValue([]),
-    lookupManagedPosts: vi.fn().mockResolvedValue({ items: [], missingIds: [] }),
-  } };
+  return {
+    ...actual,
+    telegramChannelsApi: {
+      unifiedImportContext: vi.fn(),
+      previewUnifiedImport: vi.fn(),
+      applyUnifiedImportWithProgress: vi.fn(),
+      postGroupSummaries: vi.fn().mockResolvedValue([]),
+      lookupManagedPosts: vi
+        .fn()
+        .mockResolvedValue({ items: [], missingIds: [] }),
+    },
+  };
 });
 vi.mock("@/providers/toast-provider", () => ({
-  useAppToast: () => ({ pushToast }),
+  useAppToast: () => ({ pushToast, startOperation }),
 }));
 vi.mock("./managed-posts-import-source", () => ({
   ManagedPostsImportSource: ({
@@ -34,17 +46,58 @@ vi.mock("./managed-posts-import-source", () => ({
           JSON.stringify({
             version: 1,
             groups: [],
-            hypotheses: [{ ref: "hyp-new", action: "CREATE", icon: "🧠", value: { name: "Growth hypothesis", status: "ACTIVE" } }],
+            hypotheses: [
+              {
+                ref: "hyp-new",
+                action: "CREATE",
+                icon: "🧠",
+                value: { name: "Growth hypothesis", status: "ACTIVE" },
+              },
+            ],
             posts: [
-              { ref: "post-new", action: "CREATE", title: "New publication", text: "Text", imported: false },
-              { ref: "post-imported", action: "CREATE", title: "Imported publication", text: "Text", imported: true },
+              {
+                ref: "post-new",
+                action: "CREATE",
+                title: "New publication",
+                text: "Text",
+                imported: false,
+              },
+              {
+                ref: "post-imported",
+                action: "CREATE",
+                title: "Imported publication",
+                text: "Text",
+                imported: true,
+              },
+              {
+                ref: "post-update",
+                action: "UPDATE",
+                id: "post-update",
+                title: "Updated publication",
+                text: "Updated text",
+                imported: false,
+              },
             ],
             schedule: [
-              { action: "SCHEDULE", postRef: "post-new", slotId: "slot-1", scheduledAt: "2026-09-16T08:10:00+02:00" },
-              { action: "SCHEDULE", postId: "post-rescheduled", slotId: "slot-2", scheduledAt: "2026-09-18T08:10:00+02:00" },
+              {
+                action: "SCHEDULE",
+                postRef: "post-new",
+                slotId: "slot-1",
+                scheduledAt: "2026-09-16T08:10:00+02:00",
+              },
+              {
+                action: "SCHEDULE",
+                postId: "post-rescheduled",
+                slotId: "slot-2",
+                scheduledAt: "2026-09-18T08:10:00+02:00",
+              },
               { action: "UNSCHEDULE", postId: "post-scheduled" },
             ],
-            delete: { groups: [], hypotheses: [], posts: [{ id: "post-existing" }] },
+            delete: {
+              groups: [],
+              hypotheses: [],
+              posts: [{ id: "post-existing" }],
+            },
           }),
         )
       }
@@ -55,8 +108,12 @@ vi.mock("./managed-posts-import-source", () => ({
 }));
 
 function render(ui: React.ReactElement) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return renderWithI18n(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return renderWithI18n(
+    <QueryClientProvider client={client}>{ui}</QueryClientProvider>,
+  );
 }
 
 describe("UnifiedImportModal", () => {
@@ -130,9 +187,20 @@ describe("UnifiedImportModal", () => {
         },
         {
           key: "hypotheses",
-          validCount: 3,
+          validCount: 4,
           invalidCount: 0,
-          items: [{ ref: "hyp-new", action: "CREATE", label: "Growth hypothesis", icon: "🧠", status: "ACTIVE", valid: true, warnings: [], errors: [] }],
+          items: [
+            {
+              ref: "hyp-new",
+              action: "CREATE",
+              label: "Growth hypothesis",
+              icon: "🧠",
+              status: "ACTIVE",
+              valid: true,
+              warnings: [],
+              errors: [],
+            },
+          ],
         },
         {
           key: "posts",
@@ -156,6 +224,16 @@ describe("UnifiedImportModal", () => {
               warnings: [],
               errors: [],
               imported: true,
+            },
+            {
+              ref: "post-update",
+              entityId: "post-update",
+              action: "UPDATE",
+              label: "Updated publication",
+              valid: true,
+              warnings: [],
+              errors: [],
+              imported: false,
             },
             {
               ref: "delete:post:post-existing",
@@ -239,19 +317,32 @@ describe("UnifiedImportModal", () => {
       "channel-1",
       expect.objectContaining({ version: 1 }),
     );
-    expect(await screen.findByRole("tab", { name: "Posts 3" })).toBeVisible();
+    expect(await screen.findByRole("tab", { name: "Posts 4" })).toBeVisible();
     expect(screen.getByRole("tab", { name: "Calendar 3" })).toBeVisible();
     expect(
       screen.queryByRole("tab", { name: /Groups/ }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Content hypotheses 1" })).toBeVisible();
+    expect(
+      screen.getByRole("tab", { name: "Content hypotheses 1" }),
+    ).toBeVisible();
+    const createTab = screen.getByRole("tab", { name: "Create (2)" });
+    expect(createTab).toBeVisible();
+    expect(createTab.className).not.toContain("shadow-");
+    expect(screen.getByRole("tab", { name: "Update (1)" })).toBeVisible();
+    expect(screen.getByRole("tab", { name: "Delete (1)" })).toBeVisible();
+    expect(screen.queryByText("Updated publication")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Update (1)" }));
+    expect(screen.getAllByText("Updated publication").length).toBeGreaterThan(
+      0,
+    );
+    expect(screen.getByText("UPDATE")).toBeVisible();
+    fireEvent.click(screen.getByRole("tab", { name: "Create (2)" }));
     expect(screen.getByRole("button", { name: "New (1)" })).toBeVisible();
     expect(screen.getAllByText("New publication").length).toBeGreaterThan(0);
 
-    fireEvent.change(
-      screen.getByPlaceholderText("One search query per line"),
-      { target: { value: "quiet lake\nmountain view" } },
-    );
+    fireEvent.change(screen.getByPlaceholderText("One search query per line"), {
+      target: { value: "quiet lake\nmountain view" },
+    });
     await waitFor(() =>
       expect(telegramChannelsApi.previewUnifiedImport).toHaveBeenCalledTimes(2),
     );
@@ -262,6 +353,10 @@ describe("UnifiedImportModal", () => {
           expect.objectContaining({
             ref: "post-new",
             imageSearch: ["quiet lake", "mountain view"],
+          }),
+          expect.objectContaining({
+            ref: "post-update",
+            action: "UPDATE",
           }),
         ]),
       }),
@@ -285,9 +380,13 @@ describe("UnifiedImportModal", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Imported (1)" }));
-    expect(screen.getAllByText("Imported publication").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Imported publication").length).toBeGreaterThan(
+      0,
+    );
     expect(screen.getByRole("button", { name: "Import" })).toBeEnabled();
-    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Cancel" }),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Delete (1)" }));
     expect(screen.getByText("Existing Telegram body")).toBeVisible();
@@ -295,10 +394,7 @@ describe("UnifiedImportModal", () => {
       screen.getByRole("link", {
         name: "Open Existing publication in a new tab",
       }),
-    ).toHaveAttribute(
-      "href",
-      expect.stringContaining("postId=post-existing"),
-    );
+    ).toHaveAttribute("href", expect.stringContaining("postId=post-existing"));
 
     fireEvent.click(screen.getByRole("tab", { name: "Calendar 3" }));
     expect(screen.getByRole("tab", { name: "Schedule (2)" })).toBeVisible();
@@ -306,8 +402,66 @@ describe("UnifiedImportModal", () => {
       screen.getByRole("link", {
         name: "Open Moved publication in a new tab",
       }),
-    ).toHaveAttribute("href", expect.stringContaining("postId=post-rescheduled"));
+    ).toHaveAttribute(
+      "href",
+      expect.stringContaining("postId=post-rescheduled"),
+    );
     fireEvent.click(screen.getByRole("tab", { name: "Unschedule (1)" }));
     expect(screen.getByText("Scheduled body")).toBeVisible();
+
+    vi.mocked(
+      telegramChannelsApi.applyUnifiedImportWithProgress,
+    ).mockImplementation(async (_channelId, _manifest, _hash, onProgress) => {
+      onProgress(
+        {
+          kind: "phase",
+          section: "groups",
+          status: "started",
+          message: "Processing groups",
+        },
+        0,
+        7,
+      );
+      onProgress(
+        {
+          kind: "operation",
+          section: "groups",
+          status: "success",
+          action: "CREATE",
+          ref: "group-new",
+          label: "New group",
+          message: "CREATE New group",
+        },
+        1,
+        7,
+      );
+      return {
+        manifestHash: "manifest-hash",
+        sections: [
+          {
+            key: "groups",
+            created: 1,
+            updated: 0,
+            deleted: 0,
+            scheduled: 0,
+            unscheduled: 0,
+            failed: [],
+          },
+        ],
+      };
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    await waitFor(() =>
+      expect(
+        telegramChannelsApi.applyUnifiedImportWithProgress,
+      ).toHaveBeenCalledOnce(),
+    );
+    expect(startOperation).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "unified-import:channel-1" }),
+    );
+    expect(operation.update).toHaveBeenCalledWith(
+      expect.objectContaining({ current: 1, total: 7 }),
+    );
+    expect(await screen.findByText("CREATE New group")).toBeVisible();
   });
 });

@@ -6,6 +6,7 @@ import {
   buildTelegramGptContextFilename,
   TELEGRAM_UNIFIED_IMPORT_INSTRUCTION,
   type TelegramUnifiedImportPreview,
+  type TelegramUnifiedImportProgressItem,
   type TelegramUnifiedImportResult,
 } from "@telegram-system/shared";
 import { Button, Modal } from "@/components/ui/primitives";
@@ -15,6 +16,11 @@ import { useI18n } from "@/providers/i18n-provider";
 import { parseUnifiedImportManifest } from "./unified-import-model";
 import { ManagedPostsImportSource } from "./managed-posts-import-source";
 import { UnifiedImportPreview } from "./unified-import-preview";
+import {
+  summarizeUnifiedImportProgress,
+  UnifiedImportProgress,
+  type UnifiedImportProgressEntry,
+} from "./unified-import-progress";
 
 export function UnifiedImportModal({
   open,
@@ -37,7 +43,7 @@ export function UnifiedImportModal({
   onClose: () => void;
   onApplied: () => Promise<void>;
 }) {
-  const { pushToast } = useAppToast();
+  const { pushToast, startOperation } = useAppToast();
   const { t } = useI18n();
   const [raw, setRaw] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
@@ -50,6 +56,9 @@ export function UnifiedImportModal({
   const [previewBusy, setPreviewBusy] = useState(false);
   const [previewError, setPreviewError] = useState("");
   const [applyBusy, setApplyBusy] = useState(false);
+  const [progressEntries, setProgressEntries] = useState<
+    UnifiedImportProgressEntry[]
+  >([]);
   const [contextBusy, setContextBusy] = useState(false);
   const previewRequestId = useRef(0);
   const parsed = useMemo(() => {
@@ -137,12 +146,49 @@ export function UnifiedImportModal({
   };
   const apply = async () => {
     if (!parsed.manifest || !preview?.valid) return;
+    const controller = new AbortController();
+    const operation = startOperation({
+      id: `unified-import:${channelId}`,
+      title: t("telegram.posts.import.unifiedTitle"),
+      message: t("telegram.posts.import.progressStarting"),
+      current: 0,
+      total: 0,
+      onCancel: () => controller.abort(),
+    });
     setApplyBusy(true);
+    setProgressEntries([]);
+    setResult(null);
+    const streamedEntries: UnifiedImportProgressEntry[] = [];
     try {
-      const result = await telegramChannelsApi.applyUnifiedImport(
+      const result = await telegramChannelsApi.applyUnifiedImportWithProgress(
         channelId,
         parsed.manifest,
         preview.manifestHash,
+        (
+          item: TelegramUnifiedImportProgressItem,
+          current: number,
+          total: number,
+        ) => {
+          streamedEntries.push({ item, current, total });
+          setProgressEntries([...streamedEntries]);
+          const summary = summarizeUnifiedImportProgress(streamedEntries);
+          operation.update({
+            message: `${item.action ?? item.section}: ${item.label ?? item.message}`,
+            current,
+            total,
+            progressSummary: {
+              successful:
+                summary.created +
+                summary.updated +
+                summary.deleted +
+                summary.scheduled +
+                summary.unscheduled,
+              failed: summary.failed,
+            },
+            details: t("telegram.posts.import.progressCounts", summary),
+          });
+        },
+        { signal: controller.signal },
       );
       setResult(result);
       await onApplied();
@@ -150,27 +196,46 @@ export function UnifiedImportModal({
         (total, section) => total + section.failed.length,
         0,
       );
+      const completedSummary = summarizeUnifiedImportProgress(streamedEntries);
+      const countMessage = t(
+        "telegram.posts.import.progressCounts",
+        completedSummary,
+      );
       if (failed) {
-        pushToast(
-          t("telegram.posts.import.unifiedPartial", { count: failed }),
-          "error",
-        );
+        operation.fail({
+          message: `${t("telegram.posts.import.unifiedPartial", { count: failed })} ${countMessage}`,
+        });
       } else {
-        pushToast(
-          t("telegram.posts.import.unifiedApplied", {
+        operation.succeed({
+          message: `${t("telegram.posts.import.unifiedApplied", {
             hash: result.manifestHash.slice(0, 8),
-          }),
-          "success",
-        );
-        onClose();
+          })} ${countMessage}`,
+        });
       }
     } catch (error) {
-      pushToast(
-        error instanceof Error
-          ? error.message
-          : t("telegram.posts.import.unifiedApplyError"),
-        "error",
-      );
+      if (controller.signal.aborted) {
+        const summary = summarizeUnifiedImportProgress(streamedEntries);
+        operation.dismiss();
+        pushToast(
+          t("telegram.posts.import.stopped", {
+            successful:
+              summary.created +
+              summary.updated +
+              summary.deleted +
+              summary.scheduled +
+              summary.unscheduled,
+            failed: summary.failed,
+          }),
+          "info",
+        );
+      } else {
+        operation.fail({
+          message:
+            error instanceof Error
+              ? error.message
+              : t("telegram.posts.import.unifiedApplyError"),
+        });
+      }
     } finally {
       setApplyBusy(false);
     }
@@ -215,6 +280,7 @@ export function UnifiedImportModal({
             setFileName(null);
             resetPreview();
             setResult(null);
+            setProgressEntries([]);
           }}
           onCopyContent={() => {
             void navigator.clipboard.writeText(raw).then(
@@ -273,6 +339,7 @@ export function UnifiedImportModal({
             )}
           </div>
         ) : null}
+        <UnifiedImportProgress entries={progressEntries} busy={applyBusy} />
         <div className="sticky -bottom-4 z-10 flex justify-end gap-2 border-t border-neutral-800 bg-neutral-900/95 px-1 py-3 backdrop-blur">
           <Button
             type="button"

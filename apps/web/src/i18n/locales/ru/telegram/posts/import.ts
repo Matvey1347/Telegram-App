@@ -145,6 +145,15 @@ const messages = {
   "telegram.posts.import.unifiedApplied": "Импорт применён ({hash})",
   "telegram.posts.import.unifiedPartial":
     "Импорт завершён с ошибками: {count}. Проверьте детали перед повтором.",
+  "telegram.posts.import.progressTitle": "Прогресс импорта",
+  "telegram.posts.import.progressStarting": "Запускаем поток импорта…",
+  "telegram.posts.import.progressCounts":
+    "Создано {created} · Обновлено {updated} · Удалено {deleted} · Запланировано {scheduled} · Снято {unscheduled}",
+  "telegram.posts.import.progressCreated": "Создано",
+  "telegram.posts.import.progressUpdated": "Обновлено",
+  "telegram.posts.import.progressDeleted": "Удалено",
+  "telegram.posts.import.progressScheduled": "Запланировано",
+  "telegram.posts.import.progressUnscheduled": "Снято",
   "telegram.posts.import.unifiedValid":
     "Корректно: {valid} · Ошибок: {invalid}",
   "telegram.posts.import.cancel": "Отмена",
@@ -155,10 +164,13 @@ const messages = {
   "telegram.posts.import.addSlot": "Добавить слот",
   "telegram.posts.import.operationTabs": "Операции импорта",
   "telegram.posts.import.createTab": "Создать ({count})",
+  "telegram.posts.import.updateTab": "Обновить ({count})",
   "telegram.posts.import.deleteTab": "Удалить ({count})",
-  "telegram.posts.import.emptyDeleteTab": "В этом разделе ничего не будет удалено.",
+  "telegram.posts.import.emptyDeleteTab":
+    "В этом разделе ничего не будет удалено.",
   "telegram.posts.import.openInSystem": "Открыть",
-  "telegram.posts.import.openAfterImport": "Публикацию можно будет открыть после её создания.",
+  "telegram.posts.import.openAfterImport":
+    "Публикацию можно будет открыть после её создания.",
   "telegram.posts.import.scheduleOperations": "Операции календаря",
   "telegram.posts.import.scheduleTab": "Запланировать ({count})",
   "telegram.posts.import.unscheduleTab": "Снять с планирования ({count})",

@@ -1,7 +1,6 @@
 "use client";
 
-
-import { useMemo, useRef, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ListChecks, Trash2 } from "lucide-react";
 import { IconPicker } from "@/components/icons/icon-picker";
 import {
@@ -34,9 +33,12 @@ import {
 } from "./managed-posts-import-model";
 import type { ManagedPostsGroupOption } from "./managed-posts-import-source";
 import { useI18n } from "@/providers/i18n-provider";
+import { PublicationSlotOptions } from "./publication-slot-occurrence-select";
 
 const noGroupValue = "__no_group__";
 const useDefaultGroupValue = "__use_default_group__";
+const localDateKey = (value: Date) =>
+  `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 
 export function ManagedPostsImportWorkspace({
   rows,
@@ -54,11 +56,14 @@ export function ManagedPostsImportWorkspace({
   referencedPosts,
   groupOptions,
   hypothesisOptions = [],
+  selectedRowAdornment,
+  scheduleValue,
   onUpdateRow,
   onDeleteRow,
   onSelectRow,
   onSelectTab,
   onUpdateHypotheses,
+  onScheduleChange,
 }: {
   rows: EditableImportRow[];
   visibleRowIndices: number[];
@@ -79,11 +84,20 @@ export function ManagedPostsImportWorkspace({
     label: string;
     iconEmoji?: string;
   }>;
+  selectedRowAdornment?: ReactNode;
+  scheduleValue?: {
+    slotId?: string | null;
+    scheduledAt?: string | null;
+  } | null;
   onUpdateRow: (index: number, patch: Partial<EditableImportRow>) => void;
   onDeleteRow: (index: number) => void;
   onSelectRow: (index: number) => void;
   onSelectTab: (tab: ImportRowTab) => void;
   onUpdateHypotheses?: (index: number, refs: string[]) => void;
+  onScheduleChange?: (
+    index: number,
+    value: { slotId: string | null; scheduledAt: string | null },
+  ) => void;
 }) {
   const { t } = useI18n();
   const textEditorRef = useRef<TelegramTextEditorHandle | null>(null);
@@ -109,6 +123,16 @@ export function ManagedPostsImportWorkspace({
   const iconId =
     selectedRow?.icon && !iconPresentation ? selectedRow.icon : null;
   const selectedPosition = visibleRowIndices.indexOf(selectedRowIndex);
+  const updateScheduledAt = (
+    scheduledAt: string | null,
+    slotId = scheduleValue?.slotId ?? null,
+  ) => {
+    if (onScheduleChange) {
+      onScheduleChange(selectedRowIndex, { slotId, scheduledAt });
+      return;
+    }
+    onUpdateRow(selectedRowIndex, { scheduledAt });
+  };
 
   return (
     <div className="rounded-lg border border-neutral-800 bg-neutral-950/70 p-3">
@@ -116,8 +140,12 @@ export function ManagedPostsImportWorkspace({
         <div className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-100">
           <ListChecks size={16} />
           {t("telegram.posts.import.preview")}
+          {selectedRowAdornment}
           <span className="text-xs font-normal text-neutral-500">
-            {t("telegram.posts.import.position", { current: selectedRowIndex + 1, total: rows.length })}
+            {t("telegram.posts.import.position", {
+              current: selectedRowIndex + 1,
+              total: rows.length,
+            })}
           </span>
         </div>
         <div className="inline-flex items-center gap-2">
@@ -160,7 +188,9 @@ export function ManagedPostsImportWorkspace({
       <div className="grid gap-3 xl:grid-cols-[minmax(270px,0.72fr)_minmax(420px,1.25fr)_minmax(260px,0.7fr)]">
         <div className="min-h-[360px] overflow-hidden rounded-lg border border-neutral-800 bg-[#0e1b26]">
           <TelegramPostPreview
-            channelTitle={channelTitle || t("telegram.posts.import.previewChannel")}
+            channelTitle={
+              channelTitle || t("telegram.posts.import.previewChannel")
+            }
             channelPhotoUrl={channelPhotoUrl ?? null}
             text={selectedRow?.text ?? ""}
             imageUrls={imageUrls}
@@ -305,7 +335,7 @@ export function ManagedPostsImportWorkspace({
               </FormField>
             </div>
 
-            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,0.65fr)]">
+            <div className="grid gap-3 md:grid-cols-2">
               <FormField label={t("telegram.posts.import.postGroup")}>
                 <CustomSelect
                   value={
@@ -325,7 +355,10 @@ export function ManagedPostsImportWorkspace({
                   }
                   disabled={disabled}
                   options={[
-                    { value: useDefaultGroupValue, label: t("telegram.posts.import.defaultGroup") },
+                    {
+                      value: useDefaultGroupValue,
+                      label: t("telegram.posts.import.defaultGroup"),
+                    },
                     ...groupOptions,
                   ]}
                 />
@@ -334,13 +367,19 @@ export function ManagedPostsImportWorkspace({
                 <FormField label={t("telegram.posts.editor.hypothesis")}>
                   <MultiSelect
                     value={selectedRow.hypothesisRefs ?? []}
-                    onChange={(refs) => onUpdateHypotheses(selectedRowIndex, refs)}
+                    onChange={(refs) =>
+                      onUpdateHypotheses(selectedRowIndex, refs)
+                    }
                     disabled={disabled}
                     options={hypothesisOptions}
-                    placeholder={t("telegram.posts.hypotheses.selectPlaceholder")}
+                    placeholder={t(
+                      "telegram.posts.hypotheses.selectPlaceholder",
+                    )}
                   />
                 </FormField>
               ) : null}
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
               <FormField label={t("telegram.posts.import.date")}>
                 <DateInput
                   value={selectedRow.scheduledAt?.slice(0, 10) ?? ""}
@@ -348,13 +387,12 @@ export function ManagedPostsImportWorkspace({
                   onChange={(event) => {
                     const time =
                       selectedRow.scheduledAt?.slice(11, 16) ?? "09:00";
-                    onUpdateRow(selectedRowIndex, {
-                      scheduledAt: event.target.value
-                        ? new Date(
-                            `${event.target.value}T${time}:00`,
-                          ).toISOString()
-                        : null,
-                    });
+                    const scheduledAt = event.target.value
+                      ? new Date(
+                          `${event.target.value}T${time}:00`,
+                        ).toISOString()
+                      : null;
+                    updateScheduledAt(scheduledAt);
                   }}
                 />
               </FormField>
@@ -364,23 +402,44 @@ export function ManagedPostsImportWorkspace({
                   disabled={disabled}
                   onChange={(event) => {
                     const date = selectedRow.scheduledAt?.slice(0, 10);
-                    if (date)
-                      onUpdateRow(selectedRowIndex, {
-                        scheduledAt: new Date(
+                    if (date) {
+                      updateScheduledAt(
+                        new Date(
                           `${date}T${event.target.value}:00`,
                         ).toISOString(),
-                      });
+                      );
+                    }
                   }}
                 />
               </FormField>
+            </div>
+            {onScheduleChange ? (
+              <FormField label={t("telegram.posts.schedules.chooseSlot")}>
+                <PublicationSlotOptions
+                  channelId={channelId}
+                  selectedDate={
+                    selectedRow.scheduledAt?.slice(0, 10) ??
+                    localDateKey(new Date())
+                  }
+                  value={
+                    scheduleValue?.slotId && scheduleValue.scheduledAt
+                      ? `${scheduleValue.slotId}:${scheduleValue.scheduledAt}`
+                      : null
+                  }
+                  disabled={disabled}
+                  onChange={(value) =>
+                    onScheduleChange(selectedRowIndex, value)
+                  }
+                />
+              </FormField>
+            ) : null}
+            <div>
               <Button
                 type="button"
                 variant="secondary"
-                className="md:col-span-2 xl:col-span-2 xl:col-start-3"
+                className="w-full sm:w-auto"
                 disabled={disabled || !selectedRow.scheduledAt}
-                onClick={() =>
-                  onUpdateRow(selectedRowIndex, { scheduledAt: null })
-                }
+                onClick={() => updateScheduledAt(null, null)}
               >
                 {t("telegram.posts.import.clearSchedule")}
               </Button>

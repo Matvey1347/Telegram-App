@@ -2,7 +2,11 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ApplicationLoggerService } from './domains/operations/application-logs/application-logger.service';
-import { corsOrigins, webCorsOrigins } from './common/http/cors-origins';
+import {
+  apiCorsAllowedHeaders,
+  corsOrigins,
+  webCorsOrigins,
+} from './common/http/cors-origins';
 import {
   apiPort,
   configuredRuntimeEnvironmentName,
@@ -42,18 +46,7 @@ async function bootstrap() {
     origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'X-Workspace-Id',
-      'X-Telegram-Init-Data',
-      'X-Finance-Consumer-Request',
-      'X-Correlation-Id',
-      'X-Bypass-Response-Cache',
-      'Cache-Control',
-      'Pragma',
-      'ngrok-skip-browser-warning',
-    ],
+    allowedHeaders: apiCorsAllowedHeaders,
     exposedHeaders: ['X-Correlation-Id'],
   });
 

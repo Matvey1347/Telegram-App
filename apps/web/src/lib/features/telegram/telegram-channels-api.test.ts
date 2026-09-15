@@ -95,6 +95,46 @@ describe("telegramChannelsApi.syncWorkspaceChannels", () => {
   });
 });
 
+describe("telegramChannelsApi.applyUnifiedImportWithProgress", () => {
+  it("streams the manifest with the hash produced by preview", async () => {
+    const result = { manifestHash: "hash-1", sections: [] };
+    const streamProgressAction = vi.fn().mockResolvedValue(result);
+    const client = createTelegramChannelsApi({
+      api: {} as AxiosInstance,
+      crud: vi.fn(() => ({
+        list: vi.fn(),
+        get: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        remove: vi.fn(),
+      })),
+      getPaginated: vi.fn(),
+      getAllPaginatedItems: vi.fn(),
+      streamBulkAction: vi.fn(),
+      streamProgressAction,
+      silentFeedbackConfig: {},
+      quietMutationConfig: {},
+    });
+    const manifest = { version: 1 as const, groups: [] };
+    const onProgress = vi.fn();
+
+    await expect(
+      client.applyUnifiedImportWithProgress(
+        "channel-1",
+        manifest,
+        "hash-1",
+        onProgress,
+      ),
+    ).resolves.toBe(result);
+    expect(streamProgressAction).toHaveBeenCalledWith(
+      "/telegram-channels/channel-1/unified-import/apply-stream",
+      manifest,
+      onProgress,
+      { headers: { "X-Manifest-Hash": "hash-1" } },
+    );
+  });
+});
+
 describe("telegramChannelsApi.importBatchWithProgress", () => {
   it("uses one stream request for every pasted channel reference", async () => {
     const result = { channels: [{ id: "channel-1" }], failures: [] };

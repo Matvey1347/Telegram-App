@@ -20,6 +20,7 @@ import {
 type PostRow = NonNullable<TelegramUnifiedImportManifest["posts"]>[number];
 
 export function UnifiedImportPostsPreview({
+  operation,
   manifest,
   channelId,
   channelTitle,
@@ -30,6 +31,7 @@ export function UnifiedImportPostsPreview({
   disabled,
   onChange,
 }: {
+  operation: "CREATE" | "UPDATE";
   manifest: TelegramUnifiedImportManifest;
   channelId: string;
   channelTitle: string;
@@ -42,7 +44,7 @@ export function UnifiedImportPostsPreview({
 }) {
   const { t } = useI18n();
   const editablePosts = (manifest.posts ?? []).filter(
-    (post) => post.action !== "DELETE",
+    (post) => post.action === operation,
   );
   const [activeTab, setActiveTab] = useState<ImportRowTab>("new");
   const [selectedRowIndex, setSelectedRowIndex] = useState(0);
@@ -67,6 +69,11 @@ export function UnifiedImportPostsPreview({
   const resolvedSelectedIndex = resolvedVisibleRows.includes(selectedRowIndex)
     ? selectedRowIndex
     : (resolvedVisibleRows[0] ?? 0);
+  const selectedPost = editablePosts[resolvedSelectedIndex];
+  const selectedSchedule = (manifest.schedule ?? []).find(
+    (item) =>
+      item.action !== "UNSCHEDULE" && item.postRef === selectedPost?.ref,
+  );
   const referencedPostIds = useMemo(
     () => [
       ...new Set(
@@ -98,13 +105,18 @@ export function UnifiedImportPostsPreview({
   );
 
   const replaceEditablePosts = (nextPosts: PostRow[]) => {
-    const deletes = (manifest.posts ?? []).filter(
-      (post) => post.action === "DELETE",
+    const visibleRefs = new Set(editablePosts.map((post) => post.ref));
+    const preserved = (manifest.posts ?? []).filter(
+      (post) => !visibleRefs.has(post.ref),
     );
-    const refs = new Set(nextPosts.map((post) => post.ref));
+    const refs = new Set(
+      [...nextPosts, ...preserved]
+        .filter((post) => post.action !== "DELETE")
+        .map((post) => post.ref),
+    );
     onChange({
       ...manifest,
-      posts: [...nextPosts, ...deletes],
+      posts: [...nextPosts, ...preserved],
       schedule: (manifest.schedule ?? []).filter(
         (item) =>
           item.action === "UNSCHEDULE" ||
@@ -125,30 +137,32 @@ export function UnifiedImportPostsPreview({
       (item) => item.postRef === editablePosts[index]?.ref,
     );
     if (patch.scheduledAt !== undefined) {
-      if (!patch.scheduledAt && scheduleIndex >= 0) schedule.splice(scheduleIndex, 1);
+      if (!patch.scheduledAt && scheduleIndex >= 0)
+        schedule.splice(scheduleIndex, 1);
       if (patch.scheduledAt && scheduleIndex >= 0) {
-        schedule[scheduleIndex] = { ...schedule[scheduleIndex], scheduledAt: patch.scheduledAt };
+        schedule[scheduleIndex] = {
+          ...schedule[scheduleIndex],
+          scheduledAt: patch.scheduledAt,
+        };
       }
     }
-    onChange({ ...manifest, posts: [...nextPosts, ...(manifest.posts ?? []).filter((post) => post.action === "DELETE")], schedule });
-    const selection = selectionAfterEditableRowUpdate(nextRows, resolvedTab, index, patch);
+    const visibleRefs = new Set(editablePosts.map((post) => post.ref));
+    const preserved = (manifest.posts ?? []).filter(
+      (post) => !visibleRefs.has(post.ref),
+    );
+    onChange({ ...manifest, posts: [...nextPosts, ...preserved], schedule });
+    const selection = selectionAfterEditableRowUpdate(
+      nextRows,
+      resolvedTab,
+      index,
+      patch,
+    );
     setActiveTab(selection.tab);
     setSelectedRowIndex(selection.selectedRowIndex);
   };
 
   return (
     <div className="space-y-3">
-      {editablePosts.length ? (
-        <div className="flex flex-wrap gap-2">
-          {editablePosts.map((post) => (
-            <span key={post.ref} className="inline-flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-2 py-1 text-xs text-neutral-200">
-              <ActionBadge action={post.action} />
-              {post.icon ? <span>{post.icon}</span> : null}
-              <span className="max-w-52 truncate">{post.title || post.ref}</span>
-            </span>
-          ))}
-        </div>
-      ) : null}
       {rows.length ? (
         <ManagedPostsImportWorkspace
           rows={rows}
@@ -159,6 +173,12 @@ export function UnifiedImportPostsPreview({
             new: rowIndicesForTab(rows, "new").length,
             imported: rowIndicesForTab(rows, "imported").length,
           }}
+          selectedRowAdornment={
+            <ActionBadge
+              action={editablePosts[resolvedSelectedIndex]?.action ?? operation}
+            />
+          }
+          scheduleValue={selectedSchedule}
           disabled={disabled}
           channelId={channelId}
           channelTitle={channelTitle}
@@ -177,7 +197,9 @@ export function UnifiedImportPostsPreview({
             }))}
           onUpdateRow={updateRow}
           onDeleteRow={(index) => {
-            const next = editablePosts.filter((_, rowIndex) => rowIndex !== index);
+            const next = editablePosts.filter(
+              (_, rowIndex) => rowIndex !== index,
+            );
             replaceEditablePosts(next);
             setSelectedRowIndex(Math.max(0, index - 1));
           }}
@@ -185,10 +207,35 @@ export function UnifiedImportPostsPreview({
           onUpdateHypotheses={(index, hypothesisRefs) => {
             const posts = [...(manifest.posts ?? [])];
             const target = editablePosts[index];
-            const manifestIndex = posts.findIndex((post) => post.ref === target?.ref);
+            const manifestIndex = posts.findIndex(
+              (post) => post.ref === target?.ref,
+            );
             if (manifestIndex < 0) return;
             posts[manifestIndex] = { ...posts[manifestIndex], hypothesisRefs };
             onChange({ ...manifest, posts });
+          }}
+          onScheduleChange={(index, value) => {
+            const target = editablePosts[index];
+            if (!target) return;
+            const schedule = [...(manifest.schedule ?? [])];
+            const scheduleIndex = schedule.findIndex(
+              (item) =>
+                item.action !== "UNSCHEDULE" && item.postRef === target.ref,
+            );
+            if (!value.scheduledAt) {
+              if (scheduleIndex >= 0) schedule.splice(scheduleIndex, 1);
+            } else {
+              const nextSchedule = {
+                action: "SCHEDULE" as const,
+                postRef: target.ref,
+                slotId: value.slotId ?? schedule[scheduleIndex]?.slotId ?? "",
+                scheduledAt: value.scheduledAt,
+                slotKind: schedule[scheduleIndex]?.slotKind,
+              };
+              if (scheduleIndex >= 0) schedule[scheduleIndex] = nextSchedule;
+              else schedule.push(nextSchedule);
+            }
+            onChange({ ...manifest, schedule });
           }}
           onSelectTab={(tab) => {
             setActiveTab(tab);
@@ -200,7 +247,10 @@ export function UnifiedImportPostsPreview({
   );
 }
 
-function toEditableRow(post: PostRow, scheduledAt: string | null): EditableImportRow {
+function toEditableRow(
+  post: PostRow,
+  scheduledAt: string | null,
+): EditableImportRow {
   return {
     title: post.title ?? "",
     text: post.text ?? "",

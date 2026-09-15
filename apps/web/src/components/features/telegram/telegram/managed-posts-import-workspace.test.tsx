@@ -21,6 +21,23 @@ vi.mock("./managed-post-internal-links-notice", () => ({
   ManagedPostInternalLinksNotice: () => null,
 }));
 
+vi.mock("./publication-slot-occurrence-select", () => ({
+  PublicationSlotOptions: ({
+    onChange,
+  }: {
+    onChange: (value: { slotId: string; scheduledAt: string }) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() =>
+        onChange({ slotId: "slot-1", scheduledAt: "2026-09-20T09:00:00.000Z" })
+      }
+    >
+      Available slot
+    </button>
+  ),
+}));
+
 describe("ManagedPostsImportWorkspace", () => {
   it("keeps Approved editable beside Imported", () => {
     const onUpdateRow = vi.fn();
@@ -65,5 +82,46 @@ describe("ManagedPostsImportWorkspace", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Approved" }));
 
     expect(onUpdateRow).toHaveBeenCalledWith(0, { approved: true });
+  });
+
+  it("shows the selected operation beside preview and exposes schedule slots", () => {
+    const onScheduleChange = vi.fn();
+    const row = rowToEditable({
+      title: "Post",
+      scheduledAt: "2026-09-19T09:00:00.000Z",
+    });
+
+    render(
+      <ManagedPostsImportWorkspace
+        rows={[row]}
+        visibleRowIndices={[0]}
+        selectedRowIndex={0}
+        activeTab="new"
+        tabCounts={{ new: 1, imported: 0 }}
+        disabled={false}
+        channelId="channel-1"
+        captionLengthMax={1024}
+        messageLengthMax={4096}
+        referencedPosts={[]}
+        groupOptions={[]}
+        selectedRowAdornment={<span>UPDATE</span>}
+        scheduleValue={{
+          slotId: "slot-old",
+          scheduledAt: "2026-09-19T09:00:00.000Z",
+        }}
+        onUpdateRow={vi.fn()}
+        onDeleteRow={vi.fn()}
+        onSelectRow={vi.fn()}
+        onSelectTab={vi.fn()}
+        onScheduleChange={onScheduleChange}
+      />,
+    );
+
+    expect(screen.getByText("UPDATE")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Available slot" }));
+    expect(onScheduleChange).toHaveBeenCalledWith(0, {
+      slotId: "slot-1",
+      scheduledAt: "2026-09-20T09:00:00.000Z",
+    });
   });
 });

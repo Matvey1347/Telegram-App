@@ -46,6 +46,14 @@ const duplicateValues = (values: string[]) => {
   return duplicates;
 };
 
+const isHttpUrl = (value: string) => {
+  try {
+    return ['http:', 'https:'].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+};
+
 const previewItem = (
   ref: string,
   action: string,
@@ -331,6 +339,13 @@ export function buildUnifiedImportPreviewSections(
                   ...(row.hypothesisRefs ?? [])
                     .filter((ref) => !hypothesisRefs.has(ref))
                     .map((ref) => `Unknown hypothesisRef: ${ref}`),
+                  ...(row.imageUrls ?? []).flatMap((url, index) =>
+                    isHttpUrl(url)
+                      ? []
+                      : [
+                          `imageUrls.${index} must use a valid HTTP or HTTPS URL`,
+                        ],
+                  ),
                   ...(row.id && postDeleteIds.has(row.id)
                     ? ['Post also appears in delete.posts']
                     : []),

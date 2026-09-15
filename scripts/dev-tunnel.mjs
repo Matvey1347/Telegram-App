@@ -9,6 +9,7 @@ import { assertPortAvailable } from "./dev-port-availability.mjs";
 import { terminateDevChildren } from "./dev-process-termination.mjs";
 import { waitForHttpReady } from "./dev-service-readiness.mjs";
 import { localBotPublicEnvironment } from "./public-origin-environment.mjs";
+import { extractCloudflareQuickTunnelUrl } from "./dev-cloudflare-tunnel.mjs";
 
 const withCloudflare = process.argv.includes("--cloudflare");
 const withWorkspaceBots = process.argv.includes("--bots");
@@ -104,18 +105,19 @@ function start(name, command, args, env, required = true, onLine) {
   relayErrors(name, child.stderr, recentLines, onLine);
   child.once("error", (error) => {
     failure(name, error);
-    if (required) void stop(1);
+    if (typeof required === "function" ? required() : required) void stop(1);
   });
   child.once("exit", (code) => {
     children.delete(child);
-    if (!stopping && required) {
+    const isRequired = typeof required === "function" ? required() : required;
+    if (!stopping && isRequired) {
       failure(name, `stopped (code ${code ?? "unknown"})`);
       if (recentLines.length) {
         console.error(`[${name}] last output:\n${recentLines.join("\n")}`);
       }
       void stop(code ?? 1);
     }
-    if (!stopping && !required) {
+    if (!stopping && !isRequired) {
       failure(name, `stopped (code ${code ?? "unknown"})`);
     }
   });
@@ -192,36 +194,71 @@ async function assertCloudflaredAvailable() {
 async function startCloudflareTunnel() {
   await assertCloudflaredAvailable();
   const targetPort = withBotRuntime ? botGatewayPort : tunnelTargetPort;
-  let resolveUrl;
-  let urlTimeout;
-  const publicUrl = new Promise((resolve, reject) => {
-    resolveUrl = (url) => {
-      clearTimeout(urlTimeout);
-      resolve(url);
-    };
-    urlTimeout = setTimeout(
-      () => reject(new Error("did not create a Cloudflare HTTPS tunnel")),
-      30_000,
+  let lastError;
+  let url = null;
+  for (let attempt = 1; attempt <= 3 && !url; attempt += 1) {
+    let ready = false;
+    let child;
+    try {
+      url = await new Promise((resolve, reject) => {
+        let settled = false;
+        const finish = (callback, value) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          callback(value);
+        };
+        const timeout = setTimeout(() => {
+          child?.kill("SIGTERM");
+          finish(
+            reject,
+            new Error("cloudflared did not return a quick Tunnel URL in 45s"),
+          );
+        }, 45_000);
+        timeout.unref();
+        child = start(
+          "Cloudflare",
+          "cloudflared",
+          [
+            "tunnel",
+            "--no-autoupdate",
+            "--url",
+            `http://127.0.0.1:${targetPort}`,
+          ],
+          { TUNNEL_TRANSPORT_PROTOCOL: "http2" },
+          () => ready,
+          (line) => {
+            const publicUrl = extractCloudflareQuickTunnelUrl(line);
+            if (!publicUrl) return;
+            ready = true;
+            finish(resolve, publicUrl);
+          },
+        );
+        child.once("error", (error) => finish(reject, error));
+        child.once("exit", (code) =>
+          finish(
+            reject,
+            new Error(
+              `cloudflared stopped before creating a tunnel (code ${code ?? "unknown"})`,
+            ),
+          ),
+        );
+      });
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) {
+        console.warn(
+          `○ Cloudflare Tunnel: attempt ${attempt}/3 failed; retrying…`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1_000));
+      }
+    }
+  }
+  if (!url) {
+    throw new Error(
+      `could not create a quick Tunnel after 3 attempts: ${lastError instanceof Error ? lastError.message : "unknown error"}`,
     );
-    urlTimeout.unref();
-  });
-  start(
-    "Cloudflare",
-    "cloudflared",
-    ["tunnel", "--no-autoupdate", "--url", `http://127.0.0.1:${targetPort}`],
-    {
-      // QUIC is unreliable on some local/VPN networks and can leave a quick
-      // tunnel alive but unable to serve requests. HTTP/2 keeps the same
-      // public URL while cloudflared reconnects its transport.
-      TUNNEL_TRANSPORT_PROTOCOL: "http2",
-    },
-    true,
-    (line) => {
-      const match = line.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/iu);
-      if (match) resolveUrl?.(match[0]);
-    },
-  );
-  const url = await publicUrl;
+  }
   status("Cloudflare Tunnel", url);
   console.log(
     `  Tunnel target: http://localhost:${targetPort}${withBotRuntime ? " (API + web gateway)" : tunnelTargetPort === 4000 ? "/api" : ""}`,

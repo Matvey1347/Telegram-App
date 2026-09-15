@@ -21,7 +21,8 @@ const occurrenceDateKey = (scheduledAt: string, timezone: string) => {
     month: "2-digit",
     day: "2-digit",
   }).formatToParts(new Date(scheduledAt));
-  const part = (type: string) => parts.find((item) => item.type === type)?.value;
+  const part = (type: string) =>
+    parts.find((item) => item.type === type)?.value;
   return `${part("year")}-${part("month")}-${part("day")}`;
 };
 
@@ -46,26 +47,6 @@ export function PublicationSlotOccurrenceSelect({
       ? `${String(initial.getHours()).padStart(2, "0")}:${String(initial.getMinutes()).padStart(2, "0")}`
       : "",
   );
-  const [range] = useState(() => {
-    const from = new Date();
-    from.setHours(0, 0, 0, 0);
-    return {
-      from: from.toISOString(),
-      to: new Date(from.getTime() + 62 * 86400000).toISOString(),
-    };
-  });
-  const occurrences = useQuery({
-    queryKey: telegramPublicationScheduleKeys.occurrences(channelId, range),
-    queryFn: () => telegramPublicationSchedulesApi.occurrences(channelId, range),
-    enabled: !disabled,
-  });
-  const dayOccurrences = useMemo(
-    () =>
-      (occurrences.data ?? []).filter(
-        (item) => occurrenceDateKey(item.scheduledAt, item.timezone) === selectedDate,
-      ),
-    [occurrences.data, selectedDate],
-  );
   const applyCustomTime = (time: string) => {
     setCustomTime(time);
     if (!time) return;
@@ -87,48 +68,133 @@ export function PublicationSlotOccurrenceSelect({
             setCustomTime("");
           }}
         />
-        {occurrences.isLoading ? <p className="text-sm text-neutral-400">{t("telegram.posts.schedules.loadingOccurrences")}</p> : null}
-        {occurrences.isError ? <p className="text-sm text-rose-300">{t("telegram.posts.schedules.occurrencesError")}</p> : null}
-        {!occurrences.isLoading && !occurrences.isError ? (
-          <div className="flex flex-wrap gap-2">
-            {dayOccurrences.map((item) => {
-              const key = `${item.slotId}:${item.scheduledAt}`;
-              const optionDisabled = disabled || (item.state !== "AVAILABLE" && key !== value);
-              const kindLabel = item.kind === "AD" ? "📣 Advertising / mutual promotion" : "📝 Regular publication";
-              const stateLabel = item.state === "OCCUPIED"
-                ? `${t("telegram.posts.schedules.occupied")}${item.postTitle ? `: ${item.postTitle}` : ""}`
-                : item.state === "PAST"
-                  ? t("telegram.posts.schedules.past")
-                  : t("telegram.posts.schedules.available");
-              const accessibleLabel = `${item.time} · ${kindLabel} · ${item.title} · ${stateLabel}`;
-              return (
-                <button
-                  type="button"
-                  key={key}
-                  disabled={optionDisabled}
-                  aria-label={accessibleLabel}
-                  title={accessibleLabel}
-                  onClick={() => {
-                    setCustomTime(item.time);
-                    onChange({ slotId: item.slotId, scheduledAt: item.scheduledAt });
-                  }}
-                  className={`inline-flex min-h-8 items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition ${key === value ? "border-blue-500 bg-blue-950/40 text-white" : optionDisabled ? "cursor-not-allowed border-neutral-800 bg-neutral-950/40 text-neutral-500 opacity-45" : "border-neutral-700 bg-neutral-950 text-neutral-200 hover:border-blue-600"}`}
-                >
-                  <span>{item.time}</span>
-                  <span aria-hidden="true">·</span>
-                  <span aria-hidden="true">{item.kind === "AD" ? "📣" : "📝"}</span>
-                </button>
-              );
-            })}
-            {!dayOccurrences.length ? <p className="text-sm text-neutral-500">{t("telegram.posts.schedules.noSlotsForDate")}</p> : null}
-          </div>
-        ) : null}
+        <PublicationSlotOptions
+          channelId={channelId}
+          selectedDate={selectedDate}
+          value={value}
+          disabled={disabled}
+          onChange={(next) => {
+            setCustomTime(next.time);
+            onChange(next);
+          }}
+        />
         <div className="rounded-lg border border-dashed border-neutral-700 p-3">
-          <p className="mb-2 text-sm font-medium text-neutral-200">{t("telegram.posts.schedules.customTime")}</p>
-          <TimeInput disabled={disabled} value={customTime} onChange={(event) => applyCustomTime(event.target.value)} />
-          <p className="mt-1 text-xs text-neutral-500">{t("telegram.posts.schedules.customTimeHint")}</p>
+          <p className="mb-2 text-sm font-medium text-neutral-200">
+            {t("telegram.posts.schedules.customTime")}
+          </p>
+          <TimeInput
+            disabled={disabled}
+            value={customTime}
+            onChange={(event) => applyCustomTime(event.target.value)}
+          />
+          <p className="mt-1 text-xs text-neutral-500">
+            {t("telegram.posts.schedules.customTimeHint")}
+          </p>
         </div>
       </div>
     </FormField>
+  );
+}
+
+export function PublicationSlotOptions({
+  channelId,
+  selectedDate,
+  value,
+  disabled = false,
+  onChange,
+}: {
+  channelId: string;
+  selectedDate: string;
+  value: string | null;
+  disabled?: boolean;
+  onChange: (value: {
+    slotId: string;
+    scheduledAt: string;
+    time: string;
+  }) => void;
+}) {
+  const { t } = useI18n();
+  const [range] = useState(() => {
+    const from = new Date();
+    from.setHours(0, 0, 0, 0);
+    return {
+      from: from.toISOString(),
+      to: new Date(from.getTime() + 62 * 86400000).toISOString(),
+    };
+  });
+  const occurrences = useQuery({
+    queryKey: telegramPublicationScheduleKeys.occurrences(channelId, range),
+    queryFn: () =>
+      telegramPublicationSchedulesApi.occurrences(channelId, range),
+    enabled: !disabled,
+  });
+  const dayOccurrences = useMemo(
+    () =>
+      (occurrences.data ?? []).filter(
+        (item) =>
+          occurrenceDateKey(item.scheduledAt, item.timezone) === selectedDate,
+      ),
+    [occurrences.data, selectedDate],
+  );
+
+  if (occurrences.isLoading) {
+    return (
+      <p className="text-sm text-neutral-400">
+        {t("telegram.posts.schedules.loadingOccurrences")}
+      </p>
+    );
+  }
+  if (occurrences.isError) {
+    return (
+      <p className="text-sm text-rose-300">
+        {t("telegram.posts.schedules.occurrencesError")}
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-wrap gap-2">
+      {dayOccurrences.map((item) => {
+        const key = `${item.slotId}:${item.scheduledAt}`;
+        const optionDisabled =
+          disabled || (item.state !== "AVAILABLE" && key !== value);
+        const kindLabel =
+          item.kind === "AD"
+            ? "📣 Advertising / mutual promotion"
+            : "📝 Regular publication";
+        const stateLabel =
+          item.state === "OCCUPIED"
+            ? `${t("telegram.posts.schedules.occupied")}${item.postTitle ? `: ${item.postTitle}` : ""}`
+            : item.state === "PAST"
+              ? t("telegram.posts.schedules.past")
+              : t("telegram.posts.schedules.available");
+        const accessibleLabel = `${item.time} · ${kindLabel} · ${item.title} · ${stateLabel}`;
+        return (
+          <button
+            type="button"
+            key={key}
+            disabled={optionDisabled}
+            aria-label={accessibleLabel}
+            title={accessibleLabel}
+            onClick={() =>
+              onChange({
+                slotId: item.slotId,
+                scheduledAt: item.scheduledAt,
+                time: item.time,
+              })
+            }
+            className={`inline-flex min-h-8 items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition ${key === value ? "border-blue-500 bg-blue-950/40 text-white" : optionDisabled ? "cursor-not-allowed border-neutral-800 bg-neutral-950/40 text-neutral-500 opacity-45" : "border-neutral-700 bg-neutral-950 text-neutral-200 hover:border-blue-600"}`}
+          >
+            <span>{item.time}</span>
+            <span aria-hidden="true">·</span>
+            <span aria-hidden="true">{item.kind === "AD" ? "📣" : "📝"}</span>
+          </button>
+        );
+      })}
+      {!dayOccurrences.length ? (
+        <p className="text-sm text-neutral-500">
+          {t("telegram.posts.schedules.noSlotsForDate")}
+        </p>
+      ) : null}
+    </div>
   );
 }

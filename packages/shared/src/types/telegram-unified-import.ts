@@ -98,3 +98,26 @@ export type TelegramUnifiedImportResult = {
   manifestHash: string;
   sections: TelegramUnifiedImportSectionResult[];
 };
+
+export type TelegramUnifiedImportProgressSection =
+  | "groups"
+  | "hypotheses"
+  | "posts"
+  | "schedule"
+  | "deletions";
+
+export type TelegramUnifiedImportProgressItem = {
+  kind: "phase" | "operation";
+  section: TelegramUnifiedImportProgressSection;
+  status: "started" | "completed" | "success" | "failed" | "skipped";
+  action?:
+    | "CREATE"
+    | "UPDATE"
+    | "ARCHIVE"
+    | "DELETE"
+    | "SCHEDULE"
+    | "UNSCHEDULE";
+  ref?: string;
+  label?: string;
+  message: string;
+};

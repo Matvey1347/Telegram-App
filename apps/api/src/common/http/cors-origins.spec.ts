@@ -1,4 +1,8 @@
-import { corsOrigins, webCorsOrigins } from './cors-origins';
+import {
+  apiCorsAllowedHeaders,
+  corsOrigins,
+  webCorsOrigins,
+} from './cors-origins';
 
 describe('corsOrigins', () => {
   it('allows explicitly configured HTTP(S) origins after normalizing paths', () => {
@@ -30,5 +34,9 @@ describe('corsOrigins', () => {
     expect(webCorsOrigins('http://localhost:3000')).toEqual([
       'http://localhost:3000',
     ]);
+  });
+
+  it('allows the manifest hash required by the unified import stream', () => {
+    expect(apiCorsAllowedHeaders).toContain('X-Manifest-Hash');
   });
 });

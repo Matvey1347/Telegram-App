@@ -19,6 +19,17 @@ import { TelegramManagedPostMoveService } from './telegram-managed-post-move.ser
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
 import { TelegramContentHypothesesService } from './telegram-content-hypotheses.service';
 import { buildUnifiedImportPreviewSections } from './telegram-unified-import-preview';
+import {
+  reportUnifiedImportOperation,
+  TelegramUnifiedImportProgressReporter,
+  type TelegramUnifiedImportProgressCallback,
+} from './telegram-unified-import-progress';
+import {
+  applyUnifiedImportRootDeletes,
+  applyUnifiedImportSchedule,
+} from './telegram-unified-import-finalize';
+import { resolveUnifiedImportHypothesisIconId } from './telegram-unified-import-icon';
+import { normalizeUnifiedImportManifest } from './telegram-unified-import-normalize';
 
 type SectionKey = TelegramUnifiedImportSectionResult['key'];
 
@@ -54,45 +65,13 @@ export class TelegramUnifiedImportService {
     return membership.workspaceId;
   }
 
-  private async resolveHypothesisIconId(
-    workspaceId: string,
-    userId: string,
-    rawIcon: string | null | undefined,
-    fallbackIconId: string | null | undefined,
-    title: string,
-  ) {
-    if (rawIcon === undefined) return fallbackIconId;
-    const icon = rawIcon?.trim();
-    if (!icon) return null;
-    const existingById = await this.prisma.icon.findFirst({
-      where: { id: icon, OR: [{ workspaceId }, { workspaceId: null }] },
-      select: { id: true },
-    });
-    if (existingById) return existingById.id;
-    const existingByEmoji = await this.prisma.icon.findFirst({
-      where: { workspaceId, type: 'emoji', emoji: icon },
-      select: { id: true },
-    });
-    if (existingByEmoji) return existingByEmoji.id;
-    return (
-      await this.prisma.icon.create({
-        data: {
-          workspaceId,
-          type: 'emoji',
-          name: `${title.trim()} · ${icon}`,
-          emoji: icon,
-          createdByUserId: userId,
-        },
-        select: { id: true },
-      })
-    ).id;
-  }
-
   async preview(
     userId: string,
     channelId: string,
     manifest: TelegramUnifiedImportManifest,
   ): Promise<TelegramUnifiedImportPreview> {
+    const sourceManifest = manifest;
+    manifest = normalizeUnifiedImportManifest(manifest);
     const workspaceId = await this.context(userId, channelId);
     if (manifest.version !== 1)
       throw new BadRequestException('Unsupported unified import version');
@@ -193,7 +172,7 @@ export class TelegramUnifiedImportService {
     });
     return {
       version: 1,
-      manifestHash: unifiedImportHash(manifest),
+      manifestHash: unifiedImportHash(sourceManifest),
       valid: sections.every((section) => section.invalidCount === 0),
       sections,
     };
@@ -204,6 +183,8 @@ export class TelegramUnifiedImportService {
     channelId: string,
     manifest: TelegramUnifiedImportManifest,
     expectedHash: string,
+    onProgress?: TelegramUnifiedImportProgressCallback,
+    signal?: AbortSignal,
   ): Promise<TelegramUnifiedImportResult> {
     const preview = await this.preview(userId, channelId, manifest);
     if (!expectedHash || expectedHash !== preview.manifestHash)
@@ -213,6 +194,7 @@ export class TelegramUnifiedImportService {
         message: 'Unified import has validation errors',
         preview,
       });
+    manifest = normalizeUnifiedImportManifest(manifest);
     const workspaceId = await this.workspaces.resolveWorkspaceIdForUser(userId);
     const refs = new Map<string, string>();
     const result = (key: SectionKey): TelegramUnifiedImportSectionResult => ({
@@ -230,7 +212,22 @@ export class TelegramUnifiedImportService {
       posts: result('posts'),
       schedule: result('schedule'),
     };
+    const progress = new TelegramUnifiedImportProgressReporter(
+      manifest,
+      onProgress,
+      signal,
+    );
+    const resolveRef = (ref: string, entity: 'group' | 'hypothesis') => {
+      const id = refs.get(ref);
+      if (!id)
+        throw new Error(
+          `${entity === 'group' ? 'Group' : 'Hypothesis'} dependency ${ref} did not produce an id`,
+        );
+      return id;
+    };
+    progress.phase('groups', 'started');
     for (const row of manifest.groups ?? []) {
+      const label = row.title ?? row.id ?? row.ref;
       try {
         if (row.action === 'CREATE') {
           const value = await this.groups.createPostGroup(userId, {
@@ -251,21 +248,43 @@ export class TelegramUnifiedImportService {
           await this.groups.deletePostGroup(userId, row.id!);
           results.groups.deleted++;
         }
+        reportUnifiedImportOperation(
+          progress,
+          'groups',
+          row.action,
+          row.ref,
+          label,
+          'success',
+        );
       } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Group operation failed';
         results.groups.failed.push({
           ref: row.ref,
-          error:
-            error instanceof Error ? error.message : 'Group operation failed',
+          error: message,
         });
+        reportUnifiedImportOperation(
+          progress,
+          'groups',
+          row.action,
+          row.ref,
+          label,
+          'failed',
+          message,
+        );
       }
     }
+    progress.phase('groups', 'completed');
+    progress.phase('hypotheses', 'started');
     for (const row of manifest.hypotheses ?? []) {
+      const label = row.value?.name ?? row.id ?? row.ref;
       try {
         if (row.action === 'DELETE') {
           await this.hypotheses.remove(userId, channelId, row.id!);
           results.hypotheses.deleted++;
         } else if (row.action === 'CREATE') {
-          const iconId = await this.resolveHypothesisIconId(
+          const iconId = await resolveUnifiedImportHypothesisIconId(
+            this.prisma,
             workspaceId,
             userId,
             row.icon,
@@ -296,7 +315,8 @@ export class TelegramUnifiedImportService {
             ...row.value!,
             name: row.value?.name ?? archived!.name,
           };
-          const iconId = await this.resolveHypothesisIconId(
+          const iconId = await resolveUnifiedImportHypothesisIconId(
+            this.prisma,
             workspaceId,
             userId,
             row.icon,
@@ -316,19 +336,48 @@ export class TelegramUnifiedImportService {
           refs.set(row.ref, String(value.id));
           results.hypotheses.updated++;
         }
+        reportUnifiedImportOperation(
+          progress,
+          'hypotheses',
+          row.action,
+          row.ref,
+          label,
+          'success',
+        );
       } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Hypothesis operation failed';
         results.hypotheses.failed.push({
           ref: row.ref,
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Hypothesis operation failed',
+          error: message,
         });
+        reportUnifiedImportOperation(
+          progress,
+          'hypotheses',
+          row.action,
+          row.ref,
+          label,
+          'failed',
+          message,
+        );
       }
     }
+    progress.phase('hypotheses', 'completed');
+    progress.phase('posts', 'started');
     for (const row of manifest.posts ?? []) {
+      const label = row.title ?? row.id ?? row.ref;
       if (row.imported) {
         if (row.id) refs.set(row.ref, row.id);
+        reportUnifiedImportOperation(
+          progress,
+          'posts',
+          row.action,
+          row.ref,
+          label,
+          'skipped',
+        );
         continue;
       }
       try {
@@ -342,7 +391,9 @@ export class TelegramUnifiedImportService {
               text: row.text ?? undefined,
               imageUrls: row.imageUrls,
             },
-            { groupId: row.groupRef ? refs.get(row.groupRef) : null },
+            {
+              groupId: row.groupRef ? resolveRef(row.groupRef, 'group') : null,
+            },
           );
           refs.set(row.ref, value.id);
           if (row.hypothesisRefs?.length)
@@ -351,7 +402,9 @@ export class TelegramUnifiedImportService {
               channelId,
               value.id,
               {
-                hypothesisIds: row.hypothesisRefs.map((ref) => refs.get(ref)!),
+                hypothesisIds: row.hypothesisRefs.map((ref) =>
+                  resolveRef(ref, 'hypothesis'),
+                ),
               },
             );
           results.posts.created++;
@@ -369,7 +422,9 @@ export class TelegramUnifiedImportService {
               channelId,
               row.id!,
               {
-                hypothesisIds: row.hypothesisRefs.map((ref) => refs.get(ref)!),
+                hypothesisIds: row.hypothesisRefs.map((ref) =>
+                  resolveRef(ref, 'hypothesis'),
+                ),
               },
             );
           results.posts.updated++;
@@ -377,82 +432,52 @@ export class TelegramUnifiedImportService {
           await this.moves.deleteManagedPost(userId, channelId, row.id!);
           results.posts.deleted++;
         }
+        reportUnifiedImportOperation(
+          progress,
+          'posts',
+          row.action,
+          row.ref,
+          label,
+          'success',
+        );
       } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Post operation failed';
         results.posts.failed.push({
           ref: row.ref,
-          error:
-            error instanceof Error ? error.message : 'Post operation failed',
+          error: message,
         });
+        reportUnifiedImportOperation(
+          progress,
+          'posts',
+          row.action,
+          row.ref,
+          label,
+          'failed',
+          message,
+        );
       }
     }
-    const importedPostRefs = new Set(
-      (manifest.posts ?? [])
-        .filter((row) => row.imported)
-        .map((row) => row.ref),
-    );
-    for (const row of manifest.schedule ?? []) {
-      try {
-        if (row.action === 'UNSCHEDULE') {
-          await this.publication.returnManagedPostToDraft(
-            userId,
-            channelId,
-            row.postId!,
-          );
-          results.schedule.unscheduled++;
-          continue;
-        }
-        if (row.postRef && importedPostRefs.has(row.postRef)) continue;
-        const postId = row.postId ?? refs.get(row.postRef!);
-        if (!postId) throw new Error('Post operation did not produce an id');
-        await this.publication.scheduleManagedPost(userId, channelId, postId, {
-          scheduledAt: row.scheduledAt!,
-          publicationSlotId: row.slotId!,
-        });
-        results.schedule.scheduled++;
-      } catch (error) {
-        results.schedule.failed.push({
-          ref: row.postRef ?? row.postId ?? 'schedule',
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Schedule operation failed',
-        });
-      }
-    }
-    for (const row of manifest.delete?.posts ?? []) {
-      try {
-        await this.moves.deleteManagedPost(userId, channelId, row.id);
-        results.posts.deleted++;
-      } catch (error) {
-        results.posts.failed.push({
-          ref: `delete:post:${row.id}`,
-          error: error instanceof Error ? error.message : 'Post delete failed',
-        });
-      }
-    }
-    for (const row of manifest.delete?.hypotheses ?? []) {
-      try {
-        await this.hypotheses.remove(userId, channelId, row.id);
-        results.hypotheses.deleted++;
-      } catch (error) {
-        results.hypotheses.failed.push({
-          ref: `delete:hypothesis:${row.id}`,
-          error:
-            error instanceof Error ? error.message : 'Hypothesis delete failed',
-        });
-      }
-    }
-    for (const row of manifest.delete?.groups ?? []) {
-      try {
-        await this.groups.deletePostGroup(userId, row.id);
-        results.groups.deleted++;
-      } catch (error) {
-        results.groups.failed.push({
-          ref: `delete:group:${row.id}`,
-          error: error instanceof Error ? error.message : 'Group delete failed',
-        });
-      }
-    }
+    progress.phase('posts', 'completed');
+    await applyUnifiedImportSchedule({
+      userId,
+      channelId,
+      manifest,
+      refs,
+      results,
+      progress,
+      publication: this.publication,
+    });
+    await applyUnifiedImportRootDeletes({
+      userId,
+      channelId,
+      manifest,
+      results,
+      progress,
+      moves: this.moves,
+      hypotheses: this.hypotheses,
+      groups: this.groups,
+    });
     return {
       manifestHash: preview.manifestHash,
       sections: [
