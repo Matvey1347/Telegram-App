@@ -1,8 +1,34 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { telegramSystemBotApi } from "@/lib/api";
 import { AdSaleSharedPost } from "./ad-sale-shared-post";
 
+vi.mock("@/lib/api", () => ({
+  telegramSystemBotApi: {
+    startPostImport: vi.fn(),
+    readPostImport: vi.fn(),
+    cancelPostImport: vi.fn(),
+    sendPostPreview: vi.fn(),
+  },
+}));
+
 describe("AdSaleSharedPost", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.localStorage.clear();
+    vi.mocked(telegramSystemBotApi.startPostImport).mockResolvedValue({
+      workflowId: "workflow-1",
+      mode: "single",
+    });
+    vi.mocked(telegramSystemBotApi.readPostImport).mockResolvedValue({
+      ready: false,
+      mode: "single",
+      status: "ACTIVE",
+    });
+    vi.mocked(telegramSystemBotApi.sendPostPreview).mockResolvedValue({
+      status: "SENT",
+    });
+  });
   const placements = [
     {
       key: "one",
@@ -19,7 +45,6 @@ describe("AdSaleSharedPost", () => {
   ] as never;
 
   it("sends the composed post to the bot and briefly shows confirmation", async () => {
-    const onSendSystemBotPost = vi.fn().mockResolvedValue(undefined);
     const draft = {
       title: "Advertising post",
       text: "Please approve this post",
@@ -40,7 +65,7 @@ describe("AdSaleSharedPost", () => {
         mode="shared"
         systemBotConnected
         systemBotUsername="@system_bot"
-        onSendSystemBotPost={onSendSystemBotPost}
+        workspaceId="workspace-1"
         onModeChange={vi.fn()}
         setPlacements={vi.fn()}
       />,
@@ -56,15 +81,18 @@ describe("AdSaleSharedPost", () => {
     expect(
       await screen.findByRole("button", { name: "Current post sent to bot" }),
     ).toHaveTextContent("✅ Sent to bot");
-    expect(onSendSystemBotPost).toHaveBeenCalledWith(draft);
+    expect(telegramSystemBotApi.sendPostPreview).toHaveBeenCalledWith(draft);
   });
 
-  it("asks the connected bot to start import without opening Telegram", async () => {
-    const open = vi.spyOn(window, "open");
-    let resolveWorkflow!: (value: string) => void;
-    const onPrepareSystemBot = vi.fn(
+  it("starts the connected bot import without opening Telegram", async () => {
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    let resolveWorkflow!: (value: {
+      workflowId: string;
+      mode: "single";
+    }) => void;
+    vi.mocked(telegramSystemBotApi.startPostImport).mockImplementation(
       () =>
-        new Promise<string>((resolve) => {
+        new Promise((resolve) => {
           resolveWorkflow = resolve;
         }),
     );
@@ -75,7 +103,7 @@ describe("AdSaleSharedPost", () => {
         mode="shared"
         systemBotConnected
         systemBotUsername="@system_bot"
-        onPrepareSystemBot={onPrepareSystemBot}
+        workspaceId="workspace-1"
         onModeChange={vi.fn()}
         setPlacements={vi.fn()}
       />,
@@ -90,8 +118,10 @@ describe("AdSaleSharedPost", () => {
     expect(
       screen.getByRole("button", { name: "Sending to bot" }),
     ).toBeDisabled();
-    resolveWorkflow("workflow-1");
-    await waitFor(() => expect(onPrepareSystemBot).toHaveBeenCalledTimes(1));
+    resolveWorkflow({ workflowId: "workflow-1", mode: "single" });
+    await waitFor(() =>
+      expect(telegramSystemBotApi.startPostImport).toHaveBeenCalledTimes(1),
+    );
     expect(open).not.toHaveBeenCalled();
     expect(
       await screen.findByRole("button", { name: "Sent to bot" }),
@@ -106,7 +136,7 @@ describe("AdSaleSharedPost", () => {
         mode="shared"
         systemBotConnected
         systemBotUsername="@system_bot"
-        onPrepareSystemBot={vi.fn().mockResolvedValue("workflow-1")}
+        workspaceId="workspace-1"
         onModeChange={vi.fn()}
         setPlacements={vi.fn()}
       />,
@@ -125,6 +155,9 @@ describe("AdSaleSharedPost", () => {
   });
 
   it("keeps the user in the modal when the bot workspace cannot be prepared", async () => {
+    vi.mocked(telegramSystemBotApi.startPostImport).mockRejectedValue(
+      new Error("denied"),
+    );
     render(
       <AdSaleSharedPost
         placements={placements}
@@ -132,7 +165,7 @@ describe("AdSaleSharedPost", () => {
         mode="shared"
         systemBotConnected
         systemBotUsername="@system_bot"
-        onPrepareSystemBot={vi.fn().mockRejectedValue(new Error("denied"))}
+        workspaceId="workspace-1"
         onModeChange={vi.fn()}
         setPlacements={vi.fn()}
       />,
@@ -152,6 +185,19 @@ describe("AdSaleSharedPost", () => {
   });
 
   it("stores the confirmed Telegram draft when it returns", async () => {
+    vi.mocked(telegramSystemBotApi.readPostImport).mockResolvedValue({
+      ready: true,
+      mode: "single",
+      status: "COMPLETED",
+      drafts: [
+        {
+          title: "Imported post",
+          text: "Original text",
+          imageUrls: ["https://cdn.test/post.jpg"],
+          buttonRows: [],
+        },
+      ],
+    });
     const setPlacements = vi.fn();
     render(
       <AdSaleSharedPost
@@ -160,13 +206,7 @@ describe("AdSaleSharedPost", () => {
         mode="shared"
         systemBotConnected
         systemBotUsername="@system_bot"
-        onPrepareSystemBot={vi.fn().mockResolvedValue("workflow-1")}
-        onSystemBotReturn={vi.fn().mockResolvedValue({
-          title: "Imported post",
-          text: "Original text",
-          imageUrls: ["https://cdn.test/post.jpg"],
-          buttonRows: [],
-        })}
+        workspaceId="workspace-1"
         onModeChange={vi.fn()}
         setPlacements={setPlacements}
       />,
@@ -212,7 +252,6 @@ describe("AdSaleSharedPost", () => {
   });
 
   it("offers bot connection without preparing an import when disconnected", () => {
-    const onPrepareSystemBot = vi.fn().mockResolvedValue("workflow-1");
     render(
       <AdSaleSharedPost
         placements={placements}
@@ -220,7 +259,7 @@ describe("AdSaleSharedPost", () => {
         mode="shared"
         systemBotConnected={false}
         systemBotUsername="@system_bot"
-        onPrepareSystemBot={onPrepareSystemBot}
+        workspaceId="workspace-1"
         onModeChange={vi.fn()}
         setPlacements={vi.fn()}
       />,
@@ -233,7 +272,7 @@ describe("AdSaleSharedPost", () => {
       "href",
       "https://t.me/system_bot?start=connect",
     );
-    expect(onPrepareSystemBot).not.toHaveBeenCalled();
+    expect(telegramSystemBotApi.startPostImport).not.toHaveBeenCalled();
   });
 
   it("does not mark an empty draft as a completed shared post", () => {

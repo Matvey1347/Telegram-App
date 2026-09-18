@@ -11,14 +11,6 @@ vi.mock("./post-from-bot/post-from-bot-modal", () => ({
 vi.mock("./telegram-time-posts-control", () => ({
   TimePostsControl: () => null,
 }));
-vi.mock("./gpt-context-download-button", () => ({
-  GptContextDownloadButton: () => <button type="button">Context</button>,
-}));
-vi.mock("./reset-channel-scheduled-posts-button", () => ({
-  ResetChannelScheduledPostsButton: () => (
-    <button type="button">Return all scheduled posts to drafts</button>
-  ),
-}));
 
 const channel = {
   id: "channel-1",
@@ -49,19 +41,20 @@ describe("TelegramPostsHeaderWorkflows", () => {
             importTranslationsReady={false}
             onChannelChange={vi.fn()}
             onImportModeChange={vi.fn()}
-            onResetCompleted={vi.fn()}
           />
         </TestI18nProvider>
       </QueryClientProvider>,
     );
 
     expect(screen.getByRole("button", { name: "Import" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Context" })).toBeVisible();
     expect(
-      screen.getByRole("button", {
+      screen.queryByRole("button", { name: "Context" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
         name: "Return all scheduled posts to drafts",
       }),
-    ).toBeVisible();
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Mass Publications" }));
     expect(screen.getByText("Post batch modal open")).toBeVisible();
   });

@@ -10,10 +10,10 @@ import type { WorkspaceFormDraft } from "@/hooks/use-workspace-modal-drafts";
 import {
   Button,
   EmptyState,
-  IconButton,
   LoadingState,
 } from "@/components/ui/primitives";
 import { Pagination } from "@/components/ui/pagination";
+import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
 import { useI18n } from "@/providers/i18n-provider";
 
 function batchTimestamp(value: string, locale: "en" | "ru") {
@@ -56,78 +56,34 @@ export function PostBatchBrowser({
 
   return (
     <div className="space-y-4">
-      <section
-        aria-label={t("telegram.posts.batch.savedDrafts")}
-        className="min-w-0 rounded-xl border border-neutral-800 bg-neutral-950/40 p-3"
-      >
-        <div className="mb-3">
-          <div>
-            <h4 className="font-medium text-white">
-              {t("telegram.posts.batch.savedDrafts")}
-            </h4>
-            <p className="mt-1 text-xs text-neutral-400">
-              {t("telegram.posts.batch.savedDraftsHint")}
-            </p>
-          </div>
-        </div>
-        {!drafts.length ? (
-          <EmptyState text={t("telegram.posts.batch.noSavedDrafts")} />
-        ) : null}
-        <div className="space-y-2">
-          {drafts.map((draft) => {
-            const batch = draft.form;
-            return (
-              <div
-                key={draft.id}
-                className="flex items-center justify-between gap-3 rounded-lg border border-neutral-800 bg-neutral-900/60 p-3"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-white">
-                    {batch.title}
-                  </p>
-                  <p className="mt-1 text-xs text-neutral-400">
-                    {t("telegram.posts.batch.listMeta", {
-                      posts: batch.postCount,
-                      channels: batch.channelCount,
-                    })}
-                  </p>
-                  <p className="mt-1 text-xs text-neutral-500">
-                    {batchTimestamp(draft.createdAt ?? batch.updatedAt, locale)}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <IconButton
-                    type="button"
-                    kind="delete"
-                    aria-label={t("telegram.posts.batch.deleteDraftNamed", {
-                      title: batch.title,
-                    })}
-                    title={t("telegram.posts.batch.deleteDraft")}
-                    onClick={() => onDeleteDraft(draft)}
-                  />
-                  <IconButton
-                    type="button"
-                    aria-label={t("telegram.posts.batch.editDraftNamed", {
-                      title: batch.title,
-                    })}
-                    title={t("telegram.posts.batch.editDraft")}
-                    onClick={() => onContinueDraft(draft)}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <Button
-          type="button"
-          className="mt-3"
-          disabled={!canCreate}
-          onClick={onCreate}
+      {drafts.length ? (
+        <section aria-label={t("telegram.posts.batch.savedDrafts")}>
+          <ModalDraftPicker
+            drafts={drafts}
+            titleFor={(batch) => batch.title || "Untitled post batch"}
+            onContinue={onContinueDraft}
+            onDelete={onDeleteDraft}
+            onCreateNew={onCreate}
+            createDisabled={!canCreate}
+          />
+        </section>
+      ) : (
+        <section
+          aria-label={t("telegram.posts.batch.savedDrafts")}
+          className="min-w-0 rounded-xl border border-neutral-800 bg-neutral-950/40 p-3"
         >
-          <Plus size={16} />
-          {t("telegram.posts.batch.createNew")}
-        </Button>
-      </section>
+          <h4 className="font-medium text-white">
+            {t("telegram.posts.batch.savedDrafts")}
+          </h4>
+          <p className="mb-3 mt-1 text-xs text-neutral-400">
+            {t("telegram.posts.batch.savedDraftsHint")}
+          </p>
+          <EmptyState text={t("telegram.posts.batch.noSavedDrafts")} />
+          <Button type="button" className="mt-3" disabled={!canCreate} onClick={onCreate}>
+            <Plus size={16} /> {t("telegram.posts.batch.createNew")}
+          </Button>
+        </section>
+      )}
 
       <section
         aria-label={t("telegram.posts.batch.createdBatches")}

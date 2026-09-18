@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import type { CrossPromotionTargetInput } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
+import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import {
   CreateCrossPromotionPlanDto,
   SaveCrossPromotionPlacementsDto,
@@ -29,6 +30,22 @@ type ScheduledPlacement = {
 };
 const json = <T>(value: unknown, fallback: T): T =>
   value && typeof value === 'object' ? (value as T) : fallback;
+
+function firstDeletionAt(dto: CreateCrossPromotionPlanDto) {
+  const timestamps = (dto.publicationPost.publisherPlacements ?? [])
+    .flatMap((placement) =>
+      placement.deleteAt ? [Date.parse(placement.deleteAt)] : [],
+    )
+    .filter(Number.isFinite);
+  return timestamps.length ? new Date(Math.min(...timestamps)) : null;
+}
+
+function firstPartnerPublicationAt(dto: CreateCrossPromotionPlanDto) {
+  const timestamps = (dto.publicationPost.partnerPlacements ?? [])
+    .map((placement) => Date.parse(placement.scheduledAt))
+    .filter(Number.isFinite);
+  return timestamps.length ? new Date(Math.min(...timestamps)) : null;
+}
 
 @Injectable()
 export class CrossPromotionPlansService {
@@ -118,6 +135,7 @@ export class CrossPromotionPlansService {
           telegramChannelId: true,
           joinedCount: true,
           requestedCount: true,
+          createdAt: true,
         },
       }),
     ]);
@@ -232,6 +250,7 @@ export class CrossPromotionPlansService {
         trackingEndsAt: dto.trackingEndsAt
           ? new Date(dto.trackingEndsAt)
           : null,
+        nextDueAt: firstDeletionAt(dto),
         baselineTargetCounters,
         baselinePublisherSubscribers,
       },
@@ -300,6 +319,7 @@ export class CrossPromotionPlansService {
         lastError: dto.lastError ?? null,
       },
     });
+    notifyScheduledTaskDueWorkChanged('mutual_promotion.lifecycle');
     return this.readService.shape(workspaceId, updated);
   }
 
@@ -315,15 +335,110 @@ export class CrossPromotionPlansService {
       },
     });
     if (!row) throw new NotFoundException('Cross-promotion plan not found');
-    if (
-      row.status !== 'DRAFT' &&
-      (row.status !== 'SCHEDULED' || row.scheduledAt.getTime() <= Date.now())
-    ) {
-      throw new BadRequestException(
-        'Only drafts and future scheduled promotions can be edited',
-      );
+    if (row.status === 'CANCELLED') {
+      throw new BadRequestException('Cancelled promotions cannot be edited');
     }
     return json<ScheduledPlacement[]>(row.placementPostIds, []);
+  }
+
+  /**
+   * Historical placements are attribution records, not scheduling jobs. Their
+   * format can be corrected after the fact without recreating Telegram posts.
+   */
+  async updateCompleted(
+    userId: string,
+    id: string,
+    dto: CreateCrossPromotionPlanDto,
+  ) {
+    const workspaceId = await this.workspace(userId);
+    const existing = await this.prisma.crossPromotionPlan.findFirst({
+      where: { id, workspaceId },
+      select: {
+        id: true,
+        status: true,
+        scheduledAt: true,
+        baselineTargetCounters: true,
+      },
+    });
+    if (!existing)
+      throw new NotFoundException('Cross-promotion plan not found');
+    if (
+      existing.status === 'CANCELLED' ||
+      existing.scheduledAt.getTime() > Date.now()
+    ) {
+      throw new BadRequestException(
+        'Only historical promotions can be updated without rescheduling',
+      );
+    }
+    const normalized = await this.validateInput(workspaceId, dto);
+    const previousBaselines = new Map(
+      json<CounterBaseline[]>(existing.baselineTargetCounters, []).map(
+        (baseline) => [baseline.inviteLinkId, baseline],
+      ),
+    );
+    const partnerPublicationAt = firstPartnerPublicationAt(dto);
+    const baselineTargetCounters: CounterBaseline[] = normalized.links.map(
+      (link) => {
+        // If a dedicated link did not exist before the corrected partner
+        // placement began, none of its counters can predate that placement.
+        // The original baseline may have been captured later during a failed
+        // historical re-schedule and must not erase genuine arrivals.
+        if (
+          partnerPublicationAt &&
+          link.createdAt.getTime() >= partnerPublicationAt.getTime()
+        ) {
+          return { inviteLinkId: link.id, joinedCount: 0, requestedCount: 0 };
+        }
+        const previous = previousBaselines.get(link.id);
+        return (
+          previous ?? {
+            inviteLinkId: link.id,
+            joinedCount: link.joinedCount,
+            requestedCount: link.requestedCount,
+          }
+        );
+      },
+    );
+    const updated = await this.prisma.crossPromotionPlan.update({
+      where: { id },
+      data: {
+        advertiserId: dto.advertiserId || null,
+        kind: dto.kind,
+        title: dto.title.trim(),
+        publisherChannelIds: normalized.publisherChannelIds,
+        partnerChannelIds: normalized.partnerChannelIds,
+        targets: dto.targets as unknown as Prisma.InputJsonValue,
+        publicationPost: dto.publicationPost,
+        baselineTargetCounters,
+        trackingEndsAt: dto.trackingEndsAt
+          ? new Date(dto.trackingEndsAt)
+          : null,
+        status: 'COMPLETED',
+        nextDueAt: null,
+        lastError: null,
+      },
+    });
+    return this.readService.shape(workspaceId, updated);
+  }
+
+  async rename(userId: string, id: string, title: string) {
+    const workspaceId = await this.workspace(userId);
+    const normalizedTitle = title.trim();
+    if (!normalizedTitle) {
+      throw new BadRequestException('Promotion title is required');
+    }
+    const updated = await this.prisma.crossPromotionPlan.updateMany({
+      where: { id, workspaceId, status: { not: 'CANCELLED' } },
+      data: { title: normalizedTitle },
+    });
+    if (!updated.count) {
+      throw new NotFoundException('Cross-promotion plan not found');
+    }
+    const row = await this.prisma.crossPromotionPlan.findFirst({
+      where: { id, workspaceId },
+    });
+    if (!row) throw new NotFoundException('Cross-promotion plan not found');
+    return this.readService.shape(workspaceId, row);
   }
 
   async markRescheduling(userId: string, id: string, lastError: string | null) {
@@ -366,6 +481,7 @@ export class CrossPromotionPlansService {
         trackingEndsAt: dto.trackingEndsAt
           ? new Date(dto.trackingEndsAt)
           : null,
+        nextDueAt: firstDeletionAt(dto),
         baselineTargetCounters: normalized.links.map((link) => ({
           inviteLinkId: link.id,
           joinedCount: link.joinedCount,
@@ -380,6 +496,7 @@ export class CrossPromotionPlansService {
         lastError: null,
       },
     });
+    notifyScheduledTaskDueWorkChanged('mutual_promotion.lifecycle');
     return this.readService.shape(workspaceId, row);
   }
 
@@ -387,18 +504,45 @@ export class CrossPromotionPlansService {
     const workspaceId = await this.workspace(userId);
     const row = await this.prisma.crossPromotionPlan.findFirst({
       where: { id, workspaceId },
-      select: { id: true, placementPostIds: true },
+      select: { id: true, workspaceId: true, placementPostIds: true },
     });
     if (!row) throw new NotFoundException('Cross-promotion plan not found');
     const placements = json<
       Array<{ telegramChannelId: string; managedPostId: string }>
     >(row.placementPostIds, []);
-    if (placements.length) {
-      throw new BadRequestException(
-        'Cancel scheduled Telegram posts before deleting this placement',
-      );
-    }
-    await this.prisma.crossPromotionPlan.delete({ where: { id: row.id } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.telegramManagedPost.deleteMany({
+        where: {
+          workspaceId,
+          id: { in: placements.map((placement) => placement.managedPostId) },
+        },
+      });
+      await tx.crossPromotionPlan.delete({ where: { id: row.id } });
+    });
     return { id: row.id };
+  }
+
+  async removalContext(userId: string, id: string) {
+    const workspaceId = await this.workspace(userId);
+    const row = await this.prisma.crossPromotionPlan.findFirst({
+      where: { id, workspaceId },
+      select: { id: true, placementPostIds: true },
+    });
+    if (!row) throw new NotFoundException('Cross-promotion plan not found');
+    const placements = json<ScheduledPlacement[]>(row.placementPostIds, []);
+    const remotePosts = await this.prisma.telegramManagedPost.findMany({
+      where: {
+        workspaceId,
+        id: { in: placements.map((placement) => placement.managedPostId) },
+        OR: [
+          { status: 'PUBLISHED' },
+          { telegramMessageIds: { isEmpty: false } },
+          { telegramScheduledMessageIds: { isEmpty: false } },
+          { telegramRemoteStatus: 'AUTO_DELETED' },
+        ],
+      },
+      select: { id: true },
+    });
+    return { workspaceId, remotePostIds: remotePosts.map((post) => post.id) };
   }
 }

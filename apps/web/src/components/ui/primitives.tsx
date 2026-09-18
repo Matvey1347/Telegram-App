@@ -34,6 +34,7 @@ import { currencyPresentation } from "@telegram-system/shared";
 import type { ResolvedEmoji } from "@telegram-system/shared";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { useOptionalI18n } from "@/providers/i18n-provider";
+import { CreateActionIcon } from "./create-action-icon";
 export { Modal } from "./modal";
 export { MasonryGrid } from "./masonry-grid";
 export {
@@ -56,8 +57,10 @@ export type ToastItem = {
   cancelable?: boolean;
   details?: string;
 };
+
 export function Button({
   variant = "primary",
+  children,
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "danger";
@@ -71,7 +74,10 @@ export function Button({
     <button
       {...props}
       className={`inline-flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50 ${styles} ${props.className ?? ""}`}
-    />
+    >
+      <CreateActionIcon>{children}</CreateActionIcon>
+      {children}
+    </button>
   );
 }
 export function ToggleRow({
@@ -891,6 +897,7 @@ export function CustomSelect({
   value,
   onChange,
   options,
+  ariaLabel,
   placeholder = "Select",
   disabled = false,
   dropdownDirection = "down",
@@ -898,6 +905,7 @@ export function CustomSelect({
   dropdownClassName = "",
   uiLocale,
   onSearchChange,
+  searchPlaceholder,
   onOpen,
   loading = false,
   loadingLabel = "Loading options…",
@@ -908,6 +916,7 @@ export function CustomSelect({
   value?: string;
   onChange: (value: string) => void;
   options: SelectOption[];
+  ariaLabel?: string;
   placeholder?: string;
   disabled?: boolean;
   dropdownDirection?: "up" | "down";
@@ -915,6 +924,7 @@ export function CustomSelect({
   dropdownClassName?: string;
   uiLocale?: UiLocale;
   onSearchChange?: (search: string) => void;
+  searchPlaceholder?: string;
   onOpen?: () => void;
   loading?: boolean;
   loadingLabel?: string;
@@ -934,7 +944,10 @@ export function CustomSelect({
   const selected = options.find((o) => o.value === value);
   const showSearch =
     searchable &&
-    (options.length > 5 || Boolean(onSearchChange) || Boolean(onCreateOption));
+    (options.length > 5 ||
+      Boolean(onSearchChange) ||
+      Boolean(searchPlaceholder) ||
+      Boolean(onCreateOption));
   const filteredOptions = showSearch
     ? options.filter((option) =>
         `${option.label} ${option.meta ?? ""} ${option.value}`
@@ -1057,6 +1070,7 @@ export function CustomSelect({
       <button
         ref={triggerRef}
         type="button"
+        aria-label={ariaLabel}
         disabled={disabled}
         onClick={() => {
           if (open) resetSearch();
@@ -1124,7 +1138,7 @@ export function CustomSelect({
                         pickFirstFilteredOption();
                       }
                     }}
-                    placeholder={ui.search}
+                    placeholder={searchPlaceholder ?? ui.search}
                     className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-2 text-sm text-white outline-none placeholder:text-neutral-500 focus:border-blue-600"
                   />
                 </div>

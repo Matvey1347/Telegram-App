@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PromoFormModal } from "./promo-form-modal";
@@ -8,8 +8,10 @@ const mocks = vi.hoisted(() => ({
   getInitialInviteLink: vi.fn(),
   getAllInviteLinks: vi.fn(),
   createEmoji: vi.fn(),
-  preparePromoPostImport: vi.fn(),
-  promoPostImportResult: vi.fn(),
+  startPostImport: vi.fn(),
+  readPostImport: vi.fn(),
+  cancelPostImport: vi.fn(),
+  sendPostPreview: vi.fn(),
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -20,11 +22,15 @@ vi.mock("@/lib/api", async (importOriginal) => {
     getAllTelegramChannelInviteLinks: mocks.getAllInviteLinks,
     iconsApi: { ...actual.iconsApi, createEmoji: mocks.createEmoji },
     telegramSystemBotApi: {
-      connection: vi
-        .fn()
-        .mockResolvedValue({ connected: true, botUsername: null }),
-      preparePromoPostImport: mocks.preparePromoPostImport,
-      promoPostImportResult: mocks.promoPostImportResult,
+      connection: vi.fn().mockResolvedValue({
+        connected: true,
+        botUsername: null,
+        currentWorkspaceId: "workspace-1",
+      }),
+      startPostImport: mocks.startPostImport,
+      readPostImport: mocks.readPostImport,
+      cancelPostImport: mocks.cancelPostImport,
+      sendPostPreview: mocks.sendPostPreview,
     },
   };
 });
@@ -58,23 +64,88 @@ vi.mock("@/components/features/telegram/telegram/telegram-text-editor", () => ({
 
 describe("PromoFormModal", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     mocks.getInitialInviteLink.mockReset().mockResolvedValue([]);
     mocks.getAllInviteLinks.mockReset().mockResolvedValue([]);
     mocks.createEmoji
       .mockReset()
       .mockResolvedValue({ id: "emoji-icon", type: "emoji", emoji: "🧠" });
-    mocks.preparePromoPostImport.mockReset().mockResolvedValue({
+    mocks.startPostImport.mockReset().mockResolvedValue({
       workflowId: "workflow-1",
+      mode: "single",
     });
-    mocks.promoPostImportResult.mockReset().mockResolvedValue({
+    mocks.readPostImport.mockReset().mockResolvedValue({
       ready: true,
-      draft: {
-        title: "🔷 Imported promo",
-        text: "Headline 🔷 then body",
-        imageUrls: [],
-        buttonRows: [],
-      },
+      mode: "single",
+      status: "COMPLETED",
+      drafts: [
+        {
+          title: "🔷 Imported promo",
+          text: "Headline 🔷 then body",
+          imageUrls: [],
+          buttonRows: [],
+        },
+      ],
     });
+    mocks.cancelPostImport.mockReset().mockResolvedValue({
+      workflowId: "workflow-1",
+      mode: "single",
+      status: "CANCELLED",
+    });
+    mocks.sendPostPreview.mockReset().mockResolvedValue({ status: "SENT" });
+  });
+
+  it("restores an unfinished promo from the canonical draft picker", async () => {
+    window.localStorage.setItem(
+      "ads:promo:draft:default",
+      JSON.stringify({
+        version: 3,
+        drafts: [
+          {
+            id: "promo-draft",
+            createdAt: "2026-09-15T10:00:00.000Z",
+            updatedAt: "2026-09-15T11:00:00.000Z",
+            schemaVersion: 1,
+            form: {
+              iconId: null,
+              assignedMemberId: null,
+              channelId: "",
+              inviteLinkId: "",
+              title: "Restored promo",
+              post: {
+                text: "Saved promo body",
+                imageUrls: [],
+                mediaItems: [],
+                buttonRows: [],
+              },
+            },
+          },
+        ],
+      }),
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <PromoFormModal
+          open
+          title="Create Promo"
+          channels={[]}
+          onClose={vi.fn()}
+          onSubmit={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Continue draft Restored promo",
+      }),
+    );
+    expect(screen.getByPlaceholderText("Promo title")).toHaveValue(
+      "Restored promo",
+    );
   });
 
   it("shows every promo field immediately while keeping the post editor collapsed", async () => {
@@ -97,6 +168,13 @@ describe("PromoFormModal", () => {
     expect(screen.getByText("Channel")).toBeVisible();
     expect(screen.getByText("Member")).toBeVisible();
     expect(screen.getByText("Invite link")).toBeVisible();
+    const emojiRow = screen.getByText("Emoji").parentElement?.parentElement;
+    const titleRow =
+      screen.getByText("Internal title").parentElement?.parentElement;
+    const channelRow = screen.getByText("Channel").parentElement?.parentElement;
+    expect(titleRow).toBe(channelRow);
+    expect(titleRow).not.toBe(emojiRow);
+    expect(titleRow).toHaveClass("md:grid-cols-2");
     expect(
       screen.queryByTestId("telegram-text-editor"),
     ).not.toBeInTheDocument();
@@ -106,6 +184,11 @@ describe("PromoFormModal", () => {
     );
 
     expect(screen.getByTestId("telegram-text-editor")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Replace links with {{invite_link}}",
+      }),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Add Telegram buttons")).not.toBeInTheDocument();
   });
 
@@ -157,6 +240,7 @@ describe("PromoFormModal", () => {
     expect(mocks.getInitialInviteLink).toHaveBeenCalledWith(
       "channel-1",
       undefined,
+      [],
     );
     expect(mocks.getAllInviteLinks).not.toHaveBeenCalled();
 
@@ -210,6 +294,40 @@ describe("PromoFormModal", () => {
     );
   });
 
+  it("does not submit an outdated stored invite-link ID", async () => {
+    const onSubmit = vi.fn();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <PromoFormModal
+          open
+          title="Edit Promo"
+          initial={
+            {
+              id: "promo-1",
+              title: "Promo",
+              telegramChannelId: "channel-1",
+              defaultInviteLinkId: "stale-link",
+              text: "Promo text",
+            } as never
+          }
+          channels={[{ id: "channel-1", title: "Channel" } as never]}
+          onClose={vi.fn()}
+          onSubmit={onSubmit}
+        />
+      </QueryClientProvider>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Save promo" }));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(/selected invite link is no longer available/i),
+    ).toBeVisible();
+  });
+
   it("puts the first emoji into the picker when a post is imported from the bot", async () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -234,6 +352,7 @@ describe("PromoFormModal", () => {
     expect(
       screen.getByText(/Waiting for your forwarded post/),
     ).toBeInTheDocument();
+    window.dispatchEvent(new Event("focus"));
     await waitFor(() =>
       expect(mocks.createEmoji).toHaveBeenCalledWith({
         emoji: "🔷",

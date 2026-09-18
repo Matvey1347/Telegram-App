@@ -53,7 +53,7 @@ export class TelegramSystemBotAdSaleFlowService {
   }
 
   async begin(scope: TelegramSystemBotAdSaleScope) {
-    const existing = await this.workflows.activeWithoutBatchImport(
+    const existing = await this.workflows.activeWithoutPostImport(
       scope,
       TelegramSystemBotWorkflowKind.AD_SALE,
     );

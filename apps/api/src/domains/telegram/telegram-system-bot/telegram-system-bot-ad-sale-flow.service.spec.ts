@@ -36,8 +36,8 @@ function setup(input?: { step?: string; payload?: Record<string, unknown> }) {
     return workflow;
   };
   const workflows = {
-    requireNoActiveBatchImport: jest.fn(),
-    activeWithoutBatchImport: jest.fn(async () => workflow),
+    requireNoActivePostImport: jest.fn(),
+    activeWithoutPostImport: jest.fn(async () => workflow),
     active: jest.fn(async () => workflow),
     get: jest.fn(async () => workflow),
     create: jest.fn(async (value) => update(value)),
@@ -184,7 +184,7 @@ function callback(current: { id: string; version: number }, action: string) {
 describe('TelegramSystemBotAdSaleFlowService', () => {
   it('does not start Ad Sale while a post batch capture is active', async () => {
     const state = setup();
-    state.workflows.activeWithoutBatchImport.mockRejectedValue(
+    state.workflows.activeWithoutPostImport.mockRejectedValue(
       new Error('active batch'),
     );
 

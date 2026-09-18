@@ -20,6 +20,7 @@ class GroupRowDto {
   @IsOptional() @IsString() id?: string;
   @IsOptional() @IsString() @MaxLength(200) title?: string;
   @IsOptional() @IsString() @MaxLength(200) icon?: string | null;
+  @IsOptional() @IsBoolean() imported?: boolean;
 }
 class HypothesisValueDto {
   @IsString() @MaxLength(200) name!: string;
@@ -38,6 +39,7 @@ class HypothesisRowDto {
     | 'DELETE';
   @IsOptional() @IsString() id?: string;
   @IsOptional() @IsString() @MaxLength(200) icon?: string | null;
+  @IsOptional() @IsBoolean() imported?: boolean;
   @IsOptional()
   @ValidateNested()
   @Type(() => HypothesisValueDto)
@@ -91,9 +93,11 @@ class ScheduleRowDto {
   @IsString()
   scheduledAt?: string;
   @IsOptional() @IsIn(['CONTENT', 'AD']) slotKind?: 'CONTENT' | 'AD';
+  @IsOptional() @IsBoolean() imported?: boolean;
 }
 class DeleteTargetDto {
   @IsString() id!: string;
+  @IsOptional() @IsBoolean() imported?: boolean;
 }
 class DeleteSectionDto {
   @IsOptional()

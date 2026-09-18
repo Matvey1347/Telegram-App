@@ -16,6 +16,7 @@ export type CreateTelegramSystemBotWorkflowInput =
     payload: Prisma.InputJsonValue;
     controlMessageId?: number | null;
     mutualPromotionFolderId?: string | null;
+    postImportMode?: 'SINGLE' | 'MULTIPLE' | null;
     expiresAt: Date;
   };
 

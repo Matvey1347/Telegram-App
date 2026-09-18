@@ -32,6 +32,8 @@ export const mutualPromotionFoldersApi = {
   update: async (id: string, payload: UpdateMutualPromotionFolderPayload) =>
     (await api.patch<MutualPromotionFolderDetail>(`${basePath}/${id}`, payload))
       .data,
+  remove: async (id: string) =>
+    (await api.delete<{ id: string }>(`${basePath}/${id}`)).data,
   updateInviteLinks: async (
     id: string,
     payload: UpdateMutualPromotionInviteLinksPayload,

@@ -12,9 +12,10 @@ import { MutualPromotionPostImport } from "./mutual-promotion-post-import";
 
 vi.mock("@/lib/api", () => ({
   telegramSystemBotApi: {
-    prepareMutualPromotionPostImport: vi.fn(),
-    mutualPromotionPostImportResult: vi.fn(),
-    sendMutualPromotionPostPreview: vi.fn(),
+    startPostImport: vi.fn(),
+    readPostImport: vi.fn(),
+    cancelPostImport: vi.fn(),
+    sendPostPreview: vi.fn(),
   },
 }));
 
@@ -48,7 +49,10 @@ vi.mock("./mutual-promotion-post-composer", () => ({
 }));
 
 describe("MutualPromotionPostImport", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.localStorage.clear();
+  });
   afterEach(() => vi.useRealTimers());
 
   it("explains the multi-post forwarding flow", () => {
@@ -60,6 +64,7 @@ describe("MutualPromotionPostImport", () => {
         endsAt="2026-09-10T20:00:00.000Z"
         botConnected
         botUsername="system_bot"
+        workspaceId="workspace-1"
         previewChannelTitle="Publisher"
         previewChannelPhotoUrl="https://cdn.test/publisher.jpg"
         saving={false}
@@ -77,11 +82,11 @@ describe("MutualPromotionPostImport", () => {
   it("shows animated sending and transient sent states before restoring the action", async () => {
     vi.useFakeTimers();
     vi.mocked(
-      telegramSystemBotApi.prepareMutualPromotionPostImport,
-    ).mockResolvedValue({ workflowId: "workflow-1" });
+      telegramSystemBotApi.startPostImport,
+    ).mockResolvedValue({ workflowId: "workflow-1", mode: "multiple" });
     vi.mocked(
-      telegramSystemBotApi.mutualPromotionPostImportResult,
-    ).mockResolvedValue({ ready: false });
+      telegramSystemBotApi.readPostImport,
+    ).mockResolvedValue({ ready: false, mode: "multiple", status: "ACTIVE" });
     vi.spyOn(window, "open").mockImplementation(() => null);
     render(
       <MutualPromotionPostImport
@@ -91,6 +96,7 @@ describe("MutualPromotionPostImport", () => {
         endsAt="2026-09-10T20:00:00.000Z"
         botConnected
         botUsername="system_bot"
+        workspaceId="workspace-1"
         previewChannelTitle="Publisher"
         previewChannelPhotoUrl="https://cdn.test/publisher.jpg"
         saving={false}
@@ -115,10 +121,10 @@ describe("MutualPromotionPostImport", () => {
     expect(screen.getByText(/Forward several posts in Telegram/)).toBeVisible();
 
     vi.mocked(
-      telegramSystemBotApi.mutualPromotionPostImportResult,
-    ).mockResolvedValue({ ready: true, drafts: [] });
+      telegramSystemBotApi.readPostImport,
+    ).mockResolvedValue({ ready: true, mode: "multiple", status: "COMPLETED", drafts: [] });
     fireEvent.focus(window);
-    await act(async () => Promise.resolve());
+    await act(async () => vi.advanceTimersByTimeAsync(0));
     expect(
       screen.getByRole("button", { name: "Sent to bot" }),
     ).toHaveTextContent("✅ Sent to bot");
@@ -126,7 +132,7 @@ describe("MutualPromotionPostImport", () => {
 
   it("asks the user to finish an active bot import instead of showing a generic server error", async () => {
     vi.mocked(
-      telegramSystemBotApi.prepareMutualPromotionPostImport,
+      telegramSystemBotApi.startPostImport,
     ).mockRejectedValue({
       isAxiosError: true,
       response: {
@@ -147,6 +153,7 @@ describe("MutualPromotionPostImport", () => {
         endsAt="2026-09-10T20:00:00.000Z"
         botConnected
         botUsername="system_bot"
+        workspaceId="workspace-1"
         previewChannelTitle="Publisher"
         saving={false}
         onAddPost={vi.fn().mockResolvedValue(undefined)}
@@ -170,12 +177,14 @@ describe("MutualPromotionPostImport", () => {
 
   it("edits and previews imported markup, saves the edited draft, and offers another post", async () => {
     vi.mocked(
-      telegramSystemBotApi.prepareMutualPromotionPostImport,
-    ).mockResolvedValue({ workflowId: "workflow-1" });
+      telegramSystemBotApi.startPostImport,
+    ).mockResolvedValue({ workflowId: "workflow-1", mode: "multiple" });
     vi.mocked(
-      telegramSystemBotApi.mutualPromotionPostImportResult,
+      telegramSystemBotApi.readPostImport,
     ).mockResolvedValue({
       ready: true,
+      mode: "multiple",
+      status: "COMPLETED",
       drafts: [
         {
           title: "Imported title",
@@ -192,7 +201,7 @@ describe("MutualPromotionPostImport", () => {
       ],
     });
     vi.mocked(
-      telegramSystemBotApi.sendMutualPromotionPostPreview,
+      telegramSystemBotApi.sendPostPreview,
     ).mockResolvedValue({ status: "SENT" });
     const onAddPost = vi.fn().mockResolvedValue(undefined);
     vi.spyOn(window, "open").mockImplementation(() => null);
@@ -204,6 +213,7 @@ describe("MutualPromotionPostImport", () => {
         endsAt="2026-09-10T20:00:00.000Z"
         botConnected
         botUsername="system_bot"
+        workspaceId="workspace-1"
         previewChannelTitle="Publisher"
         saving={false}
         onAddPost={onAddPost}
@@ -236,7 +246,7 @@ describe("MutualPromotionPostImport", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send post 1 to bot" }));
     await waitFor(() =>
       expect(
-        telegramSystemBotApi.sendMutualPromotionPostPreview,
+        telegramSystemBotApi.sendPostPreview,
       ).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "Edited title",
@@ -269,25 +279,27 @@ describe("MutualPromotionPostImport", () => {
       screen.getByRole("button", { name: "Add another post" }),
     ).toBeVisible();
     expect(
-      telegramSystemBotApi.prepareMutualPromotionPostImport,
+      telegramSystemBotApi.startPostImport,
     ).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Add another post" }));
     await waitFor(() =>
       expect(
-        telegramSystemBotApi.prepareMutualPromotionPostImport,
+        telegramSystemBotApi.startPostImport,
       ).toHaveBeenCalledTimes(2),
     );
   });
 
   it("keeps a deliberately cleared imported batch empty", async () => {
     vi.mocked(
-      telegramSystemBotApi.prepareMutualPromotionPostImport,
-    ).mockResolvedValue({ workflowId: "workflow-1" });
+      telegramSystemBotApi.startPostImport,
+    ).mockResolvedValue({ workflowId: "workflow-1", mode: "multiple" });
     vi.mocked(
-      telegramSystemBotApi.mutualPromotionPostImportResult,
+      telegramSystemBotApi.readPostImport,
     ).mockResolvedValue({
       ready: true,
+      mode: "multiple",
+      status: "COMPLETED",
       drafts: [
         {
           title: "First",
@@ -312,6 +324,7 @@ describe("MutualPromotionPostImport", () => {
         endsAt="2026-09-10T20:00:00.000Z"
         botConnected
         botUsername="system_bot"
+        workspaceId="workspace-1"
         previewChannelTitle="Publisher"
         saving={false}
         onAddPost={vi.fn().mockResolvedValue(undefined)}
@@ -330,7 +343,7 @@ describe("MutualPromotionPostImport", () => {
     expect(screen.getByText(/No imported posts are selected/)).toBeVisible();
     fireEvent.focus(window);
     expect(
-      telegramSystemBotApi.mutualPromotionPostImportResult,
+      telegramSystemBotApi.readPostImport,
     ).toHaveBeenCalledTimes(1);
   });
 });

@@ -11,6 +11,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useOptionalI18n } from "@/providers/i18n-provider";
+import { featureModalIconForTitle } from "./feature-modal-icons";
 
 const subscribeToClientRuntime = () => () => undefined;
 
@@ -49,6 +50,7 @@ export function Modal({
     () => false,
   );
   const portalTarget = isClient ? document.body : null;
+  const resolvedTitleIcon = titleIcon ?? featureModalIconForTitle(title);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -123,11 +125,12 @@ export function Modal({
         <div className="mb-1 flex items-center justify-between gap-3 p-4 pb-3 sm:p-5 sm:pb-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
             {leadingHeaderAction}
-            {titleIcon ? (
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-blue-800/70 bg-blue-950/40 text-blue-300">
-                {titleIcon}
-              </span>
-            ) : null}
+            <span
+              data-modal-title-icon="true"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-blue-800/70 bg-blue-950/40 text-blue-300"
+            >
+              {resolvedTitleIcon}
+            </span>
             <h3 id={titleId} className="text-lg font-semibold sm:text-xl">
               {title}
             </h3>

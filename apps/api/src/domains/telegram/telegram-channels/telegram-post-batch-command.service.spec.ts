@@ -1,6 +1,15 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment -- focused Prisma test double */
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { TelegramPostBatchCommandService } from './telegram-post-batch-command.service';
+import { TelegramPostBatchImportService } from './telegram-post-batch-import.service';
+
+type TransactionWork = ((tx: unknown) => unknown) | Array<Promise<unknown>>;
+
+function isTransactionCallback(
+  work: TransactionWork,
+): work is (tx: unknown) => unknown {
+  return typeof work === 'function';
+}
 
 describe('TelegramPostBatchCommandService', () => {
   const membership = { id: 'member-1', workspaceId: 'workspace-1' };
@@ -25,11 +34,13 @@ describe('TelegramPostBatchCommandService', () => {
         count: jest.fn().mockResolvedValue(1),
       },
       telegramSystemBotWorkflow: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findFirst: jest.fn().mockResolvedValue(
           Object.prototype.hasOwnProperty.call(overrides, 'workflow')
             ? overrides.workflow
             : {
                 id: 'workflow-1',
+                connectionId: 'connection-1',
                 completedAt: new Date('2026-09-14T10:00:00.000Z'),
                 payload: {
                   contents: [
@@ -46,8 +57,8 @@ describe('TelegramPostBatchCommandService', () => {
       },
       $transaction: jest
         .fn()
-        .mockImplementation((operations: Array<Promise<unknown>>) =>
-          Promise.all(operations),
+        .mockImplementation((work: TransactionWork): unknown =>
+          isTransactionCallback(work) ? work(prisma) : Promise.all(work),
         ),
     };
     const workspace = {
@@ -57,11 +68,17 @@ describe('TelegramPostBatchCommandService', () => {
     };
     const read = { get: jest.fn().mockResolvedValue({ id: 'batch-1' }) };
     const dispatcher = { dispatch: jest.fn() };
+    const imports = new TelegramPostBatchImportService(
+      prisma as never,
+      workspace as never,
+      read as never,
+    );
     const service = new TelegramPostBatchCommandService(
       prisma as never,
       workspace as never,
       read as never,
       dispatcher as never,
+      imports,
     );
     return { service, prisma, read, dispatcher };
   }
@@ -218,6 +235,26 @@ describe('TelegramPostBatchCommandService', () => {
       service.importWorkflow('user-1', 'workflow-1'),
     ).resolves.toEqual({ id: 'batch-1' });
 
+    expect(prisma.telegramSystemBotWorkflow.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'workflow-1',
+          workspaceId: 'workspace-1',
+          kind: 'WEBSITE_POST_IMPORT',
+          postImportMode: 'MULTIPLE',
+          resultMutualPromotionPostId: null,
+          resultPostBatchPostId: null,
+          postBatch: { is: null },
+          connection: {
+            is: {
+              userId: 'user-1',
+              enabled: true,
+            },
+          },
+        }),
+      }),
+    );
+
     expect(prisma.telegramPostBatch.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -235,13 +272,26 @@ describe('TelegramPostBatchCommandService', () => {
         }),
       }),
     );
+    expect(prisma.telegramSystemBotWorkflow.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'workflow-1',
+          connectionId: 'connection-1',
+          connection: { is: { userId: 'user-1', enabled: true } },
+          consumedAt: null,
+          postImportMode: 'MULTIPLE',
+          resultMutualPromotionPostId: null,
+        }),
+        data: { consumedAt: expect.any(Date) },
+      }),
+    );
     expect(read.get).toHaveBeenCalledWith('workspace-1', 'batch-1');
   });
 
-  it('is idempotent when the workflow was already consumed', async () => {
+  it('keeps the workspace-owned batch lookup idempotent after consumption', async () => {
     const { service, prisma } = setup({ existing: { id: 'batch-existing' } });
 
-    await service.importWorkflow('user-1', 'workflow-1');
+    await service.importWorkflow('user-2', 'workflow-1');
 
     expect(prisma.telegramSystemBotWorkflow.findFirst).not.toHaveBeenCalled();
     expect(prisma.telegramPostBatch.create).not.toHaveBeenCalled();
@@ -253,6 +303,30 @@ describe('TelegramPostBatchCommandService', () => {
     await expect(
       service.importWorkflow('user-1', 'other-workspace-workflow'),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('does not consume another user workflow in the same workspace', async () => {
+    const { service, prisma } = setup({ workflow: null });
+
+    await expect(
+      service.importWorkflow('user-2', 'workflow-1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(prisma.telegramSystemBotWorkflow.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          workspaceId: 'workspace-1',
+          connection: {
+            is: {
+              userId: 'user-2',
+              enabled: true,
+            },
+          },
+        }),
+      }),
+    );
+    expect(prisma.telegramPostBatch.create).not.toHaveBeenCalled();
+    expect(prisma.telegramSystemBotWorkflow.updateMany).not.toHaveBeenCalled();
   });
 
   it.each([

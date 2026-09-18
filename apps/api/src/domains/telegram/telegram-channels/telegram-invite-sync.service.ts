@@ -41,6 +41,7 @@ export class TelegramInviteSyncService {
     name: true,
     createdBy: true,
     adCampaignId: true,
+    peakAttributedCount: true,
   } as const;
 
   public async persistInviteLinkFromRemote(params: {
@@ -83,6 +84,9 @@ export class TelegramInviteSyncService {
         title: params.link.title,
         existingCampaignId: existing?.adCampaignId ?? null,
       });
+    const currentAttributedCount =
+      Math.max(0, Number(params.link.usage) || 0) +
+      Math.max(0, Number(params.link.requested) || 0);
     const payload = {
       name: params.link.title || existing?.name || 'Imported MTProto link',
       adCampaignId: existing?.adCampaignId ?? inferredCampaignId ?? null,
@@ -99,6 +103,10 @@ export class TelegramInviteSyncService {
       memberLimit: params.link.usageLimit,
       joinedCount: params.link.usage,
       requestedCount: params.link.requested,
+      peakAttributedCount: Math.max(
+        Number(existing?.peakAttributedCount ?? 0),
+        currentAttributedCount,
+      ),
       isRevoked: params.link.revoked,
       lastSyncedAt: new Date(),
       creatorTelegramUserId: params.link.telegramCreatorUserId,

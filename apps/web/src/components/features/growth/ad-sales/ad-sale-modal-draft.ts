@@ -1,17 +1,6 @@
 import type { TelegramAdSaleOrigin } from "@telegram-system/shared";
 import type { SalePlacementDraft } from "./ad-sale-types";
-import {
-  readWorkspaceModalDrafts,
-  removeWorkspaceModalDraft,
-  writeWorkspaceModalDraft,
-} from "@/lib/workspace-modal-drafts";
-
-const DRAFT_NAMESPACE = "telegram-ad-sales:draft";
-
 export type AdSaleModalDraft = {
-  version: 1;
-  id?: string;
-  createdAt?: string;
   advertiserTelegram: string;
   advertiserContact: string;
   selectedAdvertiserId: string | null;
@@ -28,24 +17,32 @@ export type AdSaleModalDraft = {
   networkTotalPrice: string;
 };
 
-export function readAdSaleModalDraft(storage: Storage | null | undefined) {
-  return readAdSaleModalDrafts(storage)[0] ?? null;
-}
-
-function normalizeDraftValue(
+export function normalizeAdSaleModalDraft(
   value: unknown,
-  index: number,
 ): AdSaleModalDraft | null {
   const draft = value as Partial<AdSaleModalDraft>;
-  if (draft.version !== 1 || !Array.isArray(draft.placements)) return null;
+  if (!Array.isArray(draft.placements)) return null;
+  const placements = draft.placements.map((placement) => ({
+    ...placement,
+    time: normalizeDraftTime(placement.time),
+  }));
   return {
     ...(draft as AdSaleModalDraft),
-    id: draft.id || `legacy-${index}`,
-    createdAt: draft.createdAt || new Date(0).toISOString(),
-    placements: draft.placements.map((placement) => ({
-      ...placement,
-      time: normalizeDraftTime(placement.time),
-    })),
+    advertiserTelegram: draft.advertiserTelegram ?? "",
+    advertiserContact: draft.advertiserContact ?? "",
+    selectedAdvertiserId: draft.selectedAdvertiserId ?? null,
+    assignedMemberId: draft.assignedMemberId ?? "",
+    saleOrigin: draft.saleOrigin ?? "DIRECT",
+    accountId: draft.accountId ?? "",
+    channelSelectionMode: draft.channelSelectionMode ?? "channels",
+    selectedNetworkId: draft.selectedNetworkId ?? "",
+    selectedChannelIds:
+      draft.selectedChannelIds ?? placements.map((item) => item.channelId),
+    placementDateRange: draft.placementDateRange ?? { from: "", to: "" },
+    postMode: draft.postMode ?? "shared",
+    placements,
+    networkPricingMode: draft.networkPricingMode ?? "per-placement",
+    networkTotalPrice: draft.networkTotalPrice ?? "",
   };
 }
 
@@ -58,45 +55,11 @@ function normalizeDraftTime(value: string | null | undefined) {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
-export function readAdSaleModalDrafts(storage: Storage | null | undefined) {
-  return readWorkspaceModalDrafts(
-    storage,
-    DRAFT_NAMESPACE,
-    normalizeDraftValue,
-  );
-}
-
-export function writeAdSaleModalDraft(
-  storage: Storage | null | undefined,
+export function hasMeaningfulAdSaleDraft(
   draft: AdSaleModalDraft,
+  initialValue?: AdSaleModalDraft | null,
 ) {
-  writeWorkspaceModalDraft(
-    storage,
-    DRAFT_NAMESPACE,
-    {
-      ...draft,
-      placements: draft.placements.map((placement) => ({
-        ...placement,
-        time: normalizeDraftTime(placement.time),
-      })),
-    },
-    normalizeDraftValue,
-  );
-}
-
-export function removeAdSaleModalDraft(
-  storage: Storage | null | undefined,
-  draftId?: string,
-) {
-  removeWorkspaceModalDraft(
-    storage,
-    DRAFT_NAMESPACE,
-    draftId,
-    normalizeDraftValue,
-  );
-}
-
-export function hasMeaningfulAdSaleDraft(draft: AdSaleModalDraft) {
+  if (initialValue) return JSON.stringify(draft) !== JSON.stringify(initialValue);
   return Boolean(
     draft.advertiserContact.trim() ||
     draft.selectedNetworkId ||

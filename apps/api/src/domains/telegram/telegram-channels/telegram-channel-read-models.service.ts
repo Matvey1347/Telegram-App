@@ -41,6 +41,8 @@ export class TelegramChannelReadModelsService {
     )) as {
       defaultInviteLinkId?: string | null;
       botInviteLinkId?: string | null;
+      broadcastInviteLinkId?: string | null;
+      audienceTransferInviteLinkId?: string | null;
       folderDefaultInviteLinkIds?: string[];
       mutualPromotionInviteLinkIds?: string[];
     };
@@ -74,6 +76,9 @@ export class TelegramChannelReadModelsService {
         ...link,
         isDefaultForChannel: link.id === channel.defaultInviteLinkId,
         isDefaultForBot: link.id === channel.botInviteLinkId,
+        isDefaultForBroadcast: link.id === channel.broadcastInviteLinkId,
+        isDefaultForAudienceTransfer:
+          link.id === channel.audienceTransferInviteLinkId,
         isDefaultForFolders:
           channel.folderDefaultInviteLinkIds?.includes(link.id) ?? false,
         isDefaultForMutualPromotion:
@@ -93,6 +98,7 @@ export class TelegramChannelReadModelsService {
       | 'availableForCampaignId'
       | 'selectedId'
       | 'selectedIds'
+      | 'selectedIds[]'
       | 'initial'
       | 'all'
     > = {},
@@ -105,6 +111,8 @@ export class TelegramChannelReadModelsService {
     )) as {
       defaultInviteLinkId?: string | null;
       botInviteLinkId?: string | null;
+      broadcastInviteLinkId?: string | null;
+      audienceTransferInviteLinkId?: string | null;
       folderDefaultInviteLinkIds?: string[];
       mutualPromotionInviteLinkIds?: string[];
     };
@@ -120,8 +128,14 @@ export class TelegramChannelReadModelsService {
       ...new Set(
         [
           ...(query.selectedIds ?? []),
+          ...(query['selectedIds[]'] ?? []),
           query.selectedId,
           channel.defaultInviteLinkId,
+          channel.botInviteLinkId,
+          channel.broadcastInviteLinkId,
+          channel.audienceTransferInviteLinkId,
+          ...(channel.folderDefaultInviteLinkIds ?? []),
+          ...(channel.mutualPromotionInviteLinkIds ?? []),
         ]
           .map((value) => String(value || '').trim())
           .filter(Boolean),
@@ -172,6 +186,9 @@ export class TelegramChannelReadModelsService {
       ...link,
       isDefaultForChannel: link.id === channel.defaultInviteLinkId,
       isDefaultForBot: link.id === channel.botInviteLinkId,
+      isDefaultForBroadcast: link.id === channel.broadcastInviteLinkId,
+      isDefaultForAudienceTransfer:
+        link.id === channel.audienceTransferInviteLinkId,
       isDefaultForFolders:
         channel.folderDefaultInviteLinkIds?.includes(link.id) ?? false,
       isDefaultForMutualPromotion:

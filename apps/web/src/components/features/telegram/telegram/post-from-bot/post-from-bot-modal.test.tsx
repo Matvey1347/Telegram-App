@@ -13,6 +13,11 @@ const apiMocks = vi.hoisted(() => ({
   createAndDispatch: vi.fn(),
   prepareImport: vi.fn().mockResolvedValue({ workflowId: "workflow-1" }),
   importResult: vi.fn().mockResolvedValue({ ready: false }),
+  flowOptions: null as null | {
+    onImported: (drafts: never[]) => void;
+  },
+  startImport: vi.fn(),
+  importStatus: "idle" as "idle" | "waiting",
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -25,12 +30,16 @@ vi.mock("@/lib/features/telegram/telegram-post-batches-api", () => ({
 }));
 
 vi.mock("@/hooks/use-telegram-system-bot-post-flow", () => ({
-  useTelegramSystemBotPostFlow: () => ({
-    importStatus: "idle",
-    error: "",
-    checkImport: vi.fn(),
-    startImport: vi.fn(),
-  }),
+  useTelegramSystemBotPostFlow: (options: never) => {
+    apiMocks.flowOptions = options;
+    return {
+      importStatus: apiMocks.importStatus,
+      terminalStatus: null,
+      error: "",
+      checkImport: vi.fn(),
+      startImport: apiMocks.startImport,
+    };
+  },
 }));
 
 vi.mock("./post-batch-editor", () => ({
@@ -38,13 +47,25 @@ vi.mock("./post-batch-editor", () => ({
     batch,
     onDispatch,
     onDraftChange,
+    onImportPostFromBot,
+    onImportPostsFromBot,
+    botImportingPostId,
+    initialSelectedPostId,
   }: {
     batch: TelegramPostBatch;
     onDispatch: (batch: TelegramPostBatch) => Promise<void>;
     onDraftChange?: (batch: TelegramPostBatch) => void;
+    onImportPostFromBot?: (postId: string, expectedVersion: number) => void;
+    onImportPostsFromBot?: (postIds: string[], expectedVersion: number) => void;
+    botImportingPostId?: string | null;
+    initialSelectedPostId?: string | null;
   }) => (
     <div>
       <span>Editor: {batch.title}</span>
+      <span>First post: {batch.posts[0]?.text}</span>
+      <span>Posts: {batch.posts.map((post) => post.text).join(" | ")}</span>
+      <span>Importing: {botImportingPostId}</span>
+      <span>Selected after import: {initialSelectedPostId}</span>
       <button
         type="button"
         onClick={() =>
@@ -52,6 +73,25 @@ vi.mock("./post-batch-editor", () => ({
         }
       >
         Edit local title
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onImportPostFromBot?.(batch.posts[0]?.id ?? "", batch.version)
+        }
+      >
+        Import first post
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onImportPostsFromBot?.(
+            batch.posts.map((post) => post.id),
+            batch.version,
+          )
+        }
+      >
+        Import multiple posts
       </button>
       <button
         type="button"
@@ -103,6 +143,8 @@ describe("PostFromBotModal local drafts", () => {
       botUsername: "system_bot",
       currentWorkspaceId: "workspace-1",
     });
+    apiMocks.importStatus = "idle";
+    apiMocks.startImport.mockResolvedValue(true);
     apiMocks.list.mockResolvedValue({
       items: [],
       pagination: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
@@ -128,7 +170,7 @@ describe("PostFromBotModal local drafts", () => {
 
     fireEvent.click(
       await screen.findByRole("button", {
-        name: "Edit draft Locally saved campaign",
+        name: /Continue draft/,
       }),
     );
 
@@ -179,5 +221,102 @@ describe("PostFromBotModal local drafts", () => {
         posts: [expect.not.objectContaining({ id: expect.anything() })],
       }),
     );
+  });
+
+  it("restores the post destination for a completed bot import", async () => {
+    renderModal();
+    await createLocalDraft();
+    fireEvent.click(screen.getByRole("button", { name: "Import first post" }));
+
+    await waitFor(() =>
+      expect(
+        window.localStorage.getItem("post-from-bot-import-target:workspace-1"),
+      ).toBeTruthy(),
+    );
+    await apiMocks.flowOptions?.onImported([
+      {
+        title: "Imported",
+        text: "Recovered post",
+        imageUrls: [],
+        buttonRows: [],
+      } as never,
+    ]);
+
+    expect(await screen.findByText("First post: Recovered post")).toBeVisible();
+    expect(screen.getByText(/Selected after import:/)).toHaveTextContent(
+      /^Selected after import: .+/,
+    );
+    expect(
+      window.localStorage.getItem("post-from-bot-import-target:workspace-1"),
+    ).toBeNull();
+  });
+
+  it("imports several forwarded posts and creates missing batch publications", async () => {
+    renderModal();
+    await createLocalDraft();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Import multiple posts" }),
+    );
+    await waitFor(() => expect(apiMocks.startImport).toHaveBeenCalledOnce());
+    expect(apiMocks.flowOptions).toEqual(
+      expect.objectContaining({ mode: "multiple" }),
+    );
+
+    await apiMocks.flowOptions?.onImported([
+      {
+        title: "First",
+        text: "First forwarded post",
+        imageUrls: [],
+        buttonRows: [],
+      } as never,
+      {
+        title: "Second",
+        text: "Second forwarded post",
+        imageUrls: [],
+        buttonRows: [],
+      } as never,
+    ]);
+
+    expect(
+      await screen.findByText(
+        "Posts: First forwarded post | Second forwarded post",
+      ),
+    ).toBeVisible();
+  });
+
+  it("keeps the bot import action available while an earlier import is waiting", async () => {
+    apiMocks.importStatus = "waiting";
+    window.localStorage.setItem(
+      "post-from-bot-import-target:workspace-1",
+      "restored-post",
+    );
+    renderModal();
+    await createLocalDraft();
+
+    expect(await screen.findByText(/Importing:/)).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Import first post" }),
+    ).toBeEnabled();
+    expect(
+      screen.queryByText(/Send the posts to System Bot/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not replace the previous post destination when a new start is declined", async () => {
+    apiMocks.startImport.mockResolvedValue(false);
+    window.localStorage.setItem(
+      "post-from-bot-import-target:workspace-1",
+      "previous-post",
+    );
+    renderModal();
+    await createLocalDraft();
+
+    fireEvent.click(screen.getByRole("button", { name: "Import first post" }));
+
+    await waitFor(() => expect(apiMocks.startImport).toHaveBeenCalledOnce());
+    expect(
+      window.localStorage.getItem("post-from-bot-import-target:workspace-1"),
+    ).toBe("previous-post");
   });
 });

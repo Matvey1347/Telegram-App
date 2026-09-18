@@ -60,10 +60,14 @@ const plan: CrossPromotionPlan = {
       telegramChannelId: "promoted-1",
       title: "Mentor",
       photoUrl: "https://cdn.example/promoted.jpg",
+      promoId: "promo-1",
       promoTitle: "Calm mind",
+      promoIconPresentation: { type: "unicode", value: "💎" },
       inviteLinkUrl: "https://t.me/+track",
-      joinedCount: 4,
-      requestedCount: 1,
+      inviteLinkTotalJoinedCount: 20,
+      inviteLinkTotalRequestedCount: 5,
+      joinedCount: 10,
+      requestedCount: 3,
     },
   ],
   publisherResults: [
@@ -91,13 +95,13 @@ describe("CrossPromotionPlanCard", () => {
   it("renders only the publications owned by our workspace", () => {
     const onEdit = vi.fn();
     const onCopy = vi.fn();
+    const onDelete = vi.fn();
     render(
       <CrossPromotionPlanCard
         plan={plan}
-        clock={new Date("2026-09-14T08:00:00.000Z").getTime()}
         onCopy={onCopy}
         onEdit={onEdit}
-        onDelete={vi.fn()}
+        onDelete={onDelete}
       />,
     );
 
@@ -108,19 +112,29 @@ describe("CrossPromotionPlanCard", () => {
     expect(screen.getByText("🤝")).toBeInTheDocument();
     expect(screen.getByText("Scheduled")).toBeInTheDocument();
     expect(screen.getByText("My channels")).toBeInTheDocument();
-    expect(screen.queryByText("Partner channels")).not.toBeInTheDocument();
+    expect(screen.getByText("Partner channels")).toBeInTheDocument();
     expect(screen.getByText("Mentor")).toBeInTheDocument();
-    expect(screen.getByText("Promoted")).toBeInTheDocument();
+    expect(screen.getByText("✨ Promoted")).toBeInTheDocument();
+    expect(screen.getByText("During placement")).toBeInTheDocument();
+    expect(screen.getByText("+13")).toBeInTheDocument();
+    expect(screen.queryByText(/total on link/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/joined.*requests/)).not.toBeInTheDocument();
+    expect(screen.getByText("💎")).toBeInTheDocument();
+    expect(screen.getByText("Calm mind")).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Mutual-promotion result"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Partner Publisher")).not.toBeInTheDocument();
     expect(screen.queryByText("Partner")).not.toBeInTheDocument();
     expect(screen.queryByText(/My publication:/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Tracking ends:/)).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", {
+      screen.queryByRole("link", {
         name: "Open scheduled post for My Publisher",
       }),
-    ).toHaveAttribute("href", "/telegram-posts/mine-1/editor?postId=post-1");
-    expect(screen.getAllByText(/^in /)).toHaveLength(1);
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Views")).toBeInTheDocument();
+    expect(screen.getByText("Audience decline")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "My channels: 1" }));
     expect(
@@ -131,7 +145,7 @@ describe("CrossPromotionPlanCard", () => {
       screen.getByRole("button", { name: "Actions for Mentor ↔ Business" }),
     );
     fireEvent.click(
-      screen.getByRole("menuitem", { name: "Duplicate mutual promotion" }),
+      screen.getByRole("menuitem", { name: "Add new integration" }),
     );
     expect(onCopy).toHaveBeenCalledTimes(1);
 
@@ -140,6 +154,28 @@ describe("CrossPromotionPlanCard", () => {
     );
     fireEvent.click(screen.getByRole("menuitem", { name: "Edit promotion" }));
     expect(onEdit).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Actions for Mentor ↔ Business" }),
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+    expect(onDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the selected promo from the compact placement result", () => {
+    const onOpenPromo = vi.fn();
+    render(
+      <CrossPromotionPlanCard
+        plan={plan}
+        onCopy={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenPromo={onOpenPromo}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Calm mind/ }));
+    expect(onOpenPromo).toHaveBeenCalledWith("promo-1");
   });
 
   it("does not repeat a CRM username already used as the client name", () => {
@@ -154,7 +190,6 @@ describe("CrossPromotionPlanCard", () => {
             photoUrl: null,
           },
         }}
-        clock={null}
         onCopy={vi.fn()}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
@@ -167,5 +202,20 @@ describe("CrossPromotionPlanCard", () => {
       "src",
       "https://t.me/i/userpic/320/a20_admin.jpg",
     );
+  });
+
+  it("shows only the placement result after tracking is completed", () => {
+    render(
+      <CrossPromotionPlanCard
+        plan={{ ...plan, status: "COMPLETED" }}
+        onCopy={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("During placement")).toBeInTheDocument();
+    expect(screen.getByText("+13")).toBeInTheDocument();
+    expect(screen.queryByText(/at tracking end/)).not.toBeInTheDocument();
   });
 });

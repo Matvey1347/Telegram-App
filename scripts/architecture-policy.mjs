@@ -107,7 +107,7 @@ const pageSlice =
 const pageHookAllowances = [
   ["(finance)/currencies/page.tsx", 6],
   ["(growth)/ad-campaigns/[id]/page.tsx", 5],
-  ["(growth)/ad-campaigns/page.tsx", 27],
+  ["(growth)/ad-campaigns/page.tsx", 20],
   ["(telegram)/system-bot/connect/page.tsx", 3],
   ["(telegram)/telegram-channel-networks/[id]/page.tsx", 5],
   ["(telegram)/telegram-channels/page.tsx", 17],
@@ -131,7 +131,7 @@ const pageApiAllowances = [
   ["(growth)/ad-campaigns/page.tsx", 2],
   ["(telegram)/system-bot/connect/page.tsx", 1],
   ["(telegram)/telegram-channel-networks/[id]/page.tsx", 1],
-  ["(telegram)/telegram-channels/page.tsx", 4],
+  ["(telegram)/telegram-channels/page.tsx", 3],
   ["(telegram)/telegram-posts/page.tsx", 6],
   ["(telegram)/telegram/channels/[id]/page.tsx", 2],
   ["(workspace)/settings/page.tsx", 1],
@@ -296,6 +296,46 @@ export function inspectArchitectureSource(file, source) {
   const failures = [];
   const imports = staticImports(source);
   const resolvedTargets = new Set();
+
+  const featureSpecificSystemBotImportPaths = [
+    "ad-sale-post-import",
+    "promo-post-import",
+    "mutual-promotion-post-import",
+    "post-batch-import",
+    "ad-sale-post-preview",
+    "promo-post-preview",
+    "mutual-promotion-post-preview",
+  ];
+  const legacySystemBotPaths = featureSpecificSystemBotImportPaths.filter(
+    (segment) => source.includes(`/telegram/system-bot/${segment}`),
+  );
+  if (legacySystemBotPaths.length) {
+    failures.push(
+      `${normalizedFile} defines a feature-specific System Bot post-import transport (${legacySystemBotPaths.join(
+        ", ",
+      )}); use the canonical post-import API instead.`,
+    );
+  }
+
+  const isFeatureProductionFile =
+    within(normalizedFile, "apps/web/src/components/features") &&
+    !/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(normalizedFile);
+  const lowLevelDraftStorageFunctions = [
+    "readWorkspaceModalDrafts",
+    "writeWorkspaceModalDraft",
+    "removeWorkspaceModalDraft",
+  ].filter((name) => new RegExp(`\\b${name}\\b`, "u").test(source));
+  if (
+    isFeatureProductionFile &&
+    source.includes("workspace-modal-drafts") &&
+    lowLevelDraftStorageFunctions.length
+  ) {
+    failures.push(
+      `${normalizedFile} imports low-level modal draft storage (${lowLevelDraftStorageFunctions.join(
+        ", ",
+      )}); feature code must use useWorkspaceModalDrafts.`,
+    );
+  }
 
   for (const specifier of imports) {
     const target = resolveImport(normalizedFile, specifier);

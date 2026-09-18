@@ -2,14 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Send } from "lucide-react";
 import {
   normalizeTelegramPostMediaItems,
   telegramPostPhotoUrls,
-  type TelegramPostButtonRows,
-  type TelegramPostMediaItem,
   type ResolvedEmoji,
-  type TelegramSystemBotPostDraft,
 } from "@telegram-system/shared";
 import {
   iconsApi,
@@ -17,28 +13,7 @@ import {
   type Icon,
   type Promo,
   type TelegramChannel,
-  type TelegramInviteLink,
 } from "@/lib/api";
-import { MemberSelect } from "@/components/features/workspace/member-select";
-import { IconPicker } from "@/components/icons/icon-picker";
-import { TelegramInviteLinkCreatorAvatar } from "@/components/features/telegram/telegram/telegram-invite-link-creator-avatar";
-import { TelegramPostMediaUpload } from "@/components/features/telegram/telegram/telegram-post-media-upload";
-import { TelegramPostPreview } from "@/components/features/telegram/telegram/telegram-post-preview";
-import { TelegramTextEditor } from "@/components/features/telegram/telegram/telegram-text-editor";
-import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
-import {
-  telegramInviteLinkDefaultBadgeClassName,
-  telegramInviteLinkOptionLabel,
-} from "@/lib/features/telegram/telegram-invite-link-options";
-import {
-  Button,
-  Card,
-  CustomSelect,
-  FormError,
-  FormField,
-  Input,
-  Modal,
-} from "@/components/ui/primitives";
 import { emojiIcons } from "@/lib/emoji-icons";
 import { iconToResolvedEmoji } from "@/lib/resolved-emoji";
 import {
@@ -51,75 +26,27 @@ import {
   useWorkspaceModalDrafts,
   type WorkspaceFormDraft,
 } from "@/hooks/use-workspace-modal-drafts";
-import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
+import { selectedWorkspaceDraftScope } from "@/lib/workspace-modal-drafts";
 import {
   PROMO_INVITE_LINK_TOKEN,
   promoContainsInviteToken,
+  replacePromoTelegramLinksWithToken,
   renderPromoInviteLink,
   type ReusablePromoPost,
 } from "./promo-invite-template";
-import { PromoPostEditorSection } from "./promo-post-editor-section";
+import { PromoFormView } from "./promo-form-view";
 
-export type PromoFormPayload = {
-  telegramChannelId: string;
-  assignedMemberId?: string | null;
-  iconId?: string | null;
-  title: string;
-  text: string;
-  plainText?: string | null;
-  formattedHtml?: string | null;
-  imageData?: string;
-  imageUrls: string[];
-  mediaItems: TelegramPostMediaItem[];
-  buttonRows: TelegramPostButtonRows;
-  defaultInviteLinkId?: string | null;
-};
+import {
+  emptyPromoPost as emptyPost,
+  emptyPromoModalDraft,
+  isMeaningfulPromoModalDraft,
+  normalizePromoModalDraft,
+  postFromPromo,
+  type PromoFormPayload,
+  type PromoModalDraft,
+} from "./promo-form-model";
 
-const emptyPost = (): ReusablePromoPost => ({
-  text: "",
-  imageUrls: [],
-  mediaItems: [],
-  buttonRows: [],
-});
-
-function postFromPromo(promo?: Promo): ReusablePromoPost {
-  const imageUrls = promo?.imageUrls?.length
-    ? promo.imageUrls
-    : promo?.imageData
-      ? [promo.imageData]
-      : [];
-  return promo
-    ? {
-        text: promo.text ?? "",
-        plainText: promo.plainText,
-        formattedHtml: promo.formattedHtml,
-        imageUrls,
-        mediaItems: normalizeTelegramPostMediaItems(
-          promo.mediaItems,
-          imageUrls,
-        ),
-        buttonRows: promo.buttonRows ?? [],
-      }
-    : emptyPost();
-}
-
-function hasPromoPostContent(post: ReusablePromoPost) {
-  return Boolean(
-    post.text.trim() ||
-    post.imageUrls.length ||
-    post.mediaItems?.length ||
-    post.buttonRows.length,
-  );
-}
-
-type PromoModalDraft = {
-  iconId: string | null;
-  assignedMemberId: string | null;
-  channelId: string;
-  inviteLinkId: string;
-  title: string;
-  post: ReusablePromoPost;
-};
+export type { PromoFormPayload } from "./promo-form-model";
 
 export function PromoFormModal({
   open,
@@ -183,6 +110,7 @@ export function PromoFormModal({
   );
   const draftPreview = useMemo(
     () => ({
+      title: titleValue || "Untitled promo",
       icon:
         draftIconPresentation ??
         iconToResolvedEmoji(autoIcon) ??
@@ -190,7 +118,14 @@ export function PromoFormModal({
           ? iconToResolvedEmoji(initial?.icon)
           : null),
     }),
-    [autoIcon, draftIconPresentation, iconId, initial?.icon, initial?.iconId],
+    [
+      autoIcon,
+      draftIconPresentation,
+      iconId,
+      initial?.icon,
+      initial?.iconId,
+      titleValue,
+    ],
   );
   const restoreDraft = useCallback(
     (
@@ -210,38 +145,18 @@ export function PromoFormModal({
     },
     [],
   );
-  const emptyDraft = useCallback<() => PromoModalDraft>(
-    () => ({
-      iconId: null,
-      assignedMemberId: null,
-      channelId: "",
-      inviteLinkId: "",
-      title: "",
-      post: emptyPost(),
-    }),
-    [],
-  );
-  const isMeaningfulDraft = useCallback(
-    (draft: PromoModalDraft) =>
-      Boolean(
-        draft.title.trim() ||
-        draft.iconId ||
-        draft.post.text.trim() ||
-        draft.post.imageUrls.length ||
-        draft.post.mediaItems?.length ||
-        draft.post.buttonRows.length,
-      ),
-    [],
-  );
-  const drafts = useWorkspaceModalDrafts({
+  const drafts = useWorkspaceModalDrafts<PromoModalDraft>({
     namespace: "ads:promo:draft",
+    workspaceId: selectedWorkspaceDraftScope(),
+    schemaVersion: 1,
     open,
     enabled: !initial,
     value: draftValue,
     preview: draftPreview,
-    emptyValue: emptyDraft,
+    createInitialValue: emptyPromoModalDraft,
+    normalize: normalizePromoModalDraft,
     onRestore: restoreDraft,
-    isMeaningful: isMeaningfulDraft,
+    isMeaningful: isMeaningfulPromoModalDraft,
   });
 
   const connectionQuery = useQuery({
@@ -256,27 +171,20 @@ export function PromoFormModal({
     selectedId:
       inviteLinkId || selectedChannel?.mutualPromotionInviteLinkIds?.[0],
     enabled: open,
-    seedLinks: initial?.defaultInviteLink ? [initial.defaultInviteLink] : [],
   });
   const inviteLinks = inviteLinkOptions.links;
-  const selectedInvite =
-    inviteLinks.find((link) => link.id === inviteLinkId) ??
-    initial?.defaultInviteLink;
+  const selectedInvite = inviteLinks.find((link) => link.id === inviteLinkId);
   const renderedPost = selectedInvite?.url
     ? renderPromoInviteLink(post, selectedInvite.url)
     : post;
 
-  const botFlow = useTelegramSystemBotPostFlow<TelegramSystemBotPostDraft>({
+  const botFlow = useTelegramSystemBotPostFlow({
+    mode: "single",
+    recoveryKey: "promo-form",
+    importContext: "Promo",
+    workspaceId: connectionQuery.data?.currentWorkspaceId,
     botUsername: connectionQuery.data?.botUsername,
-    prepareImport: async () =>
-      (await telegramSystemBotApi.preparePromoPostImport()).workflowId,
-    readImport: async (workflowId) => {
-      const result =
-        await telegramSystemBotApi.promoPostImportResult(workflowId);
-      return result.ready
-        ? { ready: true as const, value: result.draft }
-        : { ready: false as const };
-    },
+    enabled: open,
     onImported: async (draft) => {
       const importedTitle =
         extractAutoPrefilledPostTitle(draft.title)?.title ?? draft.title.trim();
@@ -307,25 +215,24 @@ export function PromoFormModal({
         }
       }
     },
-    sendPreview: async () => {
-      if (!selectedInvite?.url && promoContainsInviteToken(post)) {
-        throw new Error("Invite link is required");
-      }
-      await telegramSystemBotApi.sendPromoPostPreview({
-        title: titleValue.trim() || "Promo",
-        ...renderedPost,
-        plainText: renderedPost.plainText ?? undefined,
-        formattedHtml: renderedPost.formattedHtml ?? undefined,
-      });
+    previewDraft:
+      !selectedInvite?.url && promoContainsInviteToken(post)
+        ? null
+        : {
+            title: titleValue.trim() || "Promo",
+            ...renderedPost,
+            plainText: renderedPost.plainText ?? undefined,
+            formattedHtml: renderedPost.formattedHtml ?? undefined,
+          },
+    errorCopy: {
+      read: "Could not load the forwarded promo from the bot. Finish any active import and try again.",
+      preview: "Could not send the promo to the system bot.",
     },
-    importErrorMessage:
-      "Could not load the forwarded promo from the bot. Finish any active import and try again.",
-    sendErrorMessage: "Could not send the promo to the system bot.",
   });
   const resetBotFlow = botFlow.reset;
 
   useEffect(() => {
-    if (!open) resetBotFlow();
+    if (!open) void resetBotFlow();
   }, [open, resetBotFlow]);
 
   useEffect(() => {
@@ -378,6 +285,12 @@ export function PromoFormModal({
 
   const submit = async () => {
     if (!channelId || !titleValue.trim()) return;
+    if (inviteLinkId && !selectedInvite) {
+      setError(
+        "The selected invite link is no longer available for this channel. Choose a current link.",
+      );
+      return;
+    }
     const mediaItems = normalizeTelegramPostMediaItems(
       post.mediaItems,
       post.imageUrls,
@@ -395,7 +308,7 @@ export function PromoFormModal({
         imageUrls: telegramPostPhotoUrls(mediaItems),
         mediaItems,
         buttonRows: post.buttonRows,
-        defaultInviteLinkId: inviteLinkId || null,
+        defaultInviteLinkId: selectedInvite?.id ?? null,
       });
       drafts.clearCurrentDraft();
     } catch {
@@ -404,213 +317,78 @@ export function PromoFormModal({
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={title} size="xl">
-      {!initial && drafts.pendingDrafts.length ? (
-        <ModalDraftPicker
-          drafts={drafts.pendingDrafts}
-          titleFor={(draft) => draft.title.trim() || "Unfinished promo"}
-          iconIdFor={(draft) => draft.iconId}
-          onContinue={(draft) => {
-            drafts.continueDraft(draft);
-            setPostEditorExpanded(false);
-          }}
-          onDelete={drafts.deleteDraft}
-          onCreateNew={() => {
-            drafts.createNewDraft();
-            setPostEditorExpanded(false);
-          }}
-        />
-      ) : (
-        <Card className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-[auto_minmax(0,1fr)_minmax(220px,.85fr)]">
-            <FormField label="Emoji">
-              <IconPicker
-                compact
-                iconId={iconId}
-                icon={
-                  draftIconPresentation ??
-                  autoIcon ??
-                  (iconId === initial?.iconId ? initial.icon : null)
-                }
-                onChange={(value, presentation) => {
-                  manualIconRef.current = true;
-                  setAutoIcon(null);
-                  setDraftIconPresentation(presentation ?? null);
-                  setIconId(value);
-                }}
-                buttonLabel="Add emoji"
-              />
-            </FormField>
-            <FormField label="Internal title" required>
-              <Input
-                value={titleValue}
-                onChange={(event) => setTitleValue(event.target.value)}
-                placeholder="Promo title"
-              />
-            </FormField>
-            <FormField label="Channel" required>
-              <CustomSelect
-                value={channelId}
-                onChange={(value) => {
-                  setChannelId(value);
-                  setInviteLinkId("");
-                }}
-                placeholder="Select channel"
-                options={channels.map((channel) => ({
-                  value: channel.id,
-                  label: channel.title,
-                  iconUrl: channel.photoUrl,
-                  iconFallback: channel.title,
-                }))}
-              />
-            </FormField>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <FormField label="Member">
-              <MemberSelect
-                value={assignedMemberId}
-                onChange={(value) => setAssignedMemberId(value || null)}
-                defaultToCurrent={!initial}
-              />
-            </FormField>
-            <FormField label="Invite link">
-              <CustomSelect
-                value={inviteLinkId}
-                onChange={setInviteLinkId}
-                disabled={!channelId}
-                onOpen={inviteLinkOptions.requestAll}
-                loading={inviteLinkOptions.loading}
-                loadingLabel="Loading invite links…"
-                placeholder="Select invite link"
-                options={inviteLinks.map((link: TelegramInviteLink) => ({
-                  value: link.id,
-                  label: telegramInviteLinkOptionLabel(link),
-                  badgeClassName: telegramInviteLinkDefaultBadgeClassName(link),
-                  meta: link.url,
-                  iconFallback: inviteLinkCreatorFallback(link),
-                  icon: (
-                    <TelegramInviteLinkCreatorAvatar
-                      photoUrl={link.creatorPhotoUrl}
-                      memberAvatar={link.creatorMember?.avatarPresentation}
-                      label={inviteLinkCreatorFallback(link)}
-                    />
-                  ),
-                }))}
-              />
-            </FormField>
-          </div>
-          <PromoPostEditorSection
-            expanded={postEditorExpanded}
-            hasContent={hasPromoPostContent(post)}
-            connected={Boolean(connectionQuery.data?.connected)}
-            connectionLoading={connectionQuery.isLoading}
-            importStatus={botFlow.importStatus}
-            dots={botFlow.dots}
-            error={botFlow.error || undefined}
-            onImport={() => void startBotImport()}
-            onToggleEditor={() =>
-              setPostEditorExpanded((expanded) => !expanded)
-            }
-          >
-            <div className="grid items-start gap-4 xl:grid-cols-[minmax(240px,.62fr)_minmax(0,1.38fr)]">
-              <TelegramPostPreview
-                channelTitle={selectedChannel?.title || "Telegram channel"}
-                channelPhotoUrl={selectedChannel?.photoUrl}
-                text={renderedPost.text}
-                plainText={renderedPost.plainText}
-                formattedHtml={renderedPost.formattedHtml}
-                imageUrls={renderedPost.imageUrls}
-                mediaItems={renderedPost.mediaItems}
-                buttonRows={renderedPost.buttonRows}
-                onTextChange={(text) =>
-                  setPost((current) => ({
-                    ...current,
-                    text: selectedInvite?.url
-                      ? text
-                          .split(selectedInvite.url)
-                          .join(PROMO_INVITE_LINK_TOKEN)
-                      : text,
-                    plainText: undefined,
-                    formattedHtml: undefined,
-                  }))
-                }
-              />
-              <div className="space-y-3">
-                <div className="rounded-lg border border-blue-900/60 bg-blue-950/20 p-3 text-xs text-blue-100">
-                  Use <code>{PROMO_INVITE_LINK_TOKEN}</code> in text or button
-                  URLs. The selected invite link is inserted only when the promo
-                  is sent.
-                </div>
-                <FormField label="Promo text">
-                  <TelegramTextEditor
-                    value={post.text}
-                    onChange={(text) =>
-                      setPost((current) => ({
-                        ...current,
-                        text,
-                        plainText: undefined,
-                        formattedHtml: undefined,
-                      }))
-                    }
-                    rows={12}
-                    channelId={channelId || undefined}
-                    enableCustomEmoji
-                    buttonRows={post.buttonRows}
-                    onButtonRowsChange={(buttonRows) =>
-                      setPost((current) => ({ ...current, buttonRows }))
-                    }
-                    placeholder="Write the reusable Telegram promo…"
-                  />
-                </FormField>
-                <TelegramPostMediaUpload
-                  value={normalizeTelegramPostMediaItems(
-                    post.mediaItems,
-                    post.imageUrls,
-                  )}
-                  onChange={(mediaItems) =>
-                    setPost((current) => ({
-                      ...current,
-                      mediaItems,
-                      imageUrls: telegramPostPhotoUrls(mediaItems),
-                    }))
-                  }
-                  compact
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void sendToBot()}
-                  disabled={
-                    !connectionQuery.data?.connected ||
-                    botFlow.sendStatus === "working" ||
-                    !hasPromoPostContent(post)
-                  }
-                >
-                  <Send size={15} />{" "}
-                  {botFlow.sendStatus === "working"
-                    ? "Sending…"
-                    : botFlow.sendStatus === "done"
-                      ? "✅ Sent to bot"
-                      : "Send promo to bot"}
-                </Button>
-              </div>
-            </div>
-          </PromoPostEditorSection>
-          {error ? <FormError message={error} /> : null}
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" type="button" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={!channelId || !titleValue.trim()}
-              onClick={submit}
-            >
-              {initial ? "Save promo" : "Create promo"}
-            </Button>
-          </div>
-        </Card>
-      )}
-    </Modal>
+    <PromoFormView
+      open={open}
+      modalTitle={title}
+      initial={initial}
+      channels={channels}
+      pendingDrafts={drafts.pendingDrafts}
+      iconId={iconId}
+      icon={
+        draftIconPresentation ??
+        autoIcon ??
+        (iconId === initial?.iconId ? (initial.icon ?? null) : null)
+      }
+      assignedMemberId={assignedMemberId}
+      channelId={channelId}
+      inviteLinkId={inviteLinkId}
+      inviteLinks={inviteLinks}
+      inviteLinksLoading={inviteLinkOptions.loading}
+      post={post}
+      renderedPost={renderedPost}
+      selectedChannel={selectedChannel}
+      selectedInvite={selectedInvite ?? undefined}
+      postEditorExpanded={postEditorExpanded}
+      botConnected={Boolean(connectionQuery.data?.connected)}
+      botConnectionLoading={connectionQuery.isLoading}
+      importStatus={botFlow.importStatus}
+      sendStatus={botFlow.sendStatus}
+      dots={botFlow.dots}
+      botError={botFlow.error || undefined}
+      error={error}
+      titleValue={titleValue}
+      onClose={onClose}
+      onContinueDraft={(draft) => {
+        drafts.continueDraft(draft);
+        setPostEditorExpanded(false);
+      }}
+      onDeleteDraft={drafts.deleteDraft}
+      onCreateDraft={() => {
+        drafts.createNewDraft();
+        setPostEditorExpanded(false);
+      }}
+      onIconChange={(value, presentation) => {
+        manualIconRef.current = true;
+        setAutoIcon(null);
+        setDraftIconPresentation(presentation ?? null);
+        setIconId(value);
+      }}
+      onTitleChange={setTitleValue}
+      onChannelChange={(value) => {
+        setChannelId(value);
+        setInviteLinkId("");
+      }}
+      onMemberChange={(value) => setAssignedMemberId(value || null)}
+      onInviteLinkChange={setInviteLinkId}
+      onRequestInviteLinks={inviteLinkOptions.requestAll}
+      onToggleEditor={() => setPostEditorExpanded((expanded) => !expanded)}
+      onImport={() => void startBotImport()}
+      onPreviewTextChange={(text) =>
+        setPost((current) => ({
+          ...current,
+          text: selectedInvite?.url
+            ? text.split(selectedInvite.url).join(PROMO_INVITE_LINK_TOKEN)
+            : text,
+          plainText: undefined,
+          formattedHtml: undefined,
+        }))
+      }
+      onPostChange={setPost}
+      onReplaceTelegramLinks={() =>
+        setPost((current) => replacePromoTelegramLinksWithToken(current))
+      }
+      onSend={() => void sendToBot()}
+      onSubmit={() => void submit()}
+    />
   );
 }

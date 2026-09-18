@@ -16,6 +16,7 @@ import { ScheduledTasksService } from './scheduled-tasks.service';
 import { OperationsNotificationsModule } from '../notifications/operations-notifications.module';
 import { MutualPromotionFoldersModule } from '../../growth/mutual-promotion-folders/mutual-promotion-folders.module';
 import { ScheduledTaskDomainDueResolverService } from './scheduled-task-domain-due-resolver.service';
+import { CrossPromotionPlansModule } from '../../growth/cross-promotion-plans/cross-promotion-plans.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ScheduledTaskDomainDueResolverService } from './scheduled-task-domain-d
     ApplicationLogsModule,
     OperationsNotificationsModule,
     MutualPromotionFoldersModule,
+    CrossPromotionPlansModule,
   ],
   controllers: [ScheduledTasksController],
   providers: [

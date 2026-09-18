@@ -32,6 +32,8 @@ import { TelegramChannelReadModelsService } from '../telegram-channel-read-model
 import { TelegramChannelSchemaCompatibilityService } from '../telegram-channel-schema-compatibility.service';
 import { TelegramChannelSyncOrchestrator } from '../telegram-channel-sync.orchestrator';
 import { TelegramChannelSyncResultService } from '../telegram-channel-sync-result.service';
+import { TelegramChannelTrafficAttributionReadService } from '../telegram-channel-traffic-attribution-read.service';
+import { TelegramChannelTrafficAttributionService } from '../telegram-channel-traffic-attribution.service';
 import { TelegramChannelWorkbookExportService } from '../telegram-channel-workbook-export.service';
 import { TelegramChannelWorkbookDataService } from '../telegram-channel-workbook-data.service';
 import { TelegramChannelWorkbookWriter } from '../telegram-channel-workbook.writer';
@@ -89,6 +91,8 @@ const narrowProviders: ProviderType[] = [
   TelegramChannelAudienceTrendReadService,
   TelegramChannelFinancialReadService,
   TelegramChannelBookingReadService,
+  TelegramChannelTrafficAttributionReadService,
+  TelegramChannelTrafficAttributionService,
   TelegramChannelCatalogService,
   TelegramChannelReadModelsService,
   TelegramInviteSyncService,

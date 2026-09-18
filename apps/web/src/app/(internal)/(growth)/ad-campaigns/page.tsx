@@ -1,14 +1,7 @@
 "use client";
 
 import type { MouseEventHandler, ReactNode } from "react";
-import {
-  useCallback,
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   keepPreviousData,
@@ -16,11 +9,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
-import {
-  resolveTitleTemplate,
-  type ResolvedEmoji,
-} from "@telegram-system/shared";
+import { resolveTitleTemplate } from "@telegram-system/shared";
 import { AdCampaignsTable } from "@/components/features/growth/ad-campaigns/campaigns-table";
 import { AdHypothesisAvatar } from "@/components/features/growth/ad-campaigns/ad-hypothesis-avatar";
 import { AdHypothesisRowActions } from "@/components/features/growth/ad-campaigns/ad-hypothesis-row-actions";
@@ -32,17 +21,12 @@ import {
   type AdCampaignSort,
 } from "@/components/features/growth/ad-campaigns/ad-campaign-sort-menu";
 import { IconAvatar } from "@/components/icons/icon-avatar";
-import { IconPicker } from "@/components/icons/icon-picker";
 import { AppShell } from "@/components/layout/app-shell";
-import { MemberSelect } from "@/components/features/workspace/member-select";
 import { InviteLinkHistoryPanel } from "@/components/features/telegram/telegram/invite-link-history-panel";
 import { InviteLinkPreviewModal } from "@/components/features/telegram/telegram/invite-link-preview-modal";
 import {
-  accountsApi,
   adCampaignsApi,
   adHypothesesApi,
-  advertisingChannelsApi,
-  getTelegramChannelPromos,
   promosApi,
   telegramChannelNetworksApi,
   telegramChannelsApi,
@@ -55,19 +39,13 @@ import {
   type TelegramInviteLink,
 } from "@/lib/api";
 import { currenciesApi } from "@/lib/api";
-import {
-  accountKeys,
-  adCampaignKeys,
-  dashboardKeys,
-  telegramChannelKeys,
-} from "@/lib/query-keys";
+import { adCampaignKeys, telegramChannelKeys } from "@/lib/query-keys";
 import { MoneyStack } from "@/components/ui/money-stack";
+import { useAdCampaignMutations } from "@/components/features/growth/ad-campaigns/use-ad-campaign-mutations";
 import {
   Button,
   Card,
   ConfirmDeleteModal,
-  CustomSelect,
-  DateInput,
   DateRangeInput,
   EmptyState,
   FormField,
@@ -76,14 +54,11 @@ import {
   MasonryGrid,
   Modal,
   PageHeader,
-  Skeleton,
-  Textarea,
 } from "@/components/ui/primitives";
 import { useAppToast } from "@/providers/toast-provider";
 import { CircleHelp, EyeOff, Pencil, Trash2 } from "lucide-react";
 import { NativeMoney } from "@/components/ui/native-money";
 import {
-  formatAdCampaignLocalDate as formatLocalDate,
   toAdCampaignInputDate as toInputDate,
   type AdCampaignsViewMode,
 } from "@/components/features/growth/ad-campaigns/ad-campaign-route-state";
@@ -92,11 +67,6 @@ import {
   THREE_COLUMN_GRID_PAGE_SIZES,
 } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
-import {
-  CampaignMultiValueSelect as MultiValueSelect,
-  type CampaignSelectOption,
-} from "@/components/features/growth/ad-campaigns/campaign-multi-value-select";
-import { CampaignInviteLinksSelect } from "@/components/features/growth/ad-campaigns/campaign-invite-links-select";
 import {
   AdsSectionTabs,
   resolveAdsSection,
@@ -107,79 +77,18 @@ import {
   CrossPromotionPlansPage,
   MutualPromotionModeTabs,
 } from "@/components/features/growth/ad-campaigns/cross-promotion-plans-page";
-import { accountAdCampaignSelectOption } from "@/components/features/growth/ad-campaigns/ad-campaign-view-options";
 import { adsSectionHeader } from "@/components/features/growth/ad-campaigns/ads-section-header";
 import { PromoCard } from "@/components/features/growth/ad-campaigns/promo-card";
+import { HypothesisFormModal } from "@/components/features/growth/ad-campaigns/hypothesis-form-modal";
+import { CampaignModal } from "@/components/features/growth/ad-campaigns/campaign-form-modal";
 import { AdsChannelScopeFilter } from "@/components/features/growth/ad-campaigns/ads-channel-scope-filter";
-import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
-import {
-  useWorkspaceModalDrafts,
-  type WorkspaceFormDraft,
-} from "@/hooks/use-workspace-modal-drafts";
 import {
   CardActionsMenu,
   CardMenuAction,
 } from "@/components/ui/card-actions-menu";
 
-type CampaignValues = {
-  telegramChannelId: string;
-  assignedMemberId?: string | null;
-  promoIds: string[];
-  inviteLinkIds: string[];
-  advertisingChannelIds: string[];
-  price: number;
-  accountId: string;
-  date?: string;
-  customTitle?: string;
-  notes?: string;
-};
-
-type HypothesisDraftValues = {
-  iconId: string | null;
-  telegramChannelId: string;
-  assignedMemberId: string | null;
-  name: string;
-  description: string;
-  selectedIds: string[];
-};
-
-function mapCampaignInitialValues(row?: any): CampaignValues {
-  return row
-    ? {
-        telegramChannelId: row.telegramChannelId ?? "",
-        assignedMemberId:
-          row.assignedMemberId ?? row.assignedMember?.id ?? null,
-        promoIds: Array.isArray(row.promoIds)
-          ? row.promoIds
-          : row.promoId
-            ? [row.promoId]
-            : [],
-        inviteLinkIds: Array.isArray(row.inviteLinkIds)
-          ? row.inviteLinkIds
-          : row.telegramInviteLinkId
-            ? [row.telegramInviteLinkId]
-            : [],
-        advertisingChannelIds: campaignAdvertisingSources(row)
-          .map(advertisingSelectionId)
-          .filter(Boolean),
-        price: Number(row.price ?? row.costAmount ?? 0),
-        accountId: row.accountId ?? "",
-        date: toInputDate(row.placementDate || row.startedAt),
-        customTitle: row.customTitleTemplate ?? "",
-        notes: row.notes ?? "",
-      }
-    : {
-        telegramChannelId: "",
-        assignedMemberId: null,
-        promoIds: [],
-        inviteLinkIds: [],
-        advertisingChannelIds: [],
-        price: 0,
-        accountId: "",
-        date: formatLocalDate(new Date()),
-        customTitle: "",
-        notes: "",
-      };
+function isOwnTelegramChannel(channel: any) {
+  return Array.isArray(channel?.adminLinks) && channel.adminLinks.length > 0;
 }
 
 export default function AdsPage() {
@@ -316,10 +225,9 @@ function AdCampaignsPage({
         telegramChannelIds: channelScopeFilter || undefined,
         dateFrom: dateFrom || undefined,
         dateTo: dateTo || undefined,
-        sort: sort as "date_desc" | "date_asc" | "cost_desc" | "joined_desc",
+        sort,
       }),
     enabled: viewMode === "campaigns",
-    placeholderData: keepPreviousData,
   });
   const { data: performance } = useQuery({
     queryKey: ["ad-campaigns-performance", channelScopeFilter],
@@ -402,48 +310,8 @@ function AdCampaignsPage({
     setPromoFormOpen(true);
   }, [promoDeepLink.data, requestedPromoId, viewMode]);
 
-  const createMutation = useMutation({
-    mutationFn: adCampaignsApi.create,
-    onSuccess: () => {
-      void Promise.all(
-        [
-          adCampaignKeys.list(),
-          accountKeys.accounts(),
-          accountKeys.transactions(),
-          dashboardKeys.summary(),
-        ].map((queryKey) => qc.invalidateQueries({ queryKey })),
-      );
-    },
-  });
-  const updateMutation = useMutation({
-    mutationFn: ({ id, payload }: any) => adCampaignsApi.update(id, payload),
-    onSuccess: () => {
-      void Promise.all(
-        [
-          adCampaignKeys.list(),
-          accountKeys.accounts(),
-          accountKeys.transactions(),
-          dashboardKeys.summary(),
-        ].map((queryKey) => qc.invalidateQueries({ queryKey })),
-      );
-    },
-  });
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => adCampaignsApi.remove(id),
-    onSuccess: () => {
-      void Promise.all(
-        [
-          adCampaignKeys.list(),
-          accountKeys.accounts(),
-          accountKeys.transactions(),
-          dashboardKeys.summary(),
-        ].map((queryKey) => qc.invalidateQueries({ queryKey })),
-      );
-      qc.invalidateQueries({ queryKey: ["ad-campaigns-performance"] });
-      qc.invalidateQueries({ queryKey: ["ad-hypotheses"] });
-      qc.invalidateQueries({ queryKey: ["promos"] });
-    },
-  });
+  const { createMutation, updateMutation, deleteMutation } =
+    useAdCampaignMutations();
   const excludeMutation = useMutation({
     mutationFn: ({
       id,
@@ -494,6 +362,10 @@ function AdCampaignsPage({
       adHypothesesApi.updateCampaignAnalyticsInput(id, excludeFromAnalytics),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: adCampaignKeys.list() });
+      void qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() });
+      void qc.invalidateQueries({
+        queryKey: telegramChannelKeys.trafficAttributions(),
+      });
       qc.invalidateQueries({ queryKey: ["ad-hypotheses"] });
       qc.invalidateQueries({ queryKey: ["ad-campaigns-performance"] });
       pushToast(
@@ -573,7 +445,7 @@ function AdCampaignsPage({
       {sectionTabs}
       <Card className="mb-4">
         <div
-          className={`grid min-w-0 gap-3 md:grid-cols-2 ${viewMode === "campaigns" ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)_auto] lg:items-start" : "lg:max-w-4xl"}`}
+          className={`grid min-w-0 gap-3 md:grid-cols-2 ${viewMode === "campaigns" ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)_auto] lg:items-end" : "lg:max-w-4xl"}`}
         >
           <AdsChannelScopeFilter
             networks={channelNetworks ?? []}
@@ -919,8 +791,15 @@ function AdCampaignsPage({
         hypothesis={editingHypothesis}
         loading={editingHypothesisLoading}
         channels={ownTelegramChannels}
-        moneySettings={moneySettings}
-        rates={rates}
+        renderCampaign={(campaign, checked, onToggle) => (
+          <CampaignSelectRow
+            campaign={campaign}
+            checked={checked}
+            moneySettings={moneySettings}
+            rates={rates}
+            onToggle={onToggle}
+          />
+        )}
         isSubmitting={
           createHypothesisMutation.isPending ||
           updateHypothesisMutation.isPending
@@ -2296,336 +2175,6 @@ function HypothesesSection({
   );
 }
 
-function HypothesisFormModal({
-  open,
-  hypothesis,
-  loading = false,
-  channels,
-  moneySettings,
-  rates,
-  isSubmitting,
-  onClose,
-  onSubmit,
-}: {
-  open: boolean;
-  hypothesis: AdHypothesis | null;
-  loading?: boolean;
-  channels: TelegramChannel[];
-  moneySettings: any;
-  rates: any[] | undefined;
-  isSubmitting: boolean;
-  onClose: () => void;
-  onSubmit: (payload: {
-    name: string;
-    iconId?: string | null;
-    telegramChannelId: string;
-    assignedMemberId?: string | null;
-    description?: string | null;
-    adCampaignIds: string[];
-  }) => void | Promise<void>;
-}) {
-  const [iconId, setIconId] = useState<string | null>(null);
-  const [draftIconPresentation, setDraftIconPresentation] =
-    useState<ResolvedEmoji | null>(null);
-  const [telegramChannelId, setTelegramChannelId] = useState("");
-  const [assignedMemberId, setAssignedMemberId] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [campaignSearch, setCampaignSearch] = useState("");
-  const [error, setError] = useState("");
-  const campaignPagination = usePagination({ initialPageSize: 50 });
-  const deferredCampaignSearch = useDeferredValue(campaignSearch.trim());
-
-  useEffect(() => {
-    if (!open) return;
-    setIconId(hypothesis?.iconId || null);
-    setDraftIconPresentation(hypothesis?.iconPresentation ?? null);
-    setTelegramChannelId(hypothesis?.telegramChannelId || "");
-    setAssignedMemberId(
-      hypothesis?.assignedMemberId ?? hypothesis?.assignedMember?.id ?? null,
-    );
-    setName(hypothesis?.name || "");
-    setDescription(hypothesis?.description || "");
-    setSelectedIds(
-      Array.isArray((hypothesis as any)?.campaigns)
-        ? (hypothesis as any).campaigns.map(
-            (campaign: AdCampaign) => campaign.id,
-          )
-        : [],
-    );
-    setCampaignSearch("");
-    campaignPagination.resetPage();
-    setError("");
-  }, [hypothesis, open]);
-
-  const hypothesisDraft = useMemo<HypothesisDraftValues>(
-    () => ({
-      iconId,
-      telegramChannelId,
-      assignedMemberId,
-      name,
-      description,
-      selectedIds,
-    }),
-    [
-      assignedMemberId,
-      description,
-      iconId,
-      name,
-      selectedIds,
-      telegramChannelId,
-    ],
-  );
-  const hypothesisDraftPreview = useMemo(
-    () => ({ icon: draftIconPresentation }),
-    [draftIconPresentation],
-  );
-  const restoreHypothesisDraft = useCallback(
-    (
-      draft: HypothesisDraftValues,
-      storedDraft?: WorkspaceFormDraft<HypothesisDraftValues>,
-    ) => {
-      setIconId(draft.iconId ?? null);
-      setDraftIconPresentation(storedDraft?.preview?.icon ?? null);
-      setTelegramChannelId(draft.telegramChannelId);
-      setAssignedMemberId(draft.assignedMemberId);
-      setName(draft.name);
-      setDescription(draft.description);
-      setSelectedIds(draft.selectedIds);
-      setCampaignSearch("");
-      setError("");
-    },
-    [],
-  );
-  const emptyHypothesisDraft = useCallback(
-    (): HypothesisDraftValues => ({
-      iconId: null,
-      telegramChannelId: "",
-      assignedMemberId: null,
-      name: "",
-      description: "",
-      selectedIds: [],
-    }),
-    [],
-  );
-  const hypothesisDrafts = useWorkspaceModalDrafts({
-    namespace: "ads:hypothesis:draft",
-    open,
-    enabled: !hypothesis,
-    value: hypothesisDraft,
-    preview: hypothesisDraftPreview,
-    emptyValue: emptyHypothesisDraft,
-    onRestore: restoreHypothesisDraft,
-    isMeaningful: useCallback(
-      (draft: HypothesisDraftValues) =>
-        Boolean(
-          draft.name.trim() ||
-          draft.iconId ||
-          draft.description.trim() ||
-          draft.telegramChannelId ||
-          draft.selectedIds.length,
-        ),
-      [],
-    ),
-  });
-
-  const campaignsQuery = useQuery({
-    queryKey: [
-      "ad-campaigns-hypothesis-form",
-      telegramChannelId,
-      campaignPagination.page,
-      campaignPagination.pageSize,
-      deferredCampaignSearch,
-    ],
-    queryFn: () =>
-      adCampaignsApi.listPage({
-        telegramChannelId,
-        page: campaignPagination.page,
-        pageSize: campaignPagination.pageSize,
-        search: deferredCampaignSearch || undefined,
-      }),
-    enabled: open && !loading && Boolean(telegramChannelId),
-    placeholderData: keepPreviousData,
-  });
-
-  const visibleCampaigns = campaignsQuery.data?.items ?? [];
-
-  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
-  const toggleCampaign = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
-    );
-  };
-  const submit = async () => {
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      setError("Name is required.");
-      return;
-    }
-    if (!telegramChannelId) {
-      setError("Telegram channel is required.");
-      return;
-    }
-    if (!selectedIds.length) {
-      setError("Hypothesis must contain at least 1 campaign.");
-      return;
-    }
-    try {
-      await onSubmit({
-        name: trimmedName,
-        iconId,
-        telegramChannelId,
-        assignedMemberId,
-        description: description.trim() || null,
-        adCampaignIds: selectedIds,
-      });
-      hypothesisDrafts.clearCurrentDraft();
-    } catch {
-      setError("Could not save the hypothesis. Your draft is still available.");
-    }
-  };
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={hypothesis ? "Edit hypothesis" : "Create hypothesis"}
-    >
-      {loading ? <EditFormSkeleton /> : null}
-      {!loading && !hypothesis && hypothesisDrafts.pendingDrafts.length ? (
-        <ModalDraftPicker
-          drafts={hypothesisDrafts.pendingDrafts}
-          titleFor={(draft) => draft.name.trim() || "Unfinished hypothesis"}
-          onContinue={hypothesisDrafts.continueDraft}
-          onDelete={hypothesisDrafts.deleteDraft}
-          onCreateNew={hypothesisDrafts.createNewDraft}
-        />
-      ) : null}
-      {!loading && (hypothesis || !hypothesisDrafts.pendingDrafts.length) ? (
-        <div className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-[auto_minmax(0,1fr)]">
-            <FormField label="Emoji">
-              <IconPicker
-                compact
-                iconId={iconId}
-                icon={draftIconPresentation}
-                onChange={(value, presentation) => {
-                  setIconId(value);
-                  setDraftIconPresentation(presentation ?? null);
-                }}
-                buttonLabel="Add emoji"
-              />
-            </FormField>
-            <FormField label="Member">
-              <MemberSelect
-                value={assignedMemberId}
-                onChange={(value) => setAssignedMemberId(value || null)}
-                defaultToCurrent={!hypothesis}
-              />
-            </FormField>
-          </div>
-          <FormField label="Own Telegram Channel" required>
-            <CustomSelect
-              value={telegramChannelId}
-              onChange={(value) => {
-                if (value !== telegramChannelId) setSelectedIds([]);
-                setTelegramChannelId(value);
-                setCampaignSearch("");
-                campaignPagination.resetPage();
-                setError("");
-              }}
-              placeholder="Select channel"
-              options={channels.map((channel: TelegramChannel) => ({
-                value: channel.id,
-                label: channel.title,
-                iconUrl: channel.photoUrl,
-                iconFallback: channel.title,
-              }))}
-            />
-          </FormField>
-          <FormField label="Name" required>
-            <Input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </FormField>
-          <FormField label="Description">
-            <Textarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-            />
-          </FormField>
-          <div>
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <p className="text-sm font-medium text-slate-200">Campaigns</p>
-              <span className="text-xs text-slate-400">
-                {selectedIds.length} selected
-              </span>
-            </div>
-            <Input
-              value={campaignSearch}
-              onChange={(event) => {
-                setCampaignSearch(event.target.value);
-                campaignPagination.resetPage();
-              }}
-              placeholder="Search campaigns"
-              disabled={!telegramChannelId}
-              className="mb-2"
-            />
-            <div className="max-h-72 space-y-2 overflow-auto rounded-lg border border-slate-800 p-2">
-              {campaignsQuery.isLoading && telegramChannelId ? (
-                <p className="p-2 text-sm text-slate-400">Loading campaigns…</p>
-              ) : null}
-              {!telegramChannelId ? (
-                <p className="p-2 text-sm text-slate-400">
-                  Select a channel to load campaigns.
-                </p>
-              ) : null}
-              {visibleCampaigns.map((campaign: AdCampaign) => (
-                <CampaignSelectRow
-                  key={campaign.id}
-                  campaign={campaign}
-                  checked={selectedSet.has(campaign.id)}
-                  moneySettings={moneySettings}
-                  rates={rates}
-                  onToggle={() => toggleCampaign(campaign.id)}
-                />
-              ))}
-              {telegramChannelId &&
-              !campaignsQuery.isLoading &&
-              !visibleCampaigns.length ? (
-                <p className="p-2 text-sm text-slate-400">
-                  No campaigns available for this channel.
-                </p>
-              ) : null}
-            </div>
-            {campaignsQuery.data ? (
-              <Pagination
-                {...campaignsQuery.data.pagination}
-                onPageChange={campaignPagination.setPage}
-                onPageSizeChange={campaignPagination.setPageSize}
-                loading={campaignsQuery.isLoading}
-              />
-            ) : null}
-            {error ? (
-              <p className="mt-2 text-sm text-rose-300">{error}</p>
-            ) : null}
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="button" disabled={isSubmitting} onClick={submit}>
-              {isSubmitting ? "Saving..." : "Save"}
-            </Button>
-          </div>
-        </div>
-      ) : null}
-    </Modal>
-  );
-}
-
 function HypothesisCampaignsModal({
   hypothesis,
   moneySettings,
@@ -2829,457 +2378,4 @@ function getErrorMessage(error: unknown, fallback: string) {
   if (typeof responseMessage === "string" && responseMessage.trim())
     return responseMessage;
   return fallback;
-}
-
-function normalizeAdvertisingSelectionValue(value: unknown): string {
-  if (typeof value !== "string") return advertisingSelectionId(value);
-  const raw = value.trim();
-  if (!raw) return "";
-  if (raw.startsWith("source:") || raw.startsWith("person:")) {
-    return `source:${raw.replace(/^(source|person):/, "")}`;
-  }
-  if (raw.startsWith("channel:")) return raw;
-  return `channel:${raw}`;
-}
-
-function isOwnTelegramChannel(channel: any) {
-  return Array.isArray(channel?.adminLinks) && channel.adminLinks.length > 0;
-}
-
-function advertisingSelectionId(source: any): string {
-  if (!source) return "";
-  if (typeof source === "string")
-    return normalizeAdvertisingSelectionValue(source);
-  if (source?.selectionId) return source.selectionId;
-  if (source?.advertisingSourceId)
-    return `source:${source.advertisingSourceId}`;
-  if (source?.telegramChannelId) return `channel:${source.telegramChannelId}`;
-  const kind = String(
-    source?.sourceKind || source?.kind || source?.type || "",
-  ).toLowerCase();
-  if (
-    kind === "person" ||
-    kind === "advertising_source" ||
-    source?.telegramUsername ||
-    source?.contactInfo
-  ) {
-    return `source:${source.id}`;
-  }
-  return `channel:${source.id}`;
-}
-
-function campaignAdvertisingSources(row: any) {
-  if (Array.isArray(row?.advertisingChannels)) return row.advertisingChannels;
-  if (Array.isArray(row?.advertisingSources)) return row.advertisingSources;
-  if (Array.isArray(row?.advertisingChannelIds))
-    return row.advertisingChannelIds;
-  return [];
-}
-
-function mergeCampaignSelectOptions(
-  primary: CampaignSelectOption[],
-  fallback: CampaignSelectOption[],
-) {
-  const byId = new Map<string, CampaignSelectOption>();
-  [...fallback, ...primary].forEach((option) => {
-    if (!option?.value) return;
-    byId.set(option.value, option);
-  });
-  return [...byId.values()];
-}
-
-function CampaignModal({
-  open,
-  onClose,
-  onSubmit,
-  title,
-  initial,
-  channels,
-  loading = false,
-}: any) {
-  const {
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    reset,
-    formState: { errors },
-  } = useForm<CampaignValues>({
-    defaultValues: mapCampaignInitialValues(initial),
-  });
-  const selectedChannelId = watch("telegramChannelId");
-  const selectedPromoIds = watch("promoIds") || [];
-  const selectedInviteLinkIds = watch("inviteLinkIds") || [];
-  const selectedAdChannels = watch("advertisingChannelIds") || [];
-  const selectedDate = watch("date");
-  const customTitleValue = watch("customTitle");
-  const campaignDraftValue = watch();
-  const restoreCampaignDraft = useCallback(
-    (draft: CampaignValues) => reset(draft),
-    [reset],
-  );
-  const emptyCampaignDraft = useCallback(() => mapCampaignInitialValues(), []);
-  const campaignDrafts = useWorkspaceModalDrafts({
-    namespace: "ads:campaign:draft",
-    open,
-    enabled: !initial,
-    value: campaignDraftValue,
-    emptyValue: emptyCampaignDraft,
-    onRestore: restoreCampaignDraft,
-    isMeaningful: useCallback(
-      (draft: CampaignValues) =>
-        Boolean(
-          draft.telegramChannelId ||
-          draft.promoIds?.length ||
-          draft.inviteLinkIds?.length ||
-          draft.advertisingChannelIds?.length ||
-          Number(draft.price) ||
-          draft.accountId ||
-          draft.customTitle?.trim() ||
-          draft.notes?.trim() ||
-          (draft.date && draft.date !== formatLocalDate(new Date())),
-        ),
-      [],
-    ),
-  });
-
-  useEffect(() => {
-    register("advertisingChannelIds");
-    register("promoIds");
-    register("inviteLinkIds");
-  }, [register]);
-
-  useEffect(() => {
-    if (!open) return;
-    reset(mapCampaignInitialValues(initial));
-  }, [open, initial, reset]);
-
-  useEffect(() => {
-    if (!selectedChannelId) return;
-    const ownChannelKeys = new Set([
-      selectedChannelId,
-      `channel:${selectedChannelId}`,
-    ]);
-    if (!selectedAdChannels.some((id) => ownChannelKeys.has(id))) return;
-    setValue(
-      "advertisingChannelIds",
-      selectedAdChannels.filter((id) => !ownChannelKeys.has(id)),
-      { shouldValidate: true, shouldDirty: true },
-    );
-  }, [selectedAdChannels, selectedChannelId, setValue]);
-
-  const { data: promos } = useQuery({
-    queryKey: ["channel-promos", selectedChannelId],
-    queryFn: () => getTelegramChannelPromos(selectedChannelId),
-    enabled: open && !loading && !!selectedChannelId,
-  });
-  const { data: accounts } = useQuery({
-    queryKey: ["accounts"],
-    queryFn: accountsApi.list,
-    enabled: open && !loading,
-  });
-  const { data: people } = useQuery({
-    queryKey: ["advertising-people"],
-    queryFn: advertisingChannelsApi.list,
-    enabled: open && !loading,
-  });
-
-  const availablePromos = useMemo(() => promos ?? [], [promos]);
-  const ownTelegramChannels = useMemo(
-    () => (channels || []).filter(isOwnTelegramChannel),
-    [channels],
-  );
-  const promoOptions = useMemo(() => {
-    const liveOptions = availablePromos.map((promo: Promo) => ({
-      value: promo.id,
-      label: promo.title,
-      iconUrl:
-        promo.iconPresentation?.type === "image"
-          ? promo.iconPresentation.url
-          : undefined,
-      iconEmoji:
-        promo.iconPresentation?.type === "unicode"
-          ? promo.iconPresentation.value
-          : undefined,
-      iconFallback: promo.title,
-      description: promo.telegramChannel?.title,
-      searchText: promo.text,
-    }));
-    const initialOptions = (
-      initial?.promos || (initial?.promo ? [initial.promo] : [])
-    ).map((promo: Promo) => ({
-      value: promo.id,
-      label: promo.title,
-      iconUrl:
-        promo.iconPresentation?.type === "image"
-          ? promo.iconPresentation.url
-          : undefined,
-      iconEmoji:
-        promo.iconPresentation?.type === "unicode"
-          ? promo.iconPresentation.value
-          : undefined,
-      iconFallback: promo.title,
-      description: promo.telegramChannel?.title,
-      searchText: promo.text,
-    }));
-    return mergeCampaignSelectOptions(liveOptions, initialOptions);
-  }, [availablePromos, initial]);
-  const advertisingSources = useMemo(() => {
-    const liveOptions = [
-      ...(people || []).map((person: any) => ({
-        value: person.selectionId || `source:${person.id}`,
-        label: person.title || person.name,
-        iconUrl: person.imageUrl ?? undefined,
-        iconFallback: person.title || person.name,
-        description: "Person",
-        searchText: `${person.telegramUsername || ""} ${person.contactInfo || ""}`,
-      })),
-      ...(channels || [])
-        .filter((channel: any) => channel.id !== selectedChannelId)
-        .map((channel: any) => {
-          const isOwn = isOwnTelegramChannel(channel);
-          return {
-            value: `channel:${channel.id}`,
-            label: channel.title,
-            iconUrl: channel.photoUrl ?? undefined,
-            iconFallback: channel.title,
-            description: isOwn ? "Own channel" : "External channel",
-            searchText: channel.username || "",
-          };
-        }),
-    ];
-    const initialOptions = campaignAdvertisingSources(initial).map(
-      (source: any) => ({
-        value: advertisingSelectionId(source),
-        label: source.title || source.name,
-        iconUrl: source.photoUrl || source.imageUrl || undefined,
-        iconFallback: source.title || source.name,
-        description:
-          source.selectionId?.startsWith("source:") ||
-          source.sourceKind === "person" ||
-          source.kind === "person"
-            ? "Person"
-            : "External channel",
-        searchText: `${source.username || source.telegramUsername || ""} ${source.contactInfo || ""}`,
-      }),
-    );
-    return mergeCampaignSelectOptions(liveOptions, initialOptions);
-  }, [channels, initial, people, selectedChannelId]);
-
-  return (
-    <Modal open={open} onClose={onClose} title={title}>
-      {loading ? <EditFormSkeleton /> : null}
-      {!loading && !initial && campaignDrafts.pendingDrafts.length ? (
-        <ModalDraftPicker
-          drafts={campaignDrafts.pendingDrafts}
-          titleFor={(draft) =>
-            draft.customTitle?.trim() || "Unfinished ad campaign"
-          }
-          onContinue={campaignDrafts.continueDraft}
-          onDelete={campaignDrafts.deleteDraft}
-          onCreateNew={campaignDrafts.createNewDraft}
-        />
-      ) : null}
-      {!loading && (initial || !campaignDrafts.pendingDrafts.length) ? (
-        <form
-          className="space-y-3"
-          onSubmit={handleSubmit(async (v: any) => {
-            try {
-              await onSubmit({
-                ...v,
-                assignedMemberId: v.assignedMemberId || null,
-                promoIds: v.promoIds || [],
-                inviteLinkIds: v.inviteLinkIds || [],
-                price: Number(v.price),
-                advertisingChannelIds: v.advertisingChannelIds || [],
-                customTitle: v.customTitle?.trim() || null,
-              });
-              campaignDrafts.clearCurrentDraft();
-            } catch {
-              // The operation alert reports the API error; keep the draft.
-            }
-          })}
-        >
-          <FormField label="Custom title">
-            <Input
-              placeholder="[date] // custom campaign name"
-              {...register("customTitle")}
-            />
-            <p className="text-sm text-slate-500">
-              Optional. Use [date] to insert the campaign date automatically.
-            </p>
-            {customTitleValue?.trim() ? (
-              <p className="text-sm text-slate-400">
-                Preview:{" "}
-                {resolveTitleTemplate(customTitleValue, {
-                  date: selectedDate || formatLocalDate(new Date()),
-                })}
-              </p>
-            ) : null}
-          </FormField>
-          <FormField
-            label="Own Telegram Channel"
-            required
-            error={errors.telegramChannelId ? "Required field" : undefined}
-          >
-            <CustomSelect
-              value={watch("telegramChannelId")}
-              onChange={(v) => {
-                setValue("telegramChannelId", v, {
-                  shouldValidate: true,
-                  shouldDirty: true,
-                });
-                setValue("promoIds", [], {
-                  shouldDirty: true,
-                  shouldValidate: true,
-                });
-                setValue("inviteLinkIds", [], {
-                  shouldDirty: true,
-                  shouldValidate: true,
-                });
-              }}
-              placeholder="Select"
-              options={ownTelegramChannels.map((x: any) => ({
-                value: x.id,
-                label: x.title,
-                iconUrl: x.photoUrl,
-                iconFallback: x.title,
-              }))}
-            />
-          </FormField>
-          <FormField label="Member">
-            <MemberSelect
-              value={watch("assignedMemberId") ?? null}
-              onChange={(assignedMemberId) =>
-                setValue("assignedMemberId", assignedMemberId || null, {
-                  shouldDirty: true,
-                })
-              }
-              defaultToCurrent={!initial}
-            />
-          </FormField>
-          <FormField label="Promos">
-            <MultiValueSelect
-              value={selectedPromoIds}
-              onChange={(next) =>
-                setValue("promoIds", next, {
-                  shouldValidate: true,
-                  shouldDirty: true,
-                })
-              }
-              options={promoOptions}
-              placeholder="Select promos"
-            />
-          </FormField>
-          <FormField label="Invite Links">
-            <CampaignInviteLinksSelect
-              channelId={selectedChannelId}
-              campaignId={initial?.id}
-              value={selectedInviteLinkIds}
-              initialLinks={
-                initial?.inviteLinks ||
-                (initial?.telegramInviteLink
-                  ? [initial.telegramInviteLink]
-                  : [])
-              }
-              enabled={open && !loading}
-              onChange={(next) =>
-                setValue("inviteLinkIds", next, {
-                  shouldValidate: true,
-                  shouldDirty: true,
-                })
-              }
-            />
-          </FormField>
-          <FormField label="Advertising Sources">
-            <MultiValueSelect
-              value={selectedAdChannels.filter(
-                (id) =>
-                  id !== `channel:${selectedChannelId}` &&
-                  id !== selectedChannelId,
-              )}
-              onChange={(next) =>
-                setValue("advertisingChannelIds", next, {
-                  shouldValidate: true,
-                  shouldDirty: true,
-                })
-              }
-              options={advertisingSources}
-              placeholder="Select sources"
-            />
-          </FormField>
-          <FormField
-            label="Cost amount"
-            required
-            error={errors.price ? "Required field" : undefined}
-          >
-            <Input
-              type="number"
-              step="0.01"
-              {...register("price", { valueAsNumber: true, required: true })}
-            />
-          </FormField>
-          <FormField
-            label="Account"
-            required
-            error={errors.accountId ? "Required field" : undefined}
-          >
-            <CustomSelect
-              value={watch("accountId")}
-              onChange={(v) =>
-                setValue("accountId", v, {
-                  shouldValidate: true,
-                  shouldDirty: true,
-                })
-              }
-              placeholder="Select account"
-              options={(accounts || []).map(accountAdCampaignSelectOption)}
-            />
-          </FormField>
-          <FormField label="Date">
-            <DateInput
-              name="date"
-              value={watch("date") || ""}
-              onChange={(e) =>
-                setValue("date", e.target.value, { shouldDirty: true })
-              }
-            />
-          </FormField>
-          <FormField label="Notes">
-            <Textarea {...register("notes")} />
-          </FormField>
-          <input
-            type="hidden"
-            {...register("telegramChannelId", { required: true })}
-          />
-          <input type="hidden" {...register("accountId", { required: true })} />
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" type="button" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit">Save</Button>
-          </div>
-        </form>
-      ) : null}
-    </Modal>
-  );
-}
-
-function EditFormSkeleton() {
-  return (
-    <div className="space-y-4" role="status" aria-label="Loading form">
-      <span className="sr-only">Loading form…</span>
-      <div className="grid gap-3 md:grid-cols-2">
-        <Skeleton className="h-[68px]" />
-        <Skeleton className="h-[68px]" />
-      </div>
-      <Skeleton className="h-[68px]" />
-      <Skeleton className="h-[68px]" />
-      <Skeleton className="h-28" />
-      <div className="flex justify-end gap-2">
-        <Skeleton className="h-10 w-24" />
-        <Skeleton className="h-10 w-24" />
-      </div>
-    </div>
-  );
 }

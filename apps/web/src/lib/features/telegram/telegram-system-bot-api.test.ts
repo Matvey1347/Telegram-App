@@ -59,7 +59,7 @@ describe("telegramSystemBotApi subscriptions", () => {
     );
   });
 
-  it("sends an edited mutual-promotion post to the bot preview endpoint", async () => {
+  it("sends an edited post to the canonical preview endpoint", async () => {
     const draft = {
       title: "Post",
       text: "**Preview**",
@@ -73,11 +73,11 @@ describe("telegramSystemBotApi subscriptions", () => {
       post,
     } as unknown as AxiosInstance);
 
-    await expect(client.sendMutualPromotionPostPreview(draft)).resolves.toEqual(
+    await expect(client.sendPostPreview(draft)).resolves.toEqual(
       { status: "SENT" },
     );
     expect(post).toHaveBeenCalledWith(
-      "/telegram/system-bot/mutual-promotion-post-preview",
+      "/telegram/system-bot/post-preview",
       {
         title: "Post",
         text: "**Preview**",
@@ -88,18 +88,29 @@ describe("telegramSystemBotApi subscriptions", () => {
     );
   });
 
-  it("starts promo import with the dedicated Promo destination", async () => {
-    const post = vi.fn().mockResolvedValue({ data: { workflowId: "promo-1" } });
+  it("starts a canonical multiple-post import", async () => {
+    const post = vi.fn().mockResolvedValue({ data: { workflowId: "flow-1", mode: "multiple" } });
     const client = createTelegramSystemBotApi({
       post,
     } as unknown as AxiosInstance);
 
-    await expect(client.preparePromoPostImport()).resolves.toEqual({
-      workflowId: "promo-1",
+    await expect(
+      client.startPostImport({
+        mode: "multiple",
+        context: "Mass publication",
+        replaceActive: true,
+      }),
+    ).resolves.toEqual({
+      workflowId: "flow-1",
+      mode: "multiple",
     });
     expect(post).toHaveBeenCalledWith(
-      "/telegram/system-bot/promo-post-import",
-      undefined,
+      "/telegram/system-bot/post-imports",
+      {
+        mode: "multiple",
+        context: "Mass publication",
+        replaceActive: true,
+      },
       { feedback: { mode: "silent" } },
     );
   });
@@ -110,14 +121,24 @@ describe("telegramSystemBotApi subscriptions", () => {
       get,
     } as unknown as AxiosInstance);
 
-    await client.promoPostImportResult("workflow-1");
+    await client.readPostImport("workflow-1");
 
     expect(get).toHaveBeenCalledWith(
-      "/telegram/system-bot/promo-post-import",
+      "/telegram/system-bot/post-imports/workflow-1",
       expect.objectContaining({
         headers: { "Cache-Control": "no-cache" },
-        params: expect.objectContaining({ workflowId: "workflow-1" }),
+        params: expect.objectContaining({ _: expect.any(Number) }),
       }),
+    );
+  });
+
+  it("cancels the exact canonical workflow", async () => {
+    const del = vi.fn().mockResolvedValue({ data: { workflowId: "flow/1", mode: "single", status: "CANCELLED" } });
+    const client = createTelegramSystemBotApi({ delete: del } as unknown as AxiosInstance);
+    await client.cancelPostImport("flow/1");
+    expect(del).toHaveBeenCalledWith(
+      "/telegram/system-bot/post-imports/flow%2F1",
+      { feedback: { mode: "silent" } },
     );
   });
 

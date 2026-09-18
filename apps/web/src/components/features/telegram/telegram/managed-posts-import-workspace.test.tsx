@@ -78,6 +78,9 @@ describe("ManagedPostsImportWorkspace", () => {
     expect(
       screen.queryByRole("button", { name: /carpathian trail mood/i }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId("managed-post-import-identity-fields"),
+    ).toHaveClass("sm:grid-cols-[36px_minmax(0,1fr)]");
 
     fireEvent.click(screen.getByRole("checkbox", { name: "Approved" }));
 

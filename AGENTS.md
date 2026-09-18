@@ -121,6 +121,24 @@ If behavior must work "across the site", do not patch multiple pages separately.
 4. Add contract/component tests.
 5. Run repo-wide search for the old pattern and clean it up.
 
+## Workspace-local modal drafts
+
+- Browser-local modal/form drafts use the canonical `useWorkspaceModalDrafts`
+  session, `workspace-modal-drafts` storage codec, and `ModalDraftPicker`.
+- Feature code supplies only its stable namespace, value/seed, normalization,
+  meaningfulness, preview metadata, restore mapping, and successful-submit
+  cleanup. It must not implement its own localStorage draft lifecycle.
+- Before adding modal drafts, search for the canonical hook and picker. Multiple
+  drafts, Continue/Delete/Create new, autosave, and workspace isolation must
+  retain the shared UX semantics. See
+  `docs/design-system/MODAL_DRAFTS.md` for the integration contract.
+
+## System Bot website post import
+
+- Website-driven System Bot post capture always uses the canonical shared post-import API and `useTelegramSystemBotPostFlow` with mode `single` or `multiple`.
+- Feature-specific System Bot post-import endpoints, workflow kinds, transport adapters, and preview URLs are forbidden unless a separate architecture decision proves different capture semantics.
+- Consumer features own only what happens after capture: draft placement, channels, slots, scheduling, validation, and domain persistence. See `docs/external-integrations/system-bot-post-import.md`.
+
 ## Emoji and icon architecture
 
 - Display emoji/icons through the shared `ResolvedEmoji` contract and frontend `IconAvatar`.

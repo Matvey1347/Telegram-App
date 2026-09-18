@@ -163,6 +163,35 @@ test("rejects duplicate HTTP clients and framework leakage", () => {
   assert.match(apiFailures.join("\n"), /cannot depend on React or Next/);
 });
 
+test("rejects feature-specific System Bot post-import transports", () => {
+  const failures = inspectArchitectureSource(
+    "apps/web/src/lib/features/growth/example-api.ts",
+    `client.post("/telegram/system-bot/promo-post-import");`,
+  );
+  assert.match(failures.join("\n"), /canonical post-import API/);
+});
+
+test("rejects feature-owned low-level modal draft persistence", () => {
+  const failures = inspectArchitectureSource(
+    "apps/web/src/components/features/example/example-modal.tsx",
+    `
+      import { readWorkspaceModalDrafts } from "@/lib/workspace-modal-drafts";
+      export function ExampleModal() { return readWorkspaceModalDrafts; }
+    `,
+  );
+  assert.match(failures.join("\n"), /must use useWorkspaceModalDrafts/);
+
+  const canonicalConsumer = inspectArchitectureSource(
+    "apps/web/src/components/features/example/example-modal.tsx",
+    `
+      import { selectedWorkspaceDraftScope } from "@/lib/workspace-modal-drafts";
+      import { useWorkspaceModalDrafts } from "@/hooks/use-workspace-modal-drafts";
+      export function ExampleModal() { return selectedWorkspaceDraftScope() && useWorkspaceModalDrafts; }
+    `,
+  );
+  assert.deepEqual(canonicalConsumer, []);
+});
+
 test("rejects query and API orchestration in new App Router pages", () => {
   const failures = inspectArchitectureSource(
     "apps/web/src/app/(internal)/(example)/page.tsx",

@@ -120,6 +120,39 @@ describe('UpdateTelegramChannelDto', () => {
     expect(dto.botInviteLinkId).toBe('invite-bot');
     expect(validateSync(dto)).toEqual([]);
   });
+
+  it('accepts broadcast, audience-transfer and internal CPM settings', () => {
+    const dto = plainToInstance(UpdateTelegramChannelDto, {
+      broadcastInviteLinkId: 'invite-broadcast',
+      audienceTransferInviteLinkId: 'invite-transfer',
+      internalCpm: '175.5',
+    });
+
+    expect(dto.broadcastInviteLinkId).toBe('invite-broadcast');
+    expect(dto.audienceTransferInviteLinkId).toBe('invite-transfer');
+    expect(dto.internalCpm).toBe(175.5);
+    expect(validateSync(dto)).toEqual([]);
+  });
+
+  it('rejects a negative internal CPM', () => {
+    const dto = plainToInstance(UpdateTelegramChannelDto, {
+      internalCpm: -1,
+    });
+
+    expect(validateSync(dto)).not.toEqual([]);
+  });
+
+  it('limits the channel short description to 240 characters', () => {
+    const valid = plainToInstance(UpdateTelegramChannelDto, {
+      shortDescription: 'a'.repeat(240),
+    });
+    const oversized = plainToInstance(UpdateTelegramChannelDto, {
+      shortDescription: 'a'.repeat(241),
+    });
+
+    expect(validateSync(valid)).toEqual([]);
+    expect(validateSync(oversized)).not.toEqual([]);
+  });
 });
 
 describe('TelegramChannelInviteLinksQueryDto', () => {

@@ -27,6 +27,15 @@ type Placement = {
 const json = <T>(value: unknown, fallback: T): T =>
   value && typeof value === 'object' ? (value as T) : fallback;
 
+function partnerTrackingEndsAt(post: CrossPromotionPlacementPost) {
+  const timestamps = (post.partnerPlacements ?? [])
+    .flatMap((placement) =>
+      placement.deleteAt ? [Date.parse(placement.deleteAt)] : [],
+    )
+    .filter(Number.isFinite);
+  return timestamps.length ? Math.max(...timestamps) : null;
+}
+
 @Injectable()
 export class CrossPromotionPlanReadService {
   constructor(private readonly prisma: PrismaService) {}
@@ -92,8 +101,14 @@ export class CrossPromotionPlanReadService {
     const boundaries = rows.flatMap((row) =>
       row.trackingEndsAt ? [new Date(row.trackingEndsAt)] : [],
     );
+    // Invite-link counters are sampled in batches. Fetch through the next
+    // expected sample so an end-of-placement counter is not understated just
+    // because the sync landed shortly after the precise end time.
     const maxBoundary = boundaries.length
-      ? new Date(Math.max(...boundaries.map((date) => date.getTime())))
+      ? new Date(
+          Math.max(...boundaries.map((date) => date.getTime())) +
+            30 * 3_600_000,
+        )
       : null;
     const [
       channels,
@@ -116,7 +131,19 @@ export class CrossPromotionPlanReadService {
       }),
       this.prisma.promo.findMany({
         where: { workspaceId, id: { in: promoIds } },
-        select: { id: true, title: true },
+        select: {
+          id: true,
+          title: true,
+          icon: {
+            select: {
+              id: true,
+              type: true,
+              name: true,
+              emoji: true,
+              imageUrl: true,
+            },
+          },
+        },
       }),
       this.prisma.telegramInviteLink.findMany({
         where: { workspaceId, id: { in: linkIds } },
@@ -232,6 +259,47 @@ export class CrossPromotionPlanReadService {
           },
         })
       : [];
+    // A legacy failed re-schedule could clear placementPostIds even though the
+    // Telegram posts remain in our import. Recover only an exact post text at
+    // its planned channel and time, so we never attribute an arbitrary post.
+    const recoveryCandidates = rows.flatMap((row) => {
+      const placements = placementsByPlan.get(row.id) ?? [];
+      const publicationPost = publicationPostsByPlan.get(row.id)!;
+      const recoveryText =
+        publicationPost.plainText?.trim() || publicationPost.text.trim();
+      if (placements.length || !recoveryText) return [];
+      const publisherPlacements = publicationPost.publisherPlacements ?? [];
+      return row.publisherChannelIds.flatMap((telegramChannelId) => {
+        const scheduledAt = publisherPlacements.find(
+          (placement) => placement.telegramChannelId === telegramChannelId,
+        )?.scheduledAt;
+        if (!scheduledAt) return [];
+        const instant = new Date(scheduledAt).getTime();
+        return Number.isNaN(instant)
+          ? []
+          : [
+              {
+                telegramChannelId,
+                text: recoveryText,
+                postDate: {
+                  gte: new Date(instant - 2 * 3_600_000),
+                  lte: new Date(instant + 2 * 3_600_000),
+                },
+              },
+            ];
+      });
+    });
+    const recoveredTelegramPosts = recoveryCandidates.length
+      ? await this.prisma.telegramPost.findMany({
+          where: { workspaceId, OR: recoveryCandidates },
+          select: {
+            telegramChannelId: true,
+            telegramMessageId: true,
+            viewsCount: true,
+            reactionsCount: true,
+          },
+        })
+      : [];
     const channelById = new Map(
       channels.map((channel) => [channel.id, channel]),
     );
@@ -271,14 +339,32 @@ export class CrossPromotionPlanReadService {
         : null;
       const placements = placementsByPlan.get(row.id) ?? [];
       const publicationPost = publicationPostsByPlan.get(row.id)!;
-      const linkAtEnd = (id: string) =>
-        boundary == null
-          ? null
-          : linkSnapshots.find(
-              (snapshot) =>
-                snapshot.inviteLinkId === id &&
-                new Date(snapshot.syncedAt).getTime() <= boundary,
-            );
+      const historicalDraft =
+        row.status === 'DRAFT' &&
+        new Date(row.scheduledAt).getTime() <= Date.now() &&
+        baselines.length > 0;
+      const linkAtEnd = (id: string, boundaryAt: number | null = boundary) => {
+        if (boundaryAt == null) return null;
+        const snapshots = linkSnapshots.filter(
+          (snapshot) => snapshot.inviteLinkId === id,
+        );
+        const firstAtOrAfterEnd = snapshots
+          .filter(
+            (snapshot) => new Date(snapshot.syncedAt).getTime() >= boundaryAt,
+          )
+          .sort(
+            (left, right) =>
+              new Date(left.syncedAt).getTime() -
+              new Date(right.syncedAt).getTime(),
+          )[0];
+        return (
+          firstAtOrAfterEnd ??
+          snapshots.find(
+            (snapshot) => new Date(snapshot.syncedAt).getTime() <= boundaryAt,
+          ) ??
+          null
+        );
+      };
       const channelAtEnd = (id: string) =>
         boundary == null
           ? null
@@ -289,11 +375,13 @@ export class CrossPromotionPlanReadService {
             );
       return {
         ...row,
-        status:
-          row.status === 'SCHEDULED' &&
-          new Date(row.scheduledAt).getTime() <= Date.now()
+        status: historicalDraft
+          ? 'COMPLETED'
+          : row.status === 'SCHEDULED' &&
+              new Date(row.scheduledAt).getTime() <= Date.now()
             ? 'ACTIVE'
             : row.status,
+        lastError: historicalDraft ? null : row.lastError,
         advertiser: row.advertiserId
           ? (advertiserById.get(row.advertiserId) ?? null)
           : null,
@@ -308,25 +396,37 @@ export class CrossPromotionPlanReadService {
         targetResults: targets.map((target) => {
           const channel = channelById.get(target.telegramChannelId);
           const currentLink = linkById.get(target.inviteLinkId);
-          const link = linkAtEnd(target.inviteLinkId) ?? currentLink;
+          const targetBoundary =
+            partnerTrackingEndsAt(publicationPost) ?? boundary;
+          const link =
+            linkAtEnd(target.inviteLinkId, targetBoundary) ?? currentLink;
           const baseline = baselineByLink.get(target.inviteLinkId);
+          const promo = target.promoId
+            ? promoById.get(target.promoId)
+            : undefined;
+          const inviteLinkTotalJoinedCount = Number(link?.joinedCount ?? 0);
+          const inviteLinkTotalRequestedCount = Number(
+            link?.requestedCount ?? 0,
+          );
           return {
             telegramChannelId: target.telegramChannelId,
             title: channel?.title ?? 'Unavailable channel',
             photoUrl: channel?.photoUrl ?? null,
+            promoId: target.promoId ?? null,
             promoTitle:
-              (target.promoId
-                ? promoById.get(target.promoId)?.title
-                : 'Custom promo') ?? 'Unavailable promo',
+              (target.promoId ? promo?.title : 'Custom promo') ??
+              'Unavailable promo',
+            promoIconPresentation: iconToResolvedEmoji(promo?.icon ?? null),
             inviteLinkUrl: currentLink?.url ?? '',
+            inviteLinkTotalJoinedCount,
+            inviteLinkTotalRequestedCount,
             joinedCount: Math.max(
               0,
-              Number(link?.joinedCount ?? 0) -
-                Number(baseline?.joinedCount ?? 0),
+              inviteLinkTotalJoinedCount - Number(baseline?.joinedCount ?? 0),
             ),
             requestedCount: Math.max(
               0,
-              Number(link?.requestedCount ?? 0) -
+              inviteLinkTotalRequestedCount -
                 Number(baseline?.requestedCount ?? 0),
             ),
           };
@@ -348,6 +448,11 @@ export class CrossPromotionPlanReadService {
               post.telegramChannelId === channelId &&
               managedPost?.telegramMessageIds.includes(post.telegramMessageId),
           );
+          const resultPosts = publishedRows.length
+            ? publishedRows
+            : recoveredTelegramPosts.filter(
+                (post) => post.telegramChannelId === channelId,
+              );
           return {
             telegramChannelId: channelId,
             title: channel?.title ?? 'Unavailable channel',
@@ -356,14 +461,14 @@ export class CrossPromotionPlanReadService {
               before == null || after == null
                 ? null
                 : Math.max(0, before - after),
-            postViews: publishedRows.length
-              ? publishedRows.reduce(
+            postViews: resultPosts.length
+              ? resultPosts.reduce(
                   (sum, post) => sum + Number(post.viewsCount ?? 0),
                   0,
                 )
               : null,
-            postReactions: publishedRows.length
-              ? publishedRows.reduce(
+            postReactions: resultPosts.length
+              ? resultPosts.reduce(
                   (sum, post) => sum + Number(post.reactionsCount ?? 0),
                   0,
                 )

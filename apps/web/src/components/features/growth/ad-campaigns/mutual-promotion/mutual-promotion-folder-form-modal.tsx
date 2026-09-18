@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Forward } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type {
   CreateMutualPromotionFolderPayload,
@@ -12,15 +11,10 @@ import { mutualPromotionFoldersApi } from "@/lib/features/growth/mutual-promotio
 import { mutualPromotionFolderKeys } from "@/lib/query-keys";
 import {
   Button,
-  DateInput,
   ErrorState,
   FormError,
-  FormField,
-  Input,
   LoadingState,
   Modal,
-  Textarea,
-  TimeInput,
 } from "@/components/ui/primitives";
 import {
   emptyFolderDraft,
@@ -32,6 +26,8 @@ import {
 import { MutualPromotionParticipantsEditor } from "./mutual-promotion-participants-editor";
 import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
 import { useWorkspaceModalDrafts } from "@/hooks/use-workspace-modal-drafts";
+import { selectedWorkspaceDraftScope } from "@/lib/workspace-modal-drafts";
+import { MutualPromotionFolderDetails } from "./mutual-promotion-folder-details";
 
 function validateDraft(draft: FolderDraft, timezone: string) {
   if (!draft.title.trim()) return "Enter a folder title.";
@@ -129,9 +125,12 @@ export function MutualPromotionFolderFormModal({
     );
     setError(null);
   }, [folder, open, timezone]);
-  const createEmptyDraft = useCallback(
-    () => emptyFolderDraft(timezone),
-    [timezone],
+  const createInitialDraft = useCallback(
+    () =>
+      folder
+        ? folderDetailToDraft(folder, timezone)
+        : emptyFolderDraft(timezone),
+    [folder, timezone],
   );
   const restoreDraft = useCallback((value: FolderDraft) => {
     setDraft(value);
@@ -139,22 +138,24 @@ export function MutualPromotionFolderFormModal({
   }, []);
   const isMeaningfulDraft = useCallback(
     (value: FolderDraft) =>
-      Boolean(
-        value.title.trim() ||
-        value.notes.trim() ||
-        value.participants.length > 0 ||
-        JSON.stringify(value) !== JSON.stringify(emptyFolderDraft(timezone)),
-      ),
-    [timezone],
+      JSON.stringify(value) !== JSON.stringify(createInitialDraft()),
+    [createInitialDraft],
   );
-  const modalDrafts = useWorkspaceModalDrafts({
-    namespace: "mutual-promotion-folder:draft",
+  const modalDrafts = useWorkspaceModalDrafts<FolderDraft>({
+    namespace: folder
+      ? `mutual-promotion-folder:edit:${folder.id}:draft`
+      : "mutual-promotion-folder:draft",
+    workspaceId: selectedWorkspaceDraftScope(),
+    schemaVersion: 1,
     open,
-    enabled: !folder,
+    enabled: true,
     value: draft,
-    emptyValue: createEmptyDraft,
+    createInitialValue: createInitialDraft,
     onRestore: restoreDraft,
     isMeaningful: isMeaningfulDraft,
+    previewFor: (value) => ({
+      title: value.title.trim() || "Unfinished mutual-promotion draft",
+    }),
   });
 
   const updateDraft = useCallback((next: FolderDraft) => {
@@ -242,9 +243,7 @@ export function MutualPromotionFolderFormModal({
     setError(null);
     try {
       await onSubmit(toPayload(resolvedDraft, timezone));
-      if (!folder) {
-        modalDrafts.clearCurrentDraft();
-      }
+      modalDrafts.clearCurrentDraft();
     } catch {
       setError(
         "Could not save the folder. Check the selected links and dates.",
@@ -261,7 +260,7 @@ export function MutualPromotionFolderFormModal({
       }
       size="xl"
     >
-      {!folder && modalDrafts.pendingDrafts.length ? (
+      {modalDrafts.pendingDrafts.length ? (
         <ModalDraftPicker
           drafts={modalDrafts.pendingDrafts}
           titleFor={(form) =>
@@ -274,97 +273,12 @@ export function MutualPromotionFolderFormModal({
       ) : (
         <>
           <div className="grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-            <div className="space-y-4">
-              <FormField label="Folder title" required>
-                <Input
-                  autoFocus
-                  value={draft.title}
-                  onChange={(event) =>
-                    updateDraft({ ...draft, title: event.target.value })
-                  }
-                  placeholder="September // [date-range]"
-                />
-                <p className="text-xs text-neutral-500">
-                  Use [date-range] to insert the folder period automatically.
-                </p>
-                {draft.title.trim() ? (
-                  <p className="text-xs font-medium text-blue-300">
-                    Preview: {titlePreview}
-                  </p>
-                ) : null}
-              </FormField>
-              <div className="grid grid-cols-[minmax(0,1fr)_110px] gap-2">
-                <FormField label="Starts" required>
-                  <DateInput
-                    value={draft.startsDate}
-                    onChange={(event) =>
-                      updateDraft({ ...draft, startsDate: event.target.value })
-                    }
-                  />
-                </FormField>
-                <FormField label="Time" required>
-                  <TimeInput
-                    value={draft.startsTime}
-                    onChange={(event) =>
-                      updateDraft({ ...draft, startsTime: event.target.value })
-                    }
-                  />
-                </FormField>
-              </div>
-              <div className="grid grid-cols-[minmax(0,1fr)_110px] gap-2">
-                <FormField label="Ends and removes posts" required>
-                  <DateInput
-                    value={draft.endsDate}
-                    onChange={(event) =>
-                      updateDraft({ ...draft, endsDate: event.target.value })
-                    }
-                  />
-                </FormField>
-                <FormField label="Time" required>
-                  <TimeInput
-                    value={draft.endsTime}
-                    onChange={(event) =>
-                      updateDraft({ ...draft, endsTime: event.target.value })
-                    }
-                  />
-                </FormField>
-              </div>
-              <FormField label="Notes">
-                <Textarea
-                  rows={4}
-                  value={draft.notes}
-                  onChange={(event) =>
-                    updateDraft({ ...draft, notes: event.target.value })
-                  }
-                  placeholder="Internal notes"
-                />
-              </FormField>
-              {!folder ? (
-                <div className="rounded-xl border border-blue-800/70 bg-blue-950/25 p-3">
-                  <div className="flex items-start gap-2">
-                    <Forward
-                      size={17}
-                      className="mt-0.5 shrink-0 text-blue-300"
-                    />
-                    <div>
-                      <p className="text-sm font-semibold text-blue-100">
-                        Next: forward and schedule publications
-                      </p>
-                      <p className="mt-1 text-xs text-blue-200/70">
-                        After the folder is created, it opens automatically.
-                        Forward posts through the system bot and set a
-                        publication date and time for each one.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-              <div className="rounded-xl border border-blue-900/60 bg-blue-950/20 p-3 text-sm text-blue-100">
-                Reusable links may be selected in different folders, but active
-                date ranges may not overlap. Links reserved by ordinary Ads are
-                unavailable.
-              </div>
-            </div>
+            <MutualPromotionFolderDetails
+              draft={draft}
+              titlePreview={titlePreview}
+              editing={Boolean(folder)}
+              onChange={updateDraft}
+            />
             {resourcesLoading ? (
               <LoadingState text="Loading channels and accounts…" />
             ) : resourcesError ? (

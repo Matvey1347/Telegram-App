@@ -1,10 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
-  Prisma,
   TelegramPostBatchAction,
   TelegramPostBatchStatus,
-  TelegramSystemBotWorkflowKind,
-  TelegramSystemBotWorkflowStatus,
 } from '@prisma/client';
 import {
   normalizeTelegramPostMediaItems,
@@ -29,10 +26,8 @@ import {
 } from './telegram-post-batch.errors';
 import { TelegramPostBatchReadService } from './telegram-post-batch-read.service';
 import { TelegramPostBatchDispatchService } from './telegram-post-batch-dispatch.service';
-import {
-  parseImportedPostBatchContents,
-  validatePostBatchContent,
-} from './telegram-post-batch-content-policy';
+import { validatePostBatchContent } from './telegram-post-batch-content-policy';
+import { TelegramPostBatchImportService } from './telegram-post-batch-import.service';
 
 @Injectable()
 export class TelegramPostBatchCommandService {
@@ -41,6 +36,7 @@ export class TelegramPostBatchCommandService {
     private readonly workspace: WorkspaceService,
     private readonly read: TelegramPostBatchReadService,
     private readonly dispatcher: TelegramPostBatchDispatchService,
+    private readonly imports: TelegramPostBatchImportService,
   ) {}
 
   async createDraft(userId: string, dto: CreateTelegramPostBatchDto) {
@@ -122,10 +118,8 @@ export class TelegramPostBatchCommandService {
             mediaItems: normalizeTelegramPostMediaItems(
               post.mediaItems,
               post.imageUrls,
-            ) as unknown as Prisma.InputJsonValue,
-            buttonRows: normalizeTelegramPostButtonRows(
-              post.buttonRows,
-            ) as unknown as Prisma.InputJsonValue,
+            ),
+            buttonRows: normalizeTelegramPostButtonRows(post.buttonRows),
             action: post.action,
             scheduledAt:
               post.action === 'SCHEDULE' && post.scheduledAt
@@ -159,93 +153,7 @@ export class TelegramPostBatchCommandService {
   }
 
   async importWorkflow(userId: string, workflowId: string) {
-    const membership =
-      await this.workspace.resolveWorkspaceMembershipForUser(userId);
-    const existing = await this.prisma.telegramPostBatch.findFirst({
-      where: {
-        sourceWorkflowId: workflowId,
-        workspaceId: membership.workspaceId,
-      },
-      select: { id: true },
-    });
-    if (existing) return this.read.get(membership.workspaceId, existing.id);
-
-    const workflow = await this.prisma.telegramSystemBotWorkflow.findFirst({
-      where: {
-        id: workflowId,
-        workspaceId: membership.workspaceId,
-        kind: TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT,
-        status: TelegramSystemBotWorkflowStatus.COMPLETED,
-        resultPostBatchPostId: null,
-      },
-      select: { id: true, payload: true, completedAt: true },
-    });
-    if (!workflow)
-      throw new NotFoundException(
-        'Completed System Bot post batch import is unavailable',
-      );
-    const contents = parseImportedPostBatchContents(workflow.payload);
-    if (!contents.length)
-      throw postBatchInvalid('Imported posts are unavailable');
-    if (contents.length > TELEGRAM_POST_BATCH_MAX_POSTS) {
-      throw postBatchLimitExceeded(
-        `One batch can contain at most ${TELEGRAM_POST_BATCH_MAX_POSTS} posts`,
-      );
-    }
-    const createdAt = workflow.completedAt ?? new Date();
-    try {
-      const batch = await this.prisma.telegramPostBatch.create({
-        data: {
-          workspaceId: membership.workspaceId,
-          createdByMemberId: membership.id,
-          sourceWorkflowId: workflow.id,
-          title: `Post batch · ${createdAt.toISOString().slice(0, 10)}`,
-          defaultDeleteAfterHours: 24,
-          posts: {
-            create: contents.map((content, position) => {
-              const mediaItems = normalizeTelegramPostMediaItems(
-                content.mediaItems,
-                content.imageUrls,
-              );
-              const imported = {
-                workspaceId: membership.workspaceId,
-                position,
-                title:
-                  content.title?.trim() ||
-                  content.sourceTitle?.trim() ||
-                  `Post ${position + 1}`,
-                iconId: null,
-                text: content.text ?? null,
-                imageUrls: content.imageUrls ?? [],
-                mediaItems: mediaItems as unknown as Prisma.InputJsonValue,
-                buttonRows: normalizeTelegramPostButtonRows(
-                  content.buttonRows,
-                ) as unknown as Prisma.InputJsonValue,
-                action: TelegramPostBatchAction.PUBLISH_NOW,
-                deleteAfterHours: 24,
-                longTextMode: 'IMAGES_THEN_TEXT',
-                channelOverrides: [],
-              };
-              validatePostBatchContent(imported);
-              return imported;
-            }),
-          },
-        },
-        select: { id: true },
-      });
-      return this.read.get(membership.workspaceId, batch.id);
-    } catch (error) {
-      if (!isUniqueConflict(error)) throw error;
-      const raced = await this.prisma.telegramPostBatch.findFirst({
-        where: {
-          sourceWorkflowId: workflowId,
-          workspaceId: membership.workspaceId,
-        },
-        select: { id: true },
-      });
-      if (!raced) throw error;
-      return this.read.get(membership.workspaceId, raced.id);
-    }
+    return this.imports.importWorkflow(userId, workflowId);
   }
 
   async importPost(
@@ -254,86 +162,7 @@ export class TelegramPostBatchCommandService {
     postId: string,
     dto: ImportTelegramPostBatchPostDto,
   ) {
-    const membership =
-      await this.workspace.resolveWorkspaceMembershipForUser(userId);
-    const workspaceId = membership.workspaceId;
-    const [batch, workflow] = await Promise.all([
-      this.prisma.telegramPostBatch.findFirst({
-        where: { id: batchId, workspaceId },
-        select: {
-          id: true,
-          status: true,
-          version: true,
-          posts: { where: { id: postId }, select: { id: true } },
-        },
-      }),
-      this.prisma.telegramSystemBotWorkflow.findFirst({
-        where: {
-          id: dto.workflowId,
-          workspaceId,
-          kind: TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT,
-          status: TelegramSystemBotWorkflowStatus.COMPLETED,
-          resultPostBatchPostId: null,
-          postBatch: { is: null },
-        },
-        select: { id: true, payload: true },
-      }),
-    ]);
-    if (!batch || batch.posts.length !== 1) throw postBatchNotFound();
-    if (
-      batch.status !== TelegramPostBatchStatus.DRAFT ||
-      batch.version !== dto.expectedVersion
-    )
-      throw postBatchConflict();
-    if (!workflow)
-      throw new NotFoundException(
-        'Completed System Bot post import is unavailable',
-      );
-    const contents = parseImportedPostBatchContents(workflow.payload);
-    if (contents.length !== 1)
-      throw postBatchInvalid('Send exactly one post through the bot');
-    const content = contents[0];
-    const mediaItems = normalizeTelegramPostMediaItems(
-      content.mediaItems,
-      content.imageUrls,
-    );
-    const imported = {
-      title: content.title?.trim() || content.sourceTitle?.trim() || 'Post',
-      text: content.text ?? null,
-      imageUrls: content.imageUrls ?? [],
-      mediaItems: mediaItems as unknown as Prisma.InputJsonValue,
-      buttonRows: normalizeTelegramPostButtonRows(
-        content.buttonRows,
-      ) as unknown as Prisma.InputJsonValue,
-    };
-    validatePostBatchContent(imported);
-    await this.prisma.$transaction(async (tx) => {
-      const claimed = await tx.telegramPostBatch.updateMany({
-        where: {
-          id: batchId,
-          workspaceId,
-          status: TelegramPostBatchStatus.DRAFT,
-          version: dto.expectedVersion,
-        },
-        data: { version: { increment: 1 } },
-      });
-      if (claimed.count !== 1) throw postBatchConflict();
-      const consumed = await tx.telegramSystemBotWorkflow.updateMany({
-        where: {
-          id: workflow.id,
-          workspaceId,
-          status: TelegramSystemBotWorkflowStatus.COMPLETED,
-          resultPostBatchPostId: null,
-        },
-        data: { resultPostBatchPostId: postId },
-      });
-      if (consumed.count !== 1) throw postBatchConflict();
-      await tx.telegramPostBatchPost.update({
-        where: { id: postId },
-        data: imported,
-      });
-    });
-    return this.read.get(workspaceId, batchId);
+    return this.imports.importPost(userId, batchId, postId, dto);
   }
 
   async update(userId: string, id: string, dto: UpdateTelegramPostBatchDto) {
@@ -595,11 +424,4 @@ function normalizedOverrides(
 
 function unique(values: string[]) {
   return [...new Set(values)];
-}
-
-function isUniqueConflict(error: unknown) {
-  return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === 'P2002'
-  );
 }

@@ -56,6 +56,19 @@
 - Use lucide icons for icon buttons when available.
 - Verify text wrapping on mobile and avoid overlapping controls.
 
+## Local modal drafts
+
+- Use `useWorkspaceModalDrafts`, `workspace-modal-drafts`, and
+  `ModalDraftPicker` for workspace-local unfinished form sessions.
+- Feature modules define the draft value, seed, normalization,
+  meaningfulness, local preview metadata, restore mapping, and clear the
+  current session after successful submit. They must not read/write draft
+  localStorage, maintain their own persisted JSON/ready refs, or build a
+  competing picker lifecycle.
+- Search for the canonical hook and picker before adding drafts. Continue,
+  Delete, Create new, multiple drafts, autosave, and workspace switching use
+  the shared semantics. Follow `docs/design-system/MODAL_DRAFTS.md`.
+
 ## Testing
 
 - Run `pnpm --filter web typecheck`.

@@ -2,15 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  normalizeTelegramPostMediaItems,
-  telegramPostPhotoUrls,
   type TelegramPostButtonRows,
   type TelegramPostMediaItem,
 } from "@telegram-system/shared";
-import { TelegramPostMediaUpload } from "@/components/features/telegram/telegram/telegram-post-media-upload";
-import { TelegramPostPreview } from "@/components/features/telegram/telegram/telegram-post-preview";
-import { TelegramTextEditor } from "@/components/features/telegram/telegram/telegram-text-editor";
-import { FormField, Input, Select, Tooltip } from "@/components/ui/primitives";
+import { TelegramPostDraftEditor } from "@/components/features/telegram/telegram/telegram-post-draft-editor";
+import { Input, Select, Tooltip } from "@/components/ui/primitives";
 
 export type PlacementManagedPostDraft = {
   title: string;
@@ -55,10 +51,6 @@ export function PlacementPostComposer({
     publishedAt?: string;
   }) => void;
 }) {
-  const mediaItems = normalizeTelegramPostMediaItems(
-    draft?.mediaItems,
-    draft?.imageUrls,
-  );
   const autoCreatedForFutureRef = useRef(false);
   const [existingInputMode, setExistingInputMode] = useState<"select" | "link">(
     "select",
@@ -133,46 +125,16 @@ export function PlacementPostComposer({
       </div>
 
       {draft ? (
-        <div className="grid gap-4 xl:grid-cols-[minmax(280px,0.75fr)_minmax(0,1fr)]">
-          <TelegramPostPreview
-            channelTitle={channelTitle}
-            channelPhotoUrl={channelPhotoUrl}
-            text={draft.text}
-            imageUrls={draft.imageUrls}
-            mediaItems={mediaItems}
-            buttonRows={draft.buttonRows}
-          />
-          <div className="space-y-3">
-            <FormField label="Title" required>
-              <Input
-                value={draft.title}
-                onChange={(event) => updateDraft({ title: event.target.value })}
-              />
-            </FormField>
-            <FormField label="Text">
-              <TelegramTextEditor
-                value={draft.text}
-                onChange={(text) => updateDraft({ text })}
-                buttonRows={draft.buttonRows}
-                onButtonRowsChange={
-                  allowInlineButtonEditing
-                    ? (buttonRows) => updateDraft({ buttonRows })
-                    : undefined
-                }
-              />
-            </FormField>
-            <TelegramPostMediaUpload
-              value={mediaItems}
-              onChange={(nextMedia) =>
-                updateDraft({
-                  mediaItems: nextMedia,
-                  imageUrls: telegramPostPhotoUrls(nextMedia),
-                })
-              }
-              compact
-            />
-          </div>
-        </div>
+        <TelegramPostDraftEditor
+          draft={draft}
+          channelTitle={channelTitle}
+          channelPhotoUrl={channelPhotoUrl}
+          textPlaceholder="Write your Telegram post…"
+          buttonEditing={allowInlineButtonEditing ? "enabled" : "disabled"}
+          onChange={(nextDraft) =>
+            onChange({ draft: nextDraft, telegramPostId: null })
+          }
+        />
       ) : (
         <div className="space-y-2">
           {!canCreate ? (

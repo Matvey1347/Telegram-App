@@ -1,19 +1,18 @@
 import type { AxiosInstance } from "axios";
 import type { AxiosRequestConfig } from "axios";
 import type {
+  CancelTelegramSystemBotPostImportResult,
+  PrepareTelegramSystemBotPostImportPayload,
   TelegramSystemBotConnectionStatus,
   TelegramSystemBotLinkPreview,
+  TelegramSystemBotPostImportResult,
+  TelegramSystemBotPostImportStart,
   TelegramSystemBotTaskSubscriptionsResponse,
   TelegramSystemBotTaskSubscriptionView,
   UpdateTelegramSystemBotGroupSubscriptionsPayload,
   UpdateTelegramSystemBotSubscriptionPayload,
   TelegramSystemBotPostDraft,
 } from "@telegram-system/shared";
-
-export type TelegramSystemBotAdSalePostDraft = TelegramSystemBotPostDraft;
-
-export type TelegramSystemBotMutualPromotionPostDraft =
-  TelegramSystemBotAdSalePostDraft;
 
 const editablePostPayload = (draft: TelegramSystemBotPostDraft) => ({
   title: draft.title,
@@ -23,8 +22,8 @@ const editablePostPayload = (draft: TelegramSystemBotPostDraft) => ({
   buttonRows: draft.buttonRows,
 });
 
-const workflowResultConfig = (workflowId: string): AxiosRequestConfig => ({
-  params: { workflowId, _: Date.now() },
+const workflowResultConfig = (): AxiosRequestConfig => ({
+  params: { _: Date.now() },
   headers: { "Cache-Control": "no-cache" },
 });
 
@@ -67,92 +66,32 @@ export function createTelegramSystemBotApi(api: AxiosInstance) {
           silentFeedback,
         )
       ).data,
-    prepareAdSalePostImport: async () =>
+    startPostImport: async (payload: PrepareTelegramSystemBotPostImportPayload) =>
       (
-        await api.post<{ workflowId: string }>(
-          "/telegram/system-bot/ad-sale-post-import",
-          undefined,
+        await api.post<TelegramSystemBotPostImportStart>(
+          "/telegram/system-bot/post-imports",
+          payload,
           silentFeedback,
         )
       ).data,
-    adSalePostImportResult: async (workflowId: string) =>
+    readPostImport: async (workflowId: string) =>
       (
-        await api.get<
-          | { ready: false }
-          | { ready: true; draft: TelegramSystemBotAdSalePostDraft }
-        >(
-          "/telegram/system-bot/ad-sale-post-import",
-          workflowResultConfig(workflowId),
+        await api.get<TelegramSystemBotPostImportResult>(
+          `/telegram/system-bot/post-imports/${encodeURIComponent(workflowId)}`,
+          workflowResultConfig(),
         )
       ).data,
-    preparePromoPostImport: async () =>
+    cancelPostImport: async (workflowId: string) =>
       (
-        await api.post<{ workflowId: string }>(
-          "/telegram/system-bot/promo-post-import",
-          undefined,
-          silentFeedback,
-        )
-      ).data,
-    promoPostImportResult: async (workflowId: string) =>
-      (
-        await api.get<
-          { ready: false } | { ready: true; draft: TelegramSystemBotPostDraft }
-        >(
-          "/telegram/system-bot/promo-post-import",
-          workflowResultConfig(workflowId),
-        )
-      ).data,
-    prepareMutualPromotionPostImport: async (folderId: string) =>
-      (
-        await api.post<{ workflowId: string }>(
-          "/telegram/system-bot/mutual-promotion-post-import",
-          { folderId },
-          silentFeedback,
-        )
-      ).data,
-    mutualPromotionPostImportResult: async (workflowId: string) =>
-      (
-        await api.get<
-          | { ready: false }
-          | {
-              ready: true;
-              drafts: TelegramSystemBotMutualPromotionPostDraft[];
-            }
-        >(
-          "/telegram/system-bot/mutual-promotion-post-import",
-          workflowResultConfig(workflowId),
-        )
-      ).data,
-    sendAdSalePostPreview: async (draft: TelegramSystemBotAdSalePostDraft) =>
-      (
-        await api.post<{ status: "SENT" }>(
-          "/telegram/system-bot/ad-sale-post-preview",
-          editablePostPayload(draft),
-          silentFeedback,
-        )
-      ).data,
-    sendPromoPostPreview: async (draft: TelegramSystemBotPostDraft) =>
-      (
-        await api.post<{ status: "SENT" }>(
-          "/telegram/system-bot/promo-post-preview",
-          editablePostPayload(draft),
+        await api.delete<CancelTelegramSystemBotPostImportResult>(
+          `/telegram/system-bot/post-imports/${encodeURIComponent(workflowId)}`,
           silentFeedback,
         )
       ).data,
     sendPostPreview: async (draft: TelegramSystemBotPostDraft) =>
       (
         await api.post<{ status: "SENT" }>(
-          "/telegram/system-bot/promo-post-preview",
-          editablePostPayload(draft),
-          silentFeedback,
-        )
-      ).data,
-    sendMutualPromotionPostPreview: async (
-      draft: TelegramSystemBotMutualPromotionPostDraft,
-    ) =>
-      (
-        await api.post<{ status: "SENT" }>(
-          "/telegram/system-bot/mutual-promotion-post-preview",
+          "/telegram/system-bot/post-preview",
           editablePostPayload(draft),
           silentFeedback,
         )

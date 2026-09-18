@@ -16,7 +16,7 @@ function setup() {
     confirm: jest.fn(),
     cancel: jest.fn(),
   };
-  const workflows = { requireNoActiveBatchImport: jest.fn() };
+  const workflows = { requireNoActivePostImport: jest.fn() };
   const service = new TelegramSystemBotFinanceHandlerService(
     { token: 'token' } as never,
     api as never,
@@ -29,7 +29,7 @@ function setup() {
 describe('TelegramSystemBotFinanceHandlerService', () => {
   it('does not consume pending Finance input while a batch import is active', async () => {
     const { service, finance, workflows } = setup();
-    workflows.requireNoActiveBatchImport.mockRejectedValue(
+    workflows.requireNoActivePostImport.mockRejectedValue(
       new Error('active batch'),
     );
 

@@ -85,6 +85,9 @@ export const telegramChannelKeys = {
   ) => ["telegram-channel-performance-history", channelId, range] as const,
   financialSummary: (channelId: string) =>
     ["telegram-channel-financial-summary", channelId] as const,
+  trafficAttributions: () => ["telegram-channel-traffic-attribution"] as const,
+  trafficAttribution: (channelId: string) =>
+    ["telegram-channel-traffic-attribution", channelId] as const,
   inviteLinks: (channelId: string) =>
     ["telegram-channel-invite-links", channelId] as const,
   inviteLinkInitial: (

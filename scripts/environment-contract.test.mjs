@@ -93,20 +93,26 @@ test("local bot development survives Prisma schema and tunnel transport changes"
   );
 
   assert.match(runner, /"prisma",\s*"generate",\s*"--watch"/u);
+  assert.match(runner, /"api",\s*"run",\s*"db:deploy:safe"/u);
+  assert.match(runner, /runOnceWithRetries\("Database"/u);
+  assert.ok(
+    runner.indexOf('"db:deploy:safe"') < runner.indexOf('start("Backend"'),
+    "database migrations must finish before the backend starts",
+  );
   assert.match(runner, /TUNNEL_TRANSPORT_PROTOCOL:\s*"http2"/u);
   assert.match(runner, /await terminateDevChildren\(children\)/u);
   assert.match(runner, /localBotActivationTimeoutMs = 5 \* 60_000/u);
   assert.match(runner, /waitForHttpReady/u);
   assert.match(runner, /\["SIGHUP"\]/u);
-  assert.equal(apiPackage.scripts.dev, "node ../../scripts/dev-api-supervisor.mjs");
+  assert.equal(
+    apiPackage.scripts.dev,
+    "node ../../scripts/dev-api-supervisor.mjs",
+  );
   assert.equal(
     apiPackage.scripts["start:dev"],
     "node ../../scripts/dev-api-supervisor.mjs",
   );
-  const apiSupervisor = readFileSync(
-    "scripts/dev-api-supervisor.mjs",
-    "utf8",
-  );
+  const apiSupervisor = readFileSync("scripts/dev-api-supervisor.mjs", "utf8");
   assert.match(apiSupervisor, /--config", "nest-cli\.dev\.json/u);
   assert.match(apiSupervisor, /waitForHealthyBackend/u);
   assert.equal(developmentNestConfig.compilerOptions.deleteOutDir, false);

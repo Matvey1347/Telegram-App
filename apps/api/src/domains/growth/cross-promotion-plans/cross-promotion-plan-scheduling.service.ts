@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import type { CrossPromotionSchedulingProgress } from '@telegram-system/shared';
 import { TelegramChannelsService } from '../../telegram/telegram-channels/telegram-channels.service';
 import { TelegramSystemPostGroupsService } from '../../telegram/telegram-channels/telegram-system-post-groups.service';
 import type { CreateTelegramManagedPostDto } from '../../telegram/telegram-channels/dto';
 import { CreateCrossPromotionPlanDto } from './dto';
 import { CrossPromotionPlansService } from './cross-promotion-plans.service';
+import { TelegramManagedPostRemoteDeletionService } from '../../telegram/telegram-channels/telegram-managed-post-remote-deletion.service';
 
 type Progress = (
   item: CrossPromotionSchedulingProgress,
@@ -23,7 +24,25 @@ export class CrossPromotionPlanSchedulingService {
     private readonly plans: CrossPromotionPlansService,
     private readonly telegramChannels: TelegramChannelsService,
     private readonly systemPostGroups: TelegramSystemPostGroupsService,
+    private readonly remoteDeletion: TelegramManagedPostRemoteDeletionService,
   ) {}
+
+  async remove(userId: string, id: string) {
+    const context = await this.plans.removalContext(userId, id);
+    if (context.remotePostIds.length) {
+      const result = await this.remoteDeletion.deletePublishedManagedPosts({
+        workspaceId: context.workspaceId,
+        managedPostIds: context.remotePostIds,
+      });
+      if (result.failed) {
+        throw new Error(
+          result.results.find((item) => !item.success)?.error ??
+            'Telegram posts could not be deleted',
+        );
+      }
+    }
+    return this.plans.remove(userId, id);
+  }
 
   async createAndSchedule(
     userId: string,
@@ -84,6 +103,13 @@ export class CrossPromotionPlanSchedulingService {
     onProgress: Progress,
     signal: AbortSignal,
   ) {
+    // A past placement must never be moved to DRAFT by attempting to recreate
+    // its already-published posts. Use the metadata PATCH flow instead.
+    if (new Date(dto.scheduledAt).getTime() <= Date.now()) {
+      throw new BadRequestException(
+        'Historical promotions must be updated without rescheduling',
+      );
+    }
     const total = dto.publisherChannelIds.length + 2;
     const createdPosts: ScheduledPost[] = [];
     onProgress(
@@ -93,7 +119,20 @@ export class CrossPromotionPlanSchedulingService {
     );
     await this.plans.validateForScheduling(userId, dto);
     const previous = await this.plans.placementsForReschedule(userId, id);
+    const context = await this.plans.removalContext(userId, id);
     try {
+      if (context.remotePostIds.length) {
+        const deletion = await this.remoteDeletion.deletePublishedManagedPosts({
+          workspaceId: context.workspaceId,
+          managedPostIds: context.remotePostIds,
+        });
+        if (deletion.failed) {
+          throw new Error(
+            deletion.results.find((item) => !item.success)?.error ??
+              'Existing Telegram posts could not be removed',
+          );
+        }
+      }
       await this.plans.markRescheduling(userId, id, 'Rescheduling in progress');
       for (const placement of previous) {
         signal.throwIfAborted();

@@ -10,6 +10,7 @@ describe('MutualPromotionCommandService', () => {
       telegramSystemBotWorkflow: {
         findFirst: jest.fn().mockResolvedValue({
           id: 'workflow-1',
+          connectionId: 'connection-1',
           payload: {
             contents: [
               {
@@ -59,6 +60,7 @@ describe('MutualPromotionCommandService', () => {
       {} as never,
       validation as never,
       read as never,
+      {} as never,
     );
     return { service, tx, validation };
   }
@@ -102,15 +104,29 @@ describe('MutualPromotionCommandService', () => {
       where: expect.objectContaining({
         id: 'workflow-1',
         workspaceId: 'workspace-1',
-        mutualPromotionFolderId: 'folder-1',
+        kind: 'WEBSITE_POST_IMPORT',
+        postImportMode: 'MULTIPLE',
         status: 'COMPLETED',
         resultMutualPromotionPostId: null,
+        connection: {
+          is: {
+            userId: 'user-1',
+            enabled: true,
+          },
+        },
       }),
-      select: { id: true, payload: true },
+      select: { id: true, connectionId: true, payload: true },
     });
     expect(tx.telegramSystemBotWorkflow.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { resultMutualPromotionPostId: 'post-1' },
+        where: expect.objectContaining({
+          connectionId: 'connection-1',
+          connection: { is: { userId: 'user-1', enabled: true } },
+        }),
+        data: expect.objectContaining({
+          resultMutualPromotionPostId: 'post-1',
+          consumedAt: expect.any(Date),
+        }),
       }),
     );
     expect(
@@ -122,6 +138,44 @@ describe('MutualPromotionCommandService', () => {
       ],
       select: { id: true },
     });
+  });
+
+  it('rejects a workflow owned by another user in the same workspace', async () => {
+    const { service, tx } = setup();
+    tx.telegramSystemBotWorkflow.findFirst.mockResolvedValueOnce(null);
+
+    await expect(
+      service.addPost('user-2', 'folder-1', {
+        importWorkflowId: 'workflow-1',
+        posts: [
+          {
+            scheduledAt: '2026-09-08T12:00:00.000Z',
+            title: 'Imported body',
+            text: 'Imported body',
+            imageUrls: [],
+            buttonRows: [],
+          },
+        ],
+      }),
+    ).rejects.toThrow('A completed, unused System Bot import is required');
+
+    expect(tx.telegramSystemBotWorkflow.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          workspaceId: 'workspace-1',
+          connection: {
+            is: {
+              userId: 'user-2',
+              enabled: true,
+            },
+          },
+        }),
+      }),
+    );
+    expect(
+      tx.mutualPromotionFolderPost.createManyAndReturn,
+    ).not.toHaveBeenCalled();
+    expect(tx.telegramSystemBotWorkflow.updateMany).not.toHaveBeenCalled();
   });
 
   it('rolls back when the completed import was consumed concurrently', async () => {
@@ -234,6 +288,69 @@ describe('MutualPromotionCommandService', () => {
           [{ text: 'Open', url: 'https://example.test', style: 'primary' }],
         ],
       },
+    });
+  });
+
+  it('removes Telegram copies before deleting a folder', async () => {
+    const tx = {
+      telegramManagedPost: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      mutualPromotionFolder: {
+        delete: jest.fn().mockResolvedValue({ id: 'folder-1' }),
+      },
+    };
+    const prisma = {
+      mutualPromotionFolder: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'folder-1',
+          posts: [
+            {
+              deliveries: [
+                {
+                  managedPostId: 'post-1',
+                  managedPost: {
+                    status: 'PUBLISHED',
+                    telegramMessageIds: ['123'],
+                    telegramScheduledMessageIds: [],
+                    telegramRemoteStatus: 'PRESENT',
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      },
+      $transaction: jest.fn((callback) => callback(tx)),
+    };
+    const remoteDeletion = {
+      deletePublishedManagedPosts: jest.fn().mockResolvedValue({
+        failed: 0,
+        results: [{ postId: 'post-1', success: true }],
+      }),
+    };
+    const service = new MutualPromotionCommandService(
+      prisma as never,
+      {
+        resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
+      } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      remoteDeletion as never,
+    );
+
+    await expect(service.remove('user-1', 'folder-1')).resolves.toEqual({
+      id: 'folder-1',
+    });
+    expect(remoteDeletion.deletePublishedManagedPosts).toHaveBeenCalledWith({
+      workspaceId: 'workspace-1',
+      managedPostIds: ['post-1'],
+    });
+    expect(tx.telegramManagedPost.deleteMany).toHaveBeenCalled();
+    expect(tx.mutualPromotionFolder.delete).toHaveBeenCalledWith({
+      where: { id: 'folder-1' },
     });
   });
 });

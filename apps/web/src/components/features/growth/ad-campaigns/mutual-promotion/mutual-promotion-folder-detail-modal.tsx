@@ -1,15 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  CalendarClock,
-  Pencil,
-  Play,
-  UserMinus,
-  UserPlus,
-  UserRound,
-  Users,
-} from "lucide-react";
+import { CalendarClock, Pencil, Play, Users } from "lucide-react";
 import type {
   MutualPromotionExpensePayload,
   MutualPromotionFolderDetail,
@@ -17,7 +9,6 @@ import type {
 } from "@telegram-system/shared";
 import type { Account } from "@/lib/api";
 import { formatDateTime } from "@/lib/date-format";
-import { formatMoney } from "@/lib/features/finance/money";
 import {
   Button,
   CustomSelect,
@@ -35,10 +26,7 @@ import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invi
 import { MutualPromotionFolderStatusBadge } from "./mutual-promotion-folder-status-badge";
 import { MutualPromotionAttributionChart } from "./mutual-promotion-attribution-chart";
 import { MutualPromotionParticipantRoleBadge } from "./mutual-promotion-participant-role-badge";
-
-function Count({ value }: { value: number | null }) {
-  return <>{value == null ? "—" : new Intl.NumberFormat().format(value)}</>;
-}
+import { MutualPromotionParticipantAttribution } from "./mutual-promotion-participant-attribution";
 
 function ExpenseEditor({
   participantId,
@@ -112,6 +100,7 @@ export function MutualPromotionFolderDetailModal({
   accounts,
   botConnected,
   botUsername,
+  workspaceId,
   mutating,
   actionError,
   onClose,
@@ -130,6 +119,7 @@ export function MutualPromotionFolderDetailModal({
   accounts: Account[];
   botConnected: boolean;
   botUsername: string | null;
+  workspaceId?: string | null;
   mutating: boolean;
   actionError: string | null;
   onClose: () => void;
@@ -224,6 +214,7 @@ export function MutualPromotionFolderDetailModal({
             endsAt={folder.endsAt}
             botConnected={botConnected}
             botUsername={botUsername}
+            workspaceId={workspaceId}
             previewChannelTitle={previewChannel?.title ?? folder.title}
             previewChannelPhotoUrl={previewChannel?.photoUrl}
             saving={mutating}
@@ -294,63 +285,10 @@ export function MutualPromotionFolderDetailModal({
                     role={participant.role}
                   />
                 </div>
-                <dl
-                  className={`mt-2 grid gap-2 text-sm ${
-                    participant.role === "PAID" ? "grid-cols-1" : "grid-cols-3"
-                  }`}
-                >
-                  <div>
-                    <dt className="flex items-center gap-1.5 text-xs text-neutral-500">
-                      <UserPlus
-                        size={14}
-                        className="text-emerald-300"
-                        aria-hidden="true"
-                      />
-                      Joined
-                    </dt>
-                    <dd className="mt-1 text-white">
-                      <Count value={participant.stats.joinedCount} />
-                      {participant.role === "PAID" ? (
-                        <ParticipantUnitCost
-                          value={participant.stats.subscriberPrice}
-                          currency={participant.stats.currency}
-                          label="paid subscriber"
-                        />
-                      ) : null}
-                    </dd>
-                  </div>
-                  {participant.role === "PUBLISHER" ? (
-                    <>
-                      <div>
-                        <dt className="flex items-center gap-1.5 text-xs text-neutral-500">
-                          <UserMinus
-                            size={14}
-                            className="text-rose-300"
-                            aria-hidden="true"
-                          />
-                          Unsubscribed
-                          {participant.stats.unsubscribedIsEstimate ? " ≈" : ""}
-                        </dt>
-                        <dd className="mt-1 text-white">
-                          <Count value={participant.stats.unsubscribedCount} />
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="flex items-center gap-1.5 text-xs text-neutral-500">
-                          <UserRound
-                            size={14}
-                            className="text-violet-300"
-                            aria-hidden="true"
-                          />
-                          Net audience
-                        </dt>
-                        <dd className="mt-1 text-white">
-                          <Count value={participant.stats.audienceDelta} />
-                        </dd>
-                      </div>
-                    </>
-                  ) : null}
-                </dl>
+                <MutualPromotionParticipantAttribution
+                  role={participant.role}
+                  stats={participant.stats}
+                />
                 <MutualPromotionAttributionChart
                   history={participant.attributionHistory}
                   showUnsubscribed={participant.role === "PUBLISHER"}
@@ -440,21 +378,5 @@ export function MutualPromotionFolderDetailModal({
         ) : null}
       </div>
     </Modal>
-  );
-}
-
-function ParticipantUnitCost({
-  value,
-  currency,
-  label,
-}: {
-  value: number | null;
-  currency: string | null;
-  label: string;
-}) {
-  return (
-    <span className="mt-1 block text-[11px] text-neutral-500">
-      {value == null ? "—" : formatMoney(value, currency)} / {label}
-    </span>
   );
 }

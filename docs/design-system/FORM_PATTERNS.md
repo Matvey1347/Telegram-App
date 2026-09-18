@@ -27,6 +27,12 @@
 - Empty state should explain that no entity is available.
 - Clearable fields must make the empty value explicit.
 
+## Local drafts
+
+- Follow [How to add local drafts to a modal](./MODAL_DRAFTS.md).
+- Use the canonical workspace-local session and picker; feature forms do not
+  implement their own storage lifecycle.
+
 ## Dates
 
 - Preserve existing local date/timezone semantics.

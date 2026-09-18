@@ -44,6 +44,13 @@ export const crossPromotionPlansApi = {
       payload,
       onProgress,
     ),
+  updateCompleted: async (
+    id: string,
+    payload: CreateCrossPromotionPlanPayload,
+  ) => (await api.patch<CrossPromotionPlan>(`${basePath}/${id}`, payload)).data,
+  rename: async (id: string, title: string) =>
+    (await api.patch<CrossPromotionPlan>(`${basePath}/${id}/title`, { title }))
+      .data,
   remove: async (id: string, silent = false): Promise<{ id: string }> =>
     (
       await api.delete<{ id: string }>(`${basePath}/${id}`, {

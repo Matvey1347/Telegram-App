@@ -8,6 +8,8 @@ import type {
   ConsumerFinanceInvestmentMutation,
   ConsumerFinanceInvestmentPage,
   ConsumerFinanceInvestmentStatus,
+  ConsumerFinanceInvestmentSortBy,
+  ConsumerFinanceInvestmentSortDirection,
   ConsumerFinanceInvestmentSummary,
   ConsumerFinanceInvestmentUpdate,
   ConsumerFinanceInvestmentValuation,
@@ -22,6 +24,8 @@ import {
 
 type PageQuery = {
   status?: ConsumerFinanceInvestmentStatus;
+  sortBy?: ConsumerFinanceInvestmentSortBy;
+  sortDirection?: ConsumerFinanceInvestmentSortDirection;
   cursor?: string;
   limit?: number;
 };

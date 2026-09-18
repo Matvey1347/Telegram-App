@@ -1,77 +1,128 @@
 "use client";
 
+import axios from "axios";
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE_ERROR_CODE,
+  type TelegramSystemBotPostDraft,
+  type TelegramSystemBotPostImportMode,
+  type TelegramSystemBotPostImportStatus,
+} from "@telegram-system/shared";
+import { telegramSystemBotApi } from "@/lib/api";
+import { useTelegramSystemBotImportConflict } from "@/providers/telegram-system-bot-import-conflict-provider";
+import {
+  importedValue,
+  type ImportedValue,
+  type PostImportFlowErrorCopy,
+  postImportStorageKey,
+  publishPollTerminal,
+  readPostImportOnce,
+  subscribeToPollLease,
+} from "./telegram-post-import-poll-coordinator";
 
-type ImportResult<T> = { ready: false } | { ready: true; value: T };
 type ActionStatus = "idle" | "working" | "waiting" | "done";
 
-export function useTelegramSystemBotPostFlow<T>({
-  prepareImport,
-  readImport,
-  onImported,
-  sendPreview,
+export function useTelegramSystemBotPostFlow<
+  M extends TelegramSystemBotPostImportMode,
+>({
+  mode,
+  workspaceId,
   botUsername,
-  importErrorMessage,
-  startImportErrorMessage,
-  sendErrorMessage,
-  resolveImportError,
-  openBotOnStart = true,
-  storageKey,
+  onImported,
+  previewDraft,
+  onPreviewSent,
+  errorCopy,
+  recoveryKey,
+  importContext,
+  enabled = true,
+  openBotOnStart = false,
 }: {
-  prepareImport?: () => Promise<string>;
-  readImport?: (workflowId: string) => Promise<ImportResult<T>>;
-  onImported?: (value: T) => void | Promise<void>;
-  sendPreview?: () => Promise<unknown>;
+  mode: M;
+  workspaceId?: string | null;
   botUsername?: string | null;
-  importErrorMessage?: string;
-  startImportErrorMessage?: string;
-  sendErrorMessage?: string;
-  resolveImportError?: (error: unknown) => string;
+  onImported?: (
+    value: ImportedValue<M>,
+    workflowId: string,
+  ) => void | Promise<void>;
+  previewDraft?: TelegramSystemBotPostDraft | null;
+  onPreviewSent?: () => void | Promise<void>;
+  errorCopy?: PostImportFlowErrorCopy;
+  recoveryKey?: string;
+  importContext?: string;
+  enabled?: boolean;
   openBotOnStart?: boolean;
-  storageKey?: string;
 }) {
-  const latest = useRef({ readImport, onImported });
+  const confirmImportReplacement = useTelegramSystemBotImportConflict();
+  const activeError = errorCopy?.active;
+  const readError = errorCopy?.read;
+  const startError = errorCopy?.start;
+  const cancelError = errorCopy?.cancel;
+  const previewError = errorCopy?.preview;
+  const recoveryOwner = recoveryKey?.trim() || undefined;
+  const latest = useRef({ mode, onImported, onPreviewSent, previewDraft });
+  const pollInstanceId = useRef(Symbol("telegram-post-import-poller"));
+  const [leaseVersion, setLeaseVersion] = useState(0);
   useEffect(() => {
-    latest.current = { readImport, onImported };
-  }, [onImported, readImport]);
+    latest.current = { mode, onImported, onPreviewSent, previewDraft };
+  }, [mode, onImported, onPreviewSent, previewDraft]);
   const checkingRef = useRef(false);
   const pollDeadlineRef = useRef(0);
   const pollStartedAtRef = useRef(0);
   const workflowIdRef = useRef("");
-  const storageKeyRef = useRef(storageKey);
-  const restoredStorageKeyRef = useRef<string | undefined>(undefined);
+  const key = workspaceId ? postImportStorageKey(workspaceId, mode) : undefined;
+  const keyRef = useRef(key);
   const [workflowId, setWorkflowId] = useState("");
   const [importStatus, setImportStatus] = useState<ActionStatus>("idle");
+  const [terminalStatus, setTerminalStatus] =
+    useState<TelegramSystemBotPostImportStatus | null>(null);
   const [sendStatus, setSendStatus] = useState<ActionStatus>("idle");
   const [error, setError] = useState("");
   const [dots, setDots] = useState(1);
 
-  useEffect(() => {
-    storageKeyRef.current = storageKey;
-    if (!storageKey || restoredStorageKeyRef.current === storageKey) return;
-    restoredStorageKeyRef.current = storageKey;
-    pollDeadlineRef.current = 0;
-    const workflowAtRestoreStart = workflowIdRef.current;
-    const timeout = window.setTimeout(() => {
+  const clearWorkflow = useCallback(
+    (status?: TelegramSystemBotPostImportStatus) => {
+      const currentKey = keyRef.current;
+      const currentWorkflowId = workflowIdRef.current;
       if (
-        storageKeyRef.current !== storageKey ||
-        workflowIdRef.current !== workflowAtRestoreStart
-      )
-        return;
+        currentKey &&
+        window.localStorage.getItem(currentKey) === currentWorkflowId
+      ) {
+        window.localStorage.removeItem(currentKey);
+        window.localStorage.removeItem(`${currentKey}:owner`);
+      }
+      workflowIdRef.current = "";
+      pollDeadlineRef.current = 0;
+      pollStartedAtRef.current = 0;
+      setWorkflowId("");
+      if (status) setTerminalStatus(status);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const storedOwner = key
+        ? window.localStorage.getItem(`${key}:owner`)
+        : null;
+      const ownsRecovery = !recoveryOwner || storedOwner === recoveryOwner;
+      const restored =
+        key && ownsRecovery ? window.localStorage.getItem(key) || "" : "";
+      keyRef.current = key;
       checkingRef.current = false;
-      const restoredWorkflowId =
-        window.localStorage.getItem(storageKey) || "";
-      workflowIdRef.current = restoredWorkflowId;
-      pollStartedAtRef.current = Date.now();
-      pollDeadlineRef.current = restoredWorkflowId
-        ? Date.now() + 120_000
-        : 0;
-      setWorkflowId(restoredWorkflowId);
-      setImportStatus(restoredWorkflowId ? "waiting" : "idle");
+      pollStartedAtRef.current = restored ? Date.now() : 0;
+      pollDeadlineRef.current = restored ? Date.now() + 120_000 : 0;
+      workflowIdRef.current = restored;
+      setWorkflowId(restored);
+      setImportStatus(restored ? "waiting" : "idle");
+      setTerminalStatus(null);
       setError("");
-    }, 0);
-    return () => window.clearTimeout(timeout);
-  }, [storageKey]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [key, recoveryOwner]);
 
   useEffect(() => {
     if (importStatus !== "working" && sendStatus !== "working") return;
@@ -83,99 +134,128 @@ export function useTelegramSystemBotPostFlow<T>({
   }, [importStatus, sendStatus]);
 
   const checkImport = useCallback(async () => {
-    if (!workflowId || checkingRef.current || !latest.current.readImport)
-      return false;
-    const checkedWorkflowId = workflowId;
-    const checkedStorageKey = storageKeyRef.current;
-    const checkedReadImport = latest.current.readImport;
-    const checkedOnImported = latest.current.onImported;
-    const isCurrentCheck = () =>
-      storageKeyRef.current === checkedStorageKey &&
+    const checkedWorkflowId = workflowIdRef.current;
+    if (!checkedWorkflowId || checkingRef.current) return false;
+    const checkedKey = keyRef.current;
+    const isCurrent = () =>
+      keyRef.current === checkedKey &&
       workflowIdRef.current === checkedWorkflowId;
     checkingRef.current = true;
     try {
-      const result = await checkedReadImport(checkedWorkflowId);
-      if (!isCurrentCheck()) return false;
-      if (!result.ready) {
-        setImportStatus("waiting");
-        return false;
+      const result = await readPostImportOnce(checkedWorkflowId);
+      if (!isCurrent()) return false;
+      if (result.status !== "ACTIVE") {
+        if (result.ready) {
+          await latest.current.onImported?.(
+            importedValue(latest.current.mode, result.drafts),
+            checkedWorkflowId,
+          );
+          if (!isCurrent()) return false;
+          publishPollTerminal(
+            checkedKey,
+            pollInstanceId.current,
+            checkedWorkflowId,
+            "COMPLETED",
+          );
+          clearWorkflow("COMPLETED");
+          setImportStatus("done");
+          setError("");
+          return true;
+        }
+        publishPollTerminal(
+          checkedKey,
+          pollInstanceId.current,
+          checkedWorkflowId,
+          result.status,
+        );
+        clearWorkflow(result.status);
+        setImportStatus("idle");
+        setError(
+          result.status === "CANCELLED"
+            ? ""
+            : (readError ?? "The bot post import did not complete."),
+        );
+        return true;
       }
-      await checkedOnImported?.(result.value);
-      if (!isCurrentCheck()) return false;
-      if (
-        checkedStorageKey &&
-        window.localStorage.getItem(checkedStorageKey) === checkedWorkflowId
-      ) {
-        window.localStorage.removeItem(checkedStorageKey);
-      }
-      workflowIdRef.current = "";
-      setWorkflowId("");
-      setImportStatus("done");
-      setError("");
-      return true;
-    } catch {
-      if (!isCurrentCheck()) return false;
       setImportStatus("waiting");
-      setError(
-        importErrorMessage ?? "Could not load the post from the system bot.",
-      );
+      return false;
+    } catch {
+      if (!isCurrent()) return false;
+      setImportStatus("waiting");
+      setError(readError ?? "Could not load the post from the system bot.");
       return false;
     } finally {
       checkingRef.current = false;
     }
-  }, [importErrorMessage, workflowId]);
+  }, [clearWorkflow, readError]);
 
   useEffect(() => {
-    if (!workflowId || importStatus === "done") return;
-    let cancelled = false;
+    if (!enabled || !workflowId || importStatus === "done") return;
+    if (!key) return;
+    const lease = subscribeToPollLease(key, pollInstanceId.current, {
+      wake: () => setLeaseVersion((version) => version + 1),
+      terminal: (finishedWorkflowId, status) => {
+        if (workflowIdRef.current !== finishedWorkflowId) return;
+        clearWorkflow(status);
+        setImportStatus(status === "COMPLETED" ? "done" : "idle");
+      },
+    });
+    if (!lease.ownsLease) return lease.release;
+    let disposed = false;
     let timeout: number | undefined;
-    let hiddenAt =
-      document.visibilityState === "hidden" ? Date.now() : undefined;
-    const clearScheduledCheck = () => {
-      if (timeout === undefined) return;
-      window.clearTimeout(timeout);
+    let hiddenAt = document.visibilityState === "hidden" ? Date.now() : 0;
+    const clearTimer = () => {
+      if (timeout !== undefined) window.clearTimeout(timeout);
       timeout = undefined;
     };
     const schedule = (delay: number) => {
-      clearScheduledCheck();
+      clearTimer();
       if (
-        cancelled ||
+        disposed ||
         document.visibilityState === "hidden" ||
         Date.now() >= pollDeadlineRef.current
       )
         return;
       timeout = window.setTimeout(async () => {
         timeout = undefined;
-        if (Date.now() >= pollDeadlineRef.current) return;
-        const ready = await checkImport();
-        if (!ready) {
-          const elapsed = Date.now() - pollStartedAtRef.current;
-          schedule(elapsed < 10_000 ? 500 : 1_500);
-        }
+        const terminal = await checkImport();
+        if (!terminal)
+          schedule(
+            Date.now() - pollStartedAtRef.current < 10_000 ? 1_000 : 3_000,
+          );
       }, delay);
     };
-    const checkOnReturn = () => {
+    const reconcileVisibility = () => {
       if (document.visibilityState === "hidden") {
-        hiddenAt ??= Date.now();
-        clearScheduledCheck();
+        hiddenAt ||= Date.now();
+        clearTimer();
         return;
       }
-      if (hiddenAt !== undefined) {
+      if (hiddenAt) {
         pollDeadlineRef.current += Date.now() - hiddenAt;
-        hiddenAt = undefined;
+        hiddenAt = 0;
       }
       schedule(0);
     };
-    schedule(250);
-    window.addEventListener("focus", checkOnReturn);
-    document.addEventListener("visibilitychange", checkOnReturn);
+    schedule(1_000);
+    window.addEventListener("focus", reconcileVisibility);
+    document.addEventListener("visibilitychange", reconcileVisibility);
     return () => {
-      cancelled = true;
-      clearScheduledCheck();
-      window.removeEventListener("focus", checkOnReturn);
-      document.removeEventListener("visibilitychange", checkOnReturn);
+      disposed = true;
+      clearTimer();
+      lease.release();
+      window.removeEventListener("focus", reconcileVisibility);
+      document.removeEventListener("visibilitychange", reconcileVisibility);
     };
-  }, [checkImport, importStatus, workflowId]);
+  }, [
+    checkImport,
+    clearWorkflow,
+    enabled,
+    importStatus,
+    key,
+    leaseVersion,
+    workflowId,
+  ]);
 
   useEffect(() => {
     if (sendStatus !== "done") return;
@@ -184,84 +264,166 @@ export function useTelegramSystemBotPostFlow<T>({
   }, [sendStatus]);
 
   const startImport = useCallback(async () => {
-    if (!prepareImport || importStatus === "working") return;
+    if (!workspaceId || importStatus === "working") return false;
+    const replaceKnownImport = Boolean(workflowIdRef.current);
+    if (replaceKnownImport) {
+      const confirmed = await confirmImportReplacement();
+      if (!confirmed) return false;
+    }
     setError("");
     setDots(1);
+    setTerminalStatus(null);
     setImportStatus("working");
     try {
-      const nextWorkflowId = await prepareImport();
-      if (!nextWorkflowId) throw new Error("Import workflow was not prepared");
-      pollDeadlineRef.current = Date.now() + 120_000;
-      pollStartedAtRef.current = Date.now();
-      workflowIdRef.current = nextWorkflowId;
-      if (storageKeyRef.current) {
-        window.localStorage.setItem(storageKeyRef.current, nextWorkflowId);
+      const payload = {
+        mode,
+        ...(importContext?.trim() ? { context: importContext.trim() } : {}),
+      };
+      let started;
+      if (replaceKnownImport) {
+        started = await telegramSystemBotApi.startPostImport({
+          ...payload,
+          replaceActive: true,
+        });
+      } else {
+        try {
+          started = await telegramSystemBotApi.startPostImport(payload);
+        } catch (caught) {
+          const active =
+            axios.isAxiosError(caught) &&
+            caught.response?.data?.code ===
+              TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE_ERROR_CODE;
+          if (!active) throw caught;
+          setImportStatus("idle");
+          if (!(await confirmImportReplacement())) {
+            setError(
+              activeError ??
+                "Finish or cancel the current bot post import first.",
+            );
+            return false;
+          }
+          setImportStatus("working");
+          started = await telegramSystemBotApi.startPostImport({
+            ...payload,
+            replaceActive: true,
+          });
+        }
       }
-      setWorkflowId(nextWorkflowId);
+      if (!started.workflowId)
+        throw new Error("Import workflow was not prepared");
+      pollStartedAtRef.current = Date.now();
+      pollDeadlineRef.current = Date.now() + 120_000;
+      workflowIdRef.current = started.workflowId;
+      if (keyRef.current && recoveryOwner)
+        window.localStorage.setItem(`${keyRef.current}:owner`, recoveryOwner);
+      if (keyRef.current)
+        window.localStorage.setItem(keyRef.current, started.workflowId);
+      setWorkflowId(started.workflowId);
       setImportStatus("waiting");
       const username = botUsername?.trim().replace(/^@+/, "");
-      if (username && openBotOnStart) {
+      if (username && openBotOnStart)
         window.open(
           `https://t.me/${encodeURIComponent(username)}`,
           "_blank",
           "noopener,noreferrer",
         );
-      }
-    } catch (caught) {
+      return true;
+    } catch {
       setImportStatus("idle");
-      setError(
-        resolveImportError?.(caught) ??
-          startImportErrorMessage ??
-          importErrorMessage ??
-          "Could not start the bot post import.",
-      );
+      setError(startError ?? "Could not start the bot post import.");
+      return false;
     }
   }, [
+    activeError,
     botUsername,
-    importErrorMessage,
+    confirmImportReplacement,
     importStatus,
+    importContext,
+    mode,
     openBotOnStart,
-    prepareImport,
-    resolveImportError,
-    startImportErrorMessage,
+    recoveryOwner,
+    startError,
+    workspaceId,
   ]);
 
-  const send = useCallback(async () => {
-    if (!sendPreview || sendStatus === "working") return;
-    setError("");
-    setDots(1);
-    setSendStatus("working");
-    try {
-      await sendPreview();
-      setSendStatus("done");
-    } catch {
+  const cancelImport = useCallback(async () => {
+    const current = workflowIdRef.current;
+    if (!current) {
+      setImportStatus("idle");
       setSendStatus("idle");
-      setError(sendErrorMessage ?? "Could not send the post to the bot.");
+      setError("");
+      return;
     }
-  }, [sendErrorMessage, sendPreview, sendStatus]);
-
-  const reset = useCallback(() => {
-    checkingRef.current = false;
-    pollDeadlineRef.current = 0;
-    pollStartedAtRef.current = 0;
-    workflowIdRef.current = "";
-    if (storageKeyRef.current) {
-      window.localStorage.removeItem(storageKeyRef.current);
-    }
-    setWorkflowId("");
-    setImportStatus("idle");
-    setSendStatus("idle");
+    setImportStatus("working");
     setError("");
-  }, []);
+    try {
+      await telegramSystemBotApi.cancelPostImport(current);
+      if (workflowIdRef.current !== current) return;
+      publishPollTerminal(
+        keyRef.current,
+        pollInstanceId.current,
+        current,
+        "CANCELLED",
+      );
+      clearWorkflow("CANCELLED");
+      setImportStatus("idle");
+    } catch (caught) {
+      if (axios.isAxiosError(caught) && caught.response?.status === 404) {
+        publishPollTerminal(
+          keyRef.current,
+          pollInstanceId.current,
+          current,
+          "CANCELLED",
+        );
+        clearWorkflow("CANCELLED");
+        setImportStatus("idle");
+        return;
+      }
+      if (workflowIdRef.current === current) {
+        if (keyRef.current)
+          window.localStorage.setItem(keyRef.current, current);
+        setWorkflowId(current);
+        setImportStatus("waiting");
+      }
+      setError(cancelError ?? "Could not cancel the bot post import.");
+    }
+  }, [cancelError, clearWorkflow]);
+
+  const send = useCallback(
+    async (draftOverride?: TelegramSystemBotPostDraft) => {
+      const draft = draftOverride ?? latest.current.previewDraft;
+      if (!draft || sendStatus === "working") return;
+      setError("");
+      setDots(1);
+      setSendStatus("working");
+      try {
+        await telegramSystemBotApi.sendPostPreview(draft);
+        await latest.current.onPreviewSent?.();
+        setSendStatus("done");
+      } catch {
+        setSendStatus("idle");
+        setError(previewError ?? "Could not send the post to the bot.");
+      }
+    },
+    [previewError, sendStatus],
+  );
+
+  const reset = useCallback(async () => {
+    await cancelImport();
+    setTerminalStatus(null);
+    setSendStatus("idle");
+  }, [cancelImport]);
 
   return {
     workflowId,
     importStatus,
+    terminalStatus,
     sendStatus,
     error,
     dots,
     startImport,
     checkImport,
+    cancelImport,
     send,
     reset,
   };

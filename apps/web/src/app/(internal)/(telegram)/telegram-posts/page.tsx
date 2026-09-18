@@ -647,16 +647,6 @@ export function TelegramPostsPageClient({
         importTranslationsReady={importTranslationsReady}
         onChannelChange={navigateToChannel}
         onImportModeChange={setImportMode}
-        onResetCompleted={() => {
-          if (!channel) return;
-          router.replace(
-            buildTelegramPostsUrl({
-              channelId: channel.id,
-              postView: "editor",
-            }),
-          );
-          setNewPostToken((value) => value + 1);
-        }}
       />
       {channels.isLoading ? <LoadingState /> : null}
       {!channels.isLoading && !channels.error && !availableChannels.length ? (
@@ -5279,6 +5269,29 @@ function TelegramPostWorkspace({
                 ) : null}
               </div>
               <div className="grid w-full gap-3 md:grid-cols-2">
+                <FormField label={t("telegram.posts.editor.title")} required>
+                  <Input
+                    value={title}
+                    disabled={busy}
+                    onChange={(event) => {
+                      setTitleManuallyEdited(true);
+                      setTitle(event.target.value);
+                    }}
+                  />
+                </FormField>
+                <FormField label={t("telegram.posts.editor.member")}>
+                  <MemberSelect
+                    value={assignedMemberId}
+                    onChange={(value) => {
+                      setMemberSelectionTouched(true);
+                      setAssignedMemberId(value || null);
+                    }}
+                    defaultToCurrent={!editing}
+                    disabled={busy}
+                  />
+                </FormField>
+              </div>
+              <div className="grid w-full gap-3 md:grid-cols-2">
                 <ManagedPostHypothesisSelector
                   channelId={channelId}
                   postId={editing?.id}
@@ -5308,29 +5321,6 @@ function TelegramPostWorkspace({
                   </FormField>
                 </div>
               </div>
-            </div>
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1.25fr)_minmax(220px,0.75fr)]">
-              <FormField label={t("telegram.posts.editor.title")} required>
-                <Input
-                  value={title}
-                  disabled={busy}
-                  onChange={(event) => {
-                    setTitleManuallyEdited(true);
-                    setTitle(event.target.value);
-                  }}
-                />
-              </FormField>
-              <FormField label={t("telegram.posts.editor.member")}>
-                <MemberSelect
-                  value={assignedMemberId}
-                  onChange={(value) => {
-                    setMemberSelectionTouched(true);
-                    setAssignedMemberId(value || null);
-                  }}
-                  defaultToCurrent={!editing}
-                  disabled={busy}
-                />
-              </FormField>
             </div>
             <FormField label={t("telegram.posts.editor.text")}>
               <TelegramTextEditor

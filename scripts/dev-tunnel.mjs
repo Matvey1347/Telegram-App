@@ -149,6 +149,24 @@ function runOnce(name, command, args, env = {}) {
   });
 }
 
+async function runOnceWithRetries(name, command, args, env = {}, attempts = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await runOnce(name, command, args, env);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts) break;
+      console.warn(
+        `○ ${name}: attempt ${attempt}/${attempts} failed; retrying…`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, attempt * 1_000));
+    }
+  }
+  throw lastError;
+}
+
 async function activateLocalBots() {
   const response = await fetch(
     "http://127.0.0.1:4000/api/telegram/bots/runtime/local-development/start",
@@ -347,6 +365,23 @@ try {
 } catch (error) {
   failure("Local development", error);
   process.exit(1);
+}
+
+try {
+  // The generated client and the running API must use the same database
+  // contract. Apply reviewed forward migrations before either process starts,
+  // otherwise a freshly changed schema can compile successfully and then
+  // fail during Nest bootstrap with Prisma ColumnNotFound errors.
+  await runOnceWithRetries("Database", "pnpm", [
+    "--filter",
+    "api",
+    "run",
+    "db:deploy:safe",
+  ]);
+  status("Database", "pending migrations applied; schema verified");
+} catch (error) {
+  failure("Database", error);
+  await stop(1);
 }
 
 try {

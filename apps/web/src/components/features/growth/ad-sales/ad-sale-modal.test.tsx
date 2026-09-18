@@ -117,6 +117,26 @@ describe("AdSaleModal", () => {
     window.localStorage.clear();
   });
 
+  it("does not persist an untouched prop-seeded sale", async () => {
+    const onRequestQuotePreview = vi.fn().mockResolvedValue({ items: [] });
+    renderModal({
+      initialChannelId: "channel-1",
+      initialScheduledAt: futureScheduledAt(),
+      initialAdvertiser: {
+        id: "advertiser-1",
+        telegramUsername: "@seeded_client",
+      } as never,
+      onRequestQuotePreview,
+    });
+
+    await waitFor(() => expect(onRequestQuotePreview).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(
+        window.localStorage.getItem("telegram-ad-sales:draft:default"),
+      ).toBeNull(),
+    );
+  });
+
   it("offers to continue an unfinished draft and restores its placement settings", async () => {
     const first = renderModal();
     fireEvent.change(screen.getByRole("textbox", { name: "Time for all" }), {
@@ -131,7 +151,7 @@ describe("AdSaleModal", () => {
 
     renderModal();
     expect(await screen.findByText("Unfinished Ad Sale draft")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Continue draft" }));
+    fireEvent.click(screen.getByRole("button", { name: /Continue draft/ }));
 
     expect(screen.getByRole("textbox", { name: "Time for all" })).toHaveValue(
       "18:30",
@@ -146,7 +166,7 @@ describe("AdSaleModal", () => {
     renderModal();
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "Delete draft" }),
+      await screen.findByRole("button", { name: /Delete draft/ }),
     );
 
     expect(
@@ -155,7 +175,7 @@ describe("AdSaleModal", () => {
     expect(screen.getByText("Placement source")).toBeTruthy();
   });
 
-  it("shows the financial account currency and keeps the old draft when starting another sale", async () => {
+  it("keeps the old draft when starting another sale", async () => {
     window.localStorage.setItem(
       "telegram-ad-sales:draft:default",
       JSON.stringify({
@@ -188,8 +208,7 @@ describe("AdSaleModal", () => {
       },
     });
 
-    expect(await screen.findByText("100 UAH")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Create new" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Create new" }));
 
     expect(
       window.localStorage.getItem("telegram-ad-sales:draft:default"),
@@ -290,6 +309,11 @@ describe("AdSaleModal", () => {
     );
     fireEvent.click(externalNewSaleOption);
     await screen.findByText(/1\/24 · 125 UAH/);
+    await waitFor(() =>
+      expect(
+        window.localStorage.getItem("telegram-ad-sales:draft:default"),
+      ).toContain("DIRECT_EXTERNAL"),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Create sale" }));
 
     await waitFor(() =>
@@ -301,6 +325,11 @@ describe("AdSaleModal", () => {
           createAdvertiser: false,
         }),
       ),
+    );
+    await waitFor(() =>
+      expect(
+        window.localStorage.getItem("telegram-ad-sales:draft:default"),
+      ).toBeNull(),
     );
   });
 

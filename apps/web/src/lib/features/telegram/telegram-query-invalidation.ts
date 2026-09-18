@@ -7,6 +7,7 @@ import {
   telegramPostKeys,
 } from "../../query-keys";
 import { patchTelegramChannelCaches } from "./telegram-channel-cache";
+import { telegramMessageTemplateKeys } from "./telegram-channel-message-templates-api";
 import type { TelegramChannel } from "@/lib/api-types/telegram/telegram-channels";
 import type { TelegramUserAccount } from "@/lib/api-types/telegram/telegram-sources";
 
@@ -75,6 +76,12 @@ export async function reconcileTelegramChannelSettings(
     queryClient.invalidateQueries({
       queryKey: telegramChannelKeys.financialSummary(channel.id),
     }),
+    queryClient.invalidateQueries({
+      queryKey: telegramChannelKeys.trafficAttribution(channel.id),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: telegramMessageTemplateKeys.sources(),
+    }),
   ]);
 }
 
@@ -101,7 +108,7 @@ export async function invalidateTelegramAccessQueries(
     queryClient.invalidateQueries({
       queryKey: telegramChannelKeys.analyticsSources(),
     }),
-    queryClient.invalidateQueries({ queryKey: telegramChannelKeys.list() }),
+    queryClient.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
   ]);
 }
 
@@ -110,7 +117,7 @@ export async function invalidateTelegramChannelQueries(
   channelId: string,
 ) {
   await Promise.all([
-    queryClient.invalidateQueries({ queryKey: telegramChannelKeys.list() }),
+    queryClient.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
     queryClient.invalidateQueries({
       queryKey: telegramChannelKeys.detail(channelId),
     }),
@@ -128,6 +135,9 @@ export async function invalidateTelegramChannelQueries(
     }),
     queryClient.invalidateQueries({
       queryKey: telegramChannelKeys.financialSummary(channelId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: telegramChannelKeys.trafficAttribution(channelId),
     }),
     queryClient.invalidateQueries({
       queryKey: telegramChannelKeys.inviteLinks(channelId),

@@ -48,6 +48,10 @@ function setup() {
       .fn()
       .mockResolvedValue({ ...plan, status: 'SCHEDULED' }),
     remove: jest.fn().mockResolvedValue({ id: 'plan-1' }),
+    removalContext: jest.fn().mockResolvedValue({
+      workspaceId: 'workspace-1',
+      remotePostIds: [],
+    }),
     placementsForReschedule: jest.fn().mockResolvedValue([
       {
         telegramChannelId: 'old-channel',
@@ -74,19 +78,32 @@ function setup() {
       .mockResolvedValueOnce({ id: 'group-1' })
       .mockResolvedValueOnce({ id: 'group-2' }),
   };
+  const remoteDeletion = {
+    deletePublishedManagedPosts: jest.fn(),
+  };
   return {
     service: new CrossPromotionPlanSchedulingService(
       plans as never,
       telegram as never,
       systemPostGroups as never,
+      remoteDeletion as never,
     ),
     plans,
     telegram,
     systemPostGroups,
+    remoteDeletion,
   };
 }
 
 describe('CrossPromotionPlanSchedulingService', () => {
+  beforeEach(() => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-14T08:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('streams channel progress and persists a plan only after every post is scheduled', async () => {
     const { service, plans, telegram, systemPostGroups } = setup();
     const progress = jest.fn();
@@ -180,6 +197,24 @@ describe('CrossPromotionPlanSchedulingService', () => {
     expect(systemPostGroups.ensureMutualPromotionGroup).toHaveBeenCalledTimes(
       1,
     );
+  });
+
+  it('rejects a past replacement before it can remove posts or change the plan status', async () => {
+    const { service, plans, telegram } = setup();
+    jest.setSystemTime(new Date('2026-09-18T08:00:00.000Z'));
+
+    await expect(
+      service.replaceAndSchedule(
+        'user-1',
+        'plan-1',
+        payload,
+        jest.fn(),
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow('Historical promotions must be updated');
+
+    expect(plans.markRescheduling).not.toHaveBeenCalled();
+    expect(telegram.deleteManagedPost).not.toHaveBeenCalled();
   });
 
   it('removes the plan and scheduled posts when final persistence fails', async () => {

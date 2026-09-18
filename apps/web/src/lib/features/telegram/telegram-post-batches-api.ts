@@ -5,19 +5,13 @@ import type {
   TelegramPostBatchDeliveryPage,
   TelegramPostBatchDispatchResult,
   TelegramPostBatchListResponse,
-  TelegramSystemBotPostDraft,
   UpdateTelegramPostBatchPayload,
 } from "@telegram-system/shared";
 import type { AxiosInstance } from "axios";
 import { api } from "@/lib/api";
 
 const batchPath = "/telegram-post-batches";
-const importPath = "/telegram/system-bot/post-batch-import";
 const silentFeedback = { feedback: { mode: "silent" } } as never;
-
-export type TelegramPostBatchImportResult =
-  | { ready: false }
-  | { ready: true; drafts: TelegramSystemBotPostDraft[] };
 
 export function createTelegramPostBatchesApi(client: AxiosInstance) {
   return {
@@ -33,21 +27,6 @@ export function createTelegramPostBatchesApi(client: AxiosInstance) {
     create: async (payload: CreateTelegramPostBatchPayload) =>
       (await client.post<TelegramPostBatch>(batchPath, payload, silentFeedback))
         .data,
-    prepareImport: async () =>
-      (
-        await client.post<{ workflowId: string }>(
-          importPath,
-          undefined,
-          silentFeedback,
-        )
-      ).data,
-    importResult: async (workflowId: string) =>
-      (
-        await client.get<TelegramPostBatchImportResult>(importPath, {
-          params: { workflowId, _: Date.now() },
-          headers: { "Cache-Control": "no-cache" },
-        })
-      ).data,
     importWorkflow: async (workflowId: string) =>
       (
         await client.post<TelegramPostBatch>(

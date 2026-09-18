@@ -33,6 +33,7 @@ import {
   LoadingState,
   Modal,
   PageHeader,
+  ConfirmDeleteModal,
 } from "@/components/ui/primitives";
 import { MutualPromotionFolderFormModal } from "./mutual-promotion-folder-form-modal";
 import { MutualPromotionFolderDetailModal } from "./mutual-promotion-folder-detail-modal";
@@ -56,6 +57,10 @@ export function MutualPromotionFoldersPage({
     useState<MutualPromotionFolderDetail | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [inviteLinksEditorOpen, setInviteLinksEditorOpen] = useState(false);
+  const [deleteFolder, setDeleteFolder] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -104,9 +109,15 @@ export function MutualPromotionFoldersPage({
       mutualPromotionFolderKeys.detail(folder.id),
       folder,
     );
-    await queryClient.invalidateQueries({
-      queryKey: mutualPromotionFolderKeys.list(listParams),
-    });
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: mutualPromotionFolderKeys.list(listParams),
+      }),
+      queryClient.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+      queryClient.invalidateQueries({
+        queryKey: telegramChannelKeys.trafficAttributions(),
+      }),
+    ]);
   };
 
   const saveMutation = useMutation({
@@ -200,6 +211,35 @@ export function MutualPromotionFoldersPage({
     mutationFn: (folderId: string) =>
       mutualPromotionFoldersApi.cancel(folderId),
     onSuccess: reconcile,
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (folderId: string) =>
+      mutualPromotionFoldersApi.remove(folderId),
+    onSuccess: ({ id }) => {
+      queryClient.setQueryData(
+        mutualPromotionFolderKeys.list(listParams),
+        (current: typeof foldersQuery.data) =>
+          current
+            ? {
+                ...current,
+                items: current.items.filter((item) => item.id !== id),
+                pagination: {
+                  ...current.pagination,
+                  totalItems: Math.max(0, current.pagination.totalItems - 1),
+                },
+              }
+            : current,
+      );
+      if (selectedFolderId === id) setSelectedFolderId(null);
+      void Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: telegramChannelKeys.lists(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: telegramChannelKeys.trafficAttributions(),
+        }),
+      ]);
+    },
   });
   const addPostMutation = useMutation({
     mutationFn: ({
@@ -302,6 +342,17 @@ export function MutualPromotionFoldersPage({
               folder={item}
               now={now}
               onOpen={() => setSelectedFolderId(item.id)}
+              onEdit={() => {
+                setSelectedFolderId(item.id);
+                void mutualPromotionFoldersApi.get(item.id).then((detail) => {
+                  setEditingFolder(detail);
+                  setSelectedFolderId(null);
+                  setFormOpen(true);
+                });
+              }}
+              onDelete={() =>
+                setDeleteFolder({ id: item.id, title: item.title })
+              }
             />
           ))}
         </div>
@@ -368,6 +419,7 @@ export function MutualPromotionFoldersPage({
         accounts={accountsQuery.data ?? []}
         botConnected={systemBotQuery.data?.connected ?? false}
         botUsername={systemBotQuery.data?.botUsername ?? null}
+        workspaceId={systemBotQuery.data?.currentWorkspaceId}
         mutating={mutating}
         actionError={actionError}
         onClose={() => {
@@ -423,6 +475,17 @@ export function MutualPromotionFoldersPage({
           onSaved={reconcile}
         />
       ) : null}
+      <ConfirmDeleteModal
+        open={Boolean(deleteFolder)}
+        onClose={() => setDeleteFolder(null)}
+        entityName={deleteFolder?.title ?? "folder"}
+        description="The folder and its linked managed posts will be deleted. Published or scheduled Telegram copies will be removed first."
+        onConfirm={async () => {
+          if (!deleteFolder) return;
+          await deleteMutation.mutateAsync(deleteFolder.id);
+          setDeleteFolder(null);
+        }}
+      />
     </AppShell>
   );
 }

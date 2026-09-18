@@ -1,5 +1,8 @@
 # Telegram System Bot configuration
 
+For the canonical website-driven post capture contract and the minimal modal
+integration recipe, see [System Bot post import](system-bot-post-import.md).
+
 The System Bot is a special integration outside workspace `TelegramBotIntegration`, but it reads the same workspace and business data. Its LOCAL and PRODUCTION runtimes must use different BotFather bots. Both runtimes use webhooks; polling is not supported.
 
 Select exactly one runtime in a process:

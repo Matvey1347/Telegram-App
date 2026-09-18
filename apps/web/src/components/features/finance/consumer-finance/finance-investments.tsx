@@ -11,6 +11,8 @@ import type {
   ConsumerFinanceInvestment,
   ConsumerFinanceInvestmentInput,
   ConsumerFinanceInvestmentStatus,
+  ConsumerFinanceInvestmentSortBy,
+  ConsumerFinanceInvestmentSortDirection,
 } from "@telegram-system/shared";
 import {
   Button,
@@ -32,6 +34,7 @@ import { formatMoney } from "@/lib/features/finance/consumer-finance-money";
 import { FinanceInvestmentCard } from "./finance-investment-card";
 import { FinanceInvestmentEditor } from "./finance-investment-editor";
 import { FinanceInvestmentCreateModal } from "./finance-investment-create-modal";
+import { FinanceSortControl } from "./ui/finance-sort-control";
 
 type StatusFilter = ConsumerFinanceInvestmentStatus | "ALL";
 
@@ -49,9 +52,19 @@ export function FinanceInvestments({
   const t = financeInvestmentsCopy(locale);
   const client = useQueryClient();
   const [status, setStatus] = useState<StatusFilter>("ACTIVE");
-  const [editing, setEditing] = useState<ConsumerFinanceInvestment | null>(null);
+  const [sortBy, setSortBy] =
+    useState<ConsumerFinanceInvestmentSortBy>("UPDATED");
+  const [sortDirection, setSortDirection] =
+    useState<ConsumerFinanceInvestmentSortDirection>("DESC");
+  const [editing, setEditing] = useState<ConsumerFinanceInvestment | null>(
+    null,
+  );
   const [creating, setCreating] = useState(false);
-  const filters = status === "ALL" ? {} : { status };
+  const filters = {
+    ...(status === "ALL" ? {} : { status }),
+    sortBy,
+    sortDirection,
+  };
   const list = useInfiniteQuery({
     queryKey: consumerFinanceKeys.investments(botId, filters),
     queryFn: ({ pageParam }) =>
@@ -83,6 +96,9 @@ export function FinanceInvestments({
       patchInvestment(client, botId, investment);
       void client.invalidateQueries({
         queryKey: consumerFinanceKeys.investmentSummary(botId),
+      });
+      void client.invalidateQueries({
+        queryKey: consumerFinanceKeys.investmentLists(botId),
       });
       invalidateConsumerAssetDerivations(client, botId);
       setEditing(null);
@@ -149,28 +165,51 @@ export function FinanceInvestments({
           />
         </div>
       </Card>
-      <div className="max-w-xs">
-        <label className="mb-1 block text-sm text-neutral-300">
-          {t.status}
-        </label>
-        <Select
-          uiLocale={locale}
-          value={status}
-          onChange={(e) => setStatus(e.target.value as StatusFilter)}
-        >
-          <option value="ACTIVE" className="text-emerald-300">
-            {t.active}
-          </option>
-          <option value="CLOSED" className="text-sky-300">
-            {t.closed}
-          </option>
-          <option value="ARCHIVED" className="text-neutral-400">
-            {t.archived}
-          </option>
-          <option value="ALL" className="text-violet-300">
-            {t.all}
-          </option>
-        </Select>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-sm text-neutral-300">
+            {t.status}
+          </label>
+          <Select
+            uiLocale={locale}
+            value={status}
+            onChange={(e) => setStatus(e.target.value as StatusFilter)}
+          >
+            <option value="ACTIVE" className="text-emerald-300">
+              {t.active}
+            </option>
+            <option value="CLOSED" className="text-sky-300">
+              {t.closed}
+            </option>
+            <option value="ARCHIVED" className="text-neutral-400">
+              {t.archived}
+            </option>
+            <option value="ALL" className="text-violet-300">
+              {t.all}
+            </option>
+          </Select>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm text-neutral-300">
+            {t.sortBy}
+          </label>
+          <FinanceSortControl
+            locale={locale}
+            field={sortBy}
+            options={[
+              { value: "UPDATED", label: t.sortUpdated },
+              { value: "NAME", label: t.sortName },
+              { value: "INVESTED", label: t.sortInvested },
+              { value: "CURRENT_VALUE", label: t.sortCurrentValue },
+            ]}
+            direction={sortDirection}
+            fieldLabel={t.sortBy}
+            ascendingLabel={t.sortAscending}
+            descendingLabel={t.sortDescending}
+            onFieldChange={setSortBy}
+            onDirectionChange={setSortDirection}
+          />
+        </div>
       </div>
       {visible.length ? (
         <div className="grid gap-3 lg:grid-cols-2">

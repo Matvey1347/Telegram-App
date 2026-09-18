@@ -2,12 +2,18 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { TelegramUnifiedImportManifest } from "@telegram-system/shared";
+import type {
+  TelegramUnifiedImportManifest,
+  TelegramUnifiedImportPreviewItem,
+  TelegramUnifiedImportSectionResult,
+} from "@telegram-system/shared";
 import { telegramChannelsApi } from "@/lib/api";
 import { useI18n } from "@/providers/i18n-provider";
 import { ManagedPostsImportWorkspace } from "./managed-posts-import-workspace";
 import { ActionBadge } from "./unified-import-entities-preview";
 import { buildManagedPostInternalLinks } from "./managed-post-internal-links-notice";
+import { ImportStateBadge } from "./unified-import-state-tabs";
+import { UnifiedImportItemChanges } from "./unified-import-item-changes";
 import {
   importImageSearchToArray,
   rowIndicesForTab,
@@ -21,6 +27,7 @@ type PostRow = NonNullable<TelegramUnifiedImportManifest["posts"]>[number];
 
 export function UnifiedImportPostsPreview({
   operation,
+  initialPostRef,
   manifest,
   channelId,
   channelTitle,
@@ -29,9 +36,12 @@ export function UnifiedImportPostsPreview({
   captionLengthMax,
   messageLengthMax,
   disabled,
+  failures = [],
+  previewItems = [],
   onChange,
 }: {
   operation: "CREATE" | "UPDATE";
+  initialPostRef?: string | null;
   manifest: TelegramUnifiedImportManifest;
   channelId: string;
   channelTitle: string;
@@ -40,6 +50,8 @@ export function UnifiedImportPostsPreview({
   captionLengthMax: number;
   messageLengthMax: number;
   disabled: boolean;
+  failures?: TelegramUnifiedImportSectionResult["failed"];
+  previewItems?: TelegramUnifiedImportPreviewItem[];
   onChange: (manifest: TelegramUnifiedImportManifest) => void;
 }) {
   const { t } = useI18n();
@@ -47,7 +59,12 @@ export function UnifiedImportPostsPreview({
     (post) => post.action === operation,
   );
   const [activeTab, setActiveTab] = useState<ImportRowTab>("new");
-  const [selectedRowIndex, setSelectedRowIndex] = useState(0);
+  const [selectedRowIndex, setSelectedRowIndex] = useState(() => {
+    const index = editablePosts.findIndex(
+      (post) => post.ref === initialPostRef,
+    );
+    return index >= 0 ? index : 0;
+  });
   const rows = useMemo(
     () =>
       editablePosts.map((post) =>
@@ -55,9 +72,10 @@ export function UnifiedImportPostsPreview({
           post,
           (manifest.schedule ?? []).find((item) => item.postRef === post.ref)
             ?.scheduledAt ?? null,
+          previewItems.find((item) => item.ref === post.ref)?.iconPresentation,
         ),
       ),
-    [editablePosts, manifest.schedule],
+    [editablePosts, manifest.schedule, previewItems],
   );
   const visibleRowIndices = rowIndicesForTab(rows, activeTab);
   const resolvedTab: ImportRowTab = visibleRowIndices.length
@@ -174,8 +192,27 @@ export function UnifiedImportPostsPreview({
             imported: rowIndicesForTab(rows, "imported").length,
           }}
           selectedRowAdornment={
-            <ActionBadge
-              action={editablePosts[resolvedSelectedIndex]?.action ?? operation}
+            <>
+              <ActionBadge
+                action={
+                  editablePosts[resolvedSelectedIndex]?.action ?? operation
+                }
+              />
+              <ImportStateBadge imported={selectedPost?.imported} />
+              {failures.some((failure) => failure.ref === selectedPost?.ref) ? (
+                <span className="rounded bg-rose-950/70 px-1.5 py-0.5 text-[11px] text-rose-200">
+                  {
+                    failures.find(
+                      (failure) => failure.ref === selectedPost?.ref,
+                    )?.error
+                  }
+                </span>
+              ) : null}
+            </>
+          }
+          selectedRowDetails={
+            <UnifiedImportItemChanges
+              item={previewItems.find((item) => item.ref === selectedPost?.ref)}
             />
           }
           scheduleValue={selectedSchedule}
@@ -250,11 +287,13 @@ export function UnifiedImportPostsPreview({
 function toEditableRow(
   post: PostRow,
   scheduledAt: string | null,
+  iconPresentation?: TelegramUnifiedImportPreviewItem["iconPresentation"],
 ): EditableImportRow {
   return {
     title: post.title ?? "",
     text: post.text ?? "",
     icon: post.icon ?? "",
+    iconPresentation,
     urlsText: (post.imageUrls ?? []).join("\n"),
     imageSearchText: (post.imageSearch ?? []).join("\n"),
     groupId: post.groupRef,

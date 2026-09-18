@@ -50,7 +50,10 @@ export class TelegramSystemBotWorkflowStore {
         select: { id: true },
       });
       if (active) this.throwActiveImportConflict();
-      if (input.kind === TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT) {
+      if (
+        input.kind === TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT ||
+        input.kind === TelegramSystemBotWorkflowKind.WEBSITE_POST_IMPORT
+      ) {
         const finance = await tx.telegramSystemBotFinanceDraft.findFirst({
           where: {
             connectionId: input.connectionId,
@@ -67,6 +70,7 @@ export class TelegramSystemBotWorkflowStore {
           connectionId: input.connectionId,
           workspaceId: input.workspaceId,
           kind: input.kind,
+          postImportMode: input.postImportMode ?? null,
           step: input.step,
           payload: input.payload,
           controlMessageId: input.controlMessageId ?? null,
@@ -93,12 +97,8 @@ export class TelegramSystemBotWorkflowStore {
     });
   }
 
-  activeBatchImport(scope: TelegramSystemBotWorkflowScope) {
-    return this.active(scope, TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT);
-  }
-
-  activeOutsideBatchImport(scope: TelegramSystemBotWorkflowScope) {
-    return this.prisma.telegramSystemBotWorkflow.findFirst({
+  async requireNoActivePostImport(scope: TelegramSystemBotWorkflowScope) {
+    const active = await this.prisma.telegramSystemBotWorkflow.findFirst({
       where: {
         connectionId: scope.connectionId,
         workspaceId: scope.workspaceId,
@@ -106,76 +106,23 @@ export class TelegramSystemBotWorkflowStore {
         expiresAt: { gt: new Date() },
         kind: {
           in: [
-            TelegramSystemBotWorkflowKind.POST_IMPORT,
-            TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
-            TelegramSystemBotWorkflowKind.AD_SALE,
-            TelegramSystemBotWorkflowKind.WORKSPACE_SETTINGS,
+            TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT,
+            TelegramSystemBotWorkflowKind.WEBSITE_POST_IMPORT,
           ],
         },
       },
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      select: { id: true },
     });
-  }
-
-  async requireNoActiveBatchImport(scope: TelegramSystemBotWorkflowScope) {
-    if (!(await this.activeBatchImport(scope))) return;
+    if (!active) return;
     this.throwActiveImportConflict();
   }
 
-  async activeWithoutBatchImport(
+  async activeWithoutPostImport(
     scope: TelegramSystemBotWorkflowScope,
     kind: TelegramSystemBotWorkflowKind,
   ) {
-    await this.requireNoActiveBatchImport(scope);
+    await this.requireNoActivePostImport(scope);
     return this.active(scope, kind);
-  }
-
-  async requireNoActiveOutsideBatchImport(
-    scope: TelegramSystemBotWorkflowScope,
-  ) {
-    const [workflow, financeDraft] = await Promise.all([
-      this.activeOutsideBatchImport(scope),
-      this.prisma.telegramSystemBotFinanceDraft.findFirst({
-        where: {
-          connectionId: scope.connectionId,
-          workspaceId: scope.workspaceId,
-          status: 'PENDING',
-          expiresAt: { gt: new Date() },
-        },
-        select: { id: true },
-      }),
-    ]);
-    if (!workflow && !financeDraft) return;
-    this.throwActiveImportConflict();
-  }
-
-  async recoverableBatchImport(scope: TelegramSystemBotWorkflowScope) {
-    const active = await this.activeBatchImport(scope);
-    if (active) return active;
-    const recoverable = await this.prisma.telegramSystemBotWorkflow.findFirst({
-      where: {
-        connectionId: scope.connectionId,
-        workspaceId: scope.workspaceId,
-        kind: TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT,
-        status: {
-          in: [
-            TelegramSystemBotWorkflowStatus.COMMITTING,
-            TelegramSystemBotWorkflowStatus.COMPLETED,
-          ],
-        },
-        postBatch: { is: null },
-        resultPostBatchPostId: null,
-      },
-      orderBy: [{ completedAt: 'desc' }, { id: 'desc' }],
-    });
-    if (recoverable?.status === TelegramSystemBotWorkflowStatus.COMMITTING) {
-      return this.complete({
-        ...scope,
-        id: recoverable.id,
-        expectedVersion: recoverable.version,
-      });
-    }
-    return recoverable;
   }
 
   async get(scope: TelegramSystemBotWorkflowScope, id: string) {
@@ -255,13 +202,44 @@ export class TelegramSystemBotWorkflowStore {
     });
   }
 
-  completeBatchImport(input: VersionedWorkflowInput) {
+  completeCapture(input: VersionedWorkflowInput) {
     return this.changeStatus(input, {
       from: [TelegramSystemBotWorkflowStatus.ACTIVE],
       to: TelegramSystemBotWorkflowStatus.COMPLETED,
       requireNotExpired: true,
       completedAt: new Date(),
       clearError: true,
+    });
+  }
+
+  async websitePostImportMetadata(
+    scope: TelegramSystemBotWorkflowScope,
+    id: string,
+  ) {
+    const row = await this.prisma.telegramSystemBotWorkflow.findFirst({
+      where: {
+        id,
+        connectionId: scope.connectionId,
+        workspaceId: scope.workspaceId,
+        kind: TelegramSystemBotWorkflowKind.WEBSITE_POST_IMPORT,
+      },
+      select: {
+        id: true,
+        postImportMode: true,
+        status: true,
+        version: true,
+        expiresAt: true,
+      },
+    });
+    if (!row) throw new NotFoundException('Website post import is unavailable');
+    return row;
+  }
+
+  expire(input: VersionedWorkflowInput) {
+    return this.changeStatus(input, {
+      from: [TelegramSystemBotWorkflowStatus.ACTIVE],
+      to: TelegramSystemBotWorkflowStatus.EXPIRED,
+      completedAt: new Date(),
     });
   }
 
@@ -357,7 +335,7 @@ export class TelegramSystemBotWorkflowStore {
     }
   }
 
-  private throwActiveImportConflict(): never {
+  throwActiveImportConflict(): never {
     throw new ConflictException({
       code: TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE_ERROR_CODE,
       message: 'Finish the current post import before starting another one.',

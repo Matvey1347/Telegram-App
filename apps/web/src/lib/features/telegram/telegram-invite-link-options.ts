@@ -6,6 +6,8 @@ export function telegramInviteLinkOptionLabel(
     | "name"
     | "isDefaultForChannel"
     | "isDefaultForBot"
+    | "isDefaultForBroadcast"
+    | "isDefaultForAudienceTransfer"
     | "isDefaultForFolders"
     | "isDefaultForMutualPromotion"
   >,
@@ -13,6 +15,8 @@ export function telegramInviteLinkOptionLabel(
   const uses = [
     link.isDefaultForChannel ? "Default" : null,
     link.isDefaultForBot ? "Bot" : null,
+    link.isDefaultForBroadcast ? "Broadcast" : null,
+    link.isDefaultForAudienceTransfer ? "Audience transfer" : null,
     link.isDefaultForFolders ? "Folders" : null,
     link.isDefaultForMutualPromotion ? "VP" : null,
   ].filter(Boolean);

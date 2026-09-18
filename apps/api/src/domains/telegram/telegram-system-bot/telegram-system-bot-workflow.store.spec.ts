@@ -91,163 +91,23 @@ describe('TelegramSystemBotWorkflowStore', () => {
       workflow({ kind: TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT }),
     );
 
-    await expect(store.requireNoActiveBatchImport(scope)).rejects.toMatchObject(
-      {
-        response: expect.objectContaining({
-          code: 'TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE',
-        }),
-      },
-    );
-    expect(prisma.telegramSystemBotWorkflow.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          ...scope,
-          kind: TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT,
-        }),
+    await expect(store.requireNoActivePostImport(scope)).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE',
       }),
-    );
-  });
-
-  it('blocks batch capture for active single, mutual, or Ad Sale content flows', async () => {
-    const { prisma, store } = setup();
-    prisma.telegramSystemBotWorkflow.findFirst.mockResolvedValue(
-      workflow({ kind: TelegramSystemBotWorkflowKind.AD_SALE }),
-    );
-
-    await expect(
-      store.requireNoActiveOutsideBatchImport(scope),
-    ).rejects.toBeInstanceOf(ConflictException);
+    });
     expect(prisma.telegramSystemBotWorkflow.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           ...scope,
           kind: {
             in: [
-              TelegramSystemBotWorkflowKind.POST_IMPORT,
-              TelegramSystemBotWorkflowKind.MUTUAL_PROMOTION_POST,
-              TelegramSystemBotWorkflowKind.AD_SALE,
-              TelegramSystemBotWorkflowKind.WORKSPACE_SETTINGS,
+              TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT,
+              TelegramSystemBotWorkflowKind.WEBSITE_POST_IMPORT,
             ],
           },
         }),
       }),
-    );
-  });
-
-  it('discovers a completed unconsumed batch import within its workspace', async () => {
-    const { prisma, store } = setup();
-    const completed = workflow({
-      id: 'completed-1',
-      kind: TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT,
-      status: TelegramSystemBotWorkflowStatus.COMPLETED,
-    });
-    prisma.telegramSystemBotWorkflow.findFirst.mockResolvedValue(null);
-    prisma.telegramSystemBotWorkflow.findFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(completed);
-
-    await expect(store.recoverableBatchImport(scope)).resolves.toBe(completed);
-    expect(prisma.telegramSystemBotWorkflow.findFirst.mock.calls[1][0]).toEqual(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          ...scope,
-          status: {
-            in: [
-              TelegramSystemBotWorkflowStatus.COMMITTING,
-              TelegramSystemBotWorkflowStatus.COMPLETED,
-            ],
-          },
-          postBatch: { is: null },
-        }),
-      }),
-    );
-  });
-
-  it('repairs a committing unconsumed batch import instead of creating another workflow', async () => {
-    const { prisma, store } = setup();
-    const committing = workflow({
-      id: 'committing-1',
-      kind: TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT,
-      status: TelegramSystemBotWorkflowStatus.COMMITTING,
-      version: 4,
-    });
-    const completed = {
-      ...committing,
-      status: TelegramSystemBotWorkflowStatus.COMPLETED,
-      version: 5,
-    };
-    prisma.telegramSystemBotWorkflow.findFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(committing)
-      .mockResolvedValueOnce(completed);
-    prisma.telegramSystemBotWorkflow.updateMany.mockResolvedValue({ count: 1 });
-
-    await expect(store.recoverableBatchImport(scope)).resolves.toEqual(
-      completed,
-    );
-    expect(prisma.telegramSystemBotWorkflow.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          id: 'committing-1',
-          status: { in: [TelegramSystemBotWorkflowStatus.COMMITTING] },
-          version: 4,
-        }),
-        data: expect.objectContaining({
-          status: TelegramSystemBotWorkflowStatus.COMPLETED,
-          completedAt: expect.any(Date),
-        }),
-      }),
-    );
-  });
-
-  it('finishes a batch import with one active-to-completed CAS', async () => {
-    const { prisma, store } = setup();
-    const completed = workflow({
-      kind: TelegramSystemBotWorkflowKind.POST_BATCH_IMPORT,
-      status: TelegramSystemBotWorkflowStatus.COMPLETED,
-      version: 2,
-    });
-    prisma.telegramSystemBotWorkflow.updateMany.mockResolvedValue({ count: 1 });
-    prisma.telegramSystemBotWorkflow.findFirst.mockResolvedValue(completed);
-
-    await store.completeBatchImport({
-      ...scope,
-      id: 'workflow-1',
-      expectedVersion: 1,
-    });
-
-    expect(prisma.telegramSystemBotWorkflow.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          status: { in: [TelegramSystemBotWorkflowStatus.ACTIVE] },
-          version: 1,
-        }),
-        data: expect.objectContaining({
-          status: TelegramSystemBotWorkflowStatus.COMPLETED,
-        }),
-      }),
-    );
-  });
-
-  it('blocks batch capture while a non-expired Finance input is pending', async () => {
-    const { prisma, store } = setup();
-    prisma.telegramSystemBotWorkflow.findFirst.mockResolvedValue(null);
-    prisma.telegramSystemBotFinanceDraft.findFirst.mockResolvedValue({
-      id: 'finance-draft-1',
-    });
-
-    await expect(
-      store.requireNoActiveOutsideBatchImport(scope),
-    ).rejects.toBeInstanceOf(ConflictException);
-    expect(prisma.telegramSystemBotFinanceDraft.findFirst).toHaveBeenCalledWith(
-      {
-        where: {
-          ...scope,
-          status: 'PENDING',
-          expiresAt: { gt: expect.any(Date) },
-        },
-        select: { id: true },
-      },
     );
   });
 
@@ -273,6 +133,34 @@ describe('TelegramSystemBotWorkflowStore', () => {
         kind: TelegramSystemBotWorkflowKind.POST_IMPORT,
       },
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+    });
+  });
+
+  it('reads website import status and mode without selecting its payload', async () => {
+    const { prisma, store } = setup();
+    prisma.telegramSystemBotWorkflow.findFirst.mockResolvedValue({
+      id: 'workflow-1',
+      postImportMode: 'MULTIPLE',
+      status: TelegramSystemBotWorkflowStatus.ACTIVE,
+      version: 2,
+      expiresAt: new Date(),
+    });
+
+    await store.websitePostImportMetadata(scope, 'workflow-1');
+
+    expect(prisma.telegramSystemBotWorkflow.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'workflow-1',
+        ...scope,
+        kind: TelegramSystemBotWorkflowKind.WEBSITE_POST_IMPORT,
+      },
+      select: {
+        id: true,
+        postImportMode: true,
+        status: true,
+        version: true,
+        expiresAt: true,
+      },
     });
   });
 

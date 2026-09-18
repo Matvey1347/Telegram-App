@@ -318,6 +318,9 @@ export function WorkspaceChannelSyncModal({
       await queryClient.invalidateQueries({
         queryKey: telegramChannelKeys.lists(),
       });
+      await queryClient.invalidateQueries({
+        queryKey: telegramChannelKeys.trafficAttributions(),
+      });
       pushToast(
         result.summary ||
           `Synced ${result.successful}/${result.total} channels.`,

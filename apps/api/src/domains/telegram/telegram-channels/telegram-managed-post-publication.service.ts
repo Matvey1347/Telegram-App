@@ -283,11 +283,11 @@ export class TelegramManagedPostPublicationService {
           `Publication slot is already used by "${occupied.title}"`,
         );
       }
-      await this.prisma.telegramManagedPost.updateMany({
-        where: { id: postId, workspaceId, telegramChannelId: channelId },
-        data: { publicationSlotId: dto.publicationSlotId },
-      });
     }
+    await this.prisma.telegramManagedPost.updateMany({
+      where: { id: postId, workspaceId, telegramChannelId: channelId },
+      data: { publicationSlotId: dto.publicationSlotId ?? null },
+    });
     const result = await this.publishManagedPost(
       workspaceId,
       channelId,

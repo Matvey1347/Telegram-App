@@ -39,6 +39,7 @@ describe('TelegramChannelCatalogService.selectOptions', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     const result = await service.selectOptions('user-1', { owned: true });
@@ -102,6 +103,7 @@ describe('TelegramChannelCatalogService.findAll', () => {
       } as never,
       { summariesForChannels: jest.fn().mockResolvedValue(new Map()) } as never,
       { summariesForChannels: jest.fn().mockResolvedValue(new Map()) } as never,
+      { summariesForChannels: jest.fn().mockResolvedValue(new Map()) } as never,
       { productionUsername: null } as never,
     );
 
@@ -114,7 +116,10 @@ describe('TelegramChannelCatalogService.findAll', () => {
         }),
       }),
     );
-    expect(result.items[0]?.preview.hasPublicationSchedule).toBe(true);
+    expect(
+      (result.items[0] as { preview: { hasPublicationSchedule: boolean } })
+        ?.preview.hasPublicationSchedule,
+    ).toBe(true);
     expect(result.items[0]).not.toHaveProperty('publicationScheduleAssignment');
   });
 });

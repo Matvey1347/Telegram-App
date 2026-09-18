@@ -1,13 +1,11 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  readAdSaleModalDrafts,
-  removeAdSaleModalDraft,
-  writeAdSaleModalDraft,
+  hasMeaningfulAdSaleDraft,
+  normalizeAdSaleModalDraft,
   type AdSaleModalDraft,
 } from "./ad-sale-modal-draft";
 
 const baseDraft = {
-  version: 1,
   advertiserTelegram: "",
   advertiserContact: "",
   selectedAdvertiserId: null,
@@ -24,19 +22,49 @@ const baseDraft = {
   networkTotalPrice: "0",
 } satisfies AdSaleModalDraft;
 
-describe("Ad Sale draft storage", () => {
-  beforeEach(() => localStorage.clear());
+describe("Ad Sale draft normalization", () => {
+  it("repairs legacy placement times", () => {
+    const normalized = normalizeAdSaleModalDraft({
+      ...baseDraft,
+      placements: [{ time: "9:05" }],
+    });
+    expect(normalized?.placements[0]?.time).toBe("09:05");
+  });
 
-  it("keeps multiple drafts and removes only the selected one", () => {
-    writeAdSaleModalDraft(localStorage, { ...baseDraft, id: "draft-one" });
-    writeAdSaleModalDraft(localStorage, { ...baseDraft, id: "draft-two" });
-    expect(readAdSaleModalDrafts(localStorage).map((draft) => draft.id)).toEqual([
-      "draft-one",
-      "draft-two",
-    ]);
-    removeAdSaleModalDraft(localStorage, "draft-one");
-    expect(readAdSaleModalDrafts(localStorage).map((draft) => draft.id)).toEqual([
-      "draft-two",
-    ]);
+  it("does not treat prop-derived seed values as user changes", () => {
+    const seeded = {
+      ...baseDraft,
+      advertiserContact: "@seeded_client",
+      selectedAdvertiserId: "advertiser-1",
+      selectedChannelIds: ["channel-1"],
+      placements: [
+        {
+          key: "placement:channel-1:2026-08-26",
+          channelId: "channel-1",
+          date: "2026-08-26",
+          time: "12:00",
+          timezone: "Europe/Warsaw",
+          productId: "product-1",
+          expectedViews: 1_000,
+          targetCpm: "10",
+          recommendedPrice: "10",
+          minimumPrice: "10",
+          agreedPrice: "10",
+          pricingMode: "CPM" as const,
+          manualPriceReason: "",
+          warnings: [],
+          conflict: null,
+          agreedPriceManuallyEdited: false,
+        },
+      ],
+    };
+
+    expect(hasMeaningfulAdSaleDraft(seeded, seeded)).toBe(false);
+    expect(
+      hasMeaningfulAdSaleDraft(
+        { ...seeded, advertiserContact: "@changed_client" },
+        seeded,
+      ),
+    ).toBe(true);
   });
 });

@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  Patch,
   Get,
   Param,
   Post,
@@ -16,7 +17,10 @@ import {
 } from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
 import { CrossPromotionPlansService } from './cross-promotion-plans.service';
-import { CreateCrossPromotionPlanDto } from './dto';
+import {
+  CreateCrossPromotionPlanDto,
+  RenameCrossPromotionPlanDto,
+} from './dto';
 import { StreamResponseService } from '../../../common/stream/stream-response.service';
 import { CrossPromotionPlanSchedulingService } from './cross-promotion-plan-scheduling.service';
 
@@ -50,7 +54,25 @@ export class CrossPromotionPlansController {
 
   @Delete(':id')
   remove(@CurrentUser() user: JwtUser, @Param('id') id: string) {
-    return this.service.remove(user.sub, id);
+    return this.scheduling.remove(user.sub, id);
+  }
+
+  @Patch(':id/title')
+  rename(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: RenameCrossPromotionPlanDto,
+  ) {
+    return this.service.rename(user.sub, id, dto.title);
+  }
+
+  @Patch(':id')
+  updateCompleted(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: CreateCrossPromotionPlanDto,
+  ) {
+    return this.service.updateCompleted(user.sub, id, dto);
   }
 
   @Post(':id/schedule-stream')

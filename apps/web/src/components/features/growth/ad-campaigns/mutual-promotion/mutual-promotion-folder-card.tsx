@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { MutualPromotionFolderListItem } from "@telegram-system/shared";
-import { ArrowUpRight, CalendarClock } from "lucide-react";
+import { ArrowUpRight, CalendarClock, Pencil, Trash2 } from "lucide-react";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import {
   LifecycleCountdown,
@@ -15,14 +15,22 @@ import { formatDateTime } from "@/lib/date-format";
 import { MutualPromotionFolderStatusBadge } from "./mutual-promotion-folder-status-badge";
 import { MutualPromotionPaidSubscriberPrice } from "./mutual-promotion-paid-subscriber-price";
 import { MutualPromotionParticipantRoleBadge } from "./mutual-promotion-participant-role-badge";
+import {
+  CardActionsMenu,
+  CardMenuAction,
+} from "@/components/ui/card-actions-menu";
 
 export function MutualPromotionFolderCard({
   folder,
   onOpen,
+  onEdit,
+  onDelete,
   now,
 }: {
   folder: MutualPromotionFolderListItem;
   onOpen: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
   now?: number;
 }) {
   const publisherChannels = folder.channels.filter(
@@ -56,7 +64,28 @@ export function MutualPromotionFolderCard({
             </p>
             <LifecycleCountdown value={timer} className="mt-2" />
           </div>
-          <MutualPromotionFolderStatusBadge status={folder.status} />
+          <div className="pointer-events-auto flex items-start gap-1">
+            <MutualPromotionFolderStatusBadge status={folder.status} />
+            {onEdit || onDelete ? (
+              <CardActionsMenu label={`Actions for ${folder.title}`}>
+                {folder.status === "DRAFT" && onEdit ? (
+                  <CardMenuAction
+                    label="Edit folder"
+                    icon={<Pencil size={16} />}
+                    onClick={onEdit}
+                  />
+                ) : null}
+                {onDelete ? (
+                  <CardMenuAction
+                    danger
+                    label="Delete folder"
+                    icon={<Trash2 size={16} />}
+                    onClick={onDelete}
+                  />
+                ) : null}
+              </CardActionsMenu>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -135,13 +164,17 @@ function ChannelPerformance({
           </div>
           <dl className="mt-1.5 grid grid-cols-2 gap-2 pl-7 text-[10px]">
             <ChannelStat
-              label="Joined"
-              value={formatCount(channel.stats.joinedCount)}
+              label="Folder (joined + requests)"
+              value={
+                channel.stats.acquiredCount == null
+                  ? "—"
+                  : `+${formatCount(channel.stats.acquiredCount)}`
+              }
               tone="text-emerald-300"
             />
             {channel.role === "PUBLISHER" ? (
               <ChannelStat
-                label="Left ≈"
+                label="Estimated unsubscribes ≈"
                 value={formatCount(channel.stats.unsubscribedCount)}
                 tone="text-rose-300"
               />

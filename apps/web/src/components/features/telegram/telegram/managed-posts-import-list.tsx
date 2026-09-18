@@ -1,7 +1,8 @@
-
 import type { ReactNode } from "react";
+import { IconAvatar } from "@/components/icons/icon-avatar";
 import { useI18n } from "@/providers/i18n-provider";
 import {
+  importIconPresentation,
   importImageSearchToArray,
   urlsTextToArray,
   type EditableImportRow,
@@ -42,7 +43,10 @@ export function ManagedPostsImportList({
                 : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
             }`}
           >
-            {tab === "new" ? t("telegram.posts.import.tabNew") : t("telegram.posts.import.tabImported")} ({tabCounts[tab]})
+            {tab === "new"
+              ? t("telegram.posts.import.tabNotImported")
+              : t("telegram.posts.import.tabImported")}{" "}
+            ({tabCounts[tab]})
           </button>
         ))}
       </div>
@@ -64,21 +68,39 @@ export function ManagedPostsImportList({
               <span className="w-5 shrink-0 text-center text-xs tabular-nums text-neutral-500">
                 {index + 1}
               </span>
-              {row.icon ? <span className="shrink-0">{row.icon}</span> : null}
+              {row.iconPresentation || importIconPresentation(row.icon) ? (
+                <IconAvatar
+                  icon={
+                    row.iconPresentation ?? importIconPresentation(row.icon)
+                  }
+                  label={row.title}
+                  size="xs"
+                  bordered={false}
+                  decorative
+                />
+              ) : null}
               <span className="min-w-0 flex-1 truncate font-medium">
                 {row.title || t("telegram.posts.import.untitled")}
               </span>
               {row.approved ? (
-                <StatusBadge tone="approved">✓ {t("telegram.posts.import.approved")}</StatusBadge>
+                <StatusBadge tone="approved">
+                  ✓ {t("telegram.posts.import.approved")}
+                </StatusBadge>
               ) : null}
               {row.imported ? (
-                <StatusBadge tone="imported">✓ {t("telegram.posts.import.imported")}</StatusBadge>
+                <StatusBadge tone="imported">
+                  ✓ {t("telegram.posts.import.imported")}
+                </StatusBadge>
               ) : null}
               {urlsTextToArray(row.urlsText).length ? (
-                <StatusBadge tone="image">{t("telegram.posts.import.image")}</StatusBadge>
+                <StatusBadge tone="image">
+                  {t("telegram.posts.import.image")}
+                </StatusBadge>
               ) : null}
               {importImageSearchToArray(row.imageSearchText).length ? (
-                <StatusBadge tone="search">{t("telegram.posts.import.imageSearchBadge")}</StatusBadge>
+                <StatusBadge tone="search">
+                  {t("telegram.posts.import.imageSearchBadge")}
+                </StatusBadge>
               ) : null}
             </button>
           );

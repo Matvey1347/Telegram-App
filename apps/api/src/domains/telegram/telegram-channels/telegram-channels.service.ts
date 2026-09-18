@@ -30,6 +30,7 @@ import { TelegramManagedPostReconciliationService } from './telegram-managed-pos
 import { TelegramManagedPostRemoteSyncService } from './telegram-managed-post-remote-sync.service';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 import { TelegramPostMetricsService } from './telegram-post-metrics.service';
+import { TelegramChannelTrafficAttributionService } from './telegram-channel-traffic-attribution.service';
 
 @Injectable()
 export class TelegramChannelsService {
@@ -93,6 +94,7 @@ export class TelegramChannelsService {
   createAudienceSnapshot: TelegramChannelInsightsService['createAudienceSnapshot'];
   audienceSnapshots: TelegramChannelInsightsService['audienceSnapshots'];
   financialSummary: TelegramChannelInsightsService['financialSummary'];
+  trafficAttribution: TelegramChannelTrafficAttributionService['detail'];
   updatePostManualMetrics: TelegramChannelInsightsService['updatePostManualMetrics'];
   importChannel: TelegramChannelImportService['importChannel'];
   importChannels: TelegramChannelImportService['importChannels'];
@@ -148,6 +150,7 @@ export class TelegramChannelsService {
     reads: TelegramChannelReadModelsService,
     content: TelegramChannelContentReadService,
     campaign: TelegramInviteCampaignService,
+    trafficAttribution: TelegramChannelTrafficAttributionService,
   ) {
     this.checkInlineButtonPublishingAccess =
       access.checkInlineButtonPublishingAccess.bind(access);
@@ -229,6 +232,8 @@ export class TelegramChannelsService {
       insights.createAudienceSnapshot.bind(insights);
     this.audienceSnapshots = insights.audienceSnapshots.bind(insights);
     this.financialSummary = insights.financialSummary.bind(insights);
+    this.trafficAttribution =
+      trafficAttribution.detail.bind(trafficAttribution);
     this.updatePostManualMetrics =
       insights.updatePostManualMetrics.bind(insights);
     this.importChannel = channelImport.importChannel.bind(channelImport);

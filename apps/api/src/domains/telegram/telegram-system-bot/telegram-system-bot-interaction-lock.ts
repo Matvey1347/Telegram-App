@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import type { PrismaService } from '../../../prisma/prisma.service';
+import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
 
 type LockScope = { connectionId: string; workspaceId: string };
 
@@ -10,9 +11,7 @@ export function withSystemBotInteractionLock<T>(
 ) {
   return prisma.$transaction(async (tx) => {
     const scopeKey = `${scope.connectionId}:${scope.workspaceId}`;
-    await tx.$queryRaw(
-      Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${scopeKey}, 0))`,
-    );
+    await acquirePostgresTransactionLock(tx, scopeKey);
     return work(tx);
   });
 }

@@ -76,18 +76,23 @@ export function useTelegramInviteLinkOptions({
     () => setExpandedChannelId(normalizedChannelId),
     [normalizedChannelId],
   );
+  const initialLink =
+    initialQuery.data?.find((link) => link.id === selectedId) ??
+    initialQuery.data?.find((link) => link.isDefaultForChannel) ??
+    allQuery.data?.find((link) => link.id === selectedId) ??
+    allQuery.data?.find((link) => link.isDefaultForChannel) ??
+    seedLinks.find(
+      (link) =>
+        link.telegramChannelId === normalizedChannelId &&
+        (selectedId
+          ? link.id === selectedId
+          : Boolean(link.isDefaultForChannel)),
+    ) ??
+    null;
 
   return {
     links,
-    initialLink:
-      initialQuery.data?.[0] ??
-      allQuery.data?.find((link) => link.id === selectedId) ??
-      seedLinks.find(
-        (link) =>
-          link.telegramChannelId === normalizedChannelId &&
-          (!selectedId || link.id === selectedId),
-      ) ??
-      null,
+    initialLink,
     loading: initialQuery.isLoading || (allRequested && allQuery.isFetching),
     initialLoading: initialQuery.isLoading,
     allRequested,

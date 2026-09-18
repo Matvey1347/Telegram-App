@@ -40,6 +40,8 @@ describe('TelegramChannelReadModelsService', () => {
         findOne: jest.fn().mockResolvedValue({
           defaultInviteLinkId: 'link-1',
           botInviteLinkId: 'link-1',
+          broadcastInviteLinkId: 'link-1',
+          audienceTransferInviteLinkId: 'link-1',
         }),
       } as never,
     );
@@ -60,6 +62,8 @@ describe('TelegramChannelReadModelsService', () => {
         creatorPhotoUrl: 'https://cdn.test/owner.jpg',
         isDefaultForChannel: true,
         isDefaultForBot: true,
+        isDefaultForBroadcast: true,
+        isDefaultForAudienceTransfer: true,
       }),
     );
   });
@@ -70,13 +74,22 @@ describe('TelegramChannelReadModelsService', () => {
       {
         id: 'default-link',
         telegramChannelId: 'channel-1',
-        creatorTelegramUserId: null,
+        creatorTelegramUserId: '42',
+        creatorUsername: 'owner',
+        creatorPhotoUrl: null,
       },
     ]);
     const service = new TelegramChannelReadModelsService(
       {
         telegramUserAccountIntegration: {
-          findMany: jest.fn().mockResolvedValue([]),
+          findMany: jest.fn().mockResolvedValue([
+            {
+              telegramUserId: '42',
+              username: 'owner',
+              firstName: 'Owner',
+              photoUrl: 'https://cdn.test/owner.jpg',
+            },
+          ]),
         },
       } as never,
       {} as never,
@@ -115,6 +128,7 @@ describe('TelegramChannelReadModelsService', () => {
     expect(result).toEqual([
       expect.objectContaining({
         id: 'default-link',
+        creatorPhotoUrl: 'https://cdn.test/owner.jpg',
         isDefaultForChannel: true,
       }),
     ]);
@@ -137,6 +151,11 @@ describe('TelegramChannelReadModelsService', () => {
       {
         findOne: jest.fn().mockResolvedValue({
           defaultInviteLinkId: 'default-link',
+          botInviteLinkId: 'saved-bot-link',
+          broadcastInviteLinkId: 'saved-broadcast-link',
+          audienceTransferInviteLinkId: 'saved-transfer-link',
+          folderDefaultInviteLinkIds: ['saved-folder-link'],
+          mutualPromotionInviteLinkIds: ['saved-vp-link'],
         }),
       } as never,
     );
@@ -156,7 +175,17 @@ describe('TelegramChannelReadModelsService', () => {
             }),
             {
               id: {
-                in: ['vp-link', 'folder-link', 'bot-link', 'default-link'],
+                in: [
+                  'vp-link',
+                  'folder-link',
+                  'bot-link',
+                  'default-link',
+                  'saved-bot-link',
+                  'saved-broadcast-link',
+                  'saved-transfer-link',
+                  'saved-folder-link',
+                  'saved-vp-link',
+                ],
               },
             },
           ],

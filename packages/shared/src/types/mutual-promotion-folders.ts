@@ -155,7 +155,10 @@ export type MutualPromotionFolderExpense = {
 };
 
 export type MutualPromotionFolderParticipantStats = {
+  inviteLinkTotalCount: number | null;
   joinedCount: number | null;
+  requestedCount: number | null;
+  acquiredCount: number | null;
   unsubscribedCount: number | null;
   unsubscribedIsEstimate: boolean;
   audienceDelta: number | null;
@@ -173,10 +176,12 @@ export type MutualPromotionFolderParticipantStats = {
 export type MutualPromotionAttributionHistory = {
   startsAt: string;
   endsAt: string;
-  endsAtSource: "NEXT_FOLDER" | "CURRENT_TIME";
+  endsAtSource: "FINAL_CAPTURE" | "NEXT_FOLDER" | "CURRENT_TIME";
   points: Array<{
     at: string;
     joinedCount: number;
+    requestedCount: number;
+    acquiredCount: number;
     unsubscribedCount: number | null;
     audienceDelta: number | null;
   }>;
@@ -198,6 +203,7 @@ export type MutualPromotionFolderParticipant = {
     name: string;
     url: string;
     joinedCount: number;
+    requestedCount: number;
     creatorUsername: string | null;
     creatorFirstName: string | null;
     creatorPhotoUrl: string | null;
@@ -211,6 +217,8 @@ export type MutualPromotionFolderParticipant = {
   subscribersAtEnd: number | null;
   inviteJoinedAtStart: number | null;
   inviteJoinedAtEnd: number | null;
+  inviteRequestedAtStart: number | null;
+  inviteRequestedAtEnd: number | null;
   baselineCapturedAt: string | null;
   finalCapturedAt: string | null;
   expense: MutualPromotionFolderExpense | null;

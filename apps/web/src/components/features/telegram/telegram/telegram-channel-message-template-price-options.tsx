@@ -2,6 +2,7 @@
 
 import type { TelegramMessageTemplatePriceRounding } from "@telegram-system/shared";
 import { CustomSelect, FormField, Input } from "@/components/ui/primitives";
+import type { TelegramChannelMessageTemplatePriceMode } from "./telegram-channel-message-template-format";
 
 const roundingOptions: Array<{
   value: TelegramMessageTemplatePriceRounding;
@@ -12,16 +13,26 @@ const roundingOptions: Array<{
   { value: "NEAREST_10", label: "Round to nearest 10" },
 ];
 
+const priceModeOptions: Array<{
+  value: TelegramChannelMessageTemplatePriceMode;
+  label: string;
+}> = [
+  { value: "PUBLIC", label: "Sales / public CPM" },
+  { value: "INTERNAL_CPM", label: "Internal CPM" },
+];
+
 export function TelegramChannelMessageTemplatePriceOptions({
   productNames,
   excludedProductNames,
   priceRounding,
+  priceMode,
   productNameOverrides,
   bundleOfferEnabled,
   bundleDiscountPercent,
   bundleBasePriceOverrides,
   onExcludedProductNamesChange,
   onPriceRoundingChange,
+  onPriceModeChange,
   onProductNameOverridesChange,
   onBundleOfferEnabledChange,
   onBundleDiscountPercentChange,
@@ -30,12 +41,14 @@ export function TelegramChannelMessageTemplatePriceOptions({
   productNames: string[];
   excludedProductNames: string[];
   priceRounding: TelegramMessageTemplatePriceRounding;
+  priceMode: TelegramChannelMessageTemplatePriceMode;
   productNameOverrides: Record<string, string>;
   bundleOfferEnabled: boolean;
   bundleDiscountPercent: number;
   bundleBasePriceOverrides: Record<string, string>;
   onExcludedProductNamesChange: (value: string[]) => void;
   onPriceRoundingChange: (value: TelegramMessageTemplatePriceRounding) => void;
+  onPriceModeChange: (value: TelegramChannelMessageTemplatePriceMode) => void;
   onProductNameOverridesChange: (value: Record<string, string>) => void;
   onBundleOfferEnabledChange: (value: boolean) => void;
   onBundleDiscountPercentChange: (value: number) => void;
@@ -109,7 +122,9 @@ export function TelegramChannelMessageTemplatePriceOptions({
                       updateRecord(
                         bundleBasePriceOverrides,
                         name,
-                        event.target.value.replace(/[^\d.,]/g, "").replace(",", "."),
+                        event.target.value
+                          .replace(/[^\d.,]/g, "")
+                          .replace(",", "."),
                       ),
                     )
                   }
@@ -125,13 +140,31 @@ export function TelegramChannelMessageTemplatePriceOptions({
         </div>
       </fieldset>
       <div className="space-y-4">
+        <FormField label="Price calculation">
+          <CustomSelect
+            value={priceMode}
+            searchable={false}
+            options={priceModeOptions}
+            onChange={(value) =>
+              onPriceModeChange(
+                value as TelegramChannelMessageTemplatePriceMode,
+              )
+            }
+          />
+          <p className="mt-1.5 text-xs text-neutral-400">
+            Internal CPM uses the calculated internal placement price. Missing
+            internal prices are shown as an em dash.
+          </p>
+        </FormField>
         <FormField label="Price rounding">
           <CustomSelect
             value={priceRounding}
             searchable={false}
             options={roundingOptions}
             onChange={(value) =>
-              onPriceRoundingChange(value as TelegramMessageTemplatePriceRounding)
+              onPriceRoundingChange(
+                value as TelegramMessageTemplatePriceRounding,
+              )
             }
           />
           <p className="mt-1.5 text-xs text-neutral-400">
@@ -173,8 +206,8 @@ export function TelegramChannelMessageTemplatePriceOptions({
           />
         </FormField>
         <p className="text-xs text-neutral-500">
-          Package totals are summed automatically. Enter a value beside a
-          format only when you want to set its original total manually.
+          Package totals are summed automatically. Enter a value beside a format
+          only when you want to set its original total manually.
         </p>
       </div>
     </div>

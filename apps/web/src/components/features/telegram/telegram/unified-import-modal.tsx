@@ -17,9 +17,13 @@ import { parseUnifiedImportManifest } from "./unified-import-model";
 import { ManagedPostsImportSource } from "./managed-posts-import-source";
 import { UnifiedImportPreview } from "./unified-import-preview";
 import {
+  applyUnifiedImportProgressToManifest,
+  reconcileUnifiedImportResult,
+  successfulUnifiedImportProgressCount,
   summarizeUnifiedImportProgress,
   UnifiedImportProgress,
   type UnifiedImportProgressEntry,
+  type UnifiedImportProgressStatus,
 } from "./unified-import-progress";
 
 export function UnifiedImportModal({
@@ -59,8 +63,19 @@ export function UnifiedImportModal({
   const [progressEntries, setProgressEntries] = useState<
     UnifiedImportProgressEntry[]
   >([]);
+  const [progressStatus, setProgressStatus] = useState<
+    UnifiedImportProgressStatus | "idle"
+  >("idle");
+  const [progressError, setProgressError] = useState("");
   const [contextBusy, setContextBusy] = useState(false);
   const previewRequestId = useRef(0);
+  const previewCounts = preview?.sections.reduce(
+    (counts, section) => ({
+      valid: counts.valid + section.validCount,
+      invalid: counts.invalid + section.invalidCount,
+    }),
+    { valid: 0, invalid: 0 },
+  );
   const parsed = useMemo(() => {
     if (!raw.trim()) return { manifest: null, error: "" };
     try {
@@ -81,10 +96,15 @@ export function UnifiedImportModal({
     setPreviewBusy(false);
     setPreviewError("");
   };
+  const resetProgress = () => {
+    setProgressEntries([]);
+    setProgressStatus("idle");
+    setProgressError("");
+  };
 
   useEffect(() => {
     const requestId = ++previewRequestId.current;
-    if (!open || !parsed.manifest) return;
+    if (!open || !parsed.manifest || applyBusy) return;
     const timer = window.setTimeout(() => {
       setPreviewBusy(true);
       setPreviewError("");
@@ -107,7 +127,7 @@ export function UnifiedImportModal({
         });
     }, 200);
     return () => window.clearTimeout(timer);
-  }, [channelId, open, parsed.manifest, t]);
+  }, [applyBusy, channelId, open, parsed.manifest, t]);
 
   const loadFile = async (file?: File) => {
     if (!file) return;
@@ -115,6 +135,7 @@ export function UnifiedImportModal({
     setFileName(file.name);
     resetPreview();
     setResult(null);
+    resetProgress();
   };
   const copyInstructionsAndDownloadContext = async () => {
     if (contextBusy) return;
@@ -157,8 +178,11 @@ export function UnifiedImportModal({
     });
     setApplyBusy(true);
     setProgressEntries([]);
+    setProgressStatus("running");
+    setProgressError("");
     setResult(null);
     const streamedEntries: UnifiedImportProgressEntry[] = [];
+    let streamedManifest = parsed.manifest;
     try {
       const result = await telegramChannelsApi.applyUnifiedImportWithProgress(
         channelId,
@@ -171,18 +195,21 @@ export function UnifiedImportModal({
         ) => {
           streamedEntries.push({ item, current, total });
           setProgressEntries([...streamedEntries]);
+          const nextManifest = applyUnifiedImportProgressToManifest(
+            streamedManifest,
+            item,
+          );
+          if (nextManifest !== streamedManifest) {
+            streamedManifest = nextManifest;
+            setRaw(JSON.stringify(streamedManifest, null, 2));
+          }
           const summary = summarizeUnifiedImportProgress(streamedEntries);
           operation.update({
             message: `${item.action ?? item.section}: ${item.label ?? item.message}`,
             current,
             total,
             progressSummary: {
-              successful:
-                summary.created +
-                summary.updated +
-                summary.deleted +
-                summary.scheduled +
-                summary.unscheduled,
+              successful: successfulUnifiedImportProgressCount(summary),
               failed: summary.failed,
             },
             details: t("telegram.posts.import.progressCounts", summary),
@@ -191,21 +218,30 @@ export function UnifiedImportModal({
         { signal: controller.signal },
       );
       setResult(result);
+      setRaw(JSON.stringify(result.manifest, null, 2));
+      setFileName(null);
+      const finalEntries = reconcileUnifiedImportResult(
+        streamedEntries,
+        result,
+      );
+      setProgressEntries(finalEntries);
       await onApplied();
       const failed = result.sections.reduce(
         (total, section) => total + section.failed.length,
         0,
       );
-      const completedSummary = summarizeUnifiedImportProgress(streamedEntries);
+      const completedSummary = summarizeUnifiedImportProgress(finalEntries);
       const countMessage = t(
         "telegram.posts.import.progressCounts",
         completedSummary,
       );
       if (failed) {
+        setProgressStatus("completed-with-errors");
         operation.fail({
           message: `${t("telegram.posts.import.unifiedPartial", { count: failed })} ${countMessage}`,
         });
       } else {
+        setProgressStatus("completed");
         operation.succeed({
           message: `${t("telegram.posts.import.unifiedApplied", {
             hash: result.manifestHash.slice(0, 8),
@@ -215,25 +251,23 @@ export function UnifiedImportModal({
     } catch (error) {
       if (controller.signal.aborted) {
         const summary = summarizeUnifiedImportProgress(streamedEntries);
+        const stoppedMessage = t("telegram.posts.import.stopped", {
+          successful: successfulUnifiedImportProgressCount(summary),
+          failed: summary.failed,
+        });
+        setProgressStatus("cancelled");
+        setProgressError(stoppedMessage);
         operation.dismiss();
-        pushToast(
-          t("telegram.posts.import.stopped", {
-            successful:
-              summary.created +
-              summary.updated +
-              summary.deleted +
-              summary.scheduled +
-              summary.unscheduled,
-            failed: summary.failed,
-          }),
-          "info",
-        );
+        pushToast(stoppedMessage, "info");
       } else {
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : t("telegram.posts.import.unifiedApplyError");
+        setProgressStatus("failed");
+        setProgressError(errorMessage);
         operation.fail({
-          message:
-            error instanceof Error
-              ? error.message
-              : t("telegram.posts.import.unifiedApplyError"),
+          message: errorMessage,
         });
       }
     } finally {
@@ -273,6 +307,7 @@ export function UnifiedImportModal({
             setRaw(content);
             resetPreview();
             setResult(null);
+            resetProgress();
           }}
           onFile={(file) => void loadFile(file)}
           onClear={() => {
@@ -280,7 +315,7 @@ export function UnifiedImportModal({
             setFileName(null);
             resetPreview();
             setResult(null);
-            setProgressEntries([]);
+            resetProgress();
           }}
           onCopyContent={() => {
             void navigator.clipboard.writeText(raw).then(
@@ -318,6 +353,7 @@ export function UnifiedImportModal({
             captionLengthMax={captionLengthMax}
             messageLengthMax={messageLengthMax}
             disabled={applyBusy}
+            result={result}
             onChange={(manifest) => {
               setRaw(JSON.stringify(manifest, null, 2));
               setFileName(null);
@@ -325,22 +361,25 @@ export function UnifiedImportModal({
               setPreviewBusy(true);
               setPreviewError("");
               setResult(null);
+              resetProgress();
             }}
           />
         ) : null}
-        {result?.sections.some((section) => section.failed.length) ? (
-          <div className="rounded-lg border border-rose-800 bg-rose-950/20 p-3 text-sm text-rose-200">
-            {result.sections.flatMap((section) =>
-              section.failed.map((failure) => (
-                <p key={`${section.key}:${failure.ref}`}>
-                  {section.key} · {failure.ref}: {failure.error}
-                </p>
-              )),
-            )}
-          </div>
+        {progressStatus !== "idle" ? (
+          <UnifiedImportProgress
+            entries={progressEntries}
+            status={progressStatus}
+            errorMessage={progressError || undefined}
+          />
         ) : null}
-        <UnifiedImportProgress entries={progressEntries} busy={applyBusy} />
-        <div className="sticky -bottom-4 z-10 flex justify-end gap-2 border-t border-neutral-800 bg-neutral-900/95 px-1 py-3 backdrop-blur">
+        <div className="sticky -bottom-4 z-10 flex items-center justify-between gap-3 border-t border-neutral-800 bg-neutral-900/95 px-1 py-3 backdrop-blur">
+          {preview && !preview.valid && previewCounts ? (
+            <p role="alert" className="text-sm text-rose-300">
+              {t("telegram.posts.import.unifiedValid", previewCounts)}
+            </p>
+          ) : (
+            <span />
+          )}
           <Button
             type="button"
             disabled={!preview?.valid || previewBusy || applyBusy}

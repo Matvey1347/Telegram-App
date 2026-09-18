@@ -76,7 +76,7 @@ describe('TelegramSystemBotFinanceService', () => {
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
   });
 
-  it('atomically rejects Finance draft creation while a batch import owns the interaction slot', async () => {
+  it('atomically rejects Finance while a website or legacy batch import owns the interaction slot', async () => {
     const { service, prisma } = setup();
     prisma.account.findMany.mockResolvedValue([
       { id: 'account', name: 'Main', currency: 'USD' },
@@ -101,6 +101,12 @@ describe('TelegramSystemBotFinanceService', () => {
       }),
     });
     expect(prisma.telegramSystemBotFinanceDraft.create).not.toHaveBeenCalled();
+    expect(prisma.telegramSystemBotWorkflow.findFirst).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        kind: { in: ['POST_BATCH_IMPORT', 'WEBSITE_POST_IMPORT'] },
+      }),
+      select: { id: true },
+    });
   });
 
   it('moves transaction selection from account to category and then amount input', async () => {

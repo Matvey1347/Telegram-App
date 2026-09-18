@@ -11,15 +11,18 @@ type HistoryParticipant = {
   subscribersAtEnd: number | null;
   inviteJoinedAtStart: number | null;
   inviteJoinedAtEnd: number | null;
+  inviteRequestedAtStart: number | null;
+  inviteRequestedAtEnd: number | null;
   baselineCapturedAt: Date | null;
   finalCapturedAt: Date | null;
   telegramChannel: { currentSubscribersCount: number | null };
-  inviteLink: { joinedCount: number };
+  inviteLink: { joinedCount: number; requestedCount: number };
 };
 
 type CounterEvent = {
   at: Date;
   inviteJoined?: number;
+  inviteRequested?: number;
   subscribers?: number;
 };
 
@@ -47,7 +50,17 @@ export class MutualPromotionAttributionHistoryService {
       select: { startsAt: true },
     });
     const now = new Date();
-    const endsAt = nextFolder?.startsAt ?? now;
+    const participantEndsAt = new Map(
+      input.participants.map((participant) => [
+        participant.id,
+        participant.finalCapturedAt ?? nextFolder?.startsAt ?? now,
+      ]),
+    );
+    const queryEndsAt = new Date(
+      Math.max(
+        ...[...participantEndsAt.values()].map((date) => date.getTime()),
+      ),
+    );
     const startsAt = input.participants.reduce(
       (earliest, participant) =>
         participant.baselineCapturedAt &&
@@ -68,18 +81,23 @@ export class MutualPromotionAttributionHistoryService {
               (participant) => participant.inviteLinkId,
             ),
           },
-          syncedAt: { gte: startsAt, lte: endsAt },
+          syncedAt: { gte: startsAt, lte: queryEndsAt },
         },
         orderBy: [{ syncedAt: 'asc' }, { id: 'asc' }],
         take: MAX_HISTORY_ROWS,
-        select: { inviteLinkId: true, syncedAt: true, joinedCount: true },
+        select: {
+          inviteLinkId: true,
+          syncedAt: true,
+          joinedCount: true,
+          requestedCount: true,
+        },
       }),
       publisherChannelIds.length
         ? this.prisma.telegramChannelAudienceSnapshot.findMany({
             where: {
               workspaceId: input.workspaceId,
               telegramChannelId: { in: publisherChannelIds },
-              collectedAt: { gte: startsAt, lte: endsAt },
+              collectedAt: { gte: startsAt, lte: queryEndsAt },
               subscribersCount: { not: null },
             },
             orderBy: [{ collectedAt: 'asc' }, { id: 'asc' }],
@@ -95,7 +113,11 @@ export class MutualPromotionAttributionHistoryService {
     const inviteEvents = new Map<string, CounterEvent[]>();
     for (const row of inviteSnapshots) {
       const events = inviteEvents.get(row.inviteLinkId) ?? [];
-      events.push({ at: row.syncedAt, inviteJoined: row.joinedCount });
+      events.push({
+        at: row.syncedAt,
+        inviteJoined: row.joinedCount,
+        inviteRequested: row.requestedCount,
+      });
       inviteEvents.set(row.inviteLinkId, events);
     }
     const audienceEvents = new Map<string, CounterEvent[]>();
@@ -112,10 +134,15 @@ export class MutualPromotionAttributionHistoryService {
       input.participants.map((participant) => {
         const participantStart =
           participant.baselineCapturedAt ?? input.folderStartsAt;
+        const endsAt = participantEndsAt.get(participant.id)!;
         const events: CounterEvent[] = [
           { at: participantStart },
-          ...(inviteEvents.get(participant.inviteLinkId) ?? []),
-          ...(audienceEvents.get(participant.telegramChannelId) ?? []),
+          ...(inviteEvents.get(participant.inviteLinkId) ?? []).filter(
+            (event) => event.at <= endsAt,
+          ),
+          ...(audienceEvents.get(participant.telegramChannelId) ?? []).filter(
+            (event) => event.at <= endsAt,
+          ),
         ];
         if (
           participant.finalCapturedAt &&
@@ -124,17 +151,19 @@ export class MutualPromotionAttributionHistoryService {
           events.push({
             at: participant.finalCapturedAt,
             inviteJoined: participant.inviteJoinedAtEnd ?? undefined,
+            inviteRequested: participant.inviteRequestedAtEnd ?? undefined,
             subscribers: participant.subscribersAtEnd ?? undefined,
           });
         }
-        if (!nextFolder) {
+        if (participant.finalCapturedAt == null && !nextFolder) {
           events.push({
             at: endsAt,
             inviteJoined: participant.inviteLink.joinedCount,
+            inviteRequested: participant.inviteLink.requestedCount,
             subscribers:
               participant.telegramChannel.currentSubscribersCount ?? undefined,
           });
-        } else {
+        } else if (participant.finalCapturedAt == null) {
           // Keep the visible series aligned with the complete attribution window,
           // even when the last stored snapshot predates the next folder.
           events.push({ at: endsAt });
@@ -145,6 +174,8 @@ export class MutualPromotionAttributionHistoryService {
           const previous = mergedEvents.at(-1);
           if (previous?.at.getTime() === event.at.getTime()) {
             previous.inviteJoined = event.inviteJoined ?? previous.inviteJoined;
+            previous.inviteRequested =
+              event.inviteRequested ?? previous.inviteRequested;
             previous.subscribers = event.subscribers ?? previous.subscribers;
           } else {
             mergedEvents.push({ ...event });
@@ -152,12 +183,14 @@ export class MutualPromotionAttributionHistoryService {
         }
 
         let inviteJoined = participant.inviteJoinedAtStart;
+        let inviteRequested = participant.inviteRequestedAtStart ?? 0;
         let subscribers = participant.subscribersAtStart;
         const hasInviteBaseline = inviteJoined != null;
         const hasAudienceBaseline = subscribers != null;
         const points = hasInviteBaseline
           ? mergedEvents.map((event) => {
               inviteJoined = event.inviteJoined ?? inviteJoined;
+              inviteRequested = event.inviteRequested ?? inviteRequested;
               subscribers = event.subscribers ?? subscribers;
               const joinedCount = Math.max(
                 0,
@@ -169,14 +202,22 @@ export class MutualPromotionAttributionHistoryService {
                   ? (subscribers ?? participant.subscribersAtStart ?? 0) -
                     (participant.subscribersAtStart ?? 0)
                   : null;
+              const requestedCount = Math.max(
+                0,
+                (inviteRequested ?? participant.inviteRequestedAtStart ?? 0) -
+                  (participant.inviteRequestedAtStart ?? 0),
+              );
+              const acquiredCount = joinedCount + requestedCount;
               return {
                 at: event.at.toISOString(),
                 joinedCount,
+                requestedCount,
+                acquiredCount,
                 audienceDelta,
                 unsubscribedCount:
                   audienceDelta == null
                     ? null
-                    : Math.max(0, joinedCount - audienceDelta),
+                    : Math.max(0, acquiredCount - audienceDelta),
               };
             })
           : [];
@@ -186,7 +227,11 @@ export class MutualPromotionAttributionHistoryService {
           {
             startsAt: participantStart.toISOString(),
             endsAt: endsAt.toISOString(),
-            endsAtSource: nextFolder ? 'NEXT_FOLDER' : 'CURRENT_TIME',
+            endsAtSource: participant.finalCapturedAt
+              ? 'FINAL_CAPTURE'
+              : nextFolder
+                ? 'NEXT_FOLDER'
+                : 'CURRENT_TIME',
             points,
           },
         ];

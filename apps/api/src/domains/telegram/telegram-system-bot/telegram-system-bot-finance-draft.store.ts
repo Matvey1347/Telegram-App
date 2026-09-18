@@ -20,17 +20,17 @@ export function createSystemBotFinanceDraft(
   type?: TransactionType,
 ) {
   return withSystemBotInteractionLock(prisma, input, async (tx) => {
-    const batch = await tx.telegramSystemBotWorkflow.findFirst({
+    const workflow = await tx.telegramSystemBotWorkflow.findFirst({
       where: {
         connectionId: input.connectionId,
         workspaceId: input.workspaceId,
-        kind: 'POST_BATCH_IMPORT',
+        kind: { in: ['POST_BATCH_IMPORT', 'WEBSITE_POST_IMPORT'] },
         status: 'ACTIVE',
         expiresAt: { gt: new Date() },
       },
       select: { id: true },
     });
-    if (batch) {
+    if (workflow) {
       throw new ConflictException({
         code: TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE_ERROR_CODE,
         message: 'Finish or cancel the active System Bot import first.',

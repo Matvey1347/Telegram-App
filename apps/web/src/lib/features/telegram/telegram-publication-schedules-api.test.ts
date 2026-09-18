@@ -32,4 +32,27 @@ describe("telegram publication schedules api", () => {
       { scheduleId: "s1", selectionMode: "SUBSET", selectedSlotIds: ["slot1"] },
     );
   });
+
+  it("supports a silent assignment for a shared operation toast", async () => {
+    const http = {
+      put: vi.fn().mockResolvedValue({ data: { id: "a1" } }),
+    };
+    const silentFeedbackConfig = { headers: { "x-skip-feedback": "true" } };
+    const client = createTelegramPublicationSchedulesApi(
+      http as never,
+      silentFeedbackConfig,
+    );
+
+    await client.assignQuiet("c1", {
+      scheduleId: "s1",
+      selectionMode: "SUBSET",
+      selectedSlotIds: ["slot1"],
+    });
+
+    expect(http.put).toHaveBeenCalledWith(
+      "/telegram-channels/c1/publication-schedule",
+      { scheduleId: "s1", selectionMode: "SUBSET", selectedSlotIds: ["slot1"] },
+      silentFeedbackConfig,
+    );
+  });
 });

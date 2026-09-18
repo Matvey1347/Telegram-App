@@ -1,14 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import axios from "axios";
 import { ExternalLink, Forward, Plus } from "lucide-react";
 import {
-  TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE_ERROR_CODE,
   type CreateMutualPromotionPostPayload,
+  type TelegramSystemBotPostDraft,
 } from "@telegram-system/shared";
-import { telegramSystemBotApi } from "@/lib/api";
-import type { TelegramSystemBotMutualPromotionPostDraft } from "@/lib/features/telegram/telegram-system-bot-api";
 import {
   channelLocalDateKey,
   channelLocalTime,
@@ -23,7 +20,7 @@ import {
 
 function importedItems(
   workflowId: string,
-  drafts: TelegramSystemBotMutualPromotionPostDraft[],
+  drafts: TelegramSystemBotPostDraft[],
   startsAt: string,
   endsAt: string,
   timezone: string,
@@ -44,12 +41,12 @@ function importedItems(
 }
 
 export function MutualPromotionPostImport({
-  folderId,
   timezone,
   startsAt,
   endsAt,
   botConnected,
   botUsername,
+  workspaceId,
   previewChannelTitle,
   previewChannelPhotoUrl,
   saving,
@@ -61,6 +58,7 @@ export function MutualPromotionPostImport({
   endsAt: string;
   botConnected: boolean;
   botUsername: string | null;
+  workspaceId?: string | null;
   previewChannelTitle: string;
   previewChannelPhotoUrl?: string | null;
   saving: boolean;
@@ -72,39 +70,22 @@ export function MutualPromotionPostImport({
   const [items, setItems] = useState<MutualPromotionImportedPostItem[]>([]);
   const [hasAddedPosts, setHasAddedPosts] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const botFlow = useTelegramSystemBotPostFlow<{
-    workflowId: string;
-    drafts: TelegramSystemBotMutualPromotionPostDraft[];
-  }>({
+  const botFlow = useTelegramSystemBotPostFlow({
+    mode: "multiple",
+    recoveryKey: "mutual-promotion-folder",
+    importContext: "Mutual promotion folder",
+    workspaceId,
     botUsername,
-    prepareImport: async () => {
-      setError(null);
-      const result =
-        await telegramSystemBotApi.prepareMutualPromotionPostImport(folderId);
-      return result.workflowId;
-    },
-    readImport: async (workflowId) => {
-      const result =
-        await telegramSystemBotApi.mutualPromotionPostImportResult(workflowId);
-      return result.ready
-        ? {
-            ready: true as const,
-            value: { workflowId, drafts: result.drafts },
-          }
-        : { ready: false as const };
-    },
-    onImported: ({ workflowId, drafts }) => {
+    onImported: (drafts, workflowId) => {
       setImportedWorkflowId(workflowId);
       setItems(importedItems(workflowId, drafts, startsAt, endsAt, timezone));
     },
-    importErrorMessage:
-      "Could not read the forwarded posts from the system bot.",
-    resolveImportError: (caught) =>
-      axios.isAxiosError(caught) &&
-      caught.response?.data?.code ===
-        TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE_ERROR_CODE
-        ? "Finish the current post import in the bot before starting a new one."
-        : "Could not start the post import.",
+    errorCopy: {
+      read: "Could not read the forwarded posts from the system bot.",
+      active:
+        "Finish the current post import in the bot before starting a new one.",
+      start: "Could not start the post import.",
+    },
   });
 
   const addPosts = async () => {
@@ -144,7 +125,7 @@ export function MutualPromotionPostImport({
       setItems([]);
       setImportedWorkflowId(null);
       setHasAddedPosts(true);
-      botFlow.reset();
+      void botFlow.reset();
     } catch {
       setError("Could not add the imported posts to this folder.");
     }

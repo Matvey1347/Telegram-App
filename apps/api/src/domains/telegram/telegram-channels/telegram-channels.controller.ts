@@ -578,6 +578,12 @@ export class TelegramChannelsController {
   ) {
     return this.service.financialSummary(user.sub, id);
   }
+  @Get(':id/traffic-attribution') trafficAttribution(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+  ) {
+    return this.service.trafficAttribution(user.sub, id);
+  }
   @Get(':id/export') async exportChannel(
     @CurrentUser() user: JwtUser,
     @Param('id') id: string,

@@ -11,7 +11,8 @@ export const TELEGRAM_UNIFIED_IMPORT_INSTRUCTION = `Подготовь един�
       "ref": "group-news",
       "action": "CREATE",
       "title": "Название группы",
-      "icon": "📰"
+      "icon": "📰",
+      "imported": false
     }
   ],
   "hypotheses": [
@@ -19,6 +20,7 @@ export const TELEGRAM_UNIFIED_IMPORT_INSTRUCTION = `Подготовь един�
       "ref": "hyp-growth",
       "action": "CREATE",
       "icon": "🧠",
+      "imported": false,
       "value": {
         "name": "Название гипотезы",
         "description": "Что именно проверяем",
@@ -48,17 +50,19 @@ export const TELEGRAM_UNIFIED_IMPORT_INSTRUCTION = `Подготовь един�
       "postRef": "post-001",
       "slotId": "точный slotId из контекста",
       "scheduledAt": "2026-09-15T09:10:00+02:00",
-      "slotKind": "AD"
+      "slotKind": "AD",
+      "imported": false
     },
     {
       "action": "UNSCHEDULE",
-      "postId": "точный id существующей запланированной публикации"
+      "postId": "точный id существующей запланированной публикации",
+      "imported": false
     }
   ],
   "delete": {
-    "groups": [{ "id": "точный id удаляемой группы из контекста" }],
-    "hypotheses": [{ "id": "точный id удаляемой гипотезы из контекста" }],
-    "posts": [{ "id": "точный id удаляемой публикации из контекста" }]
+    "groups": [{ "id": "точный id удаляемой группы из контекста", "imported": false }],
+    "hypotheses": [{ "id": "точный id удаляемой гипотезы из контекста", "imported": false }],
+    "posts": [{ "id": "точный id удаляемой публикации из контекста", "imported": false }]
   }
 }
 
@@ -77,24 +81,25 @@ export const TELEGRAM_UNIFIED_IMPORT_INSTRUCTION = `Подготовь един�
 3. Никогда не придумывай id, slotId, ссылки, emoji или даты. Если данных недостаточно — пропусти операцию.
 4. Не создавай дубликаты существующих групп, гипотез и публикаций.
 5. Сохраняй Telegram-разметку, переносы строк, ссылки и Premium Emoji из исходного текста.
+6. В каждом элементе groups, hypotheses, posts, schedule и delete обязательно передавай imported:false. После выполнения система сама заменяет его на true только у успешно применённых операций и сохраняет созданные id. Не помечай операцию imported:true самостоятельно.
 
 GROUPS
-Формат: {"ref":"group-news","action":"CREATE|UPDATE","id":"только для UPDATE","title":"Название","icon":"emoji или null"}.
+Формат: {"ref":"group-news","action":"CREATE|UPDATE","id":"только для UPDATE","title":"Название","icon":"emoji или null","imported":false}.
 Для CREATE обязателен title. Для UPDATE обязателен существующий id. Удаление передавай через delete.groups.
 
 HYPOTHESES
-Формат: {"ref":"hyp-growth","action":"CREATE|UPDATE|ARCHIVE","id":"только для UPDATE/ARCHIVE","icon":"один обычный emoji или null","value":{"name":"Название","description":"Подробное описание","status":"ACTIVE|SUCCESSFUL|FAILED|ARCHIVED","conclusion":"вывод или null"}}.
+Формат: {"ref":"hyp-growth","action":"CREATE|UPDATE|ARCHIVE","id":"только для UPDATE/ARCHIVE","icon":"один обычный emoji или null","imported":false,"value":{"name":"Название","description":"Подробное описание","status":"ACTIVE|SUCCESSFUL|FAILED|ARCHIVED","conclusion":"вывод или null"}}.
 Для CREATE и UPDATE обязательны value.name. Передавай выбранный emoji напрямую в icon — внутренний iconId система определит автоматически. ARCHIVE сохраняет гипотезу с архивным статусом; полное удаление передавай через delete.hypotheses.
 
 POSTS
 Формат: {"ref":"post-001","action":"CREATE|UPDATE","id":"только для UPDATE","title":"Внутреннее название","icon":"один обычный emoji или null","text":"готовый Telegram-текст","imageUrls":[],"imageSearch":["поисковый запрос для картинки"],"groupRef":"ref группы или null","hypothesisRefs":["ref гипотезы"],"imported":false,"approved":false}.
 Для CREATE обязателен title. Значок публикации передавай напрямую в icon, без iconId. groupRef и hypothesisRefs должны ссылаться на refs из этого же манифеста. Один пост создавай ровно один раз; удаление передавай через delete.posts.
-Для новых публикаций всегда передавай imported:false и approved:false. imported:true означает, что публикация уже была обработана ранее и не должна импортироваться повторно.
+Для новых публикаций всегда передавай imported:false и approved:false. imported:true означает, что операция уже была успешно обработана системой и не должна импортироваться повторно.
 imageSearch отображается в редакторе импорта для поиска новых изображений и не сохраняется в публикации.
 В imageUrls передавай только прямые абсолютные HTTP/HTTPS-ссылки. Поисковые фразы передавай в imageSearch, а не в imageUrls. Markdown-ссылка вида [изображение](https://...) будет очищена автоматически, но предпочтителен чистый URL.
 
 SCHEDULE / UNSCHEDULE
-Для планирования: {"action":"SCHEDULE","postRef":"post-001","slotId":"точный ID назначенного каналу слота","scheduledAt":"ISO-8601 с часовым поясом","slotKind":"CONTENT|AD"}.
+Для планирования: {"action":"SCHEDULE","postRef":"post-001","slotId":"точный ID назначенного каналу слота","scheduledAt":"ISO-8601 с часовым поясом","slotKind":"CONTENT|AD","imported":false}.
 Для переноса уже существующей публикации на другой слот: {"action":"SCHEDULE","postId":"точный id существующей публикации","slotId":"точный ID назначенного каналу слота","scheduledAt":"ISO-8601 с часовым поясом","slotKind":"CONTENT|AD"}.
 Для снятия существующей публикации с планирования и возврата в DRAFT: {"action":"UNSCHEDULE","postId":"точный id запланированной публикации из контекста"}.
 Для совместимости отсутствие action означает SCHEDULE. Для SCHEDULE используй либо postRef публикации из этого же манифеста, либо точный postId существующей публикации; никогда не передавай оба сразу. Для UNSCHEDULE используй только точный существующий postId со статусом SCHEDULED. Не передавай slotId, scheduledAt или postRef в операции UNSCHEDULE.

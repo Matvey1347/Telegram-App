@@ -19,6 +19,7 @@ import { MutualPromotionReadService } from './mutual-promotion-read.service';
 import { MutualPromotionActivationService } from './mutual-promotion-activation.service';
 import { MutualPromotionExpenseService } from './mutual-promotion-expense.service';
 import { MutualPromotionValidationService } from './mutual-promotion-validation.service';
+import { TelegramManagedPostRemoteDeletionService } from '../../telegram/telegram-channels/telegram-managed-post-remote-deletion.service';
 import {
   mutualPromotionFolderTitle,
   mutualPromotionImportedPostCount,
@@ -36,6 +37,7 @@ export class MutualPromotionCommandService {
     private readonly activation: MutualPromotionActivationService,
     private readonly validation: MutualPromotionValidationService,
     private readonly read: MutualPromotionReadService,
+    private readonly remoteDeletion: TelegramManagedPostRemoteDeletionService,
   ) {}
 
   async create(userId: string, dto: CreateMutualPromotionFolderDto) {
@@ -186,12 +188,21 @@ export class MutualPromotionCommandService {
         where: {
           id: dto.importWorkflowId,
           workspaceId,
-          mutualPromotionFolderId: folderId,
-          kind: 'MUTUAL_PROMOTION_POST',
+          kind: 'WEBSITE_POST_IMPORT',
+          postImportMode: 'MULTIPLE',
           status: 'COMPLETED',
+          consumedAt: null,
+          resultManagedPostId: null,
+          resultPostBatchPostId: null,
+          resultAdSaleId: null,
+          resultAdSalePlacementId: null,
           resultMutualPromotionPostId: null,
+          postBatch: { is: null },
+          connection: {
+            is: { userId, enabled: true },
+          },
         },
-        select: { id: true, payload: true },
+        select: { id: true, connectionId: true, payload: true },
       });
       if (!workflow) {
         throw new ConflictException(
@@ -229,12 +240,22 @@ export class MutualPromotionCommandService {
       const consumed = await tx.telegramSystemBotWorkflow.updateMany({
         where: {
           id: workflow.id,
+          connectionId: workflow.connectionId,
           workspaceId,
-          mutualPromotionFolderId: folderId,
+          connection: { is: { userId, enabled: true } },
           status: 'COMPLETED',
+          consumedAt: null,
+          resultManagedPostId: null,
+          resultPostBatchPostId: null,
+          resultAdSaleId: null,
+          resultAdSalePlacementId: null,
           resultMutualPromotionPostId: null,
+          postBatch: { is: null },
         },
-        data: { resultMutualPromotionPostId: posts[0].id },
+        data: {
+          resultMutualPromotionPostId: posts[0].id,
+          consumedAt: new Date(),
+        },
       });
       if (consumed.count !== 1) {
         throw new ConflictException('System Bot import was already used');
@@ -357,6 +378,71 @@ export class MutualPromotionCommandService {
     });
     notifyScheduledTaskDueWorkChanged('mutual_promotion.lifecycle');
     return this.read.detailForWorkspace(workspaceId, folderId);
+  }
+
+  async remove(userId: string, folderId: string) {
+    const workspaceId =
+      await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const folder = await this.prisma.mutualPromotionFolder.findFirst({
+      where: { id: folderId, workspaceId },
+      select: {
+        id: true,
+        posts: {
+          select: {
+            deliveries: {
+              where: { managedPostId: { not: null } },
+              select: {
+                managedPostId: true,
+                managedPost: {
+                  select: {
+                    status: true,
+                    telegramMessageIds: true,
+                    telegramScheduledMessageIds: true,
+                    telegramRemoteStatus: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!folder)
+      throw new NotFoundException('Mutual-promotion folder not found');
+    const deliveries = folder.posts.flatMap((post) => post.deliveries);
+    const managedPostIds = deliveries
+      .map((delivery) => delivery.managedPostId)
+      .filter((id): id is string => Boolean(id));
+    const remotePostIds = deliveries
+      .filter(
+        (delivery) =>
+          delivery.managedPost?.status === 'PUBLISHED' ||
+          delivery.managedPost?.telegramMessageIds.length ||
+          delivery.managedPost?.telegramScheduledMessageIds.length ||
+          delivery.managedPost?.telegramRemoteStatus === 'AUTO_DELETED',
+      )
+      .map((delivery) => delivery.managedPostId!)
+      .filter(Boolean);
+    if (remotePostIds.length) {
+      const result = await this.remoteDeletion.deletePublishedManagedPosts({
+        workspaceId,
+        managedPostIds: remotePostIds,
+      });
+      if (result.failed) {
+        throw new BadRequestException(
+          result.results.find((item) => !item.success)?.error ??
+            'Telegram posts could not be deleted',
+        );
+      }
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.telegramManagedPost.deleteMany({
+        where: { workspaceId, id: { in: managedPostIds } },
+      });
+      await tx.mutualPromotionFolder.delete({ where: { id: folderId } });
+    });
+    notifyScheduledTaskDueWorkChanged('mutual_promotion.lifecycle');
+    return { id: folderId };
   }
 
   private async createParticipants(

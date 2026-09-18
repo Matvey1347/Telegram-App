@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { TelegramChannelsController } from './telegram-channels.controller';
-import { TelegramPublicationSchedulesController, TelegramChannelPublicationScheduleController } from './telegram-publication-schedules.controller';
+import {
+  TelegramPublicationSchedulesController,
+  TelegramChannelPublicationScheduleController,
+} from './telegram-publication-schedules.controller';
 import { TelegramPublicationSchedulesService } from './telegram-publication-schedules.service';
 import { TelegramContentHypothesesController } from './telegram-content-hypotheses.controller';
 import { TelegramContentHypothesesService } from './telegram-content-hypotheses.service';
@@ -95,10 +98,13 @@ import { TelegramPostBatchSummaryService } from './telegram-post-batch-summary.s
 import { TelegramPostBatchStatusService } from './telegram-post-batch-status.service';
 import { TelegramPostBatchClaimLeaseService } from './telegram-post-batch-claim-lease.service';
 import { TelegramPostBatchCommandService } from './telegram-post-batch-command.service';
+import { TelegramPostBatchImportService } from './telegram-post-batch-import.service';
 import { TelegramPostBatchDispatchService } from './telegram-post-batch-dispatch.service';
 import { TelegramPostBatchLifecycleService } from './telegram-post-batch-lifecycle.service';
 import { TelegramPostBatchDueReadService } from './telegram-post-batch-due-read.service';
 import { TelegramPostBatchPublicationRunnerService } from './telegram-post-batch-publication-runner.service';
+import { TelegramChannelTrafficAttributionReadService } from './telegram-channel-traffic-attribution-read.service';
+import { TelegramChannelTrafficAttributionService } from './telegram-channel-traffic-attribution.service';
 
 @Module({
   imports: [AdCampaignsModule],
@@ -148,6 +154,8 @@ import { TelegramPostBatchPublicationRunnerService } from './telegram-post-batch
     TelegramChannelBookingReadService,
     TelegramChannelAdPricingReadService,
     TelegramChannelAudienceTrendReadService,
+    TelegramChannelTrafficAttributionReadService,
+    TelegramChannelTrafficAttributionService,
     TelegramChannelPerformanceHistoryService,
     TelegramChannelCatalogService,
     TelegramChannelLifecycleService,
@@ -201,6 +209,7 @@ import { TelegramPostBatchPublicationRunnerService } from './telegram-post-batch
     TelegramPostBatchStatusService,
     TelegramPostBatchClaimLeaseService,
     TelegramPostBatchCommandService,
+    TelegramPostBatchImportService,
     TelegramPostBatchDispatchService,
     TelegramPostBatchLifecycleService,
     TelegramPostBatchDueReadService,

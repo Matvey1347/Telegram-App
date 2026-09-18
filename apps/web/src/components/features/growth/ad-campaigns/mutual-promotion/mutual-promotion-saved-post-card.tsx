@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import type {
   MutualPromotionFolderPost,
+  TelegramSystemBotPostDraft,
   UpdateMutualPromotionPostPayload,
 } from "@telegram-system/shared";
 import { normalizeTelegramPostMediaItems } from "@telegram-system/shared";
@@ -21,7 +22,6 @@ import {
   TimeInput,
 } from "@/components/ui/primitives";
 import { MutualPromotionPostComposer } from "./mutual-promotion-post-composer";
-import type { TelegramSystemBotMutualPromotionPostDraft } from "@/lib/features/telegram/telegram-system-bot-api";
 
 export function MutualPromotionSavedPostCard({
   post,
@@ -54,7 +54,7 @@ export function MutualPromotionSavedPostCard({
   const [editing, setEditing] = useState(false);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
-  const [draft, setDraft] = useState<TelegramSystemBotMutualPromotionPostDraft>(
+  const [draft, setDraft] = useState<TelegramSystemBotPostDraft>(
     () => postDraft(post),
   );
   const [error, setError] = useState<string | null>(null);

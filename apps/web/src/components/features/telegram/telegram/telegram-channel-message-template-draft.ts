@@ -1,61 +1,57 @@
 import type { TelegramChannelMessageTemplatePayload } from "@telegram-system/shared";
-import type { WorkspaceDraftPreview } from "@/hooks/use-workspace-modal-drafts";
-import {
-  readWorkspaceModalDrafts,
-  removeWorkspaceModalDraft,
-  writeWorkspaceModalDraft,
-} from "@/lib/workspace-modal-drafts";
+import { DEFAULT_CHANNEL_MESSAGE_TEMPLATE } from "./telegram-channel-message-template-format";
 
-const NAMESPACE = "telegram-channel-message-template:draft";
+export const TELEGRAM_MESSAGE_TEMPLATE_DRAFT_NAMESPACE =
+  "telegram-channel-message-template:draft";
 
-export type TelegramChannelMessageTemplateDraft = {
-  version: 1;
-  id?: string;
-  createdAt?: string;
-  savedTemplateId?: string | null;
-  form: TelegramChannelMessageTemplatePayload;
-  preview?: WorkspaceDraftPreview;
+export const emptyTelegramMessageTemplatePayload =
+  (): TelegramChannelMessageTemplatePayload => ({
+    title: "",
+    iconId: null,
+    scopeMode: "CHANNELS",
+    networkId: null,
+    channelIds: [],
+    bodyTemplate: DEFAULT_CHANNEL_MESSAGE_TEMPLATE,
+    overrideInviteLinks: false,
+    inviteLinkOverrides: {},
+    excludedProductNames: [],
+    priceRounding: "NONE",
+    productNameOverrides: {},
+    bundleOfferEnabled: false,
+    bundleDiscountPercent: 10,
+    bundleBasePriceOverrides: {},
+  });
+
+export type TelegramChannelMessageTemplateDraftForm = {
+  payload: TelegramChannelMessageTemplatePayload;
+  savedTemplateId: string | null;
 };
 
-function normalize(
+export function normalizeTelegramChannelMessageTemplateDraft(
   value: unknown,
-  index: number,
-): TelegramChannelMessageTemplateDraft | null {
-  const draft = value as Partial<TelegramChannelMessageTemplateDraft>;
+  _sourceSchemaVersion: number,
+  _index: number,
+  envelope?: Record<string, unknown>,
+): TelegramChannelMessageTemplateDraftForm | null {
+  const candidate = value as Partial<TelegramChannelMessageTemplateDraftForm>;
+  const payload = (candidate.payload ??
+    value) as Partial<TelegramChannelMessageTemplatePayload>;
   if (
-    draft.version !== 1 ||
-    !draft.form ||
-    !Array.isArray(draft.form.channelIds) ||
-    typeof draft.form.bodyTemplate !== "string"
-  ) {
+    !Array.isArray(payload.channelIds) ||
+    typeof payload.bodyTemplate !== "string"
+  )
     return null;
-  }
+  const savedTemplateId =
+    typeof candidate.savedTemplateId === "string"
+      ? candidate.savedTemplateId
+      : typeof envelope?.savedTemplateId === "string"
+        ? envelope.savedTemplateId
+        : null;
+  // Local drafts are only for templates that have not been saved yet.
+  // Reject records produced by the previous edit-autosave behavior.
+  if (savedTemplateId) return null;
   return {
-    version: 1,
-    id: draft.id || `legacy-${index}`,
-    createdAt: draft.createdAt || new Date(0).toISOString(),
-    savedTemplateId: draft.savedTemplateId || null,
-    form: draft.form,
-    preview: draft.preview,
+    payload: payload as TelegramChannelMessageTemplatePayload,
+    savedTemplateId: null,
   };
-}
-
-export function readTelegramChannelMessageTemplateDrafts(
-  storage?: Storage | null,
-) {
-  return readWorkspaceModalDrafts(storage, NAMESPACE, normalize);
-}
-
-export function writeTelegramChannelMessageTemplateDraft(
-  storage: Storage | null | undefined,
-  draft: TelegramChannelMessageTemplateDraft,
-) {
-  writeWorkspaceModalDraft(storage, NAMESPACE, draft, normalize);
-}
-
-export function removeTelegramChannelMessageTemplateDraft(
-  storage: Storage | null | undefined,
-  id?: string,
-) {
-  removeWorkspaceModalDraft(storage, NAMESPACE, id, normalize);
 }

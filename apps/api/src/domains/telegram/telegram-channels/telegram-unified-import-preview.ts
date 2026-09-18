@@ -1,4 +1,5 @@
 import type {
+  ResolvedEmoji,
   TelegramUnifiedImportManifest,
   TelegramUnifiedImportPreview,
   TelegramUnifiedImportPreviewItem,
@@ -19,6 +20,11 @@ type PreviewScope = {
     icon?: string | null;
     status?: string;
     scheduledAt?: Date | string | null;
+    publicationSlot?: {
+      id: string;
+      kind: 'CONTENT' | 'AD';
+      title: string;
+    } | null;
   }>;
   existingHypotheses: Array<{
     id: string;
@@ -28,12 +34,18 @@ type PreviewScope = {
     conclusion?: string | null;
     icon?: { emoji?: string | null } | null;
   }>;
-  existingSlots: Array<{ id: string; scheduleId: string }>;
+  existingSlots: Array<{
+    id: string;
+    scheduleId: string;
+    kind: 'CONTENT' | 'AD';
+    title: string;
+  }>;
   scheduleAssignment: {
     scheduleId: string;
     selectionMode: string;
     selectedSlots: Array<{ slotId: string }>;
   } | null;
+  iconPresentationsById?: Map<string, ResolvedEmoji>;
 };
 
 const duplicateValues = (values: string[]) => {
@@ -54,6 +66,27 @@ const isHttpUrl = (value: string) => {
   }
 };
 
+const displayValue = (value: unknown): string | null => {
+  if (value === null || value === undefined || value === '') return null;
+  if (Array.isArray(value)) return value.length ? value.join('\n') : null;
+  if (typeof value === 'object') return JSON.stringify(value);
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'bigint')
+    return value.toString();
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  return null;
+};
+
+const changesFor = (
+  fields: Array<{ field: string; before: unknown; after: unknown }>,
+) =>
+  fields.flatMap(({ field, before, after }) => {
+    if (after === undefined) return [];
+    const previous = displayValue(before);
+    const next = displayValue(after);
+    return previous === next ? [] : [{ field, before: previous, after: next }];
+  });
+
 const previewItem = (
   ref: string,
   action: string,
@@ -64,7 +97,17 @@ const previewItem = (
   approved?: boolean,
   presentation?: Pick<
     TelegramUnifiedImportPreviewItem,
-    'entityId' | 'icon' | 'description' | 'text' | 'imageUrls' | 'scheduledAt'
+    | 'entityId'
+    | 'icon'
+    | 'iconPresentation'
+    | 'description'
+    | 'text'
+    | 'imageUrls'
+    | 'scheduledAt'
+    | 'slotId'
+    | 'slotKind'
+    | 'slotTitle'
+    | 'changes'
   >,
 ): TelegramUnifiedImportPreviewItem => ({
   ref,
@@ -83,6 +126,12 @@ export function buildUnifiedImportPreviewSections(
   manifest: TelegramUnifiedImportManifest,
   scope: PreviewScope,
 ): TelegramUnifiedImportPreview['sections'] {
+  const postIconPresentation = (value?: string | null) => {
+    if (!value) return null;
+    if (/\p{Extended_Pictographic}/u.test(value))
+      return { type: 'unicode' as const, value, name: value };
+    return scope.iconPresentationsById?.get(value) ?? null;
+  };
   const deleteGroups = manifest.delete?.groups ?? [];
   const deleteHypotheses = manifest.delete?.hypotheses ?? [];
   const deletePosts = manifest.delete?.posts ?? [];
@@ -109,6 +158,7 @@ export function buildUnifiedImportPreviewSections(
       )
       .map((row) => row.id),
   );
+  const slotsById = new Map(scope.existingSlots.map((row) => [row.id, row]));
   const groupRefs = new Set(
     (manifest.groups ?? [])
       .filter((row) => row.action !== 'DELETE')
@@ -123,9 +173,6 @@ export function buildUnifiedImportPreviewSections(
     (manifest.posts ?? [])
       .filter((row) => row.action !== 'DELETE')
       .map((row) => row.ref),
-  );
-  const importedPostRefs = new Set(
-    (manifest.posts ?? []).filter((row) => row.imported).map((row) => row.ref),
   );
   const manifestPostsByRef = new Map(
     (manifest.posts ?? []).map((row) => [row.ref, row]),
@@ -185,21 +232,23 @@ export function buildUnifiedImportPreviewSections(
             row.ref,
             row.action,
             row.title ?? existing?.title ?? row.id ?? row.ref,
-            [
-              ...(duplicateRefs.has(row.ref) ? ['Duplicate ref'] : []),
-              ...(row.action === 'CREATE' && !row.title?.trim()
-                ? ['title is required for CREATE']
-                : []),
-              ...(row.action !== 'CREATE' &&
-              (!row.id || !knownGroups.has(row.id))
-                ? ['Group does not belong to this channel']
-                : []),
-              ...(row.id && groupDeleteIds.has(row.id)
-                ? ['Group also appears in delete.groups']
-                : []),
-            ],
+            row.imported
+              ? []
+              : [
+                  ...(duplicateRefs.has(row.ref) ? ['Duplicate ref'] : []),
+                  ...(row.action === 'CREATE' && !row.title?.trim()
+                    ? ['title is required for CREATE']
+                    : []),
+                  ...(row.action !== 'CREATE' &&
+                  (!row.id || !knownGroups.has(row.id))
+                    ? ['Group does not belong to this channel']
+                    : []),
+                  ...(row.id && groupDeleteIds.has(row.id)
+                    ? ['Group also appears in delete.groups']
+                    : []),
+                ],
             undefined,
-            undefined,
+            row.imported,
             undefined,
             row.action === 'DELETE'
               ? {
@@ -207,7 +256,23 @@ export function buildUnifiedImportPreviewSections(
                   icon: existing?.icon,
                   description: existing?.description,
                 }
-              : undefined,
+              : row.action === 'UPDATE'
+                ? {
+                    entityId: row.id,
+                    changes: changesFor([
+                      {
+                        field: 'icon',
+                        before: existing?.icon,
+                        after: row.icon,
+                      },
+                      {
+                        field: 'title',
+                        before: existing?.title,
+                        after: row.title,
+                      },
+                    ]),
+                  }
+                : undefined,
           );
         }),
         ...deleteGroups.map((row) => {
@@ -216,20 +281,22 @@ export function buildUnifiedImportPreviewSections(
             `delete:group:${row.id}`,
             'DELETE',
             existing?.title ?? row.id,
-            [
-              ...(!row.id?.trim() ? ['id is required'] : []),
-              ...(row.id?.trim() && !knownGroups.has(row.id)
-                ? ['Group does not belong to this channel']
-                : []),
-              ...(duplicateGroupDeleteIds.has(row.id)
-                ? ['Duplicate delete id']
-                : []),
-              ...(groupOperationIds.has(row.id)
-                ? ['Group also appears in groups operations']
-                : []),
-            ],
+            row.imported
+              ? []
+              : [
+                  ...(!row.id?.trim() ? ['id is required'] : []),
+                  ...(row.id?.trim() && !knownGroups.has(row.id)
+                    ? ['Group does not belong to this channel']
+                    : []),
+                  ...(duplicateGroupDeleteIds.has(row.id)
+                    ? ['Duplicate delete id']
+                    : []),
+                  ...(groupOperationIds.has(row.id)
+                    ? ['Group also appears in groups operations']
+                    : []),
+                ],
             undefined,
-            undefined,
+            row.imported,
             undefined,
             {
               entityId: row.id,
@@ -251,26 +318,30 @@ export function buildUnifiedImportPreviewSections(
             row.ref,
             row.action,
             row.value?.name ?? existing?.name ?? row.id ?? row.ref,
-            [
-              ...(duplicateRefs.has(row.ref) ? ['Duplicate ref'] : []),
-              ...(row.action === 'CREATE' && !row.value
-                ? ['value is required for CREATE']
-                : []),
-              ...(row.action === 'UPDATE' && !row.value?.name?.trim()
-                ? ['value.name is required for UPDATE']
-                : []),
-              ...(row.action !== 'CREATE' && !row.id ? ['id is required'] : []),
-              ...(row.action !== 'CREATE' &&
-              row.id &&
-              !knownHypotheses.has(row.id)
-                ? ['Hypothesis does not belong to this channel']
-                : []),
-              ...(row.id && hypothesisDeleteIds.has(row.id)
-                ? ['Hypothesis also appears in delete.hypotheses']
-                : []),
-            ],
+            row.imported
+              ? []
+              : [
+                  ...(duplicateRefs.has(row.ref) ? ['Duplicate ref'] : []),
+                  ...(row.action === 'CREATE' && !row.value
+                    ? ['value is required for CREATE']
+                    : []),
+                  ...(row.action === 'UPDATE' && !row.value?.name?.trim()
+                    ? ['value.name is required for UPDATE']
+                    : []),
+                  ...(row.action !== 'CREATE' && !row.id
+                    ? ['id is required']
+                    : []),
+                  ...(row.action !== 'CREATE' &&
+                  row.id &&
+                  !knownHypotheses.has(row.id)
+                    ? ['Hypothesis does not belong to this channel']
+                    : []),
+                  ...(row.id && hypothesisDeleteIds.has(row.id)
+                    ? ['Hypothesis also appears in delete.hypotheses']
+                    : []),
+                ],
             row.value?.status ?? existing?.status,
-            undefined,
+            row.imported,
             undefined,
             row.action === 'DELETE'
               ? {
@@ -278,7 +349,41 @@ export function buildUnifiedImportPreviewSections(
                   icon: existing?.icon?.emoji,
                   description: existing?.description ?? existing?.conclusion,
                 }
-              : undefined,
+              : row.action === 'UPDATE' || row.action === 'ARCHIVE'
+                ? {
+                    entityId: row.id,
+                    changes: changesFor([
+                      {
+                        field: 'icon',
+                        before: existing?.icon?.emoji,
+                        after: row.icon,
+                      },
+                      {
+                        field: 'name',
+                        before: existing?.name,
+                        after: row.value?.name,
+                      },
+                      {
+                        field: 'description',
+                        before: existing?.description,
+                        after: row.value?.description,
+                      },
+                      {
+                        field: 'status',
+                        before: existing?.status,
+                        after:
+                          row.action === 'ARCHIVE'
+                            ? 'ARCHIVED'
+                            : row.value?.status,
+                      },
+                      {
+                        field: 'conclusion',
+                        before: existing?.conclusion,
+                        after: row.value?.conclusion,
+                      },
+                    ]),
+                  }
+                : undefined,
           );
         }),
         ...deleteHypotheses.map((row) => {
@@ -287,20 +392,22 @@ export function buildUnifiedImportPreviewSections(
             `delete:hypothesis:${row.id}`,
             'DELETE',
             existing?.name ?? row.id,
-            [
-              ...(!row.id?.trim() ? ['id is required'] : []),
-              ...(row.id?.trim() && !knownHypotheses.has(row.id)
-                ? ['Hypothesis does not belong to this channel']
-                : []),
-              ...(duplicateHypothesisDeleteIds.has(row.id)
-                ? ['Duplicate delete id']
-                : []),
-              ...(hypothesisOperationIds.has(row.id)
-                ? ['Hypothesis also appears in hypotheses operations']
-                : []),
-            ],
+            row.imported
+              ? []
+              : [
+                  ...(!row.id?.trim() ? ['id is required'] : []),
+                  ...(row.id?.trim() && !knownHypotheses.has(row.id)
+                    ? ['Hypothesis does not belong to this channel']
+                    : []),
+                  ...(duplicateHypothesisDeleteIds.has(row.id)
+                    ? ['Duplicate delete id']
+                    : []),
+                  ...(hypothesisOperationIds.has(row.id)
+                    ? ['Hypothesis also appears in hypotheses operations']
+                    : []),
+                ],
             existing?.status,
-            undefined,
+            row.imported,
             undefined,
             {
               entityId: row.id,
@@ -356,11 +463,42 @@ export function buildUnifiedImportPreviewSections(
             row.action === 'DELETE'
               ? {
                   entityId: row.id,
-                  icon: existing?.icon,
+                  iconPresentation: postIconPresentation(existing?.icon),
                   text: existing?.text,
                   imageUrls: existing?.imageUrls,
                 }
-              : undefined,
+              : row.action === 'UPDATE'
+                ? {
+                    entityId: row.id,
+                    iconPresentation: postIconPresentation(
+                      row.icon ?? existing?.icon,
+                    ),
+                    changes: changesFor([
+                      {
+                        field: 'icon',
+                        before: existing?.icon,
+                        after: row.icon,
+                      },
+                      {
+                        field: 'title',
+                        before: existing?.title,
+                        after: row.title,
+                      },
+                      {
+                        field: 'text',
+                        before: existing?.text,
+                        after: row.text ?? undefined,
+                      },
+                      {
+                        field: 'imageUrls',
+                        before: existing?.imageUrls,
+                        after: row.imageUrls,
+                      },
+                    ]),
+                  }
+                : {
+                    iconPresentation: postIconPresentation(row.icon),
+                  },
           );
         }),
         ...deletePosts.map((row) => {
@@ -369,27 +507,29 @@ export function buildUnifiedImportPreviewSections(
             `delete:post:${row.id}`,
             'DELETE',
             existing?.title ?? row.id,
-            [
-              ...(!row.id?.trim() ? ['id is required'] : []),
-              ...(row.id?.trim() && !knownPosts.has(row.id)
-                ? ['Post does not belong to this channel']
-                : []),
-              ...(duplicatePostDeleteIds.has(row.id)
-                ? ['Duplicate delete id']
-                : []),
-              ...(postOperationIds.has(row.id)
-                ? ['Post also appears in posts operations']
-                : []),
-              ...(unschedulePostIds.includes(row.id)
-                ? ['Post also appears in UNSCHEDULE operations']
-                : []),
-            ],
+            row.imported
+              ? []
+              : [
+                  ...(!row.id?.trim() ? ['id is required'] : []),
+                  ...(row.id?.trim() && !knownPosts.has(row.id)
+                    ? ['Post does not belong to this channel']
+                    : []),
+                  ...(duplicatePostDeleteIds.has(row.id)
+                    ? ['Duplicate delete id']
+                    : []),
+                  ...(postOperationIds.has(row.id)
+                    ? ['Post also appears in posts operations']
+                    : []),
+                  ...(unschedulePostIds.includes(row.id)
+                    ? ['Post also appears in UNSCHEDULE operations']
+                    : []),
+                ],
             undefined,
-            undefined,
+            row.imported,
             undefined,
             {
               entityId: row.id,
-              icon: existing?.icon,
+              iconPresentation: postIconPresentation(existing?.icon),
               text: existing?.text,
               imageUrls: existing?.imageUrls,
             },
@@ -408,50 +548,61 @@ export function buildUnifiedImportPreviewSections(
             row.postId ?? 'unschedule',
             'UNSCHEDULE',
             existing?.title ?? row.postId ?? 'Unscheduled publication',
-            [
-              ...(!row.postId?.trim() ? ['postId is required'] : []),
-              ...(row.postId?.trim() && !knownPosts.has(row.postId)
-                ? ['Post does not belong to this channel']
-                : []),
-              ...(existing && existing.status !== 'SCHEDULED'
-                ? ['Only a scheduled post can be unscheduled']
-                : []),
-              ...(row.postId && duplicateUnschedulePostIds.has(row.postId)
-                ? ['Post is unscheduled more than once']
-                : []),
-              ...(row.postId && postDeleteIds.has(row.postId)
-                ? ['Post also appears in delete.posts']
-                : []),
-              ...(row.postId && scheduledExistingPostIds.has(row.postId)
-                ? ['Post also appears in SCHEDULE operations']
-                : []),
-              ...(row.postId && schedulePostIds.includes(row.postId)
-                ? ['Post also appears in SCHEDULE operations']
-                : []),
-            ],
+            row.imported
+              ? []
+              : [
+                  ...(!row.postId?.trim() ? ['postId is required'] : []),
+                  ...(row.postId?.trim() && !knownPosts.has(row.postId)
+                    ? ['Post does not belong to this channel']
+                    : []),
+                  ...(existing && existing.status !== 'SCHEDULED'
+                    ? ['Only a scheduled post can be unscheduled']
+                    : []),
+                  ...(row.postId && duplicateUnschedulePostIds.has(row.postId)
+                    ? ['Post is unscheduled more than once']
+                    : []),
+                  ...(row.postId && postDeleteIds.has(row.postId)
+                    ? ['Post also appears in delete.posts']
+                    : []),
+                  ...(row.postId && scheduledExistingPostIds.has(row.postId)
+                    ? ['Post also appears in SCHEDULE operations']
+                    : []),
+                  ...(row.postId && schedulePostIds.includes(row.postId)
+                    ? ['Post also appears in SCHEDULE operations']
+                    : []),
+                ],
             undefined,
-            undefined,
+            row.imported,
             undefined,
             {
               entityId: row.postId,
-              icon: existing?.icon,
+              iconPresentation: postIconPresentation(existing?.icon),
               text: existing?.text,
               imageUrls: existing?.imageUrls,
               scheduledAt: existing?.scheduledAt
                 ? new Date(existing.scheduledAt).toISOString()
-                : null,
+                : (row.scheduledAt ?? null),
+              slotId: existing?.publicationSlot?.id ?? row.slotId ?? null,
+              slotKind:
+                existing?.publicationSlot?.kind ??
+                row.slotKind ??
+                (row.slotId ? slotsById.get(row.slotId)?.kind : undefined) ??
+                null,
+              slotTitle:
+                existing?.publicationSlot?.title ??
+                (row.slotId ? slotsById.get(row.slotId)?.title : undefined) ??
+                null,
             },
           );
         }
         const postRef = row.postRef ?? '';
-        const imported = importedPostRefs.has(postRef);
         const post = manifestPostsByRef.get(postRef);
         const existing = row.postId ? postsById.get(row.postId) : undefined;
         return previewItem(
           postRef || row.postId || 'schedule',
           'SCHEDULE',
           post?.title ?? existing?.title ?? row.scheduledAt ?? postRef,
-          imported
+          row.imported
             ? []
             : [
                 ...(!postRef && !row.postId
@@ -487,7 +638,6 @@ export function buildUnifiedImportPreviewSections(
                 ...(row.postId && postDeleteIds.has(row.postId)
                   ? ['Post also appears in delete.posts']
                   : []),
-                ...(!row.slotId?.trim() ? ['slotId is required'] : []),
                 ...(row.slotId?.trim() && !knownSlots.has(row.slotId)
                   ? ['Slot is not assigned to this channel']
                   : []),
@@ -497,14 +647,24 @@ export function buildUnifiedImportPreviewSections(
                   : []),
               ],
           undefined,
-          imported,
+          row.imported,
           undefined,
           {
             entityId: post?.id ?? existing?.id,
-            icon: post?.icon ?? existing?.icon,
+            iconPresentation: postIconPresentation(
+              post?.icon ?? existing?.icon,
+            ),
             text: post?.text ?? existing?.text,
             imageUrls: post?.imageUrls ?? existing?.imageUrls,
             scheduledAt: row.scheduledAt ?? null,
+            slotId: row.slotId ?? null,
+            slotKind:
+              row.slotKind ??
+              (row.slotId ? slotsById.get(row.slotId)?.kind : undefined) ??
+              null,
+            slotTitle:
+              (row.slotId ? slotsById.get(row.slotId)?.title : undefined) ??
+              null,
           },
         );
       }),
@@ -513,9 +673,23 @@ export function buildUnifiedImportPreviewSections(
     },
   ];
 
-  return sections.map((section) => ({
-    ...section,
-    validCount: section.items.filter((row) => row.valid).length,
-    invalidCount: section.items.filter((row) => !row.valid).length,
-  }));
+  return sections.map((section) => {
+    const items =
+      section.key === 'groups' || section.key === 'hypotheses'
+        ? section.items.filter(
+            (item) =>
+              !(
+                item.action === 'UPDATE' &&
+                item.valid &&
+                item.changes?.length === 0
+              ),
+          )
+        : section.items;
+    return {
+      ...section,
+      items,
+      validCount: items.filter((row) => row.valid).length,
+      invalidCount: items.filter((row) => !row.valid).length,
+    };
+  });
 }

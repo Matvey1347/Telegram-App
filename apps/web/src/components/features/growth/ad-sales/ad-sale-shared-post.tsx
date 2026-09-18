@@ -5,10 +5,7 @@ import type { TelegramChannel } from "@/lib/api";
 import { Button, Tooltip } from "@/components/ui/primitives";
 import { channelLocalDateKey } from "@/lib/features/growth/telegram-ad-sales";
 import type { SalePlacementDraft } from "./ad-sale-types";
-import {
-  PlacementPostComposer,
-  type PlacementManagedPostDraft,
-} from "./placement-post/placement-post-composer";
+import { PlacementPostComposer } from "./placement-post/placement-post-composer";
 import { hasPlacementPostContent } from "./placement-post/placement-post-content";
 import { useTelegramSystemBotPostFlow } from "@/hooks/use-telegram-system-bot-post-flow";
 
@@ -18,9 +15,7 @@ export function AdSaleSharedPost({
   mode,
   systemBotConnected,
   systemBotUsername,
-  onSystemBotReturn,
-  onPrepareSystemBot,
-  onSendSystemBotPost,
+  workspaceId,
   onModeChange,
   setPlacements,
 }: {
@@ -29,12 +24,7 @@ export function AdSaleSharedPost({
   mode: "shared" | "individual";
   systemBotConnected?: boolean;
   systemBotUsername?: string | null;
-  onSystemBotReturn?: (
-    workflowId: string,
-    channelIds: string[],
-  ) => Promise<PlacementManagedPostDraft | null>;
-  onPrepareSystemBot?: () => Promise<string>;
-  onSendSystemBotPost?: (draft: PlacementManagedPostDraft) => Promise<void>;
+  workspaceId?: string | null;
   onModeChange: (mode: "shared" | "individual") => void;
   setPlacements: Dispatch<SetStateAction<SalePlacementDraft[]>>;
 }) {
@@ -52,18 +42,11 @@ export function AdSaleSharedPost({
       placement.date >= channelLocalDateKey(new Date(), placement.timezone),
   );
   const botFlow = useTelegramSystemBotPostFlow({
+    mode: "single",
+    recoveryKey: "ad-sale",
+    importContext: "Ad sale",
+    workspaceId,
     botUsername: systemBotUsername,
-    prepareImport: onPrepareSystemBot,
-    readImport: onSystemBotReturn
-      ? async (workflowId) => {
-          const importedDraft = await onSystemBotReturn(workflowId, [
-            ...new Set(placements.map((placement) => placement.channelId)),
-          ]);
-          return importedDraft
-            ? { ready: true as const, value: importedDraft }
-            : { ready: false as const };
-        }
-      : undefined,
     onImported: (importedDraft) => {
       setExpanded(true);
       setPlacements((current) =>
@@ -74,14 +57,12 @@ export function AdSaleSharedPost({
         })),
       );
     },
-    sendPreview:
-      draft && onSendSystemBotPost
-        ? () => onSendSystemBotPost(draft)
-        : undefined,
-    importErrorMessage: "Could not load the post from Telegram. Try again.",
-    startImportErrorMessage: "Could not prepare the bot workspace. Try again.",
-    sendErrorMessage: "Could not send the post to the bot. Try again.",
-    openBotOnStart: false,
+    previewDraft: draft ?? null,
+    errorCopy: {
+      read: "Could not load the post from Telegram. Try again.",
+      start: "Could not prepare the bot workspace. Try again.",
+      preview: "Could not send the post to the bot. Try again.",
+    },
   });
   if (!placements.length) return null;
   const isSinglePlacement = placements.length === 1;
@@ -129,7 +110,7 @@ export function AdSaleSharedPost({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {mode === "shared" && systemBotConnected === true ? (
-            draftHasContent && draft && onSendSystemBotPost ? (
+            draftHasContent && draft ? (
               <Button
                 type="button"
                 variant="secondary"

@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -16,11 +17,14 @@ import type { useAdSaleNetworkPricing } from "./ad-sale-network-pricing";
 import { createPlacementDraft } from "./ad-sale-placement-draft";
 import {
   hasMeaningfulAdSaleDraft,
-  readAdSaleModalDrafts,
-  removeAdSaleModalDraft,
-  writeAdSaleModalDraft,
+  normalizeAdSaleModalDraft,
   type AdSaleModalDraft,
 } from "./ad-sale-modal-draft";
+import {
+  useWorkspaceModalDrafts,
+  type WorkspaceFormDraft,
+} from "@/hooks/use-workspace-modal-drafts";
+import { selectedWorkspaceDraftScope } from "@/lib/workspace-modal-drafts";
 import type { PublishedPostOption, SalePlacementDraft } from "./ad-sale-types";
 import type { AdSaleModalProps } from "./ad-sale-modal-types";
 
@@ -51,9 +55,10 @@ export function useAdSaleModalSession(
   {
     open,
     accounts,
+    channels,
     productsByChannelId,
-    defaultCurrency,
     workspaceTimezone,
+    systemBotWorkspaceId,
     initialChannelId,
     initialScheduledAt,
     initialInventoryOpportunityKey,
@@ -91,7 +96,6 @@ export function useAdSaleModalSession(
     to: "",
   });
   const [submissionError, setSubmissionError] = useState("");
-  const [pendingDrafts, setPendingDrafts] = useState<AdSaleModalDraft[]>([]);
   const [slotPickerPlacementKey, setSlotPickerPlacementKey] = useState<
     string | null
   >(null);
@@ -106,84 +110,100 @@ export function useAdSaleModalSession(
   const [postsLoadingByPlacement, setPostsLoadingByPlacement] = useState<
     Record<string, boolean>
   >({});
-  const modalInitializedRef = useRef(false);
-  const draftReadyRef = useRef(false);
-  const persistedDraftJsonRef = useRef("");
-  const [currentDraftId, setCurrentDraftId] = useState(() =>
-    crypto.randomUUID(),
-  );
   const accountManuallySelectedRef = useRef(false);
-  useEffect(() => {
-    if (!(sessionOpen ?? open)) {
-      modalInitializedRef.current = false;
-      return;
-    }
-    if (!open) return;
-    if (modalInitializedRef.current) return;
-    modalInitializedRef.current = true;
-    draftReadyRef.current = false;
-    setAdvertiserTelegram(initialAdvertiser?.telegramUsername ?? "");
-    setAdvertiserContact(initialAdvertiser?.telegramUsername ?? initialAdvertiser?.email ?? initialAdvertiser?.phone ?? "");
-    setSelectedAdvertiser(initialAdvertiser ?? null);
-    setSelectedAdvertiserId(initialAdvertiser?.id ?? null);
-    setAdvertiserMatches([]);
-    setAssignedMemberId("");
-    setSaleOrigin("DIRECT");
-    accountManuallySelectedRef.current = false;
-    setAccountId(defaultAdSaleAccountId(accounts, ""));
-    setChannelSelectionMode(initialChannelId ? "channels" : "network");
-    setSelectedNetworkId("");
-    setSelectedChannelIds(initialChannelId ? [initialChannelId] : []);
-    setPostMode("shared");
+  const initialDraftRef = useRef<AdSaleModalDraft | null>(null);
+  const createInitialDraft = useCallback((): AdSaleModalDraft => {
     const initialDate =
       initialScheduledAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
-    setPlacementDateRange({ from: initialDate, to: initialDate });
-    setPlacements(
-      initialChannelId
-        ? [
-            createPlacementDraft({
-              channelId: initialChannelId,
-              product: productsByChannelId[initialChannelId]?.[0],
-              date: initialDate,
-              time: initialScheduledAt
-                ? new Date(initialScheduledAt).toISOString().slice(11, 16)
-                : "12:00",
-              timezone: workspaceTimezone,
-              inventoryOpportunityKey: initialInventoryOpportunityKey ?? null,
-            }),
-          ]
-        : [],
-    );
+    const initialPlacements = initialChannelId
+      ? [
+          createPlacementDraft({
+            channelId: initialChannelId,
+            product: productsByChannelId[initialChannelId]?.[0],
+            date: initialDate,
+            time: "12:00",
+            timezone: workspaceTimezone,
+            inventoryOpportunityKey: initialInventoryOpportunityKey ?? null,
+          }),
+        ]
+      : [];
+    return {
+      advertiserTelegram: initialAdvertiser?.telegramUsername ?? "",
+      advertiserContact:
+        initialAdvertiser?.telegramUsername ??
+        initialAdvertiser?.email ??
+        initialAdvertiser?.phone ??
+        "",
+      selectedAdvertiserId: initialAdvertiser?.id ?? null,
+      assignedMemberId: "",
+      saleOrigin: "DIRECT",
+      accountId: defaultAdSaleAccountId(accounts, ""),
+      channelSelectionMode: initialChannelId ? "channels" : "network",
+      selectedNetworkId: "",
+      selectedChannelIds: initialChannelId ? [initialChannelId] : [],
+      placementDateRange: { from: initialDate, to: initialDate },
+      postMode: "shared",
+      placements: initialPlacements,
+      networkPricingMode: "total",
+      networkTotalPrice: initialPlacements.length
+        ? String(
+            initialPlacements.reduce(
+              (total, placement) =>
+                total + Number(placement.recommendedPrice || 0),
+              0,
+            ),
+          )
+        : "",
+    };
+  }, [
+    accounts,
+    initialAdvertiser,
+    initialChannelId,
+    initialInventoryOpportunityKey,
+    initialScheduledAt,
+    productsByChannelId,
+    workspaceTimezone,
+  ]);
+
+  const restoreDraft = useCallback(
+    (
+      draft: AdSaleModalDraft,
+      storedDraft?: WorkspaceFormDraft<AdSaleModalDraft>,
+    ) => {
+      initialDraftRef.current = storedDraft ? null : draft;
+      setAdvertiserTelegram(draft.advertiserTelegram);
+      setAdvertiserContact(draft.advertiserContact);
+      setSelectedAdvertiser(
+        draft.selectedAdvertiserId === initialAdvertiser?.id
+          ? (initialAdvertiser ?? null)
+          : null,
+      );
+      setSelectedAdvertiserId(draft.selectedAdvertiserId);
+      setAdvertiserMatches([]);
+      setAssignedMemberId(draft.assignedMemberId);
+      setSaleOrigin(draft.saleOrigin);
+      accountManuallySelectedRef.current = Boolean(draft.accountId);
+      setAccountId(draft.accountId);
+      setChannelSelectionMode(draft.channelSelectionMode);
+      setSelectedNetworkId(draft.selectedNetworkId);
+      setSelectedChannelIds(draft.selectedChannelIds);
+      setPlacementDateRange(draft.placementDateRange);
+      setPostMode(draft.postMode);
+      setPlacements(draft.placements);
+      networkPricing.setMode(draft.networkPricingMode);
+      networkPricing.setTotalPrice(draft.networkTotalPrice);
     setSubmissionError("");
     setSlotPickerPlacementKey(null);
     setSlotPickerSlots([]);
     setSlotPickerError("");
     setPublishedPostsByPlacement({});
     setPostsLoadingByPlacement({});
-    const storedDrafts = readAdSaleModalDrafts(window.localStorage);
-    setPendingDrafts(storedDrafts);
-    persistedDraftJsonRef.current = "";
-    setCurrentDraftId(crypto.randomUUID());
-    draftReadyRef.current = storedDrafts.length === 0;
-  }, [
-    accounts,
-    defaultCurrency,
-    initialChannelId,
-    initialInventoryOpportunityKey,
-    initialAdvertiser,
-    initialScheduledAt,
-    open,
-    productsByChannelId,
-    sessionOpen,
-    setPlacements,
-    setPostMode,
-    workspaceTimezone,
-  ]);
+    },
+    [initialAdvertiser, networkPricing, setPlacements, setPostMode],
+  );
 
   const currentDraft = useMemo<AdSaleModalDraft>(
     () => ({
-      version: 1,
-      id: currentDraftId,
       advertiserTelegram,
       advertiserContact,
       selectedAdvertiserId,
@@ -205,7 +225,6 @@ export function useAdSaleModalSession(
       advertiserTelegram,
       assignedMemberId,
       channelSelectionMode,
-      currentDraftId,
       networkPricing.mode,
       networkPricing.totalPrice,
       placementDateRange,
@@ -217,55 +236,34 @@ export function useAdSaleModalSession(
       selectedNetworkId,
     ],
   );
-
-  useEffect(() => {
-    if (!open || !draftReadyRef.current || pendingDrafts.length) return;
-    const serialized = JSON.stringify(currentDraft);
-    if (serialized === persistedDraftJsonRef.current) return;
-    persistedDraftJsonRef.current = serialized;
-    if (hasMeaningfulAdSaleDraft(currentDraft))
-      writeAdSaleModalDraft(window.localStorage, currentDraft);
-    else removeAdSaleModalDraft(window.localStorage, currentDraft.id);
-  }, [currentDraft, open, pendingDrafts.length]);
-
-  function continueDraft(draft: AdSaleModalDraft) {
-    setCurrentDraftId(draft.id || crypto.randomUUID());
-    setAdvertiserTelegram(draft.advertiserTelegram);
-    setAdvertiserContact(draft.advertiserContact);
-    setSelectedAdvertiser(null);
-    setSelectedAdvertiserId(draft.selectedAdvertiserId);
-    setAssignedMemberId(draft.assignedMemberId);
-    setSaleOrigin(draft.saleOrigin);
-    accountManuallySelectedRef.current = Boolean(draft.accountId);
-    setAccountId(draft.accountId);
-    setChannelSelectionMode(draft.channelSelectionMode);
-    setSelectedNetworkId(draft.selectedNetworkId);
-    setSelectedChannelIds(draft.selectedChannelIds);
-    setPlacementDateRange(draft.placementDateRange);
-    setPostMode(draft.postMode);
-    setPlacements(draft.placements);
-    networkPricing.setMode(draft.networkPricingMode);
-    networkPricing.setTotalPrice(draft.networkTotalPrice);
-    persistedDraftJsonRef.current = JSON.stringify(draft);
-    draftReadyRef.current = true;
-    setPendingDrafts([]);
-  }
-
-  function deleteDraft(draft: AdSaleModalDraft) {
-    removeAdSaleModalDraft(window.localStorage, draft.id);
-    // Treat the currently initialized form as the new clean baseline. This
-    // prevents deleting a draft from immediately saving an untouched form.
-    persistedDraftJsonRef.current = JSON.stringify(currentDraft);
-    draftReadyRef.current = true;
-    setPendingDrafts((items) => items.filter((item) => item.id !== draft.id));
-  }
-
-  function createNewDraft() {
-    setCurrentDraftId(crypto.randomUUID());
-    persistedDraftJsonRef.current = "";
-    draftReadyRef.current = true;
-    setPendingDrafts([]);
-  }
+  const drafts = useWorkspaceModalDrafts<AdSaleModalDraft>({
+    namespace: "telegram-ad-sales:draft",
+    workspaceId: systemBotWorkspaceId ?? selectedWorkspaceDraftScope(),
+    schemaVersion: 1,
+    open,
+    enabled: sessionOpen ?? open,
+    value: currentDraft,
+    createInitialValue: createInitialDraft,
+    normalize: normalizeAdSaleModalDraft,
+    onRestore: restoreDraft,
+    isMeaningful: (draft) =>
+      hasMeaningfulAdSaleDraft(draft, initialDraftRef.current),
+    previewFor: (draft) => ({
+      title: draft.advertiserContact || "Unfinished Ad Sale draft",
+      subtitle: `${draft.selectedChannelIds.length || draft.placements.length} channels`,
+      avatars: channels
+        .filter((channel) =>
+          (draft.selectedChannelIds.length
+            ? draft.selectedChannelIds
+            : draft.placements.map((placement) => placement.channelId)
+          ).includes(channel.id),
+        )
+        .map((channel) => ({
+          label: channel.title,
+          imageUrl: channel.photoUrl,
+        })),
+    }),
+  });
 
   useEffect(() => {
     if (!open || accountManuallySelectedRef.current) return;
@@ -306,7 +304,7 @@ export function useAdSaleModalSession(
     setPlacementDateRange,
     submissionError,
     setSubmissionError,
-    pendingDrafts,
+    pendingDrafts: drafts.pendingDrafts,
     slotPickerPlacementKey,
     setSlotPickerPlacementKey,
     slotPickerSlots,
@@ -319,11 +317,10 @@ export function useAdSaleModalSession(
     setPublishedPostsByPlacement,
     postsLoadingByPlacement,
     setPostsLoadingByPlacement,
-    persistedDraftJsonRef,
-    draftReadyRef,
     currentDraft,
-    continueDraft,
-    deleteDraft,
-    createNewDraft,
+    clearCurrentDraft: drafts.clearCurrentDraft,
+    continueDraft: drafts.continueDraft,
+    deleteDraft: drafts.deleteDraft,
+    createNewDraft: drafts.createNewDraft,
   };
 }

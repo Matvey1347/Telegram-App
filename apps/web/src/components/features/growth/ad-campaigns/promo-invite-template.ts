@@ -5,6 +5,10 @@ import type {
 import type { Promo } from "@/lib/api";
 
 export const PROMO_INVITE_LINK_TOKEN = "{{invite_link}}";
+const TELEGRAM_LINK_PATTERN =
+  /(?:https?:\/\/)?(?:t\.me|telegram\.me)\/[^\s<>()\[\]"']*[^\s<>()\[\]"'.,!?;:]/gi;
+const TELEGRAM_LINK_ONLY_PATTERN =
+  /^(?:https?:\/\/)?(?:t\.me|telegram\.me)\/[^\s<>()\[\]"']+$/i;
 
 export type ReusablePromoPost = {
   text: string;
@@ -48,6 +52,30 @@ export function replacePromoInviteLinksWithToken(
         url: candidates.includes(button.url.trim())
           ? PROMO_INVITE_LINK_TOKEN
           : replaceEvery(button.url, candidates, PROMO_INVITE_LINK_TOKEN),
+      })),
+    ),
+  };
+}
+
+/** Turns every Telegram destination in an imported promo into its reusable invite placeholder. */
+export function replacePromoTelegramLinksWithToken(post: ReusablePromoPost) {
+  const replaceTelegramLinks = (value: string) =>
+    value.replace(TELEGRAM_LINK_PATTERN, PROMO_INVITE_LINK_TOKEN);
+  return {
+    ...post,
+    text: replaceTelegramLinks(post.text),
+    plainText: post.plainText
+      ? replaceTelegramLinks(post.plainText)
+      : post.plainText,
+    formattedHtml: post.formattedHtml
+      ? replaceTelegramLinks(post.formattedHtml)
+      : post.formattedHtml,
+    buttonRows: post.buttonRows.map((row) =>
+      row.map((button) => ({
+        ...button,
+        url: TELEGRAM_LINK_ONLY_PATTERN.test(button.url.trim())
+          ? PROMO_INVITE_LINK_TOKEN
+          : button.url,
       })),
     ),
   };

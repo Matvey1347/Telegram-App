@@ -22,6 +22,8 @@ const folder = {
       photoUrl: "https://example.com/one.jpg",
       role: "PUBLISHER",
       stats: {
+        inviteLinkTotalCount: 31,
+        acquiredCount: 4,
         joinedCount: 27,
         unsubscribedCount: 63,
         subscriberPrice: null,
@@ -44,6 +46,8 @@ const folder = {
       photoUrl: "https://example.com/two.jpg",
       role: "PAID",
       stats: {
+        inviteLinkTotalCount: 35,
+        acquiredCount: 6,
         joinedCount: 29,
         unsubscribedCount: 33,
         subscriberPrice: 250 / 29,
@@ -66,6 +70,8 @@ const folder = {
       photoUrl: "https://example.com/three.jpg",
       role: "PAID",
       stats: {
+        inviteLinkTotalCount: 28,
+        acquiredCount: 2,
         joinedCount: 26,
         unsubscribedCount: 23,
         subscriberPrice: 250 / 26,
@@ -88,6 +94,8 @@ const folder = {
       photoUrl: "https://example.com/four.jpg",
       role: "PUBLISHER",
       stats: {
+        inviteLinkTotalCount: 34,
+        acquiredCount: 4,
         joinedCount: 30,
         unsubscribedCount: 57,
         subscriberPrice: null,
@@ -107,6 +115,32 @@ const folder = {
 } as never;
 
 describe("MutualPromotionFolderCard", () => {
+  it("exposes folder actions from the three-dot menu", async () => {
+    const user = userEvent.setup();
+    const onEdit = vi.fn();
+    const onDelete = vi.fn();
+    render(
+      <MutualPromotionFolderCard
+        folder={{ ...(folder as object), status: "DRAFT" } as never}
+        onOpen={vi.fn()}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Actions for September campaign" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Edit folder" }));
+    expect(onEdit).toHaveBeenCalledTimes(1);
+
+    await user.click(
+      screen.getByRole("button", { name: "Actions for September campaign" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Delete folder" }));
+    expect(onDelete).toHaveBeenCalledTimes(1);
+  });
+
   it("opens from the whole card surface but not from channel controls", async () => {
     const user = userEvent.setup();
     const onOpen = vi.fn();
@@ -158,7 +192,7 @@ describe("MutualPromotionFolderCard", () => {
     expect(screen.getByRole("article").className).not.toContain("shadow-[");
     expect(screen.getAllByRole("img")).toHaveLength(4);
     const performance = screen.getByLabelText("Channel performance");
-    expect(within(performance).getByText("29")).toBeInTheDocument();
+    expect(within(performance).getByText("+6")).toBeInTheDocument();
     expect(within(performance).queryByText("33")).not.toBeInTheDocument();
     expect(within(performance).getByText("8.62 UAH")).toBeInTheDocument();
     expect(within(performance).getByText("8.62 UAH")).toHaveClass(
@@ -169,8 +203,15 @@ describe("MutualPromotionFolderCard", () => {
     );
     expect(within(performance).getAllByText("💳 Paid")).toHaveLength(2);
     expect(within(performance).getAllByText("📣 Publisher")).toHaveLength(2);
-    expect(within(performance).getAllByText("Joined")).toHaveLength(4);
-    expect(within(performance).getAllByText("Left ≈")).toHaveLength(2);
+    expect(
+      within(performance).queryByText("Link total (joined + requests)"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(performance).getAllByText("Folder (joined + requests)"),
+    ).toHaveLength(4);
+    expect(
+      within(performance).getAllByText("Estimated unsubscribes ≈"),
+    ).toHaveLength(2);
     expect(within(performance).getAllByText("Price")).toHaveLength(2);
 
     await user.hover(within(performance).getByText("8.62 UAH"));

@@ -24,7 +24,9 @@ describe("ManagedPostsImportList", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "New (1)" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Not imported (1)" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Imported (1)" }),
     ).toBeInTheDocument();
@@ -33,5 +35,32 @@ describe("ManagedPostsImportList", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByText("✓ Approved")).toBeInTheDocument();
     expect(container.firstElementChild).toHaveClass("xl:col-start-3");
+  });
+
+  it("shows a resolved post emoji without exposing its technical icon id", () => {
+    const row = {
+      ...rowToEditable({ title: "Post with icon", icon: "cm-icon-id" }),
+      iconPresentation: {
+        type: "unicode" as const,
+        value: "🗓️",
+        name: "Calendar",
+      },
+    };
+
+    render(
+      <ManagedPostsImportList
+        rows={[row]}
+        visibleRowIndices={[0]}
+        selectedRowIndex={0}
+        activeTab="new"
+        tabCounts={{ new: 1, imported: 0 }}
+        disabled={false}
+        onSelectRow={vi.fn()}
+        onSelectTab={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("🗓️")).toBeVisible();
+    expect(screen.queryByText("cm-icon-id")).not.toBeInTheDocument();
   });
 });

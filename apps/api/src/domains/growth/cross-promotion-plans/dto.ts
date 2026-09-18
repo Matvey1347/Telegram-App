@@ -41,6 +41,14 @@ export class CreateCrossPromotionPlanDto {
   @IsOptional() @IsDateString() trackingEndsAt?: string | null;
 }
 
+/**
+ * Completed placements keep their published configuration and measured
+ * boundaries immutable. Their display title remains safe to correct.
+ */
+export class RenameCrossPromotionPlanDto {
+  @IsString() @MaxLength(160) title!: string;
+}
+
 export class CrossPromotionPlacementDto {
   @IsString() telegramChannelId!: string;
   @IsString() managedPostId!: string;

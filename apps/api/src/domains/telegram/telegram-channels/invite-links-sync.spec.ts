@@ -227,6 +227,7 @@ describe('TelegramChannelsService invite link sync', () => {
           url: 'https://t.me/+link_13',
           joinedCount: 13,
           requestedCount: 3,
+          peakAttributedCount: 16,
           creatorMemberId: 'member-2',
         }),
         select: expect.objectContaining({
@@ -242,6 +243,7 @@ describe('TelegramChannelsService invite link sync', () => {
           name: true,
           createdBy: true,
           adCampaignId: true,
+          peakAttributedCount: true,
         }),
       }),
     );
@@ -326,6 +328,64 @@ describe('TelegramChannelsService invite link sync', () => {
       },
       data: { pendingJoinRequestsCount: 0 },
     });
+  });
+
+  it('preserves the materialized peak when a later invite sync counter drops', async () => {
+    prisma.telegramInviteLink.findUnique.mockResolvedValueOnce({
+      id: 'link-peak',
+      name: 'Peak link',
+      createdBy: null,
+      adCampaignId: null,
+      peakAttributedCount: 50,
+    });
+    prisma.telegramInviteLink.upsert.mockResolvedValueOnce({
+      id: 'link-peak',
+      telegramChannelId: 'channel-1',
+      adCampaignId: null,
+      joinedCount: 20,
+      requestedCount: 2,
+      peakAttributedCount: 50,
+      isRevoked: false,
+    });
+
+    await (service as any).persistInviteLinkFromRemote({
+      workspaceId: 'ws-1',
+      channelId: 'channel-1',
+      link: {
+        url: 'https://t.me/+peak',
+        title: 'Peak link',
+        telegramCreatorUserId: null,
+        creatorUsername: null,
+        creatorFirstName: null,
+        creatorLastName: null,
+        creatorPhotoUrl: null,
+        createdAt: null,
+        startDate: null,
+        expireDate: null,
+        usageLimit: null,
+        usage: 20,
+        requested: 2,
+        requestNeeded: false,
+        permanent: true,
+        revoked: false,
+      },
+      maps: {
+        memberByUsername: new Map(),
+        memberByTelegramUserId: new Map(),
+        memberByMtprotoUsername: new Map(),
+      },
+      processedCount: 1,
+      totalLinks: 1,
+      warnings: [],
+      progressStep: { current: 1, total: 1 },
+    });
+
+    expect(prisma.telegramInviteLink.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ peakAttributedCount: 50 }),
+        update: expect.objectContaining({ peakAttributedCount: 50 }),
+      }),
+    );
   });
 
   it('auto-attaches an imported invite link to the only campaign matching the same Warsaw placement date', async () => {
@@ -491,8 +551,14 @@ describe('TelegramChannelsService invite link sync', () => {
     expect(prisma.telegramInviteLink.upsert).toHaveBeenCalledTimes(2);
     expect(prisma.telegramInviteLink.upsert.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
-        create: expect.objectContaining({ requestedCount: 7 }),
-        update: expect.objectContaining({ requestedCount: 7 }),
+        create: expect.objectContaining({
+          requestedCount: 7,
+          peakAttributedCount: 8,
+        }),
+        update: expect.objectContaining({
+          requestedCount: 7,
+          peakAttributedCount: 8,
+        }),
         select: expect.objectContaining({
           id: true,
           adCampaignId: true,
@@ -507,6 +573,12 @@ describe('TelegramChannelsService invite link sync', () => {
         update: expect.not.objectContaining({
           requestedCount: expect.anything(),
         }),
+      }),
+    );
+    expect(prisma.telegramInviteLink.upsert.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({
+        create: expect.objectContaining({ peakAttributedCount: 8 }),
+        update: expect.objectContaining({ peakAttributedCount: 8 }),
       }),
     );
   });
@@ -594,11 +666,12 @@ describe('TelegramChannelsService invite link sync', () => {
     );
     expect(prisma.telegramInviteLink.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.not.objectContaining({
-          requestedCount: expect.anything(),
-        }),
+        data: expect.objectContaining({ peakAttributedCount: 10 }),
       }),
     );
+    expect(
+      prisma.telegramInviteLink.create.mock.calls[0]?.[0]?.data,
+    ).not.toHaveProperty('requestedCount');
     expect(prisma.telegramInviteLink.update).not.toHaveBeenCalled();
   });
 

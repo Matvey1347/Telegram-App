@@ -8,10 +8,12 @@ describe("getOverallChannelSettingsCompletion", () => {
   it("includes the publication schedule in the same setup percentage used by cards", () => {
     const channel = {
       presentationIconId: "icon-1",
-      description: "Short description",
+      shortDescription: "Short description",
       tgStatUrl: "https://tgstat.com/channel/1",
       defaultInviteLinkId: "invite-1",
       botInviteLinkId: "invite-bot",
+      broadcastInviteLinkId: "invite-newsletter",
+      audienceTransferInviteLinkId: "invite-transfer",
       folderDefaultInviteLinkIds: ["invite-folder"],
       mutualPromotionInviteLinkIds: ["invite-vp"],
       adBaseCpm: 100,
@@ -36,10 +38,12 @@ describe("getOverallChannelSettingsCompletion", () => {
   it("excludes bot setup for channels where bot management is unavailable", () => {
     const channel = {
       presentationIconId: "icon-1",
-      description: "Short description",
+      shortDescription: "Short description",
       tgStatUrl: "https://tgstat.com/channel/1",
       defaultInviteLinkId: "invite-1",
       botInviteLinkId: "invite-bot",
+      broadcastInviteLinkId: "invite-newsletter",
+      audienceTransferInviteLinkId: "invite-transfer",
       folderDefaultInviteLinkIds: ["invite-folder"],
       mutualPromotionInviteLinkIds: ["invite-vp"],
       adBaseCpm: 100,
@@ -61,9 +65,11 @@ describe("getOverallChannelSettingsCompletion", () => {
   it("does not count Appearance until every required field is configured", () => {
     const channel = {
       presentationIconId: "icon-1",
-      description: "Short description",
+      shortDescription: "Short description",
       tgStatUrl: "https://tgstat.com/channel/1",
       defaultInviteLinkId: "invite-1",
+      broadcastInviteLinkId: "invite-newsletter",
+      audienceTransferInviteLinkId: "invite-transfer",
       folderDefaultInviteLinkIds: ["invite-folder"],
       mutualPromotionInviteLinkIds: ["invite-vp"],
       preview: { sourcesCount: 0 },
@@ -76,6 +82,28 @@ describe("getOverallChannelSettingsCompletion", () => {
     );
 
     channel.botInviteLinkId = "invite-bot";
+    expect(getChannelSettingsCompletion(channel as never).appearance).toBe(
+      "complete",
+    );
+  });
+
+  it("includes newsletter and audience-transfer links in setup progress", () => {
+    const channel = {
+      presentationIconId: "icon-1",
+      shortDescription: "Short description",
+      tgStatUrl: "https://tgstat.com/channel/1",
+      defaultInviteLinkId: "invite-1",
+      botInviteLinkId: "invite-bot",
+      folderDefaultInviteLinkIds: ["invite-folder"],
+      mutualPromotionInviteLinkIds: ["invite-vp"],
+    } as Record<string, unknown>;
+
+    expect(getChannelSettingsCompletion(channel as never).appearance).toBe(
+      "empty",
+    );
+
+    channel.broadcastInviteLinkId = "invite-newsletter";
+    channel.audienceTransferInviteLinkId = "invite-transfer";
     expect(getChannelSettingsCompletion(channel as never).appearance).toBe(
       "complete",
     );

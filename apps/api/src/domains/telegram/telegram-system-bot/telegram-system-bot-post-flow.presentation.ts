@@ -8,7 +8,7 @@ import {
   telegramBotApiActionRow,
 } from '../../../telegram/shared/telegram-bot-action-buttons';
 import {
-  isTelegramSystemBotModalImport,
+  telegramSystemBotPostPayload,
   type TelegramSystemBotPostFlowScope,
   type TelegramSystemBotPostGroupOption,
   type TelegramSystemBotPostPayload,
@@ -19,8 +19,34 @@ import {
   telegramSystemBotPostPreview,
   type TelegramSystemBotCardButton,
 } from './telegram-system-bot-post-preview';
+import type { TelegramSystemBotPostFlowOptions } from './telegram-system-bot-post-flow.options';
 
 type ChannelOption = { id: string; title: string };
+
+export async function resolveTelegramSystemBotPostCard(input: {
+  workflow: TelegramSystemBotPostWorkflow;
+  scope: TelegramSystemBotPostFlowScope;
+  options: TelegramSystemBotPostFlowOptions;
+  notice?: string;
+}) {
+  const payload = telegramSystemBotPostPayload(input.workflow.payload);
+  const channels =
+    input.workflow.step === 'CHOOSE_CHANNEL'
+      ? await input.options.channels(input.scope)
+      : undefined;
+  const groups =
+    input.workflow.step === 'CHOOSE_GROUP' && payload.channelId
+      ? await input.options.groups(input.scope, payload.channelId)
+      : undefined;
+  return renderTelegramSystemBotPostCard({
+    workflow: input.workflow,
+    scope: input.scope,
+    payload,
+    channels,
+    groups,
+    notice: input.notice,
+  });
+}
 
 export function renderTelegramSystemBotPostCard(input: {
   workflow: TelegramSystemBotPostWorkflow;
@@ -43,9 +69,7 @@ export function renderTelegramSystemBotPostCard(input: {
 
   if (workflow.status === TelegramSystemBotWorkflowStatus.COMPLETED) {
     return {
-      text: isTelegramSystemBotModalImport(payload.destination)
-        ? `✅ Post added to the ${payload.destination === 'PROMO_MODAL' ? 'Promo' : 'Ad Sale'} form. Return to the website.`
-        : `✅ Post saved${workflow.resultManagedPostId ? `\nID: ${workflow.resultManagedPostId}` : ''}`,
+      text: `✅ Post saved${workflow.resultManagedPostId ? `\nID: ${workflow.resultManagedPostId}` : ''}`,
     };
   }
   if (workflow.status === TelegramSystemBotWorkflowStatus.CANCELLED) {
@@ -100,36 +124,6 @@ export function renderTelegramSystemBotPostCard(input: {
     });
   }
   if (workflow.step === 'CHOOSE_ACTION') {
-    if (isTelegramSystemBotModalImport(payload.destination)) {
-      return present({
-        text: preview.html,
-        reply_markup: {
-          inline_keyboard: [
-            ...preview.buttonRows,
-            [
-              { text: '✏️ Edit text', callback_data: `${prefix}edit.text` },
-              {
-                text: '🔗 Edit buttons',
-                callback_data: `${prefix}edit.buttons`,
-              },
-            ],
-            [
-              {
-                text: TELEGRAM_BOT_ACTION_TEXT.cancel,
-                callback_data: `${prefix}cancel`,
-              },
-              {
-                text:
-                  payload.destination === 'PROMO_MODAL'
-                    ? '✅ Add to Promo'
-                    : '✅ Add to Ad Sale',
-                callback_data: `${prefix}confirm`,
-              },
-            ],
-          ],
-        },
-      });
-    }
     return present({
       text: [
         previewText,
@@ -159,30 +153,6 @@ export function renderTelegramSystemBotPostCard(input: {
           [
             { text: '🕒 Schedule', callback_data: `${prefix}schedule` },
             { text: '🚀 Publish now', callback_data: `${prefix}publish` },
-          ],
-          navigationButtons(prefix),
-        ],
-      },
-    });
-  }
-  if (
-    isTelegramSystemBotModalImport(payload.destination) &&
-    (workflow.step === 'AWAIT_EDIT_TEXT' ||
-      workflow.step === 'AWAIT_EDIT_BUTTONS')
-  ) {
-    const editingButtons = workflow.step === 'AWAIT_EDIT_BUTTONS';
-    return present({
-      text: preview.html,
-      reply_markup: {
-        inline_keyboard: [
-          ...preview.buttonRows,
-          [
-            {
-              text: editingButtons
-                ? 'Send: Label | https://example.com'
-                : 'Send the replacement text',
-              callback_data: `${prefix}noop`,
-            },
           ],
           navigationButtons(prefix),
         ],

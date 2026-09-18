@@ -1,6 +1,6 @@
 "use client";
 
-import { X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { forwardRef, type KeyboardEvent, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { authApi, telegramChannelsApi, type TelegramManagedPost, type TelegramManagedPostLinkTarget } from "@/lib/api";
@@ -543,7 +543,8 @@ export const TelegramTextEditor = forwardRef<TelegramTextEditorHandle, TelegramT
                   placeholder="https://example.com"
                   className="min-w-0 flex-1 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
                 />
-                <button type="button" onClick={applyLink} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500">
+                <button type="button" onClick={applyLink} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500">
+                  <Plus size={16} aria-hidden="true" />
                   {t("telegram.posts.editorComponents.actions.add")}
                 </button>
               </div>

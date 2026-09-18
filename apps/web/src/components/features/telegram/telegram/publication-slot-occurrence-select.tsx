@@ -26,19 +26,32 @@ const occurrenceDateKey = (scheduledAt: string, timezone: string) => {
   return `${part("year")}-${part("month")}-${part("day")}`;
 };
 
-export function PublicationSlotOccurrenceSelect({
-  channelId,
-  value,
-  scheduledAt,
-  disabled = false,
-  onChange,
-}: {
+type PublicationSlotOccurrenceSelectProps = {
   channelId: string;
   value: string | null;
   scheduledAt?: string | null;
   disabled?: boolean;
   onChange: (value: { slotId: string | null; scheduledAt: string }) => void;
-}) {
+};
+
+export function PublicationSlotOccurrenceSelect(
+  props: PublicationSlotOccurrenceSelectProps,
+) {
+  return (
+    <PublicationSlotOccurrenceSelectState
+      key={`${props.channelId}:${props.scheduledAt ?? ""}`}
+      {...props}
+    />
+  );
+}
+
+function PublicationSlotOccurrenceSelectState({
+  channelId,
+  value,
+  scheduledAt,
+  disabled = false,
+  onChange,
+}: PublicationSlotOccurrenceSelectProps) {
   const { t } = useI18n();
   const initial = scheduledAt ? new Date(scheduledAt) : new Date();
   const [selectedDate, setSelectedDate] = useState(() => dateKey(initial));
@@ -72,6 +85,7 @@ export function PublicationSlotOccurrenceSelect({
           channelId={channelId}
           selectedDate={selectedDate}
           value={value}
+          scheduledAt={scheduledAt}
           disabled={disabled}
           onChange={(next) => {
             setCustomTime(next.time);
@@ -100,12 +114,14 @@ export function PublicationSlotOptions({
   channelId,
   selectedDate,
   value,
+  scheduledAt,
   disabled = false,
   onChange,
 }: {
   channelId: string;
   selectedDate: string;
   value: string | null;
+  scheduledAt?: string | null;
   disabled?: boolean;
   onChange: (value: {
     slotId: string;
@@ -136,6 +152,22 @@ export function PublicationSlotOptions({
       ),
     [occurrences.data, selectedDate],
   );
+  const separatorIndex = value?.indexOf(":") ?? -1;
+  const selectedSlotId =
+    separatorIndex > 0 ? value!.slice(0, separatorIndex) : null;
+  const selectedValueTime =
+    separatorIndex > 0 ? value!.slice(separatorIndex + 1) : null;
+  const selectedInstant = scheduledAt ?? selectedValueTime;
+  const selectedValue =
+    dayOccurrences
+      .filter(
+        (item) =>
+          (!selectedSlotId || item.slotId === selectedSlotId) &&
+          selectedInstant &&
+          new Date(item.scheduledAt).getTime() ===
+            new Date(selectedInstant).getTime(),
+      )
+      .map((item) => `${item.slotId}:${item.scheduledAt}`)[0] ?? null;
 
   if (occurrences.isLoading) {
     return (
@@ -156,7 +188,7 @@ export function PublicationSlotOptions({
       {dayOccurrences.map((item) => {
         const key = `${item.slotId}:${item.scheduledAt}`;
         const optionDisabled =
-          disabled || (item.state !== "AVAILABLE" && key !== value);
+          disabled || (item.state !== "AVAILABLE" && key !== selectedValue);
         const kindLabel =
           item.kind === "AD"
             ? "📣 Advertising / mutual promotion"
@@ -173,6 +205,7 @@ export function PublicationSlotOptions({
             type="button"
             key={key}
             disabled={optionDisabled}
+            aria-pressed={key === selectedValue}
             aria-label={accessibleLabel}
             title={accessibleLabel}
             onClick={() =>
@@ -182,7 +215,7 @@ export function PublicationSlotOptions({
                 time: item.time,
               })
             }
-            className={`inline-flex min-h-8 items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition ${key === value ? "border-blue-500 bg-blue-950/40 text-white" : optionDisabled ? "cursor-not-allowed border-neutral-800 bg-neutral-950/40 text-neutral-500 opacity-45" : "border-neutral-700 bg-neutral-950 text-neutral-200 hover:border-blue-600"}`}
+            className={`inline-flex min-h-8 items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition ${key === selectedValue ? "border-blue-500 bg-blue-950/70 text-white ring-1 ring-blue-500/60" : optionDisabled ? "cursor-not-allowed border-neutral-800 bg-neutral-950/40 text-neutral-600 opacity-40" : "border-neutral-800 bg-neutral-950/40 text-neutral-500 opacity-60 hover:border-blue-700 hover:text-neutral-300 hover:opacity-100"}`}
           >
             <span>{item.time}</span>
             <span aria-hidden="true">·</span>

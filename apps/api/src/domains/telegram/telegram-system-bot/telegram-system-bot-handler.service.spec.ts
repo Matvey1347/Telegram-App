@@ -30,9 +30,6 @@ describe('TelegramSystemBotHandlerService', () => {
     } as any;
     const postFlow = {
       begin: jest.fn().mockResolvedValue({ handled: 'post-begin' }),
-      resumeAdSaleImport: jest
-        .fn()
-        .mockResolvedValue({ handled: 'ad-sale-post-import' }),
       isCallback: jest.fn().mockReturnValue(false),
       callback: jest.fn(),
       input: jest.fn().mockResolvedValue(null),
@@ -43,10 +40,8 @@ describe('TelegramSystemBotHandlerService', () => {
       callback: jest.fn(),
       input: jest.fn().mockResolvedValue(null),
     } as any;
-    const mutualPromotionPostFlow = {
-      resume: jest
-        .fn()
-        .mockResolvedValue({ handled: 'mutual-promotion-post-import' }),
+    const postImport = {
+      resume: jest.fn().mockResolvedValue({ handled: 'website-post-import' }),
       isCallback: jest.fn().mockReturnValue(false),
       callback: jest.fn(),
       input: jest.fn().mockResolvedValue(null),
@@ -62,7 +57,7 @@ describe('TelegramSystemBotHandlerService', () => {
       undefined,
       undefined,
       undefined,
-      mutualPromotionPostFlow,
+      postImport,
     );
     return {
       service,
@@ -71,7 +66,7 @@ describe('TelegramSystemBotHandlerService', () => {
       finance,
       postFlow,
       adSaleFlow,
-      mutualPromotionPostFlow,
+      postImport,
     };
   }
 
@@ -115,7 +110,7 @@ describe('TelegramSystemBotHandlerService', () => {
     expect(test.adSaleFlow.begin).not.toHaveBeenCalled();
   });
 
-  it('resumes the prepared Ad Sale post import without choosing a channel', async () => {
+  it('resumes the canonical website post import from its deep link', async () => {
     const test = workflowHarness();
 
     await expect(
@@ -123,35 +118,16 @@ describe('TelegramSystemBotHandlerService', () => {
         message: {
           chat: { id: 44, type: 'private' },
           from: { id: 44 },
-          text: '/start ad_post_workflow-1',
+          text: '/start post_import_workflow-1',
         },
       }),
-    ).resolves.toEqual({ handled: 'ad-sale-post-import' });
+    ).resolves.toEqual({ handled: 'website-post-import' });
 
-    expect(test.postFlow.resumeAdSaleImport).toHaveBeenCalledWith(
+    expect(test.postImport.resume).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: 'workspace' }),
       'workflow-1',
     );
     expect(test.postFlow.begin).not.toHaveBeenCalled();
-  });
-
-  it('resumes a prepared mutual-promotion post import from its deep link', async () => {
-    const test = workflowHarness();
-
-    await expect(
-      test.service.handle({
-        message: {
-          chat: { id: 44, type: 'private' },
-          from: { id: 44 },
-          text: '/start mutual_promotion_post_workflow-1',
-        },
-      }),
-    ).resolves.toEqual({ handled: 'mutual-promotion-post-import' });
-
-    expect(test.mutualPromotionPostFlow.resume).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceId: 'workspace' }),
-      'workflow-1',
-    );
   });
 
   it('stores the Telegram message id for a connection prompt', async () => {

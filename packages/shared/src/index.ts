@@ -20,6 +20,7 @@ export * from "./types/telegram-post-buttons";
 export * from "./types/telegram-post-media";
 export * from "./types/telegram-capabilities";
 export * from "./types/telegram-channel-trend";
+export * from "./types/telegram-channel-traffic-attribution";
 export * from "./types/telegram-user-account-login";
 export * from "./types/telegram-crm";
 export * from "./types/telegram-crm-inbox";

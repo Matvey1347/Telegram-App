@@ -18,8 +18,10 @@ const sections: Array<{
 
 export function TelegramChannelMessageTemplateEditorHeader({
   onBack,
+  draftAutosaveEnabled,
 }: {
   onBack: () => void;
+  draftAutosaveEnabled: boolean;
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
@@ -35,7 +37,11 @@ export function TelegramChannelMessageTemplateEditorHeader({
           ←
         </span>
       </Button>
-      <p className="text-xs text-neutral-500">Draft saved automatically</p>
+      <p className="text-xs text-neutral-500">
+        {draftAutosaveEnabled
+          ? "Draft saved automatically"
+          : "Changes are applied after saving"}
+      </p>
     </div>
   );
 }

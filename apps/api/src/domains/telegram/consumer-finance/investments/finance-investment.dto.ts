@@ -13,6 +13,10 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import type {
+  ConsumerFinanceInvestmentSortBy,
+  ConsumerFinanceInvestmentSortDirection,
+} from '@telegram-system/shared';
 
 const TYPES = [
   'BUSINESS',
@@ -29,6 +33,12 @@ export class FinanceInvestmentQueryDto {
   @IsOptional()
   @IsIn(['ACTIVE', 'CLOSED', 'ARCHIVED'])
   status?: 'ACTIVE' | 'CLOSED' | 'ARCHIVED';
+  @IsOptional()
+  @IsIn(['UPDATED', 'NAME', 'INVESTED', 'CURRENT_VALUE'])
+  sortBy: ConsumerFinanceInvestmentSortBy = 'UPDATED';
+  @IsOptional()
+  @IsIn(['ASC', 'DESC'])
+  sortDirection: ConsumerFinanceInvestmentSortDirection = 'DESC';
   @IsOptional() @IsString() cursor?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 30;
 }

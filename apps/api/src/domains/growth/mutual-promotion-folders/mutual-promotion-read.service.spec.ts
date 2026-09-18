@@ -25,6 +25,8 @@ describe('MutualPromotionReadService', () => {
                 subscribersAtEnd: null,
                 inviteJoinedAtStart: 10,
                 inviteJoinedAtEnd: null,
+                inviteRequestedAtStart: 0,
+                inviteRequestedAtEnd: null,
                 baselineCapturedAt: new Date('2026-09-08T08:00:00.000Z'),
                 finalCapturedAt: null,
                 telegramChannel: {
@@ -41,7 +43,7 @@ describe('MutualPromotionReadService', () => {
                   stopCpaFrom: 12,
                   stopCpa: null,
                 },
-                inviteLink: { joinedCount: 15 },
+                inviteLink: { joinedCount: 15, requestedCount: 0 },
                 expense: {
                   id: 'transaction-1',
                   accountId: 'account-1',
@@ -85,6 +87,7 @@ describe('MutualPromotionReadService', () => {
           stopTo: null,
         },
         stats: expect.objectContaining({
+          inviteLinkTotalCount: 15,
           joinedCount: 5,
           unsubscribedCount: null,
           audienceDelta: null,
@@ -111,18 +114,16 @@ describe('MutualPromotionReadService', () => {
   it('loads every preferred folder link and falls back to the main link', async () => {
     const prisma = {
       telegramChannel: {
-        findMany: jest
-          .fn()
-          .mockResolvedValue([
-            {
-              defaultInviteLinkId: 'default-1',
-              folderDefaultInviteLinkIds: ['folder-1', 'folder-2'],
-            },
-            {
-              defaultInviteLinkId: 'default-2',
-              folderDefaultInviteLinkIds: [],
-            },
-          ]),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            defaultInviteLinkId: 'default-1',
+            folderDefaultInviteLinkIds: ['folder-1', 'folder-2'],
+          },
+          {
+            defaultInviteLinkId: 'default-2',
+            folderDefaultInviteLinkIds: [],
+          },
+        ]),
       },
       telegramInviteLink: {
         findMany: jest.fn().mockResolvedValue([

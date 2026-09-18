@@ -1,4 +1,12 @@
-import { IsBoolean, IsIn, IsString, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
+import type { TelegramSystemBotPostImportMode } from '@telegram-system/shared';
 
 export class UpdateTelegramSystemBotSubscriptionDto {
   @IsString()
@@ -40,8 +48,16 @@ export class UpdateTelegramSystemBotGroupSubscriptionsDto {
   notifyOnFailure!: boolean;
 }
 
-export class PrepareMutualPromotionPostImportDto {
+export class PrepareTelegramSystemBotPostImportDto {
+  @IsIn(['single', 'multiple'])
+  mode!: TelegramSystemBotPostImportMode;
+
+  @IsOptional()
   @IsString()
-  @MinLength(1)
-  folderId!: string;
+  @MaxLength(120)
+  context?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  replaceActive?: boolean;
 }

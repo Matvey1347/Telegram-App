@@ -14,7 +14,7 @@ describe('sales text presentation pricing', () => {
   });
 
   it.each([1, 24, 37, 48, 72, 120])(
-    'keeps the post for %s hours plus the one-hour safety margin',
+    'keeps the post for exactly %s hours',
     (hours) => {
       const scheduledAt = new Date('2026-01-01T12:00:00.000Z');
       expect(
@@ -23,7 +23,7 @@ describe('sales text presentation pricing', () => {
           deleteAfterHoursSnapshot: hours,
           isPermanentSnapshot: false,
         })?.getTime(),
-      ).toBe(scheduledAt.getTime() + (hours + 1) * 60 * 60 * 1000);
+      ).toBe(scheduledAt.getTime() + hours * 60 * 60 * 1000);
     },
   );
 
@@ -47,7 +47,7 @@ describe('sales text presentation pricing', () => {
         deleteAfterHoursSnapshot: 24,
         isPermanentSnapshot: false,
       })?.toISOString(),
-    ).toBe('2026-01-02T13:30:00.000Z');
+    ).toBe('2026-01-02T12:30:00.000Z');
   });
 
   it('uses the real Telegram time when a linked post predates the booking', () => {
@@ -59,6 +59,6 @@ describe('sales text presentation pricing', () => {
         deleteAfterHoursSnapshot: 24,
         isPermanentSnapshot: false,
       })?.toISOString(),
-    ).toBe('2026-01-02T11:00:00.000Z');
+    ).toBe('2026-01-02T10:00:00.000Z');
   });
 });

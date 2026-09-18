@@ -103,13 +103,41 @@ export class TelegramChannelLifecycleService {
               dto.assignedMemberId,
             )
           ).assignedMemberId;
-    const purposeInviteLinkIds = [
-      ...new Set([
-        ...(dto.folderDefaultInviteLinkIds ?? []),
-        ...(dto.mutualPromotionInviteLinkIds ?? []),
-        ...(dto.botInviteLinkId ? [dto.botInviteLinkId] : []),
-      ]),
+    const purposeInviteLinkAssignments = [
+      ...(dto.folderDefaultInviteLinkIds ??
+        existing.folderDefaultInviteLinkIds ??
+        []),
+      ...(dto.mutualPromotionInviteLinkIds ??
+        existing.mutualPromotionInviteLinkIds ??
+        []),
+      ...(dto.botInviteLinkId === undefined
+        ? existing.botInviteLinkId
+          ? [existing.botInviteLinkId]
+          : []
+        : dto.botInviteLinkId
+          ? [dto.botInviteLinkId]
+          : []),
+      ...(dto.broadcastInviteLinkId === undefined
+        ? existing.broadcastInviteLinkId
+          ? [existing.broadcastInviteLinkId]
+          : []
+        : dto.broadcastInviteLinkId
+          ? [dto.broadcastInviteLinkId]
+          : []),
+      ...(dto.audienceTransferInviteLinkId === undefined
+        ? existing.audienceTransferInviteLinkId
+          ? [existing.audienceTransferInviteLinkId]
+          : []
+        : dto.audienceTransferInviteLinkId
+          ? [dto.audienceTransferInviteLinkId]
+          : []),
     ];
+    const purposeInviteLinkIds = [...new Set(purposeInviteLinkAssignments)];
+    if (purposeInviteLinkIds.length !== purposeInviteLinkAssignments.length) {
+      throw new BadRequestException(
+        'Each traffic source must use a different invite link',
+      );
+    }
     const [presentationIcon, defaultInviteLink, purposeInviteLinksCount] =
       await Promise.all([
         dto.presentationIconId

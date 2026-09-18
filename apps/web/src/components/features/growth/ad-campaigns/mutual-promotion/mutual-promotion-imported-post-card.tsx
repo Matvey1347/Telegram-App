@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CalendarClock, ChevronDown, Trash2 } from "lucide-react";
-import type { TelegramSystemBotMutualPromotionPostDraft } from "@/lib/features/telegram/telegram-system-bot-api";
-import { telegramSystemBotApi } from "@/lib/api";
+import type { TelegramSystemBotPostDraft } from "@telegram-system/shared";
 import {
   Button,
   DateInput,
@@ -15,7 +14,7 @@ import { MutualPromotionPostComposer } from "./mutual-promotion-post-composer";
 
 export type MutualPromotionImportedPostItem = {
   id: string;
-  draft: TelegramSystemBotMutualPromotionPostDraft;
+  draft: TelegramSystemBotPostDraft;
   date: string;
   time: string;
 };
@@ -39,10 +38,11 @@ export function MutualPromotionImportedPostCard({
 }) {
   const [expanded, setExpanded] = useState(true);
   const previewFlow = useTelegramSystemBotPostFlow({
-    sendPreview: () =>
-      telegramSystemBotApi.sendMutualPromotionPostPreview(item.draft),
-    sendErrorMessage:
-      "Could not send the current post preview to the system bot.",
+    mode: "single",
+    previewDraft: item.draft,
+    errorCopy: {
+      preview: "Could not send the current post preview to the system bot.",
+    },
   });
   useEffect(() => {
     onError(previewFlow.error || null);

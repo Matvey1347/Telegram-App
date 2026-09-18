@@ -19,6 +19,7 @@ export type CrossPromotionChannelPlacementInput = {
   telegramChannelId: string;
   telegramAdProductId?: string | null;
   scheduledAt: string;
+  deleteAt?: string | null;
   expectedViews?: number | null;
 };
 
@@ -51,6 +52,7 @@ export type CrossPromotionSchedulingProgress = {
 
 export type CrossPromotionPlan = CreateCrossPromotionPlanPayload & {
   id: string;
+  nextDueAt?: string | null;
   iconPresentation: ResolvedEmoji | null;
   advertiser?: {
     id: string;
@@ -78,8 +80,12 @@ export type CrossPromotionPlan = CreateCrossPromotionPlanPayload & {
     telegramChannelId: string;
     title: string;
     photoUrl: string | null;
+    promoId: string | null;
     promoTitle: string;
+    promoIconPresentation: ResolvedEmoji | null;
     inviteLinkUrl: string;
+    inviteLinkTotalJoinedCount: number;
+    inviteLinkTotalRequestedCount: number;
     joinedCount: number;
     requestedCount: number;
   }>;

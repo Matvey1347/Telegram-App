@@ -123,6 +123,7 @@ describe('TelegramChannelMessageTemplatesService', () => {
         currentSubscribersCount: 500,
         ownViewsPerPost: 0,
         adBaseCpm: 300,
+        internalCpm: null,
         adBaseCurrency: 'UAH',
         updatedAt: new Date('2026-09-14T00:00:00.000Z'),
         defaultInviteLinkId: null,
@@ -139,6 +140,7 @@ describe('TelegramChannelMessageTemplatesService', () => {
         currentSubscribersCount: 1_000,
         ownViewsPerPost: 0,
         adBaseCpm: 300,
+        internalCpm: 175.5,
         adBaseCurrency: 'UAH',
         updatedAt: new Date('2026-09-14T00:00:00.000Z'),
         defaultInviteLinkId: 'link-main',
@@ -205,6 +207,10 @@ describe('TelegramChannelMessageTemplatesService', () => {
           expect.objectContaining({
             name: '1/24',
             price: '75',
+            internalPrice: '87.75',
+            expectedViews: 500,
+            publicCpm: '0',
+            internalCpm: '175.5',
             currency: 'UAH',
           }),
         ],
@@ -213,7 +219,12 @@ describe('TelegramChannelMessageTemplatesService', () => {
     );
     expect(result.channels[1].emojiSource).toBe('📣');
     expect(result.channels[1].products[0]).toEqual(
-      expect.objectContaining({ name: '1/24', currency: 'UAH' }),
+      expect.objectContaining({
+        name: '1/24',
+        internalPrice: null,
+        internalCpm: null,
+        currency: 'UAH',
+      }),
     );
     expect(prisma.telegramAdProduct.createMany).toHaveBeenCalledTimes(1);
   });

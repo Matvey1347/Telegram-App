@@ -46,6 +46,10 @@ export type TelegramMessageTemplateProduct = {
   id: string;
   name: string;
   price: string | null;
+  internalPrice: string | null;
+  expectedViews: number | null;
+  publicCpm: string | null;
+  internalCpm: string | null;
   currency: string;
 };
 

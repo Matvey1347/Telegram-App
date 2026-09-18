@@ -11,6 +11,11 @@ export const DEFAULT_CHANNEL_MESSAGE_TEMPLATE = `{{#channels}}
 
 {{/channels}}`;
 
+export type TelegramChannelMessageTemplatePriceMode = "PUBLIC" | "INTERNAL_CPM";
+
+const PUBLIC_PRICE_TOKEN = "{{product_price}}";
+const INTERNAL_PRICE_TOKEN = "{{product_internal_price}}";
+
 export type TelegramChannelMessageTemplateLayout = {
   showEmoji: boolean;
   showTitle: boolean;
@@ -70,6 +75,27 @@ ${heading}${description}
 {{/channels}}`;
 }
 
+export function readTelegramChannelMessageTemplatePriceMode(
+  template: string,
+): TelegramChannelMessageTemplatePriceMode {
+  return template.includes(INTERNAL_PRICE_TOKEN) ? "INTERNAL_CPM" : "PUBLIC";
+}
+
+export function rewriteTelegramChannelMessageTemplatePriceMode(
+  template: string,
+  mode: TelegramChannelMessageTemplatePriceMode,
+) {
+  const nextToken =
+    mode === "INTERNAL_CPM" ? INTERNAL_PRICE_TOKEN : PUBLIC_PRICE_TOKEN;
+  return template.replace(/{{#products}}([\s\S]*?){{\/products}}/g, (block) =>
+    block
+      .split(PUBLIC_PRICE_TOKEN)
+      .join(nextToken)
+      .split(INTERNAL_PRICE_TOKEN)
+      .join(nextToken),
+  );
+}
+
 type TemplateRenderOptions = {
   overrideInviteLinks?: boolean;
   inviteLinkOverrides?: Record<string, string>;
@@ -108,7 +134,8 @@ function renderProducts(
       const rows = channel.products
         .filter(
           (product) =>
-            product.price &&
+            (Boolean(product.price) ||
+              rowTemplate.includes(INTERNAL_PRICE_TOKEN)) &&
             !options.excludedProductNames.has(product.name.toLocaleLowerCase()),
         )
         .map((product) => {
@@ -122,6 +149,26 @@ function renderProducts(
             rendered,
             "product_price",
             roundPrice(product.price || "—", options.priceRounding),
+          );
+          rendered = replaceToken(
+            rendered,
+            "product_internal_price",
+            roundPrice(product.internalPrice || "—", options.priceRounding),
+          );
+          rendered = replaceToken(
+            rendered,
+            "product_expected_views",
+            product.expectedViews == null ? "—" : String(product.expectedViews),
+          );
+          rendered = replaceToken(
+            rendered,
+            "product_public_cpm",
+            product.publicCpm || "—",
+          );
+          rendered = replaceToken(
+            rendered,
+            "product_internal_cpm",
+            product.internalCpm || "—",
           );
           return replaceToken(rendered, "product_currency", product.currency);
         })
@@ -182,6 +229,7 @@ export function renderTelegramChannelMessageTemplate(
   channels: TelegramMessageTemplateChannelSource[],
   options?: TemplateRenderOptions,
 ) {
+  const priceMode = readTelegramChannelMessageTemplatePriceMode(template);
   const overrides = options?.inviteLinkOverrides || {};
   const excludedProductNames = new Set(
     (options?.excludedProductNames || []).map((name) =>
@@ -221,12 +269,14 @@ export function renderTelegramChannelMessageTemplate(
   >();
   for (const channel of channels) {
     for (const product of channel.products) {
+      const selectedPrice =
+        priceMode === "INTERNAL_CPM" ? product.internalPrice : product.price;
       if (
-        !product.price ||
+        !selectedPrice ||
         excludedProductNames.has(product.name.toLocaleLowerCase())
       )
         continue;
-      const amount = Number(product.price);
+      const amount = Number(selectedPrice);
       if (!Number.isFinite(amount)) continue;
       const key = `${product.name}\u0000${product.currency}`;
       const row = grouped.get(key) || {

@@ -4,7 +4,9 @@ import {
   buildTelegramChannelMessageTemplate,
   DEFAULT_CHANNEL_MESSAGE_TEMPLATE,
   DEFAULT_CHANNEL_MESSAGE_TEMPLATE_LAYOUT,
+  readTelegramChannelMessageTemplatePriceMode,
   renderTelegramChannelMessageTemplate,
+  rewriteTelegramChannelMessageTemplatePriceMode,
 } from "./telegram-channel-message-template-format";
 
 const channel = (
@@ -34,7 +36,18 @@ const channel = (
       isDefault: false,
     },
   ],
-  products: [{ id: `${id}-p`, name: "1/24", price: "75", currency: "UAH" }],
+  products: [
+    {
+      id: `${id}-p`,
+      name: "1/24",
+      price: "75",
+      internalPrice: "50",
+      expectedViews: 1_000,
+      publicCpm: "75",
+      internalCpm: "50",
+      currency: "UAH",
+    },
+  ],
 });
 
 describe("renderTelegramChannelMessageTemplate", () => {
@@ -73,8 +86,26 @@ describe("renderTelegramChannelMessageTemplate", () => {
   it("can hide formats and round the remaining prices", () => {
     const source = channel("one", "One");
     source.products = [
-      { id: "p1", name: "1/24", price: "263.4", currency: "UAH" },
-      { id: "p2", name: "3/72", price: "338.4", currency: "UAH" },
+      {
+        id: "p1",
+        name: "1/24",
+        price: "263.4",
+        internalPrice: "200",
+        expectedViews: 1_000,
+        publicCpm: "263.4",
+        internalCpm: "200",
+        currency: "UAH",
+      },
+      {
+        id: "p2",
+        name: "3/72",
+        price: "338.4",
+        internalPrice: "250",
+        expectedViews: 1_000,
+        publicCpm: "338.4",
+        internalCpm: "250",
+        currency: "UAH",
+      },
     ];
 
     const rendered = renderTelegramChannelMessageTemplate(
@@ -93,8 +124,26 @@ describe("renderTelegramChannelMessageTemplate", () => {
   it("keeps a channel heading gap without repeating gaps between prices", () => {
     const source = channel("one", "One");
     source.products = [
-      { id: "p1", name: "1/24", price: "100", currency: "UAH" },
-      { id: "p2", name: "2/48", price: "150", currency: "UAH" },
+      {
+        id: "p1",
+        name: "1/24",
+        price: "100",
+        internalPrice: "80",
+        expectedViews: 1_000,
+        publicCpm: "100",
+        internalCpm: "80",
+        currency: "UAH",
+      },
+      {
+        id: "p2",
+        name: "2/48",
+        price: "150",
+        internalPrice: "120",
+        expectedViews: 1_000,
+        publicCpm: "150",
+        internalCpm: "120",
+        currency: "UAH",
+      },
     ];
     const template = `{{#channels}}
 {{title}}
@@ -136,24 +185,80 @@ describe("renderTelegramChannelMessageTemplate", () => {
     expect(withoutOptionalValues).not.toContain("@)");
   });
 
+  it("renders internal CPM calculations and keeps missing internal prices explicit", () => {
+    const source = channel("one", "One");
+    source.description = "Short description from channel settings";
+    source.products[0] = {
+      ...source.products[0],
+      internalPrice: null,
+      expectedViews: 1_500,
+      publicCpm: "50",
+      internalCpm: "32.5",
+    };
+    const publicTemplate = `${DEFAULT_CHANNEL_MESSAGE_TEMPLATE}\n{{product_price}} outside`;
+    const internalTemplate = rewriteTelegramChannelMessageTemplatePriceMode(
+      publicTemplate,
+      "INTERNAL_CPM",
+    );
+    const templateWithMetrics = internalTemplate.replace(
+      "{{product_currency}}",
+      "{{product_currency}} · {{product_expected_views}} views · CPM {{product_internal_cpm}}",
+    );
+
+    expect(readTelegramChannelMessageTemplatePriceMode(internalTemplate)).toBe(
+      "INTERNAL_CPM",
+    );
+    expect(internalTemplate).toContain("{{product_internal_price}}");
+    expect(internalTemplate).toContain("{{product_price}} outside");
+    expect(
+      renderTelegramChannelMessageTemplate(templateWithMetrics, [source]),
+    ).toContain("1/24 — **— UAH · 1500 views · CPM 32.5**");
+  });
+
   it("renames a format and appends a configurable discounted package", () => {
     const first = channel("one", "One");
     first.products = [
-      { id: "one-day", name: "1/24", price: "120", currency: "UAH" },
+      {
+        id: "one-day",
+        name: "1/24",
+        price: "120",
+        internalPrice: "100",
+        expectedViews: 1_000,
+        publicCpm: "120",
+        internalCpm: "100",
+        currency: "UAH",
+      },
       {
         id: "one-permanent",
         name: "No auto-delete",
         price: "165",
+        internalPrice: "140",
+        expectedViews: 1_000,
+        publicCpm: "165",
+        internalCpm: "140",
         currency: "UAH",
       },
     ];
     const second = channel("two", "Two");
     second.products = [
-      { id: "two-day", name: "1/24", price: "130", currency: "UAH" },
+      {
+        id: "two-day",
+        name: "1/24",
+        price: "130",
+        internalPrice: "100",
+        expectedViews: 1_000,
+        publicCpm: "130",
+        internalCpm: "100",
+        currency: "UAH",
+      },
       {
         id: "two-permanent",
         name: "No auto-delete",
         price: "200",
+        internalPrice: "160",
+        expectedViews: 1_000,
+        publicCpm: "200",
+        internalCpm: "160",
         currency: "UAH",
       },
     ];
@@ -179,6 +284,26 @@ describe("renderTelegramChannelMessageTemplate", () => {
     );
     expect(rendered).toContain(
       "• Без видалення у всіх каналах: ~~365 UAH~~ → **330 UAH**",
+    );
+
+    const internalRendered = renderTelegramChannelMessageTemplate(
+      rewriteTelegramChannelMessageTemplatePriceMode(
+        DEFAULT_CHANNEL_MESSAGE_TEMPLATE,
+        "INTERNAL_CPM",
+      ),
+      [first, second],
+      {
+        bundleOfferEnabled: true,
+        bundleDiscountPercent: 10,
+        productNameOverrides: { "No auto-delete": "Без видалення" },
+      },
+    );
+    expect(internalRendered).toContain("1/24 — **100 UAH**");
+    expect(internalRendered).toContain(
+      "• 1/24 у всіх каналах: ~~200 UAH~~ → **180 UAH**",
+    );
+    expect(internalRendered).toContain(
+      "• Без видалення у всіх каналах: ~~300 UAH~~ → **270 UAH**",
     );
   });
 });

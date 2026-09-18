@@ -2,17 +2,21 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type {
-  ConsumerFinanceInvestment,
-  ConsumerFinanceInvestmentInput,
-} from "@telegram-system/shared";
+import type { ConsumerFinanceInvestmentInput } from "@telegram-system/shared";
 import { FinanceInvestmentEditor } from "./finance-investment-editor";
 import {
   FinanceInvestmentActionModal,
   type InvestmentAction,
   type InvestmentActionValues,
 } from "./finance-investment-action-modal";
-import { Button, ErrorState, FormField, LoadingState, Modal, Select } from "./ui";
+import {
+  Button,
+  ErrorState,
+  FormField,
+  LoadingState,
+  Modal,
+  Select,
+} from "./ui";
 import type { FinanceLocale } from "./i18n/core";
 import { financeInvestmentsCopy } from "./i18n/investments";
 import { consumerFinanceInvestmentsApi } from "@/lib/features/finance/consumer-finance-investments-api";
@@ -49,7 +53,10 @@ export function FinanceInvestmentCreateModal({
       limit: 100,
     }),
     queryFn: () =>
-      consumerFinanceInvestmentsApi.list(botId, { status: "ACTIVE", limit: 100 }),
+      consumerFinanceInvestmentsApi.list(botId, {
+        status: "ACTIVE",
+        limit: 100,
+      }),
     retry: false,
   });
   const accounts = useQuery({
@@ -84,6 +91,9 @@ export function FinanceInvestmentCreateModal({
       patchInvestmentMutation(client, botId, result);
       void client.invalidateQueries({
         queryKey: consumerFinanceKeys.investmentSummary(botId),
+      });
+      void client.invalidateQueries({
+        queryKey: consumerFinanceKeys.investmentLists(botId),
       });
       invalidateConsumerAssetDerivations(client, botId);
       onClose();
@@ -144,7 +154,9 @@ export function FinanceInvestmentCreateModal({
           <p className="text-sm text-neutral-400">{t.newInvestmentHelp}</p>
         ) : (
           <>
-            <p className="text-sm text-neutral-400">{t.existingInvestmentHelp}</p>
+            <p className="text-sm text-neutral-400">
+              {t.existingInvestmentHelp}
+            </p>
             <FormField label={t.chooseInvestment}>
               <Select
                 uiLocale={locale}
@@ -160,7 +172,9 @@ export function FinanceInvestmentCreateModal({
               </Select>
             </FormField>
             {!active.length ? (
-              <p className="text-sm text-neutral-400">{t.noActiveInvestments}</p>
+              <p className="text-sm text-neutral-400">
+                {t.noActiveInvestments}
+              </p>
             ) : null}
           </>
         )}

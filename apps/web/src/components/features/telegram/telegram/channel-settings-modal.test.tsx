@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ChannelSettingsModal } from "./channel-settings-modal";
 
 const mocks = vi.hoisted(() => ({
@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
   updateQuiet: vi.fn(),
   getScheduleAssignment: vi.fn(),
   assignSchedule: vi.fn(),
+  startOperation: vi.fn(),
+  operationSucceed: vi.fn(),
+  operationFail: vi.fn(),
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -23,7 +26,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     telegramPublicationSchedulesApi: {
       ...actual.telegramPublicationSchedulesApi,
       getAssignment: mocks.getScheduleAssignment,
-      assign: mocks.assignSchedule,
+      assignQuiet: mocks.assignSchedule,
     },
   };
 });
@@ -49,16 +52,30 @@ vi.mock("./channel-economics-editor", () => ({
     draft,
     onDraftChange,
   }: {
-    draft: { adBaseCpm: string };
-    onDraftChange: (patch: { adBaseCpm: string }) => void;
+    draft: { adBaseCpm: string; internalCpm: string };
+    onDraftChange: (patch: {
+      adBaseCpm?: string;
+      internalCpm?: string;
+    }) => void;
   }) => (
-    <label>
-      Draft CPM
-      <input
-        value={draft.adBaseCpm}
-        onChange={(event) => onDraftChange({ adBaseCpm: event.target.value })}
-      />
-    </label>
+    <>
+      <label>
+        Draft CPM
+        <input
+          value={draft.adBaseCpm}
+          onChange={(event) => onDraftChange({ adBaseCpm: event.target.value })}
+        />
+      </label>
+      <label>
+        Draft internal CPM
+        <input
+          value={draft.internalCpm}
+          onChange={(event) =>
+            onDraftChange({ internalCpm: event.target.value })
+          }
+        />
+      </label>
+    </>
   ),
 }));
 vi.mock("./channel-system-bot-access-modal", () => ({
@@ -84,10 +101,19 @@ vi.mock("./channel-publication-schedule-settings", () => ({
   ),
 }));
 vi.mock("@/providers/toast-provider", () => ({
-  useAppToast: () => ({ pushToast: vi.fn() }),
+  useAppToast: () => ({ startOperation: mocks.startOperation }),
 }));
 
 describe("ChannelSettingsModal", () => {
+  beforeEach(() => {
+    mocks.startOperation.mockReset().mockReturnValue({
+      succeed: mocks.operationSucceed,
+      fail: mocks.operationFail,
+    });
+    mocks.operationSucceed.mockReset();
+    mocks.operationFail.mockReset();
+  });
+
   it("saves schedule slots with the single modal Save button", async () => {
     mocks.analyticsSources.mockResolvedValue({ sources: [] });
     mocks.updateQuiet.mockResolvedValue({});
@@ -121,6 +147,14 @@ describe("ChannelSettingsModal", () => {
         selectedSlotIds: ["slot-1"],
       }),
     );
+    expect(mocks.startOperation).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "Applying channel settings…" }),
+    );
+    expect(mocks.operationSucceed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Your changes were saved successfully.",
+      }),
+    );
   });
 
   it("groups channel configuration into icon-labelled tabs and shows the channel avatar", async () => {
@@ -138,15 +172,18 @@ describe("ChannelSettingsModal", () => {
               id: "channel-1",
               title: "Business patterns",
               username: "business_patterns",
-              description: "Business media about practical growth",
+              shortDescription: "Business media about practical growth",
               photoUrl: "https://cdn.test/channel.jpg",
               presentationIconId: "icon-1",
               tgStatUrl: "https://tgstat.com/channel/test",
               defaultInviteLinkId: "invite-1",
               botInviteLinkId: "invite-bot",
+              broadcastInviteLinkId: "invite-broadcast",
+              audienceTransferInviteLinkId: "invite-transfer",
               folderDefaultInviteLinkIds: ["invite-folder"],
               mutualPromotionInviteLinkIds: ["invite-vp"],
               adBaseCpm: 300,
+              internalCpm: 200,
               seedSubscribersCount: 100,
               autoSyncEnabled: true,
               preview: {
@@ -229,6 +266,8 @@ describe("ChannelSettingsModal", () => {
     const cpm = screen.getByLabelText("Draft CPM");
     await userEvent.clear(cpm);
     await userEvent.type(cpm, "450");
+    const internalCpm = screen.getByLabelText("Draft internal CPM");
+    await userEvent.type(internalCpm, "175");
     await userEvent.click(screen.getByRole("tab", { name: "Appearance" }));
     expect(screen.getByLabelText("Appearance URL")).toHaveValue(
       "https://tgstat.com/new",
@@ -251,6 +290,7 @@ describe("ChannelSettingsModal", () => {
       expect.objectContaining({
         tgStatUrl: "https://tgstat.com/new",
         adBaseCpm: 450,
+        internalCpm: 175,
         seedDisabled: true,
         seedSubscribersCount: 0,
         knownFakeSubscribersCount: 0,
@@ -258,7 +298,37 @@ describe("ChannelSettingsModal", () => {
         ownReactionsPerPost: 0,
       }),
     );
-    await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("changes the settings operation to an error and keeps the modal open", async () => {
+    mocks.analyticsSources.mockReset().mockResolvedValue({ sources: [] });
+    mocks.updateQuiet.mockReset().mockRejectedValue(new Error("offline"));
+    mocks.getScheduleAssignment.mockReset().mockResolvedValue(null);
+    const onClose = vi.fn();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <ChannelSettingsModal
+          channel={{ id: "channel-1", title: "Business" } as never}
+          onClose={onClose}
+        />
+      </QueryClientProvider>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(mocks.operationFail).toHaveBeenCalledOnce());
+    expect(mocks.operationFail).toHaveBeenCalledWith({
+      title: "Could not save channel settings",
+      message: "Check the settings and try again.",
+    });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("dialog", { name: "Channel settings" }),
+    ).toBeVisible();
   });
 
   it("edits and saves the channel post sync limit from Sources", async () => {

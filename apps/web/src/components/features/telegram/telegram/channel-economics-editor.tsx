@@ -92,6 +92,9 @@ export function ChannelEconomicsEditor({
   const [localCpm, setLocalCpm] = useState(
     channel.adBaseCpm == null ? "" : String(channel.adBaseCpm),
   );
+  const [localInternalCpm, setLocalInternalCpm] = useState(
+    channel.internalCpm == null ? "" : String(channel.internalCpm),
+  );
   const [localCurrency, setLocalCurrency] = useState(
     channel.adBaseCurrency || channel.kpiCurrency || "USD",
   );
@@ -102,11 +105,16 @@ export function ChannelEconomicsEditor({
     channel.stopCpaFrom == null ? "" : String(channel.stopCpaFrom),
   );
   const cpm = draft?.adBaseCpm ?? localCpm;
+  const internalCpm = draft?.internalCpm ?? localInternalCpm;
   const currency = draft?.adBaseCurrency ?? localCurrency;
   const targetCpa = draft?.targetCpa ?? localTargetCpa;
   const normalCpa = draft?.stopCpaFrom ?? localNormalCpa;
   const setCpm = (value: string) =>
     onDraftChange ? onDraftChange({ adBaseCpm: value }) : setLocalCpm(value);
+  const setInternalCpm = (value: string) =>
+    onDraftChange
+      ? onDraftChange({ internalCpm: value })
+      : setLocalInternalCpm(value);
   const setCurrency = (value: string) =>
     onDraftChange
       ? onDraftChange({ adBaseCurrency: value })
@@ -153,6 +161,7 @@ export function ChannelEconomicsEditor({
     mutationFn: () =>
       telegramChannelsApi.updateQuiet(channel.id, {
         adBaseCpm: cpm.trim() ? Number(cpm) : null,
+        internalCpm: internalCpm.trim() ? Number(internalCpm) : null,
         adBaseCurrency: currency,
         kpiCurrency: currency,
         targetCpa: targetCpa.trim() ? Number(targetCpa) : null,
@@ -213,7 +222,7 @@ export function ChannelEconomicsEditor({
     },
     onError: () => pushToast("Could not update placement formats", "error"),
   });
-  const invalidNumber = [cpm, targetCpa, normalCpa].some(
+  const invalidNumber = [cpm, internalCpm, targetCpa, normalCpa].some(
     (value) =>
       value.trim() && (!Number.isFinite(Number(value)) || Number(value) < 0),
   );
@@ -230,15 +239,23 @@ export function ChannelEconomicsEditor({
   const content = (
     <div className="space-y-5">
       <p className="text-sm text-neutral-400">
-        One currency is used for CPM, purchase payback and KPI. KPI is CPA per
-        subscriber: lower is better.
+        One currency is used for external and internal CPM, purchase payback and
+        KPI. KPI is CPA per subscriber: lower is better.
       </p>
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(150px,0.32fr)]">
-        <FormField label="Ad CPM">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(150px,0.32fr)]">
+        <FormField label="External CPM">
           <Input
             inputMode="decimal"
             value={cpm}
             onChange={(event) => setCpm(event.target.value)}
+            placeholder="Not set"
+          />
+        </FormField>
+        <FormField label="Internal CPM">
+          <Input
+            inputMode="decimal"
+            value={internalCpm}
+            onChange={(event) => setInternalCpm(event.target.value)}
             placeholder="Not set"
           />
         </FormField>

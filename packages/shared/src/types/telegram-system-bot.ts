@@ -5,6 +5,17 @@ import type { TelegramPostMediaItem } from "./telegram-post-media";
 export const TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE_ERROR_CODE =
   "TELEGRAM_SYSTEM_BOT_IMPORT_ACTIVE";
 
+export const TELEGRAM_SYSTEM_BOT_POST_IMPORT_MAX_POSTS = 50;
+
+export type TelegramSystemBotPostImportMode = "single" | "multiple";
+
+export type TelegramSystemBotPostImportStatus =
+  | "ACTIVE"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "EXPIRED"
+  | "FAILED";
+
 export type TelegramSystemBotPostDraft = {
   title: string;
   text: string;
@@ -15,6 +26,36 @@ export type TelegramSystemBotPostDraft = {
   imageUrls: string[];
   mediaItems?: TelegramPostMediaItem[];
   buttonRows: TelegramPostButtonRows;
+};
+
+export type PrepareTelegramSystemBotPostImportPayload = {
+  mode: TelegramSystemBotPostImportMode;
+  context?: string;
+  replaceActive?: boolean;
+};
+
+export type TelegramSystemBotPostImportStart = {
+  workflowId: string;
+  mode: TelegramSystemBotPostImportMode;
+};
+
+export type TelegramSystemBotPostImportResult =
+  | {
+      ready: false;
+      mode: TelegramSystemBotPostImportMode;
+      status: Exclude<TelegramSystemBotPostImportStatus, "COMPLETED">;
+    }
+  | {
+      ready: true;
+      mode: TelegramSystemBotPostImportMode;
+      status: "COMPLETED";
+      drafts: TelegramSystemBotPostDraft[];
+    };
+
+export type CancelTelegramSystemBotPostImportResult = {
+  workflowId: string;
+  mode: TelegramSystemBotPostImportMode;
+  status: "CANCELLED";
 };
 
 export type TelegramSystemBotConnectionStatus = {

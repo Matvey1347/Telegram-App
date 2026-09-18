@@ -29,6 +29,7 @@ export type EditableImportRow = {
   title: string;
   text: string;
   icon: string;
+  iconPresentation?: ResolvedEmoji | null;
   urlsText: string;
   imageSearchText: string;
   groupId: string | null | undefined;

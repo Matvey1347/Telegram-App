@@ -15,6 +15,7 @@ describe('TelegramUnifiedImportService', () => {
     },
     icon: {
       findFirst: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn(),
     },
     telegramPublicationScheduleSlot: {
@@ -70,6 +71,7 @@ describe('TelegramUnifiedImportService', () => {
     prisma.telegramManagedPost.findMany.mockReset().mockResolvedValue([]);
     prisma.telegramContentHypothesis.findMany.mockReset().mockResolvedValue([]);
     prisma.icon.findFirst.mockReset();
+    prisma.icon.findMany.mockReset().mockResolvedValue([]);
     prisma.icon.create.mockReset();
     hypotheses.create.mockReset();
     hypotheses.update.mockReset();
@@ -108,6 +110,154 @@ describe('TelegramUnifiedImportService', () => {
       'posts',
       'schedule',
     ]);
+  });
+
+  it('describes changed fields for update operations', async () => {
+    prisma.postGroup.findMany.mockResolvedValueOnce([
+      { id: 'group-1', title: 'Old group', icon: '🧠' },
+    ]);
+    prisma.telegramContentHypothesis.findMany.mockResolvedValueOnce([
+      {
+        id: 'hypothesis-1',
+        name: 'Old hypothesis',
+        description: 'Old description',
+        status: 'ACTIVE',
+        conclusion: null,
+        icon: { emoji: '💡' },
+      },
+    ]);
+    prisma.telegramManagedPost.findMany.mockResolvedValueOnce([
+      {
+        id: 'post-1',
+        title: 'Old post',
+        text: 'Old text',
+        imageUrls: ['https://example.com/old.jpg'],
+        icon: '📝',
+        status: 'DRAFT',
+        scheduledAt: null,
+      },
+    ]);
+
+    const preview = await service.preview('user-1', 'channel-1', {
+      version: 1,
+      groups: [
+        {
+          ref: 'group-update',
+          action: 'UPDATE',
+          id: 'group-1',
+          title: 'New group',
+          icon: '🌱',
+        },
+      ],
+      hypotheses: [
+        {
+          ref: 'hypothesis-update',
+          action: 'UPDATE',
+          id: 'hypothesis-1',
+          value: {
+            name: 'New hypothesis',
+            description: 'New description',
+            status: 'COMPLETED',
+          },
+        },
+      ],
+      posts: [
+        {
+          ref: 'post-update',
+          action: 'UPDATE',
+          id: 'post-1',
+          title: 'New post',
+          text: 'New text',
+          imageUrls: ['https://example.com/new.jpg'],
+        },
+      ],
+    });
+
+    expect(preview.sections[0].items[0].changes).toEqual(
+      expect.arrayContaining([
+        { field: 'title', before: 'Old group', after: 'New group' },
+        { field: 'icon', before: '🧠', after: '🌱' },
+      ]),
+    );
+    expect(preview.sections[1].items[0].changes).toEqual(
+      expect.arrayContaining([
+        {
+          field: 'name',
+          before: 'Old hypothesis',
+          after: 'New hypothesis',
+        },
+        { field: 'status', before: 'ACTIVE', after: 'COMPLETED' },
+      ]),
+    );
+    expect(preview.sections[2].items[0].changes).toEqual(
+      expect.arrayContaining([
+        { field: 'title', before: 'Old post', after: 'New post' },
+        { field: 'text', before: 'Old text', after: 'New text' },
+      ]),
+    );
+  });
+
+  it('omits unchanged group and hypothesis updates and skips their writes', async () => {
+    const existingGroup = {
+      id: 'group-unchanged',
+      title: 'Existing group',
+      description: null,
+      icon: '🌿',
+    };
+    const existingHypothesis = {
+      id: 'hypothesis-unchanged',
+      name: 'Existing hypothesis',
+      description: 'Same description',
+      status: 'ACTIVE',
+      conclusion: null,
+      icon: { emoji: '🧠' },
+    };
+    prisma.postGroup.findMany.mockResolvedValue([existingGroup]);
+    prisma.telegramContentHypothesis.findMany.mockResolvedValue([
+      existingHypothesis,
+    ]);
+    const manifest = {
+      version: 1 as const,
+      groups: [
+        {
+          ref: 'group-unchanged-ref',
+          action: 'UPDATE' as const,
+          id: 'group-unchanged',
+          title: 'Existing group',
+          icon: '🌿',
+        },
+      ],
+      hypotheses: [
+        {
+          ref: 'hypothesis-unchanged-ref',
+          action: 'UPDATE' as const,
+          id: 'hypothesis-unchanged',
+          icon: '🧠',
+          value: {
+            name: 'Existing hypothesis',
+            description: 'Same description',
+            status: 'ACTIVE' as const,
+            conclusion: null,
+          },
+        },
+      ],
+    };
+
+    const preview = await service.preview('user-1', 'channel-1', manifest);
+    const result = await service.apply(
+      'user-1',
+      'channel-1',
+      manifest,
+      unifiedImportHash(manifest),
+    );
+
+    expect(preview.valid).toBe(true);
+    expect(preview.sections[0].items).toEqual([]);
+    expect(preview.sections[1].items).toEqual([]);
+    expect(groups.updatePostGroup).not.toHaveBeenCalled();
+    expect(hypotheses.update).not.toHaveBeenCalled();
+    expect(result.sections[0].updated).toBe(0);
+    expect(result.sections[1].updated).toBe(0);
   });
 
   it('rejects cross-section references that do not exist', async () => {
@@ -407,6 +557,11 @@ describe('TelegramUnifiedImportService', () => {
       icon: '🗓️',
       status: 'SCHEDULED',
       scheduledAt: new Date('2026-10-01T08:00:00.000Z'),
+      publicationSlot: {
+        id: 'slot-content',
+        kind: 'CONTENT',
+        title: 'Morning content',
+      },
     };
     prisma.telegramManagedPost.findMany
       .mockResolvedValueOnce([existing])
@@ -440,6 +595,9 @@ describe('TelegramUnifiedImportService', () => {
         entityId: 'post-scheduled',
         label: 'Scheduled publication',
         scheduledAt: '2026-10-01T08:00:00.000Z',
+        slotId: 'slot-content',
+        slotKind: 'CONTENT',
+        slotTitle: 'Morning content',
         valid: true,
       }),
     );
@@ -450,6 +608,14 @@ describe('TelegramUnifiedImportService', () => {
     );
     expect(result.sections[3]).toEqual(
       expect.objectContaining({ scheduled: 0, unscheduled: 1 }),
+    );
+    expect(result.manifest.schedule?.[0]).toEqual(
+      expect.objectContaining({
+        imported: true,
+        scheduledAt: '2026-10-01T08:00:00.000Z',
+        slotId: 'slot-content',
+        slotKind: 'CONTENT',
+      }),
     );
   });
 
@@ -483,13 +649,22 @@ describe('TelegramUnifiedImportService', () => {
       title: 'Scheduled publication',
       text: 'Scheduled body',
       imageUrls: [],
-      icon: '🗓️',
+      icon: 'post-icon-id',
       status: 'SCHEDULED',
       scheduledAt: new Date('2026-10-01T08:00:00.000Z'),
     };
     prisma.telegramManagedPost.findMany
       .mockResolvedValueOnce([existing])
       .mockResolvedValueOnce([existing]);
+    prisma.icon.findMany.mockResolvedValue([
+      {
+        id: 'post-icon-id',
+        type: 'emoji',
+        name: 'Calendar',
+        emoji: '🗓️',
+        imageUrl: null,
+      },
+    ]);
     const manifest = {
       version: 1 as const,
       schedule: [
@@ -515,6 +690,10 @@ describe('TelegramUnifiedImportService', () => {
         action: 'SCHEDULE',
         entityId: 'post-scheduled',
         label: 'Scheduled publication',
+        iconPresentation: expect.objectContaining({
+          type: 'unicode',
+          value: '🗓️',
+        }),
         valid: true,
       }),
     );
@@ -530,6 +709,164 @@ describe('TelegramUnifiedImportService', () => {
     expect(result.sections[3]).toEqual(
       expect.objectContaining({ scheduled: 1, unscheduled: 0 }),
     );
+  });
+
+  it('treats UNSCHEDULE followed by SCHEDULE as one reschedule operation', async () => {
+    const existing = {
+      id: 'post-moved',
+      title: 'Moved publication',
+      text: 'Scheduled body',
+      imageUrls: [],
+      icon: '🗓️',
+      status: 'SCHEDULED',
+      scheduledAt: new Date('2026-10-01T08:00:00.000Z'),
+    };
+    prisma.telegramManagedPost.findMany
+      .mockResolvedValueOnce([existing])
+      .mockResolvedValueOnce([existing]);
+    const manifest = {
+      version: 1 as const,
+      schedule: [
+        { action: 'UNSCHEDULE' as const, postId: 'post-moved' },
+        {
+          action: 'SCHEDULE' as const,
+          postId: 'post-moved',
+          slotId: 'slot-1',
+          scheduledAt: '2026-10-02T08:00:00.000Z',
+        },
+      ],
+    };
+
+    const preview = await service.preview('user-1', 'channel-1', manifest);
+    const result = await service.apply(
+      'user-1',
+      'channel-1',
+      manifest,
+      unifiedImportHash(manifest),
+    );
+
+    expect(preview.valid).toBe(true);
+    expect(preview.sections[3].items).toEqual([
+      expect.objectContaining({ action: 'SCHEDULE', entityId: 'post-moved' }),
+    ]);
+    expect(publication.returnManagedPostToDraft).not.toHaveBeenCalled();
+    expect(publication.scheduleManagedPost).toHaveBeenCalledWith(
+      'user-1',
+      'channel-1',
+      'post-moved',
+      {
+        scheduledAt: '2026-10-02T08:00:00.000Z',
+        publicationSlotId: 'slot-1',
+      },
+    );
+    expect(result.sections[3]).toEqual(
+      expect.objectContaining({ scheduled: 1, unscheduled: 0 }),
+    );
+    expect(result.manifest.schedule).toEqual([
+      expect.objectContaining({ action: 'SCHEDULE', postId: 'post-moved' }),
+    ]);
+  });
+
+  it('schedules an existing publication at a custom time without a slot id', async () => {
+    const existing = {
+      id: 'post-custom-time',
+      title: 'Custom-time publication',
+      text: 'Scheduled body',
+      imageUrls: [],
+      icon: '🕘',
+      status: 'DRAFT',
+      scheduledAt: null,
+    };
+    prisma.telegramManagedPost.findMany
+      .mockResolvedValueOnce([existing])
+      .mockResolvedValueOnce([existing]);
+    const manifest = {
+      version: 1 as const,
+      schedule: [
+        {
+          action: 'SCHEDULE' as const,
+          postId: 'post-custom-time',
+          scheduledAt: '2026-10-02T09:25:00.000Z',
+        },
+      ],
+    };
+
+    const preview = await service.preview('user-1', 'channel-1', manifest);
+    await service.apply(
+      'user-1',
+      'channel-1',
+      manifest,
+      unifiedImportHash(manifest),
+    );
+
+    expect(preview.valid).toBe(true);
+    expect(preview.sections[3].items[0]).toEqual(
+      expect.objectContaining({
+        action: 'SCHEDULE',
+        entityId: 'post-custom-time',
+        valid: true,
+      }),
+    );
+    expect(publication.scheduleManagedPost).toHaveBeenCalledWith(
+      'user-1',
+      'channel-1',
+      'post-custom-time',
+      {
+        scheduledAt: '2026-10-02T09:25:00.000Z',
+        publicationSlotId: undefined,
+      },
+    );
+  });
+
+  it('returns a resumable manifest with successful operations imported and failed schedules pending', async () => {
+    commands.createManagedPost.mockResolvedValue({ id: 'post-created' });
+    publication.scheduleManagedPost.mockRejectedValue(
+      new Error('Referenced publication was not found'),
+    );
+    const manifest = {
+      version: 1 as const,
+      posts: [
+        {
+          ref: 'post-new',
+          action: 'CREATE' as const,
+          title: 'Evening publication',
+          imported: false,
+        },
+      ],
+      schedule: [
+        {
+          action: 'SCHEDULE' as const,
+          postRef: 'post-new',
+          slotId: 'slot-1',
+          scheduledAt: '2026-09-16T19:10:00+02:00',
+          imported: false,
+        },
+      ],
+    };
+
+    const result = await service.apply(
+      'user-1',
+      'channel-1',
+      manifest,
+      unifiedImportHash(manifest),
+    );
+
+    expect(result.manifest.posts?.[0]).toEqual(
+      expect.objectContaining({ id: 'post-created', imported: true }),
+    );
+    expect(result.manifest.schedule?.[0]).toEqual(
+      expect.objectContaining({
+        postRef: 'post-new',
+        scheduledAt: '2026-09-16T19:10:00+02:00',
+        imported: false,
+      }),
+    );
+    expect(result.sections[3].failed).toEqual([
+      {
+        ref: 'post-new',
+        error: 'Referenced publication was not found',
+      },
+    ]);
   });
 
   it('applies root delete targets after the main manifest operations', async () => {

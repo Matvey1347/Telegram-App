@@ -670,7 +670,7 @@ export const telegramChannelsApi = createTelegramChannelsApi({
   quietMutationConfig,
 });
 export const telegramPublicationSchedulesApi =
-  createTelegramPublicationSchedulesApi(api);
+  createTelegramPublicationSchedulesApi(api, silentFeedbackConfig);
 export const telegramContentHypothesesApi =
   createTelegramContentHypothesesApi(api);
 const telegramSourcesApi = createTelegramSourcesApi({

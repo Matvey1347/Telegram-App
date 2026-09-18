@@ -144,27 +144,22 @@ function orderSql(sort: AdCampaignQueryDto['sort']) {
   if (sort === 'date_asc') {
     return Prisma.sql`COALESCE(campaign."placementDate", campaign."startedAt", campaign."createdAt") ASC, campaign."id" ASC`;
   }
-  if (sort === 'cost_desc') {
-    return Prisma.sql`campaign."price" DESC, campaign."id" DESC`;
+  if (sort === 'cost_desc' || sort === 'cost_asc') {
+    const direction = sort === 'cost_asc' ? Prisma.sql`ASC` : Prisma.sql`DESC`;
+    return Prisma.sql`campaign."priceInPrimaryCurrency" ${direction}, campaign."id" ${direction}`;
   }
-  if (sort === 'joined_desc') {
-    return Prisma.sql`(
-      CASE
-        WHEN COALESCE((
-          SELECT SUM(link."joinedCount")
-          FROM "TelegramInviteLink" link
-          WHERE link."adCampaignId" = campaign."id"
-            AND link."workspaceId" = campaign."workspaceId"
-        ), 0) > 0
-        THEN COALESCE((
-          SELECT SUM(link."joinedCount")
-          FROM "TelegramInviteLink" link
-          WHERE link."adCampaignId" = campaign."id"
-            AND link."workspaceId" = campaign."workspaceId"
-        ), 0)
-        ELSE campaign."joinedCount"
-      END
-    ) DESC, campaign."id" DESC`;
+  if (sort === 'joined_desc' || sort === 'joined_asc') {
+    const direction =
+      sort === 'joined_asc' ? Prisma.sql`ASC` : Prisma.sql`DESC`;
+    return Prisma.sql`COALESCE(
+      NULLIF((
+        SELECT SUM(link."joinedCount")
+        FROM "TelegramInviteLink" link
+        WHERE link."adCampaignId" = campaign."id"
+          AND link."workspaceId" = campaign."workspaceId"
+      ), 0),
+      campaign."joinedCount"
+    ) ${direction}, campaign."id" ${direction}`;
   }
   return Prisma.sql`COALESCE(campaign."placementDate", campaign."startedAt", campaign."createdAt") DESC, campaign."id" DESC`;
 }

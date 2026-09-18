@@ -21,6 +21,7 @@ export function MutualPromotionAttributionChart({
   if (!history || history.points.length < 2) return null;
   const chartData = history.points.map((point) => ({
     ...point,
+    acquiredCount: point.acquiredCount ?? point.joinedCount,
     timestamp: new Date(point.at).getTime(),
   }));
 
@@ -36,7 +37,7 @@ export function MutualPromotionAttributionChart({
         className="h-20 w-full"
         aria-label={
           showUnsubscribed
-            ? "Invite-link arrivals and unsubscribes chart"
+            ? "Invite-link arrivals and estimated unsubscribes chart"
             : "Invite-link arrivals chart"
         }
       >
@@ -78,8 +79,8 @@ export function MutualPromotionAttributionChart({
             />
             <Line
               type="monotone"
-              dataKey="joinedCount"
-              name="Joined"
+              dataKey="acquiredCount"
+              name="Joined + requests"
               stroke="#6ee7b7"
               strokeWidth={2}
               dot={false}
@@ -89,7 +90,7 @@ export function MutualPromotionAttributionChart({
               <Line
                 type="monotone"
                 dataKey="unsubscribedCount"
-                name="Unsubscribed ≈"
+                name="Estimated unsubscribes ≈"
                 stroke="#fda4af"
                 strokeWidth={2}
                 dot={false}

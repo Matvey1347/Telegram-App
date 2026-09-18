@@ -3,6 +3,7 @@
 import { formatDateWithWeekday } from "@/lib/date-format";
 
 import { useMemo } from "react";
+import { Plus } from "lucide-react";
 import type { TelegramAdAvailabilitySlot } from "@telegram-system/shared";
 import { CalendarSlotCard } from "@/components/features/growth/ad-sales/calendar-slot-card";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
@@ -263,8 +264,9 @@ export function CalendarTab(props: {
                               createManualSlot(addSlotChannel, day),
                             )
                           }
-                          className="shrink-0 rounded-md border border-emerald-700/70 bg-emerald-950/80 px-2 py-1 text-[10px] font-semibold text-emerald-100 opacity-0 shadow-sm transition hover:border-emerald-500 focus-visible:opacity-100 group-hover/day:opacity-100"
+                          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-emerald-700/70 bg-emerald-950/80 px-2 py-1 text-[10px] font-semibold text-emerald-100 opacity-0 shadow-sm transition hover:border-emerald-500 focus-visible:opacity-100 group-hover/day:opacity-100"
                         >
+                          <Plus size={11} aria-hidden="true" />
                           Add slot
                         </button>
                       ) : null}
@@ -446,8 +448,9 @@ export function CalendarTab(props: {
                                     createManualSlot(channel, day),
                                   )
                                 }
-                                className="shrink-0 rounded-md border border-emerald-700/70 bg-emerald-950/80 px-2 py-1 text-[10px] font-semibold text-emerald-100 opacity-0 transition hover:border-emerald-500 focus-visible:opacity-100 group-hover/day:opacity-100"
+                                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-emerald-700/70 bg-emerald-950/80 px-2 py-1 text-[10px] font-semibold text-emerald-100 opacity-0 transition hover:border-emerald-500 focus-visible:opacity-100 group-hover/day:opacity-100"
                               >
+                                <Plus size={11} aria-hidden="true" />
                                 Add slot
                               </button>
                             </div>

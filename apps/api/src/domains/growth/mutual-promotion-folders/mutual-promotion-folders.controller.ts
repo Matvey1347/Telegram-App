@@ -93,6 +93,11 @@ export class MutualPromotionFoldersController {
     return this.commands.update(user.sub, id, dto);
   }
 
+  @Delete(':id')
+  remove(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.commands.remove(user.sub, id);
+  }
+
   @Patch(':id/invite-links')
   updateInviteLinks(
     @CurrentUser() user: JwtUser,

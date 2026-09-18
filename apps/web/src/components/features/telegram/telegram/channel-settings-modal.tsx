@@ -45,6 +45,7 @@ import {
 } from "./channel-settings-draft";
 import { ChannelSystemBotAccessModal } from "./channel-system-bot-access-modal";
 import { useAppToast } from "@/providers/toast-provider";
+import { featureModalIcon } from "@/components/ui/feature-modal-icons";
 import { ChannelSourcesSettings } from "./channel-sources-settings";
 import {
   ChannelPublicationScheduleSettings,
@@ -107,7 +108,7 @@ export function ChannelSettingsModal({
   const [publicationScheduleDraft, setPublicationScheduleDraft] =
     useState<ChannelPublicationScheduleDraft | null>(null);
   const queryClient = useQueryClient();
-  const { pushToast } = useAppToast();
+  const { startOperation } = useAppToast();
   const scheduleAssignment = useQuery({
     queryKey: telegramPublicationScheduleKeys.assignment(channel.id),
     queryFn: () => telegramPublicationSchedulesApi.getAssignment(channel.id),
@@ -133,22 +134,39 @@ export function ChannelSettingsModal({
     setDraft((current) => ({ ...current, ...patch }));
   const save = useMutation({
     mutationFn: async () => {
-      const channelUpdate = telegramChannelsApi.updateQuiet(
-        channel.id,
-        buildChannelSettingsPayload(draft),
-      );
-      const scheduleUpdate = publicationScheduleDraft?.scheduleId
-        ? telegramPublicationSchedulesApi.assign(channel.id, {
-            scheduleId: publicationScheduleDraft.scheduleId,
-            selectionMode: "SUBSET",
-            selectedSlotIds: publicationScheduleDraft.selectedSlotIds,
-          })
-        : Promise.resolve(null);
-      const [updatedChannel] = await Promise.all([
-        channelUpdate,
-        scheduleUpdate,
-      ]);
-      return updatedChannel;
+      const operation = startOperation({
+        id: `channel-settings:${channel.id}`,
+        title: "Saving channel settings",
+        message: "Applying channel settings…",
+      });
+      try {
+        const channelUpdate = telegramChannelsApi.updateQuiet(
+          channel.id,
+          buildChannelSettingsPayload(draft),
+        );
+        const scheduleUpdate = publicationScheduleDraft?.scheduleId
+          ? telegramPublicationSchedulesApi.assignQuiet(channel.id, {
+              scheduleId: publicationScheduleDraft.scheduleId,
+              selectionMode: "SUBSET",
+              selectedSlotIds: publicationScheduleDraft.selectedSlotIds,
+            })
+          : Promise.resolve(null);
+        const [updatedChannel] = await Promise.all([
+          channelUpdate,
+          scheduleUpdate,
+        ]);
+        operation.succeed({
+          title: "Channel settings saved",
+          message: "Your changes were saved successfully.",
+        });
+        return updatedChannel;
+      } catch (error) {
+        operation.fail({
+          title: "Could not save channel settings",
+          message: "Check the settings and try again.",
+        });
+        throw error;
+      }
     },
     onSuccess: async () => {
       await Promise.all([
@@ -159,17 +177,23 @@ export function ChannelSettingsModal({
           queryKey: telegramChannelKeys.detail(channel.id),
         }),
         queryClient.invalidateQueries({
+          queryKey: telegramChannelKeys.trafficAttribution(channel.id),
+        }),
+        queryClient.invalidateQueries({
           queryKey: telegramPublicationScheduleKeys.assignment(channel.id),
         }),
       ]);
-      pushToast("Channel settings saved", "success");
-      onClose();
     },
-    onError: () => pushToast("Could not save channel settings", "error"),
   });
 
   return (
-    <Modal open onClose={onClose} title="Channel settings" size="xl">
+    <Modal
+      open
+      onClose={onClose}
+      title="Channel settings"
+      titleIcon={featureModalIcon("channel-settings")}
+      size="xl"
+    >
       <div className="mb-4 flex items-center gap-3 rounded-xl border border-neutral-800 bg-neutral-950/50 p-3">
         <TelegramEntityAvatar
           imageUrl={channel.photoUrl}

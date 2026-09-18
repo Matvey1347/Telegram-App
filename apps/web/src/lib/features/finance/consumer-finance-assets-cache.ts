@@ -144,6 +144,9 @@ export function patchInvestmentMutation(
   void client.invalidateQueries({
     queryKey: consumerFinanceKeys.investmentSummary(botId),
   });
+  void client.invalidateQueries({
+    queryKey: consumerFinanceKeys.investmentLists(botId),
+  });
 }
 
 export function invalidateConsumerAssetDerivations(

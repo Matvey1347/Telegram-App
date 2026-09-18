@@ -19,8 +19,7 @@ import {
 import { compactSystemBotInlineKeyboard } from './telegram-system-bot-inline-keyboard';
 import { TelegramSystemBotChannelAccessService } from './telegram-system-bot-channel-access.service';
 import { TelegramSystemBotWorkspaceFlowService } from './telegram-system-bot-workspace-flow.service';
-import { TelegramSystemBotMutualPromotionPostFlowService } from './telegram-system-bot-mutual-promotion-post-flow.service';
-import { TelegramSystemBotPostBatchFlowService } from './telegram-system-bot-post-batch-flow.service';
+import { TelegramSystemBotPostImportService } from './telegram-system-bot-post-import.service';
 import {
   resolveSystemBotAction,
   systemBotWorkflowScope,
@@ -51,9 +50,7 @@ export class TelegramSystemBotHandlerService {
     @Optional()
     private readonly workspaceFlow?: TelegramSystemBotWorkspaceFlowService,
     @Optional()
-    private readonly mutualPromotionPostFlow?: TelegramSystemBotMutualPromotionPostFlowService,
-    @Optional()
-    private readonly postBatchFlow?: TelegramSystemBotPostBatchFlowService,
+    private readonly postImport?: TelegramSystemBotPostImportService,
   ) {}
 
   async handle(update: TelegramSystemBotUpdate) {
@@ -159,10 +156,8 @@ export class TelegramSystemBotHandlerService {
         return this.postFlow.callback(workflowScope, callback);
       if (callback && this.adSaleFlow?.isCallback(callback))
         return this.adSaleFlow.callback(workflowScope, callback);
-      if (callback && this.mutualPromotionPostFlow?.isCallback(callback))
-        return this.mutualPromotionPostFlow.callback(workflowScope, callback);
-      if (callback && this.postBatchFlow?.isCallback(callback))
-        return this.postBatchFlow.callback(workflowScope, callback);
+      if (callback && this.postImport?.isCallback(callback))
+        return this.postImport.callback(workflowScope, callback);
       if (callback === 'posts:new') return this.postFlow?.begin(workflowScope);
       if (callback && this.posts?.isCallback(callback))
         return this.posts.callback(
@@ -187,17 +182,11 @@ export class TelegramSystemBotHandlerService {
           update.message,
         );
         if (workspaceResult) return workspaceResult;
-        const postBatchResult = await this.postBatchFlow?.input(
+        const postImportResult = await this.postImport?.input(
           workflowScope,
           update.message,
         );
-        if (postBatchResult) return postBatchResult;
-        const mutualPromotionPostResult =
-          await this.mutualPromotionPostFlow?.input(
-            workflowScope,
-            update.message,
-          );
-        if (mutualPromotionPostResult) return mutualPromotionPostResult;
+        if (postImportResult) return postImportResult;
         const postResult = await this.postFlow?.input(
           workflowScope,
           update.message,
@@ -298,25 +287,14 @@ export class TelegramSystemBotHandlerService {
           systemBotWorkflowScope(chatId, connection, workspace),
         );
       }
-      const adSalePostMatch = /^\/start ad_post_([A-Za-z0-9_-]+)$/.exec(
-        command,
-      );
-      if (adSalePostMatch && this.postFlow) {
+      const websitePostImportMatch =
+        /^\/start post_import_([A-Za-z0-9_-]+)$/.exec(command);
+      if (websitePostImportMatch && this.postImport) {
         const workspace =
           await this.connections.requireCurrentWorkspace(connection);
-        return this.postFlow.resumeAdSaleImport(
+        return this.postImport.resume(
           systemBotWorkflowScope(chatId, connection, workspace),
-          adSalePostMatch[1],
-        );
-      }
-      const mutualPromotionPostMatch =
-        /^\/start mutual_promotion_post_([A-Za-z0-9_-]+)$/.exec(command);
-      if (mutualPromotionPostMatch && this.mutualPromotionPostFlow) {
-        const workspace =
-          await this.connections.requireCurrentWorkspace(connection);
-        return this.mutualPromotionPostFlow.resume(
-          systemBotWorkflowScope(chatId, connection, workspace),
-          mutualPromotionPostMatch[1],
+          websitePostImportMatch[1],
         );
       }
       const workspaces =

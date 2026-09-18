@@ -2,9 +2,11 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
+import { Plus } from "lucide-react";
 import {
   canonicalizeTimeInputValue,
   ConfirmDeleteModal,
+  Button,
   CustomSelect,
   CurrencySelect,
   DateInput,
@@ -77,6 +79,21 @@ describe("MasonryGrid", () => {
 });
 
 describe("Modal", () => {
+  it("renders a shared styled title icon when a feature does not provide one", () => {
+    render(
+      <Modal open onClose={vi.fn()} title="Create promo">
+        Promo form
+      </Modal>,
+    );
+
+    const iconBadge = screen
+      .getByRole("dialog", { name: "Create promo" })
+      .querySelector('[data-modal-title-icon="true"]');
+    expect(iconBadge).toBeInTheDocument();
+    expect(iconBadge?.querySelector(".lucide-images")).toBeInTheDocument();
+    expect(iconBadge?.querySelector(".lucide-plus")).not.toBeInTheDocument();
+  });
+
   it("portals the dialog outside page stacking contexts", () => {
     const { container } = render(
       <div className="relative z-50">
@@ -137,6 +154,29 @@ describe("Modal", () => {
     unmount();
     expect(document.activeElement).toBe(trigger);
     trigger.remove();
+  });
+});
+
+describe("Button", () => {
+  it("adds an icon to textual creation actions without duplicating an existing icon", () => {
+    const { rerender } = render(<Button>Create promo</Button>);
+    expect(
+      screen
+        .getByRole("button", { name: "Create promo" })
+        .querySelector('[data-create-action-icon="true"]'),
+    ).toBeInTheDocument();
+
+    rerender(
+      <Button>
+        <Plus data-testid="provided-icon" /> Create promo
+      </Button>,
+    );
+    expect(screen.getByTestId("provided-icon")).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("button", { name: "Create promo" })
+        .querySelector('[data-create-action-icon="true"]'),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -248,6 +288,28 @@ describe("CustomSelect", () => {
     );
     expect(onOpen).toHaveBeenCalledOnce();
     expect(screen.getAllByText("Loading invite links…")).toHaveLength(2);
+  });
+
+  it("shows search for a short option list when a search placeholder is requested", async () => {
+    const user = userEvent.setup();
+    render(
+      <CustomSelect
+        value="bot"
+        onChange={() => {}}
+        options={[
+          { value: "bot", label: "Bot link" },
+          { value: "folder", label: "Folder link" },
+          { value: "vp", label: "VP link" },
+        ]}
+        searchPlaceholder="Search invite links"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Bot link" }));
+
+    expect(
+      screen.getByPlaceholderText("Search invite links"),
+    ).toBeInTheDocument();
   });
 
   it("allows onOpen to update its parent without updating during CustomSelect render", async () => {

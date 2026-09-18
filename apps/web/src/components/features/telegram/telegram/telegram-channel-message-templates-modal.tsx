@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessagesSquare, Plus, Send } from "lucide-react";
 import type {
@@ -24,26 +24,31 @@ import {
   telegramMessageTemplateKeys,
 } from "@/lib/features/telegram/telegram-channel-message-templates-api";
 import {
-  readTelegramChannelMessageTemplateDrafts,
-  removeTelegramChannelMessageTemplateDraft,
-  type TelegramChannelMessageTemplateDraft,
+  normalizeTelegramChannelMessageTemplateDraft,
+  emptyTelegramMessageTemplatePayload,
+  TELEGRAM_MESSAGE_TEMPLATE_DRAFT_NAMESPACE,
+  type TelegramChannelMessageTemplateDraftForm,
 } from "./telegram-channel-message-template-draft";
 import { TelegramChannelMessageTemplateEditor } from "./telegram-channel-message-template-editor";
 import { TelegramChannelAvatarList } from "./telegram-channel-avatar-list";
 import { renderTelegramChannelMessageTemplate } from "./telegram-channel-message-template-format";
 import { telegramSystemBotApi } from "@/lib/api";
 import { useAppToast } from "@/providers/toast-provider";
+import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
+import { useWorkspaceModalDrafts } from "@/hooks/use-workspace-modal-drafts";
+import {
+  selectedWorkspaceDraftScope,
+  type WorkspaceDraftPreview,
+  type WorkspaceFormDraft,
+} from "@/lib/workspace-modal-drafts";
 
 type EditorState = {
   initial?:
     | TelegramChannelMessageTemplate
-    | TelegramChannelMessageTemplateDraft;
-  draftId: string;
+    | WorkspaceFormDraft<TelegramChannelMessageTemplateDraftForm>;
 };
 
-type DeleteTarget =
-  | { kind: "draft"; id?: string; name: string }
-  | { kind: "saved"; id: string; name: string };
+type DeleteTarget = { kind: "saved"; id: string; name: string };
 
 type TemplateScope = {
   scopeMode: TelegramMessageTemplateScopeMode;
@@ -51,7 +56,6 @@ type TemplateScope = {
   channelIds: string[];
 };
 
-const newDraftId = () => `template-${crypto.randomUUID()}`;
 const fallbackTemplateIcon: ResolvedEmoji = {
   type: "unicode",
   value: "📣",
@@ -69,20 +73,61 @@ export function TelegramChannelMessageTemplatesModal({
   const queryClient = useQueryClient();
   const { pushToast } = useAppToast();
   const [editor, setEditor] = useState<EditorState | null>(null);
-  const [draftRevision, setDraftRevision] = useState(0);
+  const [localDraft, setLocalDraft] =
+    useState<TelegramChannelMessageTemplateDraftForm>(() => ({
+      payload: emptyTelegramMessageTemplatePayload(),
+      savedTemplateId: null,
+    }));
+  const [draftPreview, setDraftPreview] = useState<
+    WorkspaceDraftPreview | undefined
+  >();
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const editingSavedTemplate = Boolean(
+    editor?.initial && !("form" in editor.initial),
+  );
   const templates = useQuery({
     queryKey: telegramMessageTemplateKeys.list(),
     queryFn: telegramChannelMessageTemplatesApi.list,
   });
-  const drafts = useMemo(
-    () =>
-      typeof window === "undefined"
-        ? []
-        : readTelegramChannelMessageTemplateDrafts(window.localStorage),
-    // Re-read only when an editor returns or a draft is deleted.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [draftRevision, editor],
+  const restoreDraft = useCallback(
+    (
+      value: TelegramChannelMessageTemplateDraftForm,
+      draft?: WorkspaceFormDraft<TelegramChannelMessageTemplateDraftForm>,
+    ) => {
+      setLocalDraft(value);
+      setDraftPreview(draft?.preview);
+      if (draft) setEditor({ initial: draft });
+    },
+    [],
+  );
+  const modalDrafts =
+    useWorkspaceModalDrafts<TelegramChannelMessageTemplateDraftForm>({
+      namespace: TELEGRAM_MESSAGE_TEMPLATE_DRAFT_NAMESPACE,
+      workspaceId: selectedWorkspaceDraftScope(),
+      schemaVersion: 1,
+      open: true,
+      enabled: !editingSavedTemplate,
+      value: localDraft,
+      preview: draftPreview,
+      createInitialValue: () => ({
+        payload: emptyTelegramMessageTemplatePayload(),
+        savedTemplateId: null,
+      }),
+      normalize: normalizeTelegramChannelMessageTemplateDraft,
+      onRestore: restoreDraft,
+      isMeaningful: (draft) =>
+        JSON.stringify(draft.payload) !==
+        JSON.stringify(emptyTelegramMessageTemplatePayload()),
+    });
+  const updateLocalDraft = useCallback(
+    (
+      value: TelegramChannelMessageTemplateDraftForm,
+      preview: WorkspaceDraftPreview,
+    ) => {
+      setLocalDraft(value);
+      setDraftPreview(preview);
+    },
+    [],
   );
   const removeSaved = useMutation({
     mutationFn: telegramChannelMessageTemplatesApi.remove,
@@ -124,11 +169,6 @@ export function TelegramChannelMessageTemplatesModal({
         "error",
       ),
   });
-  const deleteDraft = (id?: string) => {
-    removeTelegramChannelMessageTemplateDraft(localStorage, id);
-    setDraftRevision((value) => value + 1);
-  };
-
   return (
     <>
       <Modal
@@ -143,12 +183,13 @@ export function TelegramChannelMessageTemplatesModal({
             channels={channels}
             networks={networks}
             initial={editor.initial}
-            draftId={editor.draftId}
-            onBack={() => setEditor(null)}
-            onSaved={() => {
+            onDraftChange={updateLocalDraft}
+            onClearDraft={modalDrafts.clearCurrentDraft}
+            onBack={() => {
+              modalDrafts.showDraftPicker();
               setEditor(null);
-              setDraftRevision((value) => value + 1);
             }}
+            onSaved={() => setEditor(null)}
           />
         ) : (
           <div className="space-y-5">
@@ -160,73 +201,23 @@ export function TelegramChannelMessageTemplatesModal({
               </p>
               <Button
                 type="button"
-                onClick={() => setEditor({ draftId: newDraftId() })}
+                onClick={() => {
+                  modalDrafts.createNewDraft();
+                  setEditor({});
+                }}
               >
                 <Plus size={16} /> New template
               </Button>
             </div>
-            {drafts.length ? (
-              <section>
-                <h3 className="mb-2 text-sm font-semibold text-neutral-200">
-                  Continue a draft
-                </h3>
-                <div className="grid gap-2 md:grid-cols-2">
-                  {drafts.map((draft) => (
-                    <Card
-                      key={draft.id}
-                      className="flex items-center gap-3 p-3"
-                    >
-                      <IconAvatar
-                        icon={draft.preview?.icon || fallbackTemplateIcon}
-                        label={draft.form.title || "Untitled template"}
-                        size="sm"
-                        decorative
-                      />
-                      <div className="min-w-0 flex-1">
-                        <button
-                          type="button"
-                          className="block max-w-full text-left"
-                          onClick={() =>
-                            setEditor({ initial: draft, draftId: draft.id! })
-                          }
-                        >
-                          <span className="block truncate font-medium text-white">
-                            {draft.form.title || "Untitled template"}
-                          </span>
-                        </button>
-                        <TemplateScopeSummary
-                          scope={draft.form}
-                          channels={channels}
-                          networks={networks}
-                          suffix="local draft"
-                        />
-                      </div>
-                      <IconButton
-                        type="button"
-                        aria-label="Edit draft"
-                        title="Edit draft"
-                        onClick={() =>
-                          setEditor({ initial: draft, draftId: draft.id! })
-                        }
-                      />
-                      <IconButton
-                        type="button"
-                        kind="delete"
-                        aria-label="Delete draft"
-                        title="Delete draft"
-                        onClick={() =>
-                          setDeleteTarget({
-                            kind: "draft",
-                            id: draft.id,
-                            name: draft.form.title || "Untitled template",
-                          })
-                        }
-                      />
-                    </Card>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+            <ModalDraftPicker
+              drafts={modalDrafts.pendingDrafts}
+              onContinue={modalDrafts.continueDraft}
+              onDelete={modalDrafts.deleteDraft}
+              onCreateNew={() => {
+                modalDrafts.createNewDraft();
+                setEditor({});
+              }}
+            />
             <section>
               <h3 className="mb-2 text-sm font-semibold text-neutral-200">
                 Saved templates
@@ -256,12 +247,7 @@ export function TelegramChannelMessageTemplatesModal({
                       <button
                         type="button"
                         className="block max-w-full text-left"
-                        onClick={() =>
-                          setEditor({
-                            initial: template,
-                            draftId: newDraftId(),
-                          })
-                        }
+                        onClick={() => setEditor({ initial: template })}
                       >
                         <span className="block truncate font-medium text-white">
                           {template.title || "Untitled template"}
@@ -289,9 +275,7 @@ export function TelegramChannelMessageTemplatesModal({
                       type="button"
                       aria-label="Edit template"
                       title="Edit template"
-                      onClick={() =>
-                        setEditor({ initial: template, draftId: newDraftId() })
-                      }
+                      onClick={() => setEditor({ initial: template })}
                     />
                     <IconButton
                       type="button"
@@ -318,17 +302,9 @@ export function TelegramChannelMessageTemplatesModal({
         open={Boolean(deleteTarget)}
         onClose={() => setDeleteTarget(null)}
         entityName={deleteTarget?.name ?? ""}
-        description={
-          deleteTarget?.kind === "draft"
-            ? "The unfinished draft will be permanently removed from this device."
-            : "The template will be permanently removed from this workspace."
-        }
+        description="The template will be permanently removed from this workspace."
         onConfirm={() => {
           if (!deleteTarget) return;
-          if (deleteTarget.kind === "draft") {
-            deleteDraft(deleteTarget.id);
-            return;
-          }
           return removeSaved.mutateAsync(deleteTarget.id);
         }}
       />

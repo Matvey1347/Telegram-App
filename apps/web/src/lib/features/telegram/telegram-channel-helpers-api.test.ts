@@ -34,7 +34,10 @@ describe("telegram channel invite-link options", () => {
 
     expect(get).toHaveBeenCalledWith(
       "/telegram-channels/channel-1/invite-links/select",
-      { params: { initial: true, selectedId: "link-1" } },
+      {
+        params: { initial: true, selectedId: "link-1" },
+        paramsSerializer: { indexes: null },
+      },
     );
   });
 
@@ -63,6 +66,7 @@ describe("telegram channel invite-link options", () => {
           selectedId: "link-main",
           selectedIds: ["link-main", "link-vp"],
         },
+        paramsSerializer: { indexes: null },
       },
     );
   });

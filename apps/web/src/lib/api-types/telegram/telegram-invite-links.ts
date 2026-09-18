@@ -12,6 +12,8 @@ export type TelegramInviteLink = {
   isRevoked: boolean;
   isDefaultForChannel?: boolean;
   isDefaultForBot?: boolean;
+  isDefaultForBroadcast?: boolean;
+  isDefaultForAudienceTransfer?: boolean;
   isDefaultForFolders?: boolean;
   isDefaultForMutualPromotion?: boolean;
   expireDate?: string;

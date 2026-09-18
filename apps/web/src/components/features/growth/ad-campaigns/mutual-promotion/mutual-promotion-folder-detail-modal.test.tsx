@@ -120,7 +120,10 @@ describe("MutualPromotionFolderDetailModal", () => {
                   amountInPrimaryCurrency: 350,
                 },
                 stats: {
+                  inviteLinkTotalCount: 6,
                   joinedCount: 29,
+                  requestedCount: 0,
+                  acquiredCount: 4,
                   unsubscribedCount: 33,
                   unsubscribedIsEstimate: true,
                   audienceDelta: -4,
@@ -199,17 +202,22 @@ describe("MutualPromotionFolderDetailModal", () => {
     expect(screen.getByText("😇")).toBeVisible();
     const metricLabels = Array.from(document.querySelectorAll("dt"));
     expect(metricLabels.map((label) => label.textContent?.trim())).toEqual([
-      "Joined",
+      "Folder (joined + requests)",
     ]);
     expect(metricLabels[0].querySelector("svg")).toHaveClass(
       "text-emerald-300",
     );
-    expect(screen.getByText("12.07 UAH / paid subscriber")).toBeInTheDocument();
+    expect(
+      screen.getByText("12.07 UAH / attributed arrival"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("+4")).toBeInTheDocument();
     expect(screen.getByText("Invite-link history")).toBeInTheDocument();
     expect(
       screen.getByLabelText("Invite-link arrivals chart"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Unsubscribed ≈")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Estimated unsubscribes ≈"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Net audience")).not.toBeInTheDocument();
   });
 
@@ -276,6 +284,6 @@ describe("MutualPromotionFolderDetailModal", () => {
     expect(
       screen.getByText(/added immediately to Telegram Scheduled Messages/),
     ).toBeVisible();
-    expect(screen.getByText("Unsubscribed")).toBeVisible();
+    expect(screen.getByText("Estimated unsubscribes ≈")).toBeVisible();
   });
 });

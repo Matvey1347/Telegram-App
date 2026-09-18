@@ -10,9 +10,12 @@ export type ChannelSettingsDraft = {
   tgStatUrl: string;
   defaultInviteLinkId: string;
   botInviteLinkId: string;
+  broadcastInviteLinkId: string;
+  audienceTransferInviteLinkId: string;
   folderDefaultInviteLinkIds: string[];
   mutualPromotionInviteLinkIds: string[];
   adBaseCpm: string;
+  internalCpm: string;
   adBaseCurrency: string;
   targetCpa: string;
   stopCpaFrom: string;
@@ -34,9 +37,12 @@ export function createChannelSettingsDraft(
     tgStatUrl: channel.tgStatUrl || "",
     defaultInviteLinkId: channel.defaultInviteLinkId || "",
     botInviteLinkId: channel.botInviteLinkId || "",
+    broadcastInviteLinkId: channel.broadcastInviteLinkId || "",
+    audienceTransferInviteLinkId: channel.audienceTransferInviteLinkId || "",
     folderDefaultInviteLinkIds: channel.folderDefaultInviteLinkIds ?? [],
     mutualPromotionInviteLinkIds: channel.mutualPromotionInviteLinkIds ?? [],
     adBaseCpm: channel.adBaseCpm == null ? "" : String(channel.adBaseCpm),
+    internalCpm: channel.internalCpm == null ? "" : String(channel.internalCpm),
     adBaseCurrency: channel.adBaseCurrency || channel.kpiCurrency || "USD",
     targetCpa: channel.targetCpa == null ? "" : String(channel.targetCpa),
     stopCpaFrom: channel.stopCpaFrom == null ? "" : String(channel.stopCpaFrom),
@@ -68,9 +74,12 @@ export function buildChannelSettingsPayload(draft: ChannelSettingsDraft) {
     tgStatUrl: draft.tgStatUrl.trim() || null,
     defaultInviteLinkId: draft.defaultInviteLinkId || null,
     botInviteLinkId: draft.botInviteLinkId || null,
+    broadcastInviteLinkId: draft.broadcastInviteLinkId || null,
+    audienceTransferInviteLinkId: draft.audienceTransferInviteLinkId || null,
     folderDefaultInviteLinkIds: draft.folderDefaultInviteLinkIds,
     mutualPromotionInviteLinkIds: draft.mutualPromotionInviteLinkIds,
     adBaseCpm: optionalNumber(draft.adBaseCpm),
+    internalCpm: optionalNumber(draft.internalCpm),
     adBaseCurrency: draft.adBaseCurrency,
     kpiCurrency: draft.adBaseCurrency,
     targetCpa: optionalNumber(draft.targetCpa),
@@ -86,7 +95,12 @@ export function buildChannelSettingsPayload(draft: ChannelSettingsDraft) {
 }
 
 export function channelSettingsDraftIsInvalid(draft: ChannelSettingsDraft) {
-  const numericValues = [draft.adBaseCpm, draft.targetCpa, draft.stopCpaFrom];
+  const numericValues = [
+    draft.adBaseCpm,
+    draft.internalCpm,
+    draft.targetCpa,
+    draft.stopCpaFrom,
+  ];
   const hasInvalidNumber = numericValues.some(
     (value) =>
       value.trim() && (!Number.isFinite(Number(value)) || Number(value) < 0),

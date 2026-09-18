@@ -8,6 +8,7 @@ describe("TelegramChannelMessageTemplatePriceOptions", () => {
     const user = userEvent.setup();
     const onExcludedProductNamesChange = vi.fn();
     const onPriceRoundingChange = vi.fn();
+    const onPriceModeChange = vi.fn();
     const onProductNameOverridesChange = vi.fn();
     const onBundleOfferEnabledChange = vi.fn();
     const onBundleDiscountPercentChange = vi.fn();
@@ -17,12 +18,14 @@ describe("TelegramChannelMessageTemplatePriceOptions", () => {
         productNames={["1/24", "3/72"]}
         excludedProductNames={[]}
         priceRounding="NONE"
+        priceMode="PUBLIC"
         productNameOverrides={{ "No auto-delete": "Без видалення" }}
         bundleOfferEnabled={false}
         bundleDiscountPercent={10}
         bundleBasePriceOverrides={{}}
         onExcludedProductNamesChange={onExcludedProductNamesChange}
         onPriceRoundingChange={onPriceRoundingChange}
+        onPriceModeChange={onPriceModeChange}
         onProductNameOverridesChange={onProductNameOverridesChange}
         onBundleOfferEnabledChange={onBundleOfferEnabledChange}
         onBundleDiscountPercentChange={onBundleDiscountPercentChange}
@@ -41,6 +44,12 @@ describe("TelegramChannelMessageTemplatePriceOptions", () => {
     );
     expect(onPriceRoundingChange).toHaveBeenCalledWith("NEAREST_10");
 
+    await user.click(
+      screen.getByRole("button", { name: "Sales / public CPM" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Internal CPM" }));
+    expect(onPriceModeChange).toHaveBeenCalledWith("INTERNAL_CPM");
+
     fireEvent.change(screen.getByLabelText("Display name for 1/24"), {
       target: { value: "Добу" },
     });
@@ -49,7 +58,9 @@ describe("TelegramChannelMessageTemplatePriceOptions", () => {
       "No auto-delete": "Без видалення",
     });
 
-    await user.click(screen.getByRole("checkbox", { name: "Add package offer" }));
+    await user.click(
+      screen.getByRole("checkbox", { name: "Add package offer" }),
+    );
     expect(onBundleOfferEnabledChange).toHaveBeenCalledWith(true);
   });
 });

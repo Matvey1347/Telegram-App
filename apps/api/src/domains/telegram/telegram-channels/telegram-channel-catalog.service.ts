@@ -18,6 +18,7 @@ import {
 } from './dto';
 import { TelegramChannelBookingReadService } from './telegram-channel-booking-read.service';
 import { TelegramChannelAudienceTrendReadService } from './telegram-channel-audience-trend-read.service';
+import { TelegramChannelTrafficAttributionService } from './telegram-channel-traffic-attribution.service';
 import { TelegramChannelFinancialReadService } from './telegram-channel-financial-read.service';
 import { DEFAULT_TELEGRAM_CHANNEL_POST_SYNC_LIMIT } from './telegram-channel-sync-limits';
 import { TelegramSystemBotConfigService } from '../telegram-system-bot/telegram-system-bot-config.service';
@@ -44,6 +45,7 @@ export class TelegramChannelCatalogService {
     private readonly telegramChannelFinancialReadService: TelegramChannelFinancialReadService,
     private readonly telegramChannelBookingReadService: TelegramChannelBookingReadService,
     private readonly telegramChannelAudienceTrendReadService: TelegramChannelAudienceTrendReadService,
+    private readonly telegramChannelTrafficAttributionService: TelegramChannelTrafficAttributionService,
     private readonly telegramSystemBotConfig: TelegramSystemBotConfigService,
   ) {}
 
@@ -237,6 +239,7 @@ export class TelegramChannelCatalogService {
       financialSummaryByChannel,
       bookingSummaryByChannel,
       audienceTrendByChannel,
+      trafficAttributionByChannel,
     ] = await Promise.all([
       this.telegramChannelSchemaCompatibilityService.timePostsByChannelIds(
         channelIds,
@@ -260,6 +263,10 @@ export class TelegramChannelCatalogService {
         workspaceId,
         channelIds,
         CHANNEL_CARD_TREND_PERIOD_DAYS,
+      ),
+      this.telegramChannelTrafficAttributionService.summariesForChannels(
+        workspaceId,
+        channelIds,
       ),
     ]);
 
@@ -324,6 +331,8 @@ export class TelegramChannelCatalogService {
         kpiStatus: 'unknown' as const,
         kpiLabel: '-',
       };
+      const trafficAttribution = trafficAttributionByChannel.get(channel.id);
+      const channelTrafficAttribution = trafficAttribution ?? null;
 
       return {
         ...channelData,
@@ -367,6 +376,7 @@ export class TelegramChannelCatalogService {
               : undefined,
           },
           financialSummary,
+          trafficAttribution: channelTrafficAttribution,
           bookingSchedule: bookingSummaryByChannel.get(channel.id) ?? {
             futureScheduledTotal: 0,
             draftTotal: 0,

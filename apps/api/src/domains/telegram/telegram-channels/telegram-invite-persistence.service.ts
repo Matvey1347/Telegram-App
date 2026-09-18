@@ -32,6 +32,7 @@ export class TelegramInvitePersistenceService {
     expireDate: true,
     memberLimit: true,
     joinedCount: true,
+    peakAttributedCount: true,
     isRevoked: true,
     lastSyncedAt: true,
     creatorTelegramUserId: true,
@@ -54,6 +55,7 @@ export class TelegramInvitePersistenceService {
     adCampaignId: true,
     joinedCount: true,
     requestedCount: true,
+    peakAttributedCount: true,
     isRevoked: true,
   } as const;
 

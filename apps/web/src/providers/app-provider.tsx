@@ -9,6 +9,7 @@ import { NotificationNavigationCoordinator } from "./notification-navigation-coo
 import { NotificationServiceWorkerProvider } from "./notification-service-worker-provider";
 import { QueryProvider } from "./query-provider";
 import { TabIdentityProvider } from "./tab-identity-provider";
+import { TelegramSystemBotImportConflictProvider } from "./telegram-system-bot-import-conflict-provider";
 import { ToastProvider } from "./toast-provider";
 
 export function AppProvider({
@@ -20,23 +21,25 @@ export function AppProvider({
       <QueryProvider>
         <NotificationServiceWorkerProvider>
           <ToastProvider>
-            <Suspense
-              fallback={
-                <ClientErrorReporter>
-                  <ProtectedRoute>{children}</ProtectedRoute>
-                </ClientErrorReporter>
-              }
-            >
-              <TabIdentityProvider>
-                <ClientErrorReporter>
-                  <ProtectedRoute>
-                    <NotificationNavigationCoordinator>
-                      {children}
-                    </NotificationNavigationCoordinator>
-                  </ProtectedRoute>
-                </ClientErrorReporter>
-              </TabIdentityProvider>
-            </Suspense>
+            <TelegramSystemBotImportConflictProvider>
+              <Suspense
+                fallback={
+                  <ClientErrorReporter>
+                    <ProtectedRoute>{children}</ProtectedRoute>
+                  </ClientErrorReporter>
+                }
+              >
+                <TabIdentityProvider>
+                  <ClientErrorReporter>
+                    <ProtectedRoute>
+                      <NotificationNavigationCoordinator>
+                        {children}
+                      </NotificationNavigationCoordinator>
+                    </ProtectedRoute>
+                  </ClientErrorReporter>
+                </TabIdentityProvider>
+              </Suspense>
+            </TelegramSystemBotImportConflictProvider>
           </ToastProvider>
         </NotificationServiceWorkerProvider>
       </QueryProvider>

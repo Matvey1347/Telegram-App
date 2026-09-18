@@ -10,6 +10,10 @@ describe('MutualPromotionStatisticsService', () => {
       subscribersAtEnd: 106,
       inviteJoinedAtStart: 20,
       inviteJoinedAtEnd: 30,
+      inviteRequestedAtStart: null,
+      inviteRequestedAtEnd: null,
+      currentInviteJoinedCount: 34,
+      currentInviteRequestedCount: 6,
       baselineCapturedAt: new Date(),
       finalCapturedAt: new Date(),
       expense: {
@@ -23,7 +27,10 @@ describe('MutualPromotionStatisticsService', () => {
     });
 
     expect(stats).toEqual({
+      inviteLinkTotalCount: 40,
       joinedCount: 10,
+      requestedCount: 0,
+      acquiredCount: 10,
       unsubscribedCount: 4,
       unsubscribedIsEstimate: true,
       audienceDelta: 6,
@@ -42,6 +49,8 @@ describe('MutualPromotionStatisticsService', () => {
       subscribersAtEnd: 98,
       inviteJoinedAtStart: 20,
       inviteJoinedAtEnd: 20,
+      inviteRequestedAtStart: null,
+      inviteRequestedAtEnd: null,
       baselineCapturedAt: new Date(),
       finalCapturedAt: null,
       expense: {
@@ -67,6 +76,8 @@ describe('MutualPromotionStatisticsService', () => {
       subscribersAtEnd: 80,
       inviteJoinedAtStart: 20,
       inviteJoinedAtEnd: 30,
+      inviteRequestedAtStart: null,
+      inviteRequestedAtEnd: null,
       baselineCapturedAt: new Date(),
       finalCapturedAt: new Date(),
       expense: {
@@ -98,16 +109,20 @@ describe('MutualPromotionStatisticsService', () => {
         subscribersAtEnd: null,
         inviteJoinedAtStart: 20,
         inviteJoinedAtEnd: null,
+        inviteRequestedAtStart: 0,
+        inviteRequestedAtEnd: null,
         baselineCapturedAt: new Date('2026-09-09T21:59:27.650Z'),
         finalCapturedAt: null,
         currentSubscribersCount: 890,
         currentInviteJoinedCount: 29,
+        currentInviteRequestedCount: 0,
         expense: null,
       },
       { useCurrentCounters: true },
     );
 
     expect(stats).toMatchObject({
+      inviteLinkTotalCount: 29,
       joinedCount: 9,
       audienceDelta: 6,
       retainedCount: 6,
@@ -123,6 +138,8 @@ describe('MutualPromotionStatisticsService', () => {
       subscribersAtEnd: 90,
       inviteJoinedAtStart: 20,
       inviteJoinedAtEnd: 30,
+      inviteRequestedAtStart: null,
+      inviteRequestedAtEnd: null,
       baselineCapturedAt: new Date(),
       finalCapturedAt: new Date(),
       expense: null,
@@ -133,6 +150,8 @@ describe('MutualPromotionStatisticsService', () => {
       subscribersAtEnd: 130,
       inviteJoinedAtStart: 20,
       inviteJoinedAtEnd: 30,
+      inviteRequestedAtStart: null,
+      inviteRequestedAtEnd: null,
       baselineCapturedAt: new Date(),
       finalCapturedAt: new Date(),
       expense: null,

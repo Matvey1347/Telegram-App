@@ -23,6 +23,8 @@ describe("CrossPromotionPartnerSide", () => {
 
     render(
       <CrossPromotionPartnerSide
+        expanded
+        onExpandedChange={vi.fn()}
         channels={[
           { id: "partner-1", title: "Partner" } as never,
           { id: "own-1", title: "My selected publishing channel" } as never,
@@ -84,5 +86,56 @@ describe("CrossPromotionPartnerSide", () => {
       }),
     );
     expect(screen.getByText("My selected publishing channel")).toBeVisible();
+  });
+
+  it("can hide the partner side without clearing its fields", () => {
+    const onExpandedChange = vi.fn();
+    render(
+      <CrossPromotionPartnerSide
+        expanded={false}
+        onExpandedChange={onExpandedChange}
+        channels={[]}
+        partnerChannels={[]}
+        ownChannels={[]}
+        partnerIds={[]}
+        onPartnerIdsChange={vi.fn()}
+        partnerAdvertiserId={null}
+        partnerContact=""
+        onPartnerContactChange={vi.fn()}
+        onPartnerTelegramChange={vi.fn()}
+        onPartnerAdvertiserChange={vi.fn()}
+        onSearchAdvertisers={vi.fn().mockResolvedValue([])}
+        importingChannel={false}
+        onImportChannel={vi.fn()}
+        productsByChannelId={{}}
+        settings={{ formatIds: {}, times: {} }}
+        defaultDate="2026-09-15"
+        onDefaultDateChange={vi.fn()}
+        defaultTime="17:00"
+        onSettingsChange={vi.fn()}
+        basicsReady={false}
+        targetIds={[]}
+        targets={[]}
+        onTargetIdsChange={vi.fn()}
+        onTargetsChange={vi.fn()}
+        onResolved={vi.fn()}
+        outboundMode="PROMO"
+        onOutboundModeChange={vi.fn()}
+        outboundPost={{ title: "", text: "", imageUrls: [], buttonRows: [] }}
+        onOutboundPostChange={vi.fn()}
+        botConnected={false}
+        importStatus="idle"
+        sendStatus="idle"
+        onImportPost={vi.fn()}
+        onSendPost={vi.fn()}
+        promoReady={false}
+      />,
+    );
+
+    const toggle = screen.getByRole("button", { name: /Partner side/ });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Client")).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(onExpandedChange).toHaveBeenCalledWith(true);
   });
 });

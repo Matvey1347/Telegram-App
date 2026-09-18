@@ -1,31 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { TelegramChannel } from "@/lib/api";
 import { telegramChannelsApi } from "@/lib/api";
 import { IconPicker } from "@/components/icons/icon-picker";
 import {
   Button,
-  CustomSelect,
   FormField,
   Input,
   Modal,
-  MultiSelect,
   Textarea,
 } from "@/components/ui/primitives";
 import { telegramChannelKeys } from "@/lib/query-keys";
-import {
-  isTelegramInviteLink,
-  telegramInviteLinkDefaultBadgeClassName,
-  telegramInviteLinkOptionLabel,
-} from "@/lib/features/telegram/telegram-invite-link-options";
 import { useAppToast } from "@/providers/toast-provider";
-import { TelegramInviteLinkCreatorAvatar } from "./telegram-invite-link-creator-avatar";
-import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
 import type { ChannelSettingsDraft } from "./channel-settings-draft";
 import { useTelegramInviteLinkOptions } from "@/lib/features/telegram/use-telegram-invite-link-options";
 import { useRegisterTelegramInviteLink } from "@/lib/features/telegram/use-register-telegram-invite-link";
+import { ChannelInviteLinkSelectField } from "./channel-invite-link-select-field";
 
 export function ChannelPresentationSettingsModal({
   channel,
@@ -50,6 +42,8 @@ export function ChannelPresentationSettingsModal({
     presentationIconId: channel.presentationIconId || "",
     defaultInviteLinkId: channel.defaultInviteLinkId || "",
     botInviteLinkId: channel.botInviteLinkId || "",
+    broadcastInviteLinkId: channel.broadcastInviteLinkId || "",
+    audienceTransferInviteLinkId: channel.audienceTransferInviteLinkId || "",
     folderDefaultInviteLinkIds: channel.folderDefaultInviteLinkIds ?? [],
     mutualPromotionInviteLinkIds: channel.mutualPromotionInviteLinkIds ?? [],
   });
@@ -64,10 +58,69 @@ export function ChannelPresentationSettingsModal({
     selectedIds: [
       values.defaultInviteLinkId,
       values.botInviteLinkId,
+      values.broadcastInviteLinkId,
+      values.audienceTransferInviteLinkId,
       ...values.folderDefaultInviteLinkIds,
       ...values.mutualPromotionInviteLinkIds,
     ].filter(Boolean),
   });
+  const hydratedPurposeLinksForChannel = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      linkOptions.loading ||
+      !linkOptions.links.length ||
+      hydratedPurposeLinksForChannel.current === channel.id
+    )
+      return;
+    hydratedPurposeLinksForChannel.current = channel.id;
+    const patch: Partial<ChannelSettingsDraft> = {};
+    const savedDefault = linkOptions.links.find(
+      (link) => link.isDefaultForChannel,
+    )?.id;
+    const savedBot = linkOptions.links.find((link) => link.isDefaultForBot)?.id;
+    const savedBroadcast = linkOptions.links.find(
+      (link) => link.isDefaultForBroadcast,
+    )?.id;
+    const savedAudienceTransfer = linkOptions.links.find(
+      (link) => link.isDefaultForAudienceTransfer,
+    )?.id;
+    const savedFolders = linkOptions.links
+      .filter((link) => link.isDefaultForFolders)
+      .map((link) => link.id);
+    const savedMutualPromotion = linkOptions.links
+      .filter((link) => link.isDefaultForMutualPromotion)
+      .map((link) => link.id);
+    if (!values.defaultInviteLinkId && savedDefault)
+      patch.defaultInviteLinkId = savedDefault;
+    if (!values.botInviteLinkId && savedBot) patch.botInviteLinkId = savedBot;
+    if (!values.broadcastInviteLinkId && savedBroadcast)
+      patch.broadcastInviteLinkId = savedBroadcast;
+    if (!values.audienceTransferInviteLinkId && savedAudienceTransfer)
+      patch.audienceTransferInviteLinkId = savedAudienceTransfer;
+    if (!values.folderDefaultInviteLinkIds.length && savedFolders.length)
+      patch.folderDefaultInviteLinkIds = savedFolders;
+    if (
+      !values.mutualPromotionInviteLinkIds.length &&
+      savedMutualPromotion.length
+    )
+      patch.mutualPromotionInviteLinkIds = savedMutualPromotion;
+    if (!Object.keys(patch).length) return;
+    if (onDraftChange) onDraftChange(patch);
+    // The query is the source of truth when a compact channel card omits its saved link roles.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    else setLocalDraft((current) => ({ ...current, ...patch }));
+  }, [
+    channel.id,
+    linkOptions.links,
+    linkOptions.loading,
+    onDraftChange,
+    values.botInviteLinkId,
+    values.broadcastInviteLinkId,
+    values.audienceTransferInviteLinkId,
+    values.defaultInviteLinkId,
+    values.folderDefaultInviteLinkIds.length,
+    values.mutualPromotionInviteLinkIds.length,
+  ]);
   const selectedInviteLinkId =
     values.defaultInviteLinkId || linkOptions.initialLink?.id || "";
   const links = useMemo(
@@ -76,6 +129,9 @@ export function ChannelPresentationSettingsModal({
         ...link,
         isDefaultForChannel: link.id === selectedInviteLinkId,
         isDefaultForBot: link.id === values.botInviteLinkId,
+        isDefaultForBroadcast: link.id === values.broadcastInviteLinkId,
+        isDefaultForAudienceTransfer:
+          link.id === values.audienceTransferInviteLinkId,
         isDefaultForFolders: values.folderDefaultInviteLinkIds.includes(
           link.id,
         ),
@@ -86,6 +142,8 @@ export function ChannelPresentationSettingsModal({
       linkOptions.links,
       selectedInviteLinkId,
       values.botInviteLinkId,
+      values.broadcastInviteLinkId,
+      values.audienceTransferInviteLinkId,
       values.folderDefaultInviteLinkIds,
       values.mutualPromotionInviteLinkIds,
     ],
@@ -104,16 +162,18 @@ export function ChannelPresentationSettingsModal({
     if (target === "default") update({ defaultInviteLinkId: result.id });
     if (target === "folders") {
       update({
-        folderDefaultInviteLinkIds: [
-          ...new Set([...values.folderDefaultInviteLinkIds, result.id]),
-        ],
+        folderDefaultInviteLinkIds: selectPrimaryInviteLink(
+          values.folderDefaultInviteLinkIds,
+          result.id,
+        ),
       });
     }
     if (target === "vp") {
       update({
-        mutualPromotionInviteLinkIds: [
-          ...new Set([...values.mutualPromotionInviteLinkIds, result.id]),
-        ],
+        mutualPromotionInviteLinkIds: selectPrimaryInviteLink(
+          values.mutualPromotionInviteLinkIds,
+          result.id,
+        ),
       });
     }
   };
@@ -125,6 +185,9 @@ export function ChannelPresentationSettingsModal({
         presentationIconId: values.presentationIconId || null,
         defaultInviteLinkId: selectedInviteLinkId || null,
         botInviteLinkId: values.botInviteLinkId || null,
+        broadcastInviteLinkId: values.broadcastInviteLinkId || null,
+        audienceTransferInviteLinkId:
+          values.audienceTransferInviteLinkId || null,
         folderDefaultInviteLinkIds: values.folderDefaultInviteLinkIds,
         mutualPromotionInviteLinkIds: values.mutualPromotionInviteLinkIds,
       }),
@@ -138,6 +201,9 @@ export function ChannelPresentationSettingsModal({
         }),
         queryClient.invalidateQueries({
           queryKey: telegramChannelKeys.inviteLinks(channel.id),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: telegramChannelKeys.trafficAttribution(channel.id),
         }),
       ]);
       pushToast("Channel appearance saved", "success");
@@ -181,144 +247,100 @@ export function ChannelPresentationSettingsModal({
         />
       </FormField>
       <div className="grid gap-3 sm:grid-cols-2">
-        <FormField label="Main invite link">
-          <CustomSelect
-            value={selectedInviteLinkId}
-            onChange={(defaultInviteLinkId) => update({ defaultInviteLinkId })}
-            disabled={registerLink.isPending}
-            onOpen={linkOptions.requestAll}
-            loading={linkOptions.loading}
-            loadingLabel="Loading invite links…"
-            placeholder="Select link"
-            options={links.map((link) => ({
-              value: link.id,
-              label: telegramInviteLinkOptionLabel(link),
-              badgeClassName: telegramInviteLinkDefaultBadgeClassName(link),
-              meta: link.url,
-              iconFallback: inviteLinkCreatorFallback(link),
-              icon: (
-                <TelegramInviteLinkCreatorAvatar
-                  photoUrl={link.creatorPhotoUrl}
-                  memberAvatar={link.creatorMember?.avatarPresentation}
-                  label={inviteLinkCreatorFallback(link)}
-                />
+        <ChannelInviteLinkSelectField
+          label="Main invite link"
+          value={selectedInviteLinkId}
+          links={links}
+          placeholder="Select link"
+          disabled={registerLink.isPending}
+          loading={linkOptions.loading}
+          onOpen={linkOptions.requestAll}
+          onChange={(defaultInviteLinkId) => update({ defaultInviteLinkId })}
+          onCreate={(url) => registerAndSelect(url, "default")}
+        />
+        <ChannelInviteLinkSelectField
+          label="Invite link for VP"
+          value={values.mutualPromotionInviteLinkIds[0] || ""}
+          links={links}
+          placeholder="Select VP link"
+          helpText={
+            values.mutualPromotionInviteLinkIds.length > 1
+              ? `${values.mutualPromotionInviteLinkIds.length - 1} legacy VP link(s) stay saved for historical attribution.`
+              : "The single default invite link for mutual-promotion posts."
+          }
+          disabled={registerLink.isPending}
+          loading={linkOptions.loading}
+          onOpen={linkOptions.requestAll}
+          onChange={(inviteLinkId) =>
+            update({
+              mutualPromotionInviteLinkIds: selectPrimaryInviteLink(
+                values.mutualPromotionInviteLinkIds,
+                inviteLinkId,
               ),
-            }))}
-            canCreateOption={(value) =>
-              isTelegramInviteLink(value) &&
-              !links.some((link) => link.url === value.trim())
-            }
-            createOptionLabel={() => "Verify and add this invite link"}
-            onCreateOption={async (url) => {
-              await registerAndSelect(url, "default");
-            }}
-          />
-        </FormField>
-        <FormField label="Invite links for VP">
-          <MultiSelect
-            value={values.mutualPromotionInviteLinkIds}
-            onChange={(mutualPromotionInviteLinkIds) =>
-              update({ mutualPromotionInviteLinkIds })
-            }
-            disabled={registerLink.isPending}
-            onOpen={linkOptions.requestAll}
-            loading={linkOptions.loading}
-            loadingLabel="Loading invite links…"
-            placeholder="Select VP links"
-            searchPlaceholder="Search invite links"
-            options={links.map((link) => ({
-              value: link.id,
-              label: telegramInviteLinkOptionLabel(link),
-              selectedLabel: link.name,
-              badgeClassName: telegramInviteLinkDefaultBadgeClassName(link),
-              iconFallback: inviteLinkCreatorFallback(link),
-              icon: (
-                <TelegramInviteLinkCreatorAvatar
-                  photoUrl={link.creatorPhotoUrl}
-                  memberAvatar={link.creatorMember?.avatarPresentation}
-                  label={inviteLinkCreatorFallback(link)}
-                />
+            })
+          }
+          onCreate={(url) => registerAndSelect(url, "vp")}
+        />
+        <ChannelInviteLinkSelectField
+          label="Invite link for Folders"
+          value={values.folderDefaultInviteLinkIds[0] || ""}
+          links={links}
+          placeholder="Select folder link"
+          helpText={
+            values.folderDefaultInviteLinkIds.length > 1
+              ? `${values.folderDefaultInviteLinkIds.length - 1} legacy folder link(s) stay saved for historical attribution.`
+              : "The single default invite link for new folders."
+          }
+          disabled={registerLink.isPending}
+          loading={linkOptions.loading}
+          onOpen={linkOptions.requestAll}
+          onChange={(inviteLinkId) =>
+            update({
+              folderDefaultInviteLinkIds: selectPrimaryInviteLink(
+                values.folderDefaultInviteLinkIds,
+                inviteLinkId,
               ),
-            }))}
-            canCreateOption={(value) =>
-              isTelegramInviteLink(value) &&
-              !links.some((link) => link.url === value.trim())
-            }
-            createOptionLabel={() => "Verify and add this invite link"}
-            onCreateOption={(url) => registerAndSelect(url, "vp")}
-            creatingOption={registerLink.isPending}
-          />
-          <p className="text-xs text-neutral-500">
-            Preferred links for mutual-promotion posts; multiple are allowed.
-          </p>
-        </FormField>
-        <FormField label="Invite links for Folders">
-          <MultiSelect
-            value={values.folderDefaultInviteLinkIds}
-            onChange={(folderDefaultInviteLinkIds) =>
-              update({ folderDefaultInviteLinkIds })
-            }
-            disabled={registerLink.isPending}
-            onOpen={linkOptions.requestAll}
-            loading={linkOptions.loading}
-            loadingLabel="Loading invite links…"
-            placeholder="Select folder links"
-            searchPlaceholder="Search invite links"
-            options={links.map((link) => ({
-              value: link.id,
-              label: telegramInviteLinkOptionLabel(link),
-              selectedLabel: link.name,
-              badgeClassName: telegramInviteLinkDefaultBadgeClassName(link),
-              iconFallback: inviteLinkCreatorFallback(link),
-              icon: (
-                <TelegramInviteLinkCreatorAvatar
-                  photoUrl={link.creatorPhotoUrl}
-                  memberAvatar={link.creatorMember?.avatarPresentation}
-                  label={inviteLinkCreatorFallback(link)}
-                />
-              ),
-            }))}
-            canCreateOption={(value) =>
-              isTelegramInviteLink(value) &&
-              !links.some((link) => link.url === value.trim())
-            }
-            createOptionLabel={() => "Verify and add this invite link"}
-            onCreateOption={(url) => registerAndSelect(url, "folders")}
-            creatingOption={registerLink.isPending}
-          />
-          <p className="text-xs text-neutral-500">
-            Preferred links loaded automatically when a folder is created;
-            multiple are allowed.
-          </p>
-        </FormField>
-        <FormField label="Invite link for bot">
-          <CustomSelect
-            value={values.botInviteLinkId}
-            onChange={(botInviteLinkId) => update({ botInviteLinkId })}
-            disabled={registerLink.isPending}
-            onOpen={linkOptions.requestAll}
-            loading={linkOptions.loading}
-            loadingLabel="Loading invite links…"
-            placeholder="Select bot link"
-            options={links.map((link) => ({
-              value: link.id,
-              label: telegramInviteLinkOptionLabel(link),
-              badgeClassName: telegramInviteLinkDefaultBadgeClassName(link),
-              meta: link.url,
-              iconFallback: inviteLinkCreatorFallback(link),
-              icon: (
-                <TelegramInviteLinkCreatorAvatar
-                  photoUrl={link.creatorPhotoUrl}
-                  memberAvatar={link.creatorMember?.avatarPresentation}
-                  label={inviteLinkCreatorFallback(link)}
-                />
-              ),
-            }))}
-          />
-          <p className="text-xs text-neutral-500">
-            The single invite link used by bot-generated publications.
-          </p>
-        </FormField>
+            })
+          }
+          onCreate={(url) => registerAndSelect(url, "folders")}
+        />
+        <ChannelInviteLinkSelectField
+          label="Invite link for bot"
+          value={values.botInviteLinkId}
+          links={links}
+          placeholder="Select bot link"
+          helpText="The single invite link used by bot-generated publications."
+          disabled={registerLink.isPending}
+          loading={linkOptions.loading}
+          onOpen={linkOptions.requestAll}
+          onChange={(botInviteLinkId) => update({ botInviteLinkId })}
+        />
+        <ChannelInviteLinkSelectField
+          label="Invite link for newsletter"
+          value={values.broadcastInviteLinkId}
+          links={links}
+          placeholder="Select newsletter link"
+          helpText="The invite link used in channel newsletters and mailings."
+          disabled={registerLink.isPending}
+          loading={linkOptions.loading}
+          onOpen={linkOptions.requestAll}
+          onChange={(broadcastInviteLinkId) =>
+            update({ broadcastInviteLinkId })
+          }
+        />
+        <ChannelInviteLinkSelectField
+          label="Invite link for audience transfer"
+          value={values.audienceTransferInviteLinkId}
+          links={links}
+          placeholder="Select audience transfer link"
+          helpText="The invite link used when transferring an audience to this channel."
+          disabled={registerLink.isPending}
+          loading={linkOptions.loading}
+          onOpen={linkOptions.requestAll}
+          onChange={(audienceTransferInviteLinkId) =>
+            update({ audienceTransferInviteLinkId })
+          }
+        />
       </div>
       {registerLink.isError ? (
         <p className="text-sm text-rose-300">
@@ -348,4 +370,12 @@ export function ChannelPresentationSettingsModal({
       {content}
     </Modal>
   );
+}
+
+export function selectPrimaryInviteLink(existing: string[], selected: string) {
+  if (!selected) return [];
+  // Older workspaces can have more than one purpose link. Keep those IDs as
+  // historical source assignments; this form only selects one primary link
+  // for new folders and mutual-promotion posts.
+  return [selected, ...existing.filter((id) => id !== selected)];
 }

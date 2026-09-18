@@ -61,6 +61,27 @@ export function createLocalBatch(
   };
 }
 
+export function hasMeaningfulLocalBatch(batch: TelegramPostBatch) {
+  const customBatchTitle =
+    Boolean(batch.title.trim()) &&
+    !/^Mass publication · \d{4}-\d{2}-\d{2}$/.test(batch.title.trim());
+  return Boolean(
+    customBatchTitle ||
+    batch.posts.length > 1 ||
+    batch.posts.some(
+      (post, index) =>
+        post.title.trim() !== `Post ${index + 1}` ||
+        Boolean(post.text?.trim()) ||
+        post.imageUrls.length ||
+        post.mediaItems.length ||
+        post.buttonRows.some((row) => row.length) ||
+        post.action !== "PUBLISH_NOW" ||
+        post.deleteAfterHours !== batch.defaultDeleteAfterHours ||
+        post.channelOverrides.length,
+    ),
+  );
+}
+
 export function addLocalPost(batch: TelegramPostBatch) {
   const post = createLocalPost(
     batch.posts.length,
@@ -87,7 +108,7 @@ export function importLocalPost(
         ? {
             ...post,
             title: imported.title?.trim() || post.title,
-            text: imported.formattedHtml || imported.text || null,
+            text: imported.text || null,
             imageUrls: imported.imageUrls ?? [],
             mediaItems: imported.mediaItems ?? [],
             buttonRows: imported.buttonRows ?? [],
@@ -95,6 +116,25 @@ export function importLocalPost(
         : post,
     ),
   };
+}
+
+export function importLocalPosts(
+  batch: TelegramPostBatch,
+  postIds: string[],
+  importedPosts: TelegramSystemBotPostDraft[],
+) {
+  let next = batch;
+  const importedPostIds: string[] = [];
+  for (const [index, imported] of importedPosts.entries()) {
+    let postId = postIds[index];
+    if (!postId || !next.posts.some((post) => post.id === postId)) {
+      next = addLocalPost(next);
+      postId = next.posts.at(-1)!.id;
+    }
+    next = importLocalPost(next, postId, imported);
+    importedPostIds.push(postId);
+  }
+  return { batch: next, importedPostIds };
 }
 
 export function localScheduleParts(value: string | null) {
@@ -123,11 +163,20 @@ export function setPostSchedule(
   post: TelegramPostBatchPost,
   action: TelegramPostBatchAction,
 ) {
+  const scheduledAt =
+    action === "SCHEDULE" ? (post.scheduledAt ?? defaultScheduleIso()) : null;
   return {
     ...post,
     action,
-    scheduledAt:
-      action === "SCHEDULE" ? (post.scheduledAt ?? defaultScheduleIso()) : null,
+    scheduledAt,
+    channelOverrides:
+      action === "SCHEDULE"
+        ? post.channelOverrides.map((override) =>
+            override.action === "SCHEDULE"
+              ? { ...override, scheduledAt }
+              : override,
+          )
+        : post.channelOverrides,
   };
 }
 
@@ -196,7 +245,7 @@ export function updatePayload(
       action: post.action,
       scheduledAt: post.scheduledAt,
       deleteAfterHours: post.deleteAfterHours,
-      longTextMode: post.longTextMode,
+      longTextMode: "IMAGES_THEN_TEXT",
       channelOverrides: post.channelOverrides,
     })),
   };

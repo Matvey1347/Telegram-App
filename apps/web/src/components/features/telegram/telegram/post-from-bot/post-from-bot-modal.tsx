@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import {
   keepPreviousData,
@@ -8,15 +8,13 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import type {
-  TelegramPostBatch,
-  TelegramSystemBotPostDraft,
-} from "@telegram-system/shared";
+import type { TelegramPostBatch } from "@telegram-system/shared";
 import type { TelegramChannelNetwork } from "@/lib/api";
 import type { TelegramChannelSelectOption } from "@/lib/api-types/telegram/telegram-channels";
 import { telegramChannelNetworksApi, telegramSystemBotApi } from "@/lib/api";
 import { useTelegramSystemBotPostFlow } from "@/hooks/use-telegram-system-bot-post-flow";
 import { useWorkspaceModalDrafts } from "@/hooks/use-workspace-modal-drafts";
+import { selectedWorkspaceDraftScope } from "@/lib/workspace-modal-drafts";
 import { usePagination } from "@/hooks/use-pagination";
 import {
   telegramPostBatchKeys,
@@ -34,8 +32,32 @@ import {
   addLocalPost,
   createAndDispatchPayload,
   createLocalBatch,
+  hasMeaningfulLocalBatch,
   importLocalPost,
+  importLocalPosts,
 } from "./post-batch-model";
+
+type BotImportTarget = {
+  kind: "single" | "multiple";
+  postIds: string[];
+};
+
+function parseBotImportTarget(value: string | null): BotImportTarget | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as Partial<BotImportTarget>;
+    if (
+      (parsed.kind === "single" || parsed.kind === "multiple") &&
+      Array.isArray(parsed.postIds) &&
+      parsed.postIds.every((postId) => typeof postId === "string")
+    ) {
+      return { kind: parsed.kind, postIds: parsed.postIds };
+    }
+  } catch {
+    return { kind: "single", postIds: [value] };
+  }
+  return null;
+}
 
 export function PostFromBotModal({
   open,
@@ -51,9 +73,15 @@ export function PostFromBotModal({
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const pagination = usePagination({ initialPageSize: 10 });
-  const [botImportTarget, setBotImportTarget] = useState<{
-    postId: string;
-  } | null>(null);
+  const [botImportTarget, setBotImportTarget] =
+    useState<BotImportTarget | null>(null);
+  const [startingBotImportPostId, setStartingBotImportPostId] = useState<
+    string | null
+  >(null);
+  const [botImportRevision, setBotImportRevision] = useState(0);
+  const [lastImportedPostId, setLastImportedPostId] = useState<string | null>(
+    null,
+  );
   const [editingLocalDraft, setEditingLocalDraft] = useState(false);
   const [localBatch, setLocalBatch] = useState(() =>
     createLocalBatch(undefined, false),
@@ -68,6 +96,23 @@ export function PostFromBotModal({
     enabled: open,
   });
   const workspaceId = connection.data?.currentWorkspaceId ?? undefined;
+  const botTargetStorageKey = workspaceId
+    ? `post-from-bot-import-target:${workspaceId}`
+    : undefined;
+  useEffect(() => {
+    if (!open || !botTargetStorageKey) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const target = parseBotImportTarget(
+        window.localStorage.getItem(botTargetStorageKey),
+      );
+      if (target) setBotImportTarget(target);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [botTargetStorageKey, open]);
   const networks = useQuery<TelegramChannelNetwork[]>({
     queryKey: networkKeys.list(),
     queryFn: telegramChannelNetworksApi.list,
@@ -96,18 +141,31 @@ export function PostFromBotModal({
   });
 
   const localDrafts = useWorkspaceModalDrafts<TelegramPostBatch>({
-    namespace: workspaceId
-      ? `telegram-post-batches:${workspaceId}`
-      : "telegram-post-batches:unavailable",
+    namespace: "telegram-post-batches:draft",
+    workspaceId: workspaceId ?? selectedWorkspaceDraftScope(),
+    schemaVersion: 1,
+    legacyKeys: workspaceId
+      ? [`telegram-post-batches:${workspaceId}:${workspaceId}`]
+      : [],
     open,
     enabled: Boolean(workspaceId),
     value: localBatch,
-    emptyValue: () => createLocalBatch(defaultChannelId),
+    createInitialValue: () => createLocalBatch(defaultChannelId),
     onRestore: (batch) => {
       setLocalBatch(batch);
       setEditingLocalDraft(true);
     },
-    isMeaningful: (batch) => Boolean(batch.title.trim()),
+    isMeaningful: hasMeaningfulLocalBatch,
+    previewFor: (batch) => ({
+      title: batch.title || "Untitled post batch",
+      subtitle: `${batch.posts.length} posts · ${batch.channelIds.length} channels`,
+      avatars: channels
+        .filter((channel) => batch.channelIds.includes(channel.id))
+        .map((channel) => ({
+          label: channel.title,
+          imageUrl: channel.photoUrl,
+        })),
+    }),
   });
   const dispatch = useMutation({
     mutationFn: (batch: TelegramPostBatch) =>
@@ -141,29 +199,67 @@ export function PostFromBotModal({
       setSelection({ workspaceId, batchId: result.batch.id });
     },
   });
-  const botFlow = useTelegramSystemBotPostFlow<TelegramSystemBotPostDraft>({
-    storageKey: workspaceId
-      ? `telegram-system-bot-post-batch-import:${workspaceId}`
-      : undefined,
+  const botFlow = useTelegramSystemBotPostFlow({
+    mode: "multiple",
+    recoveryKey: "post-from-bot",
+    importContext: "Mass publication",
+    workspaceId,
     botUsername: connection.data?.botUsername,
-    prepareImport: async () =>
-      (await telegramPostBatchesApi.prepareImport()).workflowId,
-    readImport: async (workflowId) => {
-      const result = await telegramPostBatchesApi.importResult(workflowId);
-      if (!result.ready) return { ready: false };
-      if (result.drafts.length !== 1)
-        throw new Error("Send exactly one post through the bot");
-      return { ready: true, value: result.drafts[0] };
-    },
+    enabled: open,
     onImported: (imported) => {
-      const target = botImportTarget;
+      const target =
+        parseBotImportTarget(
+          botTargetStorageKey
+            ? window.localStorage.getItem(botTargetStorageKey)
+            : null,
+        ) ?? botImportTarget;
       if (!target) return;
-      setLocalBatch((batch) => importLocalPost(batch, target.postId, imported));
+      if (target.kind === "single") {
+        const postId = target.postIds[0];
+        const first = imported[0];
+        if (!postId || !first) return;
+        setLocalBatch((batch) => importLocalPost(batch, postId, first));
+        setLastImportedPostId(postId);
+      } else {
+        const result = importLocalPosts(localBatch, target.postIds, imported);
+        setLocalBatch(result.batch);
+        setLastImportedPostId(result.importedPostIds.at(-1) ?? null);
+      }
+      setBotImportRevision((revision) => revision + 1);
       setBotImportTarget(null);
+      if (botTargetStorageKey)
+        window.localStorage.removeItem(botTargetStorageKey);
     },
-    importErrorMessage: t("telegram.posts.batch.importReadError"),
-    startImportErrorMessage: t("telegram.posts.batch.importStartError"),
+    errorCopy: {
+      read: t("telegram.posts.batch.importReadError"),
+      start: t("telegram.posts.batch.importStartError"),
+    },
   });
+  useEffect(() => {
+    if (botFlow.terminalStatus && botTargetStorageKey)
+      window.localStorage.removeItem(botTargetStorageKey);
+  }, [botFlow.terminalStatus, botTargetStorageKey]);
+  const startBotImport = async (target: BotImportTarget) => {
+    setStartingBotImportPostId(
+      target.kind === "single" ? (target.postIds[0] ?? null) : "all",
+    );
+    try {
+      const started = await botFlow.startImport();
+      if (!started) return;
+      setBotImportTarget(target);
+      if (botTargetStorageKey)
+        window.localStorage.setItem(
+          botTargetStorageKey,
+          JSON.stringify(target),
+        );
+    } finally {
+      setStartingBotImportPostId(null);
+    }
+  };
+  const startBotImportForPost = (postId: string) =>
+    startBotImport({ kind: "single", postIds: [postId] });
+  const startBotImportForBatch = (postIds: string[]) =>
+    startBotImport({ kind: "multiple", postIds });
 
   const close = () => {
     setSelection({ workspaceId, batchId: "" });
@@ -269,8 +365,7 @@ export function PostFromBotModal({
             </p>
           ) : null}
           {botFlow.importStatus === "waiting" ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-900/60 bg-blue-950/20 p-3 text-sm text-blue-100">
-              <span>{t("telegram.posts.batch.waitingForBotHint")}</span>
+            <div className="flex justify-end">
               <Button
                 type="button"
                 variant="secondary"
@@ -300,17 +395,28 @@ export function PostFromBotModal({
           ) : null}
           {editingLocalDraft ? (
             <PostBatchWorkspace
-              key={localBatch.id}
+              key={`${localBatch.id}:${botImportRevision}`}
               batch={localBatch}
+              initialSelectedPostId={lastImportedPostId}
               channels={channels}
               networks={networks.data ?? []}
               saving={false}
               dispatching={dispatch.isPending}
               botImportingPostId={
-                botFlow.importStatus === "working" ||
-                botFlow.importStatus === "waiting"
-                  ? botImportTarget?.postId
-                  : null
+                botFlow.importStatus === "working"
+                  ? startingBotImportPostId === "all"
+                    ? null
+                    : startingBotImportPostId
+                  : botFlow.importStatus === "waiting" &&
+                      botImportTarget?.kind === "single"
+                    ? (botImportTarget.postIds[0] ?? null)
+                    : null
+              }
+              botImportingAll={
+                (botFlow.importStatus === "working" &&
+                  startingBotImportPostId === "all") ||
+                (botFlow.importStatus === "waiting" &&
+                  botImportTarget?.kind === "multiple")
               }
               canImportFromBot={connected}
               onSave={async () => undefined}
@@ -320,8 +426,10 @@ export function PostFromBotModal({
               onAddPost={async (batch) => addLocalPost(batch)}
               onDraftChange={setLocalBatch}
               onImportPostFromBot={(postId) => {
-                setBotImportTarget({ postId });
-                void botFlow.startImport();
+                void startBotImportForPost(postId);
+              }}
+              onImportPostsFromBot={(postIds) => {
+                void startBotImportForBatch(postIds);
               }}
             />
           ) : detail.data ? (
@@ -336,8 +444,15 @@ export function PostFromBotModal({
                 botImportingPostId={
                   botFlow.importStatus === "working" ||
                   botFlow.importStatus === "waiting"
-                    ? botImportTarget?.postId
+                    ? botImportTarget?.kind === "single"
+                      ? (botImportTarget.postIds[0] ?? null)
+                      : null
                     : null
+                }
+                botImportingAll={
+                  (botFlow.importStatus === "working" ||
+                    botFlow.importStatus === "waiting") &&
+                  botImportTarget?.kind === "multiple"
                 }
                 canImportFromBot={connected}
                 onSave={async () => undefined}

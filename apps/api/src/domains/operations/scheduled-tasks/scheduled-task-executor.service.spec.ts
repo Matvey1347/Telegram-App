@@ -11,6 +11,7 @@ import { ScheduledTaskRegistryService } from './scheduled-task-registry.service'
 import { TelegramManagedPostReconciliationService } from '../../telegram/telegram-channels/telegram-managed-post-reconciliation.service';
 import { TelegramCrmInitialSyncService } from '../../telegram/telegram-crm/telegram-crm-initial-sync.service';
 import { MutualPromotionLifecycleService } from '../../growth/mutual-promotion-folders/mutual-promotion-lifecycle.service';
+import { CrossPromotionPlanLifecycleService } from '../../growth/cross-promotion-plans/cross-promotion-plan-lifecycle.service';
 
 describe('scheduled task registry executors', () => {
   function setup() {
@@ -66,6 +67,14 @@ describe('scheduled task registry executors', () => {
         nextDueAt: null,
       }),
     };
+    const directPromotion = {
+      processDueActions: jest.fn().mockResolvedValue({
+        considered: 2,
+        processed: 2,
+        completed: 1,
+        retried: 1,
+      }),
+    };
     const services = new Map<unknown, unknown>([
       [TelegramWorkspaceFullSyncService, fullSync],
       [GreeterExpiryService, greeter],
@@ -78,6 +87,7 @@ describe('scheduled task registry executors', () => {
       [TelegramManagedPostReconciliationService, managedPosts],
       [TelegramCrmInitialSyncService, crmSync],
       [MutualPromotionLifecycleService, mutualPromotion],
+      [CrossPromotionPlanLifecycleService, directPromotion],
     ]);
     const moduleRef = {
       resolve: jest.fn((token: unknown) =>
@@ -95,6 +105,7 @@ describe('scheduled task registry executors', () => {
       managedPosts,
       crmSync,
       mutualPromotion,
+      directPromotion,
     };
   }
 
@@ -145,13 +156,18 @@ describe('scheduled task registry executors', () => {
   });
 
   it('runs the due-driven mutual-promotion lifecycle with one aggregate summary', async () => {
-    const { executor, mutualPromotion } = setup();
+    const { executor, mutualPromotion, directPromotion } = setup();
     const result = await executor.executors['mutual_promotion.lifecycle']();
 
     expect(mutualPromotion.processDueActions).toHaveBeenCalledTimes(1);
-    expect(result.summary).toContain('processed 4');
-    expect(result.summary).toContain('retried 1');
-    expect(result.details).toMatchObject({ considered: 5, completed: 3 });
+    expect(directPromotion.processDueActions).toHaveBeenCalledTimes(1);
+    expect(result.summary).toContain('4 folder actions');
+    expect(result.summary).toContain('2 direct-promotion deletions');
+    expect(result.summary).toContain('retried 2');
+    expect(result.details).toMatchObject({
+      folders: { considered: 5, completed: 3 },
+      direct: { considered: 2, completed: 1 },
+    });
   });
 
   it('dispatches due Greeter broadcasts through persistent maintenance', async () => {

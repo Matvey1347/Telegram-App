@@ -90,7 +90,7 @@ describe("ChannelActionsMenu", () => {
             id: "channel-1",
             title: "Complete channel",
             presentationIconId: "icon-1",
-            description: "Short description",
+            shortDescription: "Short description",
             tgStatUrl: "https://tgstat.com/channel/1",
             defaultInviteLinkId: "invite-1",
             botInviteLinkId: "invite-bot",

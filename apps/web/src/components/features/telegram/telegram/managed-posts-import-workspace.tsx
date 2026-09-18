@@ -57,6 +57,7 @@ export function ManagedPostsImportWorkspace({
   groupOptions,
   hypothesisOptions = [],
   selectedRowAdornment,
+  selectedRowDetails,
   scheduleValue,
   onUpdateRow,
   onDeleteRow,
@@ -85,6 +86,7 @@ export function ManagedPostsImportWorkspace({
     iconEmoji?: string;
   }>;
   selectedRowAdornment?: ReactNode;
+  selectedRowDetails?: ReactNode;
   scheduleValue?: {
     slotId?: string | null;
     scheduledAt?: string | null;
@@ -185,6 +187,8 @@ export function ManagedPostsImportWorkspace({
         </div>
       </div>
 
+      {selectedRowDetails}
+
       <div className="grid gap-3 xl:grid-cols-[minmax(270px,0.72fr)_minmax(420px,1.25fr)_minmax(260px,0.7fr)]">
         <div className="min-h-[360px] overflow-hidden rounded-lg border border-neutral-800 bg-[#0e1b26]">
           <TelegramPostPreview
@@ -239,7 +243,10 @@ export function ManagedPostsImportWorkspace({
               </label>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-[48px_minmax(0,1fr)]">
+            <div
+              data-testid="managed-post-import-identity-fields"
+              className="grid gap-2 sm:grid-cols-[36px_minmax(0,1fr)]"
+            >
               <FormField label={t("telegram.posts.import.icon")}>
                 <IconPicker
                   compact

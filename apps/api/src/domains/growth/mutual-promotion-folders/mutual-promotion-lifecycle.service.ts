@@ -204,6 +204,7 @@ export class MutualPromotionLifecycleService {
             { baselineCapturedAt: null },
             { subscribersAtStart: null },
             { inviteJoinedAtStart: null },
+            { inviteRequestedAtStart: null },
           ],
         },
       });

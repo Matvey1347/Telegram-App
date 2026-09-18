@@ -17,6 +17,7 @@ export class MutualPromotionBoundaryService {
         UPDATE "MutualPromotionFolderParticipant" participant
         SET "subscribersAtStart" = channel."currentSubscribersCount",
             "inviteJoinedAtStart" = invite."joinedCount",
+            "inviteRequestedAtStart" = invite."requestedCount",
             "baselineCapturedAt" = ${capturedAt},
             "updatedAt" = ${capturedAt}
         FROM "TelegramChannel" channel, "TelegramInviteLink" invite
@@ -38,6 +39,7 @@ export class MutualPromotionBoundaryService {
           { baselineCapturedAt: null },
           { subscribersAtStart: null },
           { inviteJoinedAtStart: null },
+          { inviteRequestedAtStart: null },
         ],
       },
     });
@@ -61,6 +63,7 @@ export class MutualPromotionBoundaryService {
         UPDATE "MutualPromotionFolderParticipant" participant
         SET "subscribersAtEnd" = channel."currentSubscribersCount",
             "inviteJoinedAtEnd" = invite."joinedCount",
+            "inviteRequestedAtEnd" = invite."requestedCount",
             "finalCapturedAt" = ${capturedAt},
             "updatedAt" = ${capturedAt}
         FROM "TelegramChannel" channel, "TelegramInviteLink" invite

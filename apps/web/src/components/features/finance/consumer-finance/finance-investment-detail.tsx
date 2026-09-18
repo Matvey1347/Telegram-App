@@ -91,6 +91,9 @@ export function FinanceInvestmentDetailScreen({
       void client.invalidateQueries({
         queryKey: consumerFinanceKeys.investmentSummary(botId),
       });
+      void client.invalidateQueries({
+        queryKey: consumerFinanceKeys.investmentLists(botId),
+      });
       invalidateConsumerAssetDerivations(client, botId);
       setEditing(false);
     },
@@ -194,6 +197,9 @@ export function FinanceInvestmentDetailScreen({
       );
       void client.invalidateQueries({
         queryKey: consumerFinanceKeys.investmentSummary(botId),
+      });
+      void client.invalidateQueries({
+        queryKey: consumerFinanceKeys.investmentLists(botId),
       });
       invalidateConsumerAssetDerivations(client, botId);
     },

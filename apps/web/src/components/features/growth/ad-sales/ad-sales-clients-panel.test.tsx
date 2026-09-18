@@ -48,12 +48,14 @@ describe("AdSalesClientsPanel", () => {
       screen.getByPlaceholderText("Name, company, Telegram, contact"),
     ).toBeTruthy();
     const filtersButton = screen.getByRole("button", { name: "Filters" });
-    const sortButton = screen.getByRole("button", { name: "Sort clients" });
+    const sortSelect = screen.getByLabelText("Sort clients by");
+    const sortButton = screen.getByRole("button", {
+      name: /Sort clients by: Descending/i,
+    });
     expect(filtersButton.textContent).toBe("");
     expect(filtersButton.className).not.toContain("border");
-    expect(sortButton.className).not.toContain("border");
     expect(filtersButton.className).toContain("h-[38px]");
-    expect(sortButton.className).toContain("h-[38px]");
+    expect(sortSelect).toBeTruthy();
     expect(screen.queryByText("High value")).toBeNull();
     expect(screen.queryByText("Needs action")).toBeNull();
     expect(screen.queryByText("Page revenue")).toBeNull();
@@ -64,13 +66,8 @@ describe("AdSalesClientsPanel", () => {
     expect(screen.getByText("Lifecycle")).toBeTruthy();
     expect(screen.getByText("Archive")).toBeTruthy();
 
+    fireEvent.change(sortSelect, { target: { value: "NAME" } });
     fireEvent.click(sortButton);
-    expect(screen.getByRole("menu")).toBeTruthy();
-    fireEvent.mouseDown(document.body);
-    expect(screen.queryByRole("menu")).toBeNull();
-
-    fireEvent.click(sortButton);
-    fireEvent.click(screen.getByRole("menuitemradio", { name: "Name: A–Z" }));
     await waitFor(() =>
       expect(listCrmAdvertisers).toHaveBeenLastCalledWith(
         expect.objectContaining({ sortBy: "NAME", sortDirection: "ASC" }),

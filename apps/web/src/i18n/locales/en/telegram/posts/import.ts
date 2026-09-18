@@ -11,6 +11,7 @@ const messages = {
   "telegram.posts.import.parsePlanError": "Could not parse plan.",
   "telegram.posts.import.reimportDelete": "Reimport / Delete",
   "telegram.posts.import.tabNew": "New",
+  "telegram.posts.import.tabNotImported": "Not imported",
   "telegram.posts.import.tabImported": "Imported",
   "telegram.posts.import.untitled": "Untitled post",
   "telegram.posts.import.emptyTab": "No posts in this tab.",
@@ -141,6 +142,13 @@ const messages = {
     "Import completed with {count} failed operations. Review the details before retrying.",
   "telegram.posts.import.progressTitle": "Import progress",
   "telegram.posts.import.progressStarting": "Starting the import stream…",
+  "telegram.posts.import.progressSuccessful": "Successful",
+  "telegram.posts.import.progressStatus.running": "In progress",
+  "telegram.posts.import.progressStatus.completed": "Completed",
+  "telegram.posts.import.progressStatus.completed-with-errors":
+    "Completed with errors",
+  "telegram.posts.import.progressStatus.failed": "Failed",
+  "telegram.posts.import.progressStatus.cancelled": "Cancelled",
   "telegram.posts.import.progressCounts":
     "Created {created} · Updated {updated} · Deleted {deleted} · Scheduled {scheduled} · Unscheduled {unscheduled}",
   "telegram.posts.import.progressCreated": "Created",
@@ -164,9 +172,28 @@ const messages = {
   "telegram.posts.import.openInSystem": "Open",
   "telegram.posts.import.openAfterImport":
     "The publication can be opened after it is created.",
+  "telegram.posts.import.removeOperation": "Remove this operation from import",
+  "telegram.posts.import.noChanges": "No field values will change.",
+  "telegram.posts.import.emptyValue": "Empty",
+  "telegram.posts.import.changeField.icon": "Icon",
+  "telegram.posts.import.changeField.title": "Title",
+  "telegram.posts.import.changeField.name": "Name",
+  "telegram.posts.import.changeField.description": "Description",
+  "telegram.posts.import.changeField.status": "Status",
+  "telegram.posts.import.changeField.conclusion": "Conclusion",
+  "telegram.posts.import.changeField.text": "Telegram text",
+  "telegram.posts.import.changeField.imageUrls": "Media URLs",
   "telegram.posts.import.scheduleOperations": "Calendar operations",
   "telegram.posts.import.scheduleTab": "Schedule ({count})",
   "telegram.posts.import.unscheduleTab": "Unschedule ({count})",
+  "telegram.posts.import.inlinePreview": "Preview",
+  "telegram.posts.import.inlinePreviewNamed": "Preview {title}",
+  "telegram.posts.import.editScheduleNamed":
+    "Edit publication date and time for {title}",
+  "telegram.posts.import.reschedule": "Reschedule",
+  "telegram.posts.import.unknownScheduleDate": "Date not available",
+  "telegram.posts.import.emptyCalendarState":
+    "There are no calendar operations in this tab.",
   "telegram.posts.import.invalidFile": "Invalid file",
 } as const satisfies TranslationCatalog;
 export default messages;

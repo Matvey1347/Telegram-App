@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
@@ -9,7 +9,11 @@ import type {
   CrossPromotionPlan,
   CrossPromotionPlanKind,
 } from "@telegram-system/shared";
-import { telegramChannelNetworksApi, telegramChannelsApi } from "@/lib/api";
+import {
+  promosApi,
+  telegramChannelNetworksApi,
+  telegramChannelsApi,
+} from "@/lib/api";
 import { networkKeys, telegramChannelKeys } from "@/lib/query-keys";
 import {
   crossPromotionPlanKeys,
@@ -20,12 +24,14 @@ import {
   Button,
   EmptyState,
   ErrorState,
+  ConfirmDeleteModal,
   LoadingState,
   MasonryGrid,
   PageHeader,
 } from "@/components/ui/primitives";
 import { CrossPromotionPlanModal } from "./cross-promotion-plan-modal";
 import { CrossPromotionPlanCard } from "./cross-promotion-plan-card";
+import { PromoFormModal } from "./promo-form-modal";
 import { adsSectionHeader } from "./ads-section-header";
 import { useAppToast } from "@/providers/toast-provider";
 
@@ -45,15 +51,8 @@ export function CrossPromotionPlansPage({
   const [editingPlan, setEditingPlan] = useState<CrossPromotionPlan | null>(
     null,
   );
-  const [clock, setClock] = useState<number | null>(null);
-  useEffect(() => {
-    const initialTick = window.setTimeout(() => setClock(Date.now()), 0);
-    const interval = window.setInterval(() => setClock(Date.now()), 30_000);
-    return () => {
-      window.clearTimeout(initialTick);
-      window.clearInterval(interval);
-    };
-  }, []);
+  const [deletePlan, setDeletePlan] = useState<CrossPromotionPlan | null>(null);
+  const [previewPromoId, setPreviewPromoId] = useState<string | null>(null);
   const plansQuery = useQuery({
     queryKey: crossPromotionPlanKeys.list(kind),
     queryFn: () => crossPromotionPlansApi.list(kind),
@@ -68,8 +67,19 @@ export function CrossPromotionPlansPage({
     queryFn: telegramChannelNetworksApi.list,
     staleTime: 60_000,
   });
+  const previewPromoQuery = useQuery({
+    queryKey: ["promos", "preview", previewPromoId],
+    queryFn: () => promosApi.get(previewPromoId!),
+    enabled: Boolean(previewPromoId),
+  });
   const saveMutation = useMutation({
     mutationFn: async (payload: CreateCrossPromotionPlanPayload) => {
+      const isHistorical =
+        editingPlan &&
+        new Date(editingPlan.scheduledAt).getTime() <= Date.now();
+      if (editingPlan && isHistorical) {
+        return crossPromotionPlansApi.updateCompleted(editingPlan.id, payload);
+      }
       const operation = startOperation({
         id: `cross-promotion-schedule-${Date.now()}`,
         title: "Scheduling mutual promotion",
@@ -105,9 +115,13 @@ export function CrossPromotionPlansPage({
       }
     },
     onSuccess: async () => {
-      await qc.invalidateQueries({
-        queryKey: crossPromotionPlanKeys.list(kind),
-      });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.list(kind) }),
+        qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+        qc.invalidateQueries({
+          queryKey: telegramChannelKeys.trafficAttributions(),
+        }),
+      ]);
       setOpen(false);
       setCopyFrom(null);
       setEditingPlan(null);
@@ -120,11 +134,18 @@ export function CrossPromotionPlansPage({
         crossPromotionPlanKeys.list(kind),
         (current) => current?.filter((plan) => plan.id !== id) ?? [],
       );
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: telegramChannelKeys.lists() }),
+        qc.invalidateQueries({
+          queryKey: telegramChannelKeys.trafficAttributions(),
+        }),
+      ]);
     },
   });
   const header = adsSectionHeader(
     kind === "DIRECT_MUTUAL" ? "mutual-promotion" : "own-promotion",
   );
+  const planGroups = groupPlansByPartner(plansQuery.data ?? []);
   return (
     <AppShell>
       <PageHeader
@@ -149,26 +170,27 @@ export function CrossPromotionPlansPage({
           <LoadingState />
         ) : plansQuery.isError ? (
           <ErrorState text="Could not load promotion placements." />
-        ) : !plansQuery.data?.length ? (
+        ) : !planGroups.length ? (
           <EmptyState text="No placements yet." />
         ) : (
           <MasonryGrid className="xl:grid-cols-2">
-            {plansQuery.data.map((plan) => (
+            {planGroups.map(({ plan, integrations }) => (
               <CrossPromotionPlanCard
                 key={plan.id}
                 plan={plan}
-                clock={clock}
-                onCopy={() => {
+                integrations={integrations}
+                onCopy={(source) => {
                   setEditingPlan(null);
-                  setCopyFrom(plan);
+                  setCopyFrom(source);
                   setOpen(true);
                 }}
-                onEdit={() => {
+                onEdit={(source) => {
                   setCopyFrom(null);
-                  setEditingPlan(plan);
+                  setEditingPlan(source);
                   setOpen(true);
                 }}
-                onDelete={() => void deleteMutation.mutateAsync(plan.id)}
+                onDelete={() => setDeletePlan(plan)}
+                onOpenPromo={setPreviewPromoId}
               />
             ))}
           </MasonryGrid>
@@ -190,8 +212,57 @@ export function CrossPromotionPlansPage({
         }}
         onSubmit={(payload) => saveMutation.mutateAsync(payload)}
       />
+      <PromoFormModal
+        open={Boolean(previewPromoQuery.data)}
+        title="Edit Promo"
+        initial={previewPromoQuery.data}
+        channels={channelsQuery.data ?? []}
+        onClose={() => setPreviewPromoId(null)}
+        onSubmit={async (payload) => {
+          const promo = previewPromoQuery.data;
+          if (!promo) return;
+          await promosApi.update(promo.id, payload);
+          await Promise.all([
+            qc.invalidateQueries({ queryKey: ["promos"] }),
+            qc.invalidateQueries({
+              queryKey: crossPromotionPlanKeys.list(kind),
+            }),
+          ]);
+          setPreviewPromoId(null);
+        }}
+      />
+      <ConfirmDeleteModal
+        open={Boolean(deletePlan)}
+        onClose={() => setDeletePlan(null)}
+        entityName={deletePlan?.title ?? "mutual promotion"}
+        description="Linked scheduled or published Telegram posts will be removed before this promotion is deleted."
+        onConfirm={async () => {
+          if (!deletePlan) return;
+          await deleteMutation.mutateAsync(deletePlan.id);
+          setDeletePlan(null);
+        }}
+      />
     </AppShell>
   );
+}
+
+function groupPlansByPartner(plans: CrossPromotionPlan[]) {
+  const groups = new Map<string, CrossPromotionPlan[]>();
+  for (const plan of plans) {
+    const key = plan.advertiserId
+      ? `advertiser:${plan.advertiserId}`
+      : `partner-channels:${[...plan.partnerChannelIds].sort().join(",") || plan.id}`;
+    const group = groups.get(key) ?? [];
+    group.push(plan);
+    groups.set(key, group);
+  }
+  return [...groups.values()].map((integrations) => {
+    const ordered = [...integrations].sort(
+      (left, right) =>
+        Date.parse(right.scheduledAt) - Date.parse(left.scheduledAt),
+    );
+    return { plan: ordered[0], integrations: ordered };
+  });
 }
 
 export function MutualPromotionModeTabs({

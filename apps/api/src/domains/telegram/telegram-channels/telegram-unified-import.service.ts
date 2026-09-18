@@ -11,6 +11,7 @@ import type {
   TelegramUnifiedImportSectionResult,
 } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 import { TelegramManagedPostCommandService } from './telegram-managed-post-command.service';
@@ -27,6 +28,7 @@ import {
 import {
   applyUnifiedImportRootDeletes,
   applyUnifiedImportSchedule,
+  skipImportedEntity,
 } from './telegram-unified-import-finalize';
 import { resolveUnifiedImportHypothesisIconId } from './telegram-unified-import-icon';
 import { normalizeUnifiedImportManifest } from './telegram-unified-import-normalize';
@@ -94,7 +96,7 @@ export class TelegramUnifiedImportService {
       ...deleteHypotheses.map((row) => row.id),
     ];
     const slotIds = (manifest.schedule ?? []).flatMap((row) =>
-      row.action !== 'UNSCHEDULE' && row.slotId ? [row.slotId] : [],
+      row.slotId ? [row.slotId] : [],
     );
     const [
       existingGroups,
@@ -128,6 +130,9 @@ export class TelegramUnifiedImportService {
               icon: true,
               status: true,
               scheduledAt: true,
+              publicationSlot: {
+                select: { id: true, kind: true, title: true },
+              },
             },
           })
         : [],
@@ -151,7 +156,7 @@ export class TelegramUnifiedImportService {
       slotIds.length
         ? this.prisma.telegramPublicationScheduleSlot.findMany({
             where: { id: { in: slotIds }, schedule: { workspaceId } },
-            select: { id: true, scheduleId: true },
+            select: { id: true, scheduleId: true, kind: true, title: true },
           })
         : [],
       this.prisma.telegramChannelPublicationScheduleAssignment.findFirst({
@@ -163,12 +168,42 @@ export class TelegramUnifiedImportService {
         },
       }),
     ]);
+    const iconIds = [
+      ...(manifest.posts ?? []).map((post) => post.icon),
+      ...existingPosts.map((post) => post.icon),
+    ].filter(
+      (value): value is string =>
+        typeof value === 'string' &&
+        Boolean(value) &&
+        !/\p{Extended_Pictographic}/u.test(value),
+    );
+    const icons = iconIds.length
+      ? await this.prisma.icon.findMany({
+          where: {
+            id: { in: [...new Set(iconIds)] },
+            OR: [{ workspaceId }, { workspaceId: null }],
+          },
+          select: {
+            id: true,
+            type: true,
+            name: true,
+            emoji: true,
+            imageUrl: true,
+          },
+        })
+      : [];
     const sections = buildUnifiedImportPreviewSections(manifest, {
       existingGroups,
       existingPosts,
       existingHypotheses,
-      existingSlots: existingSlots as Array<{ id: string; scheduleId: string }>,
+      existingSlots,
       scheduleAssignment,
+      iconPresentationsById: new Map(
+        icons.flatMap((icon) => {
+          const presentation = iconToResolvedEmoji(icon);
+          return presentation ? [[icon.id, presentation] as const] : [];
+        }),
+      ),
     });
     return {
       version: 1,
@@ -194,9 +229,35 @@ export class TelegramUnifiedImportService {
         message: 'Unified import has validation errors',
         preview,
       });
+    const schedulePreviewItems =
+      preview.sections.find((section) => section.key === 'schedule')?.items ??
+      [];
     manifest = normalizeUnifiedImportManifest(manifest);
+    manifest = {
+      ...manifest,
+      schedule: (manifest.schedule ?? []).map((row, index) => {
+        if (row.action !== 'UNSCHEDULE') return row;
+        const item = schedulePreviewItems[index];
+        return {
+          ...row,
+          scheduledAt: row.scheduledAt ?? item?.scheduledAt ?? undefined,
+          slotId: row.slotId ?? item?.slotId ?? undefined,
+          slotKind: row.slotKind ?? item?.slotKind ?? undefined,
+        };
+      }),
+    };
     const workspaceId = await this.workspaces.resolveWorkspaceIdForUser(userId);
     const refs = new Map<string, string>();
+    const actionableGroupRefs = new Set(
+      preview.sections
+        .find((section) => section.key === 'groups')
+        ?.items.map((item) => item.ref) ?? [],
+    );
+    const actionableHypothesisRefs = new Set(
+      preview.sections
+        .find((section) => section.key === 'hypotheses')
+        ?.items.map((item) => item.ref) ?? [],
+    );
     const result = (key: SectionKey): TelegramUnifiedImportSectionResult => ({
       key,
       created: 0,
@@ -228,6 +289,20 @@ export class TelegramUnifiedImportService {
     progress.phase('groups', 'started');
     for (const row of manifest.groups ?? []) {
       const label = row.title ?? row.id ?? row.ref;
+      if (skipImportedEntity(row, 'groups', label, refs, progress)) continue;
+      if (row.action === 'UPDATE' && !actionableGroupRefs.has(row.ref)) {
+        refs.set(row.ref, row.id!);
+        row.imported = true;
+        reportUnifiedImportOperation(
+          progress,
+          'groups',
+          row.action,
+          row.ref,
+          label,
+          'skipped',
+        );
+        continue;
+      }
       try {
         if (row.action === 'CREATE') {
           const value = await this.groups.createPostGroup(userId, {
@@ -235,7 +310,8 @@ export class TelegramUnifiedImportService {
             title: row.title!,
             icon: row.icon,
           });
-          refs.set(row.ref, String(value.id));
+          row.id = String(value.id);
+          refs.set(row.ref, row.id);
           results.groups.created++;
         } else if (row.action === 'UPDATE') {
           await this.groups.updatePostGroup(userId, row.id!, {
@@ -248,6 +324,7 @@ export class TelegramUnifiedImportService {
           await this.groups.deletePostGroup(userId, row.id!);
           results.groups.deleted++;
         }
+        row.imported = true;
         reportUnifiedImportOperation(
           progress,
           'groups',
@@ -257,6 +334,7 @@ export class TelegramUnifiedImportService {
           'success',
         );
       } catch (error) {
+        row.imported = false;
         const message =
           error instanceof Error ? error.message : 'Group operation failed';
         results.groups.failed.push({
@@ -278,6 +356,21 @@ export class TelegramUnifiedImportService {
     progress.phase('hypotheses', 'started');
     for (const row of manifest.hypotheses ?? []) {
       const label = row.value?.name ?? row.id ?? row.ref;
+      if (skipImportedEntity(row, 'hypotheses', label, refs, progress))
+        continue;
+      if (row.action === 'UPDATE' && !actionableHypothesisRefs.has(row.ref)) {
+        refs.set(row.ref, row.id!);
+        row.imported = true;
+        reportUnifiedImportOperation(
+          progress,
+          'hypotheses',
+          row.action,
+          row.ref,
+          label,
+          'skipped',
+        );
+        continue;
+      }
       try {
         if (row.action === 'DELETE') {
           await this.hypotheses.remove(userId, channelId, row.id!);
@@ -295,7 +388,8 @@ export class TelegramUnifiedImportService {
             ...row.value!,
             iconId,
           });
-          refs.set(row.ref, String(value.id));
+          row.id = String(value.id);
+          refs.set(row.ref, row.id);
           results.hypotheses.created++;
         } else {
           const archived =
@@ -336,6 +430,7 @@ export class TelegramUnifiedImportService {
           refs.set(row.ref, String(value.id));
           results.hypotheses.updated++;
         }
+        row.imported = true;
         reportUnifiedImportOperation(
           progress,
           'hypotheses',
@@ -345,6 +440,7 @@ export class TelegramUnifiedImportService {
           'success',
         );
       } catch (error) {
+        row.imported = false;
         const message =
           error instanceof Error
             ? error.message
@@ -368,18 +464,7 @@ export class TelegramUnifiedImportService {
     progress.phase('posts', 'started');
     for (const row of manifest.posts ?? []) {
       const label = row.title ?? row.id ?? row.ref;
-      if (row.imported) {
-        if (row.id) refs.set(row.ref, row.id);
-        reportUnifiedImportOperation(
-          progress,
-          'posts',
-          row.action,
-          row.ref,
-          label,
-          'skipped',
-        );
-        continue;
-      }
+      if (skipImportedEntity(row, 'posts', label, refs, progress)) continue;
       try {
         if (row.action === 'CREATE') {
           const value = await this.commands.createManagedPost(
@@ -395,7 +480,8 @@ export class TelegramUnifiedImportService {
               groupId: row.groupRef ? resolveRef(row.groupRef, 'group') : null,
             },
           );
-          refs.set(row.ref, value.id);
+          row.id = value.id;
+          refs.set(row.ref, row.id);
           if (row.hypothesisRefs?.length)
             await this.hypotheses.setPostHypotheses(
               userId,
@@ -432,6 +518,7 @@ export class TelegramUnifiedImportService {
           await this.moves.deleteManagedPost(userId, channelId, row.id!);
           results.posts.deleted++;
         }
+        row.imported = true;
         reportUnifiedImportOperation(
           progress,
           'posts',
@@ -441,6 +528,7 @@ export class TelegramUnifiedImportService {
           'success',
         );
       } catch (error) {
+        row.imported = false;
         const message =
           error instanceof Error ? error.message : 'Post operation failed';
         results.posts.failed.push({
@@ -480,6 +568,7 @@ export class TelegramUnifiedImportService {
     });
     return {
       manifestHash: preview.manifestHash,
+      manifest,
       sections: [
         results.groups,
         results.hypotheses,

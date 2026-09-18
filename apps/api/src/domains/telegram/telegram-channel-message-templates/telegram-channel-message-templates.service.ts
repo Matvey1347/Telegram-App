@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, TelegramAdPricingMode } from '@prisma/client';
 import type {
   TelegramChannelMessageTemplate,
   TelegramChannelMessageTemplatePayload,
@@ -272,6 +272,7 @@ export class TelegramChannelMessageTemplatesService {
         currentSubscribersCount: true,
         ownViewsPerPost: true,
         adBaseCpm: true,
+        internalCpm: true,
         adBaseCurrency: true,
         updatedAt: true,
         defaultInviteLinkId: true,
@@ -327,10 +328,22 @@ export class TelegramChannelMessageTemplatesService {
             const preview = pricingSource
               ? this.pricingReader.previewFromSource(pricingSource, product)
               : null;
+            const internalPreview =
+              pricingSource && channel.internalCpm != null
+                ? this.pricingReader.previewFromSource(pricingSource, product, {
+                    pricingMode: TelegramAdPricingMode.CPM,
+                    targetCpm: channel.internalCpm,
+                    minimumCpm: channel.internalCpm,
+                  })
+                : null;
             return {
               id: product.id,
               name: product.name,
               price: preview?.recommendedPrice ?? null,
+              internalPrice: internalPreview?.recommendedPrice ?? null,
+              expectedViews: preview?.expectedViews ?? null,
+              publicCpm: preview?.targetCpm ?? null,
+              internalCpm: internalPreview?.targetCpm ?? null,
               currency:
                 preview?.currency || channel.adBaseCurrency || product.currency,
             };

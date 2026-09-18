@@ -29,7 +29,7 @@ export function MutualPromotionPaidSubscriberPrice({
       <button
         type="button"
         className={`cursor-help truncate font-semibold tabular-nums underline decoration-dotted underline-offset-2 ${toneClass}`}
-        aria-label={`${displayPrice}. Paid subscriber KPI: ${kpiToneLabel(tone)}`}
+        aria-label={`${displayPrice}. Attributed arrival KPI: ${kpiToneLabel(tone)}`}
       >
         {displayPrice}
       </button>

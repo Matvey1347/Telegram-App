@@ -4,7 +4,11 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TelegramChannelMessageTemplatesModal } from "./telegram-channel-message-templates-modal";
 import type { TelegramChannel, TelegramChannelNetwork } from "@/lib/api";
-import { writeTelegramChannelMessageTemplateDraft } from "./telegram-channel-message-template-draft";
+import {
+  normalizeTelegramChannelMessageTemplateDraft,
+  TELEGRAM_MESSAGE_TEMPLATE_DRAFT_NAMESPACE,
+} from "./telegram-channel-message-template-draft";
+import { writeWorkspaceModalDraft } from "@/lib/workspace-modal-drafts";
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
@@ -109,23 +113,40 @@ beforeEach(() => {
 
 describe("TelegramChannelMessageTemplatesModal", () => {
   it("shows the standard pencil action for a local draft", async () => {
-    writeTelegramChannelMessageTemplateDraft(localStorage, {
-      version: 1,
-      id: "draft-1",
-      form: {
-        title: "Draft price list",
-        iconId: null,
-        scopeMode: "CHANNELS",
-        networkId: null,
-        channelIds: [],
-        bodyTemplate: "{{#channels}}{{title}}{{/channels}}",
-        overrideInviteLinks: false,
-        inviteLinkOverrides: {},
+    writeWorkspaceModalDraft(
+      localStorage,
+      {
+        namespace: TELEGRAM_MESSAGE_TEMPLATE_DRAFT_NAMESPACE,
+        workspaceId: "workspace-1",
+        schemaVersion: 1,
+        normalize: normalizeTelegramChannelMessageTemplateDraft,
       },
-    });
+      {
+        id: "draft-1",
+        createdAt: "2026-09-15T10:00:00.000Z",
+        updatedAt: "2026-09-15T10:00:00.000Z",
+        schemaVersion: 1,
+        form: {
+          payload: {
+            title: "Draft price list",
+            iconId: null,
+            scopeMode: "CHANNELS",
+            networkId: null,
+            channelIds: [],
+            bodyTemplate: "{{#channels}}{{title}}{{/channels}}",
+            overrideInviteLinks: false,
+            inviteLinkOverrides: {},
+          },
+          savedTemplateId: null,
+        },
+        preview: { title: "Draft price list" },
+      },
+    );
     renderModal();
 
-    const editDraft = screen.getByRole("button", { name: "Edit draft" });
+    const editDraft = await screen.findByRole("button", {
+      name: /Continue draft/,
+    });
     expect(editDraft).toHaveClass("border-neutral-700");
 
     await userEvent.click(editDraft);
@@ -158,6 +179,32 @@ describe("TelegramChannelMessageTemplatesModal", () => {
     expect(mocks.sendPostPreview).toHaveBeenCalledWith(
       expect.objectContaining({ title: "All Channels", text: "Channel One" }),
     );
+  });
+
+  it("shows only a preview skeleton and never creates a draft while editing a saved template", async () => {
+    const user = userEvent.setup();
+    mocks.source.mockReturnValue(new Promise(() => {}));
+    renderModal({
+      channels: [{ id: "channel-1", title: "Channel One" } as TelegramChannel],
+    });
+
+    await user.click(
+      await screen.findByRole("button", { name: "Edit template" }),
+    );
+
+    expect(
+      screen.getByRole("status", { name: "Loading message template preview" }),
+    ).toBeVisible();
+    expect(screen.getByText("Changes are applied after saving")).toBeVisible();
+    expect(
+      screen.queryByText("Draft saved automatically"),
+    ).not.toBeInTheDocument();
+    expect(mocks.pushToast).not.toHaveBeenCalled();
+    expect(
+      localStorage.getItem(
+        `${TELEGRAM_MESSAGE_TEMPLATE_DRAFT_NAMESPACE}:workspace-1`,
+      ),
+    ).toBeNull();
   });
 
   it("requires the shared destructive confirmation before deleting a template", async () => {

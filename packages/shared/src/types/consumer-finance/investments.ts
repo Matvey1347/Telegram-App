@@ -15,6 +15,14 @@ export type ConsumerFinanceInvestmentType =
 
 export type ConsumerFinanceInvestmentStatus = "ACTIVE" | "CLOSED" | "ARCHIVED";
 
+export type ConsumerFinanceInvestmentSortBy =
+  | "UPDATED"
+  | "NAME"
+  | "INVESTED"
+  | "CURRENT_VALUE";
+
+export type ConsumerFinanceInvestmentSortDirection = "ASC" | "DESC";
+
 export type ConsumerFinanceInvestmentCashFlowKind = "CONTRIBUTION" | "RETURN";
 
 export type ConsumerFinanceInvestment = {

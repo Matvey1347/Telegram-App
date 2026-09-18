@@ -81,10 +81,5 @@ export type AdSaleModalProps = {
   sessionOpen?: boolean;
   systemBotConnected?: boolean;
   systemBotUsername?: string | null;
-  onSystemBotReturn?: (
-    workflowId: string,
-    channelIds: string[],
-  ) => Promise<PlacementManagedPostDraft | null>;
-  onPrepareSystemBot?: () => Promise<string>;
-  onSendSystemBotPost?: (draft: PlacementManagedPostDraft) => Promise<void>;
+  systemBotWorkspaceId?: string | null;
 };

@@ -97,7 +97,11 @@ describe("telegramChannelsApi.syncWorkspaceChannels", () => {
 
 describe("telegramChannelsApi.applyUnifiedImportWithProgress", () => {
   it("streams the manifest with the hash produced by preview", async () => {
-    const result = { manifestHash: "hash-1", sections: [] };
+    const result = {
+      manifestHash: "hash-1",
+      manifest: { version: 1 as const },
+      sections: [],
+    };
     const streamProgressAction = vi.fn().mockResolvedValue(result);
     const client = createTelegramChannelsApi({
       api: {} as AxiosInstance,

@@ -11,6 +11,7 @@ import type {
   TelegramChannelPerformanceHistory,
   TelegramChannelPerformanceHistoryRange,
   TelegramChannelSystemBotConnection,
+  TelegramChannelTrafficAttributionDetail,
   TelegramManagedPostCalendarResult,
   TelegramPostPlannerApplyResult,
   TelegramPostPlannerFormat,
@@ -171,6 +172,12 @@ export function createTelegramChannelsApi({
       ).data,
     list: async () =>
       getAllPaginatedItems<TelegramChannel>("/telegram-channels"),
+    trafficAttribution: async (channelId: string) =>
+      (
+        await api.get<TelegramChannelTrafficAttributionDetail>(
+          `/telegram-channels/${channelId}/traffic-attribution`,
+        )
+      ).data,
     listOwned: async () =>
       getAllPaginatedItems<TelegramChannel>("/telegram-channels", {
         owned: true,

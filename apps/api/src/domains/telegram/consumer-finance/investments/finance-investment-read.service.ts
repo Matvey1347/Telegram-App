@@ -19,10 +19,19 @@ export class FinanceInvestmentReadService {
 
   async list(profileId: string, query: FinanceInvestmentQueryDto) {
     const limit = query.limit ?? 30;
+    const direction = query.sortDirection === 'ASC' ? 'asc' : 'desc';
+    const sortField =
+      query.sortBy === 'NAME'
+        ? 'name'
+        : query.sortBy === 'INVESTED'
+          ? 'totalInvestedInValuationCurrency'
+          : query.sortBy === 'CURRENT_VALUE'
+            ? 'currentValueInValuationCurrency'
+            : 'updatedAt';
     const rows = await this.prisma.financeInvestment.findMany({
       where: { profileId, ...(query.status ? { status: query.status } : {}) },
       select: financeInvestmentSelect,
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ [sortField]: direction }, { id: direction }],
       cursor: query.cursor ? { id: query.cursor } : undefined,
       skip: query.cursor ? 1 : 0,
       take: limit + 1,

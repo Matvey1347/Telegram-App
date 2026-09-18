@@ -10,7 +10,7 @@ import type {
   TelegramChannel,
   TelegramChannelNetwork,
 } from "@/lib/api";
-import { telegramAdSalesApi, telegramSystemBotApi } from "@/lib/api";
+import { telegramAdSalesApi } from "@/lib/api";
 import {
   getTelegramChannelPosts,
   syncTelegramChannelPostMetrics,
@@ -30,6 +30,7 @@ export function AdSalesCheckoutDialogs({
   adSaleSeedSlot,
   systemBotConnected,
   systemBotUsername,
+  systemBotWorkspaceId,
   submitAdSale,
   initialAdvertiser,
 }: {
@@ -46,6 +47,7 @@ export function AdSalesCheckoutDialogs({
   adSaleSeedSlot: TelegramAdAvailabilitySlot | null;
   systemBotConnected?: boolean;
   systemBotUsername?: string | null;
+  systemBotWorkspaceId?: string | null;
   submitAdSale: ComponentProps<typeof AdSaleModal>["onSubmit"];
   initialAdvertiser?: ComponentProps<typeof AdSaleModal>["initialAdvertiser"];
 }) {
@@ -68,25 +70,7 @@ export function AdSalesCheckoutDialogs({
         initialAdvertiser={initialAdvertiser}
         systemBotConnected={systemBotConnected}
         systemBotUsername={systemBotUsername}
-        onPrepareSystemBot={async () => {
-          const prepared = await telegramSystemBotApi.prepareAdSalePostImport();
-          return prepared.workflowId;
-        }}
-        onSendSystemBotPost={async (draft) => {
-          await telegramSystemBotApi.sendAdSalePostPreview({
-            title: draft.title,
-            text: draft.text,
-            imageUrls: draft.imageUrls,
-            mediaItems: draft.mediaItems,
-            buttonRows: draft.buttonRows,
-          });
-        }}
-        onSystemBotReturn={async (workflowId) => {
-          const result =
-            await telegramSystemBotApi.adSalePostImportResult(workflowId);
-          if (!result.ready) return null;
-          return result.draft;
-        }}
+        systemBotWorkspaceId={systemBotWorkspaceId}
         onSearchAdvertisers={(query) =>
           telegramAdSalesApi.searchAdvertisers({ q: query, limit: 20 })
         }

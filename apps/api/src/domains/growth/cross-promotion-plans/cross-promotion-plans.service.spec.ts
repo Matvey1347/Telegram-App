@@ -120,7 +120,10 @@ function setup() {
     telegramChannelAudienceSnapshot: {
       findMany: jest.fn().mockResolvedValue([]),
     },
-    telegramManagedPost: { findMany: jest.fn().mockResolvedValue([]) },
+    telegramManagedPost: {
+      findMany: jest.fn().mockResolvedValue([]),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     telegramPost: { findMany: jest.fn().mockResolvedValue([]) },
     telegramAdvertiser: {
       findFirst: jest.fn().mockResolvedValue({ id: 'advertiser-1' }),
@@ -162,6 +165,11 @@ function setup() {
               advertiserId: data.advertiserId ?? null,
             }),
         ),
+      update: jest
+        .fn()
+        .mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+          Promise.resolve({ ...row, status: 'COMPLETED', ...data }),
+        ),
       updateMany: jest.fn(),
       delete: jest.fn().mockResolvedValue({ id: 'plan-1' }),
     },
@@ -169,6 +177,11 @@ function setup() {
   const workspace = {
     resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
   };
+  Object.assign(prisma, {
+    $transaction: jest.fn((callback: (tx: typeof prisma) => unknown) =>
+      callback(prisma),
+    ),
+  });
   return {
     service: new CrossPromotionPlansService(
       prisma as never,
@@ -180,6 +193,88 @@ function setup() {
 }
 
 describe('CrossPromotionPlansService', () => {
+  it('updates completed placement configuration without changing its measured boundary', async () => {
+    const { service, prisma } = setup();
+    prisma.crossPromotionPlan.findFirst.mockResolvedValueOnce({
+      id: 'plan-1',
+      status: 'COMPLETED',
+      scheduledAt: new Date('2026-09-15T08:00:00.000Z'),
+    });
+
+    await service.updateCompleted('user-1', 'plan-1', {
+      ...payload,
+      trackingEndsAt: '2026-09-17T08:00:00.000Z',
+      publicationPost: {
+        ...payload.publicationPost,
+        publisherPlacements: [
+          {
+            telegramChannelId: 'publisher-1',
+            scheduledAt: payload.scheduledAt,
+            deleteAt: '2026-09-17T08:00:00.000Z',
+          },
+        ],
+      },
+    });
+
+    expect(prisma.crossPromotionPlan.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        // Jest asymmetric matchers deliberately cross the untyped mock boundary.
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        data: expect.objectContaining({
+          status: 'COMPLETED',
+          nextDueAt: null,
+          trackingEndsAt: new Date('2026-09-17T08:00:00.000Z'),
+        }),
+      }),
+    );
+  });
+
+  it('re-bases a dedicated link when a corrected partner placement predates the link', async () => {
+    const { service, prisma } = setup();
+    prisma.crossPromotionPlan.findFirst.mockResolvedValueOnce({
+      id: 'plan-1',
+      status: 'COMPLETED',
+      scheduledAt: new Date('2026-09-15T08:00:00.000Z'),
+      baselineTargetCounters: [
+        { inviteLinkId: 'link-1', joinedCount: 10, requestedCount: 12 },
+      ],
+    });
+    prisma.telegramInviteLink.findMany.mockImplementationOnce(() => [
+      {
+        id: 'link-1',
+        telegramChannelId: 'target-1',
+        joinedCount: 10,
+        requestedCount: 12,
+        createdAt: new Date('2026-09-13T18:31:00.000Z'),
+      },
+    ]);
+
+    await service.updateCompleted('user-1', 'plan-1', {
+      ...payload,
+      publicationPost: {
+        ...payload.publicationPost,
+        partnerPlacements: [
+          {
+            telegramChannelId: 'partner-1',
+            scheduledAt: '2026-09-13T15:06:00.000Z',
+          },
+        ],
+      },
+    });
+
+    expect(prisma.crossPromotionPlan.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        // Jest asymmetric matchers are intentionally dynamic at this assertion boundary.
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        data: expect.objectContaining({
+          baselineTargetCounters: [
+            { inviteLinkId: 'link-1', joinedCount: 0, requestedCount: 0 },
+          ],
+        }),
+      }),
+    );
+  });
+
   it('captures tracking baselines and returns observable joins and donor losses', async () => {
     const { service, prisma } = setup();
     const result = await service.create('user-1', payload);
@@ -200,6 +295,8 @@ describe('CrossPromotionPlansService', () => {
     );
     expect(result.targetResults[0].joinedCount).toBe(4);
     expect(result.targetResults[0].requestedCount).toBe(1);
+    expect(result.targetResults[0].inviteLinkTotalJoinedCount).toBe(14);
+    expect(result.targetResults[0].inviteLinkTotalRequestedCount).toBe(3);
     expect(result.publisherResults[0].subscribersLost).toBe(5);
     expect(result.iconPresentation).toEqual(
       expect.objectContaining({ type: 'unicode', value: '🤝' }),
@@ -328,14 +425,14 @@ describe('CrossPromotionPlansService', () => {
     });
     expect(prisma.crossPromotionPlan.findFirst).toHaveBeenCalledWith({
       where: { id: 'plan-1', workspaceId: 'workspace-1' },
-      select: { id: true, placementPostIds: true },
+      select: { id: true, workspaceId: true, placementPostIds: true },
     });
     expect(prisma.crossPromotionPlan.delete).toHaveBeenCalledWith({
       where: { id: 'plan-1' },
     });
   });
 
-  it('does not delete a plan while it still owns scheduled posts', async () => {
+  it('removes linked managed posts before deleting a plan', async () => {
     const { service, prisma } = setup();
     prisma.crossPromotionPlan.findFirst.mockResolvedValueOnce({
       id: 'plan-1',
@@ -344,10 +441,15 @@ describe('CrossPromotionPlansService', () => {
       ],
     });
 
-    await expect(service.remove('user-1', 'plan-1')).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
-    expect(prisma.crossPromotionPlan.delete).not.toHaveBeenCalled();
+    await expect(service.remove('user-1', 'plan-1')).resolves.toEqual({
+      id: 'plan-1',
+    });
+    expect(prisma.telegramManagedPost.deleteMany).toHaveBeenCalledWith({
+      where: {
+        workspaceId: 'workspace-1',
+        id: { in: ['post-1'] },
+      },
+    });
   });
 
   it('returns grouped placements when a future scheduled promotion is edited', async () => {
@@ -376,7 +478,7 @@ describe('CrossPromotionPlansService', () => {
     ]);
   });
 
-  it('does not reschedule a promotion after publication has started', async () => {
+  it('allows an active promotion to be replaced', async () => {
     const { service, prisma } = setup();
     prisma.crossPromotionPlan.findFirst.mockResolvedValueOnce({
       id: 'plan-1',
@@ -387,6 +489,6 @@ describe('CrossPromotionPlansService', () => {
 
     await expect(
       service.placementsForReschedule('user-1', 'plan-1'),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).resolves.toEqual([]);
   });
 });

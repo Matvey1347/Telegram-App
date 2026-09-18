@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildChannelSettingsPayload,
+  channelSettingsDraftIsInvalid,
   createChannelSettingsDraft,
 } from "./channel-settings-draft";
 
@@ -10,6 +11,9 @@ describe("channel settings description", () => {
       description: "Telegram bio must not appear here",
       shortDescription: "Existing description",
       botInviteLinkId: "invite-bot",
+      broadcastInviteLinkId: "invite-broadcast",
+      audienceTransferInviteLinkId: "invite-transfer",
+      internalCpm: 175,
     } as never);
     expect(draft.description).toBe("Existing description");
     draft.description = "  Updated description  ";
@@ -18,6 +22,9 @@ describe("channel settings description", () => {
       expect.objectContaining({
         shortDescription: "Updated description",
         botInviteLinkId: "invite-bot",
+        broadcastInviteLinkId: "invite-broadcast",
+        audienceTransferInviteLinkId: "invite-transfer",
+        internalCpm: 175,
       }),
     );
   });
@@ -29,5 +36,12 @@ describe("channel settings description", () => {
     expect(buildChannelSettingsPayload(draft)).toEqual(
       expect.objectContaining({ shortDescription: null }),
     );
+  });
+
+  it("rejects a negative internal CPM", () => {
+    const draft = createChannelSettingsDraft({} as never);
+    draft.internalCpm = "-1";
+
+    expect(channelSettingsDraftIsInvalid(draft)).toBe(true);
   });
 });

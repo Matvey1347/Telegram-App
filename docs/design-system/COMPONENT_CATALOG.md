@@ -29,6 +29,17 @@ Before adding a primitive or domain wrapper, search for an existing selector, da
 - Use when native select is not enough for visual option metadata or multiple selection.
 - Do not create local multi-selects before checking these.
 
+### `SortControl`
+
+- Import: `@/components/ui/sort-control`.
+- Use for internal paginated lists that let the user choose both a sort field
+  and ascending/descending direction. Keep the field selector and adjacent
+  direction button as two independent controls.
+- Sort paginated data on the server before `skip`/`take` or cursor slicing,
+  include both values in the query key, and reset the page when either changes.
+- Consumer applications keep a product-owned visual wrapper so their UI and
+  localization remain inside the product boundary.
+
 ### `TimezoneSelect`
 
 - Import: `@/components/ui/timezone-select`

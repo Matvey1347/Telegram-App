@@ -11,65 +11,40 @@ import type {
 } from "@telegram-system/shared";
 import type { TelegramChannel, TelegramChannelNetwork } from "@/lib/api";
 import { telegramSystemBotApi } from "@/lib/api";
-import { IconPicker } from "@/components/icons/icon-picker";
-import {
-  Button,
-  Card,
-  CustomSelect,
-  ErrorState,
-  FormField,
-  Input,
-  LoadingState,
-} from "@/components/ui/primitives";
+import { Button, Card, ErrorState } from "@/components/ui/primitives";
 import { TelegramPostPreview } from "./telegram-post-preview";
-import { TelegramChannelScopeSelector } from "./telegram-channel-scope-selector";
-import { TelegramChannelMessageTemplatePriceOptions } from "./telegram-channel-message-template-price-options";
 import {
-  buildTelegramChannelMessageTemplate,
-  DEFAULT_CHANNEL_MESSAGE_TEMPLATE,
   readTelegramChannelMessageTemplateLayout,
   renderTelegramChannelMessageTemplate,
 } from "./telegram-channel-message-template-format";
-import { TelegramChannelMessageTemplateLayoutOptions } from "./telegram-channel-message-template-layout-options";
 import {
   TelegramChannelMessageTemplateEditorHeader,
   TelegramChannelMessageTemplateEditorTabs,
   type TelegramChannelMessageTemplateEditorSection,
 } from "./telegram-channel-message-template-editor-tabs";
 import {
-  type TelegramChannelMessageTemplateDraft,
-  removeTelegramChannelMessageTemplateDraft,
-  writeTelegramChannelMessageTemplateDraft,
+  emptyTelegramMessageTemplatePayload,
+  type TelegramChannelMessageTemplateDraftForm,
 } from "./telegram-channel-message-template-draft";
+import type {
+  WorkspaceDraftPreview,
+  WorkspaceFormDraft,
+} from "@/lib/workspace-modal-drafts";
 import {
   telegramChannelMessageTemplatesApi,
   telegramMessageTemplateKeys,
 } from "@/lib/features/telegram/telegram-channel-message-templates-api";
 import { useAppToast } from "@/providers/toast-provider";
-import { telegramInviteLinkDefaultBadgeClassName } from "@/lib/features/telegram/telegram-invite-link-options";
-
-const emptyPayload = (): TelegramChannelMessageTemplatePayload => ({
-  title: "",
-  iconId: null,
-  scopeMode: "CHANNELS",
-  networkId: null,
-  channelIds: [],
-  bodyTemplate: DEFAULT_CHANNEL_MESSAGE_TEMPLATE,
-  overrideInviteLinks: false,
-  inviteLinkOverrides: {},
-  excludedProductNames: [],
-  priceRounding: "NONE",
-  productNameOverrides: {},
-  bundleOfferEnabled: false,
-  bundleDiscountPercent: 10,
-  bundleBasePriceOverrides: {},
-});
+import { TelegramChannelMessageTemplateSettings } from "./telegram-channel-message-template-settings";
+import { TelegramChannelMessageTemplatePreviewSkeleton } from "./telegram-channel-message-template-preview-skeleton";
+import { useTelegramChannelMessageTemplatePriceMode } from "./use-telegram-channel-message-template-price-mode";
 
 export function TelegramChannelMessageTemplateEditor({
   channels,
   networks,
   initial,
-  draftId,
+  onDraftChange,
+  onClearDraft,
   onBack,
   onSaved,
 }: {
@@ -77,19 +52,23 @@ export function TelegramChannelMessageTemplateEditor({
   networks: TelegramChannelNetwork[];
   initial?:
     | TelegramChannelMessageTemplate
-    | TelegramChannelMessageTemplateDraft;
-  draftId: string;
+    | WorkspaceFormDraft<TelegramChannelMessageTemplateDraftForm>;
+  onDraftChange: (
+    value: TelegramChannelMessageTemplateDraftForm,
+    preview: WorkspaceDraftPreview,
+  ) => void;
+  onClearDraft: () => void;
   onBack: () => void;
   onSaved: () => void;
 }) {
   const sourceForm = initial
     ? "form" in initial
-      ? initial.form
+      ? initial.form.payload
       : initial
-    : emptyPayload();
+    : emptyTelegramMessageTemplatePayload();
   const savedTemplateId = initial
     ? "form" in initial
-      ? initial.savedTemplateId
+      ? initial.form.savedTemplateId
       : initial.id
     : null;
   const [title, setTitle] = useState(sourceForm.title || "");
@@ -117,10 +96,8 @@ export function TelegramChannelMessageTemplateEditor({
   const [layout, setLayout] = useState(() =>
     readTelegramChannelMessageTemplateLayout(sourceForm.bodyTemplate),
   );
-  const bodyTemplate = useMemo(
-    () => buildTelegramChannelMessageTemplate(layout),
-    [layout],
-  );
+  const { bodyTemplate, priceMode, setPriceMode } =
+    useTelegramChannelMessageTemplatePriceMode(sourceForm.bodyTemplate, layout);
   const [overrideInviteLinks, setOverrideInviteLinks] = useState(
     sourceForm.overrideInviteLinks,
   );
@@ -258,17 +235,15 @@ export function TelegramChannelMessageTemplateEditor({
   );
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      writeTelegramChannelMessageTemplateDraft(window.localStorage, {
-        version: 1,
-        id: draftId,
-        savedTemplateId,
-        form: payload,
-        preview: { icon: iconPresentation },
-      });
-    }, 350);
-    return () => window.clearTimeout(timer);
-  }, [draftId, iconPresentation, payload, savedTemplateId]);
+    onDraftChange(
+      { payload, savedTemplateId },
+      {
+        title: payload.title || "Untitled template",
+        icon: iconPresentation,
+        badge: "Local draft",
+      },
+    );
+  }, [iconPresentation, onDraftChange, payload, savedTemplateId]);
 
   const save = useMutation({
     mutationFn: () =>
@@ -276,7 +251,7 @@ export function TelegramChannelMessageTemplateEditor({
         ? telegramChannelMessageTemplatesApi.update(savedTemplateId, payload)
         : telegramChannelMessageTemplatesApi.create(payload),
     onSuccess: async () => {
-      removeTelegramChannelMessageTemplateDraft(localStorage, draftId);
+      onClearDraft();
       await queryClient.invalidateQueries({
         queryKey: telegramMessageTemplateKeys.all,
       });
@@ -303,135 +278,57 @@ export function TelegramChannelMessageTemplateEditor({
 
   return (
     <div className="space-y-4">
-      <TelegramChannelMessageTemplateEditorHeader onBack={onBack} />
+      <TelegramChannelMessageTemplateEditorHeader
+        onBack={onBack}
+        draftAutosaveEnabled={!savedTemplateId}
+      />
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(300px,.75fr)]">
         <Card className="space-y-4">
           <TelegramChannelMessageTemplateEditorTabs
             value={activeSection}
             onChange={setActiveSection}
           />
-          {activeSection === "details" ? (
-            <div className="space-y-4">
-              <div className="grid items-end gap-3 sm:grid-cols-[72px_minmax(0,1fr)]">
-                <FormField label="Emoji">
-                  <IconPicker
-                    compact
-                    iconId={iconId || null}
-                    icon={iconPresentation}
-                    onChange={(value, presentation) => {
-                      setIconId(value || "");
-                      setIconPresentation(presentation ?? null);
-                    }}
-                    allowImages={false}
-                    buttonLabel="Choose emoji"
-                  />
-                </FormField>
-                <FormField label="Name (optional)">
-                  <Input
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                    placeholder="All channels price list"
-                  />
-                </FormField>
-              </div>
-              <TelegramChannelScopeSelector
-                mode={mode}
-                selectedNetworkId={networkId}
-                selectedChannelIds={channelIds}
-                networks={networks}
-                channels={channels}
-                onModeChange={setMode}
-                onNetworkChange={setNetworkId}
-                onChannelsChange={setChannelIds}
-                label="Generate for"
-              />
-            </div>
-          ) : null}
-          {activeSection === "channel" ? (
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-sm font-medium text-white">
-                  Information to include
-                </h3>
-                <p className="mb-3 mt-0.5 text-xs text-neutral-400">
-                  Build every channel heading with switches instead of template
-                  code.
-                </p>
-                <TelegramChannelMessageTemplateLayoutOptions
-                  value={layout}
-                  onChange={setLayout}
-                />
-              </div>
-              <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-3">
-                <label className="flex cursor-pointer items-start gap-3">
-                  <input
-                    type="checkbox"
-                    className="mt-1 h-4 w-4 accent-blue-500"
-                    checked={overrideInviteLinks}
-                    onChange={(event) =>
-                      setOverrideInviteLinks(event.target.checked)
-                    }
-                  />
-                  <span>
-                    <span className="block text-sm font-medium text-white">
-                      Choose a different invite link per channel
-                    </span>
-                    <span className="block text-xs text-neutral-400">
-                      Off uses the main link configured in Appearance.
-                    </span>
-                  </span>
-                </label>
-                {overrideInviteLinks && sourceQuery.data?.channels.length ? (
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    {sourceQuery.data.channels.map((channel) => (
-                      <FormField key={channel.id} label={channel.title}>
-                        <CustomSelect
-                          value={
-                            inviteLinkOverrides[channel.id] ||
-                            channel.defaultInviteLinkId ||
-                            ""
-                          }
-                          onChange={(linkId) =>
-                            setInviteLinkOverrides((current) => ({
-                              ...current,
-                              [channel.id]: linkId,
-                            }))
-                          }
-                          placeholder="Select invite link"
-                          options={channel.inviteLinks.map((link) => ({
-                            value: link.id,
-                            label: link.name,
-                            badgeClassName:
-                              telegramInviteLinkDefaultBadgeClassName({
-                                isDefaultForChannel: link.isDefault,
-                              }),
-                            meta: link.url,
-                          }))}
-                        />
-                      </FormField>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-          {activeSection === "prices" ? (
-            <TelegramChannelMessageTemplatePriceOptions
-              productNames={availableProductNames}
-              excludedProductNames={excludedProductNames}
-              priceRounding={priceRounding}
-              productNameOverrides={productNameOverrides}
-              bundleOfferEnabled={bundleOfferEnabled}
-              bundleDiscountPercent={bundleDiscountPercent}
-              bundleBasePriceOverrides={bundleBasePriceOverrides}
-              onExcludedProductNamesChange={setExcludedProductNames}
-              onPriceRoundingChange={setPriceRounding}
-              onProductNameOverridesChange={setProductNameOverrides}
-              onBundleOfferEnabledChange={setBundleOfferEnabled}
-              onBundleDiscountPercentChange={setBundleDiscountPercent}
-              onBundleBasePriceOverridesChange={setBundleBasePriceOverrides}
-            />
-          ) : null}
+          <TelegramChannelMessageTemplateSettings
+            section={activeSection}
+            channels={channels}
+            networks={networks}
+            title={title}
+            iconId={iconId}
+            iconPresentation={iconPresentation}
+            mode={mode}
+            networkId={networkId}
+            channelIds={channelIds}
+            layout={layout}
+            overrideInviteLinks={overrideInviteLinks}
+            inviteLinkOverrides={inviteLinkOverrides}
+            sourceChannels={sourceQuery.data?.channels}
+            availableProductNames={availableProductNames}
+            excludedProductNames={excludedProductNames}
+            priceRounding={priceRounding}
+            priceMode={priceMode}
+            productNameOverrides={productNameOverrides}
+            bundleOfferEnabled={bundleOfferEnabled}
+            bundleDiscountPercent={bundleDiscountPercent}
+            bundleBasePriceOverrides={bundleBasePriceOverrides}
+            onTitleChange={setTitle}
+            onIconChange={(value, presentation) => {
+              setIconId(value);
+              setIconPresentation(presentation);
+            }}
+            onModeChange={setMode}
+            onNetworkChange={setNetworkId}
+            onChannelsChange={setChannelIds}
+            onLayoutChange={setLayout}
+            onOverrideInviteLinksChange={setOverrideInviteLinks}
+            onInviteLinkOverridesChange={setInviteLinkOverrides}
+            onExcludedProductNamesChange={setExcludedProductNames}
+            onPriceRoundingChange={setPriceRounding}
+            onPriceModeChange={setPriceMode}
+            onProductNameOverridesChange={setProductNameOverrides}
+            onBundleOfferEnabledChange={setBundleOfferEnabled}
+            onBundleDiscountPercentChange={setBundleDiscountPercent}
+            onBundleBasePriceOverridesChange={setBundleBasePriceOverrides}
+          />
           {sourceQuery.data?.channels.some(
             (channel) => !channel.inviteLinks.length,
           ) ? (
@@ -471,9 +368,7 @@ export function TelegramChannelMessageTemplateEditor({
         </Card>
         <div className="xl:sticky xl:top-4">
           {sourceQuery.isFetching ? (
-            <Card>
-              <LoadingState text="Loading channel data and prices…" />
-            </Card>
+            <TelegramChannelMessageTemplatePreviewSkeleton />
           ) : sourceQuery.isError ? (
             <ErrorState text="Could not load current channel data for the preview." />
           ) : stableSourceIds.length ? (

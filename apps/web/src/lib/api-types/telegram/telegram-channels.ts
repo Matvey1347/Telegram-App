@@ -12,6 +12,7 @@ import type {
 } from "./telegram-channel-analytics";
 import type {
   TelegramChannelAudienceTrend,
+  TelegramChannelTrafficAttributionPreview,
   TelegramChannelSystemBotConnection,
   TelegramPublishingCapabilities,
 } from "@telegram-system/shared";
@@ -92,6 +93,8 @@ export type TelegramChannel = EntityAssignment & {
   presentationIconPresentation?: ResolvedEmoji | null;
   defaultInviteLinkId?: string | null;
   botInviteLinkId?: string | null;
+  broadcastInviteLinkId?: string | null;
+  audienceTransferInviteLinkId?: string | null;
   folderDefaultInviteLinkIds?: string[];
   mutualPromotionInviteLinkIds?: string[];
   language?: string;
@@ -106,6 +109,7 @@ export type TelegramChannel = EntityAssignment & {
   ownReactionsPerPost?: number;
   kpiCurrency?: string;
   adBaseCpm?: number | string | null;
+  internalCpm?: number | string | null;
   adBaseCurrency?: string;
   subscriberBaseQuality?: string | null;
   dataQualityNotes?: string | null;
@@ -167,6 +171,7 @@ export type TelegramChannel = EntityAssignment & {
     audienceTrend?: TelegramChannelAudienceTrend | null;
     hasPublicationSchedule?: boolean;
     financialSummary: TelegramChannelFinancialSummary;
+    trafficAttribution?: TelegramChannelTrafficAttributionPreview | null;
     bookingSchedule?: {
       futureScheduledTotal: number;
       draftTotal: number;

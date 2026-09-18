@@ -24,6 +24,7 @@ import {
   IsUrl,
   Matches,
   Max,
+  MaxLength,
   Min,
   ValidateIf,
   ValidateNested,
@@ -37,7 +38,7 @@ export class CreateTelegramChannelDto {
   @IsOptional() @IsString() username?: string;
   @IsOptional() @IsString() telegramChatId?: string;
   @IsOptional() @IsString() description?: string;
-  @IsOptional() @IsString() shortDescription?: string | null;
+  @IsOptional() @IsString() @MaxLength(240) shortDescription?: string | null;
   @IsOptional() @Type(() => Number) @IsInt() currentSubscribersCount?: number;
 }
 
@@ -53,11 +54,13 @@ export class UpdateTelegramChannelDto {
   @IsOptional() @IsString() username?: string;
   @IsOptional() @IsString() telegramChatId?: string;
   @IsOptional() @IsString() description?: string;
-  @IsOptional() @IsString() shortDescription?: string | null;
+  @IsOptional() @IsString() @MaxLength(240) shortDescription?: string | null;
   @IsOptional() @IsUrl({ require_protocol: true }) tgStatUrl?: string | null;
   @IsOptional() @IsString() presentationIconId?: string | null;
   @IsOptional() @IsString() defaultInviteLinkId?: string | null;
   @IsOptional() @IsString() botInviteLinkId?: string | null;
+  @IsOptional() @IsString() broadcastInviteLinkId?: string | null;
+  @IsOptional() @IsString() audienceTransferInviteLinkId?: string | null;
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(100)
@@ -96,6 +99,9 @@ export class UpdateTelegramChannelDto {
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) targetCpa?: number;
   @IsOptional() @Matches(/^[A-Za-z]{3}$/) kpiCurrency?: string;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) adBaseCpm?:
+    | number
+    | null;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) internalCpm?:
     | number
     | null;
   @IsOptional() @Matches(/^[A-Za-z]{3}$/) adBaseCurrency?: string;
@@ -390,6 +396,17 @@ export class TelegramChannelInviteLinksQueryDto extends PaginationQueryDto {
   @ArrayMaxSize(100)
   @IsString({ each: true })
   selectedIds?: string[];
+  // Accept axios's historic bracket serialization while callers migrate to
+  // the canonical repeated `selectedIds` query parameter.
+  @IsOptional()
+  @Transform(({ value }) => {
+    const values = Array.isArray(value) ? value : [value];
+    return values.flatMap((item) => String(item).split(',')).filter(Boolean);
+  })
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  ['selectedIds[]']?: string[];
   @IsOptional()
   @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()

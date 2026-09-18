@@ -48,7 +48,7 @@ export class TelegramSystemBotFinanceHandlerService {
   }) {
     const { chatId, connectionId, userId, workspaceId, callback, messageId } =
       input;
-    await this.workflows.requireNoActiveBatchImport({
+    await this.workflows.requireNoActivePostImport({
       connectionId,
       workspaceId,
     });
@@ -150,7 +150,7 @@ export class TelegramSystemBotFinanceHandlerService {
     text: string;
     inputMessageId?: number;
   }) {
-    await this.workflows.requireNoActiveBatchImport(input);
+    await this.workflows.requireNoActivePostImport(input);
     const result = await this.finance.submitInput(input);
     if (!result) return null;
     if (input.inputMessageId) {

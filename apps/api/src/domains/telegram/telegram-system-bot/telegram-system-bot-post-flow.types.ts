@@ -35,10 +35,8 @@ export type TelegramSystemBotCapturedPostContent = {
   warnings: string[];
 };
 
-export type TelegramSystemBotModalDestination = 'AD_SALE_MODAL' | 'PROMO_MODAL';
-
 export type TelegramSystemBotPostPayload = {
-  destination?: 'MANAGED_POST' | TelegramSystemBotModalDestination;
+  destination?: 'MANAGED_POST';
   content?: TelegramSystemBotCapturedPostContent;
   channelId?: string;
   channelTitle?: string;
@@ -47,12 +45,6 @@ export type TelegramSystemBotPostPayload = {
   action?: TelegramSystemBotPostAction;
   scheduledAt?: string;
 };
-
-export function isTelegramSystemBotModalImport(
-  destination: TelegramSystemBotPostPayload['destination'],
-): destination is TelegramSystemBotModalDestination {
-  return destination === 'AD_SALE_MODAL' || destination === 'PROMO_MODAL';
-}
 
 export type TelegramSystemBotPostGroupOption = {
   id: string;

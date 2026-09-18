@@ -35,4 +35,42 @@ describe('TelegramUnifiedImportDto', () => {
 
     expect(validateSync(dto)).not.toEqual([]);
   });
+
+  it('accepts resumable imported markers in every manifest section', () => {
+    const dto = plainToInstance(TelegramUnifiedImportDto, {
+      version: 1,
+      groups: [
+        { ref: 'group-1', action: 'CREATE', title: 'Group', imported: false },
+      ],
+      hypotheses: [
+        {
+          ref: 'hypothesis-1',
+          action: 'CREATE',
+          imported: false,
+          value: { name: 'Hypothesis' },
+        },
+      ],
+      posts: [
+        { ref: 'post-1', action: 'CREATE', title: 'Post', imported: false },
+      ],
+      schedule: [
+        {
+          action: 'SCHEDULE',
+          postRef: 'post-1',
+          slotId: 'slot-1',
+          scheduledAt: '2026-09-21T08:10:00+02:00',
+          imported: false,
+        },
+      ],
+      delete: {
+        groups: [{ id: 'group-old', imported: false }],
+        hypotheses: [{ id: 'hypothesis-old', imported: false }],
+        posts: [{ id: 'post-old', imported: false }],
+      },
+    });
+
+    expect(
+      validateSync(dto, { whitelist: true, forbidNonWhitelisted: true }),
+    ).toEqual([]);
+  });
 });

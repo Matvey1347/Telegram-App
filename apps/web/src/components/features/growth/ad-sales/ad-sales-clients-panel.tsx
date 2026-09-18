@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { ArrowUpDown, Check, SlidersHorizontal, X } from "lucide-react";
+import { SlidersHorizontal, X } from "lucide-react";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 import { Pagination } from "@/components/ui/pagination";
+import { SortControl } from "@/components/ui/sort-control";
 import {
   Card,
   ErrorState,
@@ -57,22 +58,12 @@ type ArchivedFilter = "active" | "archived" | "all";
 type ClientSort = "PRIORITY" | "REVENUE" | "RECENT_PURCHASE" | "NAME" | "SALES";
 type SortDirection = "ASC" | "DESC";
 
-const clientSortOptions: Array<{
-  label: string;
-  sortBy: ClientSort;
-  sortDirection: SortDirection;
-}> = [
-  { label: "Priority", sortBy: "PRIORITY", sortDirection: "DESC" },
-  {
-    label: "Recent purchase",
-    sortBy: "RECENT_PURCHASE",
-    sortDirection: "DESC",
-  },
-  { label: "Revenue: high to low", sortBy: "REVENUE", sortDirection: "DESC" },
-  { label: "Revenue: low to high", sortBy: "REVENUE", sortDirection: "ASC" },
-  { label: "Orders: most first", sortBy: "SALES", sortDirection: "DESC" },
-  { label: "Name: A–Z", sortBy: "NAME", sortDirection: "ASC" },
-  { label: "Name: Z–A", sortBy: "NAME", sortDirection: "DESC" },
+const clientSortOptions: Array<{ label: string; value: ClientSort }> = [
+  { label: "Priority", value: "PRIORITY" },
+  { label: "Recent purchase", value: "RECENT_PURCHASE" },
+  { label: "Revenue", value: "REVENUE" },
+  { label: "Orders", value: "SALES" },
+  { label: "Name", value: "NAME" },
 ];
 
 export function AdSalesClientsPanel() {
@@ -87,11 +78,9 @@ export function AdSalesClientsPanel() {
   const [archived, setArchived] = useState<ArchivedFilter>("active");
   const [sortBy, setSortBy] = useState<ClientSort>("PRIORITY");
   const [sortDirection, setSortDirection] = useState<SortDirection>("DESC");
-  const [sortOpen, setSortOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [ordersClient, setOrdersClient] =
     useState<TelegramAdCrmAdvertiserListItem | null>(null);
-  const sortMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timeout = window.setTimeout(
@@ -100,23 +89,6 @@ export function AdSalesClientsPanel() {
     );
     return () => window.clearTimeout(timeout);
   }, [search]);
-
-  useEffect(() => {
-    if (!sortOpen) return;
-    const closeOutside = (event: MouseEvent) => {
-      if (!sortMenuRef.current?.contains(event.target as Node))
-        setSortOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSortOpen(false);
-    };
-    document.addEventListener("mousedown", closeOutside);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("mousedown", closeOutside);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [sortOpen]);
 
   const queryParams = useMemo(
     () => ({
@@ -202,51 +174,21 @@ export function AdSalesClientsPanel() {
               />
             </FormField>
           </div>
-          <div ref={sortMenuRef} className="relative self-end">
-            <button
-              type="button"
-              className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-lg text-neutral-300 transition hover:bg-neutral-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              aria-label="Sort clients"
-              aria-haspopup="menu"
-              aria-expanded={sortOpen}
-              title="Sort clients"
-              onClick={() => setSortOpen((current) => !current)}
-            >
-              <ArrowUpDown size={20} />
-            </button>
-            {sortOpen ? (
-              <div
-                role="menu"
-                className="absolute right-0 top-full z-40 mt-1 w-56 rounded-lg border border-neutral-700 bg-neutral-950 p-1 shadow-2xl"
-              >
-                {clientSortOptions.map((option) => {
-                  const selected =
-                    option.sortBy === sortBy &&
-                    option.sortDirection === sortDirection;
-                  return (
-                    <button
-                      key={`${option.sortBy}-${option.sortDirection}`}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={selected}
-                      onClick={() => {
-                        setPage(1);
-                        setSortBy(option.sortBy);
-                        setSortDirection(option.sortDirection);
-                        setSortOpen(false);
-                      }}
-                      className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-800 hover:text-white"
-                    >
-                      {option.label}
-                      {selected ? (
-                        <Check size={15} className="text-blue-400" />
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>
+          <SortControl
+            className="w-full self-end lg:w-64"
+            field={sortBy}
+            options={clientSortOptions}
+            direction={sortDirection}
+            fieldLabel="Sort clients by"
+            onFieldChange={(value) => {
+              setPage(1);
+              setSortBy(value);
+            }}
+            onDirectionChange={(value) => {
+              setPage(1);
+              setSortDirection(value);
+            }}
+          />
           <button
             type="button"
             className="relative inline-flex h-[38px] w-[38px] items-center justify-center rounded-lg text-neutral-300 transition hover:bg-neutral-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"

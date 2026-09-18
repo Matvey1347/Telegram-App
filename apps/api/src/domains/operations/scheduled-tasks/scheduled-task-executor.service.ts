@@ -20,6 +20,7 @@ import { OperationsNotificationDueService } from '../notifications/operations-no
 import { TelegramCrmInitialSyncService } from '../../telegram/telegram-crm/telegram-crm-initial-sync.service';
 import { MutualPromotionLifecycleService } from '../../growth/mutual-promotion-folders/mutual-promotion-lifecycle.service';
 import { TelegramPostBatchLifecycleService } from '../../telegram/telegram-channels/telegram-post-batch-lifecycle.service';
+import { CrossPromotionPlanLifecycleService } from '../../growth/cross-promotion-plans/cross-promotion-plan-lifecycle.service';
 
 @Injectable()
 export class ScheduledTaskExecutorService {
@@ -77,12 +78,19 @@ export class ScheduledTaskExecutorService {
       };
     },
     'mutual_promotion.lifecycle': async () => {
-      const result = await (
-        await this.mutualPromotionLifecycleService()
-      ).processDueActions();
+      const [result, direct] = await Promise.all([
+        (await this.mutualPromotionLifecycleService()).processDueActions(),
+        this.moduleRef
+          .resolve<CrossPromotionPlanLifecycleService>(
+            CrossPromotionPlanLifecycleService,
+            undefined,
+            { strict: false },
+          )
+          .then((service) => service.processDueActions()),
+      ]);
       return {
-        summary: `Considered ${result.considered} mutual-promotion actions; processed ${result.processed}, completed ${result.completed}, retried ${result.retried}, failed ${result.failed}.`,
-        details: result,
+        summary: `Processed ${result.processed} folder actions and ${direct.processed} direct-promotion deletions; completed ${result.completed + direct.completed}, retried ${result.retried + direct.retried}, failed ${result.failed}.`,
+        details: { folders: result, direct },
       };
     },
     'telegram.post_batches.lifecycle': async () => {

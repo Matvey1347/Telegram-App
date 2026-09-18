@@ -206,6 +206,19 @@ export class AdCampaignQueryDto extends PaginationQueryDto {
   @IsOptional() @IsDateString() dateFrom?: string;
   @IsOptional() @IsDateString() dateTo?: string;
   @IsOptional()
-  @IsIn(['date_desc', 'date_asc', 'cost_desc', 'joined_desc'])
-  sort?: 'date_desc' | 'date_asc' | 'cost_desc' | 'joined_desc';
+  @IsIn([
+    'date_desc',
+    'date_asc',
+    'cost_desc',
+    'cost_asc',
+    'joined_desc',
+    'joined_asc',
+  ])
+  sort?:
+    | 'date_desc'
+    | 'date_asc'
+    | 'cost_desc'
+    | 'cost_asc'
+    | 'joined_desc'
+    | 'joined_asc';
 }

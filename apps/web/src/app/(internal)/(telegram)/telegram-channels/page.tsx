@@ -3,28 +3,11 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  ArrowUpRight,
-  CircleHelp,
-  ImagePlus,
-  RefreshCw,
-  Send,
-  X,
-} from "lucide-react";
+import { CircleHelp, ImagePlus, X } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
 import { AppShell } from "@/components/layout/app-shell";
-import { ChannelPreview } from "@/components/features/telegram/telegram/channel-preview";
-import { ExternalChannelAdAnalysis } from "@/components/features/telegram/telegram/external-channel-ad-analysis";
-import {
-  ChannelEconomicsSummary,
-  sortChannelsByScale,
-} from "@/components/features/telegram/telegram/channel-economics-summary";
-import {
-  ChannelActionsMenu,
-  ChannelMenuAction,
-  ChannelMenuLink,
-} from "@/components/features/telegram/telegram/channel-card-actions";
-import { ChannelStatusBadges } from "@/components/features/telegram/telegram/channel-system-bot-access-modal";
+import { sortChannelsByScale } from "@/components/features/telegram/telegram/channel-economics-summary";
+import { TelegramChannelCatalogCard } from "@/components/features/telegram/telegram/telegram-channel-catalog-card";
 import {
   ChannelSyncScopeModal,
   DEFAULT_CHANNEL_SYNC_SELECTION,
@@ -68,7 +51,6 @@ import {
   type TelegramChannelSourceAccess,
 } from "@/lib/api";
 import { scheduleProgressDismiss, syncProgressToToast } from "@/lib/progress";
-import { buildTelegramPostsUrl } from "@/lib/features/telegram/telegram-posts-url";
 import {
   Button,
   ConfirmDeleteModal,
@@ -121,12 +103,6 @@ import {
 } from "@/components/features/telegram/telegram/telegram-channel-export";
 
 const TELEGRAM_TAB_STORAGE_KEY = "telegram-channels:last-tab";
-function normalizeUsername(value?: string | null) {
-  return String(value || "")
-    .replace(/^@/, "")
-    .trim();
-}
-
 function requestErrorMessage(error: unknown, fallback: string) {
   const responseError = error as { response?: { data?: { message?: string } } };
   return responseError?.response?.data?.message || fallback;
@@ -1676,100 +1652,33 @@ export default function TelegramChannelsPage() {
             <div className="text-red-300">Failed to load channels</div>
           ) : null}
           <MasonryGrid>
-            {filteredChannels.map((channel: TelegramChannel) => {
-              const hasAdminLink = isOwnChannel(channel);
-              const username = normalizeUsername(channel.username);
-              return (
-                <div
-                  key={channel.id}
-                  className="rounded-xl border border-neutral-800/80 bg-neutral-900/55 p-4 text-sm text-neutral-300"
-                >
-                  <ChannelPreview
-                    channel={channel}
-                    status={
-                      hasAdminLink ? (
-                        <ChannelStatusBadges
-                          connection={channel.preview?.systemBotConnection}
-                          archived={Boolean(channel.archivedAt)}
-                        />
-                      ) : undefined
-                    }
-                    rightAction={
-                      <ChannelActionsMenu
-                        channel={channel}
-                        currencySettings={currencySettings}
-                        archived={Boolean(channel.archivedAt)}
-                        canArchive={hasAdminLink}
-                        onRestore={() => restoreMutation.mutate(channel.id)}
-                        onArchive={() => archiveMutation.mutate(channel.id)}
-                        onDelete={() => setDeleting(channel)}
-                      >
-                        {hasAdminLink ? (
-                          <ChannelMenuLink
-                            label="Open channel"
-                            href={`/telegram/channels/${channel.id}`}
-                            icon={<ArrowUpRight size={17} />}
-                          />
-                        ) : null}
-                        {hasAdminLink && !channel.archivedAt ? (
-                          <ChannelMenuAction
-                            label="Sync channel"
-                            icon={<RefreshCw size={17} />}
-                            onClick={() => {
-                              setSyncTargetChannel(channel);
-                              setSyncSelection(
-                                syncSelectionFromChannel(channel),
-                              );
-                              setSyncPostLimit(channel.postSyncLimit ?? 50);
-                            }}
-                          />
-                        ) : null}
-                        {!hasAdminLink && username && !channel.archivedAt ? (
-                          <ChannelMenuAction
-                            label="Refresh public data"
-                            icon={<RefreshCw size={17} />}
-                            onClick={() =>
-                              importMutation.mutate({
-                                input: `@${username}`,
-                                mode: "refresh",
-                              })
-                            }
-                          />
-                        ) : null}
-                        {hasAdminLink &&
-                        !channel.archivedAt &&
-                        channel.preview?.canPostMessages ? (
-                          <ChannelMenuLink
-                            label="Posts"
-                            href={buildTelegramPostsUrl({
-                              channelId: channel.id,
-                              postView: "editor",
-                            })}
-                            icon={<Send size={17} />}
-                          />
-                        ) : null}
-                      </ChannelActionsMenu>
-                    }
-                    className="!mb-0 !border-0 !bg-transparent !p-0"
-                  />
-                  <ChannelEconomicsSummary
-                    channel={channel}
-                    currencySettings={currencySettings}
-                  />
-                  {!hasAdminLink ? (
-                    <ExternalChannelAdAnalysis
-                      channel={channel}
-                      onEdit={(analysis) =>
-                        setAnalysisEditor({ channel, analysis })
-                      }
-                      onDelete={(analysis) =>
-                        setDeletingAnalysis({ channel, analysis })
-                      }
-                    />
-                  ) : null}
-                </div>
-              );
-            })}
+            {filteredChannels.map((channel: TelegramChannel) => (
+              <TelegramChannelCatalogCard
+                key={channel.id}
+                channel={channel}
+                currencySettings={currencySettings}
+                onRestore={(channelId) => restoreMutation.mutate(channelId)}
+                onArchive={(channelId) => archiveMutation.mutate(channelId)}
+                onDelete={setDeleting}
+                onSync={(target) => {
+                  setSyncTargetChannel(target);
+                  setSyncSelection(syncSelectionFromChannel(target));
+                  setSyncPostLimit(target.postSyncLimit ?? 50);
+                }}
+                onRefreshPublicData={(username) =>
+                  importMutation.mutate({
+                    input: `@${username}`,
+                    mode: "refresh",
+                  })
+                }
+                onEditAnalysis={(target, analysis) =>
+                  setAnalysisEditor({ channel: target, analysis })
+                }
+                onDeleteAnalysis={(target, analysis) =>
+                  setDeletingAnalysis({ channel: target, analysis })
+                }
+              />
+            ))}
           </MasonryGrid>
           {!channelsInitialLoading &&
           !channelsInitialError &&

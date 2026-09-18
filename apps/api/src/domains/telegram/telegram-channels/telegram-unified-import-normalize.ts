@@ -11,8 +11,22 @@ function cleanUnifiedImportImageUrl(value: string) {
 export function normalizeUnifiedImportManifest(
   manifest: TelegramUnifiedImportManifest,
 ): TelegramUnifiedImportManifest {
+  const schedule = manifest.schedule?.filter((operation, index, operations) => {
+    if (operation.action !== 'UNSCHEDULE' || !operation.postId) return true;
+    return !operations.some(
+      (candidate, candidateIndex) =>
+        candidateIndex > index &&
+        candidate.action !== 'UNSCHEDULE' &&
+        candidate.postId === operation.postId,
+    );
+  });
   return {
     ...manifest,
+    groups: manifest.groups?.map((group) => ({ ...group })),
+    hypotheses: manifest.hypotheses?.map((hypothesis) => ({
+      ...hypothesis,
+      value: hypothesis.value ? { ...hypothesis.value } : undefined,
+    })),
     posts: manifest.posts?.map((post) => ({
       ...post,
       imageUrls: post.imageUrls
@@ -20,5 +34,18 @@ export function normalizeUnifiedImportManifest(
         .map(cleanUnifiedImportImageUrl)
         .filter(Boolean),
     })),
+    // A generated plan may express a move as UNSCHEDULE followed by SCHEDULE.
+    // SCHEDULE already reschedules an existing publication atomically, so keep
+    // only the final operation instead of reporting a false conflict.
+    schedule: schedule?.map((operation) => ({ ...operation })),
+    delete: manifest.delete
+      ? {
+          groups: manifest.delete.groups?.map((target) => ({ ...target })),
+          hypotheses: manifest.delete.hypotheses?.map((target) => ({
+            ...target,
+          })),
+          posts: manifest.delete.posts?.map((target) => ({ ...target })),
+        }
+      : undefined,
   };
 }

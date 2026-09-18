@@ -204,9 +204,7 @@ function LegacyAdSalesPage() {
     query: channelsQuery,
     channels,
     saleableChannels,
-  } = useAdSalesChannels(
-    tab !== "clients" || inventoryOpen || adSaleModalOpen,
-  );
+  } = useAdSalesChannels(tab !== "clients" || inventoryOpen || adSaleModalOpen);
   const networksQuery = useQuery({
     queryKey: ["telegram-channel-networks"],
     queryFn: telegramChannelNetworksApi.list,
@@ -924,7 +922,6 @@ function LegacyAdSalesPage() {
           }}
         />
       ) : null}
-
       {tab === "analytics" ? (
         <AdSalesAnalyticsPanel
           selectedChannelIds={effectiveChannelIds}
@@ -945,6 +942,7 @@ function LegacyAdSalesPage() {
         adSaleSeedSlot={adSaleSeedSlot}
         systemBotConnected={systemBotConnectionQuery.data?.connected}
         systemBotUsername={systemBotConnectionQuery.data?.botUsername}
+        systemBotWorkspaceId={systemBotConnectionQuery.data?.currentWorkspaceId}
         submitAdSale={submitAdSale}
         initialAdvertiser={initialAdvertiser}
       />

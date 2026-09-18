@@ -217,9 +217,12 @@ describe("ChannelSyncScopeModal", () => {
       skippedCount: 0,
     });
     await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
-    expect(invalidateQueries).toHaveBeenCalledOnce();
+    expect(invalidateQueries).toHaveBeenCalledTimes(2);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["telegram-channels", "list"],
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["telegram-channel-traffic-attribution"],
     });
     expect(pushToast).toHaveBeenCalledWith(
       "Synced 99/100 channels, 1 failed.",

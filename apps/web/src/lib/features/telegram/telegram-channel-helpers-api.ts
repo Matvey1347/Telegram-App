@@ -165,6 +165,10 @@ export function createTelegramChannelHelpers({
               ...(selectedId ? { selectedId } : {}),
               ...(selectedIds?.length ? { selectedIds } : {}),
             },
+            // Nest's query validation receives repeated `selectedIds` values
+            // as an array. Axios's bracket format (`selectedIds[]`) instead
+            // becomes a different, rejected property.
+            paramsSerializer: { indexes: null },
           },
         )
       ).data,

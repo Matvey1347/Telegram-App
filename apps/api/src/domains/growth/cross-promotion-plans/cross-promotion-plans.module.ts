@@ -4,6 +4,7 @@ import { CrossPromotionPlansService } from './cross-promotion-plans.service';
 import { CrossPromotionPlanReadService } from './cross-promotion-plan-read.service';
 import { CrossPromotionPlanSchedulingService } from './cross-promotion-plan-scheduling.service';
 import { TelegramChannelsModule } from '../../telegram/telegram-channels/telegram-channels.module';
+import { CrossPromotionPlanLifecycleService } from './cross-promotion-plan-lifecycle.service';
 
 @Module({
   imports: [TelegramChannelsModule],
@@ -12,6 +13,8 @@ import { TelegramChannelsModule } from '../../telegram/telegram-channels/telegra
     CrossPromotionPlansService,
     CrossPromotionPlanReadService,
     CrossPromotionPlanSchedulingService,
+    CrossPromotionPlanLifecycleService,
   ],
+  exports: [CrossPromotionPlanLifecycleService],
 })
 export class CrossPromotionPlansModule {}

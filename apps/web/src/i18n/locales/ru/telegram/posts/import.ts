@@ -11,6 +11,7 @@ const messages = {
   "telegram.posts.import.parsePlanError": "Не удалось разобрать план.",
   "telegram.posts.import.reimportDelete": "Повторный импорт / удаление",
   "telegram.posts.import.tabNew": "Новые",
+  "telegram.posts.import.tabNotImported": "Не импортировано",
   "telegram.posts.import.tabImported": "Импортированные",
   "telegram.posts.import.untitled": "Без названия",
   "telegram.posts.import.emptyTab": "В этой вкладке нет публикаций.",
@@ -147,6 +148,13 @@ const messages = {
     "Импорт завершён с ошибками: {count}. Проверьте детали перед повтором.",
   "telegram.posts.import.progressTitle": "Прогресс импорта",
   "telegram.posts.import.progressStarting": "Запускаем поток импорта…",
+  "telegram.posts.import.progressSuccessful": "Успешно",
+  "telegram.posts.import.progressStatus.running": "Выполняется",
+  "telegram.posts.import.progressStatus.completed": "Завершён",
+  "telegram.posts.import.progressStatus.completed-with-errors":
+    "Завершён с ошибками",
+  "telegram.posts.import.progressStatus.failed": "Ошибка",
+  "telegram.posts.import.progressStatus.cancelled": "Остановлен",
   "telegram.posts.import.progressCounts":
     "Создано {created} · Обновлено {updated} · Удалено {deleted} · Запланировано {scheduled} · Снято {unscheduled}",
   "telegram.posts.import.progressCreated": "Создано",
@@ -171,9 +179,28 @@ const messages = {
   "telegram.posts.import.openInSystem": "Открыть",
   "telegram.posts.import.openAfterImport":
     "Публикацию можно будет открыть после её создания.",
+  "telegram.posts.import.removeOperation": "Убрать эту операцию из импорта",
+  "telegram.posts.import.noChanges": "Значения полей не изменятся.",
+  "telegram.posts.import.emptyValue": "Пусто",
+  "telegram.posts.import.changeField.icon": "Иконка",
+  "telegram.posts.import.changeField.title": "Название",
+  "telegram.posts.import.changeField.name": "Название",
+  "telegram.posts.import.changeField.description": "Описание",
+  "telegram.posts.import.changeField.status": "Статус",
+  "telegram.posts.import.changeField.conclusion": "Вывод",
+  "telegram.posts.import.changeField.text": "Текст Telegram",
+  "telegram.posts.import.changeField.imageUrls": "Ссылки на медиа",
   "telegram.posts.import.scheduleOperations": "Операции календаря",
   "telegram.posts.import.scheduleTab": "Запланировать ({count})",
   "telegram.posts.import.unscheduleTab": "Снять с планирования ({count})",
+  "telegram.posts.import.inlinePreview": "Предпросмотр",
+  "telegram.posts.import.inlinePreviewNamed": "Предпросмотр: {title}",
+  "telegram.posts.import.editScheduleNamed":
+    "Изменить дату и время публикации: {title}",
+  "telegram.posts.import.reschedule": "Перепланировать",
+  "telegram.posts.import.unknownScheduleDate": "Дата недоступна",
+  "telegram.posts.import.emptyCalendarState":
+    "В этой вкладке нет операций календаря.",
   "telegram.posts.import.invalidFile": "Некорректный файл",
 } as const satisfies Record<keyof typeof en, string>;
 export default messages;

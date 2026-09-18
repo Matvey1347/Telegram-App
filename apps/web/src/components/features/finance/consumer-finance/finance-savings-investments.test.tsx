@@ -218,9 +218,60 @@ describe("Consumer Finance savings and investments screens", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Load more" }));
     expect(api.investments).toHaveBeenLastCalledWith("bot", {
       status: "ACTIVE",
+      sortBy: "UPDATED",
+      sortDirection: "DESC",
       cursor: "asset-next",
       limit: 30,
     });
+  });
+
+  it("sends investment field and direction sorting and starts a fresh cursor chain", async () => {
+    api.investments.mockImplementation(
+      (_bot: string, query: { cursor?: string }) =>
+        Promise.resolve({
+          items: [],
+          nextCursor: query.cursor ? null : "asset-next",
+        }),
+    );
+    host(
+      <FinanceInvestments
+        botId="bot"
+        locale="en"
+        defaultCurrency="USD"
+        onOpen={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Load more" }));
+    await waitFor(() => expect(api.investments).toHaveBeenCalledTimes(2));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Sort investments by" }),
+    );
+    fireEvent.click(screen.getByRole("option", { name: "Invested amount" }));
+    await waitFor(() =>
+      expect(api.investments).toHaveBeenLastCalledWith("bot", {
+        status: "ACTIVE",
+        sortBy: "INVESTED",
+        sortDirection: "DESC",
+        cursor: undefined,
+        limit: 30,
+      }),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /Sort investments by: Descending.*Ascending/i,
+      }),
+    );
+    await waitFor(() =>
+      expect(api.investments).toHaveBeenLastCalledWith("bot", {
+        status: "ACTIVE",
+        sortBy: "INVESTED",
+        sortDirection: "ASC",
+        cursor: undefined,
+        limit: 30,
+      }),
+    );
   });
 
   it("records a return through the add-investment flow as an investment cash flow", async () => {
@@ -239,7 +290,10 @@ describe("Consumer Finance savings and investments screens", () => {
       createdAt: "2026-01-01",
       updatedAt: "2026-01-01",
     };
-    api.investments.mockResolvedValue({ items: [investment], nextCursor: null });
+    api.investments.mockResolvedValue({
+      items: [investment],
+      nextCursor: null,
+    });
     api.accounts.mockResolvedValue([
       {
         id: "cash",
@@ -262,7 +316,9 @@ describe("Consumer Finance savings and investments screens", () => {
       />,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Add investment" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Add investment" }),
+    );
     const picker = await screen.findByRole("dialog", {
       name: "Add investment",
     });
@@ -277,10 +333,14 @@ describe("Consumer Finance savings and investments screens", () => {
     fireEvent.click(
       within(picker).getByRole("button", { name: "Choose an investment" }),
     );
-    fireEvent.click(await screen.findByRole("option", { name: /Photo studio/ }));
+    fireEvent.click(
+      await screen.findByRole("option", { name: /Photo studio/ }),
+    );
     fireEvent.click(within(picker).getByRole("button", { name: "Continue" }));
 
-    const action = await screen.findByRole("dialog", { name: /Return: Photo studio/ });
+    const action = await screen.findByRole("dialog", {
+      name: /Return: Photo studio/,
+    });
     fireEvent.change(action.querySelector('input[inputmode="decimal"]')!, {
       target: { value: "25" },
     });

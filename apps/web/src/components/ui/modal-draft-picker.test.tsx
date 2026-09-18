@@ -1,91 +1,82 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import type { WorkspaceFormDraft } from "@/lib/workspace-modal-drafts";
 import { ModalDraftPicker } from "./modal-draft-picker";
 
-vi.mock("@/lib/api", () => ({
-  iconsApi: {
-    list: vi
-      .fn()
-      .mockResolvedValue([
-        { id: "legacy-icon", type: "emoji", name: "Handshake", emoji: "🤝" },
-      ]),
-  },
-}));
+type Form = { title: string };
+const draft = (
+  id: string,
+  preview?: WorkspaceFormDraft<Form>["preview"],
+): WorkspaceFormDraft<Form> => ({
+  id,
+  createdAt: "2026-09-15T10:00:00.000Z",
+  updatedAt: "2026-09-15T11:00:00.000Z",
+  schemaVersion: 1,
+  form: { title: `Form ${id}` },
+  preview,
+});
 
 describe("ModalDraftPicker", () => {
-  it("shows the persisted emoji preview and keeps actions icon-only", () => {
-    const draft = {
-      version: 1 as const,
-      id: "draft-1",
-      form: { title: "Mutual promo" },
-      preview: { icon: { type: "unicode" as const, value: "🤝" } },
-    };
+  it("uses persisted metadata and keeps actions accessible", () => {
+    const saved = draft("one", {
+      title: "Mutual promo",
+      subtitle: "Two channels",
+      detail: "Tomorrow",
+      badge: "Ready",
+      icon: { type: "unicode", value: "🤝" },
+    });
     const onContinue = vi.fn();
     const onDelete = vi.fn();
-
     render(
       <ModalDraftPicker
-        drafts={[draft]}
-        titleFor={(form) => form.title}
+        drafts={[saved]}
         onContinue={onContinue}
         onDelete={onDelete}
         onCreateNew={vi.fn()}
       />,
     );
-
     expect(screen.getByText("🤝")).toBeInTheDocument();
-    const continueButton = screen.getByRole("button", {
-      name: "Continue draft Mutual promo",
-    });
-    const deleteButton = screen.getByRole("button", {
-      name: "Delete draft Mutual promo",
-    });
-    expect(continueButton).toHaveTextContent("");
-    expect(deleteButton).toHaveClass("text-red-300");
-
-    fireEvent.click(continueButton);
-    fireEvent.click(deleteButton);
-    expect(onContinue).toHaveBeenCalledWith(draft);
-    expect(onDelete).toHaveBeenCalledWith(draft);
+    expect(screen.getByText("Two channels")).toBeVisible();
+    expect(screen.getByText("Tomorrow · Ready")).toBeVisible();
+    expect(screen.getByText(/^Saved \d/)).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Continue draft Mutual promo" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Delete draft Mutual promo" }),
+    );
+    expect(onContinue).toHaveBeenCalledWith(saved);
+    expect(onDelete).toHaveBeenCalledWith(saved);
   });
 
-  it("renders older drafts that have no preview metadata", () => {
+  it("caps avatar rendering and shows the remaining count", () => {
     render(
       <ModalDraftPicker
-        drafts={[{ version: 1, id: "legacy", form: { title: "Legacy draft" } }]}
+        drafts={[
+          draft("many", {
+            title: "Campaign",
+            avatars: ["A", "B", "C", "D", "E"].map((label) => ({ label })),
+          }),
+        ]}
+        onContinue={vi.fn()}
+        onDelete={vi.fn()}
+        onCreateNew={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("+2")).toBeVisible();
+    expect(screen.getByLabelText("5 channels selected").children).toHaveLength(4);
+  });
+
+  it("falls back to local form presentation without network hydration", () => {
+    render(
+      <ModalDraftPicker
+        drafts={[draft("legacy")]}
         titleFor={(form) => form.title}
         onContinue={vi.fn()}
         onDelete={vi.fn()}
         onCreateNew={vi.fn()}
       />,
     );
-
-    expect(screen.getByText("Legacy draft")).toBeInTheDocument();
-  });
-
-  it("resolves an old draft icon from the shared icon collection", async () => {
-    const client = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-    render(
-      <QueryClientProvider client={client}>
-        <ModalDraftPicker
-          drafts={[
-            {
-              version: 1,
-              id: "legacy",
-              form: { title: "Legacy draft", iconId: "legacy-icon" },
-            },
-          ]}
-          titleFor={(form) => form.title}
-          onContinue={vi.fn()}
-          onDelete={vi.fn()}
-          onCreateNew={vi.fn()}
-        />
-      </QueryClientProvider>,
-    );
-
-    expect(await screen.findByText("🤝")).toBeInTheDocument();
+    expect(screen.getByText("Form legacy")).toBeVisible();
   });
 });

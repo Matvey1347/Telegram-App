@@ -83,7 +83,13 @@ export function createMarketingApi({
         search?: string;
         dateFrom?: string;
         dateTo?: string;
-        sort?: "date_desc" | "date_asc" | "cost_desc" | "joined_desc";
+        sort?:
+          | "date_desc"
+          | "date_asc"
+          | "cost_desc"
+          | "cost_asc"
+          | "joined_desc"
+          | "joined_asc";
       },
     ) => getPaginated<AdCampaign>("/ad-campaigns", params),
     updateAnalyticsInput: async (

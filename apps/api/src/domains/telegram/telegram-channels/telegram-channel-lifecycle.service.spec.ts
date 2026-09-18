@@ -164,4 +164,87 @@ describe('TelegramChannelLifecycleService system groups', () => {
       ),
     );
   });
+
+  it.each([
+    ['broadcastInviteLinkId', 'another-channel-broadcast-link'],
+    ['audienceTransferInviteLinkId', 'another-channel-transfer-link'],
+  ] as const)('rejects an invalid purpose link in %s', async (field, value) => {
+    const prisma = {
+      icon: { findFirst: jest.fn() },
+      telegramInviteLink: {
+        findFirst: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
+      },
+    };
+    const service = new TelegramChannelLifecycleService(
+      prisma as never,
+      {} as never,
+      { workspace: jest.fn().mockResolvedValue('workspace-1') } as never,
+      {
+        resolveImportPolicy: jest.fn().mockResolvedValue({
+          acquisitionType: 'CREATED',
+          postsSyncFrom: null,
+          inviteLinksSyncFrom: null,
+          purchaseTransactionId: null,
+        }),
+      } as never,
+      {} as never,
+      {
+        findOne: jest.fn().mockResolvedValue({
+          id: 'channel-1',
+          targetCpa: null,
+          stopCpaFrom: null,
+        }),
+      } as never,
+      {} as never,
+    );
+
+    await expect(
+      service.update('user-1', 'channel-1', { [field]: value }),
+    ).rejects.toThrow(
+      new BadRequestException(
+        'Purpose-specific invite links must belong to this channel',
+      ),
+    );
+  });
+
+  it('rejects assigning one invite link to multiple traffic sources', async () => {
+    const service = new TelegramChannelLifecycleService(
+      {} as never,
+      {} as never,
+      { workspace: jest.fn().mockResolvedValue('workspace-1') } as never,
+      {
+        resolveImportPolicy: jest.fn().mockResolvedValue({
+          acquisitionType: 'CREATED',
+          postsSyncFrom: null,
+          inviteLinksSyncFrom: null,
+          purchaseTransactionId: null,
+        }),
+      } as never,
+      {} as never,
+      {
+        findOne: jest.fn().mockResolvedValue({
+          id: 'channel-1',
+          targetCpa: null,
+          stopCpaFrom: null,
+          botInviteLinkId: 'shared-link',
+          broadcastInviteLinkId: null,
+          audienceTransferInviteLinkId: null,
+          folderDefaultInviteLinkIds: [],
+          mutualPromotionInviteLinkIds: [],
+        }),
+      } as never,
+      {} as never,
+    );
+
+    await expect(
+      service.update('user-1', 'channel-1', {
+        broadcastInviteLinkId: 'shared-link',
+      }),
+    ).rejects.toThrow(
+      new BadRequestException(
+        'Each traffic source must use a different invite link',
+      ),
+    );
+  });
 });

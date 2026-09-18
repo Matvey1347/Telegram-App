@@ -96,13 +96,34 @@ export function CrossPromotionPublicationPostEditor({
               </Button>
             </>
           ) : (
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={onUseSelectedPromo}
-            >
-              <UsersRound size={15} /> Use selected promo
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={
+                  !botConnected ||
+                  importStatus === "working" ||
+                  importStatus === "waiting"
+                }
+                onClick={onImport}
+              >
+                <Bot size={15} />{" "}
+                {importStatus === "working"
+                  ? "Loading…"
+                  : importStatus === "waiting"
+                    ? "Waiting for bot…"
+                    : importStatus === "done"
+                      ? "✅ Imported from bot"
+                      : "Import through bot"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={onUseSelectedPromo}
+              >
+                <UsersRound size={15} /> Use selected promo
+              </Button>
+            </>
           )}
           {expanded ? (
             <Button

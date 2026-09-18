@@ -62,4 +62,26 @@ describe("CrossPromotionPublicationPostEditor", () => {
     expect(onImport).toHaveBeenCalledOnce();
     expect(screen.getByText("Composer for Publishing channel")).toBeVisible();
   });
+
+  it("exposes bot import for an own-channels placement", () => {
+    const onImport = vi.fn();
+    render(
+      <CrossPromotionPublicationPostEditor
+        directMutual={false}
+        post={emptyPost}
+        botConnected
+        importStatus="idle"
+        sendStatus="idle"
+        onImport={onImport}
+        onSend={vi.fn()}
+        onUseSelectedPromo={vi.fn()}
+        onChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Import through bot/i }),
+    );
+    expect(onImport).toHaveBeenCalledOnce();
+  });
 });

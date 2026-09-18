@@ -10,8 +10,6 @@ import { telegramPostKeys } from "@/lib/query-keys";
 import { ManagedPostsImportModal } from "./managed-posts-import-modal";
 import { PostGroupsImportModal } from "./post-groups-import-modal";
 import { ChannelReimportDeleteModal } from "./channel-reimport-delete-modal";
-import { GptContextDownloadButton } from "./gpt-context-download-button";
-import { ResetChannelScheduledPostsButton } from "./reset-channel-scheduled-posts-button";
 import type { ChannelImportMode } from "./channel-import-navigation";
 import { PostFromBotModal } from "./post-from-bot/post-from-bot-modal";
 import { UnifiedImportModal } from "./unified-import-modal";
@@ -23,7 +21,6 @@ export function TelegramPostsHeaderWorkflows({
   importTranslationsReady,
   onChannelChange,
   onImportModeChange,
-  onResetCompleted,
 }: {
   channel?: TelegramChannelSelectOption;
   channels: TelegramChannelSelectOption[];
@@ -31,7 +28,6 @@ export function TelegramPostsHeaderWorkflows({
   importTranslationsReady: boolean;
   onChannelChange: (channelId: string) => void;
   onImportModeChange: (mode: ChannelImportMode | null) => void;
-  onResetCompleted: () => void;
 }) {
   const { locale, t } = useI18n();
   const queryClient = useQueryClient();
@@ -74,15 +70,6 @@ export function TelegramPostsHeaderWorkflows({
               >
                 <Bot size={17} /> {t("telegram.posts.batch.addViaBot")}
               </Button>
-              <GptContextDownloadButton
-                channelId={activeChannel.id}
-                channelTitle={activeChannel.title}
-              />
-              <ResetChannelScheduledPostsButton
-                channelId={activeChannel.id}
-                channelTitle={activeChannel.title}
-                onCompleted={onResetCompleted}
-              />
             </div>
           ) : undefined
         }
@@ -95,8 +82,12 @@ export function TelegramPostsHeaderWorkflows({
           channelTitle={activeChannel.title}
           channelPhotoUrl={activeChannel.photoUrl}
           channelTelegramChatId={activeChannel.telegramChatId}
-          captionLengthMax={activeChannel.publishingCapabilities.captionLengthMax}
-          messageLengthMax={activeChannel.publishingCapabilities.messageLengthMax}
+          captionLengthMax={
+            activeChannel.publishingCapabilities.captionLengthMax
+          }
+          messageLengthMax={
+            activeChannel.publishingCapabilities.messageLengthMax
+          }
           onClose={() => onImportModeChange(null)}
           onApplied={async () => {
             await Promise.all([

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import type { TelegramAdAvailabilitySlot } from "@telegram-system/shared";
-import type { TelegramChannel } from "@/lib/api";
 import {
   expandNetworkChannelIds,
   toNumber,
@@ -10,14 +9,13 @@ import {
 import { expandAdSaleDateRange } from "@/lib/features/growth/ad-sales-bulk-date-builder";
 import { hasPlacementPostContent } from "./placement-post/placement-post-content";
 // prettier-ignore
-import type { PublishedPostOption, QuoteRequestDraft, SalePlacementDraft } from "./ad-sale-types";
+import type { QuoteRequestDraft, SalePlacementDraft } from "./ad-sale-types";
 import {
   commonAdSaleFormats,
   createPlacementDraft,
   productPrice,
   resolveAdSaleCurrency,
 } from "./ad-sale-placement-draft";
-import { removeAdSaleModalDraft } from "./ad-sale-modal-draft";
 import { useAdSaleQuotePreview } from "./ad-sale-quote-preview";
 import {
   defaultAdSaleAccountId,
@@ -25,6 +23,7 @@ import {
 } from "./ad-sale-modal-session";
 import { useAdSaleNetworkPricing } from "./ad-sale-network-pricing";
 import { isValidTelegramUsernameInput } from "./ad-sale-client-field";
+import { useAdSalePlacementLoaders } from "./use-ad-sale-placement-loaders";
 function channelKey(channelId: string, date: string) {
   return `placement:${channelId}:${date}`;
 }
@@ -66,7 +65,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     slotPickerSlots, setSlotPickerSlots, slotPickerLoading, setSlotPickerLoading,
     slotPickerError, setSlotPickerError, publishedPostsByPlacement,
     setPublishedPostsByPlacement, postsLoadingByPlacement, setPostsLoadingByPlacement,
-    persistedDraftJsonRef, draftReadyRef, currentDraft,
+    clearCurrentDraft,
     continueDraft, deleteDraft, createNewDraft,
   } = useAdSaleModalSession(options, {
     postMode,
@@ -207,49 +206,17 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     workspaceTimezone,
   ]);
 
-  const loadPublishedPosts = async (
-    placement: SalePlacementDraft,
-    telegramPostUrl?: string,
-  ): Promise<PublishedPostOption | null> => {
-    const cacheKey = `${placement.channelId}:${placement.date}`;
-    if (postsLoadingByPlacement[cacheKey]) return null;
-
-    setPostsLoadingByPlacement((current) => ({ ...current, [cacheKey]: true }));
-
-    try {
-      const posts = await onLoadPublishedPosts({
-        channelId: placement.channelId,
-        date: placement.date,
-        timezone: placement.timezone,
-        telegramPostUrl,
-      });
-      setPublishedPostsByPlacement((current) => ({
-        ...current,
-        [cacheKey]: telegramPostUrl
-          ? [
-              ...new Map(
-                [...(current[cacheKey] ?? []), ...posts].map((post) => [
-                  post.id,
-                  post,
-                ]),
-              ).values(),
-            ]
-          : posts,
-      }));
-      return posts[0] ?? null;
-    } catch {
-      setPublishedPostsByPlacement((current) => ({
-        ...current,
-        [cacheKey]: [],
-      }));
-      return null;
-    } finally {
-      setPostsLoadingByPlacement((current) => ({
-        ...current,
-        [cacheKey]: false,
-      }));
-    }
-  };
+  const { loadPublishedPosts, openSlotPicker } = useAdSalePlacementLoaders({
+    onLoadAvailableSlots,
+    onLoadPublishedPosts,
+    postsLoadingByPlacement,
+    setPostsLoadingByPlacement,
+    setPublishedPostsByPlacement,
+    setSlotPickerPlacementKey,
+    setSlotPickerSlots,
+    setSlotPickerLoading,
+    setSlotPickerError,
+  });
 
   const quoteRequests = useMemo<QuoteRequestDraft[]>(
     () =>
@@ -290,34 +257,6 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     (!networkPricing.allocation ||
       Math.round(paymentAmount * 100) ===
         Math.round(networkPricing.allocation.totalAmount * 100));
-
-  async function openSlotPicker(placement: SalePlacementDraft) {
-    setSlotPickerPlacementKey(placement.key);
-    setSlotPickerSlots([]);
-    setSlotPickerError("");
-    setSlotPickerLoading(true);
-    try {
-      const start = new Date(`${placement.date}T00:00:00`);
-      start.setDate(start.getDate() - 7);
-      const end = new Date(`${placement.date}T23:59:59`);
-      end.setDate(end.getDate() + 21);
-      const slots = await onLoadAvailableSlots({
-        channelId: placement.channelId,
-        productId: placement.productId || undefined,
-        from: start.toISOString(),
-        to: end.toISOString(),
-      });
-      setSlotPickerSlots(slots);
-    } catch (error) {
-      setSlotPickerError(
-        error instanceof Error
-          ? error.message
-          : "Could not load available slots.",
-      );
-    } finally {
-      setSlotPickerLoading(false);
-    }
-  }
 
   function applySlot(slot: TelegramAdAvailabilitySlot) {
     if (!slotPickerPlacementKey) return;
@@ -411,9 +350,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
         );
         return;
       }
-      removeAdSaleModalDraft(window.localStorage, currentDraft.id);
-      persistedDraftJsonRef.current = "";
-      draftReadyRef.current = false;
+      clearCurrentDraft();
       onClose();
     } catch (error) {
       setSubmissionError(
@@ -438,45 +375,6 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     placements.every((placement) =>
       hasPlacementPostContent(placement.managedPostDraft),
     );
-  const pendingDraftSummaries = useMemo(
-    () =>
-      pendingDrafts.map((pendingDraft) => {
-        const channelIds = [
-          ...new Set(
-            pendingDraft.placements.map((placement) => placement.channelId),
-          ),
-        ];
-        const amount =
-          pendingDraft.networkPricingMode === "total"
-            ? toNumber(pendingDraft.networkTotalPrice)
-            : pendingDraft.placements.reduce(
-                (sum, placement) => sum + toNumber(placement.agreedPrice),
-                0,
-              );
-        return {
-          draft: pendingDraft,
-          draftChannels: channelIds.map(
-            (channelId) =>
-              channels.find((channel) => channel.id === channelId) ??
-              ({ id: channelId, title: channelId } as TelegramChannel),
-          ),
-          amount,
-          currency:
-            accounts
-              .find((account) => account.id === pendingDraft.accountId)
-              ?.currency.toUpperCase() ??
-            resolveAdSaleCurrency({
-              channelIds,
-              channels,
-              placements: pendingDraft.placements,
-              productsByChannelId,
-              fallback: defaultCurrency,
-            }),
-        };
-      }),
-    [accounts, channels, defaultCurrency, pendingDrafts, productsByChannelId],
-  );
-
   // prettier-ignore
   return {
     advertiserTelegram, setAdvertiserTelegram, advertiserContact, setAdvertiserContact,
@@ -491,7 +389,7 @@ export function useAdSaleModalController(options: AdSaleModalProps) {
     quotePreview,
     effectiveChannelIds, paymentCurrency, commonTime, commonFormats, commonFormatName,
     loadPublishedPosts, canSubmit, openSlotPicker, applySlot, submit, slotPickerPlacement,
-    slotsByDate, sharedPostActive, pendingDraftSummaries, continueDraft, deleteDraft,
+    slotsByDate, sharedPostActive, continueDraft, deleteDraft,
     createNewDraft,
   };
 }

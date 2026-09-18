@@ -23,6 +23,50 @@ describe("parseUnifiedImportManifest", () => {
     ).toThrow("posts");
   });
 
+  it("converts a plain exported post array into a v1 posts manifest", () => {
+    const manifest = parseUnifiedImportManifest(
+      JSON.stringify([
+        {
+          title: "Morning post",
+          text: "Warm text",
+          icon: "🌞",
+          urls: ["https://i.pinimg.com/example.jpg"],
+        },
+        {
+          title: "Evening post",
+          text: "Evening text",
+          imageUrls: ["https://example.com/evening.jpg"],
+        },
+      ]),
+    );
+
+    expect(manifest).toEqual({
+      version: 1,
+      posts: [
+        expect.objectContaining({
+          ref: "post-import-1",
+          action: "CREATE",
+          title: "Morning post",
+          icon: "🌞",
+          imageUrls: ["https://i.pinimg.com/example.jpg"],
+          imported: false,
+          approved: false,
+        }),
+        expect.objectContaining({
+          ref: "post-import-2",
+          title: "Evening post",
+          imageUrls: ["https://example.com/evening.jpg"],
+        }),
+      ],
+    });
+  });
+
+  it("reports the malformed item when an imported post array contains a scalar", () => {
+    expect(() => parseUnifiedImportManifest('[{"title":"Post"}, 42]')).toThrow(
+      "Публикация 2",
+    );
+  });
+
   it("documents one complete manifest with every supported section", () => {
     expect(TELEGRAM_UNIFIED_IMPORT_INSTRUCTION).toContain(
       "ТОЧНЫЙ ФОРМАТ ОТВЕТА",

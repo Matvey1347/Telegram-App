@@ -3,12 +3,12 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MutualPromotionFolderFormModal } from "./mutual-promotion-folder-form-modal";
 
-function renderModal() {
+function renderModal(folder: Parameters<typeof MutualPromotionFolderFormModal>[0]["folder"] = null) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <MutualPromotionFolderFormModal
         open
-        folder={null}
+        folder={folder}
         timezone="Europe/Warsaw"
         channels={[]}
         accounts={[]}
@@ -121,6 +121,43 @@ describe("MutualPromotionFolderFormModal drafts", () => {
       expect(stored).toContain("First draft");
       expect(stored).toContain("Second draft");
     });
+  });
+
+  it("restores unfinished edits without mixing them with create drafts", async () => {
+    const folder = {
+      id: "folder-1",
+      title: "Published title",
+      titleTemplate: "Published title",
+      startsAt: "2026-09-08T08:00:00.000Z",
+      endsAt: "2026-09-10T08:00:00.000Z",
+      notes: null,
+      participants: [],
+    } as never;
+    const first = renderModal(folder);
+    fireEvent.change(screen.getByPlaceholderText("September // [date-range]"), {
+      target: { value: "Unfinished edited title" },
+    });
+    await waitFor(() =>
+      expect(
+        window.localStorage.getItem(
+          "mutual-promotion-folder:edit:folder-1:draft:default",
+        ),
+      ).toContain("Unfinished edited title"),
+    );
+    expect(
+      window.localStorage.getItem("mutual-promotion-folder:draft:default"),
+    ).toBeNull();
+    first.unmount();
+
+    renderModal(folder);
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Continue draft Unfinished edited title",
+      }),
+    );
+    expect(screen.getByPlaceholderText("September // [date-range]")).toHaveValue(
+      "Unfinished edited title",
+    );
   });
 
   it("highlights the title preview and explains the publication step", () => {
