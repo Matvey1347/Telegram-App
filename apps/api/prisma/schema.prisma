@@ -2129,12 +2129,11 @@ model TelegramAdSchedulePolicy {
 }
 
 model TelegramAdSalesWorkspaceSettings {
-  workspaceId                  String   @id
-  defaultOrganicPostsPerAdSlot Int      @default(3)
-  salesCommissionEnabled       Boolean  @default(false)
-  defaultSalesCommissionRate   Decimal  @default(0)
-  createdAt                    DateTime @default(now())
-  updatedAt                    DateTime @updatedAt
+  workspaceId                String   @id
+  salesCommissionEnabled     Boolean  @default(false)
+  defaultSalesCommissionRate Decimal  @default(0)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
@@ -5586,7 +5585,7 @@ model ExchangeRate {
   updatedAt DateTime @updatedAt
 
   @@unique([baseCurrency, targetCurrency, date])
-  @@index([baseCurrency, targetCurrency, date])
+  @@index([baseCurrency, targetCurrency, date(sort: Desc)])
 }
 
 model Icon {

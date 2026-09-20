@@ -64,7 +64,6 @@ export class TelegramAdSalesAvailabilityReader {
     const extendedTo = new Date(to.getTime() + 24 * 60 * 60 * 1000);
     const [
       workspace,
-      workspaceSettings,
       policies,
       products,
       placements,
@@ -75,9 +74,6 @@ export class TelegramAdSalesAvailabilityReader {
       this.prisma.workspace.findUniqueOrThrow({
         where: { id: workspaceId },
         select: { timezone: true },
-      }),
-      this.prisma.telegramAdSalesWorkspaceSettings.findUnique({
-        where: { workspaceId },
       }),
       this.prisma.telegramAdSchedulePolicy.findMany({
         where: { workspaceId, telegramChannelId: { in: channelIds } },
@@ -231,7 +227,7 @@ export class TelegramAdSalesAvailabilityReader {
       { placements: resolvedPlacements },
     ]);
 
-    const defaultCadence = workspaceSettings?.defaultOrganicPostsPerAdSlot ?? 3;
+    const defaultCadence = 3;
     const workspaceTimezone = workspace.timezone || 'Europe/Warsaw';
     const storedPolicyByChannel = new Map(
       policies.map((policy) => [policy.telegramChannelId, policy]),

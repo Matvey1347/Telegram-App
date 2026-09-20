@@ -158,7 +158,6 @@ import {
   normalizeDefaultAdSalesProductName,
   TELEGRAM_AD_SALES_DEFAULT_PRODUCTS,
 } from './telegram-ad-sales-default-products';
-import { findOrCreateAdSalesWorkspaceSettings } from './telegram-ad-sales-workspace-settings';
 import { TelegramAdSalesSaleReadService } from './telegram-ad-sales-sale-read.service';
 import {
   assertNoActiveSalePayments,
@@ -563,16 +562,11 @@ export class TelegramAdSalesService {
     const policy = await this.prisma.telegramAdSchedulePolicy.findFirst({
       where: { workspaceId, telegramChannelId: channelId },
     });
-    const workspaceSettings = await findOrCreateAdSalesWorkspaceSettings(
-      this.prisma,
-      workspaceId,
-    );
     if (policy) {
       return policy.useWorkspaceDefault
         ? {
             ...policy,
-            organicPostsPerAdSlot:
-              workspaceSettings.defaultOrganicPostsPerAdSlot,
+            organicPostsPerAdSlot: 3,
           }
         : policy;
     }
@@ -583,7 +577,7 @@ export class TelegramAdSalesService {
       createdAt: new Date(),
       updatedAt: new Date(),
       ...this.policyDefaults(timezone),
-      organicPostsPerAdSlot: workspaceSettings.defaultOrganicPostsPerAdSlot,
+      organicPostsPerAdSlot: 3,
     };
   }
 
@@ -736,7 +730,9 @@ export class TelegramAdSalesService {
             select: {
               id: true,
               title: true,
-              text: true, imageUrls: true, mediaItems: true,
+              text: true,
+              imageUrls: true,
+              mediaItems: true,
               buttonRows: true,
               telegramChannelId: true,
               sourceType: true,

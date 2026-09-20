@@ -6,8 +6,6 @@ type AdSalesWorkspaceSettingsPrisma = Pick<
   'telegramAdSalesWorkspaceSettings'
 >;
 
-const DEFAULT_ORGANIC_POSTS_PER_AD_SLOT = 3;
-
 export async function findOrCreateAdSalesWorkspaceSettings(
   prisma: AdSalesWorkspaceSettingsPrisma,
   workspaceId: string,
@@ -21,7 +19,6 @@ export async function findOrCreateAdSalesWorkspaceSettings(
     return await prisma.telegramAdSalesWorkspaceSettings.create({
       data: {
         workspaceId,
-        defaultOrganicPostsPerAdSlot: DEFAULT_ORGANIC_POSTS_PER_AD_SLOT,
       },
     });
   } catch (error) {

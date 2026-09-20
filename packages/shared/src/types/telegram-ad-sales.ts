@@ -209,7 +209,6 @@ export type TelegramAdSchedulePolicy = {
 
 export type TelegramAdSalesWorkspaceSettings = {
   workspaceId: string;
-  defaultOrganicPostsPerAdSlot: number;
   salesCommissionEnabled: boolean;
   defaultSalesCommissionRate: number;
   createdAt: string;

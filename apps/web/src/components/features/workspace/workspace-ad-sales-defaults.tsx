@@ -12,18 +12,12 @@ export function WorkspaceAdSalesDefaults({ isOwner }: { isOwner: boolean }) {
     queryKey: telegramAdSalesKeys.workspaceSettings(),
     queryFn: telegramAdSalesApi.getWorkspaceSettings,
   });
-  const [postingCadenceDraft, setPostingCadenceDraft] = useState<string | null>(
-    null,
-  );
   const [commissionEnabledDraft, setCommissionEnabledDraft] = useState<
     boolean | null
   >(null);
   const [commissionRateDraft, setCommissionRateDraft] = useState<string | null>(
     null,
   );
-  const postingCadence =
-    postingCadenceDraft ??
-    String(settings.data?.defaultOrganicPostsPerAdSlot ?? 3);
   const commissionEnabled =
     commissionEnabledDraft ?? settings.data?.salesCommissionEnabled ?? false;
   const commissionRate =
@@ -37,7 +31,6 @@ export function WorkspaceAdSalesDefaults({ isOwner }: { isOwner: boolean }) {
   const mutation = useMutation({
     mutationFn: telegramAdSalesApi.updateWorkspaceSettings,
     onSuccess: async () => {
-      setPostingCadenceDraft(null);
       setCommissionEnabledDraft(null);
       setCommissionRateDraft(null);
       await queryClient.invalidateQueries({
@@ -56,15 +49,6 @@ export function WorkspaceAdSalesDefaults({ isOwner }: { isOwner: boolean }) {
         <h4 className="text-base font-semibold text-white">
           Advertising sales
         </h4>
-        <div className="mt-4 max-w-xl">
-          <label className="mb-1 block text-sm text-neutral-300">
-            Organic posts per ad opportunity
-          </label>
-          <Input
-            value={postingCadence}
-            onChange={(event) => setPostingCadenceDraft(event.target.value)}
-          />
-        </div>
         {isOwner ? (
           <div className="mt-5 max-w-xl rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
             <div className="flex items-center justify-between gap-4">
@@ -87,22 +71,27 @@ export function WorkspaceAdSalesDefaults({ isOwner }: { isOwner: boolean }) {
                 />
               </button>
             </div>
-            <label className="mb-1 mt-4 block text-sm text-neutral-300">
-              Default commission, %
-            </label>
-            <Input
-              type="number"
-              min="0"
-              max="100"
-              step="0.01"
-              value={commissionRate}
-              onChange={(event) => setCommissionRateDraft(event.target.value)}
-              disabled={!commissionEnabled}
-            />
-            {commissionRateInvalid ? (
-              <p className="mt-1 text-xs text-rose-300">
-                Commission must be between 0% and 100%.
-              </p>
+            {commissionEnabled ? (
+              <>
+                <label className="mb-1 mt-4 block text-sm text-neutral-300">
+                  Default commission, %
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={commissionRate}
+                  onChange={(event) =>
+                    setCommissionRateDraft(event.target.value)
+                  }
+                />
+                {commissionRateInvalid ? (
+                  <p className="mt-1 text-xs text-rose-300">
+                    Commission must be between 0% and 100%.
+                  </p>
+                ) : null}
+              </>
             ) : null}
           </div>
         ) : null}
@@ -115,7 +104,6 @@ export function WorkspaceAdSalesDefaults({ isOwner }: { isOwner: boolean }) {
           <Button
             onClick={() =>
               mutation.mutate({
-                defaultOrganicPostsPerAdSlot: Number(postingCadence || 3),
                 ...(isOwner
                   ? {
                       salesCommissionEnabled: commissionEnabled,
@@ -126,8 +114,7 @@ export function WorkspaceAdSalesDefaults({ isOwner }: { isOwner: boolean }) {
             }
             disabled={
               mutation.isPending ||
-              !postingCadence.trim() ||
-              (isOwner && commissionRateInvalid)
+              (isOwner && commissionEnabled && commissionRateInvalid)
             }
           >
             Save ad-sales defaults

@@ -62,11 +62,6 @@ describe('TelegramAdSalesAvailabilityReader sale summaries', () => {
       workspace: {
         findUniqueOrThrow: jest.fn().mockResolvedValue({ timezone: 'UTC' }),
       },
-      telegramAdSalesWorkspaceSettings: {
-        findUnique: jest
-          .fn()
-          .mockResolvedValue({ defaultOrganicPostsPerAdSlot: 1 }),
-      },
       telegramAdSchedulePolicy: {
         findMany: jest.fn().mockResolvedValue([
           {

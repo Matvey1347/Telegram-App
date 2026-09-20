@@ -154,12 +154,6 @@ export class UpdateTelegramAdPolicyDto {
 
 export class UpdateTelegramAdSalesWorkspaceSettingsDto {
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  defaultOrganicPostsPerAdSlot?: number;
-
-  @IsOptional()
   @IsBoolean()
   salesCommissionEnabled?: boolean;
 

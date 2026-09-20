@@ -338,13 +338,11 @@ function createService() {
   prisma.workspace.findUniqueOrThrow.mockResolvedValue({ timezone: 'UTC' });
   prisma.telegramAdSalesWorkspaceSettings.upsert.mockResolvedValue({
     workspaceId: 'ws-1',
-    defaultOrganicPostsPerAdSlot: 3,
     createdAt: new Date('2026-08-01T00:00:00.000Z'),
     updatedAt: new Date('2026-08-01T00:00:00.000Z'),
   });
   prisma.telegramAdSalesWorkspaceSettings.findUnique.mockResolvedValue({
     workspaceId: 'ws-1',
-    defaultOrganicPostsPerAdSlot: 3,
     createdAt: new Date('2026-08-01T00:00:00.000Z'),
     updatedAt: new Date('2026-08-01T00:00:00.000Z'),
   });

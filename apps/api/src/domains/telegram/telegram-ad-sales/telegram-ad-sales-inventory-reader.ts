@@ -36,56 +36,47 @@ export class TelegramAdSalesInventoryReader {
         timePosts: { orderBy: [{ position: 'asc' }, { time: 'asc' }] },
       },
     });
-    const [
-      workspace,
-      workspaceSettings,
-      policies,
-      products,
-      placements,
-      pricingSources,
-    ] = await Promise.all([
-      this.prisma.workspace.findUniqueOrThrow({
-        where: { id: params.workspaceId },
-        select: { timezone: true },
-      }),
-      this.prisma.telegramAdSalesWorkspaceSettings.findUnique({
-        where: { workspaceId: params.workspaceId },
-      }),
-      this.prisma.telegramAdSchedulePolicy.findMany({
-        where: {
-          workspaceId: params.workspaceId,
-          telegramChannelId: { in: params.channelIds },
-        },
-      }),
-      this.prisma.telegramAdProduct.findMany({
-        where: {
-          workspaceId: params.workspaceId,
-          telegramChannelId: { in: params.channelIds },
-          isActive: true,
-        },
-        orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
-      }),
-      this.prisma.telegramAdSalePlacement.findMany({
-        where: {
-          workspaceId: params.workspaceId,
-          telegramChannelId: { in: params.channelIds },
-          scheduledAt: {
-            gte: new Date(params.from.getTime() - 7 * 24 * 60 * 60 * 1000),
-            lte: new Date(params.to.getTime() + 24 * 60 * 60 * 1000),
+    const [workspace, policies, products, placements, pricingSources] =
+      await Promise.all([
+        this.prisma.workspace.findUniqueOrThrow({
+          where: { id: params.workspaceId },
+          select: { timezone: true },
+        }),
+        this.prisma.telegramAdSchedulePolicy.findMany({
+          where: {
+            workspaceId: params.workspaceId,
+            telegramChannelId: { in: params.channelIds },
           },
-        },
-        select: {
-          id: true,
-          telegramAdSaleId: true,
-          telegramChannelId: true,
-          status: true,
-          scheduledAt: true,
-        },
-      }),
-      this.pricingReader.sourcesForChannels(params.workspaceId, channels),
-    ]);
+        }),
+        this.prisma.telegramAdProduct.findMany({
+          where: {
+            workspaceId: params.workspaceId,
+            telegramChannelId: { in: params.channelIds },
+            isActive: true,
+          },
+          orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+        }),
+        this.prisma.telegramAdSalePlacement.findMany({
+          where: {
+            workspaceId: params.workspaceId,
+            telegramChannelId: { in: params.channelIds },
+            scheduledAt: {
+              gte: new Date(params.from.getTime() - 7 * 24 * 60 * 60 * 1000),
+              lte: new Date(params.to.getTime() + 24 * 60 * 60 * 1000),
+            },
+          },
+          select: {
+            id: true,
+            telegramAdSaleId: true,
+            telegramChannelId: true,
+            status: true,
+            scheduledAt: true,
+          },
+        }),
+        this.pricingReader.sourcesForChannels(params.workspaceId, channels),
+      ]);
     const workspaceTimezone = workspace.timezone || 'Europe/Warsaw';
-    const cadence = workspaceSettings?.defaultOrganicPostsPerAdSlot ?? 3;
+    const cadence = 3;
     const policyByChannel = new Map(
       policies.map((policy) => [policy.telegramChannelId, policy]),
     );

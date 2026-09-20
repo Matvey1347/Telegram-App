@@ -13,14 +13,21 @@ import {
   WorkspaceRole,
 } from '@prisma/client';
 import { WorkspaceService } from '../../../common/workspace.service';
+import { CurrencyConversionService } from '../../../common/currency-conversion.service';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { valueDashboardTransactions } from '../../operations/dashboard/dashboard-transaction-valuation';
 import { roundMoney, salesCommission } from './member-finance-calculations';
 import { allocateProfitByCapital } from './member-finance-calculations';
 
 export type MemberFinanceReader = Pick<
   Prisma.TransactionClient,
-  'telegramAdSalePayment' | 'memberCompensationSettlement' | 'investment' | 'transaction'
+  | 'telegramAdSalePayment'
+  | 'memberCompensationSettlement'
+  | 'investment'
+  | 'transaction'
+  | 'workspaceMember'
+  | 'workspace'
 >;
 
 type MemberTotals = {
@@ -36,6 +43,7 @@ export class MemberFinanceReadService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaceService: WorkspaceService,
+    private readonly conversion: CurrencyConversionService,
   ) {}
 
   private signedInvestment(row: {
@@ -53,7 +61,14 @@ export class MemberFinanceReadService {
     memberIds?: string[],
     client: MemberFinanceReader = this.prisma,
   ) {
-    const [payments, settlements, investments, transactions] = await Promise.all([
+    const [
+      payments,
+      settlements,
+      investments,
+      transactions,
+      members,
+      workspace,
+    ] = await Promise.all([
       client.telegramAdSalePayment.findMany({
         where: {
           workspaceId,
@@ -89,13 +104,33 @@ export class MemberFinanceReadService {
       client.transaction.findMany({
         where: { workspaceId, deletedAt: null },
         select: {
-          id: true, type: true, date: true, amountInPrimaryCurrency: true,
-          category: true, categoryRef: { select: { key: true } },
+          id: true,
+          type: true,
+          date: true,
+          amount: true,
+          currency: true,
+          amountInPrimaryCurrency: true,
+          category: true,
+          categoryRef: { select: { key: true } },
           telegramAdSalePayment: { select: { id: true } },
         },
         orderBy: [{ date: 'asc' }, { id: 'asc' }],
       }),
+      client.workspaceMember.findMany({
+        where: { workspaceId, isHidden: false },
+        select: { id: true },
+      }),
+      client.workspace.findUniqueOrThrow({
+        where: { id: workspaceId },
+        select: { primaryCurrency: true },
+      }),
     ]);
+    const valuedTransactions = await valueDashboardTransactions({
+      transactions,
+      primaryCurrency: workspace.primaryCurrency,
+      workspaceId,
+      conversionService: this.conversion,
+    });
 
     const byMember = new Map<string, MemberTotals>();
     const get = (id: string) => {
@@ -126,31 +161,64 @@ export class MemberFinanceReadService {
       const value = this.signedInvestment(investment);
       const row = get(investment.workspaceMemberId);
       if (investment.origin === InvestmentOrigin.SALARY) row.salary += value;
-      else if (investment.origin === InvestmentOrigin.EXTERNAL) row.external += value;
+      else if (investment.origin === InvestmentOrigin.EXTERNAL)
+        row.external += value;
     }
+    const visibleMemberIds = new Set(members.map((member) => member.id));
     const capitalByMember = new Map<string, number>();
-    const events = [
-      ...investments
-        .filter((investment) => investment.origin !== InvestmentOrigin.REINVESTMENT)
-        .map((investment) => ({ kind: 'capital' as const, date: investment.date, id: investment.id, investment })),
-      ...transactions.map((transaction) => ({ kind: 'profit' as const, date: transaction.date, id: transaction.id, transaction })),
-    ].sort((a, b) => a.date.getTime() - b.date.getTime() || a.id.localeCompare(b.id));
-    const commissionByPayment = new Map(payments.map((payment) => [payment.id, salesCommission(Number(payment.amountInPrimaryCurrency), Number(payment.sale.sellerCommissionRate))]));
-    for (const event of events) {
-      if (event.kind === 'capital') {
-        const change = this.signedInvestment(event.investment);
-        capitalByMember.set(event.investment.workspaceMemberId, (capitalByMember.get(event.investment.workspaceMemberId) ?? 0) + change);
+    for (const investment of investments) {
+      if (
+        investment.origin === InvestmentOrigin.REINVESTMENT ||
+        !visibleMemberIds.has(investment.workspaceMemberId)
+      ) {
         continue;
       }
-      const key = event.transaction.categoryRef?.key ?? event.transaction.category.trim().toLowerCase().replace(/\s+/g, '_');
-      if (['investment', 'investment_return', 'balance_adjustment', 'fixing_balance', 'salary'].includes(key)) continue;
-      let profit = Number(event.transaction.amountInPrimaryCurrency ?? 0) * (event.transaction.type === 'income' ? 1 : -1);
-      const paymentId = event.transaction.telegramAdSalePayment?.id;
-      if (paymentId) profit -= commissionByPayment.get(paymentId) ?? 0;
-      const allocations = allocateProfitByCapital(Math.abs(profit), [...capitalByMember].map(([memberId, amount]) => ({ memberId, amount })));
-      for (const allocation of allocations) {
-        get(allocation.memberId).investorEarnings += profit < 0 ? -allocation.amount : allocation.amount;
-      }
+      const change = this.signedInvestment(investment);
+      capitalByMember.set(
+        investment.workspaceMemberId,
+        (capitalByMember.get(investment.workspaceMemberId) ?? 0) + change,
+      );
+    }
+    const commissionByPayment = new Map(
+      payments.map((payment) => [
+        payment.id,
+        salesCommission(
+          Number(payment.amountInPrimaryCurrency),
+          Number(payment.sale.sellerCommissionRate),
+        ),
+      ]),
+    );
+    // Investor profit is a single current balance: all earned revenue less
+    // sales commission is divided by today's visible investor capital. Do not
+    // allocate historical income against a past capital snapshot.
+    const totalProfit = valuedTransactions.reduce((sum, transaction) => {
+      const key =
+        transaction.categoryRef?.key ??
+        transaction.category.trim().toLowerCase().replace(/\s+/g, '_');
+      if (
+        transaction.type !== 'income' ||
+        [
+          'investment',
+          'investment_return',
+          'balance_adjustment',
+          'fixing_balance',
+        ].includes(key)
+      )
+        return sum;
+      let revenue = Number(transaction.amountInPrimaryCurrency ?? 0);
+      const paymentId = transaction.telegramAdSalePayment?.id;
+      if (paymentId) revenue -= commissionByPayment.get(paymentId) ?? 0;
+      return sum + revenue;
+    }, 0);
+    const allocations = allocateProfitByCapital(
+      totalProfit,
+      [...capitalByMember].map(([memberId, amount]) => ({
+        memberId,
+        amount,
+      })),
+    );
+    for (const allocation of allocations) {
+      get(allocation.memberId).investorEarnings += allocation.amount;
     }
     return { byMember, payments, settlements, investments };
   }
@@ -239,7 +307,18 @@ export class MemberFinanceReadService {
     const [member, workspace, rows] = await Promise.all([
       this.prisma.workspaceMember.findFirst({
         where: { id: memberId, workspaceId: membership.workspaceId },
-        include: { user: { select: { id: true, name: true, email: true } }, avatarIcon: { select: { id: true, type: true, name: true, emoji: true, imageUrl: true } } },
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+          avatarIcon: {
+            select: {
+              id: true,
+              type: true,
+              name: true,
+              emoji: true,
+              imageUrl: true,
+            },
+          },
+        },
       }),
       this.prisma.workspace.findUniqueOrThrow({
         where: { id: membership.workspaceId },

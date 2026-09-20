@@ -43,7 +43,6 @@ function createPerformanceService() {
     telegramAdSalesWorkspaceSettings: {
       findUnique: jest.fn().mockResolvedValue({
         workspaceId: 'ws-1',
-        defaultOrganicPostsPerAdSlot: 3,
         createdAt: new Date('2026-08-01T00:00:00.000Z'),
         updatedAt: new Date('2026-08-01T00:00:00.000Z'),
       }),
@@ -96,7 +95,6 @@ function createPerformanceService() {
   const workspaceSettingsService = new TelegramAdSalesWorkspaceSettingsService(
     prisma as never,
     workspaceService as never,
-    responseCache as never,
   );
   return { service, workspaceSettingsService, prisma, workspaceService };
 }
@@ -210,14 +208,12 @@ function pricingSourceRows(
 function workspaceSettings(
   overrides: Partial<{
     workspaceId: string;
-    defaultOrganicPostsPerAdSlot: number;
     createdAt: Date;
     updatedAt: Date;
   }> = {},
 ) {
   return {
     workspaceId: 'ws-1',
-    defaultOrganicPostsPerAdSlot: 3,
     createdAt: new Date('2026-08-01T00:00:00.000Z'),
     updatedAt: new Date('2026-08-01T00:00:00.000Z'),
     ...overrides,
@@ -232,7 +228,6 @@ describe('TelegramAdSalesService performance contracts', () => {
 
     expect(result).toEqual({
       workspaceId: 'ws-1',
-      defaultOrganicPostsPerAdSlot: 3,
       defaultSalesCommissionRate: 0,
       createdAt: '2026-08-01T00:00:00.000Z',
       updatedAt: '2026-08-01T00:00:00.000Z',
@@ -261,7 +256,6 @@ describe('TelegramAdSalesService performance contracts', () => {
     await expect(workspaceSettingsService.get('user-1')).resolves.toEqual(
       expect.objectContaining({
         workspaceId: 'ws-1',
-        defaultOrganicPostsPerAdSlot: 3,
       }),
     );
 
@@ -269,7 +263,6 @@ describe('TelegramAdSalesService performance contracts', () => {
       {
         data: {
           workspaceId: 'ws-1',
-          defaultOrganicPostsPerAdSlot: 3,
         },
       },
     );
@@ -286,7 +279,6 @@ describe('TelegramAdSalesService performance contracts', () => {
   it('recovers a concurrent workspace-settings create from the winning row', async () => {
     const { workspaceSettingsService, prisma } = createPerformanceService();
     const winner = workspaceSettings({
-      defaultOrganicPostsPerAdSlot: 5,
       updatedAt: new Date('2026-08-02T00:00:00.000Z'),
     });
     prisma.telegramAdSalesWorkspaceSettings.findUnique
@@ -301,7 +293,6 @@ describe('TelegramAdSalesService performance contracts', () => {
 
     await expect(workspaceSettingsService.get('user-1')).resolves.toEqual({
       workspaceId: 'ws-1',
-      defaultOrganicPostsPerAdSlot: 5,
       defaultSalesCommissionRate: 0,
       createdAt: '2026-08-01T00:00:00.000Z',
       updatedAt: '2026-08-02T00:00:00.000Z',
@@ -316,7 +307,7 @@ describe('TelegramAdSalesService performance contracts', () => {
     }).toEqual({ reads: 2, createAttempts: 1, upserts: 0 });
   });
 
-  it('reads an established workspace-default policy with four queries and zero writes', async () => {
+  it('reads an established workspace-default policy with three queries and zero writes', async () => {
     const { service, prisma } = createPerformanceService();
     prisma.telegramChannel.findFirst.mockResolvedValue(channels(1)[0]);
     prisma.telegramAdSchedulePolicy.findFirst.mockResolvedValue({
@@ -345,12 +336,11 @@ describe('TelegramAdSalesService performance contracts', () => {
       reads:
         prisma.telegramChannel.findFirst.mock.calls.length +
         prisma.workspace.findUniqueOrThrow.mock.calls.length +
-        prisma.telegramAdSchedulePolicy.findFirst.mock.calls.length +
-        prisma.telegramAdSalesWorkspaceSettings.findUnique.mock.calls.length,
+        prisma.telegramAdSchedulePolicy.findFirst.mock.calls.length,
       workspaceSettingsWrites:
         prisma.telegramAdSalesWorkspaceSettings.create.mock.calls.length +
         prisma.telegramAdSalesWorkspaceSettings.upsert.mock.calls.length,
-    }).toEqual({ reads: 4, workspaceSettingsWrites: 0 });
+    }).toEqual({ reads: 3, workspaceSettingsWrites: 0 });
   });
 
   it.each([1, 10, 50, 100])(
@@ -531,7 +521,6 @@ describe('TelegramAdSalesService performance contracts', () => {
         workspaceService.resolveWorkspaceIdForUser.mock.calls.length +
         prisma.telegramChannel.findMany.mock.calls.length +
         prisma.workspace.findUniqueOrThrow.mock.calls.length +
-        prisma.telegramAdSalesWorkspaceSettings.findUnique.mock.calls.length +
         prisma.telegramAdSchedulePolicy.findMany.mock.calls.length +
         prisma.telegramAdProduct.findMany.mock.calls.length +
         prisma.telegramAdSalePlacement.findMany.mock.calls.length +
@@ -540,7 +529,7 @@ describe('TelegramAdSalesService performance contracts', () => {
         prisma.$queryRaw.mock.calls.length;
       expect({ before: 7 + 5 * channelCount, after }).toEqual({
         before: 7 + 5 * channelCount,
-        after: 10,
+        after: 9,
       });
       expect(new Set(result.slots.map((slot) => slot.channelId)).size).toBe(
         channelCount,

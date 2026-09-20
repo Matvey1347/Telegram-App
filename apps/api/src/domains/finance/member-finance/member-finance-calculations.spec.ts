@@ -10,7 +10,7 @@ describe('member finance calculations', () => {
     expect(salesCommission(19.99, 7)).toBe(1.4);
   });
 
-  it('calculates reinvestable profit after accrued salary without double-counting its payout', () => {
+  it('calculates reinvestable profit from revenue less accrued sales commission only', () => {
     const profit = reinvestableProfit({
       operatingTransactions: [
         {
@@ -38,11 +38,10 @@ describe('member finance calculations', () => {
           categoryKey: 'investment',
         },
       ],
-      commissionPayoutTransactionIds: new Set(['salary-payout']),
       accruedSalesCommission: 100,
     });
 
-    expect(profit).toBe(850);
+    expect(profit).toBe(900);
   });
 
   it('allocates every cent by capital share with deterministic rounding', () => {

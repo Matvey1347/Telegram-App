@@ -238,7 +238,7 @@ export class MemberFinanceService {
         );
       }
 
-      const [workspace, transactions, payouts, commissionPayments, capital] =
+      const [workspace, transactions, commissionPayments, capital, members] =
         await Promise.all([
           tx.workspace.findUniqueOrThrow({
             where: { id: owner.workspaceId },
@@ -258,14 +258,6 @@ export class MemberFinanceService {
               category: true,
             },
           }),
-          tx.memberCompensationSettlement.findMany({
-            where: {
-              workspaceId: owner.workspaceId,
-              type: MemberCompensationSettlementType.PAYOUT,
-              date: { gte: from, lte: to },
-            },
-            select: { transactionId: true },
-          }),
           tx.telegramAdSalePayment.findMany({
             where: {
               workspaceId: owner.workspaceId,
@@ -283,13 +275,12 @@ export class MemberFinanceService {
             where: { workspaceId: owner.workspaceId },
             _sum: { amountInPrimaryCurrency: true },
           }),
+          tx.workspaceMember.findMany({
+            where: { workspaceId: owner.workspaceId, isHidden: false },
+            select: { id: true },
+          }),
         ]);
 
-      const payoutTransactionIds = new Set(
-        payouts
-          .map((row) => row.transactionId)
-          .filter((id): id is string => Boolean(id)),
-      );
       const accruedSalesCommission = commissionPayments.reduce(
         (sum, payment) =>
           sum +
@@ -306,7 +297,6 @@ export class MemberFinanceService {
             row.categoryRef?.key ??
             row.category.trim().toLowerCase().replace(/\s+/g, '_'),
         })),
-        commissionPayoutTransactionIds: payoutTransactionIds,
         accruedSalesCommission,
       });
       if (netProfit <= 0) {
@@ -325,12 +315,15 @@ export class MemberFinanceService {
             Number(row._sum.amountInPrimaryCurrency ?? 0) * direction,
         );
       }
+      const visibleMemberIds = new Set(members.map((member) => member.id));
       const allocations = allocateProfitByCapital(
         netProfit,
-        [...capitalByMember].map(([memberId, amount]) => ({
-          memberId,
-          amount,
-        })),
+        [...capitalByMember]
+          .filter(([memberId]) => visibleMemberIds.has(memberId))
+          .map(([memberId, amount]) => ({
+            memberId,
+            amount,
+          })),
       );
       if (!allocations.length) {
         throw new BadRequestException(

@@ -22,7 +22,6 @@ describe("WorkspaceAdSalesDefaults", () => {
     vi.restoreAllMocks();
     vi.spyOn(telegramAdSalesApi, "getWorkspaceSettings").mockResolvedValue({
       workspaceId: "workspace-1",
-      defaultOrganicPostsPerAdSlot: 3,
       salesCommissionEnabled: false,
       defaultSalesCommissionRate: 0,
       createdAt: "2026-09-12T00:00:00.000Z",
@@ -63,5 +62,16 @@ describe("WorkspaceAdSalesDefaults", () => {
       await screen.findByRole("button", { name: "Save ad-sales defaults" }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Sales commission")).toBeNull();
+  });
+
+  it("shows the commission rate only after commission is enabled", async () => {
+    const user = userEvent.setup();
+    renderDefaults();
+
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+    await user.click(
+      await screen.findByRole("switch", { name: "Enable sales commission" }),
+    );
+    expect(screen.getByRole("spinbutton")).toBeInTheDocument();
   });
 });

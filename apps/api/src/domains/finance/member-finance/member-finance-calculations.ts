@@ -14,27 +14,26 @@ export function reinvestableProfit(input: {
     amountInPrimaryCurrency: unknown;
     categoryKey: string;
   }>;
-  commissionPayoutTransactionIds: ReadonlySet<string>;
   accruedSalesCommission: number;
 }) {
-  const operatingResult = input.operatingTransactions.reduce((sum, row) => {
+  const earnedRevenue = input.operatingTransactions.reduce((sum, row) => {
     if (
       row.categoryKey === 'investment' ||
       row.categoryKey === 'investment_return' ||
       row.categoryKey === 'balance_adjustment' ||
       row.categoryKey === 'fixing_balance' ||
-      input.commissionPayoutTransactionIds.has(row.id)
+      row.type !== 'income'
     ) {
       return sum;
     }
     const amount = Number(row.amountInPrimaryCurrency ?? 0);
-    return sum + (row.type === 'income' ? amount : -amount);
+    return sum + amount;
   }, 0);
 
-  // Sales salary is accrued when the customer's payment becomes active. A
-  // later cash payout is excluded above, otherwise the same salary would be
-  // deducted twice or assigned to whichever period the owner happened to pay.
-  return roundMoney(operatingResult - input.accruedSalesCommission);
+  // Until broader operating expenses are introduced into the investor model,
+  // revenue is reduced only by the commission accrued for the salesperson.
+  // A later commission payout is not a second investor expense.
+  return roundMoney(earnedRevenue - input.accruedSalesCommission);
 }
 
 export function allocateProfitByCapital(

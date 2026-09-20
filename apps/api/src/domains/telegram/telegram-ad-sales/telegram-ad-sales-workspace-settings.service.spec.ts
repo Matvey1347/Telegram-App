@@ -5,7 +5,6 @@ import { TelegramAdSalesWorkspaceSettingsService } from './telegram-ad-sales-wor
 const settings = {
   id: 'settings-1',
   workspaceId: 'workspace-1',
-  defaultOrganicPostsPerAdSlot: 3,
   salesCommissionEnabled: true,
   defaultSalesCommissionRate: 12.5,
   createdAt: new Date('2026-09-01T00:00:00.000Z'),
@@ -28,18 +27,16 @@ function createService(role: WorkspaceRole = WorkspaceRole.owner) {
       role,
     }),
   };
-  const responseCache = { clearByPrefix: jest.fn() };
   const service = new TelegramAdSalesWorkspaceSettingsService(
     prisma as never,
     workspaceService as never,
-    responseCache as never,
   );
-  return { service, prisma, responseCache };
+  return { service, prisma };
 }
 
 describe('TelegramAdSalesWorkspaceSettingsService', () => {
-  it('lets an owner enable the default commission and invalidates availability', async () => {
-    const { service, prisma, responseCache } = createService();
+  it('lets an owner enable the default commission', async () => {
+    const { service, prisma } = createService();
 
     const result = await service.update('owner-1', {
       salesCommissionEnabled: true,
@@ -55,9 +52,6 @@ describe('TelegramAdSalesWorkspaceSettingsService', () => {
         },
       }),
     );
-    expect(responseCache.clearByPrefix).toHaveBeenCalledWith(
-      'telegram-ad-sales:availability:workspace-1:',
-    );
     expect(result.defaultSalesCommissionRate).toBe(12.5);
   });
 
@@ -70,19 +64,5 @@ describe('TelegramAdSalesWorkspaceSettingsService', () => {
     expect(
       prisma.telegramAdSalesWorkspaceSettings.upsert,
     ).not.toHaveBeenCalled();
-  });
-
-  it('still lets a member update the non-financial scheduling default', async () => {
-    const { service, prisma } = createService(WorkspaceRole.member);
-
-    await service.update('member-user-1', {
-      defaultOrganicPostsPerAdSlot: 4,
-    });
-
-    expect(prisma.telegramAdSalesWorkspaceSettings.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        update: { defaultOrganicPostsPerAdSlot: 4 },
-      }),
-    );
   });
 });
