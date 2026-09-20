@@ -81,6 +81,24 @@ export class MutualPromotionActivationService {
         );
         if (!folder.participants.length)
           throw new BadRequestException('At least one participant is required');
+        if (!publishers.length) {
+          if (folder.posts.length) {
+            throw new BadRequestException(
+              'Folders without publishing channels cannot contain publications',
+            );
+          }
+          const activatedAt = new Date();
+          await tx.mutualPromotionFolder.update({
+            where: { id: folder.id },
+            data: {
+              status: 'ACTIVE',
+              activatedAt,
+              completedAt: null,
+              nextDueAt: folder.endsAt,
+            },
+          });
+          return;
+        }
         const now = new Date();
         if (folder.startsAt <= now)
           throw new BadRequestException('Folder start must be in the future');
@@ -97,10 +115,6 @@ export class MutualPromotionActivationService {
         if (publishers.length && folder.posts.length < 5)
           throw new BadRequestException(
             'At least five publications are required',
-          );
-        if (!publishers.length && folder.posts.length)
-          throw new BadRequestException(
-            'Folders without publishing channels cannot contain publications',
           );
         if (
           folder.posts.some(

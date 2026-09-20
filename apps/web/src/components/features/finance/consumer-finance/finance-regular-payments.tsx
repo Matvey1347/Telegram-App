@@ -18,6 +18,7 @@ import {
   ErrorState,
   FinanceCardActionsMenu,
   LoadingState,
+  Select,
 } from "./ui";
 import { FinanceConfirmModal } from "./finance-confirm-modal";
 import { FinanceRegularPaymentConfirm } from "./finance-regular-payment-confirm";
@@ -164,23 +165,14 @@ export function FinanceRegularPayments({
   };
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap gap-2" role="tablist">
-          {(["ACTIVE", "PAUSED", "CANCELED"] as const).map((value) => (
-            <Button
-              key={value}
-              role="tab"
-              aria-selected={status === value}
-              variant={status === value ? "primary" : "secondary"}
-              onClick={() => setStatus(value)}
-            >
-              {value === "ACTIVE"
-                ? t.active
-                : value === "PAUSED"
-                  ? t.paused
-                  : t.canceled}
-            </Button>
-          ))}
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div className="w-full max-w-xs">
+          <label className="mb-1 block text-sm text-neutral-300">{t.status}</label>
+          <Select uiLocale={locale} value={status} onChange={(event) => setStatus(event.target.value as typeof status)}>
+            <option value="ACTIVE">🟢 {t.active}</option>
+            <option value="PAUSED">⏸️ {t.paused}</option>
+            <option value="CANCELED">⛔ {t.canceled}</option>
+          </Select>
         </div>
         <Button onClick={() => setEditing("create")}>
           {t.addRegularPayment}
@@ -335,7 +327,7 @@ function RegularPaymentCard({
           <div className="min-w-0">
             <h2 className="truncate font-medium">{payment.name}</h2>
             <p className="text-xs text-neutral-400">
-              {payment.account.name} · {recurrence}
+              {recurrence}
             </p>
           </div>
         </div>
@@ -394,14 +386,35 @@ function RegularPaymentCard({
           />
         </div>
       </div>
-      <p
-        className={`mt-3 text-sm ${payment.isDue ? "font-medium text-amber-300" : "text-neutral-400"}`}
-      >
-        {payment.isDue ? `${t.due} · ` : ""}
-        {new Intl.DateTimeFormat(financeIntlLocale(locale), {
-          timeZone: payment.scheduleTimezone,
-        }).format(new Date(payment.nextOccurrenceAt))}
-      </p>
+      <div className="mt-3 grid gap-2 text-sm text-neutral-400 sm:grid-cols-3">
+        <div className="flex items-center gap-1.5">
+          <IconAvatar
+            icon={payment.account.iconPresentation}
+            label={payment.account.name}
+            size="xs"
+            bordered={false}
+          />
+          <span className="truncate">{payment.account.name}</span>
+        </div>
+        <div>
+          <p className="text-xs text-neutral-500">{t.nextPayment}</p>
+          <p className={payment.isDue ? "font-medium text-amber-300" : ""}>
+          {payment.isDue ? `${t.due} · ` : ""}
+          {new Intl.DateTimeFormat(financeIntlLocale(locale), {
+            timeZone: payment.scheduleTimezone,
+          }).format(new Date(payment.nextOccurrenceAt))}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-neutral-500">{t.lastPayment}</p>
+          <p>{payment.lastPaymentAt
+            ? new Intl.DateTimeFormat(financeIntlLocale(locale), {
+                timeZone: payment.scheduleTimezone,
+              }).format(new Date(payment.lastPaymentAt))
+            : t.noPaymentYet}
+          </p>
+        </div>
+      </div>
       {payment.category ? (
         <p className="mt-1 text-xs text-neutral-500">
           {localizeFinanceCategory(
@@ -415,7 +428,7 @@ function RegularPaymentCard({
         <p className="mt-2 text-sm text-neutral-400">{payment.note}</p>
       ) : null}
       <div className="mt-4 flex flex-wrap gap-2">
-        {payment.status === "ACTIVE" && payment.isDue ? (
+        {payment.status === "ACTIVE" ? (
           <>
             <Button disabled={busy} onClick={() => onConfirm(false)}>
               {t.confirmPayment}

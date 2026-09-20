@@ -244,6 +244,17 @@ describe('telegramMarkupToHtml', () => {
     );
   });
 
+  it('keeps overlapping link and italic formatting valid for the Bot API', () => {
+    const html = telegramMarkupToHtml(
+      '**__Підпишись зараз [на__ «Де гроші](https://t.me/example)**?»**__, щоб у 2026 році кардинально змінити своє життя на краще!__**',
+    );
+
+    expect(html).toBe(
+      '<b><i>Підпишись зараз <a href="https://t.me/example">на__ «Де гроші</a></i></b><i>?»<b></b></i><b>, щоб у 2026 році кардинально змінити своє життя на краще!__</b>',
+    );
+    expect(() => HTMLParser.parse(html)).not.toThrow();
+  });
+
   it('converts regular and expandable quote blocks', () => {
     expect(
       telegramMarkupToHtml(

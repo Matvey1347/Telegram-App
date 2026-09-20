@@ -73,11 +73,9 @@ export class BotBillingAnalyticsService {
     };
   }
 
-  async aiUsage(workspaceId: string, botIntegrationId: string, environment: 'LOCAL' | 'PRODUCTION') {
+  async aiUsage(workspaceId: string, botIntegrationId: string) {
     const periodStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
-    const runtime = await this.prisma.telegramBotRuntimeInstance.findFirst({ where: { workspaceId, botIntegrationId, environment }, select: { id: true } });
-    if (!runtime) return { periodStart: periodStart.toISOString(), requests: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, estimatedCostMicros: 0, unpricedRequests: 0, byModel: [], byUser: [] };
-    const where = { workspaceId, botIntegrationId, runtimeInstanceId: runtime.id, createdAt: { gte: periodStart }, status: { not: 'PENDING' } };
+    const where = { workspaceId, botIntegrationId, createdAt: { gte: periodStart }, status: { not: 'PENDING' } };
     const [summary, models, users] = await Promise.all([
       this.prisma.aiUsageEvent.aggregate({ where, _count: { _all: true, estimatedCostMicros: true }, _sum: { inputTokens: true, cachedInputTokens: true, outputTokens: true, estimatedCostMicros: true } }),
       this.prisma.aiUsageEvent.groupBy({ by: ['model'], where, _count: { _all: true }, _sum: { inputTokens: true, outputTokens: true, estimatedCostMicros: true }, orderBy: { _sum: { estimatedCostMicros: 'desc' } } }),

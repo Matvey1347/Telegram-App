@@ -165,19 +165,24 @@ describe('MutualPromotionActivationService', () => {
     );
   });
 
-  it('activates a paid-only folder with boundary capture and no publications', async () => {
+  it('activates a paid-only folder without future-date validation or lifecycle work', async () => {
     const { service, tx, publication } = setup(0, 0);
+    const paidOnlyFolder = await tx.mutualPromotionFolder.findFirst();
+    paidOnlyFolder.startsAt = new Date(now.getTime() - 60_000);
+    tx.mutualPromotionFolder.findFirst.mockResolvedValue(paidOnlyFolder);
 
     const result = await service.activate('user-1', 'folder-1');
 
     expect(result.deliveriesCreated).toBe(0);
     expect(tx.telegramManagedPost.createMany).not.toHaveBeenCalled();
     expect(tx.mutualPromotionPostDelivery.createMany).not.toHaveBeenCalled();
-    expect(tx.mutualPromotionWorkItem.createMany).toHaveBeenCalledWith({
-      data: [
-        expect.objectContaining({ kind: 'CAPTURE_START_BASELINE' }),
-        expect.objectContaining({ kind: 'FINISH_FOLDER' }),
-      ],
+    expect(tx.mutualPromotionWorkItem.createMany).not.toHaveBeenCalled();
+    expect(tx.mutualPromotionFolder.update).toHaveBeenCalledWith({
+      where: { id: 'folder-1' },
+      data: expect.objectContaining({
+        status: 'ACTIVE',
+        nextDueAt: endsAt,
+      }),
     });
     expect(publication.scheduleManagedPostNatively).not.toHaveBeenCalled();
   });

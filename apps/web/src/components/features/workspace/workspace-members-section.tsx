@@ -117,6 +117,14 @@ export function WorkspaceMembersSection({
       new Map((memberFinance.data ?? []).map((item) => [item.memberId, item])),
     [memberFinance.data],
   );
+  const totalVisibleInvested = useMemo(
+    () =>
+      (data ?? []).reduce((sum, member) => {
+        if (member.isHidden) return sum;
+        return sum + (financeByMember.get(member.id)?.investments.total ?? 0);
+      }, 0),
+    [data, financeByMember],
+  );
 
   const ownersCount = useMemo(
     () => (data || []).filter((member) => member.role === "owner").length,
@@ -243,8 +251,13 @@ export function WorkspaceMembersSection({
 
       <div className="columns-1 gap-4 md:columns-2 xl:columns-3">
         {data?.map((member: WorkspaceMember) => {
-          const hasInvestments =
-            Number(member.investmentSummary?.totalInvestedPrimary ?? 0) > 0;
+          const financeSummary = financeByMember.get(member.id);
+          const totalInvested = financeSummary?.investments.total ?? 0;
+          const hasInvestments = !member.isHidden && totalInvested > 0;
+          const investmentSharePercent =
+            totalVisibleInvested > 0
+              ? (totalInvested / totalVisibleInvested) * 100
+              : 0;
           const canManageMember =
             currentRole === "owner" && !member.isCurrentUser;
           const linkedAccountsCount =
@@ -291,18 +304,18 @@ export function WorkspaceMembersSection({
                           You
                         </span>
                       ) : null}
+                      <RoleBadge member={member} />
                     </div>
                     <p className="truncate text-xs text-neutral-400">
                       {member.user.email}
                     </p>
-                    <div className="mt-1 flex min-w-0 items-center gap-1.5">
-                      <RoleBadge member={member} />
-                      {member.isHidden ? (
+                    {member.isHidden ? (
+                      <div className="mt-1 flex min-w-0 items-center gap-1.5">
                         <span className="truncate rounded-full border border-neutral-700 bg-neutral-950/70 px-2 py-0.5 text-xs text-neutral-400">
                           Finance hidden
                         </span>
-                      ) : null}
-                    </div>
+                      </div>
+                    ) : null}
                     {member.telegramUsername || linkedAccountsCount > 0 ? (
                       <p className="mt-1 truncate text-xs text-neutral-500">
                         {member.telegramUsername
@@ -355,24 +368,19 @@ export function WorkspaceMembersSection({
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-neutral-800 pt-2 text-xs">
                     <span className="text-neutral-500">Invested</span>
                     <span className="font-semibold tabular-nums text-neutral-100">
-                      {Number(
-                        member.investmentSummary?.totalInvestedDisplay ?? 0,
-                      ).toLocaleString(undefined, {
+                      {Number(totalInvested).toLocaleString(undefined, {
                         maximumFractionDigits: 2,
                       })}{" "}
-                      {member.investmentSummary?.displayCurrency}
+                      {financeSummary?.primaryCurrency}
                       <span className="ml-2 font-normal text-neutral-500">
-                        {Number(
-                          member.investmentSummary?.investmentSharePercent ?? 0,
-                        ).toFixed(2)}
-                        %
+                        {investmentSharePercent.toFixed(2)}%
                       </span>
                     </span>
                   </div>
                 ) : null}
                 <WorkspaceMemberFinance
                   member={member}
-                  summary={financeByMember.get(member.id)}
+                  summary={financeSummary}
                   canManage={currentRole === "owner"}
                 />
               </div>

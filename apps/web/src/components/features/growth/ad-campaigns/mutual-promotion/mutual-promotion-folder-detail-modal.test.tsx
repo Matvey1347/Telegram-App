@@ -12,7 +12,7 @@ vi.mock("./mutual-promotion-saved-post-card", () => ({
 }));
 
 describe("MutualPromotionFolderDetailModal", () => {
-  it("allows a paid-only draft to activate without adding posts", () => {
+  it("does not offer activation for a paid-only draft", () => {
     render(
       <MutualPromotionFolderDetailModal
         open
@@ -49,8 +49,8 @@ describe("MutualPromotionFolderDetailModal", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Activate" })).toBeEnabled();
-    expect(screen.getByText(/No posts are needed/)).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Activate" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/No posts are needed/)).not.toBeInTheDocument();
     expect(screen.queryByText("Post import")).not.toBeInTheDocument();
     expect(screen.queryByText(/Publications \(0\)/)).not.toBeInTheDocument();
   });

@@ -120,6 +120,10 @@ export class AccountService {
     });
     const membership =
       await this.workspaceService.resolveWorkspaceMembershipForUser(userId);
+    const activeMembership = await this.prisma.workspaceMember.findUnique({
+      where: { id: membership.id },
+      select: { salesCommissionRate: true },
+    });
     const profileAccounts = user.profileTelegramUserAccount
       ? [user.profileTelegramUserAccount]
       : [];
@@ -132,6 +136,10 @@ export class AccountService {
     return {
       ...publicUser,
       workspaceMemberId: membership.id,
+      salesCommissionRate:
+        activeMembership?.salesCommissionRate == null
+          ? null
+          : Number(activeMembership.salesCommissionRate),
       editorShortcuts:
         (user.editorShortcuts as EditorShortcutPreferences | null) ?? {},
       locale: normalizeAppLocale(user.locale),
@@ -175,6 +183,15 @@ export class AccountService {
 
     if (dto.locale !== undefined) {
       data.locale = normalizeAppLocale(dto.locale) satisfies AppLocale;
+    }
+
+    if (
+      dto.salesCommissionRate !== undefined &&
+      membership.role !== WorkspaceRole.owner
+    ) {
+      throw new ForbiddenException(
+        'Only workspace owners can change their sales commission rate',
+      );
     }
 
     if (dto.name !== undefined) {
@@ -335,6 +352,13 @@ export class AccountService {
         if (normalizedTelegramUsername !== undefined) {
           data.telegramUsername = normalizedTelegramUsername;
         }
+      }
+
+      if (dto.salesCommissionRate !== undefined) {
+        await tx.workspaceMember.update({
+          where: { id: membership.id },
+          data: { salesCommissionRate: dto.salesCommissionRate },
+        });
       }
 
       if (Object.keys(data).length) {

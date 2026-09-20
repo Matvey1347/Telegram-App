@@ -158,7 +158,6 @@ describe('FinanceContextService consumer bootstrap persistence', () => {
       where: {
         workspaceId: 'workspace-1',
         botIntegrationId: 'bot-1',
-        runtimeInstanceId: 'runtime-1',
         telegramUserId: '12345',
       },
       include: {

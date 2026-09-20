@@ -55,6 +55,9 @@ describe('AccountService global profile', () => {
         }),
       },
       telegramUserAccountIntegration: { findMany: jest.fn() },
+      workspaceMember: {
+        findUnique: jest.fn().mockResolvedValue({ salesCommissionRate: null }),
+      },
     };
     const service = new AccountService(
       prisma as never,
@@ -188,6 +191,56 @@ describe('AccountService global profile', () => {
       data: { profileTelegramUserAccount: { disconnect: true } },
     });
     expect(tx.telegramUserAccountIntegration.findMany).not.toHaveBeenCalled();
+  });
+
+  it('lets an owner save a commission override only for their active membership', async () => {
+    const tx = {
+      user: { update: jest.fn() },
+      workspaceMember: { update: jest.fn().mockResolvedValue({}) },
+    };
+    const service = new AccountService(
+      {
+        $transaction: jest.fn(
+          async (callback: (client: typeof tx) => unknown) => callback(tx),
+        ),
+      } as never,
+      {
+        resolveWorkspaceMembershipForUser: jest
+          .fn()
+          .mockResolvedValue(membership),
+      } as never,
+      {} as never,
+    );
+    jest.spyOn(service, 'me').mockResolvedValue({ ok: true } as never);
+
+    await service.updateMe('user-1', { salesCommissionRate: 17.5 });
+
+    expect(tx.workspaceMember.update).toHaveBeenCalledWith({
+      where: { id: 'member-bohdan' },
+      data: { salesCommissionRate: 17.5 },
+    });
+    expect(tx.user.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects a commission override from a non-owner', async () => {
+    const service = new AccountService(
+      {} as never,
+      {
+        resolveWorkspaceMembershipForUser: jest.fn().mockResolvedValue({
+          ...membership,
+          role: 'member',
+        }),
+      } as never,
+      {} as never,
+    );
+
+    await expect(
+      service.updateMe('user-1', { salesCommissionRate: 17.5 }),
+    ).rejects.toMatchObject({
+      response: {
+        message: 'Only workspace owners can change their sales commission rate',
+      },
+    });
   });
 
   it('rejects an account created by the user after it was assigned to somebody else', async () => {

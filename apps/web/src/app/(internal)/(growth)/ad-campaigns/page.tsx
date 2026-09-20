@@ -1872,7 +1872,7 @@ function PromosSection({
         <EmptyState text="No promos yet." />
       ) : null}
       {promos.length ? (
-        <MasonryGrid>
+        <MasonryGrid className="xl:grid-cols-4">
           {promos.map((promo) => (
             <PromoCard
               key={promo.id}

@@ -87,8 +87,8 @@ describe("Consumer Finance savings and investments screens", () => {
 
   it("loads up to 100 active reallocation destinations outside the active filter", async () => {
     host(<FinanceSavings botId="bot" locale="en" defaultCurrency="USD" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Active" }));
-    fireEvent.click(screen.getByRole("option", { name: "Completed" }));
+    fireEvent.click(await screen.findByRole("button", { name: "🟢 Active" }));
+    fireEvent.click(screen.getByRole("option", { name: "✅ Completed" }));
     await waitFor(() =>
       expect(api.savings).toHaveBeenCalledWith("bot", {
         status: "ACTIVE",

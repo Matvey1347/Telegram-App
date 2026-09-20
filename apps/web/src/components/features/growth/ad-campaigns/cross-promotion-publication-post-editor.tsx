@@ -59,18 +59,16 @@ export function CrossPromotionPublicationPostEditor({
         <div className="flex flex-wrap items-center gap-2">
           {directMutual ? (
             <>
-              {!expanded ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setManuallyCollapsed(false);
-                    setOpened(true);
-                  }}
-                >
-                  <Pencil size={15} /> Write manually
-                </Button>
-              ) : null}
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setManuallyCollapsed(false);
+                  setOpened(true);
+                }}
+              >
+                <Pencil size={15} /> {hasPost ? "✅ Write manually" : "Write manually"}
+              </Button>
               <Button
                 type="button"
                 variant="secondary"

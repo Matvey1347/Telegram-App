@@ -2,10 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type {
-  BotBillingUserPage,
-  TelegramBotRuntimeEnvironment,
-} from "@telegram-system/shared";
+import type { BotBillingUserPage } from "@telegram-system/shared";
 import { Gift, Search, Settings2, UserRound } from "lucide-react";
 import {
   Button,
@@ -27,17 +24,13 @@ import { financeAdminTimezoneOptions } from "@/lib/features/finance/finance-admi
 
 type FinanceUser = BotBillingUserPage["items"][number];
 
-export function FinanceSubscribersSection({
-  botId,
-  environment,
-}: {
-  botId: string;
-  environment: TelegramBotRuntimeEnvironment;
-}) {
-  const [query, setQuery] = useState<BotBillingUsersQuery>({ environment });
+export function FinanceSubscribersSection({ botId }: { botId: string }) {
+  const [query, setQuery] = useState<BotBillingUsersQuery>({
+    environment: "PRODUCTION",
+  });
   const [history, setHistory] = useState<string[]>([]);
   const [selected, setSelected] = useState<FinanceUser | null>(null);
-  const effectiveQuery = { ...query, environment };
+  const effectiveQuery = query;
   const users = useQuery({
     queryKey: botBillingKeys.users(botId, effectiveQuery),
     queryFn: () => botBillingApi.users(botId, effectiveQuery),
@@ -66,7 +59,7 @@ export function FinanceSubscribersSection({
             onChange={(event) => {
               setHistory([]);
               setQuery({
-                environment,
+                environment: "PRODUCTION",
                 search: event.target.value || undefined,
               });
             }}
@@ -80,7 +73,7 @@ export function FinanceSubscribersSection({
         isEmpty={!users.data?.items.length}
         loadingText="Loading Finance users"
         errorText="Could not load Finance users."
-        emptyText={`No users in the ${environment === "LOCAL" ? "local" : "production"} bot`}
+        emptyText="No users for this bot"
         onRetry={() => void users.refetch()}
       >
         <div className="grid gap-3 xl:grid-cols-2">

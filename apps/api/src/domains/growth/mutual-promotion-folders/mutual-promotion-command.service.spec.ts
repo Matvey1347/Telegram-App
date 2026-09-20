@@ -65,6 +65,54 @@ describe('MutualPromotionCommandService', () => {
     return { service, tx, validation };
   }
 
+  it('creates a paid-only folder already active', async () => {
+    const created = { id: 'folder-paid', title: 'Paid only' };
+    const tx = {
+      mutualPromotionFolder: { create: jest.fn().mockResolvedValue(created) },
+    };
+    const validation = {
+      parseInterval: jest.fn().mockReturnValue({ startsAt, endsAt }),
+      lockInviteLinks: jest.fn(),
+      validateParticipants: jest.fn(),
+    };
+    const expenses = { createForFolder: jest.fn() };
+    const read = { detailForWorkspace: jest.fn().mockResolvedValue(created) };
+    const service = new MutualPromotionCommandService(
+      { $transaction: jest.fn((callback) => callback(tx)) } as never,
+      {
+        resolveWorkspaceMembershipForUser: jest
+          .fn()
+          .mockResolvedValue({ workspaceId: 'workspace-1' }),
+      } as never,
+      expenses as never,
+      {} as never,
+      validation as never,
+      read as never,
+      {} as never,
+    );
+
+    await service.create('user-1', {
+      title: 'Paid only',
+      startsAt: startsAt.toISOString(),
+      endsAt: endsAt.toISOString(),
+      participants: [
+        {
+          telegramChannelId: 'channel-1',
+          inviteLinkId: 'invite-1',
+          role: 'PAID',
+        },
+      ],
+    });
+
+    expect(tx.mutualPromotionFolder.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        status: 'ACTIVE',
+        activatedAt: expect.any(Date),
+        nextDueAt: endsAt,
+      }),
+    });
+  });
+
   it('requires finance.create before allocating paid-folder expenses', async () => {
     const prisma = { $transaction: jest.fn() };
     const authorization = {

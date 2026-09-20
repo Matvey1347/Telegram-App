@@ -419,6 +419,19 @@ export class TelegramManagedPostHistoryService {
             : telegramEdit?.lastTelegramSyncNote,
           assignedMemberId,
           icon: dto.icon === undefined ? undefined : dto.icon?.trim() || null,
+          deleteAfterHours:
+            dto.deleteAfterHours === undefined
+              ? undefined
+              : dto.deleteAfterHours,
+          deleteAt:
+            dto.deleteAfterHours === undefined
+              ? undefined
+              : post.publishedAt && dto.deleteAfterHours
+                ? new Date(
+                    post.publishedAt.getTime() +
+                      dto.deleteAfterHours * 3_600_000,
+                  )
+                : null,
           lastError: null,
           telegramScheduledMessageIds: convertsNativeScheduleToLocal
             ? []

@@ -71,6 +71,7 @@ export function createWorkspaceApi({
       telegramUserAccountIds?: string[];
       editorShortcuts?: EditorShortcutPreferences;
       locale?: "en" | "ru";
+      salesCommissionRate?: number | null;
     }) => (await api.patch<AccountMe>("/account/me", payload)).data,
     updateLocale: async (locale: "en" | "ru") =>
       (

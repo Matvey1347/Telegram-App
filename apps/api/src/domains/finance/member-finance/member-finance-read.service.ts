@@ -191,7 +191,7 @@ export class MemberFinanceReadService {
     // Investor profit is a single current balance: all earned revenue less
     // sales commission is divided by today's visible investor capital. Do not
     // allocate historical income against a past capital snapshot.
-    const totalProfit = valuedTransactions.reduce((sum, transaction) => {
+    const revenueTransactions = valuedTransactions.flatMap((transaction) => {
       const key =
         transaction.categoryRef?.key ??
         transaction.category.trim().toLowerCase().replace(/\s+/g, '_');
@@ -204,23 +204,57 @@ export class MemberFinanceReadService {
           'fixing_balance',
         ].includes(key)
       )
-        return sum;
+        return [];
       let revenue = Number(transaction.amountInPrimaryCurrency ?? 0);
       const paymentId = transaction.telegramAdSalePayment?.id;
       if (paymentId) revenue -= commissionByPayment.get(paymentId) ?? 0;
-      return sum + revenue;
-    }, 0);
-    const allocations = allocateProfitByCapital(
-      totalProfit,
-      [...capitalByMember].map(([memberId, amount]) => ({
-        memberId,
-        amount,
-      })),
+      return revenue > 0
+        ? [
+            {
+              id: transaction.id,
+              date: transaction.date,
+              amount: revenue,
+              title: transaction.category,
+            },
+          ]
+        : [];
+    });
+    const totalProfit = revenueTransactions.reduce(
+      (sum, transaction) => sum + transaction.amount,
+      0,
     );
+    const capital = [...capitalByMember].map(([memberId, amount]) => ({
+      memberId,
+      amount,
+    }));
+    const allocations = allocateProfitByCapital(totalProfit, capital);
     for (const allocation of allocations) {
       get(allocation.memberId).investorEarnings += allocation.amount;
     }
-    return { byMember, payments, settlements, investments };
+    const totalCapital = capital.reduce((sum, row) => sum + row.amount, 0);
+    const automaticReinvestmentsByMember = new Map<
+      string,
+      Array<{ id: string; date: Date; amount: number; title: string }>
+    >();
+    for (const investor of capital) {
+      if (investor.amount <= 0 || totalCapital <= 0) continue;
+      automaticReinvestmentsByMember.set(
+        investor.memberId,
+        revenueTransactions.map((transaction) => ({
+          id: `reinvestment:${transaction.id}`,
+          date: transaction.date,
+          amount: transaction.amount * (investor.amount / totalCapital),
+          title: transaction.title,
+        })),
+      );
+    }
+    return {
+      byMember,
+      payments,
+      settlements,
+      investments,
+      automaticReinvestmentsByMember,
+    };
   }
 
   private presentSummary(
@@ -357,6 +391,15 @@ export class MemberFinanceReadService {
           amount: this.signedInvestment(investment),
           title: investment.notes,
         })),
+      ...(rows.automaticReinvestmentsByMember.get(memberId) ?? []).map(
+        (reinvestment) => ({
+          id: reinvestment.id,
+          type: 'AUTO_REINVESTMENT',
+          date: reinvestment.date.toISOString(),
+          amount: reinvestment.amount,
+          title: reinvestment.title,
+        }),
+      ),
     ].sort((a, b) => b.date.localeCompare(a.date));
     return {
       member: {

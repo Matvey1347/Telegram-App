@@ -1,7 +1,7 @@
 import { BotBillingAnalyticsService } from './bot-billing-analytics.service';
 
 describe('BotBillingAnalyticsService', () => {
-  it('aggregates real AI cost by model and user inside one bot runtime', async () => {
+  it('aggregates real AI cost by model and user across a logical bot', async () => {
     const prisma = {
       telegramBotRuntimeInstance: { findFirst: jest.fn().mockResolvedValue({ id: 'runtime-local' }) },
       aiUsageEvent: {
@@ -11,8 +11,10 @@ describe('BotBillingAnalyticsService', () => {
       telegramBotUser: { findMany: jest.fn().mockResolvedValue([{ id: 'user-1', telegramUserId: '42', username: 'alice', firstName: 'Alice' }]) },
     };
     const service = new BotBillingAnalyticsService(prisma as never);
-    await expect(service.aiUsage('workspace-1', 'bot-1', 'LOCAL')).resolves.toMatchObject({ requests: 2, estimatedCostMicros: 90, unpricedRequests: 0, byModel: [{ model: 'gpt-5-mini', requests: 2 }], byUser: [{ telegramBotUserId: 'user-1', username: 'alice', requests: 2 }] });
-    expect(prisma.telegramBotRuntimeInstance.findFirst).toHaveBeenCalledWith({ where: { workspaceId: 'workspace-1', botIntegrationId: 'bot-1', environment: 'LOCAL' }, select: { id: true } });
+    await expect(service.aiUsage('workspace-1', 'bot-1')).resolves.toMatchObject({ requests: 2, estimatedCostMicros: 90, unpricedRequests: 0, byModel: [{ model: 'gpt-5-mini', requests: 2 }], byUser: [{ telegramBotUserId: 'user-1', username: 'alice', requests: 2 }] });
+    expect(prisma.aiUsageEvent.aggregate).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.not.objectContaining({ runtimeInstanceId: expect.anything() }),
+    }));
   });
 
   it('returns zero-valued Finance summaries when a bot has no billing data', async () => {

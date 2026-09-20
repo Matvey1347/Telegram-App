@@ -210,6 +210,44 @@ describe('TelegramMtprotoClient import resolution', () => {
     });
   });
 
+  it('imports an invite-only channel preview after Telegram sends a join request', async () => {
+    fakeClient.invoke.mockImplementation((request: unknown) => {
+      if (request instanceof Api.messages.CheckChatInvite) {
+        return new Api.ChatInvite({
+          title: 'Approval-only channel',
+          about: 'Preview available before approval',
+          participantsCount: 42,
+          requestNeeded: true,
+        } as never);
+      }
+      if (request instanceof Api.messages.ImportChatInvite) {
+        const error = new Error('INVITE_REQUEST_SENT');
+        Object.assign(error, { errorMessage: 'INVITE_REQUEST_SENT' });
+        throw error;
+      }
+      throw new Error('Unexpected invoke');
+    });
+
+    await expect(
+      client.getPublicChannelInfo({
+        apiId: '1',
+        apiHash: 'hash',
+        session: 'session',
+        channelRef: 'https://t.me/+approvalOnly',
+        inviteHash: 'approvalOnly',
+      }),
+    ).resolves.toMatchObject({
+      kind: 'channel',
+      telegramChatId: '',
+      title: 'Approval-only channel',
+      description: 'Preview available before approval',
+      participantsCount: 42,
+      inviteLink: 'https://t.me/+approvalOnly',
+      accessMode: 'PRIVATE_JOIN_REQUEST',
+      requiresJoinRequest: true,
+    });
+  });
+
   it('falls back to ChannelFull pending count when live queue lookup fails', async () => {
     const entity = new Api.Channel({
       id: '123456' as any,

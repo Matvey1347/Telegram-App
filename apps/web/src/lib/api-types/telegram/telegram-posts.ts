@@ -83,6 +83,8 @@ export type TelegramManagedPost = {
   publicationSlotId?: string | null;
   scheduleMode?: TelegramManagedPostScheduleMode | null;
   publishedAt?: string | null;
+  deleteAfterHours?: number | null;
+  deleteAt?: string | null;
   telegramScheduledMessageIds: string[];
   telegramMessageIds: string[];
   telegramMessageUrls: string[];

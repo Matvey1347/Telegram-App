@@ -231,10 +231,10 @@ export function FinanceSavings({
           value={status}
           onChange={(e) => setStatus(e.target.value as StatusFilter)}
         >
-          <option value="ACTIVE">{t.active}</option>
-          <option value="COMPLETED">{t.completed}</option>
-          <option value="ARCHIVED">{t.archived}</option>
-          <option value="ALL">{t.all}</option>
+          <option value="ACTIVE">🟢 {t.active}</option>
+          <option value="COMPLETED">✅ {t.completed}</option>
+          <option value="ARCHIVED">📦 {t.archived}</option>
+          <option value="ALL">◌ {t.all}</option>
         </Select>
       </div>
       {visible.length ? (

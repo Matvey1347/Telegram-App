@@ -3718,7 +3718,8 @@ model TelegramBotUser {
   providerCustomers            BotProviderCustomer[]
   financeProposals             FinancePendingProposal[]
 
-  @@unique([runtimeInstanceId, telegramUserId])
+  /// A person belongs to the logical bot, not to a local or production runtime.
+  @@unique([botIntegrationId, telegramUserId])
   @@index([workspaceId, botIntegrationId])
   @@index([workspaceId, runtimeInstanceId])
   @@index([telegramChatId])
@@ -5260,6 +5261,8 @@ model TelegramManagedPost {
   scheduledAt                  DateTime?
   scheduleMode                 String?
   publishedAt                  DateTime?
+  deleteAfterHours             Int?
+  deleteAt                     DateTime?
   telegramScheduledMessageIds  String[]                                @default([])
   telegramMessageIds           String[]                                @default([])
   telegramMessageUrls          String[]                                @default([])
@@ -5318,6 +5321,7 @@ model TelegramManagedPost {
   @@index([workspaceId, telegramChannelId, plannerRunId], map: "TelegramManagedPost_workspaceId_telegramChannelId_plannerRunId_")
   @@index([workspaceId, telegramChannelId, plannerSlotId], map: "TelegramManagedPost_workspaceId_telegramChannelId_plannerSlotId")
   @@index([status, scheduledAt])
+  @@index([status, deleteAt])
   @@index([workspaceId, telegramChannelId, publicationSlotId], map: "TelegramManagedPost_workspaceId_telegramChannelId_publicationSl")
   @@index([telegramIdVerificationStatus, status, telegramIdLastCheckedAt], map: "TelegramManagedPost_due_identity_idx")
   @@index([workspaceId, telegramChannelId, origin, status, scheduledAt], map: "TelegramManagedPost_workspaceId_telegramChannelId_origin_status")

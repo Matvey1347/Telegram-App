@@ -72,8 +72,8 @@ export class TelegramBotUsersService {
     if (existing === undefined) {
       existing = await this.prisma.telegramBotUser.findUnique({
         where: {
-          runtimeInstanceId_telegramUserId: {
-            runtimeInstanceId: input.runtimeInstanceId,
+          botIntegrationId_telegramUserId: {
+            botIntegrationId: input.botIntegrationId,
             telegramUserId,
           },
         },
@@ -83,7 +83,6 @@ export class TelegramBotUsersService {
       input.existingUser &&
       (input.existingUser.workspaceId !== input.workspaceId ||
         input.existingUser.botIntegrationId !== input.botIntegrationId ||
-        input.existingUser.runtimeInstanceId !== input.runtimeInstanceId ||
         input.existingUser.telegramUserId !== telegramUserId)
     ) {
       throw new Error('Preloaded Telegram bot user scope mismatch');
@@ -114,8 +113,8 @@ export class TelegramBotUsersService {
         }
         existing = await this.prisma.telegramBotUser.findUnique({
           where: {
-            runtimeInstanceId_telegramUserId: {
-              runtimeInstanceId: input.runtimeInstanceId,
+            botIntegrationId_telegramUserId: {
+              botIntegrationId: input.botIntegrationId,
               telegramUserId,
             },
           },

@@ -287,8 +287,7 @@ export function CrossPromotionPartnerSide({
             </>
           ) : (
             <p className="rounded-lg border border-dashed border-neutral-700 p-3 text-sm text-neutral-500">
-              Add a title and choose channels on both sides to configure the
-              promo.
+              Add a title and choose where you publish to configure your promo.
             </p>
           )}
         </>

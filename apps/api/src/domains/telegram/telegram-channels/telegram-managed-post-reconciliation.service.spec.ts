@@ -27,6 +27,7 @@ describe('TelegramManagedPostReconciliationService local delivery', () => {
       {} as never,
       {} as never,
       publication as never,
+      {} as never,
     );
 
     await expect(
@@ -94,6 +95,7 @@ describe('TelegramManagedPostReconciliationService remote identity window', () =
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     await service.reconcileManagedPostIdentities({
@@ -111,5 +113,53 @@ describe('TelegramManagedPostReconciliationService remote identity window', () =
     expect(loadedRecent).toEqual([
       expect.objectContaining({ id: '8503', text: 'Published post' }),
     ]);
+  });
+});
+
+describe('TelegramManagedPostReconciliationService automatic deletion', () => {
+  it('deletes due published posts only within their own workspace', async () => {
+    const prisma = {
+      telegramManagedPost: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            { id: 'post-a', workspaceId: 'workspace-a' },
+            { id: 'post-b', workspaceId: 'workspace-b' },
+          ]),
+        updateMany: jest.fn(),
+      },
+    };
+    const deletion = {
+      deletePublishedManagedPosts: jest
+        .fn()
+        .mockResolvedValueOnce({ deleted: 1, failed: 0 })
+        .mockResolvedValueOnce({ deleted: 0, failed: 1 }),
+    };
+    const service = new TelegramManagedPostReconciliationService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      deletion as never,
+    );
+
+    await expect((service as any).deleteDueManagedPosts()).resolves.toEqual({
+      considered: 2,
+      deleted: 1,
+      failed: 1,
+    });
+    expect(deletion.deletePublishedManagedPosts).toHaveBeenCalledWith({
+      workspaceId: 'workspace-a',
+      managedPostIds: ['post-a'],
+    });
+    expect(deletion.deletePublishedManagedPosts).toHaveBeenCalledWith({
+      workspaceId: 'workspace-b',
+      managedPostIds: ['post-b'],
+    });
   });
 });

@@ -182,7 +182,7 @@ describe("TelegramBotCard", () => {
     expect(screen.getByTestId("configure-bot-app-icon")).toBeInTheDocument();
   });
 
-  it("switches one logical card between production and configured local runtime", async () => {
+  it("keeps runtime setup separate while sharing finance metrics", async () => {
     const user = userEvent.setup();
     const financeBot = bot("FINANCE");
     financeBot.runtimes.push({
@@ -220,17 +220,20 @@ describe("TelegramBotCard", () => {
     );
     expect(screen.getAllByRole("article")).toHaveLength(1);
     expect(screen.getByText("@admissions_prod")).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: "Production" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Finance business metrics")).toHaveTextContent(
+      "Registered12",
+    );
     await user.click(screen.getByRole("tab", { name: "Local" }));
     expect(screen.getByText("@admissions_local")).toBeInTheDocument();
     expect(screen.getByLabelText("Finance business metrics")).toHaveTextContent(
-      "Registered2",
+      "Registered12",
     );
-    expect(
-      window.localStorage.getItem("telegram-bot-runtime-environment:bot-1"),
-    ).toBe("LOCAL");
   });
 
-  it("restores the previously selected local runtime after a refresh", () => {
+  it("opens the production runtime by default", () => {
     window.localStorage.setItem(
       "telegram-bot-runtime-environment:bot-1",
       "LOCAL",
@@ -254,50 +257,10 @@ describe("TelegramBotCard", () => {
       />,
     );
 
-    expect(screen.getByText("@admissions_local")).toBeInTheDocument();
+    expect(screen.getByText("@admissions_prod")).toBeInTheDocument();
   });
 
-  it("shows the local setup state and uses local only for refresh", async () => {
-    const user = userEvent.setup();
-    const onConfigureRuntime = vi.fn();
-    const onCheck = vi.fn();
-    render(
-      <TelegramBotCard
-        bot={bot("GREETER")}
-        checkingEnvironment={null}
-        onCheck={onCheck}
-        onRequestDelete={vi.fn()}
-        onSwitch={vi.fn()}
-        onConfigureRuntime={onConfigureRuntime}
-      />,
-    );
-    await user.click(screen.getByRole("tab", { name: "Local" }));
-    expect(screen.getByText("Local bot is not configured")).toBeInTheDocument();
-    await user.click(
-      screen.getByRole("button", { name: "Actions for Admissions bot" }),
-    );
-    expect(screen.getByRole("menuitem", { name: "Refresh" })).toBeDisabled();
-    await user.click(
-      screen.getByRole("button", { name: "Connect local test bot" }),
-    );
-    expect(onConfigureRuntime).toHaveBeenCalledWith("LOCAL");
-    expect(onCheck).not.toHaveBeenCalled();
-  });
-
-  it("hides Finance metrics until the selected local runtime is connected", async () => {
-    const user = userEvent.setup();
-    renderCard("FINANCE");
-
-    expect(
-      screen.getByLabelText("Finance business metrics"),
-    ).toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "Local" }));
-
-    expect(screen.getByText("Local bot is not configured")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Finance business metrics")).toBeNull();
-  });
-
-  it("shows a pending refresh only for the selected runtime", async () => {
+  it("shows a pending refresh for the canonical production runtime", async () => {
     const user = userEvent.setup();
     renderCard("GREETER", "PRODUCTION");
     await user.click(
@@ -306,41 +269,5 @@ describe("TelegramBotCard", () => {
     expect(
       screen.getByRole("menuitem", { name: "Refreshing" }),
     ).toBeDisabled();
-    await user.click(screen.getByRole("tab", { name: "Local" }));
-    await user.click(
-      screen.getByRole("button", { name: "Actions for Admissions bot" }),
-    );
-    expect(screen.getByRole("menuitem", { name: "Refresh" })).toBeDisabled();
-  });
-
-  it("shows one direct local Finance App link before a manual check", async () => {
-    const user = userEvent.setup();
-    const financeBot = bot("FINANCE");
-    financeBot.runtimes.push({
-      ...financeBot.runtimes[0],
-      id: "runtime-local",
-      environment: "LOCAL",
-      webhookUrl:
-        "https://example.ngrok-free.app/api/telegram/bots/runtime/runtime-local/webhook",
-      webApp: { status: "UNKNOWN", url: null },
-      miniApp: { status: "UNKNOWN", actualUrl: null },
-    });
-    render(
-      <TelegramBotCard
-        bot={financeBot}
-        checkingEnvironment={null}
-        onCheck={vi.fn()}
-        onRequestDelete={vi.fn()}
-        onSwitch={vi.fn()}
-        onConfigureRuntime={vi.fn()}
-      />,
-    );
-
-    await user.click(screen.getByRole("tab", { name: "Local" }));
-    expect(screen.getAllByRole("link", { name: "RUNNING" })).toHaveLength(1);
-    expect(screen.getByRole("link", { name: "RUNNING" })).toHaveAttribute(
-      "href",
-      "https://example.ngrok-free.app/finance/bot-1",
-    );
   });
 });

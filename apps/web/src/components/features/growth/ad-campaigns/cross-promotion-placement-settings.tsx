@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Eye, Radio, Users } from "lucide-react";
+import { ChevronDown, ExternalLink, Eye, Radio, Users } from "lucide-react";
 import type { TelegramAdProduct } from "@telegram-system/shared";
 import type { TelegramChannel } from "@/lib/api";
 import {
@@ -31,6 +31,7 @@ export function CrossPromotionPlacementSettings({
   onDefaultDateChange,
   onChange,
   showAdSlots = false,
+  managedPostUrls = {},
 }: {
   title: string;
   description: string;
@@ -43,6 +44,7 @@ export function CrossPromotionPlacementSettings({
   onDefaultDateChange?: (date: string) => void;
   onChange: (value: CrossPromotionPlacementSettingsValue) => void;
   showAdSlots?: boolean;
+  managedPostUrls?: Record<string, string>;
 }) {
   const selected = channelIds
     .map((id) => channels.find((channel) => channel.id === id))
@@ -167,8 +169,8 @@ export function CrossPromotionPlacementSettings({
               </FormField>
             ) : null}
             <div className="min-w-0 space-y-2">
-              <label className="block min-w-0 space-y-1 text-xs text-neutral-400">
-                <span>Time for all</span>
+              <label className="block min-w-0 text-sm">
+                <span className="mb-1 block text-neutral-300">Time for all</span>
                 <TimeInput
                   value={commonTime}
                   onChange={(event) => setAllTimes(event.target.value)}
@@ -184,8 +186,8 @@ export function CrossPromotionPlacementSettings({
                 />
               ) : null}
             </div>
-            <label className="min-w-0 space-y-1 text-xs text-neutral-400">
-              <span>Format for all</span>
+            <label className="block min-w-0 text-sm">
+              <span className="mb-1 block text-neutral-300">Format for all</span>
               <span className="block [&>div>button]:h-9 [&>div>button]:min-h-0">
                 <CustomSelect
                   value={commonFormatName}
@@ -211,6 +213,7 @@ export function CrossPromotionPlacementSettings({
         <div className="grid gap-2">
           {selected.map((channel) => {
             const products = productsByChannelId[channel.id] ?? [];
+            const managedPostUrl = managedPostUrls[channel.id];
             const selectedProduct = products.find(
               (product) => product.id === value.formatIds[channel.id],
             );
@@ -249,6 +252,14 @@ export function CrossPromotionPlacementSettings({
                           : "No estimate"}
                       </span>
                     </p>
+                    {managedPostUrl ? (
+                      <a
+                        href={managedPostUrl}
+                        className="mt-1 inline-flex items-center gap-1 text-xs text-sky-300 hover:text-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      >
+                        <ExternalLink size={12} /> Open publication
+                      </a>
+                    ) : null}
                   </div>
                 </div>
                 <FormField label="Format" required>

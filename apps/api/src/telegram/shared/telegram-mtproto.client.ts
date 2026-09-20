@@ -1164,8 +1164,37 @@ export class TelegramMtprotoClient {
       if (code === 'USER_ALREADY_PARTICIPANT') {
         return this.resolveInviteParticipantConflict(client, inviteLink, previewTitle);
       }
+      if (code === 'INVITE_REQUEST_SENT') {
+        return this.joinRequestInvitePreview(invite, fallbackRef, inviteLink);
+      }
       this.mapInviteError(error);
     }
+  }
+
+  private joinRequestInvitePreview(
+    invite: Api.TypeChatInvite,
+    fallbackRef: string,
+    inviteLink: string,
+  ): ResolvedTelegramEntity {
+    const preview = invite as {
+      title?: unknown;
+      about?: unknown;
+      participantsCount?: unknown;
+    };
+    return {
+      kind: 'channel',
+      telegramChatId: '',
+      title: String(preview.title || fallbackRef).trim() || fallbackRef,
+      username: null,
+      description:
+        typeof preview.about === 'string' ? preview.about : null,
+      participantsCount: this.toFiniteNumber(preview.participantsCount),
+      photoUrl: null,
+      inviteLink,
+      joinedByInvite: false,
+      accessMode: 'PRIVATE_JOIN_REQUEST',
+      requiresJoinRequest: true,
+    };
   }
 
   private async resolveTitleInfo(client: TelegramClient, titleQuery: string) {

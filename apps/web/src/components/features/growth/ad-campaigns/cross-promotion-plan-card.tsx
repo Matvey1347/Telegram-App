@@ -83,11 +83,6 @@ export function CrossPromotionPlanCard({
           <div className="flex shrink-0 items-start gap-1">
             <MutualPromotionFolderStatusBadge status={plan.status} />
             <CardActionsMenu label={`Actions for ${plan.title}`}>
-              <CardMenuAction
-                label="Add new integration"
-                icon={<Copy size={16} />}
-                onClick={() => onCopy(plan)}
-              />
               {canEdit ? (
                 <CardMenuAction
                   label="Edit promotion"
@@ -95,6 +90,11 @@ export function CrossPromotionPlanCard({
                   onClick={() => onEdit(plan)}
                 />
               ) : null}
+              <CardMenuAction
+                label="Add new integration"
+                icon={<Copy size={16} />}
+                onClick={() => onCopy(plan)}
+              />
               <CardMenuAction
                 danger
                 label="Delete"

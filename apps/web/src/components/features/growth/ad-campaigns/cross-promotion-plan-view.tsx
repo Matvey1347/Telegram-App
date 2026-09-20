@@ -24,6 +24,7 @@ import {
   Modal,
 } from "@/components/ui/primitives";
 import { IconPicker } from "@/components/icons/icon-picker";
+import { buildTelegramPostsUrl } from "@/lib/features/telegram/telegram-posts-url";
 import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
 import {
   resolveTelegramChannelScopeIds,
@@ -159,6 +160,19 @@ export function CrossPromotionPlanView({
     botFlowTarget === "outbound"
       ? botFlow
       : { importStatus: "idle" as const, sendStatus: "idle" as const };
+  const publisherManagedPostUrls =
+    mode === "edit" && initial?.status !== "DRAFT"
+      ? Object.fromEntries(
+          (initial?.placementPostIds ?? []).map((placement) => [
+            placement.telegramChannelId,
+            buildTelegramPostsUrl({
+              channelId: placement.telegramChannelId,
+              postId: placement.managedPostId,
+              postView: "editor",
+            }),
+          ]),
+        )
+      : {};
   const importPost = (target: "post" | "outbound") => {
     setBotFlowTarget(target);
     if (botTargetStorageKey)
@@ -274,6 +288,7 @@ export function CrossPromotionPlanView({
                       onDefaultDateChange={setDate}
                       onChange={setPublisherSettings}
                       showAdSlots
+                      managedPostUrls={publisherManagedPostUrls}
                     />
                     {kind === "DIRECT_MUTUAL" ? (
                       <CrossPromotionPublicationPostEditor

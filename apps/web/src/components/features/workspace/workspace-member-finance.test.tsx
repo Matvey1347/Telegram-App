@@ -54,22 +54,33 @@ describe("WorkspaceMemberFinance", () => {
           amount: 100,
           title: "Ad sale",
         },
+        {
+          id: "investment:1",
+          type: "EXTERNAL_CONTRIBUTION",
+          date: "2026-09-11T10:00:00.000Z",
+          amount: 300,
+          title: "Initial investment",
+        },
       ],
     });
     vi.spyOn(accountsApi, "list").mockResolvedValue([] as never);
   });
 
-  it("shows principal versus investor profit and lets a member inspect history", async () => {
+  it("shows invested and reinvested balances without duplicating the total", async () => {
     const user = userEvent.setup();
     renderFinance(false);
 
     expect(screen.getByText("Commission payable")).toBeInTheDocument();
-    expect(screen.getByText(/Capital/)).toHaveTextContent("400");
-    expect(screen.getByText(/Investor profit/)).toHaveTextContent("600");
+    expect(screen.getByText(/Invested/)).toHaveTextContent("400");
+    expect(screen.getByText(/Reinvested/)).toHaveTextContent("600");
+    expect(screen.queryByText(/Total investment/)).toBeNull();
     await user.click(
       screen.getByRole("button", { name: /Commission payable/ }),
     );
     expect(await screen.findByText("Commission earned")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open External investment in Finance" }),
+    ).toHaveAttribute("href", "/finance#transactions");
     expect(screen.queryByRole("button", { name: "Pay salary" })).toBeNull();
   });
 
@@ -86,6 +97,8 @@ describe("WorkspaceMemberFinance", () => {
     expect(
       screen.getByRole("button", { name: "Invest salary" }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Withdraw reinvest" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Withdraw reinvest" }),
+    ).toBeNull();
   });
 });

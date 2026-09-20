@@ -8,6 +8,7 @@ import { TelegramChannelsSupportService } from './telegram-channels-support.serv
 import { TelegramManagedPostGroupPresentationService } from './telegram-managed-post-group-presentation.service';
 import { TelegramManagedPostIdentityService } from './telegram-managed-post-identity.service';
 import { TelegramManagedPostPublicationService } from './telegram-managed-post-publication.service';
+import { TelegramManagedPostRemoteDeletionService } from './telegram-managed-post-remote-deletion.service';
 import { MANAGED_POST_LOCAL_PUBLISHING_STALE_MS } from '../../operations/scheduled-tasks/due-work-predicates';
 import { managedPostNotFound } from './telegram-posts.errors';
 
@@ -22,6 +23,7 @@ export class TelegramManagedPostReconciliationService {
     private readonly telegramChannelCatalogService: TelegramChannelCatalogService,
     private readonly telegramManagedPostGroupPresentationService: TelegramManagedPostGroupPresentationService,
     private readonly telegramManagedPostPublicationService: TelegramManagedPostPublicationService,
+    private readonly telegramManagedPostRemoteDeletionService: TelegramManagedPostRemoteDeletionService,
   ) {}
 
   private readonly iconSelect = {
@@ -67,7 +69,71 @@ export class TelegramManagedPostReconciliationService {
     const identity = await this.identityService.reconcilePendingWorkspaces(
       (workspaceId) => this.reconcileDueManagedPosts(workspaceId),
     );
-    return { ...identity, localDelivery };
+    const autoDeletion = await this.deleteDueManagedPosts();
+    return { ...identity, localDelivery, autoDeletion };
+  }
+
+  private async deleteDueManagedPosts() {
+    const now = new Date();
+    const awaitingDeadline = await this.prisma.telegramManagedPost.findMany({
+      where: {
+        status: TelegramManagedPostStatus.PUBLISHED,
+        deleteAfterHours: { not: null },
+        deleteAt: null,
+      },
+      select: { id: true, publishedAt: true, deleteAfterHours: true },
+      take: 100,
+    });
+    await Promise.all(
+      awaitingDeadline.map((post) =>
+        post.publishedAt && post.deleteAfterHours
+          ? this.prisma.telegramManagedPost.updateMany({
+              where: {
+                id: post.id,
+                status: TelegramManagedPostStatus.PUBLISHED,
+                deleteAt: null,
+              },
+              data: {
+                deleteAt: new Date(
+                  post.publishedAt.getTime() + post.deleteAfterHours * 3_600_000,
+                ),
+              },
+            })
+          : Promise.resolve(),
+      ),
+    );
+    const due = await this.prisma.telegramManagedPost.findMany({
+      where: {
+        status: TelegramManagedPostStatus.PUBLISHED,
+        deleteAt: { lte: now },
+        telegramRemoteStatus: { not: 'AUTO_DELETED' },
+      },
+      select: { id: true, workspaceId: true },
+      orderBy: [{ deleteAt: 'asc' }, { id: 'asc' }],
+      take: 50,
+    });
+    const byWorkspace = new Map<string, string[]>();
+    due.forEach((post) => {
+      const ids = byWorkspace.get(post.workspaceId) ?? [];
+      ids.push(post.id);
+      byWorkspace.set(post.workspaceId, ids);
+    });
+    let deleted = 0;
+    let failed = 0;
+    for (const [workspaceId, managedPostIds] of byWorkspace) {
+      try {
+        const result =
+          await this.telegramManagedPostRemoteDeletionService.deletePublishedManagedPosts({
+            workspaceId,
+            managedPostIds,
+          });
+        deleted += result.deleted;
+        failed += result.failed;
+      } catch {
+        failed += managedPostIds.length;
+      }
+    }
+    return { considered: due.length, deleted, failed };
   }
 
   public async publishDueLocallyScheduledManagedPosts() {

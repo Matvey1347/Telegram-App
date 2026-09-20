@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/app-shell";
-import { InlineIconPicker } from "@/components/icons/inline-icon-picker";
+import { IconPicker } from "@/components/icons/icon-picker";
 import {
   Button,
   Card,
@@ -99,13 +99,21 @@ export default function SettingsPage() {
           <Card>
             <h3 className="text-lg font-semibold">Workspace</h3>
             <div className="mt-4 space-y-3">
-              <div className="flex items-end gap-3">
-                <InlineIconPicker
-                  iconId={workspaceIconId}
-                  icon={me.data?.workspace.avatarPresentation}
-                  onChange={setWorkspaceIconId}
-                  className="mb-0.5 shrink-0 text-2xl"
-                />
+              <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-end">
+                <div>
+                  <label className="mb-1 block text-sm text-neutral-300">
+                    Workspace emoji
+                  </label>
+                  <IconPicker
+                    iconId={workspaceIconId}
+                    icon={me.data?.workspace.avatarPresentation}
+                    onChange={setWorkspaceIconId}
+                    buttonLabel="Choose workspace emoji"
+                    ariaLabel="Choose workspace emoji"
+                    className="!h-10 !min-w-10 !rounded-lg !border-neutral-700 !bg-neutral-950 px-2 text-lg"
+                    iconClassName="!h-8 !w-8 !rounded-md !border-0 !bg-transparent"
+                  />
+                </div>
                 <div className="min-w-0 flex-1">
                   <label className="mb-1 block text-sm text-neutral-300">
                     Workspace name

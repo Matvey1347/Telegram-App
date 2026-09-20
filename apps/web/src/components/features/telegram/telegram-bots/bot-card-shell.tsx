@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowLeftRight,
@@ -50,23 +50,8 @@ export function BotCardShell({
     | ReactNode
     | ((environment: TelegramBotRuntimeEnvironment) => ReactNode);
 }) {
-  const storageKey = `telegram-bot-runtime-environment:${bot.id}`;
   const [environment, setEnvironment] =
     useState<TelegramBotRuntimeEnvironment>("PRODUCTION");
-
-  useEffect(() => {
-    const saved = window.localStorage.getItem(storageKey);
-    if (saved === "LOCAL" || saved === "PRODUCTION") {
-      // The runtime preference exists only in the browser and is restored after hydration.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setEnvironment(saved);
-    }
-  }, [storageKey]);
-
-  function selectEnvironment(next: TelegramBotRuntimeEnvironment) {
-    setEnvironment(next);
-    window.localStorage.setItem(storageKey, next);
-  }
   const runtime = bot.runtimes.find((item) => item.environment === environment);
   const appType = bot.applicationType;
   const currentApp = bot.applications.find((option) => option.type === appType);
@@ -172,7 +157,7 @@ export function BotCardShell({
             type="button"
             role="tab"
             aria-selected={environment === option}
-            onClick={() => selectEnvironment(option)}
+            onClick={() => setEnvironment(option)}
             className={`rounded-md px-2.5 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${environment === option ? "bg-neutral-700 text-white" : "text-neutral-400 hover:text-neutral-200"}`}
           >
             {option === "PRODUCTION" ? "Production" : "Local"}

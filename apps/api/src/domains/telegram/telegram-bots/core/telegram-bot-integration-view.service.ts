@@ -60,15 +60,28 @@ export class TelegramBotIntegrationViewService {
     summaries: Awaited<ReturnType<BotBillingAnalyticsService['summariesForRuntimes']>>,
     runtimes: Array<{ id: string; environment: 'LOCAL' | 'PRODUCTION' }>,
   ): TelegramBotIntegrationView['applicationSummary'] {
+    // Finance users belong to the logical bot, not to one runtime. Tokens,
+    // webhooks and health remain runtime-specific, while both tabs share the
+    // same business metrics.
+    const shared = Array.from(summaries.values()).reduce(
+      (total, summary) => ({
+        registeredUsers: total.registeredUsers + summary.registeredUsers,
+        paidUsers: total.paidUsers + summary.paidUsers,
+        activeSubscriptions: total.activeSubscriptions + summary.activeSubscriptions,
+        failedPayments: total.failedPayments + summary.failedPayments,
+      }),
+      {
+        registeredUsers: 0,
+        paidUsers: 0,
+        activeSubscriptions: 0,
+        failedPayments: 0,
+      },
+    );
     return {
       applicationType: 'FINANCE',
       finance: Object.fromEntries(runtimes.map((runtime) => {
-        const summary = summaries.get(runtime.id);
         return [runtime.environment, {
-          registeredUsers: summary?.registeredUsers || 0,
-          paidUsers: summary?.paidUsers || 0,
-          activeSubscriptions: summary?.activeSubscriptions || 0,
-          failedPayments: summary?.failedPayments || 0,
+          ...shared,
         }];
       })),
     };

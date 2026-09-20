@@ -259,5 +259,12 @@ describe('MemberFinanceReadService', () => {
 
     expect(rows.byMember.get('m1')?.investorEarnings).toBe(2424.51);
     expect(rows.byMember.get('m2')?.investorEarnings).toBe(437.49);
+    expect(rows.automaticReinvestmentsByMember.get('m1')).toEqual([
+      expect.objectContaining({
+        id: 'reinvestment:channel-income',
+        amount: expect.closeTo(2424.51458, 5),
+        title: 'Channel revenue',
+      }),
+    ]);
   });
 });

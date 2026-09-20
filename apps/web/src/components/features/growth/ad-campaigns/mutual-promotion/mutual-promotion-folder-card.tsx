@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { MutualPromotionFolderListItem } from "@telegram-system/shared";
-import { ArrowUpRight, CalendarClock, Pencil, Trash2 } from "lucide-react";
+import { CalendarClock, Pencil, Trash2 } from "lucide-react";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 import {
   LifecycleCountdown,
@@ -97,11 +97,6 @@ export function MutualPromotionFolderCard({
 
       <ChannelPerformance channels={folder.channels} />
 
-      <div className="pointer-events-none relative z-10 mt-3 flex justify-end border-t border-white/10 px-4 py-2">
-        <span className="inline-flex items-center gap-1 text-xs font-medium text-sky-300 transition group-hover:text-sky-200">
-          Details <ArrowUpRight size={14} />
-        </span>
-      </div>
     </article>
   );
 }

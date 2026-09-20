@@ -1,6 +1,7 @@
 "use client";
 
 import { ExternalLink } from "lucide-react";
+import { useState } from "react";
 import Image from "next/image";
 import type { ConsumerFinanceProfile } from "@telegram-system/shared";
 import type { FinanceCoreCopy, FinanceLocale } from "./i18n/core";
@@ -13,6 +14,7 @@ import { ConsumerFinanceActionLauncher } from "./consumer-finance-action-launche
 import { FinanceLanguageSelect } from "./ui/finance-language-select";
 import { FinanceMobileNavigation } from "./finance-mobile-navigation";
 import { FinanceAccountMenu } from "./finance-account-menu";
+import financeStyles from "./ui/finance-ui.module.css";
 
 export function FinanceMiniAppShell({
   botId,
@@ -55,11 +57,12 @@ export function FinanceMiniAppShell({
   openingBrowser?: boolean;
   browserOpenError?: string;
 }) {
+  const [moreOpen, setMoreOpen] = useState(false);
   return (
     <main
       data-finance-surface="telegram"
       data-finance-shell="mini-app"
-      className="min-h-dvh bg-neutral-950 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] text-neutral-100"
+      className={`${financeStyles.pwaInset} min-h-dvh bg-neutral-950 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] text-neutral-100`}
     >
       <div className="mx-auto flex min-h-dvh w-full max-w-2xl">
         <div className="min-w-0 flex-1">
@@ -135,17 +138,20 @@ export function FinanceMiniAppShell({
         </div>
       </div>
 
-      <ConsumerFinanceActionLauncher
-        compact
-        showOnDesktop
-        copy={copy}
-        onAction={onAction}
-      />
+      {!moreOpen ? (
+        <ConsumerFinanceActionLauncher
+          compact
+          showOnDesktop
+          copy={copy}
+          onAction={onAction}
+        />
+      ) : null}
       <FinanceMobileNavigation
         screen={screen}
         copy={copy}
         onNavigate={onNavigate}
         onOpenAssistant={onOpenAssistant}
+        onMoreOpenChange={setMoreOpen}
         alwaysVisible
       />
     </main>

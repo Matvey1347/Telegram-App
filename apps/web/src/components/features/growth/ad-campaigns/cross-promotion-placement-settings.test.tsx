@@ -63,6 +63,35 @@ describe("CrossPromotionPlacementSettings", () => {
     expect(screen.getByText("No estimate")).toBeVisible();
   });
 
+  it("links each existing placement to its scheduled publication", () => {
+    render(
+      <CrossPromotionPlacementSettings
+        title="Formats in my channels"
+        description="Scheduled"
+        channelIds={["channel-1"]}
+        channels={[{ id: "channel-1", title: "Mentor" } as never]}
+        productsByChannelId={{}}
+        value={{ formatIds: {}, times: {} }}
+        defaultDate="2026-09-14"
+        defaultTime="10:00"
+        onChange={vi.fn()}
+        managedPostUrls={{
+          "channel-1": "/telegram-posts/channel-1/editor?postId=post-1",
+        }}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Formats in my channels/ }),
+    );
+    expect(
+      screen.getByRole("link", { name: "Open publication" }),
+    ).toHaveAttribute(
+      "href",
+      "/telegram-posts/channel-1/editor?postId=post-1",
+    );
+  });
+
   it("applies one format and time to every channel while keeping individual fields", () => {
     const onChange = vi.fn();
     const onDefaultDateChange = vi.fn();

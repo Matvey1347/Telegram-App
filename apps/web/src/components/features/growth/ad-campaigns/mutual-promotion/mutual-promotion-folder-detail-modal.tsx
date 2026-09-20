@@ -344,7 +344,7 @@ export function MutualPromotionFolderDetailModal({
           </section>
         ) : null}
 
-        {editable ? (
+        {editable && folder.publisherCount > 0 ? (
           <section className="rounded-xl border border-blue-900/70 bg-blue-950/20 p-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-start gap-3">
@@ -370,12 +370,7 @@ export function MutualPromotionFolderDetailModal({
                         are removed automatically when the folder ends.
                       </p>
                     </>
-                  ) : (
-                    <p className="text-neutral-300">
-                      No posts are needed. Activation measures invite-link joins
-                      from the folder start until its end.
-                    </p>
-                  )}
+                  ) : null}
                 </div>
               </div>
               <Button

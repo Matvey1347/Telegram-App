@@ -29,10 +29,12 @@ const payload = {
       {
         telegramChannelId: 'channel-1',
         scheduledAt: '2026-09-15T08:00:00.000Z',
+        deleteAt: '2026-09-17T08:00:00.000Z',
       },
       {
         telegramChannelId: 'channel-2',
         scheduledAt: '2026-09-15T09:00:00.000Z',
+        deleteAt: '2026-09-16T09:00:00.000Z',
       },
     ],
   },
@@ -145,6 +147,7 @@ describe('CrossPromotionPlanSchedulingService', () => {
             },
           ],
         ],
+        deleteAfterHours: 48,
       },
       { groupId: 'group-1' },
     );

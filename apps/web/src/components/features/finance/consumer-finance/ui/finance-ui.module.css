@@ -2,6 +2,18 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Telegram owns the Mini App viewport inset. A standalone installed PWA does
+   not, so reserve a small top breathing room only in that display mode. */
+@media (display-mode: standalone) {
+  .pwaInset {
+    padding-top: max(0.75rem, env(safe-area-inset-top));
+  }
+
+  .pwaInset > div > div > header {
+    padding-top: 0;
+  }
+}
+
 .toast {
   animation: finance-notification-in 180ms ease-out;
 }

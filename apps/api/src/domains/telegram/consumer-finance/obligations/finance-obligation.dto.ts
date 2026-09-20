@@ -34,6 +34,11 @@ export class FinanceDebtQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit = 30;
 }
 
+export class FinanceDebtSettlementDto {
+  @IsOptional() @IsString() accountId?: string;
+  @IsOptional() @IsNumberString() amount?: string;
+}
+
 export class FinanceSharedExpenseParticipantDto {
   @IsString() @MinLength(1) @MaxLength(120) @Matches(/\S/u) name!: string;
   @IsNumberString() amount!: string;

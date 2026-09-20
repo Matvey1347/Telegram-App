@@ -12,14 +12,10 @@ vi.mock("@/components/ui/primitives", () => ({
   PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
 }));
 vi.mock("./finance-overview-section", () => ({
-  FinanceOverviewSection: ({ environment }: { environment: string }) => (
-    <div>Overview runtime: {environment}</div>
-  ),
+  FinanceOverviewSection: () => <div>Logical bot overview</div>,
 }));
 vi.mock("./finance-subscribers-section", () => ({
-  FinanceSubscribersSection: ({ environment }: { environment: string }) => (
-    <div>Users runtime: {environment}</div>
-  ),
+  FinanceSubscribersSection: () => <div>Logical bot users</div>,
 }));
 vi.mock("./finance-monetization-section", () => ({
   FinanceMonetizationSection: () => <div>Monetization</div>,
@@ -28,17 +24,16 @@ vi.mock("./finance-integrations-section", () => ({
   FinanceIntegrationsSection: () => <div>Integrations</div>,
 }));
 
-describe("FinanceBotAdmin runtime isolation", () => {
-  it("defaults analytics to production and explicitly carries the selected runtime into Users", () => {
+describe("FinanceBotAdmin", () => {
+  it("keeps analytics and users on one logical bot", () => {
     render(<FinanceBotAdmin botId="finance-bot" />);
 
     expect(
-      screen.getByText("Overview runtime: PRODUCTION"),
+      screen.getByText("Logical bot overview"),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Local bot" }));
-    expect(screen.getByText("Overview runtime: LOCAL")).toBeInTheDocument();
+    expect(screen.queryByRole("tab")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Users/ }));
-    expect(screen.getByText("Users runtime: LOCAL")).toBeInTheDocument();
+    expect(screen.getByText("Logical bot users")).toBeInTheDocument();
   });
 });

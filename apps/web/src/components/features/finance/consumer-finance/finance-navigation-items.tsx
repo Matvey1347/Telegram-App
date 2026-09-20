@@ -143,7 +143,7 @@ export function FinanceNavigationButton({
       data-finance-nav-active={active ? "true" : "false"}
       aria-current={active ? "page" : undefined}
       onClick={activate}
-      className={`${styles.item} ${specialStyles.scope} ${active ? styles.active : ""} group outline-none focus-visible:ring-2 focus-visible:ring-sky-300 ${
+      className={`${mobile ? `${styles.item} ${specialStyles.scope}` : ""} ${active ? styles.active : ""} group outline-none focus-visible:ring-2 focus-visible:ring-sky-300 ${
         mobile
           ? "flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[11px]"
           : "flex min-h-11 w-full items-center gap-2 rounded-xl border border-transparent px-2.5 text-sm"
@@ -152,10 +152,10 @@ export function FinanceNavigationButton({
       <span
         key={pressSequence}
         data-finance-icon-sequence={pressSequence}
-        className={`${styles.iconTile} inline-flex shrink-0 items-center justify-center rounded-lg border border-neutral-700/60 bg-neutral-800/60 ${mobile ? "h-7 w-7 border-transparent bg-transparent" : "h-8 w-8"}`}
+        className={`${mobile ? styles.iconTile : ""} inline-flex shrink-0 items-center justify-center rounded-lg border border-neutral-700/60 bg-neutral-800/60 ${mobile ? "h-7 w-7 border-transparent bg-transparent" : "h-8 w-8"}`}
       >
         <Icon
-          className={`${styles.icon} ${specialStyles.icon}`}
+          className={mobile ? `${styles.icon} ${specialStyles.icon}` : undefined}
           size={mobile ? 18 : 17}
           aria-hidden="true"
         />
@@ -222,10 +222,9 @@ export function FinanceScreenIcon({
     <span
       data-finance-screen-icon={screen}
       data-finance-nav-id={item?.id ?? screen}
-      className={`${styles.pageIcon} ${specialStyles.pageScope} ${groupStyles.pageIconMotion} inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-800/70 bg-sky-500/10 text-sky-200 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.05)]`}
+      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-800/70 bg-sky-500/10 text-sky-200 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.05)]"
     >
       <Icon
-        className={`${styles.icon} ${specialStyles.icon}`}
         size={19}
         aria-hidden="true"
       />

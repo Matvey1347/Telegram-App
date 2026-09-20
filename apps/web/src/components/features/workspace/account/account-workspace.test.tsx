@@ -131,6 +131,22 @@ describe("AccountWorkspace", () => {
     );
   });
 
+  it("lets an owner save a personal sales commission override", async () => {
+    renderAccount();
+    const rate = await screen.findByRole("spinbutton", {
+      name: "My commission override, %",
+    });
+    fireEvent.change(rate, { target: { value: "17.5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(accountApi.updateMe).toHaveBeenCalledWith(
+        expect.objectContaining({ salesCommissionRate: 17.5 }),
+        expect.anything(),
+      ),
+    );
+  });
+
   it("shows a recoverable Russian error when the profile cannot load", async () => {
     vi.mocked(accountApi.me).mockRejectedValue(
       new Error("database unavailable"),

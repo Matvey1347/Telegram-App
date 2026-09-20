@@ -3,6 +3,7 @@ import type { CrossPromotionSchedulingProgress } from '@telegram-system/shared';
 import { TelegramChannelsService } from '../../telegram/telegram-channels/telegram-channels.service';
 import { TelegramSystemPostGroupsService } from '../../telegram/telegram-channels/telegram-system-post-groups.service';
 import type { CreateTelegramManagedPostDto } from '../../telegram/telegram-channels/dto';
+import type { CrossPromotionChannelPlacementInput } from '@telegram-system/shared';
 import { CreateCrossPromotionPlanDto } from './dto';
 import { CrossPromotionPlansService } from './cross-promotion-plans.service';
 import { TelegramManagedPostRemoteDeletionService } from '../../telegram/telegram-channels/telegram-managed-post-remote-deletion.service';
@@ -198,7 +199,7 @@ export class CrossPromotionPlanSchedulingService {
       const post = await this.telegramChannels.createManagedPost(
         userId,
         channelId,
-        this.managedPostPayload(dto),
+        this.managedPostPayload(dto, placement),
         { groupId: group.id },
       );
       createdPosts.push({
@@ -227,6 +228,7 @@ export class CrossPromotionPlanSchedulingService {
 
   private managedPostPayload(
     dto: CreateCrossPromotionPlanDto,
+    placement?: CrossPromotionChannelPlacementInput,
   ): CreateTelegramManagedPostDto {
     const post = dto.publicationPost;
     return {
@@ -241,7 +243,19 @@ export class CrossPromotionPlanSchedulingService {
           style: button.style ?? 'default',
         })),
       ),
+      deleteAfterHours: this.deleteAfterHours(placement),
     };
+  }
+
+  private deleteAfterHours(
+    placement?: CrossPromotionChannelPlacementInput,
+  ): 24 | 48 | 72 | null | undefined {
+    if (!placement?.deleteAt) return null;
+    const scheduledAt = Date.parse(placement.scheduledAt);
+    const deleteAt = Date.parse(placement.deleteAt);
+    if (!Number.isFinite(scheduledAt) || !Number.isFinite(deleteAt)) return null;
+    const hours = Math.round((deleteAt - scheduledAt) / 3_600_000);
+    return hours === 24 || hours === 48 || hours === 72 ? hours : null;
   }
 
   private async rollback(

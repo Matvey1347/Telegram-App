@@ -8,6 +8,7 @@ import { telegramSystemBotKeys } from "@/lib/query-keys";
 import { useTelegramInviteLinkOptions } from "@/lib/features/telegram/use-telegram-invite-link-options";
 import { useTelegramSystemBotPostFlow } from "@/hooks/use-telegram-system-bot-post-flow";
 import { TelegramInviteLinkCreatorAvatar } from "@/components/features/telegram/telegram/telegram-invite-link-creator-avatar";
+import { IconAvatar } from "@/components/icons/icon-avatar";
 import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invite-link-creator";
 import {
   isTelegramInviteLink,
@@ -110,9 +111,20 @@ export function PromoQuickSendModal({
       size="sm"
     >
       <div className="min-w-0 space-y-4">
-        <p className="max-h-32 overflow-y-auto break-words rounded-lg border border-neutral-800 bg-neutral-950/50 p-3 text-sm leading-5 text-neutral-300">
-          {promo.title}
-        </p>
+        <div className="flex max-h-32 min-w-0 items-start gap-2 overflow-y-auto rounded-lg border border-neutral-800 bg-neutral-950/50 p-3 text-sm leading-5 text-neutral-300">
+          {(currentPromo?.iconPresentation ?? promo.iconPresentation) ? (
+            <IconAvatar
+              icon={currentPromo?.iconPresentation ?? promo.iconPresentation}
+              label={currentPromo?.title ?? promo.title}
+              size="xs"
+              bordered={false}
+              className="mt-0.5 shrink-0 !bg-transparent"
+            />
+          ) : null}
+          <p className="min-w-0 break-words">
+            {currentPromo?.title ?? promo.title}
+          </p>
+        </div>
         {detail.isLoading ? (
           <p className="text-xs text-neutral-400">Loading promo post…</p>
         ) : null}

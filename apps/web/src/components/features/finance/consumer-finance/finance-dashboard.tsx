@@ -53,7 +53,9 @@ function FinanceDashboardContent({
 }) {
   const t = financeDashboardCopy(locale);
   const { stats } = data;
-  const accounts = stats.accounts.filter((account) => !account.archivedAt);
+  const accounts = stats.accounts.filter(
+    (account) => !account.archivedAt && Number(account.balance) !== 0,
+  );
   return (
     <>
       <Card className="!p-3">
@@ -78,7 +80,7 @@ function FinanceDashboardContent({
               stats.netWorth.currency,
               "text-emerald-200",
             ],
-          ].map(([label, value, currency, tone]) => (
+          ].filter(([, value]) => Number(value) !== 0).map(([label, value, currency, tone]) => (
             <div key={label}>
               <p className="text-[10px] uppercase text-neutral-500">{label}</p>
               <p className={`text-base font-semibold tabular-nums ${tone}`}>
@@ -103,7 +105,7 @@ function FinanceDashboardContent({
             [t.invested, stats.invested, "text-violet-200"],
             [t.investmentReturns, stats.investmentReturns, "text-emerald-200"],
             [t.net, stats.net, "text-sky-200"],
-          ].map(([label, value, tone]) => (
+          ].filter(([, value]) => Number(value) !== 0).map(([label, value, tone]) => (
             <div key={label} className="min-w-0">
               <p className="text-[10px] uppercase text-neutral-500">{label}</p>
               <p

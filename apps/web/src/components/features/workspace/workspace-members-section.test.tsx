@@ -149,13 +149,19 @@ describe("WorkspaceMembersSection", () => {
       await screen.findByRole("button", { name: "Actions for Bob" }),
     );
     await user.click(screen.getByRole("menuitem", { name: "Edit member" }));
+    const commissionRate = screen.getByRole("spinbutton");
+    await user.clear(commissionRate);
+    await user.type(commissionRate, "17.5");
     await user.click(screen.getByRole("button", { name: /Content manager/u }));
     await user.click(screen.getByRole("button", { name: /Reviewer/u }));
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(workspaceMembersApi.update).toHaveBeenCalledWith(
       "member-2",
-      expect.objectContaining({ roleDefinitionId: "role-reviewer" }),
+      expect.objectContaining({
+        roleDefinitionId: "role-reviewer",
+        salesCommissionRate: 17.5,
+      }),
     );
   });
 });

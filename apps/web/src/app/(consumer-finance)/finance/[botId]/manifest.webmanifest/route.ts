@@ -17,25 +17,25 @@ export function buildFinanceManifest(botId: string): MetadataRoute.Manifest {
     categories: ["finance", "productivity"],
     icons: [
       {
-        src: "/brand/finance-pwa-192.png",
+        src: "/brand/nexeloq-pwa-192.png",
         sizes: "192x192",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: "/brand/finance-pwa-512.png",
+        src: "/brand/nexeloq-pwa-512.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: "/brand/finance-pwa-maskable-192.png",
+        src: "/brand/nexeloq-pwa-maskable-192.png",
         sizes: "192x192",
         type: "image/png",
         purpose: "maskable",
       },
       {
-        src: "/brand/finance-pwa-maskable-512.png",
+        src: "/brand/nexeloq-pwa-maskable-512.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable",

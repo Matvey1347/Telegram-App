@@ -49,11 +49,11 @@ export const consumerFinanceObligationsApi = {
         consumerRequest(),
       )
     ).data,
-  settleDebt: async (botId: string, id: string) =>
+  settleDebt: async (botId: string, id: string, accountId?: string, amount?: string) =>
     (
       await consumerFinanceHttp.post<ConsumerFinanceDebtSettlement>(
         `${consumerFinanceRoot(botId)}/debts/${id}/settle`,
-        {},
+        { ...(accountId ? { accountId } : {}), ...(amount ? { amount } : {}) },
         consumerRequest(),
       )
     ).data,

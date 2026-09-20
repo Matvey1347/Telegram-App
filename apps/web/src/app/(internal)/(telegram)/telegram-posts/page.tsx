@@ -110,6 +110,11 @@ import {
 } from "@/components/features/telegram/telegram/managed-post-deep-link";
 import { TelegramPostsHeaderWorkflows } from "@/components/features/telegram/telegram/telegram-posts-header-workflows";
 import { PublicationSlotOccurrenceSelect } from "@/components/features/telegram/telegram/publication-slot-occurrence-select";
+import {
+  POST_BATCH_FORMAT_OPTIONS,
+  postBatchFormatValue,
+  postBatchLifetimeFromFormat,
+} from "@/components/features/telegram/telegram/post-from-bot/post-batch-format";
 import { ManagedPostHypothesisSelector } from "@/components/features/telegram/telegram/managed-post-hypothesis-selector";
 import { ContentHypothesesWorkspace } from "@/components/features/telegram/telegram/content-hypotheses-modal";
 import {
@@ -207,6 +212,7 @@ import {
   LoadingState,
   Modal,
   MultiSelect,
+  Select,
   Textarea,
   TimeInput,
   ToggleRow,
@@ -908,6 +914,7 @@ function TelegramPostWorkspace({
   const [publicationSlotId, setPublicationSlotId] = useState<string | null>(
     null,
   );
+  const [deleteAfterHours, setDeleteAfterHours] = useState<number | null>(null);
   const [longTextMode, setLongTextMode] =
     useState<LongTextMode>("IMAGES_THEN_TEXT");
   const [statusTab, setStatusTab] = useState<PostStatusTab>("DRAFT");
@@ -2786,6 +2793,7 @@ function TelegramPostWorkspace({
     setScheduleDate(now.date);
     setScheduleTime(now.time);
     setPublicationSlotId(null);
+    setDeleteAfterHours(null);
     setLongTextMode("IMAGES_THEN_TEXT");
     setUploadingImages(false);
     setSelectedPostIds([]);
@@ -2849,6 +2857,7 @@ function TelegramPostWorkspace({
     const postScheduleTime = scheduledLocalParts?.time || localNowParts().time;
     setScheduleTime(postScheduleTime);
     setPublicationSlotId(post.publicationSlotId ?? null);
+    setDeleteAfterHours(post.deleteAfterHours ?? null);
     setUploadingImages(false);
     if (
       post.publishMode === "IMAGES_THEN_TEXT" ||
@@ -3207,6 +3216,7 @@ function TelegramPostWorkspace({
       buttonRows: TelegramPostButtonRows;
       assignedMemberId?: string;
       icon?: string | null;
+      deleteAfterHours?: number | null;
     } = {
       title: saveTitle,
       text,
@@ -3214,6 +3224,7 @@ function TelegramPostWorkspace({
       mediaItems: [...mediaItems],
       buttonRows,
       icon: saveIcon,
+      deleteAfterHours,
     };
     const selectedMemberId =
       assignedMemberId ??
@@ -5441,6 +5452,25 @@ function TelegramPostWorkspace({
                 />
               </div>
             ) : null}
+            <FormField label="Remove after publication">
+              <div className="space-y-1.5">
+                <Select
+                  value={postBatchFormatValue(deleteAfterHours as 24 | 48 | 72 | null)}
+                  onChange={(event) =>
+                    setDeleteAfterHours(postBatchLifetimeFromFormat(event.target.value))
+                  }
+                >
+                  {POST_BATCH_FORMAT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+                <p className="text-xs text-neutral-500">
+                  The post will be deleted from Telegram after publication.
+                </p>
+              </div>
+            </FormField>
             {pendingPostSaves.length + savingPostIds.length > 0 ? (
               <div className="flex items-center gap-2 rounded-lg border border-blue-800/70 bg-blue-950/20 px-3 py-2 text-xs text-blue-200">
                 <LoaderCircle size={14} className="animate-spin" />

@@ -222,8 +222,7 @@ export function CrossPromotionPlanModal({
   };
   const basicsReady =
     Boolean(title.trim()) &&
-    publisherIds.length > 0 &&
-    (kind !== "DIRECT_MUTUAL" || partnerIds.length > 0);
+    publisherIds.length > 0;
   const hasOutboundPost = Boolean(
     outboundPost.text.trim() ||
     outboundPost.imageUrls.length ||

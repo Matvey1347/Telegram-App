@@ -50,6 +50,29 @@ export class CrossPromotionPlanLifecycleService {
       });
       const stored = json<Placement[]>(plan.placementPostIds, []);
       const configured = post.publisherPlacements ?? [];
+      const managedPosts = stored.length
+        ? await this.prisma.telegramManagedPost.findMany({
+            where: {
+              workspaceId: plan.workspaceId,
+              id: { in: stored.map((placement) => placement.managedPostId) },
+            },
+            select: { id: true, status: true },
+          })
+        : [];
+      const hasPublishedPost = managedPosts.some(
+        (managedPost) => managedPost.status === 'PUBLISHED',
+      );
+      const partnerPlacements = post.partnerPlacements ?? [];
+      // Partner channels are external: their actual Telegram message cannot be
+      // queried from our account. Once their planned time has arrived, the
+      // placement is underway and the promotion must no longer be Scheduled.
+      const hasPartnerPublicationStarted = partnerPlacements.some(
+        (placement) => {
+          const scheduledAt = Date.parse(placement.scheduledAt);
+          return Number.isFinite(scheduledAt) && scheduledAt <= now.getTime();
+        },
+      );
+      const isActive = hasPublishedPost || hasPartnerPublicationStarted;
       const legacyDue = configured.every((placement) => !placement.deleteAt);
       const dueIds = stored
         .filter((placement) => {
@@ -64,6 +87,40 @@ export class CrossPromotionPlanLifecycleService {
           );
         })
         .map((placement) => placement.managedPostId);
+      if (!dueIds.length) {
+        const futurePublication = [...configured, ...partnerPlacements]
+          .map((placement) => Date.parse(placement.scheduledAt))
+          .filter(
+            (timestamp) =>
+              Number.isFinite(timestamp) && timestamp > now.getTime(),
+          );
+        const futureDeletion = configured
+          .flatMap((placement) =>
+            placement.deleteAt ? [Date.parse(placement.deleteAt)] : [],
+          )
+          .filter(
+            (timestamp) =>
+              Number.isFinite(timestamp) && timestamp > now.getTime(),
+          );
+        await this.prisma.crossPromotionPlan.update({
+          where: { id: plan.id },
+          data: {
+            status: isActive ? 'ACTIVE' : 'SCHEDULED',
+            nextDueAt: isActive
+              ? (futureDeletion.length
+                  ? new Date(Math.min(...futureDeletion))
+                  : null)
+              : new Date(
+                  Math.min(
+                    ...futurePublication,
+                    now.getTime() + 60_000,
+                  ),
+                ),
+            lastError: null,
+          },
+        });
+        continue;
+      }
       const deletion = await this.remoteDeletion.deletePublishedManagedPosts({
         workspaceId: plan.workspaceId,
         managedPostIds: dueIds,

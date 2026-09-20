@@ -41,7 +41,7 @@ export function FinanceCardActionsMenu({
         <EllipsisVertical size={18} aria-hidden="true" />
       </button>
       {open ? (
-        <div className="absolute right-0 top-11 z-40 min-w-52 rounded-xl border border-neutral-700 bg-neutral-950 p-1.5 shadow-2xl">
+        <div className="absolute bottom-11 right-0 z-20 min-w-52 rounded-xl border border-neutral-700 bg-neutral-950 p-1.5 shadow-2xl">
           {actions.map((action) => (
             <button
               key={action.label}

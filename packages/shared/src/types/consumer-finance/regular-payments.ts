@@ -39,6 +39,8 @@ export type ConsumerFinanceRegularPayment = {
   /** Number of recurrence units between payments. Older responses imply 1. */
   intervalCount?: number;
   nextOccurrenceAt: string;
+  /** Most recent confirmed payment, if this schedule has been paid before. */
+  lastPaymentAt?: string | null;
   /** Timezone used for recurrence calendar anchors. */
   scheduleTimezone: string;
   note?: string | null;

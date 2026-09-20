@@ -115,6 +115,7 @@ export class TelegramManagedPostCommandService {
       mediaItems?: TelegramPostMediaItem[];
       buttonRows?: unknown;
       icon?: string | null;
+      deleteAfterHours?: number | null;
       groupId?: string | null;
       groupPosition?: number | null;
       jsonImportKey?: string | null;
@@ -132,6 +133,7 @@ export class TelegramManagedPostCommandService {
         origin: 'SYSTEM',
         assignedMemberId: params.assignedMemberId,
         icon: params.icon?.trim() || null,
+        deleteAfterHours: params.deleteAfterHours ?? null,
         groupId: params.groupId,
         groupPosition: params.groupPosition,
         jsonImportKey: params.jsonImportKey ?? null,
@@ -168,6 +170,7 @@ export class TelegramManagedPostCommandService {
       buttonRows: dto.buttonRows,
       assignedMemberId,
       icon: dto.icon?.trim() || null,
+      deleteAfterHours: dto.deleteAfterHours ?? null,
     };
   }
 

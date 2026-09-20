@@ -12,7 +12,6 @@ import {
   UserRoundCheck,
   UsersRound,
 } from "lucide-react";
-import type { TelegramBotRuntimeEnvironment } from "@telegram-system/shared";
 import type { BotBillingOverviewView } from "@telegram-system/shared";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { Card } from "@/components/ui/primitives";
@@ -23,16 +22,10 @@ import {
   formatBillingDate,
   formatBillingMoney,
 } from "./finance-billing-format";
-export function FinanceOverviewSection({
-  botId,
-  environment,
-}: {
-  botId: string;
-  environment: TelegramBotRuntimeEnvironment;
-}) {
+export function FinanceOverviewSection({ botId }: { botId: string }) {
   const overview = useQuery({
-    queryKey: botBillingKeys.overview(botId, environment),
-    queryFn: () => botBillingApi.overview(botId, environment),
+    queryKey: botBillingKeys.overview(botId, "PRODUCTION"),
+    queryFn: () => botBillingApi.overview(botId),
   });
   return (
     <QueryContentState

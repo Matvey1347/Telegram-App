@@ -31,11 +31,14 @@ type ScheduledPlacement = {
 const json = <T>(value: unknown, fallback: T): T =>
   value && typeof value === 'object' ? (value as T) : fallback;
 
-function firstDeletionAt(dto: CreateCrossPromotionPlanDto) {
-  const timestamps = (dto.publicationPost.publisherPlacements ?? [])
-    .flatMap((placement) =>
-      placement.deleteAt ? [Date.parse(placement.deleteAt)] : [],
-    )
+function firstLifecycleAt(dto: CreateCrossPromotionPlanDto) {
+  const timestamps = [
+    ...(dto.publicationPost.publisherPlacements ?? []),
+    ...(dto.publicationPost.partnerPlacements ?? []),
+  ]
+    .flatMap((placement) => [placement.scheduledAt, placement.deleteAt])
+    .filter((value): value is string => Boolean(value))
+    .map((value) => Date.parse(value))
     .filter(Number.isFinite);
   return timestamps.length ? new Date(Math.min(...timestamps)) : null;
 }
@@ -250,7 +253,7 @@ export class CrossPromotionPlansService {
         trackingEndsAt: dto.trackingEndsAt
           ? new Date(dto.trackingEndsAt)
           : null,
-        nextDueAt: firstDeletionAt(dto),
+        nextDueAt: firstLifecycleAt(dto),
         baselineTargetCounters,
         baselinePublisherSubscribers,
       },
@@ -481,7 +484,7 @@ export class CrossPromotionPlansService {
         trackingEndsAt: dto.trackingEndsAt
           ? new Date(dto.trackingEndsAt)
           : null,
-        nextDueAt: firstDeletionAt(dto),
+        nextDueAt: firstLifecycleAt(dto),
         baselineTargetCounters: normalized.links.map((link) => ({
           inviteLinkId: link.id,
           joinedCount: link.joinedCount,

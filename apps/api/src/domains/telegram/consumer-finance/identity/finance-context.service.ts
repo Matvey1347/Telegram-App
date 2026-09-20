@@ -118,8 +118,8 @@ export class FinanceContextService {
     const telegramUserId = String(user.id);
     const existingUser = await this.prisma.telegramBotUser.findUnique({
       where: {
-        runtimeInstanceId_telegramUserId: {
-          runtimeInstanceId,
+        botIntegrationId_telegramUserId: {
+          botIntegrationId: bot.id,
           telegramUserId,
         },
       },
@@ -164,7 +164,6 @@ export class FinanceContextService {
       where: {
         workspaceId: input.workspaceId,
         botIntegrationId: input.botIntegrationId,
-        runtimeInstanceId: input.runtimeInstanceId,
         telegramUserId: input.telegramUserId,
       },
       include: {

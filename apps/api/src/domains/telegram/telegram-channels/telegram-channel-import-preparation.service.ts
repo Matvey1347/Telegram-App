@@ -72,7 +72,13 @@ export class TelegramChannelImportPreparationService {
     info: ResolvedTelegramEntity,
     inputType: TelegramImportInput['type'],
   ) {
-    if (info.kind === 'channel' && !String(info.telegramChatId || '').trim()) {
+    const isJoinRequestPreview =
+      inputType === 'invite' && info.requiresJoinRequest;
+    if (
+      info.kind === 'channel' &&
+      !String(info.telegramChatId || '').trim() &&
+      !isJoinRequestPreview
+    ) {
       if (inputType === 'invite') {
         throw new BadRequestException(
           'Could not resolve a real Telegram channel from the invite link.',

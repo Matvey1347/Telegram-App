@@ -10,6 +10,54 @@ const escapeHtml = (value: string) =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
+/**
+ * The managed editor accepts formatting runs that can overlap (for example an
+ * italic run ending inside a link). Telegram's HTML parser requires properly
+ * nested tags, so close and reopen intervening tags when a crossing close tag
+ * is encountered. This keeps every formatting run visible instead of turning
+ * the whole post into a Bot API error.
+ */
+function normalizeTelegramHtmlTagNesting(html: string) {
+  type OpenTag = { name: string; open: string; close: string };
+  const stack: OpenTag[] = [];
+
+  return (
+    html.replace(
+      /<\/?([a-z][a-z0-9-]*)(?:\s[^<>]*?)?\/?\s*>/gi,
+      (tag, rawName: string) => {
+        const name = rawName.toLowerCase();
+        const isClosing = /^<\//.test(tag);
+        const isSelfClosing =
+          /\/>$/.test(tag) || name === 'br' || name === 'img';
+        if (isSelfClosing) return tag;
+        if (!isClosing) {
+          stack.push({ name, open: tag, close: `</${name}>` });
+          return tag;
+        }
+
+        const matchingIndex = stack.map((item) => item.name).lastIndexOf(name);
+        if (matchingIndex < 0) return '';
+
+        const intervening = stack.splice(matchingIndex + 1);
+        const matching = stack.pop();
+        stack.push(...intervening);
+        return `${intervening
+          .slice()
+          .reverse()
+          .map((item) => item.close)
+          .join('')}${matching?.close ?? ''}${intervening
+          .map((item) => item.open)
+          .join('')}`;
+      },
+    ) +
+    stack
+      .slice()
+      .reverse()
+      .map((item) => item.close)
+      .join('')
+  );
+}
+
 function parseFencedCodeBlock(info: string, lineBreak: string, code: string) {
   const normalizedInfo = info.replace(/\r/g, '');
   const normalizedLineBreak = lineBreak.replace(/\r/g, '\n');
@@ -248,9 +296,11 @@ export function telegramMarkupToHtml(raw: string, rich = false) {
       .replace(/\+\+([\s\S]+?)\+\+/g, '<u>$1</u>')
       .replace(/~~([\s\S]+?)~~/g, '<s>$1</s>');
 
-    return convertBlockquotes(value).replace(
-      /\uE000(\d+)\uE001/g,
-      (_match, index: string) => tokens[Number(index)] ?? '',
+    return normalizeTelegramHtmlTagNesting(
+      convertBlockquotes(value).replace(
+        /\uE000(\d+)\uE001/g,
+        (_match, index: string) => tokens[Number(index)] ?? '',
+      ),
     );
   };
   return render(raw);

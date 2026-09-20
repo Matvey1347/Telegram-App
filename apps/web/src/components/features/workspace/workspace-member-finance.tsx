@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Banknote, History, TrendingUp } from "lucide-react";
+import {
+  Banknote,
+  History,
+  Landmark,
+  Repeat2,
+  TrendingUp,
+  WalletCards,
+} from "lucide-react";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { accountsApi, memberFinanceApi } from "@/lib/api";
 import type { MemberFinanceSummary } from "@/lib/api-types";
@@ -70,7 +77,7 @@ export function WorkspaceMemberFinance({
   const currency = summary.primaryCurrency;
   const total = summary.investments.total;
   const principal = Math.max(0, summary.investments.principal);
-  const investorEarnings = summary.investments.investorEarnings;
+  const reinvested = summary.investments.investorEarnings;
   const maximum = summary.commissionPayable;
   const enteredAmount = Number(amount);
 
@@ -91,11 +98,11 @@ export function WorkspaceMemberFinance({
           </strong>
         </div>
         {total > 0 ? (
-          <div className="mt-3">
-            <div className="mb-1.5 flex justify-between text-[11px] text-neutral-500">
-              <span>Capital {formatMoney(principal, currency)}</span>
-              <span>Investor profit {formatMoney(investorEarnings, currency)}</span>
-            </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-neutral-500">
+            <span>Invested {formatMoney(principal, currency)}</span>
+            <span className="text-right">
+              Reinvested {formatMoney(reinvested, currency)}
+            </span>
           </div>
         ) : null}
       </button>
@@ -103,14 +110,18 @@ export function WorkspaceMemberFinance({
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title={`${member.user.name} · money history`}
+        title={`${member.user.name} · investments`}
+        leadingHeaderAction={
+          details.data?.member ? (
+            <IconAvatar
+              icon={details.data.member.avatarPresentation}
+              label={details.data.member.name}
+              size="sm"
+            />
+          ) : undefined
+        }
+        titleIcon={<Landmark size={18} />}
       >
-        {details.data?.member ? (
-          <div className="mb-3 flex items-center gap-2 text-sm text-neutral-300">
-            <IconAvatar icon={details.data.member.avatarPresentation} label={details.data.member.name} size="sm" />
-            <span>{details.data.member.name}</span>
-          </div>
-        ) : null}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Metric
             label="Earned"
@@ -122,8 +133,8 @@ export function WorkspaceMemberFinance({
             value={summary.commissionPayable}
             currency={currency}
           />
-          <Metric label="Capital" value={principal} currency={currency} />
-          <Metric label="Investor profit" value={investorEarnings} currency={currency} />
+          <Metric label="Invested" value={principal} currency={currency} />
+          <Metric label="Reinvested" value={reinvested} currency={currency} />
         </div>
 
         {canManage ? (
@@ -156,7 +167,18 @@ export function WorkspaceMemberFinance({
               </FormField>
               {action === "pay" ? (
                 <FormField label="Account">
-                  <CustomSelect value={accountId} onChange={setAccountId} placeholder="Select account" options={(accounts.data ?? []).map((account) => ({ value: account.id, label: account.name, meta: account.currency, iconPresentation: account.iconPresentation ?? undefined, iconFallback: account.currency }))} />
+                  <CustomSelect
+                    value={accountId}
+                    onChange={setAccountId}
+                    placeholder="Select account"
+                    options={(accounts.data ?? []).map((account) => ({
+                      value: account.id,
+                      label: account.name,
+                      meta: account.currency,
+                      iconPresentation: account.iconPresentation ?? undefined,
+                      iconFallback: account.currency,
+                    }))}
+                  />
                 </FormField>
               ) : null}
             </div>
@@ -213,25 +235,54 @@ export function WorkspaceMemberFinance({
                 </Button>
               </div>
             ) : null}
-            {(details.data?.timeline ?? []).map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
-              >
-                <div className="min-w-0">
-                  <div className="font-medium text-neutral-200">
-                    {historyLabel(item.type)}
-                  </div>
-                  <div className="truncate text-xs text-neutral-500">
-                    {new Date(item.date).toLocaleString()}{" "}
-                    {item.title ? `· ${item.title}` : ""}
+            {(details.data?.timeline ?? []).map((item) => {
+              const isInvestment = [
+                "SALARY_INVESTED",
+                "EXTERNAL_CONTRIBUTION",
+                "REINVESTMENT_CONTRIBUTION",
+                "AUTO_REINVESTMENT",
+              ].includes(item.type);
+              const content = (
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-950 text-emerald-300">
+                    {historyIcon(item.type)}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="font-medium text-neutral-200">
+                      {historyLabel(item.type)}
+                    </div>
+                    <div className="truncate text-xs text-neutral-500">
+                      {new Date(item.date).toLocaleString()}{" "}
+                      {item.title ? `· ${item.title}` : ""}
+                    </div>
                   </div>
                 </div>
+              );
+              const amount = (
                 <span className="shrink-0 tabular-nums text-neutral-100">
                   {formatMoney(Math.abs(item.amount), currency)}
                 </span>
-              </div>
-            ))}
+              );
+              return isInvestment ? (
+                <a
+                  key={item.id}
+                  href="/finance#transactions"
+                  aria-label={`Open ${historyLabel(item.type)} in Finance`}
+                  className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm transition hover:bg-neutral-800/70"
+                >
+                  {content}
+                  {amount}
+                </a>
+              ) : (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
+                >
+                  {content}
+                  {amount}
+                </div>
+              );
+            })}
             {!details.isLoading && !details.data?.timeline.length ? (
               <div className="px-3 py-6 text-center text-sm text-neutral-500">
                 No member finance activity yet
@@ -272,7 +323,20 @@ function historyLabel(type: string) {
         SALARY_INVESTED: "Salary invested",
         EXTERNAL_CONTRIBUTION: "External investment",
         REINVESTMENT_CONTRIBUTION: "Profit reinvested",
+        AUTO_REINVESTMENT: "Revenue reinvested",
       } as Record<string, string>
     )[type] ?? type
   );
+}
+
+function historyIcon(type: string) {
+  if (type === "EXTERNAL_CONTRIBUTION") return <WalletCards size={15} />;
+  if (type === "SALARY_INVESTED") return <TrendingUp size={15} />;
+  if (type === "REINVESTMENT_CONTRIBUTION" || type === "AUTO_REINVESTMENT") {
+    return <Repeat2 size={15} />;
+  }
+  if (type === "COMMISSION_EARNED" || type === "SALARY_PAID") {
+    return <Banknote size={15} />;
+  }
+  return <Landmark size={15} />;
 }

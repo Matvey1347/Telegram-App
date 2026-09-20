@@ -30,6 +30,7 @@ describe('CrossPromotionPlanLifecycleService', () => {
         findMany: jest.fn().mockResolvedValue([duePlan]),
         update: jest.fn().mockResolvedValue({}),
       },
+      telegramManagedPost: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const remoteDeletion = {
       deletePublishedManagedPosts: jest.fn().mockResolvedValue({
@@ -67,6 +68,7 @@ describe('CrossPromotionPlanLifecycleService', () => {
         findMany: jest.fn().mockResolvedValue([duePlan]),
         update: jest.fn().mockResolvedValue({}),
       },
+      telegramManagedPost: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const remoteDeletion = {
       deletePublishedManagedPosts: jest.fn().mockResolvedValue({
@@ -91,6 +93,75 @@ describe('CrossPromotionPlanLifecycleService', () => {
         status: 'ACTIVE',
         nextDueAt: new Date(now.getTime() + 60_000),
         lastError: 'Telegram unavailable',
+      },
+    });
+  });
+
+  it('marks a plan active once a placement post is published before deletion is due', async () => {
+    const plan = {
+      ...duePlan,
+      nextDueAt: new Date('2026-09-15T10:00:00.000Z'),
+    };
+    const prisma = {
+      crossPromotionPlan: {
+        findMany: jest.fn().mockResolvedValue([plan]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      telegramManagedPost: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'post-1', status: 'PUBLISHED' }]),
+      },
+    };
+    const service = new CrossPromotionPlanLifecycleService(
+      prisma as never,
+      { deletePublishedManagedPosts: jest.fn() } as never,
+    );
+
+    await service.processDueActions(new Date('2026-09-15T10:01:00.000Z'));
+
+    expect(prisma.crossPromotionPlan.update).toHaveBeenCalledWith({
+      where: { id: 'plan-1' },
+      data: {
+        status: 'ACTIVE',
+        nextDueAt: new Date('2026-09-16T10:00:00.000Z'),
+        lastError: null,
+      },
+    });
+  });
+
+  it('marks a plan active when a partner placement reaches its scheduled time', async () => {
+    const plan = {
+      ...duePlan,
+      nextDueAt: new Date('2026-09-15T10:00:00.000Z'),
+      publicationPost: {
+        ...duePlan.publicationPost,
+        partnerPlacements: [
+          {
+            telegramChannelId: 'partner-channel-1',
+            scheduledAt: '2026-09-15T10:00:00.000Z',
+          },
+        ],
+      },
+    };
+    const prisma = {
+      crossPromotionPlan: {
+        findMany: jest.fn().mockResolvedValue([plan]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      telegramManagedPost: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = new CrossPromotionPlanLifecycleService(
+      prisma as never,
+      { deletePublishedManagedPosts: jest.fn() } as never,
+    );
+
+    await service.processDueActions(new Date('2026-09-15T10:01:00.000Z'));
+
+    expect(prisma.crossPromotionPlan.update).toHaveBeenCalledWith({
+      where: { id: 'plan-1' },
+      data: {
+        status: 'ACTIVE',
+        nextDueAt: new Date('2026-09-16T10:00:00.000Z'),
+        lastError: null,
       },
     });
   });

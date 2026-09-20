@@ -77,6 +77,7 @@ describe("FinanceDebts", () => {
     expect(api.accounts).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Add debt" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     await waitFor(() => expect(api.accounts).toHaveBeenCalledOnce());
   });
 
@@ -100,13 +101,12 @@ describe("FinanceDebts", () => {
     const invalidate = vi.spyOn(client, "invalidateQueries");
     fireEvent.click(await screen.findByRole("button", { name: "Settle" }));
     const dialog = screen.getByRole("dialog");
-    fireEvent.change(within(dialog).getByPlaceholderText("Alex"), {
-      target: { value: "Alex" },
-    });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Settle" }));
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Create transaction" }),
+    );
 
     await waitFor(() =>
-      expect(api.settleDebt).toHaveBeenCalledWith("bot", "debt-1"),
+      expect(api.settleDebt).toHaveBeenCalledWith("bot", "debt-1", "cash", "42"),
     );
     expect(await screen.findByText("No open debts.")).toBeInTheDocument();
     expect(invalidate.mock.calls.map(([input]) => input?.queryKey)).toEqual(

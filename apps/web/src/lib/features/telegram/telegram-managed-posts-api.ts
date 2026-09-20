@@ -124,6 +124,7 @@ export function createTelegramManagedPostsApi({
         name: string;
         description?: string | null;
         icon?: string | null;
+        deleteAfterHours?: number | null;
         position?: number;
         isActive?: boolean;
       },
@@ -142,6 +143,7 @@ export function createTelegramManagedPostsApi({
         name?: string;
         description?: string | null;
         icon?: string | null;
+        deleteAfterHours?: number | null;
         position?: number;
         isActive?: boolean;
       },

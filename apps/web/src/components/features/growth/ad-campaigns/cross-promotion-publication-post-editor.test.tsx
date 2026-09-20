@@ -63,6 +63,26 @@ describe("CrossPromotionPublicationPostEditor", () => {
     expect(screen.getByText("Composer for Publishing channel")).toBeVisible();
   });
 
+  it("marks manual composition as selected when it already has a post", () => {
+    render(
+      <CrossPromotionPublicationPostEditor
+        directMutual
+        post={{ ...emptyPost, text: "Partner copy" }}
+        botConnected
+        importStatus="idle"
+        sendStatus="idle"
+        onImport={vi.fn()}
+        onSend={vi.fn()}
+        onUseSelectedPromo={vi.fn()}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "✅ Write manually" }),
+    ).toBeVisible();
+  });
+
   it("exposes bot import for an own-channels placement", () => {
     const onImport = vi.fn();
     render(

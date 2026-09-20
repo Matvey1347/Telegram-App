@@ -60,6 +60,8 @@ export class MutualPromotionCommandService {
       membership.workspaceId,
       dto.assignedMemberId,
     );
+    const paidOnly = dto.participants.every((participant) => participant.role === 'PAID');
+    const activatedAt = paidOnly ? new Date() : null;
     const folder = await this.prisma.$transaction(async (tx) => {
       await this.validation.lockInviteLinks(
         tx,
@@ -81,6 +83,9 @@ export class MutualPromotionCommandService {
           notes: dto.notes?.trim() || null,
           assignedMemberId,
           createdByUserId: userId,
+          status: paidOnly ? 'ACTIVE' : 'DRAFT',
+          activatedAt,
+          nextDueAt: paidOnly ? endsAt : null,
         },
       });
       await this.expenses.createForFolder(

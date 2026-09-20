@@ -19,63 +19,34 @@ export function AnalyticsPresentation({
   locale?: FinanceLocale;
 }) {
   const t = financeAnalyticsCopy(locale);
+  const accountRows = data.accounts.filter((account) =>
+    [
+      account.income,
+      account.expenses,
+      account.invested,
+      account.investmentReturns,
+      account.netCashflow,
+    ].some((value) => Number(value) !== 0),
+  );
+  const trends = data.trends.filter(
+    (trend) => Number(trend.previous) !== 0 || Number(trend.current) !== 0,
+  );
   return (
     <div className="mt-3 space-y-3">
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-9">
-        <Metric
-          label={t.income}
-          value={data.summary.income}
-          currency={data.currency}
-          tone="text-emerald-300"
-        />
-        <Metric
-          label={t.expense}
-          value={data.summary.expenses}
-          currency={data.currency}
-          tone="text-rose-300"
-        />
-        <Metric
-          label={t.saved}
-          value={data.summary.saved}
-          currency={data.currency}
-          tone="text-sky-200"
-        />
-        <Metric
-          label={t.invested}
-          value={data.summary.invested}
-          currency={data.currency}
-          tone="text-violet-200"
-        />
-        <Metric
-          label={t.investmentReturns}
-          value={data.summary.investmentReturns}
-          currency={data.currency}
-          tone="text-emerald-200"
-        />
-        <Metric
-          label={t.net}
-          value={data.summary.netCashflow}
-          currency={data.currency}
-          tone="text-sky-200"
-        />
-        <Metric
-          label={t.savingsSummary}
-          value={data.savings.allocated}
-          currency={data.savings.currency}
-          tone="text-sky-200"
-        />
-        <Metric
-          label={t.investmentValue}
-          value={data.investments.currentValue}
-          currency={data.investments.currency}
-          tone="text-violet-200"
-        />
-        <Metric
-          label={t.netWorth}
-          value={data.netWorth.amount}
-          currency={data.netWorth.currency}
-          tone="text-emerald-200"
-        />
+        {[
+          [t.income, data.summary.income, data.currency, "text-emerald-300"],
+          [t.expense, data.summary.expenses, data.currency, "text-rose-300"],
+          [t.saved, data.summary.saved, data.currency, "text-sky-200"],
+          [t.invested, data.summary.invested, data.currency, "text-violet-200"],
+          [t.investmentReturns, data.summary.investmentReturns, data.currency, "text-emerald-200"],
+          [t.net, data.summary.netCashflow, data.currency, "text-sky-200"],
+          [t.savingsSummary, data.savings.allocated, data.savings.currency, "text-sky-200"],
+          [t.investmentValue, data.investments.currentValue, data.investments.currency, "text-violet-200"],
+          [t.netWorth, data.netWorth.amount, data.netWorth.currency, "text-emerald-200"],
+        ].filter(([, value]) => Number(value) !== 0).map(([label, value, currency, tone]) => (
+          <Metric key={label} label={label} value={String(value)} currency={currency} tone={tone} />
+        ))}
       </div>
       <p className="text-[10px] text-neutral-500">
         {t.net}: {t.netExplanation}
@@ -161,7 +132,7 @@ export function AnalyticsPresentation({
           </p>
         ) : null}
         <div className="mt-2 grid gap-2 sm:grid-cols-3">
-          {data.trends.map((trend) => (
+          {trends.map((trend) => (
             <div
               key={trend.metric}
               className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-2 text-xs"
@@ -195,7 +166,7 @@ export function AnalyticsPresentation({
       </div>
       <section>
         <h3 className="text-sm font-medium">{t.accountBreakdown}</h3>
-        {data.accounts.length ? (
+        {accountRows.length ? (
           <div className="mt-2 overflow-x-auto rounded-lg border border-neutral-800">
             <table className="w-full min-w-[520px] text-sm">
               <thead className="bg-neutral-950/70 text-xs text-neutral-500">
@@ -211,7 +182,7 @@ export function AnalyticsPresentation({
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-800">
-                {data.accounts.map((account) => (
+                {accountRows.map((account) => (
                   <tr key={account.accountId}>
                     <td className="px-3 py-2">
                       <span className="flex items-center gap-2">
@@ -224,26 +195,24 @@ export function AnalyticsPresentation({
                       </span>
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-emerald-300">
-                      {formatMoney(account.income, data.currency, "symbol")}
+                      {formatNonZeroMoney(account.income, data.currency)}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-rose-300">
-                      {formatMoney(account.expenses, data.currency, "symbol")}
+                      {formatNonZeroMoney(account.expenses, data.currency)}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-violet-200">
-                      {formatMoney(account.invested, data.currency, "symbol")}
+                      {formatNonZeroMoney(account.invested, data.currency)}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-emerald-200">
-                      {formatMoney(
+                      {formatNonZeroMoney(
                         account.investmentReturns,
                         data.currency,
-                        "symbol",
                       )}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">
-                      {formatMoney(
+                      {formatNonZeroMoney(
                         account.netCashflow,
                         data.currency,
-                        "symbol",
                       )}
                     </td>
                   </tr>
@@ -257,6 +226,10 @@ export function AnalyticsPresentation({
       </section>
     </div>
   );
+}
+
+function formatNonZeroMoney(value: string | number, currency: string) {
+  return Number(value) === 0 ? "—" : formatMoney(value, currency, "symbol");
 }
 
 const DONUT_COLORS = [

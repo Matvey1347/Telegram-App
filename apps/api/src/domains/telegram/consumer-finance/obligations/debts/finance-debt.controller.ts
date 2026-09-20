@@ -12,6 +12,7 @@ import type { Request } from 'express';
 import {
   FinanceDebtInputDto,
   FinanceDebtQueryDto,
+  FinanceDebtSettlementDto,
   FinanceSharedExpenseInputDto,
 } from '../finance-obligation.dto';
 import { FinanceConsumerRequestService } from '../../http/finance-consumer-request.service';
@@ -70,8 +71,9 @@ export class FinanceDebtController {
     @Param('botId') botId: string,
     @Param('id') id: string,
     @Req() request: Request,
+    @Body() input: FinanceDebtSettlementDto,
   ) {
     const session = this.requests.authenticate(botId, request);
-    return this.debts.settle(session.profileId, id);
+    return this.debts.settle(session.profileId, id, input.accountId, input.amount);
   }
 }

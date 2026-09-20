@@ -35,6 +35,7 @@ type ProfileValues = {
   email: string;
   telegramUsername: string;
   telegramUserAccountIds: string[];
+  salesCommissionRate: string;
 };
 type PasswordValues = {
   currentPassword: string;
@@ -77,6 +78,10 @@ export function AccountWorkspace() {
       telegramUsername: account.data?.telegramUsername ?? "",
       telegramUserAccountIds:
         account.data?.assignedTelegramUserAccounts?.map(({ id }) => id) ?? [],
+      salesCommissionRate:
+        account.data?.salesCommissionRate == null
+          ? ""
+          : String(account.data.salesCommissionRate),
     },
   });
   const passwordForm = useForm<PasswordValues>();
@@ -209,6 +214,12 @@ export function AccountWorkspace() {
                   identityMode === "account" && selectedAccountId
                     ? [selectedAccountId]
                     : [],
+                salesCommissionRate:
+                  account.data.workspace.role === "owner"
+                    ? values.salesCommissionRate === ""
+                      ? null
+                      : Number(values.salesCommissionRate)
+                    : undefined,
               })
             }
           />
@@ -422,6 +433,40 @@ function ProfileForm({
             </div>
           )}
         </section>
+        {data.workspace.role === "owner" ? (
+          <section className="space-y-2 border-t border-neutral-800 pt-4">
+            <div>
+              <h3 className="font-semibold text-white">Sales commission</h3>
+              <p className="mt-0.5 text-xs text-neutral-500">
+                Leave this blank to use the workspace default. Your chosen rate
+                is saved with each new deal.
+              </p>
+            </div>
+            <FormField label="My commission override, %">
+              <Input
+                type="number"
+                aria-label="My commission override, %"
+                min="0"
+                max="100"
+                step="0.01"
+                placeholder="Use workspace default"
+                {...form.register("salesCommissionRate", {
+                  validate: (value) =>
+                    value === "" ||
+                    (Number.isFinite(Number(value)) &&
+                      Number(value) >= 0 &&
+                      Number(value) <= 100) ||
+                    "Enter a rate from 0 to 100",
+                })}
+              />
+              {form.formState.errors.salesCommissionRate ? (
+                <p className="mt-1 text-xs text-rose-300">
+                  {form.formState.errors.salesCommissionRate.message}
+                </p>
+              ) : null}
+            </FormField>
+          </section>
+        ) : null}
         <FormError message={error} />
         <div className="flex justify-end">
           <Button type="submit" disabled={pending}>

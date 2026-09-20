@@ -420,6 +420,10 @@ export class TelegramManagedPostPublisherService {
             scheduledAt: scheduleAt ?? null,
             scheduleMode: scheduleAt ? 'TELEGRAM_NATIVE' : null,
             publishedAt: scheduleAt ? null : new Date(),
+            deleteAt:
+              scheduleAt || !post.deleteAfterHours
+                ? null
+                : new Date(Date.now() + post.deleteAfterHours * 3_600_000),
             telegramScheduledMessageIds: scheduleAt ? ids : [],
             telegramMessageIds: scheduleAt ? [] : ids,
             telegramMessageUrls: publishedUrls,
@@ -452,7 +456,7 @@ export class TelegramManagedPostPublisherService {
         if (!canonical) throw telegramPostsNotFound('TELEGRAM_MANAGED_POST_NOT_FOUND', 'Managed post not found');
         return canonical;
       });
-      return this.notifyManagedPostSchedulePersisted(published, scheduleAt, (_count?.adSalePlacements ?? 0) > 0);
+      return this.notifyManagedPostSchedulePersisted(published, scheduleAt, (_count?.adSalePlacements ?? 0) > 0, Boolean(post.deleteAfterHours));
     } catch (error) {
       const rawMessage = error instanceof Error ? error.message : 'Telegram publish failed';
       const publicMessage = /MEDIA_INVALID/i.test(rawMessage)
@@ -497,8 +501,8 @@ export class TelegramManagedPostPublisherService {
     }
   }
 
-  public notifyManagedPostSchedulePersisted<T>(persisted: T, scheduleAt?: Date, hasAdSalePlacement = false) {
-    if (scheduleAt) {
+  public notifyManagedPostSchedulePersisted<T>(persisted: T, scheduleAt?: Date, hasAdSalePlacement = false, hasAutoDelete = false) {
+    if (scheduleAt || hasAutoDelete) {
       notifyScheduledTaskDueWorkChanged('telegram.managed_posts.reconcile_due');
     } else if (hasAdSalePlacement) {
       notifyScheduledTaskDueWorkChanged('telegram_ad_sales.due_deletions');

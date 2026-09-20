@@ -44,6 +44,7 @@ vi.mock("@/providers/toast-provider", () => ({
 const promo = {
   id: "promo-1",
   telegramChannelId: "channel-1",
+  iconPresentation: { type: "unicode", value: "✨" },
   title: "Крео 1",
   previewText:
     "Начало рекламного текста, которое должно быть видно в карточке.",
@@ -158,6 +159,7 @@ describe("PromoCard", () => {
     await userEvent.click(
       screen.getByRole("menuitem", { name: "Send to bot" }),
     );
+    expect(await screen.findByText("✨")).toBeInTheDocument();
     await userEvent.click(
       await screen.findByRole("button", { name: /Old link/ }),
     );

@@ -32,6 +32,7 @@ export function ConsumerFinanceActionLauncher({
     { id: "debt", label: copy.debts, Icon: HandCoins },
     { id: "investment", label: copy.investments, Icon: TrendingUp },
   ] as const;
+  const quickActions = actions.slice(0, 3);
 
   if (!compact) {
     return (
@@ -57,7 +58,7 @@ export function ConsumerFinanceActionLauncher({
     >
       {open ? (
         <div className="mb-3 grid min-w-48 gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-2 shadow-2xl">
-          {actions.map(({ id, label, Icon }) => (
+          {quickActions.map(({ id, label, Icon }) => (
             <button
               key={id}
               type="button"

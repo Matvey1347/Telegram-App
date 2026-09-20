@@ -33,8 +33,13 @@ export function TelegramBotCard({
       onConfigureRuntime={onConfigureRuntime}
       onEditProfile={onEditProfile}
     >
-      {appType === "FINANCE" ? (environment: TelegramBotRuntimeEnvironment) => (
-        <FinanceBotSummary summary={bot.applicationSummary?.finance?.[environment]} />
+      {appType === "FINANCE" ? () => (
+        <FinanceBotSummary
+          summary={
+            bot.applicationSummary?.finance?.PRODUCTION ??
+            bot.applicationSummary?.finance?.LOCAL
+          }
+        />
       ) : appType === "GREETER" ? (
         <GreeterBotSummary />
       ) : (

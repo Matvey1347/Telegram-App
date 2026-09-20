@@ -21,12 +21,14 @@ export function FinanceMobileNavigation({
   copy,
   onNavigate,
   onOpenAssistant,
+  onMoreOpenChange,
   alwaysVisible = false,
 }: {
   screen: ConsumerFinanceScreen;
   copy: FinanceCoreCopy;
   onNavigate: (screen: ConsumerFinanceScreen) => void;
   onOpenAssistant?: () => void;
+  onMoreOpenChange?: (open: boolean) => void;
   alwaysVisible?: boolean;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -35,8 +37,12 @@ export function FinanceMobileNavigation({
   );
   const moreTriggerRef = useRef<HTMLButtonElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
+  const setMore = (open: boolean) => {
+    setMoreOpen(open);
+    onMoreOpenChange?.(open);
+  };
   const navigate = (next: ConsumerFinanceScreen) => {
-    setMoreOpen(false);
+    setMore(false);
     onNavigate(next);
   };
   const toggleGroup = (groupId: string) =>
@@ -62,7 +68,7 @@ export function FinanceMobileNavigation({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        setMoreOpen(false);
+        setMore(false);
         return;
       }
       if (event.key !== "Tab") return;
@@ -108,7 +114,7 @@ export function FinanceMobileNavigation({
             label={copy.assistant}
             Icon={Bot}
             onClick={() => {
-              setMoreOpen(false);
+              setMore(false);
               onOpenAssistant();
             }}
           />
@@ -130,7 +136,7 @@ export function FinanceMobileNavigation({
           expanded={moreOpen}
           controls="finance-more-navigation"
           buttonRef={moreTriggerRef}
-          onClick={() => setMoreOpen((value) => !value)}
+          onClick={() => setMore(!moreOpen)}
         />
       </nav>
       {moreOpen ? (
@@ -139,7 +145,7 @@ export function FinanceMobileNavigation({
             aria-hidden="true"
             data-finance-more-backdrop
             className={`fixed inset-0 z-30 bg-black/65 backdrop-blur-[2px] ${alwaysVisible ? "" : "md:hidden"}`}
-            onClick={() => setMoreOpen(false)}
+            onClick={() => setMore(false)}
           />
           <div
             ref={sheetRef}
@@ -154,7 +160,7 @@ export function FinanceMobileNavigation({
               <button
                 type="button"
                 aria-label={copy.close}
-                onClick={() => setMoreOpen(false)}
+                onClick={() => setMore(false)}
                 className="flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-700 bg-neutral-900 text-neutral-200 outline-none transition active:scale-95 focus-visible:ring-2 focus-visible:ring-sky-300 motion-reduce:transition-none"
               >
                 <X size={18} aria-hidden="true" />

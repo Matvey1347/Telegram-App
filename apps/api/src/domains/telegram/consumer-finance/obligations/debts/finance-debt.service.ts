@@ -263,7 +263,12 @@ export class FinanceDebtService {
     return result.value;
   }
 
-  async settle(profileId: string, id: string) {
+  async settle(
+    profileId: string,
+    id: string,
+    settlementAccountId?: string,
+    amount?: string,
+  ) {
     const profile = await this.ledger.profileContext(profileId);
     const now = new Date();
     const preflight = await this.prisma.financeDebt.findFirst({
@@ -304,16 +309,41 @@ export class FinanceDebtService {
           reschedule: false,
         };
       }
+      const settledAmount = amount
+        ? new Prisma.Decimal(amount)
+        : existing.amount;
+      if (
+        !settledAmount.isFinite() ||
+        !settledAmount.isPositive() ||
+        settledAmount.greaterThan(existing.amount)
+      )
+        throw new BadRequestException('Settlement amount must not exceed debt');
+      const remainingAmount = existing.amount.minus(settledAmount);
+      const fullySettled = remainingAmount.isZero();
       const transactionInput = {
-        accountId: existing.accountId,
+        accountId: settlementAccountId ?? existing.accountId,
         type:
           existing.direction === 'I_OWE'
             ? ('EXPENSE' as const)
             : ('INCOME' as const),
-        amount: existing.amount.toString(),
+        amount: settledAmount.toString(),
         description: existing.name,
         occurredAt: now.toISOString(),
       };
+      if (settlementAccountId && settlementAccountId !== existing.accountId) {
+        const account = await tx.financeAccount.findFirst({
+          where: {
+            id: settlementAccountId,
+            profileId,
+            archivedAt: null,
+          },
+          select: { id: true },
+        });
+        if (!account)
+          throw new BadRequestException(
+            'Settlement account must be active',
+          );
+      }
       if (!rates)
         throw new ConflictException('Debt settlement state has changed');
       const writeContext = await this.ledger.prepareTransactionWriteContext(
@@ -338,9 +368,10 @@ export class FinanceDebtService {
       const claimed = await tx.financeDebt.updateMany({
         where: { id, profileId, status: 'OPEN', version: existing.version },
         data: {
-          status: 'SETTLED',
-          settledAt: now,
-          settlementTransactionId: transaction.id,
+          amount: remainingAmount,
+          status: fullySettled ? 'SETTLED' : 'OPEN',
+          settledAt: fullySettled ? now : null,
+          settlementTransactionId: fullySettled ? transaction.id : null,
           version: { increment: 1 },
         },
       });

@@ -63,8 +63,8 @@ export function FinanceDebts({
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
   const settle = useMutation({
-    mutationFn: (debt: ConsumerFinanceDebt) =>
-      consumerFinanceObligationsApi.settleDebt(botId, debt.id),
+    mutationFn: ({ debt, accountId, amount }: { debt: ConsumerFinanceDebt; accountId: string; amount: string }) =>
+      consumerFinanceObligationsApi.settleDebt(botId, debt.id, accountId, amount),
     onSuccess: (result) => {
       reconcileConsumerDebtPages(client, botId, result.debt);
       reconcileConsumerTransactionCaches(
@@ -84,8 +84,8 @@ export function FinanceDebts({
   };
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex gap-2" role="tablist">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex flex-wrap gap-2" role="tablist">
           {(["OPEN", "SETTLED"] as const).map((value) => (
             <Button
               key={value}
@@ -166,7 +166,8 @@ export function FinanceDebts({
           debt={settling}
           locale={locale}
           onClose={() => setSettling(null)}
-          onCreate={() => settle.mutateAsync(settling)}
+          botId={botId}
+          onCreate={(accountId, amount) => settle.mutateAsync({ debt: settling, accountId, amount })}
         />
       ) : null}
       {settle.isError ? <ErrorState text={t.debtSettleError} /> : null}
@@ -188,7 +189,7 @@ function DebtCard({
   const t = financeDebtsCopy(locale);
   return (
     <Card className={debt.isOverdue ? "border-rose-700" : ""}>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 gap-3">
           <IconAvatar
             icon={debt.account.iconPresentation}
@@ -204,7 +205,7 @@ function DebtCard({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2 sm:justify-end">
           <strong className="shrink-0 tabular-nums">
             {formatMoney(debt.amount, debt.currency, "symbol")}
           </strong>

@@ -341,7 +341,7 @@ export function MutualPromotionFoldersPage({
         <EmptyState text="No mutual-promotion folders yet. Create one to prepare channels and publications." />
       ) : null}
       {foldersQuery.data?.items.length ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
           {foldersQuery.data.items.map((item) => (
             <MutualPromotionFolderCard
               key={item.id}

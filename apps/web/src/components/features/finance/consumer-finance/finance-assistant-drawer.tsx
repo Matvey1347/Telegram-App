@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bot, LoaderCircle, X } from "lucide-react";
+import { LoaderCircle, X } from "lucide-react";
 import type {
   ConsumerFinanceAssistantMessage,
   ConsumerFinanceAssistantProposal,
@@ -255,7 +255,7 @@ export function FinanceAssistantDrawer({
           className={
             isPage
               ? "relative mx-auto flex h-[calc(100dvh-11rem)] min-h-[28rem] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-neutral-800 bg-neutral-950 shadow-xl md:h-[calc(100dvh-8.5rem)]"
-              : "fixed inset-x-0 bottom-0 z-50 flex h-[min(82dvh,720px)] flex-col overflow-hidden rounded-t-3xl border border-neutral-700 bg-neutral-950/98 shadow-2xl backdrop-blur-xl sm:inset-auto sm:bottom-6 sm:right-6 sm:h-[min(680px,calc(100dvh-3rem))] sm:w-[410px] sm:rounded-3xl"
+              : "fixed inset-0 z-50 flex h-dvh flex-col overflow-hidden bg-neutral-950 shadow-2xl sm:inset-auto sm:bottom-6 sm:right-6 sm:h-[min(680px,calc(100dvh-3rem))] sm:w-[410px] sm:rounded-3xl sm:border sm:border-neutral-700 sm:bg-neutral-950/98 sm:backdrop-blur-xl"
           }
         >
           {media.dragActive ? (
@@ -305,12 +305,6 @@ export function FinanceAssistantDrawer({
 
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 [scrollbar-color:#3a3a3a_transparent] [scrollbar-width:thin]">
             <AssistantBubble>{t.intro}</AssistantBubble>
-            {!messages.length ? (
-              <div className="rounded-2xl border border-neutral-800 bg-neutral-900/55 p-4 text-center">
-                <Bot className="mx-auto text-cyan-300" size={24} />
-                <p className="mt-2 text-sm text-neutral-300">{t.ready}</p>
-              </div>
-            ) : null}
             {messages.map((message, index) =>
               message.role === "user" ? (
                 <p

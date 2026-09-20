@@ -413,16 +413,15 @@ export class BotBillingService {
     catch (error) { await this.prisma.botCoupon.delete({ where: { id: coupon.id } }); throw error; }
   }
 
-  async overview(userId: string, botIntegrationId: string, environment: 'LOCAL' | 'PRODUCTION' = 'PRODUCTION') {
+  async overview(userId: string, botIntegrationId: string, _environment: 'LOCAL' | 'PRODUCTION' = 'PRODUCTION') {
     const bot = await this.bot(userId, botIntegrationId);
-    const runtime = { runtimeInstance: { is: { environment: environment as TelegramBotRuntimeEnvironment } } };
     const [subscriptionMetrics, registeredUsers, revenue, recentEvents, recentSubscriptions, aiUsage] = await Promise.all([
-      this.prisma.botSubscription.findMany({ where: { botIntegrationId, workspaceId: bot.workspaceId, telegramBotUser: runtime }, select: { telegramBotUserId: true, status: true, currency: true, interval: true, amountMinor: true, currentPeriodEnd: true, providerSubscription: { select: { mode: true } } } }),
-      this.prisma.telegramBotUser.count({ where: { botIntegrationId, workspaceId: bot.workspaceId, ...runtime } }),
-      this.prisma.botBillingEvent.groupBy({ by: ['currency'], where: { botIntegrationId, workspaceId: bot.workspaceId, type: 'PAYMENT_SUCCEEDED', mode: BotBillingProviderMode.LIVE, subscription: { telegramBotUser: runtime } }, _sum: { amountMinor: true } }),
-      this.prisma.botBillingEvent.findMany({ where: { botIntegrationId, workspaceId: bot.workspaceId, type: { in: ['PAYMENT_SUCCEEDED', 'PAYMENT_FAILED'] }, subscription: { telegramBotUser: runtime } }, orderBy: { occurredAt: 'desc' }, take: 12, select: { id: true, type: true, occurredAt: true, subscriptionId: true, amountMinor: true, currency: true, subscription: { select: { telegramBotUser: { select: { id: true, telegramUserId: true, username: true, firstName: true } }, plan: { select: { id: true, name: true } } } } } }),
-      this.prisma.botSubscription.findMany({ where: { botIntegrationId, workspaceId: bot.workspaceId, telegramBotUser: runtime }, orderBy: { createdAt: 'desc' }, take: 8, select: { id: true, createdAt: true, amountMinor: true, currency: true, telegramBotUser: { select: { id: true, telegramUserId: true, username: true, firstName: true } }, plan: { select: { id: true, name: true } } } }),
-      this.analytics.aiUsage(bot.workspaceId, botIntegrationId, environment),
+      this.prisma.botSubscription.findMany({ where: { botIntegrationId, workspaceId: bot.workspaceId }, select: { telegramBotUserId: true, status: true, currency: true, interval: true, amountMinor: true, currentPeriodEnd: true, providerSubscription: { select: { mode: true } } } }),
+      this.prisma.telegramBotUser.count({ where: { botIntegrationId, workspaceId: bot.workspaceId } }),
+      this.prisma.botBillingEvent.groupBy({ by: ['currency'], where: { botIntegrationId, workspaceId: bot.workspaceId, type: 'PAYMENT_SUCCEEDED', mode: BotBillingProviderMode.LIVE }, _sum: { amountMinor: true } }),
+      this.prisma.botBillingEvent.findMany({ where: { botIntegrationId, workspaceId: bot.workspaceId, type: { in: ['PAYMENT_SUCCEEDED', 'PAYMENT_FAILED'] } }, orderBy: { occurredAt: 'desc' }, take: 12, select: { id: true, type: true, occurredAt: true, subscriptionId: true, amountMinor: true, currency: true, subscription: { select: { telegramBotUser: { select: { id: true, telegramUserId: true, username: true, firstName: true } }, plan: { select: { id: true, name: true } } } } } }),
+      this.prisma.botSubscription.findMany({ where: { botIntegrationId, workspaceId: bot.workspaceId }, orderBy: { createdAt: 'desc' }, take: 8, select: { id: true, createdAt: true, amountMinor: true, currency: true, telegramBotUser: { select: { id: true, telegramUserId: true, username: true, firstName: true } }, plan: { select: { id: true, name: true } } } }),
+      this.analytics.aiUsage(bot.workspaceId, botIntegrationId),
     ]);
     const analytics = this.analytics.calculate(registeredUsers, subscriptionMetrics);
     analytics.collectedRevenue = revenue.map((row) => ({ currency: row.currency, amountMinor: row._sum.amountMinor || 0 }));
@@ -454,9 +453,8 @@ export class BotBillingService {
       ...(query.source ? { source: query.source as BotSubscriptionSource } : {}),
       ...(query.planId ? { planId: query.planId } : {}),
       ...(query.provider ? { providerSubscription: { is: { provider: query.provider as BotBillingProvider } } } : {}),
-      ...((query.search?.trim() || query.environment) ? { telegramBotUser: { is: {
+      ...(query.search?.trim() ? { telegramBotUser: { is: {
         ...(query.search?.trim() ? { OR: [{ username: { contains: query.search.trim(), mode: 'insensitive' as const } }, { firstName: { contains: query.search.trim(), mode: 'insensitive' as const } }, { telegramUserId: { contains: query.search.trim() } }] } : {}),
-        ...(query.environment ? { runtimeInstance: { is: { environment: query.environment as TelegramBotRuntimeEnvironment } } } : {}),
       } } } : {}),
     };
     const rows = await this.prisma.botSubscription.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit + 1, ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}), select: { id: true, source: true, status: true, amountMinor: true, currency: true, interval: true, currentPeriodStart: true, currentPeriodEnd: true, cancelAtPeriodEnd: true, createdAt: true, telegramBotUser: { select: { id: true, telegramUserId: true, username: true, firstName: true } }, plan: { select: { id: true, name: true } }, providerSubscription: { select: { provider: true } } } });
@@ -470,7 +468,6 @@ export class BotBillingService {
     const rows = await this.prisma.telegramBotUser.findMany({
       where: {
         workspaceId: bot.workspaceId, botIntegrationId,
-        runtimeInstance: { is: { environment: (query.environment || 'PRODUCTION') as TelegramBotRuntimeEnvironment } },
         ...(query.search?.trim() ? { OR: [{ username: { contains: query.search.trim(), mode: 'insensitive' } }, { firstName: { contains: query.search.trim(), mode: 'insensitive' } }, { lastName: { contains: query.search.trim(), mode: 'insensitive' } }, { telegramUserId: { contains: query.search.trim() } }] } : {}),
       },
       orderBy: [{ lastInteractionAt: 'desc' }, { id: 'desc' }], take: limit + 1,

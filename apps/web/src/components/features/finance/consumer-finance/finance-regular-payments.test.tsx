@@ -231,7 +231,8 @@ describe("FinanceRegularPayments", () => {
     await waitFor(() =>
       expect(api.pauseRegularPayment).toHaveBeenCalledWith("bot", "rent"),
     );
-    fireEvent.click(screen.getByRole("tab", { name: "Paused" }));
+    fireEvent.click(screen.getByRole("button", { name: "🟢 Active" }));
+    fireEvent.click(screen.getByRole("option", { name: "⏸️ Paused" }));
     fireEvent.click(
       await screen.findByRole("button", { name: "Payment actions" }),
     );
@@ -240,7 +241,8 @@ describe("FinanceRegularPayments", () => {
       expect(api.resumeRegularPayment).toHaveBeenCalledWith("bot", "rent"),
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: "Active" }));
+    fireEvent.click(screen.getByRole("button", { name: "⏸️ Paused" }));
+    fireEvent.click(screen.getByRole("option", { name: "🟢 Active" }));
     fireEvent.click(
       await screen.findByRole("button", { name: "Payment actions" }),
     );
